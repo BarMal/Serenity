@@ -10,13 +10,14 @@ import com.serenity.command.{
   DiagnosticsCommands,
   ExternalChangeCommands,
   FileIntent,
+  LayoutOverrideCommands,
   LineEndingCommands,
   ReopenWithEncodingCommands,
   RichTextCommands,
   RichTextIntent,
   SafeModeCommands
 }
-import com.serenity.config.AppMode
+import com.serenity.config.{AppMode, LayoutPin, UiLayout}
 import com.serenity.diagnostics.RuntimeIdentity
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
@@ -210,6 +211,49 @@ object ConfirmPrompt:
       choices = ConfirmChoice("OK", ConfirmAction.Dismiss, ButtonEmphasis.Primary) :: openRecovered,
       blocking = true
     )
+
+  /** Switching to `layout` would leave the chrome the config file pins as it is. Cancelling changes nothing, so it is
+    * what Escape does.
+    */
+  def layoutOverride(layout: UiLayout, pins: List[LayoutPin]): ConfirmPrompt =
+    of(
+      title = s"Switch to the ${layout.label} layout",
+      message = pinLines(pins, "Your config file sets these, so switching would leave them as they are:"),
+      choices = List(
+        ConfirmChoice(
+          s"Use ${layout.label} for all",
+          ConfirmAction.Run(LayoutOverrideCommands.useLayout(layout, pins)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Keep my settings", ConfirmAction.Run(LayoutOverrideCommands.keepMine(layout))),
+        ConfirmChoice("Choose one by one", ConfirmAction.Run(LayoutOverrideCommands.chooseEach(layout))),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Asked once, on the first launch after the layout became a default the config file can override. Keeping the file
+    * as it is changes nothing, so it is what Escape does.
+    */
+  def layoutOverrideAtStartup(layout: UiLayout, pins: List[LayoutPin]): ConfirmPrompt =
+    of(
+      title = s"The ${layout.label} layout is on",
+      message = pinLines(pins, "Your config file sets these interface settings, which override the layout:"),
+      choices = List(
+        ConfirmChoice(
+          s"Use ${layout.label} for all",
+          ConfirmAction.Run(LayoutOverrideCommands.useLayout(layout, pins)),
+          ButtonEmphasis.Primary
+        ),
+        ConfirmChoice("Choose one by one", ConfirmAction.Run(LayoutOverrideCommands.chooseEach(layout))),
+        ConfirmChoice("Keep my settings", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  private def pinLines(pins: List[LayoutPin], heading: String): List[String] =
+    heading :: pins.map(pin => s"${pin.label}: ${pin.current} -> ${pin.layoutValue}") :::
+      List("Using the layout removes these settings from your config file, so they follow the layout from then on.")
 
   /** A startup notice with no start page to carry it, such as when Serenity was launched to open a file. */
   def startupNotice(message: String): ConfirmPrompt =

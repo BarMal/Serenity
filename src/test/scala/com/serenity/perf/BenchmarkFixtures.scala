@@ -47,7 +47,7 @@ private[perf] object BenchmarkFixtures:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.default.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
+        config = AppConfig.conventional.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       ),
       // AppState.initial seeds runtime.nextBufferId = BufferId(1) to follow its own initial buffer 0. This fixture
       // replaces the buffer map wholesale with a hand-picked BufferId(1), so nextBufferId must move past it too --
@@ -55,6 +55,16 @@ private[perf] object BenchmarkFixtures:
       // AppStateValidation.validated) reports "Next buffer ID collides with an existing
       // buffer: 1".
       runtime = AppState.initial.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
+    )
+
+  /** `count` buffers of `content` open at once, as tabs, with the first one shown in the pane. */
+  def editorStateWithBuffers(count: Int, content: String): AppState =
+    val base    = editorState(content, None)
+    val opened  = (2 to count).map(id => BufferId(id) -> Buffer.fromString(BufferId(id), content)).toMap
+    val buffers = base.persisted.buffers ++ opened
+    base.copy(
+      persisted = base.persisted.copy(buffers = buffers, bufferOrder = buffers.keys.toList.sortBy(_.value)),
+      runtime = base.runtime.copy(nextBufferId = BufferId(count + 1))
     )
 
   def editorStateForRichDocument(document: RichTextDocument): AppState =

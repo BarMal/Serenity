@@ -56,7 +56,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _ <- stateManager.applyEvent(MoveDown)
 
@@ -92,7 +93,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(Enter)
@@ -116,7 +118,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       state <- stateManager.getCurrentState
     yield startPageOf(state).actions.map(action => (action.id, action.label, action.shortcut)) shouldBe List(
@@ -142,7 +145,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(MoveDown)
       _          <- stateManager.applyEvent(MoveDown)
@@ -173,7 +177,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(InsertChar('3'))
       finalState <- awaitState(stateManager)(explorerRoots(_).contains(folder))
@@ -192,7 +197,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _      <- stateManager.applyEvent(MoveDown)
       _      <- stateManager.applyEvent(MoveDown)
@@ -212,7 +218,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _     <- stateManager.applyEvent(MoveDown)
       _     <- stateManager.applyEvent(MoveDown)
@@ -288,7 +295,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         Theme.default,
-        ViewportSize(80, 24)
+        ViewportSize(80, 24),
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _      <- stateManager.applyEvent(MoveDown)
       _      <- stateManager.applyEvent(MoveDown)
@@ -318,7 +326,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(InsertChar('9'))
       finalState <- stateManager.getCurrentState
@@ -343,7 +352,8 @@ class StartupCommandsSpec extends AnyFlatSpec with Matchers with StateManagerTes
         stateManager,
         stateManager.sessionStartupInfo,
         theme,
-        viewportSize
+        viewportSize,
+        appConfig = com.serenity.config.AppConfig.conventional
       )
       _          <- stateManager.applyEvent(Enter) // Select first option: New Session
       finalState <- stateManager.getCurrentState

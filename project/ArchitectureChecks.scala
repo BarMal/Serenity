@@ -205,81 +205,6 @@ object ArchitectureChecks {
       }
     }
 
-  /** #1677: no `AtomicReference`, `AtomicInteger`, `synchronized`, or `mutable.` may live inside a top-level
-    * `object` declaration, or anywhere under `state/models`, in `src/main`. An `object` compiles to a single
-    * JVM-wide instance, so any of these forms held directly in its body -- not inside a nested `class`/`trait`,
-    * which owns a separate instance per construction -- is exactly the shared, un-scoped mutable state this issue
-    * removed from `RendererFrameState`, `ThemeManager`, `CharacterRenderer`, `MarkdownPreviewCache` and
-    * `DictionaryLoader`. The domain model (`state/models`) is held to the same four patterns regardless of
-    * object/class, since a case class describing data must never carry a hidden mutable field at all (`AppState`'s
-    * old `annotationIndexCache` et al.).
-    *
-    * Detection is structural, not a flat per-file text search: a running stack of open `object`/`class`/`trait`/
-    * `enum` frames (by indentation -- the same technique [[bodyLength]] uses to find where a method ends) tracks
-    * what type textually encloses each line, so a legitimately instance-scoped field of a `class` nested inside an
-    * `object` is not mistaken for a field of the object itself -- only an unbroken chain of enclosing `object`s all
-    * the way up counts as top-level. Block (`/** ... */`) and line (`//`) comments are skipped so a comment that
-    * merely explains why a pattern is or isn't used (as this file's own doc comments do) is never itself flagged.
-    */
-  private val MutabilityTokens: Seq[String] = Seq("AtomicReference", "AtomicInteger", "synchronized", "mutable.")
-
-  private val TypeStart =
-    """^(\s*)((?:override|private(?:\[[^\]]+\])?|protected(?:\[[^\]]+\])?|final|sealed|abstract|implicit|case|open)\s+)*(object|class|trait|enum)\b""".r
-
-  final private case class TypeFrame(isObject: Boolean, indent: Int)
-
-  private def mutabilityViolations(path: String, lines: Vector[String]): Seq[Violation] =
-    if (!path.startsWith("main/")) Nil
-    else {
-      val inModels                = path.contains("com/serenity/state/models")
-      var stack: List[TypeFrame]  = Nil
-      var inBlockComment: Boolean = false
-
-      lines.zipWithIndex.flatMap { case (line, index) =>
-        val trimmed = line.trim
-        if (inBlockComment) {
-          if (trimmed.contains("*/")) inBlockComment = false
-          Nil
-        } else if (trimmed.isEmpty || trimmed.startsWith("//") || trimmed.startsWith("*")) {
-          Nil
-        } else if (trimmed.startsWith("/*")) {
-          if (!trimmed.contains("*/")) inBlockComment = true
-          Nil
-        } else {
-          val indent = line.indexWhere(!_.isWhitespace)
-          stack = stack.dropWhile(_.indent >= indent)
-
-          val violation =
-            if (!MutabilityTokens.exists(trimmed.contains)) None
-            else if (inModels)
-              Some(
-                Violation(
-                  path,
-                  s"forbidden mutable state at line ${index + 1}: state/models must hold no AtomicReference/" +
-                    "AtomicInteger/synchronized/mutable. state -- describe data, not hidden mutation (#1677)",
-                  1
-                )
-              )
-            else if (stack.nonEmpty && stack.forall(_.isObject))
-              Some(
-                Violation(
-                  path,
-                  s"forbidden mutable state at line ${index + 1}: a top-level object may not hold AtomicReference/" +
-                    "AtomicInteger/synchronized/mutable. state -- scope it to an owning instance instead (#1677)",
-                  1
-                )
-              )
-            else None
-
-          TypeStart.findPrefixMatchOf(line).foreach { m =>
-            stack = TypeFrame(isObject = m.group(3) == "object", indent) :: stack
-          }
-
-          violation.toSeq
-        }
-      }
-    }
-
   final case class Violation(path: String, detail: String, measured: Int) {
     def key: String = s"$path\t$detail"
     def render: String = s"$key\t$measured"
@@ -372,16 +297,57 @@ object ArchitectureChecks {
           }
       }
 
-  def collect(base: File): Seq[Violation] =
-    scalaFiles(base).flatMap { file =>
-      val path = relativise(base, file)
-      val lines = readLines(file)
+  /** Declarations that can never move out of an object, each with the reason. Kept apart from the baseline: the
+    * baseline only shrinks as code is fixed, while an entry here is removed by a redesign, argued in
+    * docs/allowlist-review.md. An entry that no longer matches a declaration fails [[check]], so this list cannot rot.
+    */
+  val PurityAllowlist: Seq[PurityChecks.Allowed] = Seq(
+    PurityChecks.Allowed(
+      "main/scala/com/serenity/text/TextCounts.scala",
+      "TextCounts.threadLocalWords",
+      "A `BreakIterator` is neither thread-safe nor cheap to build, so each thread keeps one as scratch; thread-confined, never shared, and the answers are pure in the text. Kept by owner decision (#2350): a fresh iterator per `TextCounts.of` made `text.counts.rope_build` allocate 5.9x (867 KB to 5.13 MB, time +7%) and `rope_edit` 13x (9.7 KB to 125 KB, time +15%). The only caller path is `Rope`'s parameterless `lazy val textSummary`, so a scratch would need the whole rope API (docs/allowlist-review.md, L4)."
+    ),
+    PurityChecks.Allowed(
+      "main/scala/com/serenity/text/TextCounts.scala",
+      "TextCounts.threadLocalCharacters",
+      "Thread-confined `BreakIterator` scratch, the character-instance twin of `threadLocalWords`; kept with it by owner decision (#2350), same measurements (docs/allowlist-review.md, L5)."
+    ),
+    PurityChecks.Allowed(
+      "main/scala/com/serenity/text/TextEditing.scala",
+      "TextEditing.threadLocalBreakIterator",
+      "Thread-confined `BreakIterator` scratch plus the identity of the text last set on it, which spares each boundary question a `setText`. Kept by owner decision (#2350): with no caching, `text.boundary.word_motion` was 2.45x slower, `grapheme_motion` 4.98x, `keystroke_after_edit` 1.97x, and `find_whole_word` 1.26x with 12x the allocation, and about 16 files on the reducer path have no natural owner for a scratch (docs/allowlist-review.md, L1)."
+    ),
+    PurityChecks.Allowed(
+      "main/scala/com/serenity/text/TextEditing.scala",
+      "TextEditing.threadLocalWordBreakIterator",
+      "The word-boundary twin of `threadLocalBreakIterator`, kept separate so word motion's grapheme questions do not evict its text; kept with it by owner decision (#2350), same measurements (docs/allowlist-review.md, L2)."
+    ),
+    PurityChecks.Allowed(
+      "main/scala/com/serenity/rope/RopeCharacterSource.scala",
+      "RopeCharacterSource.lastUsed",
+      "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals; kept with them by owner decision (#2350), same measurements (docs/allowlist-review.md, L3)."
+    )
+  )
+
+  private def purityViolations(parsed: Seq[PurityChecks.Parsed]): Seq[Violation] = {
+    val index = PurityChecks.index(parsed)
+    parsed.flatMap(file => PurityChecks.mutableDeclarations(file) ++ PurityChecks.statefulInstances(file, index))
+  }
+
+  /** Every violation, allowlisted purity declarations included. */
+  private def collectAll(base: File): Seq[Violation] = {
+    val files = scalaFiles(base).map(file => (relativise(base, file), readLines(file)))
+    val structural = files.flatMap { case (path, lines) =>
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
-        stateOwnershipViolations(path, lines) ++ mutabilityViolations(path, lines) ++
-        documentContentViolations(path, lines)
+        stateOwnershipViolations(path, lines) ++ documentContentViolations(path, lines)
     }
+    structural ++ purityViolations(files.map { case (path, lines) => PurityChecks.parse(path, lines) })
+  }
+
+  def collect(base: File): Seq[Violation] =
+    collectAll(base).filterNot(PurityChecks.allowlisted(PurityAllowlist, _))
 
   def readBaseline(file: File): Map[String, Int] =
     if (!file.exists()) Map.empty
@@ -414,7 +380,9 @@ object ArchitectureChecks {
 
   def check(base: File, baselineFile: File): Option[String] = {
     val baseline = readBaseline(baselineFile)
-    val current = collect(base)
+    val everything = collectAll(base)
+    val current = everything.filterNot(PurityChecks.allowlisted(PurityAllowlist, _))
+    val stale = PurityChecks.staleAllowlist(PurityAllowlist, everything)
     val currentByKey = current.map(v => v.key -> v.measured).toMap
 
     val added = current.filterNot(v => baseline.contains(v.key))
@@ -443,7 +411,16 @@ object ArchitectureChecks {
              fixed.toSeq.sorted.map(key => s"  ${key.replace('\t', ' ')}").mkString("\n")
            ))
 
-    if (problems.isEmpty) None else Some(problems.mkString("\n"))
+    val staleProblems =
+      if (stale.isEmpty) Nil
+      else
+        Seq(
+          s"${stale.size} allowlist entr(y/ies) no longer match a declaration -- remove from PurityAllowlist:",
+          stale.map(a => s"  ${a.path}  ${a.declaration}").mkString("\n")
+        )
+
+    val all = problems ++ staleProblems
+    if (all.isEmpty) None else Some(all.mkString("\n"))
   }
 
   /** Regression guard for the checks themselves (#1676): a reducer that reaches a forbidden package through a
@@ -454,6 +431,7 @@ object ArchitectureChecks {
     * `architectureCheck` depends on, so CI fails immediately if `importViolations`'s matching is ever narrowed back.
     */
   def selfTest(): Unit = {
+    PurityChecks.selfTest()
     def check(
         description: String,
         lines: Vector[String],
@@ -571,7 +549,7 @@ object ArchitectureChecks {
         expectCaught: Boolean,
         path: String = "main/scala/com/serenity/ui/renderer/Sample.scala"
     ): Unit = {
-      val violations = mutabilityViolations(path, lines)
+      val violations = PurityChecks.mutableDeclarations(PurityChecks.parse(path, lines))
       require(
         violations.nonEmpty == expectCaught,
         s"ArchitectureChecks self-test failed ($description): expected forbidden mutable state to be " +
@@ -590,12 +568,12 @@ object ArchitectureChecks {
     )
 
     checkMutability(
-      "a synchronized call against a field held directly by a top-level object",
+      "a synchronized block that initialises a field held directly by a top-level object",
       Vector(
         "package com.serenity.ui.renderer",
         "object Sample:",
         "  private val lock = new Object",
-        "  def touch(): Unit = lock.synchronized { () }"
+        "  private val guarded = lock.synchronized { 1 }"
       ),
       expectCaught = true
     )

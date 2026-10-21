@@ -16,19 +16,35 @@ class DamageProducerStateChangesSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(0)
 
   private def stateWithContent(text: String, cursors: List[CursorPosition] = List(CursorPosition(0, 0))): AppState =
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = AppState.initial.persisted.buffers.updated(
-          bufferId,
-          AppState.initial.persisted
-            .buffers(bufferId)
-            .copy(
-              document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope(text)),
-              editing = EditingState(cursors)
-            )
-        )
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .buffers
+              .updated(
+                bufferId,
+                AppState
+                  .initial(com.serenity.config.AppConfig.conventional)
+                  .persisted
+                  .buffers(bufferId)
+                  .copy(
+                    document = AppState
+                      .initial(com.serenity.config.AppConfig.conventional)
+                      .persisted
+                      .buffers(bufferId)
+                      .document
+                      .copy(content = Rope(text)),
+                    editing = EditingState(cursors)
+                  )
+              )
+          )
       )
-    )
 
   "DamageProducer.forTransition" should "report no damage when nothing changed" in {
     val state = stateWithContent("alpha\nbeta\ngamma")

@@ -5,7 +5,8 @@ import java.nio.file.Path
 import cats.effect.IO
 import com.serenity.app.LaunchReset.Moved
 import com.serenity.app.StartupCrashGuard.Decision
-import com.serenity.diagnostics.PreviousRun
+import com.serenity.config.LayoutPin
+import com.serenity.diagnostics.{CrashRecord, CrashReport, PreviousRun, RuntimeIdentity}
 import com.serenity.state.manager.StartupRecoveryState
 import com.serenity.state.models.AppState
 import com.serenity.ui.presets.UiPresetStore
@@ -21,6 +22,12 @@ object StartupRecovery:
 
   val ignoreCrashes: CrashRecorder = (_, _) => IO.unit
 
+  def crashRecorderFor(store: CrashRecord): CrashRecorder =
+    (message, error) =>
+      IO.realTimeInstant.flatMap { at =>
+        store.recordCrash(CrashReport.render(RuntimeIdentity.current, at, message, Some(error), store.directory)).void
+      }
+
   /** @param notices
     *   Shown on the start page, since a terminal launch has nowhere else to say them.
     * @param crashLoopAfter
@@ -29,6 +36,9 @@ object StartupRecovery:
     * @param unexpectedExit
     *   The report of a previous run that did not end cleanly, offered to the user once. A crash loop's prompt speaks
     *   first, since it is the more actionable of the two.
+    * @param layoutPins
+    *   Chrome the config file pins away from the layout in force, to be asked about once on the first launch that sees
+    *   it (see [[LayoutOverrideReview]]).
     * @param crashRecorder
     *   How a failure of this run is left for the next launch to report.
     */
@@ -37,7 +47,8 @@ object StartupRecovery:
       notices: List[String],
       crashLoopAfter: Option[Int] = None,
       unexpectedExit: Option[String] = None,
-      crashRecorder: CrashRecorder = ignoreCrashes
+      crashRecorder: CrashRecorder = ignoreCrashes,
+      layoutPins: List[LayoutPin] = Nil
   ):
 
     def windowTitle: String =
@@ -58,7 +69,7 @@ object StartupRecovery:
         .fold(UiPresetStore.default)(root => UiPresetStore(root.resolve("ui-presets.json")))
 
     def appliedTo(state: AppState): AppState =
-      StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit)
+      StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit, layoutPins)
 
   object Plan:
     val normal: Plan = Plan(safeMode = false, notices = Nil)

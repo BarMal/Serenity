@@ -109,6 +109,7 @@ object LspProtocol:
       "clientInfo" -> Json.obj("name" -> "Serenity".asJson, "version" -> "0.1.0".asJson),
       "rootUri"    -> rootUri.value.asJson,
       "capabilities" -> Json.obj(
+        "general" -> Json.obj("positionEncodings" -> PositionEncoding.offered.map(_.label.asJson).asJson),
         "workspace" -> Json.obj(
           "applyEdit"     -> true.asJson,
           "configuration" -> true.asJson

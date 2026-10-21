@@ -6,6 +6,7 @@ import java.awt.{Font, GraphicsEnvironment}
 import cats.effect.IO
 import com.serenity.state.models.TypographyRole
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.theme.HeadingScale
 import org.typelevel.log4cats.Logger
 
 object FontLoader:
@@ -29,13 +30,28 @@ object FontLoader:
       textScaleMultiplier: Double = 1.0,
       enableLigatures: Boolean = true,
       textLigatures: Boolean = true,
-      uiLigatures: Boolean = false
+      uiLigatures: Boolean = false,
+      fallbackFamilies: List[String] = Nil
   ):
+    /** The fonts that draw what the code, prose or UI font has no glyph for: these families in order, the bundled emoji
+      * face, then the system's own resolver.
+      */
+    def fallback: FontFallback = FontFallback(fallbackFamilies.toVector, emojiFontFamily)
+
     def codeFontSize: Float =
       fontSize
 
     def codeLigatures: Boolean =
       enableLigatures
+
+    /** The prose size with only a manual text scale applied: what headings damp against, never the detected device
+      * scale.
+      */
+    def logicalTextFontSize: Float =
+      textScaleMode match
+        case TextScaleMode.Manual =>
+          HeadingScale.logicalBodyPt(textFontSize, FontConfig.clampTextScale(textScaleMultiplier).toFloat)
+        case _ => textFontSize
 
     def scaledCodeFontSize: Float =
       scaledPointSize(fontSize)
@@ -197,12 +213,23 @@ object FontLoader:
       .orElse(loadBundledFontBase("/fonts/MonaspaceNeon-Bold.otf"))
 
   private lazy val toolbarIconFontBase: Option[Font] =
-    loadBundledFontBase("/fonts/MaterialIconsRound-Regular.otf").filter { font =>
-      try
-        val environment = GraphicsEnvironment.getLocalGraphicsEnvironment
-        environment.registerFont(font) || environment.getAvailableFontFamilyNames.contains(font.getFamily)
-      catch case _: Exception => false
-    }
+    loadBundledFontBase("/fonts/MaterialIconsRound-Regular.otf").filter(registerBundled)
+
+  /** The family of the bundled monochrome emoji face, registered with a Regular and a Bold file so that a bold request
+    * finds a face of its own: Java2D cannot select a variable font's weight axis, and its synthetic bold would widen
+    * the advance.
+    */
+  lazy val emojiFontFamily: Option[String] =
+    val faces = List("/fonts/NotoEmoji-Regular.ttf", "/fonts/NotoEmoji-Bold.ttf").flatMap(loadBundledFontBase)
+    faces match
+      case regular :: _ :: Nil if faces.forall(registerBundled) => Some(regular.getFamily)
+      case _                                                    => None
+
+  private def registerBundled(font: Font): Boolean =
+    try
+      val environment = GraphicsEnvironment.getLocalGraphicsEnvironment
+      environment.registerFont(font) || environment.getAvailableFontFamilyNames.contains(font.getFamily)
+    catch case _: Exception => false
 
   private def loadBundledFontBase(resourcePath: String): Option[Font] =
     Option(getClass.getResourceAsStream(resourcePath)).flatMap { stream =>

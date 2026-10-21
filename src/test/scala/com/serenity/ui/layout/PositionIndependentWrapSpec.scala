@@ -110,15 +110,19 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
     val rows    = visualLines(buffer(List(dropCap)), cache)
 
     rows.length should be >= 3
-    val inset = rows.head.xOffsetPx
-    inset should be > 0.0f
-    rows(1).xOffsetPx shouldBe inset
+    val indent = rows(1).xOffsetPx
+    indent should be > 0.0f
     rows(2).xOffsetPx shouldBe 0.0f
     rows.foreach(row => row.row.caretStops.head.xPx shouldBe 0.0f)
-    rows.take(2).foreach { row =>
-      row.xForColumn(row.startColumn) shouldBe Some(inset)
-      row.caretStops.head.xPx shouldBe inset
-    }
+    // The second row starts at the indent; the first gives back the width of the character its glyph replaces, so
+    // the text after that character starts at the same x.
+    rows(1).xForColumn(rows(1).startColumn) shouldBe Some(indent)
+    rows(1).caretStops.head.xPx shouldBe indent
+    val replacedWidthPx = rows.head.row.xForColumn(1).getOrElse(fail("missing caret x"))
+    replacedWidthPx should be > 0.0f
+    rows.head.xOffsetPx shouldBe (indent - replacedWidthPx) +- 0.001f
+    rows.head.xForColumn(1).getOrElse(fail("missing caret x")) shouldBe indent +- 0.001f
+    rows.head.caretStops.head.xPx shouldBe (indent - replacedWidthPx) +- 0.001f
     rows(2).caretStops shouldBe rows(2).row.caretStops
     visualLines(buffer(List(dropCap)), cache) shouldBe rows
     cache.wrapStats.coldWraps shouldBe 1L
@@ -134,7 +138,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
     val centredRows = visualLines(buffer(List(centred)), cache, panel)
 
     centredRows.zip(plainRows).foreach { (aligned, unaligned) =>
-      val available = math.max(0.0f, panel.toFloat - unaligned.widthPx)
+      val available = math.max(0.0f, panel.toFloat - unaligned.xOffsetPx - unaligned.widthPx)
       aligned.xOffsetPx shouldBe unaligned.xOffsetPx + available / 2.0f
       aligned.xForColumn(aligned.startColumn) shouldBe Some(aligned.xOffsetPx)
     }

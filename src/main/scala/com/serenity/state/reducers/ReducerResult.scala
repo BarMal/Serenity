@@ -35,6 +35,9 @@ enum FileEffect:
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case DirectLoadFile(path: Path)
 
+  /** Opens the files a rename's edits name that no buffer holds, then applies the edits to them (#1965). */
+  case OpenForRenameEdit(pending: PendingRename)
+
 enum ExplorerEffect:
   case OpenRoot(position: PanelPosition, path: Path, size: Int)
 
@@ -75,6 +78,12 @@ enum LspQueueEffect:
 enum UndoEffect:
   case RecordBoundary(entry: HistoryEntry, grouping: EditGrouping)
 
+/** What the editor asks of the input method itself (#2008). */
+enum ImeEffect:
+
+  /** A composition began where the editor takes no text: end it on the platform's side and say why. */
+  case Refused
+
 enum AppEffect:
   case CompleteQuit
   case ExecuteCommand(command: Command)
@@ -92,6 +101,7 @@ enum AppEffect:
   case Workflow(effect: WorkflowEffect)
   case LspQueue(effect: LspQueueEffect)
   case Undo(effect: UndoEffect)
+  case Ime(effect: ImeEffect)
 
 final case class ReducerResult(
     state: AppState,

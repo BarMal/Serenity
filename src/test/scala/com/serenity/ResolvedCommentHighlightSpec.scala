@@ -24,20 +24,28 @@ class ResolvedCommentHighlightSpec extends AnyFlatSpec with Matchers:
         editing = EditingState(List(CursorPosition(0, 0))),
         annotations = Annotations(documentComments = List(comment))
       )
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        buffers = Map(bufferId -> buffer),
-        bufferOrder = List(bufferId),
-        layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
-        ),
-        theme = Theme.light,
-        config = com.serenity.config.AppConfig.default.withSyntaxHighlighting(false)
-      ),
-      runtime = AppState.initial.runtime.copy(resolvedCommentsVisible = showResolved)
-    )
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(
+        persisted = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(bufferId -> buffer),
+            bufferOrder = List(bufferId),
+            layout = Layout(
+              editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, bufferId)),
+              activeEditorPaneId = Some(paneId),
+              workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
+            ),
+            theme = Theme.light,
+            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+          ),
+        runtime = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .runtime
+          .copy(resolvedCommentsVisible = showResolved)
+      )
 
   private def highlightedCells(state: AppState, caches: RenderCaches): Int =
     val surface    = new MockRenderSurface(100, 30)

@@ -1,0 +1,510 @@
+package com.serenity.perf
+
+import java.awt.Font
+import java.awt.image.BufferedImage
+import java.nio.file.{Files, Path}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
+import cats.effect.unsafe.implicits.global
+import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, ProseMeasure, StatusLinePlacement, TabStripMode}
+import com.serenity.keystroke.events.PageDown
+import com.serenity.richtext.{
+  InlineMark,
+  ParagraphAlignment,
+  ParagraphRole,
+  RichTextDocument,
+  RichTextParagraph,
+  RichTextRun,
+  RichTextStyle,
+  RtfDocumentCodec
+}
+import com.serenity.state.manager.StateManagerTestFacade.updateState
+import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.models.*
+import com.serenity.testkit.FrameMismatchDump
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
+import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+/** Paging down a chaptered rich document to its end shows, at every step, the frame a cold repaint draws, in both
+  * layouts at the device scales a laptop reports. Two images alternate as the window's pool does, and the window shows
+  * only the rects each frame names for repainting, so a band the frame clears but never publishes stays stale on
+  * screen, as it did below the last row once a scroll left the pane with fewer rows.
+  */
+class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
+
+  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+
+  private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
+  private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+
+  final private case class Window(width: Int, height: Int):
+    def viewport: ViewportSize = ViewportSize(width / cellMetrics.charWidth, height / cellMetrics.lineHeight)
+
+  private val fullHd = Window(1920, 1080)
+
+  private def chapters(count: Int, bodies: Int): RichTextDocument =
+    RichTextDocument(
+      (1 to count).toList.flatMap { chapter =>
+        RichTextParagraph(List(RichTextRun(s"Chapter $chapter")), role = ParagraphRole.Heading(1)) ::
+          (1 to bodies).toList.map { body =>
+            RichTextParagraph(
+              List(
+                RichTextRun(s"Chapter $chapter paragraph $body. " + "lorem ipsum dolor sit amet " * (6 + body * 7 % 23))
+              )
+            )
+          }
+      }
+    )
+
+  private val oracleImages = OracleImages()
+
+  private def deviceWidthPx(window: Window, scale: Double): Int  = math.ceil(window.width * scale).toInt
+  private def deviceHeightPx(window: Window, scale: Double): Int = math.ceil(window.height * scale).toInt
+
+  final private class Pooled(
+      window: Window,
+      pool: Int,
+      scale: Double,
+      persists: Boolean,
+      fringe: Boolean,
+      frames: FrameImages
+  ):
+
+    def this(window: Window, pool: Int, scale: Double, persists: Boolean = true, fringe: Boolean = false) =
+      this(
+        window,
+        pool,
+        scale,
+        persists,
+        fringe,
+        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pool)
+      )
+
+    /** The vertical spans, in logical pixels, of the runs the last frame drew. */
+    val drawnSpans = new AtomicReference[Vector[(Int, Int)]](Vector.empty)
+
+    private def record(yPx: Int, heightPx: Int): Unit =
+      val _ = drawnSpans.updateAndGet(_ :+ (yPx -> heightPx))
+
+    private val images      = frames.drawn
+    private val screenImage = frames.screen
+    private val caches      = RenderCaches.create()
+    private val screen      = ScreenIdentity(this)
+    private val drawn       = AtomicInteger(0)
+    private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)
+
+    /** A faint pixel pair one device pixel left of a run, as the serif of a wrapped row's first glyph leaves. */
+    private def leaveFringe(image: BufferedImage, xPx: Float, yPx: Int): Unit =
+      val x = math.floor(xPx * scale).toInt - 1
+      (0 until (2 * scale).toInt).foreach { dy =>
+        val y = (yPx * scale).toInt + scale.toInt + dy
+        if x >= 0 && y < image.getHeight then image.setRGB(x, y, 0x181c23)
+      }
+
+    def contentLeftPx: Option[Int] =
+      lastPlan.get().flatMap(_.paneLayouts.values.headOption).map(layout => cellMetrics.toPixelX(layout.contentRect.x))
+
+    def stampPooled(x: Int, ys: List[Int]): Unit =
+      ys.foreach(y => images.head.setRGB(x, y, 0xff00ff))
+
+    def pooledIsStamped(x: Int, y: Int): Boolean = (images.head.getRGB(x, y) & 0xffffff) == 0xff00ff
+
+    def render(state: AppState, damage: Damage): BufferedImage =
+      val image = images(drawn.getAndIncrement() % pool)
+      drawnSpans.set(Vector.empty)
+      val surface = new Java2DRenderSurface(
+        image,
+        cellMetrics,
+        codeFont,
+        _ => (),
+        logicalWidthPx = window.width,
+        logicalHeightPx = window.height,
+        deviceScaleX = scale,
+        deviceScaleY = scale,
+        contentPersists = persists,
+        layerCacheOwnerOverride = Some(screen),
+        textCaches = caches.surfaceText
+      ):
+        override def drawRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          s: String,
+          clipGlyphToRun: Boolean
+        ): Unit =
+          record(yPx, lineHeightPx)
+          super.drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s, clipGlyphToRun)
+          if fringe && s.nonEmpty then leaveFringe(image, xPx, yPx)
+        override def drawShapedRunPx(
+          xPx: Float,
+          yPx: Int,
+          bgWidthPx: Float,
+          lineHeightPx: Int,
+          ascentPx: Int,
+          stretch: String,
+          from: Int,
+          until: Int,
+          clipGlyphToRun: Boolean
+        ): Unit =
+          record(yPx, lineHeightPx)
+          super.drawShapedRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, stretch, from, until, clipGlyphToRun)
+          if fringe && from < until then leaveFringe(image, xPx, yPx)
+      val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
+      lastPlan.set(
+        RendererFramePlanner.renderFrame(
+          state,
+          cursorVisible = false,
+          surface,
+          window.viewport,
+          caches.authoritativeScene.forState(state, window.viewport, codeFont, textFont),
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          None,
+          Some(FrameOutput(screen, repaintRegion)),
+          damage,
+          caches = caches
+        )
+      )
+      present(image, repaintRegion.get())
+      screenImage
+
+    /** What the window shows after the frame is published: only the rects the frame names change on screen. */
+    private def present(image: BufferedImage, region: Option[List[PixelRect]]): Unit =
+      val g = screenImage.createGraphics()
+      try
+        region match
+          case None => g.drawImage(image, 0, 0, null)
+          case Some(rects) =>
+            rects.foreach { rect =>
+              val (x, y) = (math.floor(rect.xPx * scale).toInt, math.floor(rect.yPx * scale).toInt)
+              val (w, h) = (math.ceil(rect.widthPx * scale).toInt, math.ceil(rect.heightPx * scale).toInt)
+              val clipped = new java.awt.Rectangle(x, y, w, h)
+                .intersection(new java.awt.Rectangle(0, 0, image.getWidth, image.getHeight))
+              if !clipped.isEmpty then
+                g.drawImage(
+                  image.getSubimage(clipped.x, clipped.y, clipped.width, clipped.height),
+                  clipped.x,
+                  clipped.y,
+                  null
+                )
+            }
+      finally g.dispose()
+
+  private def differing(
+    window: Window,
+    drawn: BufferedImage,
+    state: AppState,
+    scale: Double,
+    fringe: Boolean = false
+  ): Seq[(Int, Int)] =
+    oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), 1) { frames =>
+      val cold = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
+      val differing =
+        for
+          x <- 0 until drawn.getWidth
+          y <- 0 until drawn.getHeight
+          if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+        yield (x, y)
+      if differing.nonEmpty then
+        System.err.println(
+          FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
+        )
+      differing
+    }
+
+  private def summary(d: Seq[(Int, Int)]): String =
+    val ys = d.map(_._2)
+    s"${d.size} px differ, y ${ys.minOption.getOrElse(0)}-${ys.maxOption.getOrElse(0)}"
+
+  private def pagedThrough(
+    config: AppConfig,
+    window: Window,
+    pool: Int,
+    scale: Double,
+    document: RichTextDocument,
+    pageDowns: Int = 12,
+    perFrame: Int = 1,
+    fringe: Boolean = false
+  ): List[String] =
+    val (stateManager, id) =
+      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, config, grid = window.viewport)
+    stateManager
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updatedWith(id)(
+              _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+            )
+          )
+        )
+      )
+      .unsafeRunSync()
+    val frames = Pooled(window, pool, scale, fringe = fringe)
+    val first  = stateManager.getCurrentState.unsafeRunSync()
+    val _      = frames.render(first, Damage.Everything)
+    val steps = (1 to pageDowns).foldLeft((first, List.empty[String])) {
+      case ((before, found), step) =>
+        (1 to perFrame).foreach(_ => stateManager.applyEvent(PageDown).unsafeRunSync())
+        val after = stateManager.getCurrentState.unsafeRunSync()
+        val diff =
+          differing(
+            window,
+            frames.render(after, DamageProducer.forTransition(before, after)),
+            after,
+            scale,
+            fringe
+          )
+        val top = after.persisted.buffers.get(id).map(_.viewport.topLine)
+        (after, if diff.isEmpty then found else s"step $step top=$top: ${summary(diff)}" :: found)
+    }
+    steps._2.reverse.take(3)
+
+  private val wordSample: RichTextDocument =
+    RtfDocumentCodec
+      .readBytes(Files.readAllBytes(Path.of("src/test/resources/richtext/word-sample.rtf")))
+      .getOrElse(fail("expected word-sample.rtf to decode"))
+
+  private val documents = List(
+    "six chapters of twelve paragraphs" -> chapters(6, 12),
+    "eight chapters of four paragraphs" -> chapters(8, 4),
+    "a short last page"                 -> RichTextDocument(chapters(5, 3).paragraphs.take(18)),
+    "Word's sample"                     -> wordSample
+  )
+
+  for
+    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
+    scale                    <- List(1.0, 2.0)
+    (documentName, document) <- documents
+    if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")
+  do
+    s"PageDown through $documentName in the $layoutName layout at ${scale}x" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(config, fullHd, 2, scale, document) shouldBe empty
+      }
+
+  private val ownersConfig: AppConfig =
+    AppConfig.default
+      .withStatusLinePlacement(StatusLinePlacement.Pinned)
+      .withLineNumbers(false)
+      .withPaneHeaders(false)
+      .withScrollbar(false)
+      .withTabStrip(TabStripMode.Off)
+
+  private val windows = List(
+    "1920x1080"                 -> fullHd,
+    "800x600"                   -> Window(800, 600),
+    "a height off the row grid" -> Window(1000, 777),
+    "a short, wide window"      -> Window(1400, 333)
+  )
+
+  private def novel(count: Int, bodies: Int): RichTextDocument =
+    val big = RichTextStyle(fontSize = Some(28f), marks = Set(InlineMark.Bold))
+    RichTextDocument(
+      (1 to count).toList.flatMap { chapter =>
+        val bodyParagraphs = (1 to bodies).toList.map { body =>
+          val text =
+            s"Chapter $chapter paragraph $body. " + "the mage said nothing and watched the rain " * (4 + body * 5 % 19)
+          RichTextParagraph(
+            List(RichTextRun(text.take(40)), RichTextRun(text.drop(40), RichTextStyle(marks = Set(InlineMark.Italic)))),
+            alignment = ParagraphAlignment.Justify
+          )
+        }
+        List(
+          RichTextParagraph(
+            List(RichTextRun(s"Chapter $chapter", big)),
+            ParagraphAlignment.Center,
+            ParagraphRole.Heading(1)
+          ),
+          RichTextParagraph(List(RichTextRun("")), ParagraphAlignment.Center),
+          RichTextParagraph(List(RichTextRun("A subtitle")), ParagraphAlignment.Center, ParagraphRole.Heading(2))
+        ) ++ bodyParagraphs.headOption.map(_.copy(role = ParagraphRole.dropCap())).toList ++ bodyParagraphs.drop(1)
+      }
+    )
+
+  private val chaptered = List(
+    "centred headings over justified, italic prose" -> novel(6, 10),
+    "chapters ending in a short one" -> RichTextDocument(
+      chapters(4, 9).paragraphs ++ chapters(1, 2).paragraphs.map(p =>
+        p.copy(runs = p.runs.map(r => r.copy(text = r.text.replace("Chapter 1", "Chapter 5"))))
+      )
+    ),
+    "six chapters of twelve paragraphs" -> chapters(6, 12),
+    "a single long chapter"             -> chapters(1, 40)
+  )
+
+  for
+    (chromeName, config) <- List(
+      "the owner's chrome (status pinned, no scrollbar)" -> ownersConfig,
+      "pinned status with a scrollbar"                   -> ownersConfig.withScrollbar(true)
+    )
+    scale                    <- List(1.0, 2.0)
+    (windowName, window)     <- windows
+    (documentName, document) <- chaptered
+  do
+    s"PageDown through $documentName with $chromeName at ${scale}x in a $windowName window" should
+      "draw what a cold frame draws at every step, past the end too" in {
+        pagedThrough(config, window, 2, scale, document, pageDowns = 40) shouldBe empty
+      }
+
+  for
+    (shape, perFrame)        <- List(("one PageDown a frame", 1), ("three PageDowns a frame", 3))
+    scale                    <- List(1.0, 2.0)
+    (documentName, document) <- ("Word's sample" -> wordSample) :: chaptered.take(2)
+  do
+    s"PageDown through $documentName with the owner's chrome at ${scale}x with $shape" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(
+          ownersConfig,
+          fullHd,
+          2,
+          scale,
+          document,
+          pageDowns = 20,
+          perFrame = perFrame
+        ) shouldBe empty
+      }
+
+  for
+    scale <- List(1.0, 2.0)
+    (windowName, window) <- List(
+      "1500x1000" -> Window(1500, 1000),
+      "1920x1080" -> fullHd,
+      "800x600"   -> Window(800, 600)
+    )
+    (documentName, document) <- List(
+      "two short chapters"    -> novel(2, 4),
+      "chapters five and six" -> RichTextDocument(novel(6, 3).paragraphs.drop(0).takeRight(2 * (3 + 3 + 0)))
+    )
+  do
+    s"PageDown through $documentName with the focused text body dimmed at ${scale}x in a $windowName window" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(ownersConfig.withFocusedTextBody(true), window, 2, scale, document, pageDowns = 6) shouldBe empty
+      }
+
+  private val writingConfig: AppConfig =
+    ownersConfig
+      .withAppMode(AppMode.Prose)
+      .withTypewriterScrolling(true)
+      .withFocusedTextBody(true)
+      .withProseMeasure(Some(ProseMeasure.Default))
+      .withInterfaceDensity(InterfaceDensity.Spacious)
+
+  for
+    scale <- List(1.0, 2.0)
+    (windowName, window) <- List(
+      "1500x1000" -> Window(1500, 1000),
+      "1920x1080" -> fullHd,
+      "800x600"   -> Window(800, 600)
+    )
+    (documentName, document) <- List(
+      "two short chapters" -> novel(2, 4),
+      "six chapters"       -> novel(6, 6),
+      "plain chapters"     -> chapters(3, 3)
+    )
+  do
+    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+      }
+
+  for
+    scale  <- List(1.0, 2.0)
+    height <- List(560, 575, 593, 608, 623)
+  do
+    s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x" should
+      "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
+        pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
+      }
+
+  "PageDown through a dimmed typewriter document" should "clear the pixel beside the text column of every row it draws again" in {
+    val document = novel(2, 4)
+    val window   = Window(800, 600)
+    val (stateManager, id) =
+      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, writingConfig, grid = window.viewport)
+    stateManager
+      .updateState(state =>
+        state.copy(persisted =
+          state.persisted.copy(buffers =
+            state.persisted.buffers.updatedWith(id)(
+              _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+            )
+          )
+        )
+      )
+      .unsafeRunSync()
+    val frames = Pooled(window, 1, 1.0)
+    val first  = stateManager.getCurrentState.unsafeRunSync()
+    val _      = frames.render(first, Damage.Everything)
+    val (_, survivors) = (1 to 3).foldLeft((first, List.empty[String])) {
+      case ((before, found), step) =>
+        stateManager.applyEvent(PageDown).unsafeRunSync()
+        val after = stateManager.getCurrentState.unsafeRunSync()
+        val left  = frames.contentLeftPx.getOrElse(0) - 1
+        val ys    = (60 until 540 by 4).toList
+        frames.stampPooled(left, ys)
+        val _          = frames.render(after, DamageProducer.forTransition(before, after))
+        val drawnAgain = ys.filter(y => frames.drawnSpans.get().exists((top, height) => y >= top && y < top + height))
+        (after, found ++ drawnAgain.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+    }
+    survivors.take(3) shouldBe empty
+  }
+
+  for
+    scale <- List(1.0, 2.0)
+    (windowName, window) <- List(
+      "1500x1000" -> Window(1500, 1000),
+      "1920x1080" -> fullHd,
+      "800x600"   -> Window(800, 600)
+    )
+    (documentName, document) <- List("two short chapters" -> novel(2, 4), "six chapters" -> novel(6, 6))
+  do
+    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window, a serif fringe beside the column" should
+      "draw what a cold frame draws at every step" in {
+        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8, fringe = true) shouldBe empty
+      }
+
+  private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
+    RichTextDocument(
+      chapters(chapterCount, bodies).paragraphs ++ List(
+        RichTextParagraph(List(RichTextRun(s"Chapter ${chapterCount + 1}")), role = ParagraphRole.Heading(1)),
+        RichTextParagraph(List(RichTextRun("")))
+      )
+    )
+
+  for
+    (configName, config) <- List(
+      "the owner's chrome with dimming" -> ownersConfig.withFocusedTextBody(true),
+      "typewriter scrolling"            -> writingConfig
+    )
+    scale                <- List(1.0, 2.0)
+    (windowName, window) <- List("1500x1000" -> Window(1500, 1000), "800x600" -> Window(800, 600))
+    (documentName, document) <- List(
+      "an empty last chapter"      -> endingInAnEmptyChapter(5, 6),
+      "a short empty last chapter" -> endingInAnEmptyChapter(2, 3)
+    )
+  do
+    s"PageDown through $documentName with $configName at ${scale}x in a $windowName window" should
+      "draw what a cold frame draws, with nothing left on the rows past the end" in {
+        pagedThrough(config, window, 2, scale, document, pageDowns = 12) shouldBe empty
+      }
+
+  "A sweep of chapter shapes ending in an empty chapter" should "draw what a cold frame draws" in {
+    val failures = for
+      (configName, config) <- List("dimming" -> ownersConfig.withFocusedTextBody(true), "typewriter" -> writingConfig)
+      window               <- List(Window(1500, 1000), Window(800, 600))
+      count                <- 2 to 5
+      bodies               <- 1 to 7
+      found                <- pagedThrough(config, window, 2, 1.0, endingInAnEmptyChapter(count, bodies), pageDowns = 5)
+    yield s"$configName $window chapters=$count bodies=$bodies: $found"
+    failures shouldBe empty
+  }

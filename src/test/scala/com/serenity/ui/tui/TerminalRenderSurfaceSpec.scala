@@ -3,6 +3,7 @@ package com.serenity.ui.tui
 import java.awt.Color
 import java.io.StringWriter
 
+import com.serenity.ChromeOn
 import com.serenity.config.CursorMode
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.*
@@ -226,11 +227,11 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val bufferId     = BufferId(1)
     val viewport     = ViewportSize(80, 24)
     val buffer       = Buffer.fromString(bufferId, "hello terminal")
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
@@ -462,16 +463,16 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       val cursorColumn = 15
       val baseBuffer   = Buffer.fromString(bufferId, "Hello, cursor tracking world!")
       val buffer       = baseBuffer.copy(editing = EditingState(List(CursorPosition(0, cursorColumn))))
-      val state = AppState.initial.copy(
-        persisted = AppState.initial.persisted.copy(
-          config = AppState.initial.persisted.config
+      val state = ChromeOn.initial.copy(
+        persisted = ChromeOn.initial.persisted.copy(
+          config = ChromeOn.initial.persisted.config
             .withCursorMode(CursorMode.Blink)
             .withLineNumbers(false)
             .withoutStatusLine
             .withPaneHeaders(false),
           buffers = Map(buffer.id -> buffer),
           bufferOrder = List(buffer.id),
-          layout = AppState.initial.persisted.layout.copy(
+          layout = ChromeOn.initial.persisted.layout.copy(
             editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
             activeEditorPaneId = Some(paneId),
             workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
@@ -513,16 +514,16 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val baseBuffer   = Buffer.fromString(bufferId, text)
     val buffer =
       baseBuffer.copy(editing = EditingState(List(CursorPosition(cursorLine, cursorColumn))))
-    val state = AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config
+    val state = ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
+        config = ChromeOn.initial.persisted.config
           .withCursorMode(CursorMode.Blink)
           .withLineNumbers(false)
           .withoutStatusLine
           .withPaneHeaders(false),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
@@ -556,12 +557,12 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val buffer   = Buffer.fromString(bufferId, "hello terminal")
-    AppState.initial.copy(
-      persisted = AppState.initial.persisted.copy(
-        config = AppState.initial.persisted.config.withCursorMode(cursorMode),
+    ChromeOn.initial.copy(
+      persisted = ChromeOn.initial.persisted.copy(
+        config = ChromeOn.initial.persisted.config.withCursorMode(cursorMode),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
+        layout = ChromeOn.initial.persisted.layout.copy(
           editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
@@ -570,8 +571,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         theme = Theme.light
       ),
       // This exercises `TerminalRenderSurface`'s own ANSI output directly, so it is a TUI render whatever surface
-      // `AppState.initial` itself defaults to -- flagging it as one keeps the line-number gutter at the terminal's
+      // `ChromeOn.initial` itself defaults to -- flagging it as one keeps the line-number gutter at the terminal's
       // flush density (`AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding`), matching what this
       // spec's hardcoded cursor-position escapes assume.
-      runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
+      runtime = ChromeOn.initial.runtime.copy(capabilities = FrontendCapabilities.tui())
     )

@@ -18,34 +18,70 @@ object ModalSurfaceComposition:
     modal: Modal,
     frameRect: LayoutRect,
     targetRows: Int,
-    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings,
+    measure: TextMeasure = TextMeasure.Cells
   ): Option[ResolvedSurfaceComposition] =
     modal match
-      case Modal.Confirm(prompt)           => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows))
+      case Modal.Confirm(prompt)           => Some(ConfirmComposition.forPrompt(prompt, frameRect, targetRows, measure))
       case Modal.TextPrompt(prompt)        => Some(textPromptPlan(prompt, frameRect))
-      case find: Modal.Find                => Some(findPlan(find, frameRect, modalBindings))
-      case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings))
-      case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows))
-      case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect))
+      case find: Modal.Find                => Some(findPlan(find, frameRect, modalBindings, measure))
+      case Modal.FileWorkflow(workflow)    => Some(filePlan(workflow, frameRect, modalBindings, measure))
+      case Modal.ReplaceWorkflow(workflow) => Some(replacePlan(workflow, frameRect, targetRows, measure))
+      case Modal.ListPicker(picker)        => Some(ListPickerComposition.forPicker(picker, frameRect, measure))
       case Modal.PanelArrangement(arrangement) =>
-        Some(PanelArrangementComposition.forArrangement(arrangement, frameRect, modalBindings))
+        Some(PanelArrangementComposition.forArrangement(arrangement, frameRect, modalBindings, measure))
 
-  /** Return the minimum frame height needed to show a modal workflow at the requested density. */
-  def frameHeight(modal: Modal, targetRows: Int): Int =
+  /** [[forModal]] with the density, keymap and text measure the app's own state calls for -- how painting, hit-testing
+    * and accessibility all read a modal, so they agree on where its wrapped rows and choices are.
+    */
+  def forState(modal: Modal, frameRect: LayoutRect, state: AppState): Option[ResolvedSurfaceComposition] =
+    forModal(
+      modal,
+      frameRect,
+      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
+      state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings,
+      TextMeasure.Cells
+    )
+
+  /** [[frameHeight]] for a frame `width` cells wide, as the app's own state sizes it. */
+  def frameHeightFor(modal: Modal, width: Int, state: AppState): Int =
+    frameHeight(
+      modal,
+      SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity),
+      width,
+      state.persisted.config.inputConfig.focusedKeymapConfig.modal.bindings,
+      TextMeasure.Cells
+    )
+
+  /** The minimum frame height needed to show a modal workflow at the requested density, in a frame `width` cells wide:
+    * prose that wraps there takes the rows it wraps to.
+    */
+  def frameHeight(
+    modal: Modal,
+    targetRows: Int,
+    width: Int,
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]] = ModalKeyAction.defaultBindings,
+    measure: TextMeasure = TextMeasure.Cells
+  ): Int =
     val actionRows = math.max(1, targetRows)
+    val wrap       = ModalWrap.ofFrame(width, measure)
     modal match
-      case Modal.TextPrompt(_)                 => 3
-      case find: Modal.Find                    => if find.results.isEmpty then 5 else 6
-      case Modal.ListPicker(picker)            => ListPickerComposition.frameHeight(picker)
-      case Modal.PanelArrangement(arrangement) => PanelArrangementComposition.frameHeight(arrangement)
+      case Modal.TextPrompt(_) => 3
+      case find: Modal.Find =>
+        (if find.results.isEmpty then 5 else 6) + (findErrorLines(find, wrap).size - 1).max(0)
+      case Modal.ListPicker(picker) => ListPickerComposition.frameHeight(picker, wrap)
+      case Modal.PanelArrangement(arrangement) =>
+        PanelArrangementComposition.frameHeight(arrangement, modalBindings, wrap)
       case Modal.ReplaceWorkflow(workflow) =>
-        val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(_ => 1)
+        val contentRows = 3 + actionRows * 2 + workflow.statusMessage.fold(0)(wrap.lines(_).size)
         SurfaceFrameLayout.DefaultBorderCells * 2 + contentRows
       case Modal.FileWorkflow(workflow) =>
         // header + filename + path + format rows, plus up to 4 suggestions, plus a status/create-dir footer and the
-        // keybinding-hints footer (issue #1253).
-        math.max(9, math.min(14, workflow.suggestions.take(4).size + 8))
-      case Modal.Confirm(prompt) => ConfirmComposition.frameHeight(prompt, actionRows)
+        // keybinding-hints footer (issue #1253), which take as many rows as they wrap to.
+        val footerRows = math.max(1, fileFooterLines(workflow, wrap).size)
+        val hintRows   = wrap.lines(fileWorkflowKeyHints(workflow, modalBindings)).size
+        math.max(9, math.min(14, workflow.suggestions.take(4).size + 8)) + (footerRows - 1) + (hintRows - 1)
+      case Modal.Confirm(prompt) => ConfirmComposition.frameHeight(prompt, actionRows, wrap)
 
   private def inputPlan(
     label: String,
@@ -75,15 +111,18 @@ object ModalSurfaceComposition:
   private def findPlan(
     find: Modal.Find,
     frameRect: LayoutRect,
-    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]],
+    measure: TextMeasure
   ): ResolvedSurfaceComposition =
-    val content   = SurfaceFrameLayout(frameRect).contentRect
-    val bounds    = logicalRect(content.x, content.y, content.width, content.height)
-    val query     = find.query
-    val resultSet = FindResultSet.normalized(query.text, find.results, find.currentIndex, find.capped)
-    val headerBox = textBox(findHeader(find.options, modalBindings), rowRect(bounds, 0))
-    val queryBox  = inputBox("Find", query.text, SurfaceFocusId("find"), rowRect(bounds, 1), caret = Some(query.caret))
-    val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 3)).zipWithIndex.map {
+    val content    = SurfaceFrameLayout(frameRect).contentRect
+    val bounds     = logicalRect(content.x, content.y, content.width, content.height)
+    val errorRows  = findErrorLines(find, ModalWrap.ofContent(content.width, measure))
+    val footerRows = math.max(1, errorRows.size)
+    val query      = find.query
+    val resultSet  = FindResultSet.normalized(query.text, find.results, find.currentIndex, find.capped)
+    val headerBox  = textBox(findHeader(find.options, modalBindings), rowRect(bounds, 0))
+    val queryBox   = inputBox("Find", query.text, SurfaceFocusId("find"), rowRect(bounds, 1), caret = Some(query.caret))
+    val resultBoxes = resultSet.visibleResults(math.max(0, content.height - 2 - footerRows)).zipWithIndex.map {
       case ((result, index), offset) =>
         textBox(
           s"${index + 1}. ${result.line + 1}:${result.column + 1}",
@@ -93,19 +132,27 @@ object ModalSurfaceComposition:
           action = Some(SurfaceAction.SelectFindResult(index))
         )
     }
-    val queryError =
-      Option.when(query.text.nonEmpty)(FindPattern.compile(query.text, find.options)).flatMap(_.left.toOption)
-    val footer = Option.when(resultSet.query.nonEmpty) {
-      queryError match
-        case Some(error) =>
-          textBox(s"Invalid regex: ${error.message}", rowRect(bounds, content.height - 1), tone = OverlayTone.Error)
-        case None =>
+    val footer =
+      if errorRows.nonEmpty then
+        errorRows.zipWithIndex.map { (line, offset) =>
+          textBox(line, rowRect(bounds, content.height - footerRows + offset), tone = OverlayTone.Error)
+        }
+      else if resultSet.query.nonEmpty then
+        List(
           textBox(
             if resultSet.results.isEmpty then "0 matches" else resultSet.selectionSummary,
             rowRect(bounds, content.height - 1)
           )
-    }
-    plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer.toList)
+        )
+      else Nil
+    plan(bounds, headerBox :: queryBox :: resultBoxes ++ footer)
+
+  private def findErrorLines(find: Modal.Find, wrap: ModalWrap): List[String] =
+    Option
+      .when(find.query.text.nonEmpty)(FindPattern.compile(find.query.text, find.options))
+      .flatMap(_.left.toOption)
+      .toList
+      .flatMap(error => wrap.lines(s"Invalid regex: ${error.message}"))
 
   /** "find" followed by each option's state and key, e.g. `find  [x] case alt+c  [ ] word alt+w  [ ] regex alt+r`. */
   private def findHeader(options: FindOptions, modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]): String =
@@ -124,7 +171,8 @@ object ModalSurfaceComposition:
   private def replacePlan(
     workflow: ReplaceWorkflowState,
     frameRect: LayoutRect,
-    targetRows: Int
+    targetRows: Int,
+    measure: TextMeasure
   ): ResolvedSurfaceComposition =
     val content    = SurfaceFrameLayout(frameRect).contentRect
     val bounds     = logicalRect(content.x, content.y, content.width, content.height)
@@ -161,7 +209,10 @@ object ModalSurfaceComposition:
         ("Selection", "replace-selection", workflow.selectedScope == ReplaceWorkflowScope.Selection)
       )
     )
-    val status = workflow.statusMessage.toList.map(message => textBox(message, rowRect(bounds, 2 + actionRows * 2)))
+    val status = workflow.statusMessage.toList
+      .flatMap(ModalWrap.ofContent(content.width, measure).lines)
+      .zipWithIndex
+      .map((line, offset) => textBox(line, rowRect(bounds, 2 + actionRows * 2 + offset)))
     plan(bounds, fields ++ actionBoxes ++ scopeBoxes ++ status)
 
   /** Keeps the tail of a path's segments on screen when they do not all fit `maxWidth`, eliding the head behind a
@@ -195,10 +246,12 @@ object ModalSurfaceComposition:
   private def filePlan(
     workflow: FileWorkflowState,
     frameRect: LayoutRect,
-    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]]
+    modalBindings: Map[ModalKeyAction, List[HotkeyTrigger]],
+    measure: TextMeasure
   ): ResolvedSurfaceComposition =
     val content   = SurfaceFrameLayout(frameRect).contentRect
     val bounds    = logicalRect(content.x, content.y, content.width, content.height)
+    val wrap      = ModalWrap.ofContent(content.width, measure)
     val rowHeight = 1
     // A dedicated kind (rather than plain Text) so AccessibilityModel.modalControls can find and announce this
     // non-interactive header directly -- it has no focusId, so it can never turn up among `hitRegions` the way an
@@ -292,17 +345,23 @@ object ModalSurfaceComposition:
           rowRect(bounds, displayIndex + suggestionBaseRow, rowHeight)
         )
     }
-    val footer = workflow.statusMessage
+    val footerLines = fileFooterLines(workflow, wrap)
+    val footerStart = suggestions.size + suggestionBaseRow
+    val hintsStart  = footerStart + math.max(1, footerLines.size)
+    val footer =
+      footerLines.zipWithIndex.map((line, offset) => textBox(line, rowRect(bounds, footerStart + offset, rowHeight)))
+    val keyHints = wrap.lines(fileWorkflowKeyHints(workflow, modalBindings)).zipWithIndex.map { (line, offset) =>
+      textBox(line, rowRect(bounds, hintsStart + offset, rowHeight))
+    }
+    plan(bounds, header :: (filename.toList ++ (path :: (formatRow ++ suggestions ++ footer ++ keyHints))))
+
+  private def fileFooterLines(workflow: FileWorkflowState, wrap: ModalWrap): List[String] =
+    workflow.statusMessage
       .orElse(Option.when(workflow.confirmCreateDirectories && workflow.missingPathSegments.nonEmpty) {
         s"Create directories: ${workflow.missingPathSegments.mkString(" / ")}"
       })
       .toList
-      .map(message => textBox(message, rowRect(bounds, suggestions.size + suggestionBaseRow, rowHeight)))
-    val keyHints = textBox(
-      fileWorkflowKeyHints(workflow, modalBindings),
-      rowRect(bounds, suggestions.size + suggestionBaseRow + 1, rowHeight)
-    )
-    plan(bounds, header :: (filename.toList ++ (path :: (formatRow ++ suggestions ++ footer :+ keyHints))))
+      .flatMap(wrap.lines)
 
   /** Builds the file workflow's own current-action hint, in the same tone as `commandRunnerShowKeyHints` elsewhere in
     * this file: sourced live from `modalBindings` (the app's actual, currently-configured `Modal` keymap group) rather

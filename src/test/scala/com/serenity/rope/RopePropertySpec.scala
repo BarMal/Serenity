@@ -26,8 +26,9 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     * genuinely vary in depth and internal structure.
     */
   property("the shape generator produces genuinely varied trees") {
+    val text = "the quick brown fox jumps over the lazy dog. " * 45
     val samples = Gen
-      .listOfN(200, Generators.ropeOfShape("the quick brown fox jumps over the lazy dog"))
+      .listOfN(200, Generators.ropeOfShape(text, maxDepth = 9))
       .sample
       .getOrElse(Nil)
 
@@ -35,7 +36,7 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     samples.map(_.height).distinct.size should be > 3
     samples.exists(_.height > 3) shouldBe true
     // Content is invariant across all of them, which is the premise the rest of the file rests on.
-    samples.map(_.collect()).distinct shouldBe List("the quick brown fox jumps over the lazy dog")
+    samples.map(_.collect()).distinct shouldBe List(text)
   }
 
   property("collect returns the text the rope was built from, whatever its shape") {
@@ -91,19 +92,20 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     forAll(Generators.ropeWithText)((rope, text) => rope.nonWhitespaceCount shouldBe text.count(!_.isWhitespace))
   }
 
-  property("rebalance preserves content and yields a balanced tree") {
+  property("joining a rope to itself keeps the content and yields a valid B-tree, whatever the shape") {
     forAll(Generators.ropeWithText) { (rope, text) =>
-      val rebalanced = rope.rebalance
-      rebalanced.collect() shouldBe text
-      rebalanced.rebuild.isHeightBalanced shouldBe true
-      rebalanced.rebuild.isWeightBalanced shouldBe true
+      val doubled = rope.concat(rope)
+      doubled.collect() shouldBe text + text
+      RopeInvariants.violations(rope, checkFigures = false, checkLeafMinimum = false) shouldBe Nil
+      RopeInvariants.violations(doubled, checkFigures = false, checkLeafMinimum = false) shouldBe Nil
     }
   }
 
-  /** Depth is what `index` and `splitAt` descend, so the Fibonacci bound is the invariant that actually protects
-    * traversal cost. A long run of edits is where a rope degenerates, so it is asserted after every one.
+  /** Depth is what `index` and `splitAt` descend, so a tree whose leaves stay at one depth within the node bounds is
+    * the invariant that actually protects traversal cost. A long run of edits is where a rope degenerates, so it is
+    * asserted after every one.
     */
-  property("a long run of edits never leaves the rope depth-unbalanced") {
+  property("a long run of edits never leaves the rope an invalid B-tree") {
     forAll(Generators.genText) { inserted =>
       val edited = (1 to 200).foldLeft(Rope("")) { (rope, step) =>
         val grown = rope
@@ -115,7 +117,7 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
           else grown
 
         withClue(s"after $step edits, weight ${trimmed.weight} at height ${trimmed.height}: ") {
-          trimmed.isDepthBalanced shouldBe true
+          RopeInvariants.violations(trimmed, checkFigures = false) shouldBe Nil
         }
         trimmed
       }
@@ -129,7 +131,7 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
       rope.insert(rope.weight, s"line $step ").getOrElse(fail("expected insert to succeed"))
     )
 
-    appended.isDepthBalanced shouldBe true
+    RopeInvariants.violations(appended, checkFigures = false) shouldBe Nil
     appended.height should be <= 4 * (31 - Integer.numberOfLeadingZeros(appended.weight))
   }
 
@@ -221,7 +223,7 @@ class RopePropertySpec extends AnyPropSpec with ScalaCheckPropertyChecks with Ma
     }
   }
 
-  /** #1063: `getLine` used to walk `Leaf`/`Node` directly (`appendLine`/`appendLeafLine`) while `linesIteratorFrom`
+  /** #1063: `getLine` used to walk `Leaf`/`Branch` directly (`appendLine`/`appendLeafLine`) while `linesIteratorFrom`
     * streamed flattened chunks from `chunksInRange` (`nextLine`) -- two traversal styles answering the same "content of
     * line N" question. `getLine` now delegates to `linesIteratorFrom`, so this locks the two call shapes in agreement
     * across generated tree shapes rather than re-testing one definition against itself.

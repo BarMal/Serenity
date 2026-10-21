@@ -1,5 +1,6 @@
 package com.serenity.ui.renderer
 
+import com.serenity.document.KeywordHighlight
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
@@ -22,7 +23,8 @@ object RendererHighlights:
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    fallback: Option[CellFallback] = None
   ): Unit =
     buffer.editing.cursors.toList.foreach { cursor =>
       selectionColumnsForVisualLine(cursor, visualLine).foreach {
@@ -39,7 +41,8 @@ object RendererHighlights:
             snapshot,
             selectionStart,
             selectionEnd,
-            styledSegments
+            styledSegments,
+            fallback = fallback
           )
       }
     }
@@ -54,7 +57,8 @@ object RendererHighlights:
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    fallback: Option[CellFallback] = None
   ): Unit =
     comments.foreach { comment =>
       columnsForRange(comment.start, comment.end, visualLine, markPoint = true).foreach {
@@ -72,7 +76,8 @@ object RendererHighlights:
             snapshot,
             commentStart,
             commentEnd,
-            styledSegments
+            styledSegments,
+            fallback = fallback
           )
       }
     }
@@ -90,7 +95,8 @@ object RendererHighlights:
     theme: Theme,
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
-    styledSegments: Option[List[StyledText]] = None
+    styledSegments: Option[List[StyledText]] = None,
+    fallback: Option[CellFallback] = None
   ): Unit =
     matches.foreach { found =>
       columnsForRange(found.start, found.end, visualLine, markPoint = false).foreach {
@@ -107,9 +113,64 @@ object RendererHighlights:
             snapshot,
             matchStart,
             matchEnd,
-            styledSegments
+            styledSegments,
+            fallback = fallback
           )
       }
+    }
+
+  /** Keyword occurrences on this row: a soft wash of the accent, lighter than a find match, painted before the find
+    * matches and the selection so either still reads on top of it.
+    */
+  def renderKeywordHighlights(
+    surface: RenderSurface,
+    keywords: List[KeywordHighlight],
+    visualLine: TextVisualLine,
+    rect: LayoutRect,
+    screenY: Int,
+    lineTopPx: Int,
+    theme: Theme,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    styledSegments: Option[List[StyledText]] = None,
+    fallback: Option[CellFallback] = None
+  ): Unit =
+    keywords.foreach { keyword =>
+      columnsForRange(keyword.start, keyword.end, visualLine, markPoint = false).foreach {
+        case (keywordStart, keywordEnd) =>
+          renderTextRangeBackground(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme.foreground,
+            keywordBackground(theme),
+            context,
+            snapshot,
+            keywordStart,
+            keywordEnd,
+            styledSegments,
+            fallback = fallback
+          )
+      }
+    }
+
+  def keywordBackground(theme: Theme): RenderColor =
+    theme.accent.mixOver(theme.background, 0.18)
+
+  /** The find matches on the rows about to be drawn, so a partial repaint re-matches only those lines. */
+  def findMatchesOnDrawnRows(
+    buffer: Buffer,
+    state: AppState,
+    visualLines: Vector[TextVisualLine],
+    dirtyRows: Option[Set[Int]]
+  ): Map[Int, List[FindHighlight]] =
+    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
+      val drawnLines = visualLines.zipWithIndex.collect {
+        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
+      }.toSet
+      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def findMatchBackground(theme: Theme): RenderColor =
@@ -145,7 +206,9 @@ object RendererHighlights:
     snapshot: TextLayoutSnapshot,
     styledSegments: Option[List[StyledText]] = None,
     dimmed: Boolean = false,
-    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight
+    blendWeight: Double = DefaultDiagnosticHighlightBlendWeight,
+    clipBottomPx: Int = Int.MaxValue,
+    fallback: Option[CellFallback] = None
   ): Unit =
     lineDiagnostics.foreach { diagnostic =>
       val start        = CursorPosition(diagnostic.range.start.line, diagnostic.range.start.character)
@@ -153,7 +216,20 @@ object RendererHighlights:
       val severityCode = diagnostic.severity.map(_.code)
       columnsForRange(start, end, visualLine, markPoint = false).foreach {
         case (diagStart, diagEnd) if diagnostic.source.contains(SpellChecker.Source) =>
-          renderMisspelling(surface, visualLine, rect, screenY, lineTopPx, theme, context, snapshot, diagStart, diagEnd)
+          renderMisspelling(
+            surface,
+            visualLine,
+            rect,
+            screenY,
+            lineTopPx,
+            theme,
+            context,
+            snapshot,
+            diagStart,
+            diagEnd,
+            clipBottomPx,
+            fallback
+          )
         case (diagStart, diagEnd) =>
           renderTextRangeBackground(
             surface,
@@ -168,6 +244,7 @@ object RendererHighlights:
             diagStart,
             diagEnd,
             styledSegments,
+            fallback = fallback,
             extraStyle = TextStyle(isUnderlined = severityThemeColor(theme, severityCode).style.isUnderlined)
           )
       }
@@ -177,6 +254,9 @@ object RendererHighlights:
     * stays readable and the mark reads as an error rather than as the warning or search highlight the shared diagnostic
     * background used to resemble. A cell surface has no sub-cell pixels, so there the word is underlined in the error
     * colour instead.
+    *
+    * The squiggle stops at `clipBottomPx`, the pane's bottom edge, as the row's text does: below it the pixels belong
+    * to no row's band, so a frame that keeps the row would clear them and one that draws it again would not.
     */
   private def renderMisspelling(
     surface: RenderSurface,
@@ -188,7 +268,9 @@ object RendererHighlights:
     context: RenderContext,
     snapshot: TextLayoutSnapshot,
     rangeStart: Int,
-    rangeEnd: Int
+    rangeEnd: Int,
+    clipBottomPx: Int,
+    fallback: Option[CellFallback]
   ): Unit =
     val colour = theme.error.foreground
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
@@ -203,21 +285,27 @@ object RendererHighlights:
         val gap       = if rowBottom - baselinePx - 1 - amplitude >= 1 then 1 else 0
         val topPx     = math.max(lineTopPx, math.min(baselinePx + gap, rowBottom - 1 - amplitude))
         forEachSquiggleSegment(startXPx.round, widthPx.round, topPx, amplitude) { (xPx, yPx, segmentWidthPx) =>
-          surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
+          if yPx < clipBottomPx then surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
         }
       }
     else
       val underline = TextStyle(isUnderlined = true)
       surface.enableStyle(underline)
       try
-        (rangeStart until rangeEnd).foreach { bufferColumn =>
-          val charIndex = bufferColumn - visualLine.startColumn
-          val screenX   = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context) + charIndex
-          if screenX >= rect.x && screenX < rect.right && charIndex >= 0 && charIndex < visualLine.text.length then
-            surface.setForegroundColor(colour)
-            surface.setBackgroundColor(theme.background)
-            CharacterRenderer.renderChar(surface, screenX, screenY, visualLine.text.charAt(charIndex))
-        }
+        surface.setForegroundColor(colour)
+        surface.setBackgroundColor(theme.background)
+        CharacterRenderer.renderCellRange(
+          surface,
+          visualLine,
+          rangeStart,
+          rangeEnd,
+          rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context),
+          screenY,
+          rect.x,
+          rect.right,
+          context.cellMetrics.charWidth,
+          fallback
+        )
       finally surface.disableStyle(underline)
 
   private val MaxSquiggleAmplitudePx = 2
@@ -326,6 +414,7 @@ object RendererHighlights:
     rangeStart: Int,
     rangeEnd: Int,
     styledSegments: Option[List[StyledText]],
+    fallback: Option[CellFallback],
     extraStyle: TextStyle = TextStyle.normal
   ): Unit =
     if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
@@ -345,52 +434,64 @@ object RendererHighlights:
           }
           .foreach {
             case (chunkStart, chunkEnd, style) =>
-              val chunkRangeStart = visualLine.startColumn + chunkStart
-              val chunkRangeEnd   = visualLine.startColumn + chunkEnd
-              val chunkText =
-                if chunkStart < visualLine.text.length then
-                  visualLine.text.substring(chunkStart, math.min(chunkEnd, visualLine.text.length))
-                else " "
-              val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
-              val endXPx =
-                if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
-                  startXPx + context.cellMetrics.charWidth
-                else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
-              val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
-              RendererCursorGlyphs.measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx).foreach {
-                widthPx =>
-                  val combinedStyle = style.combine(extraStyle)
-                  surface.setForegroundColor(foreground)
-                  surface.setBackgroundColor(background)
-                  surface.enableStyle(combinedStyle)
-                  try
-                    surface.text.drawRunPx(
-                      startXPx,
-                      lineTopPx,
-                      widthPx,
-                      RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
-                      RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
-                      chunkText,
-                      clipGlyphToRun = true
-                    )
-                  finally surface.disableStyle(combinedStyle)
+              val chunkLength = visualLine.text.length
+              val pieces =
+                if chunkStart < chunkLength then
+                  MeasuredLineRuns.fontPieces(visualLine, chunkStart, math.min(chunkEnd, chunkLength))
+                else Vector((chunkStart, chunkEnd, None))
+              pieces.foreach {
+                case (pieceStart, pieceEnd, family) =>
+                  val chunkRangeStart = visualLine.startColumn + pieceStart
+                  val chunkRangeEnd   = visualLine.startColumn + pieceEnd
+                  val chunkText =
+                    if pieceStart < chunkLength then
+                      visualLine.text.substring(pieceStart, math.min(pieceEnd, chunkLength))
+                    else " "
+                  val startXPx = lineOriginPx + visualLine.xForColumn(chunkRangeStart).getOrElse(visualLine.widthPx)
+                  val endXPx =
+                    if chunkRangeStart == chunkRangeEnd - 1 && chunkRangeStart >= visualLine.endColumn then
+                      startXPx + context.cellMetrics.charWidth
+                    else lineOriginPx + visualLine.xForColumn(chunkRangeEnd).getOrElse(visualLine.widthPx)
+                  val desiredWidthPx = math.max(context.cellMetrics.charWidth.toFloat, endXPx - startXPx)
+                  RendererCursorGlyphs
+                    .measuredRunWidthWithin(rect, context, startXPx, startXPx + desiredWidthPx)
+                    .foreach { widthPx =>
+                      val combinedStyle = style.combine(extraStyle)
+                      surface.setForegroundColor(foreground)
+                      surface.setBackgroundColor(background)
+                      surface.enableStyle(combinedStyle)
+                      def draw(): Unit =
+                        surface.text.drawRunPx(
+                          startXPx,
+                          lineTopPx,
+                          widthPx,
+                          RendererPaneContent.rowHeightPxFor(visualLine, snapshot),
+                          RendererPaneContent.rowAscentPxFor(visualLine, snapshot),
+                          chunkText,
+                          clipGlyphToRun = true
+                        )
+                      try family.fold(draw())(surface.text.withFallbackFamily(_)(draw()))
+                      finally surface.disableStyle(combinedStyle)
+                    }
               }
           }
     else
       surface.enableStyle(extraStyle)
       try
-        (rangeStart until rangeEnd).foreach { bufferColumn =>
-          val relativeColumn = bufferColumn - visualLine.startColumn
-          val screenX        = rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context) + relativeColumn
-          if screenX >= rect.x && screenX < rect.right then
-            val charIndex = bufferColumn - visualLine.startColumn
-            val charToRender =
-              if charIndex >= 0 && charIndex < visualLine.text.length then visualLine.text.charAt(charIndex)
-              else ' '
-            surface.setForegroundColor(foreground)
-            surface.setBackgroundColor(background)
-            CharacterRenderer.renderChar(surface, screenX, screenY, charToRender)
-        }
+        surface.setForegroundColor(foreground)
+        surface.setBackgroundColor(background)
+        CharacterRenderer.renderCellRange(
+          surface,
+          visualLine,
+          rangeStart,
+          rangeEnd,
+          rect.x + RendererPaneContent.visualLineCellOffset(visualLine, context),
+          screenY,
+          rect.x,
+          rect.right,
+          context.cellMetrics.charWidth,
+          fallback
+        )
       finally surface.disableStyle(extraStyle)
 
   private[renderer] def selectionColumnsForVisualLine(cursor: Cursor, visualLine: TextVisualLine): Option[(Int, Int)] =

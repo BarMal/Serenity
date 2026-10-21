@@ -1,6 +1,7 @@
 package com.serenity.ui.terminal
 
 import java.awt.*
+import java.awt.event.{ContainerAdapter, ContainerEvent}
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JComponent
@@ -23,7 +24,7 @@ private[terminal] trait SwingWindowImageSupport:
     * for the paint to finish; only a paint stuck past [[MaxLeaseWaitNanos]] makes it allocate, so a hung event thread
     * can never stall rendering.
     */
-  final private[serenity] class ReusableImagePool:
+  final private[serenity] class ReusableImagePool(maxLeaseWaitNanos: Long = MaxLeaseWaitNanos):
 
     final private case class Slots(
         published: Option[BufferedImage],
@@ -54,7 +55,7 @@ private[terminal] trait SwingWindowImageSupport:
         if !interrupted then awaitSpareRelease(deadlineNanos)
 
     def acquire(width: Int, height: Int, imageType: Int): BufferedImage =
-      awaitSpareRelease(System.nanoTime() + MaxLeaseWaitNanos)
+      awaitSpareRelease(System.nanoTime() + maxLeaseWaitNanos)
       val before = slots.getAndUpdate(current => if current.spareIsLeased then current else current.copy(spare = None))
       before.spare
         .filterNot(_ => before.spareIsLeased)
@@ -76,6 +77,7 @@ private[terminal] trait SwingWindowImageSupport:
       leaseLock.synchronized(leaseLock.notifyAll())
 
   /** A paint takes a few milliseconds; this is generous for one and short enough that a stuck one costs a single frame.
+    * A pool takes its own wait so a test can make it long enough to be immune to scheduling pauses.
     */
   private val MaxLeaseWaitNanos = 50_000_000L
 
@@ -172,6 +174,12 @@ private[terminal] trait SwingWindowImageSupport:
     * any double-buffered ancestor it passes, so unbuffering only `canvas` is not enough: the root pane, layered pane
     * and content pane are buffered by default and would still be the buffer. Components that are not ancestors keep
     * their own buffering.
+    *
+    * The canvas's own children are unbuffered too, now and as they are added. A child is only spared a buffer of its
+    * own when an ancestor is the one being buffered (`JComponent.paintToOffscreen` sets `ANCESTOR_USING_BUFFER`); with
+    * the canvas unbuffered, a double-buffered child painted during a `RepaintManager` pass is drawn into the shared
+    * opaque back buffer and that buffer, which nothing initialised for it, is copied over the frame. A non-opaque child
+    * that paints nothing, as every accessibility proxy does, thereby blanks its whole rectangle.
     */
   private[serenity] def presentDirectly(canvas: JComponent): Unit =
     canvas.setOpaque(true)
@@ -179,6 +187,19 @@ private[terminal] trait SwingWindowImageSupport:
       .unfold[Component, Option[Component]](Some(canvas))(_.map(component => (component, Option(component.getParent))))
       .collect { case swingComponent: JComponent => swingComponent }
       .foreach(_.setDoubleBuffered(false))
+    canvas.getComponents.foreach(unbufferTree)
+    canvas.addContainerListener(
+      new ContainerAdapter:
+        override def componentAdded(event: ContainerEvent): Unit = unbufferTree(event.getChild)
+    )
+
+  private def unbufferTree(component: Component): Unit =
+    component match
+      case swingComponent: JComponent => swingComponent.setDoubleBuffered(false)
+      case _                          => ()
+    component match
+      case container: Container => container.getComponents.foreach(unbufferTree)
+      case _                    => ()
 
   /** An opaque frame is stretched over the whole panel and overwrites every pixel of the clip, so filling black first
     * is a second full-clip write; only a missing or alpha-carrying frame leaves pixels to define.

@@ -63,11 +63,11 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
 
   private def editorState(
     theme: Theme,
-    config: AppConfig = AppConfig.default,
+    config: AppConfig = AppConfig.conventional,
     text: String = "alpha\nbeta\ngamma",
     configureBuffer: Buffer => Buffer = identity
   ): AppState =
-    val initial = AppState.initial
+    val initial = AppState.initial(AppConfig.conventional)
     initial.copy(
       persisted = initial.persisted.copy(
         buffers = Map(bufferId -> configureBuffer(Buffer.fromString(bufferId, text))),
@@ -112,7 +112,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
   }
 
   "the pinned status gutter in the TUI under a transparent theme" should "paint the opaque panel colour" in {
-    val config = AppConfig.default.withStatusLinePlacement(StatusLinePlacement.Pinned)
+    val config = AppConfig.conventional.withStatusLinePlacement(StatusLinePlacement.Pinned)
     val screen = render(editorState(transparent, config))
 
     val lastRow = viewport.height - 1
@@ -123,7 +123,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep a background it was explicitly configured with" in {
-    val config = AppConfig.default
+    val config = AppConfig.conventional
       .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withStatusLineColors(StatusLineColors(background = Some(Color.BLUE)))
     val screen = render(editorState(transparent, config))

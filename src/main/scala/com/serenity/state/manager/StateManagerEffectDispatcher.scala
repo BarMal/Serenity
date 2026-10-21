@@ -21,6 +21,7 @@ final private[manager] class CommandEffectInterpreter(
       case AppEffect.Explorer(value)                 => dependencies.explorer(value)
       case AppEffect.Workflow(value)                 => dependencies.workflow(value)
       case AppEffect.LspQueue(value)                 => dependencies.lspQueue(value)
+      case AppEffect.Ime(value)                      => dependencies.ime(value)
       case AppEffect.ScheduleCommandRunnerBindingExpiry(recordedAtMillis) =>
         dependencies.scheduleCommandRunnerBindingExpiry(recordedAtMillis)
       // Intercepted by StateManagerEventPipeline.interpretEffect before reaching this dispatcher (#1016) -- undo
@@ -40,5 +41,6 @@ private[manager] object CommandEffectInterpreter:
       workflow: WorkflowEffect => IO[Unit],
       lspQueue: LspQueueEffect => IO[Unit],
       scheduleCommandRunnerBindingExpiry: Long => IO[Unit],
-      settings: SettingsEffect => IO[Unit] = _ => IO.unit
+      settings: SettingsEffect => IO[Unit] = _ => IO.unit,
+      ime: ImeEffect => IO[Unit] = _ => IO.unit
   )

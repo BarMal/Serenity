@@ -2,10 +2,12 @@ package com.serenity.state.manager
 
 import cats.syntax.all.*
 import com.serenity.config.{AppConfig, RenderDamageGranularity}
+import com.serenity.document.KeywordHighlights
 import com.serenity.lsp.model.Diagnostic
 import com.serenity.rope.{Balance, RopeDiff}
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.models.*
+import com.serenity.ui.openings.{LineEdit, OpeningInvalidation, VirtualDropCaps}
 
 /** Computes what a transition between two `AppState`s damaged, so the render loop doesn't have to rediscover it by
   * diffing frames -- the wake-up decision this drives is wired in by `#998` (`AppRuntime.inputEventPhase`). `#999`
@@ -51,8 +53,24 @@ object DamageProducer:
               granularity
             )
     }
-    bufferDamage |+| chromeDamage(before, after) |+| fullRenderDamage(before, after) |+|
+    val damage = bufferDamage |+| compositionDamage(before, after) |+| chromeDamage(before, after) |+|
+      fullRenderDamage(before, after) |+|
       paneChromeDamage(before, after) |+| statusLineDamage(before, after) |+| tabBarDamage(before, after)
+    // Every combine regroups all the facts it holds, so a transition that grabs no thumb does not pay for one.
+    scrollbarDamage(before, after) match
+      case Damage.Nothing => damage
+      case grabbed        => damage |+| grabbed
+
+  /** The pre-edit is drawn into the text, so the buffer shows differently when one begins, changes or ends (#2008) -
+    * though none of its own state does. Whole-buffer, since a pre-edit can reflow the rows below it.
+    */
+  private def compositionDamage(before: AppState, after: AppState): Damage =
+    if before.runtime.composition == after.runtime.composition then Damage.Nothing
+    else
+      List(before, after)
+        .flatMap(_.runtime.composition)
+        .map(composition => Damage.BufferAll(composition.bufferId): Damage)
+        .combineAll
 
   /** Everything about one buffer's own state that can dirty its visible rows without necessarily touching its rope
     * content -- cursor and selection movement, comment/diagnostic annotation changes, and a language reclassification
@@ -68,12 +86,14 @@ object DamageProducer:
     afterBuffer: Buffer,
     granularity: RenderDamageGranularity
   )(using Balance): Damage =
-    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity)
+    val content = contentDamage(bufferId, beforeBuffer, afterBuffer, granularity) |+|
+      openingsDamage(bufferId, before, after, beforeBuffer, afterBuffer)
     content |+|
       cursorDamage(bufferId, beforeBuffer, afterBuffer, Damage.damagedLines(bufferId, content)) |+|
       selectionDamage(bufferId, beforeBuffer, afterBuffer) |+|
       findMatchDamage(bufferId, before, after) |+|
       commentDamage(bufferId, beforeBuffer, afterBuffer) |+|
+      keywordHighlightDamage(bufferId, before, after) |+|
       diagnosticDamage(bufferId, before, after, beforeBuffer, afterBuffer) |+|
       languageDamage(bufferId, beforeBuffer, afterBuffer) |+|
       viewportDamage(bufferId, beforeBuffer, afterBuffer) |+|
@@ -92,6 +112,50 @@ object DamageProducer:
         case Some((start, end)) =>
           cellDamage(bufferId, after, start, end, granularity)
             .getOrElse(Damage.BufferRows(bufferId, rowsForOffsetRange(after, start, end)))
+
+  /** A virtual drop cap is the opening's alone, so an edit that is not to the opening can still give it one or take it
+    * away, and the frames alone cannot say so to a screen that shows the frame before last. The damage names the
+    * paragraphs such an edit may have turned into openings or out of them; a change to the settings a buffer is laid
+    * out with damages all of it. Nothing while no virtual drop caps are drawn.
+    */
+  private def openingsDamage(
+    bufferId: BufferId,
+    before: AppState,
+    after: AppState,
+    beforeBuffer: Buffer,
+    afterBuffer: Buffer
+  )(using Balance): Damage =
+    val settingsBefore = beforeBuffer.effectiveOpenings(before.persisted.config.openingsConfig).layoutForm
+    val settingsAfter  = afterBuffer.effectiveOpenings(after.persisted.config.openingsConfig).layoutForm
+    if settingsBefore != settingsAfter then Damage.BufferAll(bufferId)
+    else if !VirtualDropCaps
+          .drawn(settingsAfter) || isSameReference(beforeBuffer.document.content, afterBuffer.document.content)
+    then Damage.Nothing
+    else
+      (beforeBuffer.richText.richTextDocument, afterBuffer.richText.richTextDocument) match
+        case (Some(was), Some(now)) =>
+          val edit = LineEdit.between(
+            beforeBuffer.document.content,
+            afterBuffer.document.content,
+            afterBuffer.document.changeFrom(beforeBuffer.document)
+          )
+          val lines = OpeningInvalidation.widenedParagraphs(was, now, edit).toSet
+          if VirtualDropCaps
+                .growsRows(settingsAfter) && (lines.nonEmpty || mayChangeFirstLetter(beforeBuffer, afterBuffer, edit))
+          then Damage.BufferAll(bufferId)
+          else if lines.isEmpty then Damage.Nothing
+          else Damage.BufferRows(bufferId, lines)
+        case _ => Damage.Nothing
+
+  /** Whether an edit can change the first letter of a paragraph, or whether it has one at all: it spans lines, or
+    * starts within the first character. A first row that grows to hold its letter changes height with either, which
+    * moves every row below it without those rows being edited.
+    */
+  private def mayChangeFirstLetter(before: Buffer, after: Buffer, edit: LineEdit)(using Balance): Boolean =
+    edit.oldCount > 1 || edit.newCount > 1 ||
+      changedOffsetRange(before.document, after.document).forall((start, _) =>
+        after.document.content.offsetToLineColumn(start)._2 <= 1
+      )
 
   /** The range of `after`'s text that `before`'s edits replaced: taken from the change `after` recorded when it has
     * one, found by walking the two ropes otherwise (a reload, a restored session).
@@ -175,6 +239,14 @@ object DamageProducer:
         val changed       = beforeResults.diff(afterResults) ++ afterResults.diff(beforeResults)
         val current       = found.flatMap(_.resultSet.selectedResult)
         Damage.BufferRows(bufferId, (changed ++ current).map(_.line))
+
+  /** Keyword highlights appear and go with the notes pane, the toggle and the keyword notes rather than with any edit,
+    * so a change in which terms are painted repaints the whole buffer.
+    */
+  private def keywordHighlightDamage(bufferId: BufferId, before: AppState, after: AppState): Damage =
+    if KeywordHighlights.paintedTerms(before, bufferId) == KeywordHighlights.paintedTerms(after, bufferId) then
+      Damage.Nothing
+    else Damage.BufferAll(bufferId)
 
   private def commentDamage(bufferId: BufferId, before: Buffer, after: Buffer): Damage =
     if before.annotations.documentComments == after.annotations.documentComments then Damage.Nothing
@@ -278,7 +350,7 @@ object DamageProducer:
     * having to enumerate what every field does to a rendered frame.
     */
   private def chromeDamage(before: AppState, after: AppState): Damage =
-    if before.persisted.theme != after.persisted.theme ||
+    if before.persisted.theme != after.persisted.theme || before.runtime.summons != after.runtime.summons ||
         !(before.persisted.config == after.persisted.config || statusRowOnly(
           before.persisted.config,
           after.persisted.config
@@ -381,6 +453,15 @@ object DamageProducer:
         Damage.Surface(UiSurface.TabBarSurfaceId)
       case _ => Damage.Nothing
 
+  /** A held thumb is painted differently, and nothing in the buffer says so. The thumb's position needs no fact here:
+    * scrolling and editing already report their damage, and the renderer finds the bar moved from its own geometry.
+    */
+  private def scrollbarDamage(before: AppState, after: AppState): Damage =
+    val (was, now) = (before.runtime.pointerGesture.scrollbarGrab, after.runtime.pointerGesture.scrollbarGrab)
+    if was == now then Damage.Nothing
+    else
+      (was.toList ++ now.toList).foldLeft(Damage.Nothing: Damage)((acc, grab) => acc |+| Damage.Scrollbar(grab.paneId))
+
   /** Whether `before`/`after` present the same *kind* of [[SurfacePresentation]] (ignoring the fields a non-marker kind
     * carries, e.g. a `Floating` surface's anchor/placement) -- the presentation-stability half of
     * [[singleSurfaceOnlyContentChange]]'s carve-out.
@@ -451,6 +532,6 @@ object DamageProducer:
     if statusRowInputs(before) == statusRowInputs(after) then Damage.Nothing else Damage.Chrome
 
   private def statusRowInputs(state: AppState): Option[(Option[String], Boolean)] =
-    Option.when(state.persisted.config.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
+    Option.when(state.chrome.statusLine.isPinned)((state.statusLineText, state.activeBuffer.isDefined))
 
   private def isSameReference(a: AnyRef, b: AnyRef): Boolean = a eq b

@@ -3,6 +3,9 @@ package com.serenity
 import java.awt.Font
 import java.awt.image.BufferedImage
 
+import scala.annotation.unused
+
+import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity, SkiaRenderSurface}
 import org.jetbrains.skia.{Bitmap, BlendMode, ImageInfo, Paint, Rect, Surface}
@@ -21,6 +24,12 @@ trait FramePixels:
   /** Every pixel, row by row. */
   def rgbPixels: Array[Int]
 
+  /** The frame as an image, for the dump a failed comparison writes. */
+  final def toImage: BufferedImage =
+    val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
+    image.setRGB(0, 0, widthPx, heightPx, rgbPixels, 0, widthPx)
+    image
+
 /** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. */
 trait FrameBackend:
   def newFrame(widthPx: Int, heightPx: Int): FramePixels
@@ -32,7 +41,8 @@ trait FrameBackend:
     logicalWidthPx: Int,
     logicalHeightPx: Int,
     scale: Double,
-    persists: Boolean
+    persists: Boolean,
+    caches: RenderCaches
   ): RenderSurface
 
 object Java2DFrames extends FrameBackend:
@@ -56,7 +66,8 @@ object Java2DFrames extends FrameBackend:
     logicalWidthPx: Int,
     logicalHeightPx: Int,
     scale: Double,
-    persists: Boolean
+    persists: Boolean,
+    caches: RenderCaches
   ): RenderSurface =
     frame match
       case java2d: Java2DFrame =>
@@ -70,7 +81,8 @@ object Java2DFrames extends FrameBackend:
           deviceScaleX = scale,
           deviceScaleY = scale,
           contentPersists = persists,
-          layerCacheOwnerOverride = Some(ScreenIdentity(java2d.image))
+          layerCacheOwnerOverride = Some(ScreenIdentity(java2d.image)),
+          textCaches = caches.surfaceText
         )
       case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
 
@@ -119,7 +131,8 @@ object SkiaFrames extends FrameBackend:
     logicalWidthPx: Int,
     logicalHeightPx: Int,
     scale: Double,
-    persists: Boolean
+    persists: Boolean,
+    @unused caches: RenderCaches
   ): RenderSurface =
     frame match
       case skia: SkiaFrame =>

@@ -34,7 +34,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -58,10 +58,16 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "announce a focus change once while ignoring unchanged editor state" in {
-    val before    = AccessibilitySnapshot.from(AppState.initial, viewport)
+    val before    = AccessibilitySnapshot.from(AppState.initial(AppConfig.conventional), viewport)
     val surfaceId = SurfaceId("outline")
     val docked =
-      DockedPanelFixtures.dock(AppState.initial, surfaceId, SurfaceContent.Outline(Nil), PanelPosition.Left, 20)
+      DockedPanelFixtures.dock(
+        AppState.initial(AppConfig.conventional),
+        surfaceId,
+        SurfaceContent.Outline(Nil),
+        PanelPosition.Left,
+        20
+      )
     val afterState = docked.copy(persisted = docked.persisted.copy(focus = Focus.Surface(surfaceId)))
 
     val after = AccessibilitySnapshot.from(afterState, viewport, Some(before))
@@ -93,7 +99,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       ),
       selectedIndex = 1
     )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -118,7 +124,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "expose find and replace workflow fields and actions" in {
     val surfaceId    = SurfaceId("replace")
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -192,7 +198,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
     cases.foreach {
       case (surfaceId, modal) =>
-        val initialState = AppState.initial
+        val initialState = AppState.initial(AppConfig.conventional)
         val state =
           if isBlockingModal(modal) then
             initialState.copy(
@@ -252,7 +258,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       path = "/tmp/project",
       activeField = FileWorkflowField.Path
     )
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -271,7 +277,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   it should "expose only the top modal and its controls while a modal is active" in {
     val floatingId   = SurfaceId("runner")
     val modalId      = SurfaceId("replace")
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -296,7 +302,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "expose the close prompt's actions with rendered bounds and selection" in {
     val surfaceId    = SurfaceId("close")
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -332,7 +338,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val surfaceId           = SurfaceId("close-constrained")
     val workflow            = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
     val constrainedViewport = ViewportSize(40, 4)
-    val initialState        = AppState.initial
+    val initialState        = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -356,10 +362,10 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer.fromString(bufferId, "toolbar").copy(editing = EditingState(List(CursorPosition(0, 0))))
     val toolbarState = ContextualToolbarState()
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
-        config = AppConfig.default.withUiElementGap(Some(1)).withAppMode(AppMode.Prose),
+        config = AppConfig.conventional.withUiElementGap(Some(1)).withAppMode(AppMode.Prose),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -399,17 +405,22 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   it should "announce changed command and modal validation status once" in {
     val runnerId = SurfaceId("runner")
     val modalId  = SurfaceId("replace-status")
-    val baseline = AppState.initial.copy(
-      runtime = AppState.initial.runtime.copy(
-        uiSurfaces = List(
-          UiSurface(
-            runnerId,
-            SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Invalid command"))),
-            SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+    val baseline = AppState
+      .initial(AppConfig.conventional)
+      .copy(
+        runtime = AppState
+          .initial(AppConfig.conventional)
+          .runtime
+          .copy(
+            uiSurfaces = List(
+              UiSurface(
+                runnerId,
+                SurfaceContent.CommandPalette(CommandRunner.empty.copy(statusMessage = Some("Invalid command"))),
+                SurfacePresentation.Floating(None, SurfacePlacement.BelowCursor)
+              )
+            )
           )
-        )
       )
-    )
     val first    = AccessibilitySnapshot.from(baseline, viewport)
     val repeated = AccessibilitySnapshot.from(baseline, viewport, Some(first))
     val changed = AccessibilitySnapshot.from(
@@ -456,7 +467,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     * discover the open tabs, which one was active, or how many there were.
     */
   private def bufferState(bufferIds: List[Int]): AppState =
-    val initialState = AppState.initial
+    val initialState = AppState.initial(AppConfig.conventional)
     val buffers      = bufferIds.map(id => BufferId(id) -> Buffer.fromString(BufferId(id), s"content-$id")).toMap
     initialState.copy(
       persisted = initialState.persisted.copy(
@@ -470,7 +481,10 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     )
 
   "AccessibilitySnapshot" should "expose no tab-bar nodes when at most one buffer is open" in {
-    AccessibilitySnapshot.from(AppState.initial, viewport).nodes.map(_.id) should not contain "surface:tab-bar"
+    AccessibilitySnapshot
+      .from(AppState.initial(AppConfig.conventional), viewport)
+      .nodes
+      .map(_.id) should not contain "surface:tab-bar"
   }
 
   it should "expose one Button-role node per open tab, with only the active tab selected" in {

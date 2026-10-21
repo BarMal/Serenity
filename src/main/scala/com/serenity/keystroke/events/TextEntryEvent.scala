@@ -1,6 +1,6 @@
 package com.serenity.keystroke.events
 
-import com.serenity.state.models.ClipboardEntry
+import com.serenity.state.models.{ClipboardEntry, CompositionClause}
 
 sealed trait TextEntryEvent
 
@@ -15,12 +15,27 @@ sealed trait ScrollEvent extends TextEntryEvent
 sealed trait ModalRequestEvent extends TextEntryEvent
 
 final case class InsertChar(char: Char) extends TextInputEvent
-case object DeleteBackward              extends DeletionEvent
-case object DeleteForward               extends DeletionEvent
-case object DeleteWordBackward          extends DeletionEvent
-case object DeleteWordForward           extends DeletionEvent
-case object DeleteToLineStart           extends DeletionEvent
-case object DeleteToLineEnd             extends DeletionEvent
+
+/** A string committed in one go: an input method's commit, or a code point outside the BMP, which no single `Char` can
+  * carry (#2008). It is one edit at every cursor and groups for undo like typed text; a one-character string is exactly
+  * [[InsertChar]].
+  */
+final case class InsertText(text: String) extends TextInputEvent
+
+/** What an input method reports (#2008). `ImeComposing` is the whole pre-edit so far, `clauses` and `caret` as offsets
+  * into it; `ImeCommit` is text the input method has finished with; `ImeCancelled` ends a composition with no text.
+  */
+sealed trait ImeEvent extends TextEntryEvent
+
+final case class ImeComposing(text: String, clauses: List[CompositionClause], caret: Option[Int]) extends ImeEvent
+final case class ImeCommit(text: String)                                                          extends ImeEvent
+case object ImeCancelled                                                                          extends ImeEvent
+case object DeleteBackward                                                                        extends DeletionEvent
+case object DeleteForward                                                                         extends DeletionEvent
+case object DeleteWordBackward                                                                    extends DeletionEvent
+case object DeleteWordForward                                                                     extends DeletionEvent
+case object DeleteToLineStart                                                                     extends DeletionEvent
+case object DeleteToLineEnd                                                                       extends DeletionEvent
 case object MoveLeft                    extends NavigationEvent
 case object MoveRight                   extends NavigationEvent
 case object MoveWordLeft                extends NavigationEvent

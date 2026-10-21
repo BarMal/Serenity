@@ -18,7 +18,7 @@ import com.serenity.perf.BenchmarkFixtures.{
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
 import com.serenity.ui.renderer.{
   CharacterRenderer,
   FontSpec,
@@ -52,18 +52,23 @@ private[perf] object RenderBenchmarks:
   // Shared across the frame and markdown benchmarks, mirroring StateManager's cache reuse across renders (#1677).
   private val renderCaches = RenderCaches.create()
 
-  def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
-    val longMeasuredLine = TextLayoutSnapshot.visualLineForText(
+  private lazy val longMeasuredLine =
+    TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
-      textFont
+      textFont,
+      renderCaches.shapedText,
+      renderCaches.wrappedLines.layoutMemos
     )
+
+  def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
     val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
     val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)
     val commentsState    = withDocumentComments(multilineState)
     val diagnosticsState = withBenchmarkDiagnostics(commentsState)
     val plainScrollState = scrolledToDeepViewport(multilineState)
     val layoutSnapshot   = visibleViewportLayout(plainScrollState)
+    val unremembered     = WrappedLineCache.measuring(renderCaches.shapedText, renderCaches.wrappedLines.layoutMemos)
     prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
     val fullFrame              = renderedFrame(richState, deviceScale = 1.0, renderCaches)
     val diagnosticsAndComments = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
@@ -82,7 +87,8 @@ private[perf] object RenderBenchmarks:
               buffer,
               panelWidthPx = frameWidthPx,
               monoFont,
-              wordWrapEnabled = false
+              wordWrapEnabled = false,
+              wrapCache = unremembered
             )
           }
       ),
@@ -163,7 +169,7 @@ private[perf] object RenderBenchmarks:
     val markdownStateBase    = editorState(markdownSource, Some(LanguageId.Markdown))
     val markdownState = markdownStateBase.copy(persisted =
       markdownStateBase.persisted.copy(config =
-        AppConfig.default
+        AppConfig.conventional
           .withLineNumbers(false)
           .withoutStatusLine
           .withWordWrap(false)
@@ -220,7 +226,8 @@ private[perf] object RenderBenchmarks:
       logicalWidthPx = frameWidthPx,
       logicalHeightPx = frameHeightPx,
       deviceScaleX = deviceScale,
-      deviceScaleY = deviceScale
+      deviceScaleY = deviceScale,
+      textCaches = caches.surfaceText
     )
     RendererEntryPoints.render(
       state,
@@ -247,7 +254,8 @@ private[perf] object RenderBenchmarks:
       textFont,
       _ => (),
       logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx
+      logicalHeightPx = frameHeightPx,
+      textCaches = renderCaches.surfaceText
     )
     surface.setFont(FontSpec.fromAwt(textFont))
     surface.clearViewport(Theme.light.background)

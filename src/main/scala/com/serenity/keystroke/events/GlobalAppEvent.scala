@@ -2,6 +2,7 @@ package com.serenity.keystroke.events
 
 import java.nio.file.Path
 
+import com.serenity.config.ChromeElement
 import com.serenity.keystroke.Modifier
 import com.serenity.state.models.{BufferId, PanelId}
 
@@ -77,3 +78,19 @@ final case class CursorPeekModifierReleased(modifier: Modifier, atMillis: Long) 
   * cancels a pending cursor-peek gesture the same way a real key already cancels the existing bare-modifier hotkey tap.
   */
 case object CursorPeekOtherKeyPressed extends GlobalAppEvent
+
+/** The summon chord of `element` went down: the element is shown for as long as the chord is held, or, if it was
+  * locked, dismissed. Sent by the window, which sees keys come and go; see `SummonChordTracker`.
+  */
+final case class ChromeSummonPressed(element: ChromeElement) extends GlobalAppEvent
+
+/** The summon chord of `element` was let go. */
+final case class ChromeSummonReleased(element: ChromeElement) extends GlobalAppEvent
+
+/** The lock key went down while a summon chord was held: every element held stays shown after release. */
+case object ChromeSummonLocked extends GlobalAppEvent
+
+/** The summon chord of `element` pressed in a terminal, which cannot report a key released: it shows and locks the
+  * element, and dismisses it the next time.
+  */
+final case class ChromeSummonToggled(element: ChromeElement) extends GlobalAppEvent

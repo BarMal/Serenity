@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuite 
+errors="0" failures="0" hostname="vm" name="com.example.FastSpec" tests="40" time="0.250" timestamp="2026-10-10T12:00:01">
+  <testcase 
+  name="adds" classname="com.example.FastSpec" time="0.001">
+  </testcase>
+</testsuite>

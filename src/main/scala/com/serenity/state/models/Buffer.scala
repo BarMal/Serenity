@@ -11,6 +11,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{FidelityReport, InlineAtom, RichTextDocument, RichTextStyle}
 import com.serenity.rope.{Balance, ChangeSet, Rope}
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
+import com.serenity.ui.openings.{OpeningOverride, OpeningResolver, OpeningSettings}
 
 opaque type BufferId = Int
 
@@ -129,7 +130,9 @@ final case class Document(
     headingIndex: HeadingIndexCell = new HeadingIndexCell,
     // How this document is indented, by the sources that can say; `Buffer.effectiveIndentation` settles it against the global
     // settings.
-    indentation: DocumentIndentation = DocumentIndentation()
+    indentation: DocumentIndentation = DocumentIndentation(),
+    // What the user set for this document's chapter openings, over the global settings; see `Buffer.effectiveOpenings`.
+    openings: OpeningOverride = OpeningOverride.Empty
 ):
 
   /** The headings of `content` read as Markdown, advanced from the last read rather than parsed afresh. */
@@ -199,6 +202,12 @@ final case class Document(
   /** This document with the indentation `previous` was given by the user, which a re-read of the file does not undo. */
   def keepingChosenIndentationOf(previous: Document): Document =
     copy(indentation = indentation.copy(chosen = previous.indentation.chosen))
+
+  /** This document with the opening settings `previous` was given by the user, which a re-read of the file does not
+    * undo.
+    */
+  def keepingOpeningsOf(previous: Document): Document =
+    copy(openings = previous.openings)
 
   /** The change from `version` to now, or `None` when it cannot be known exactly. */
   def changesSince(version: Long): Option[ChangeSet] =
@@ -363,6 +372,10 @@ final case class Buffer(
   /** The indentation Tab types and layout measures for this buffer: its own sources first, `global` for the rest. */
   def effectiveIndentation(global: IndentationSettings): IndentationSettings =
     document.indentation.effective(global)
+
+  /** The chapter-opening settings this buffer is laid out with: its own overrides over the `global` ones. */
+  def effectiveOpenings(global: OpeningSettings): OpeningSettings =
+    OpeningResolver.resolve(global, document.openings)
 
   def allSelections: List[Selection] =
     editing.cursors.toList.flatMap(_.selection)

@@ -1,6 +1,15 @@
 package com.serenity.state.manager
 
-import com.serenity.keystroke.events.{Event, InsertChar, ResizeEvent, TextEntryEvent}
+import com.serenity.keystroke.events.{
+  Event,
+  ImeCancelled,
+  ImeCommit,
+  ImeComposing,
+  InsertChar,
+  InsertText,
+  ResizeEvent,
+  TextEntryEvent
+}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, BufferId, Focus, Runtime}
 import com.serenity.state.reducers.{AppEventReducer, ReducerResult, SettingsPreviewReducer, SystemEventReducer}
@@ -54,7 +63,9 @@ private[manager] object EventPipelineTransitions:
       case _                   => false
     def stamped(runtime: Runtime): Runtime = if inEditor then runtime.observeEditKey(nowNanos) else runtime
     event match
-      case _: InsertChar     => state.copy(runtime = stamped(state.runtime.observeTyping(nowNanos)))
+      case _: (ImeComposing | ImeCancelled.type) => state
+      case _: (InsertChar | InsertText | ImeCommit) =>
+        state.copy(runtime = stamped(state.runtime.observeTyping(nowNanos)))
       case _: TextEntryEvent => if inEditor then state.copy(runtime = stamped(state.runtime)) else state
       case _                 => state
 

@@ -17,19 +17,35 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(0)
 
   private def stateWithContent(text: String, cursors: List[CursorPosition] = List(CursorPosition(0, 0))): AppState =
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = AppState.initial.persisted.buffers.updated(
-          bufferId,
-          AppState.initial.persisted
-            .buffers(bufferId)
-            .copy(
-              document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope(text)),
-              editing = EditingState(cursors)
-            )
-        )
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .buffers
+              .updated(
+                bufferId,
+                AppState
+                  .initial(com.serenity.config.AppConfig.conventional)
+                  .persisted
+                  .buffers(bufferId)
+                  .copy(
+                    document = AppState
+                      .initial(com.serenity.config.AppConfig.conventional)
+                      .persisted
+                      .buffers(bufferId)
+                      .document
+                      .copy(content = Rope(text)),
+                    editing = EditingState(cursors)
+                  )
+              )
+          )
       )
-    )
 
   /** A monospaced (`Code`) buffer under `Cells` granularity -- the one combination [[DamageProducer]] may report
     * column-precise damage for.
@@ -72,20 +88,37 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     val bare    = stateWithContent("first\nsecond")
     val before = bare.copy(persisted =
       bare.persisted.copy(
-        buffers = AppState.initial.persisted.buffers
+        buffers = AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .buffers
           .updated(
             bufferId,
-            AppState.initial.persisted
+            AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
               .buffers(bufferId)
               .copy(document =
-                AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope("first\nsecond"))
+                AppState
+                  .initial(com.serenity.config.AppConfig.conventional)
+                  .persisted
+                  .buffers(bufferId)
+                  .document
+                  .copy(content = Rope("first\nsecond"))
               )
           ) +
-          (otherId -> AppState.initial.persisted
+          (otherId -> AppState
+            .initial(com.serenity.config.AppConfig.conventional)
+            .persisted
             .buffers(bufferId)
             .copy(
               id = otherId,
-              document = AppState.initial.persisted.buffers(bufferId).document.copy(content = Rope("x\ny")),
+              document = AppState
+                .initial(com.serenity.config.AppConfig.conventional)
+                .persisted
+                .buffers(bufferId)
+                .document
+                .copy(content = Rope("x\ny")),
               editing = EditingState(List(CursorPosition(0, 0)))
             ))
       )
@@ -176,7 +209,7 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report no damage for a buffer that did not exist before the transition" in {
-    val before  = AppState.initial
+    val before  = AppState.initial(com.serenity.config.AppConfig.conventional)
     val otherId = BufferId(99)
     val after = before.copy(persisted =
       before.persisted.copy(
@@ -279,7 +312,11 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
     val bare = stateWithContent("alpha\nbeta\ngamma")
     val before = bare.copy(persisted =
       bare.persisted.copy(config =
-        AppState.initial.persisted.config.withRenderDamageGranularity(RenderDamageGranularity.Cells)
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .config
+          .withRenderDamageGranularity(RenderDamageGranularity.Cells)
       )
     )
     val editedBuffer = before.persisted

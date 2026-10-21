@@ -65,8 +65,20 @@ jobs:
             exit 0
           fi
 
+          # CI finishing is what starts this job, but the Cross-OS jobs run beside it and must also have passed. A check
+          # that has not been created yet is not a passing one, so these are waited for by name, for a few minutes, and
+          # then fail the merge rather than letting a pull request through without Windows and macOS (#2016).
+          required_checks=("Cross-OS Tests: Test (windows)" "Cross-OS Tests: Test (macos)")
+          missing_polls=0
+
           while true; do
             checks_json="$(gh pr checks "${PR_NUMBER}" --repo "${REPO}" --json bucket,name,workflow)"
+
+            missing_checks="$(
+              for required in "${required_checks[@]}"; do
+                jq -r --arg required "${required}" 'if any(.[]; "\(.workflow): \(.name)" == $required) then empty else $required end' <<<"${checks_json}"
+              done
+            )"
 
             failed_checks="$(
               jq -r '.[] | select(.workflow != "Auto Squash Merge" and (.bucket == "fail" or .bucket == "cancel")) | "\(.workflow): \(.name) [\(.bucket)]"' <<<"${checks_json}"
@@ -82,7 +94,17 @@ jobs:
               jq -r '.[] | select(.workflow != "Auto Squash Merge" and .bucket == "pending") | "\(.workflow): \(.name) [\(.bucket)]"' <<<"${checks_json}"
             )"
 
-            if [ -z "${pending_checks}" ]; then
+            if [ -n "${missing_checks}" ]; then
+              missing_polls=$((missing_polls + 1))
+              if [ "${missing_polls}" -gt 30 ]; then
+                echo "::error::PR ${PR_NUMBER} never got the required checks:"
+                echo "${missing_checks}"
+                exit 1
+              fi
+              pending_checks="${pending_checks}"$'\n'"${missing_checks} [not started]"
+            fi
+
+            if [ -z "${pending_checks//[$'\n']/}" ]; then
               break
             fi
 

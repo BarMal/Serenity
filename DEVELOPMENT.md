@@ -47,6 +47,25 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 `third-party/`; `sbt checkThirdPartyNotices` (run in CI) fails if it is stale or a dependency has no registry row. See
 [CONTRIBUTING.md](CONTRIBUTING.md#licensing).
 
+### DNG-free Skiko natives
+
+The stock Skiko natives link the Adobe DNG SDK, whose licence terms conflict with GPLv3 (#2028). `.github/workflows/skiko-natives.yml`
+rebuilds them from the upstream Skia and Skiko tags in `ci/skiko/pins.env` with the reviewed patches beside it, scans every
+jar with `scripts/check_no_dng.py` (after proving the scanner on the stock library), and on a manual run publishes the six
+jars, attested, to the `skiko-maven` branch that GitHub Pages serves.
+
+A pull request builds all four runner groups and merges and scans the six jars; nothing is published. Skia is cached by pin and
+patch, so a warm run takes about ten minutes. A cold run builds Skia for every target: roughly 20 minutes on Linux, 50 on macOS
+and Windows.
+
+To change a pin or a patch:
+
+1. Edit `ci/skiko/pins.env` or the patch, and bump `NATIVES_VERSION` (`<skiko version>-dngfree.<n>`): the cache key and the
+   Maven coordinates both follow from them.
+2. Check `git apply --check` for each patch against the new tag, and run the unit tests in `scripts/`.
+3. Open the pull request and wait for the four groups and the merge job to pass.
+4. Run the workflow manually with `groups` = `all` and `publish` = `true`, then point the build at the new `NATIVES_VERSION`.
+
 ### Changelog
 
 `CHANGELOG.md` has two kinds of level-two heading and no others:
@@ -82,8 +101,9 @@ Local mutation that genuinely earns its place is scoped with `// scalafix:off Di
 | `AsInstanceOf`, `IsInstanceOf` | Pattern matching over casting |
 
 `Null`, `Throw`, `OptionPartial` and `IterableOps` are reported as **warnings only** — each needs its
-own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`), the LSP framer and the richtext
-codecs are excluded, since they sit at the outermost boundary where those constructs are legitimate.
+own migration. Java/AWT interop (`ui/terminal`, `ui/accessibility`) and the LSP framer are excluded, since they
+sit at the outermost boundary where those constructs are legitimate. The richtext codecs are checked like everything
+else; the JAXP callbacks that must throw carry a `@SuppressWarnings` saying why.
 Tests are exempt entirely.
 
 To take a deliberate exception, annotate the declaration and say why:
@@ -120,6 +140,14 @@ entry means deleting it:
 sbt writeArchitectureBaseline   # after removing a violation, to bank the win
 ```
 
+`architectureCheck` also enforces purity (`project/PurityChecks.scala`, #1677), at the level of declarations, so a local
+`var` or mutable collection inside a method is fine. A top-level `object` may not declare a `val`/`lazy val`/`var` that
+holds `AtomicReference/Integer/Long/Boolean`, `synchronized`, `ThreadLocal`, `ConcurrentHashMap`, `mutable.`, or a
+`java.util` `HashMap`/`LinkedHashMap`/`ArrayDeque`/`ArrayList`/`WeakHashMap`/`IdentityHashMap` (only where the file
+imports it), and may not hold an instance of a class that has such a member (`new Cache`, `Cache.bounded()`).
+Declarations that cannot move are named in `ArchitectureChecks.PurityAllowlist` with a reason, apart from the baseline;
+`docs/allowlist-review.md` argues each one's redesign.
+
 The baseline may shrink, never grow. If you must add to it, explain the entry in review: CI's
 `architecture` job fails a PR whose baseline entry count or total measured lines/hits grows unless the
 diff also adds a `# paydown: <why, issue link>` comment line to `project/architecture-baseline.tsv`.
@@ -151,6 +179,17 @@ The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicG
 is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
 a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
 `.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
+
+What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
+`scripts/measure-footprint.sh` reproduces it against an assembled jar.
+
+### Returning heap to the OS
+
+At startup, unless `performance.memory.compact = false`, Serenity sets `MinHeapFreeRatio=10`, `MaxHeapFreeRatio=30` and
+(under G1 only) `G1PeriodicGCInterval=30000` through `HotSpotDiagnosticMXBean.setVMOption`, in both window and terminal
+modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30 s once the app is up. With the setting
+off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
+(`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
 
 ### Startup warm-up
 

@@ -25,7 +25,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(BufferId(1), lines)
       .copy(viewport = Viewport(topLine = topLine, leftColumn = 0, visibleLines = 10, visibleColumns = 20))
-    val base = AppState.initial
+    val base = AppState.initial(com.serenity.config.AppConfig.conventional)
     base.copy(persisted =
       base.persisted.copy(
         buffers = Map(buffer.id -> buffer),

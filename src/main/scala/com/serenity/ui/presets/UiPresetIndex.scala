@@ -3,10 +3,9 @@ package com.serenity.ui.presets
 import java.nio.channels.FileChannel
 import java.nio.charset.StandardCharsets
 import java.nio.file.*
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.locks.ReentrantLock
 
-import cats.effect.IO
+import cats.effect.std.Mutex
+import cats.effect.{IO, Ref}
 import com.serenity.io.AtomicFileWriter
 import io.circe.*
 import io.circe.generic.semiauto.deriveEncoder
@@ -78,16 +77,16 @@ class UiPresetStore private[serenity] (path: Path):
   private val mutationLockPath = path.resolveSibling(s".${path.getFileName.toString}.lock")
 
   private def withExclusiveMutationLock[A](operation: IO[A]): IO[A] =
-    val processLock = UiPresetStore.inProcessLock(mutationLockPath)
-    IO.blocking(processLock.lock())
-      .bracket { _ =>
+    UiPresetStore
+      .inProcessMutex(mutationLockPath)
+      .flatMap(_.lock.surround {
         IO.blocking {
           Option(mutationLockPath.getParent).foreach(Files.createDirectories(_))
           FileChannel.open(mutationLockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         }.bracket { channel =>
           IO.blocking(channel.lock()).bracket(_ => operation)(fileLock => IO.blocking(fileLock.release()))
         }(channel => IO.blocking(channel.close()))
-      }(_ => IO.blocking(processLock.unlock()))
+      })
 
   def load(): IO[UiPresetIndex] =
     IO.blocking(Files.exists(path)).flatMap {
@@ -197,10 +196,26 @@ class UiPresetStore private[serenity] (path: Path):
 object UiPresetStore:
   val defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", "ui-presets.json")
 
-  private val inProcessLocks = new ConcurrentHashMap[Path, ReentrantLock]()
+  /** Process-wide on purpose: the preset file is, and the OS file lock cannot arbitrate two channels in one JVM (the
+    * second `FileChannel.lock` throws `OverlappingFileLockException`), so every `UiPresetStore` that names a file must
+    * queue on the same mutex. Per-instance mutexes would let two stores write one file at once.
+    */
+  private val inProcessMutexes: Ref[IO, Map[Path, Mutex[IO]]] = Ref.unsafe(Map.empty)
 
-  private def inProcessLock(path: Path): ReentrantLock =
-    inProcessLocks.computeIfAbsent(path.toAbsolutePath.normalize, _ => new ReentrantLock())
+  /** The one mutex for `path` in this process. Not a thread-owned lock: each step of a mutation is its own
+    * `IO.blocking`, so the steps run on whichever threads the pool picks, and a waiting fiber holds no thread.
+    */
+  private def inProcessMutex(path: Path): IO[Mutex[IO]] =
+    val key = path.toAbsolutePath.normalize
+    inProcessMutexes.get.flatMap(
+      _.get(key).fold(
+        Mutex[IO].flatMap(fresh =>
+          inProcessMutexes.modify(held =>
+            held.get(key).fold((held.updated(key, fresh), fresh))(existing => (held, existing))
+          )
+        )
+      )(IO.pure)
+    )
 
   def apply(path: Path): UiPresetStore =
     new UiPresetStore(path)

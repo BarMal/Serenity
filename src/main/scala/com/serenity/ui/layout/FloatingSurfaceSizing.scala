@@ -96,10 +96,7 @@ private[layout] object FloatingSurfaceSizing:
       case SurfaceContent.CommentLens(lens) =>
         CommentLensSurfaceComposition.frameHeight(lens)
       case SurfaceContent.ModalWorkflow(modal) =>
-        ModalSurfaceComposition.frameHeight(
-          modal,
-          SurfaceFrameLayout.minimumTargetRows(state.persisted.config.interfaceDensity)
-        )
+        ModalSurfaceComposition.frameHeightFor(modal, maxWidth, state)
       case SurfaceContent.Terminal(_, _) | SurfaceContent.Outline(_, _, _) | SurfaceContent.Comments(_, _, _) |
           SurfaceContent.Diagnostics(_, _, _) | SurfaceContent.MarkdownPreview(_, _) =>
         math.min(8, math.max(4, maxHeight - 1))

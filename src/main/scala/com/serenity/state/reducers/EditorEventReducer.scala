@@ -96,6 +96,9 @@ object EditorEventReducer:
       case ScrollLeft(columns) =>
         reduceHorizontalScroll(paneId, pane, currentState, geometry, columns, direction = -1, ColumnLeft)
 
+      case imeEvent: ImeEvent =>
+        ImeReducer.reduce(imeEvent, paneId, pane, currentState)
+
       case textEvent: TextEntryEvent =>
         reduceTextEvent(textEvent, paneId, pane, currentState, geometry)
 
@@ -177,9 +180,9 @@ object EditorEventReducer:
 
   private def refreshesFindResults(event: TextEntryEvent): Boolean =
     event match
-      case InsertChar(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward | DeleteWordBackward |
-          DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut | CutToDarlings |
-          RestoreDarling | PasteFromHistory(_) | ToggleLineComment | ToggleBlockComment =>
+      case InsertChar(_) | InsertText(_) | TabKey | ReverseTabKey | DeleteBackward | DeleteForward |
+          DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd | NewLine | Enter | Paste | Cut |
+          CutToDarlings | RestoreDarling | PasteFromHistory(_) | ToggleLineComment | ToggleBlockComment =>
         true
       case _ =>
         false
@@ -268,7 +271,7 @@ object EditorEventReducer:
       val ctx          = CursorEventContext(buffer, head, hasSelection, isMulti, currentState, paneId, geometry)
 
       event match
-        case InsertChar(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
+        case InsertChar(_) | InsertText(_) | TabKey | NewLine | Enter | ReverseTabKey | DeleteBackward | DeleteForward |
             DeleteWordBackward | DeleteWordForward | DeleteToLineStart | DeleteToLineEnd =>
           EditorTextEditReducer.reduce(event, ctx)
 
@@ -305,6 +308,25 @@ object EditorEventReducer:
         val buffer      = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
         val newCursor   = CursorPosition(0, 1)
         val updatedPane = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
+        ReducerResult.noEffects(
+          currentState.copy(
+            persisted = currentState.persisted.copy(
+              buffers = currentState.persisted.buffers + (bufferId -> buffer),
+              layout = currentState.persisted.layout.copy(
+                editorPanes = currentState.persisted.layout.editorPanes + (paneId -> updatedPane)
+              )
+            ),
+            runtime = currentState.runtime.copy(nextBufferId = BufferId(bufferId.value + 1))
+          )
+        )
+
+      case InsertText(text) if text.nonEmpty =>
+        val bufferId       = currentState.runtime.nextBufferId
+        val fresh          = Buffer.fromString(bufferId, text)
+        val buffer         = fresh.copy(document = fresh.document.copy(isDirty = true, isNewEmpty = false))
+        val (line, column) = buffer.document.content.offsetToLineColumn(text.length)
+        val newCursor      = CursorPosition(line, column)
+        val updatedPane    = pane.copy(bufferId = Some(bufferId), cursors = List(newCursor))
         ReducerResult.noEffects(
           currentState.copy(
             persisted = currentState.persisted.copy(

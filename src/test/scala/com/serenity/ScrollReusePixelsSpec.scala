@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.ui.layout.ScrollbarLayout
 import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -24,7 +25,7 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
   private def stampColumn(image: FramePixels, plan: EditorPaneRenderPlan, scale: Double): Column =
     val content = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
     val column = Column(
-      x = math.round(cellMetrics.toPixelX(content.right) * scale).toInt - 3,
+      x = math.round(ScrollbarLayout.strip(content, cellMetrics).xPx * scale).toInt - 3,
       fromY = math.round(cellMetrics.toPixelY(content.y) * scale).toInt,
       toY = math.round(cellMetrics.toPixelY(content.bottom) * scale).toInt
     )
@@ -44,16 +45,59 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
     stamped(image, column)
 
+  /** A scroll copies the rows it keeps and draws the rows it exposes, the rows beside them, and the top row. What it
+    * may draw is therefore a number of rows, and a row is as tall as the font makes it (17 px on Linux, 19 on Windows)
+    * in a pane whose height is whole cells (555 px on Linux, 544 on Windows). The share left copied is bounded by the
+    * rows drawn at most, measured in those: 0.858 and 0.838 for one row, 0.735 and 0.698 for five, against the same
+    * bound of five rows and ten rows on both.
+    */
+  private def copiedAllButRows(before: AppState, after: AppState, drawnRowsAtMost: Int, scale: Double = 2.0): Unit =
+    val session    = Session(scale)
+    val plan       = session.settle(before)
+    val column     = stampColumn(session.pendingImage, plan, scale)
+    val rowPx      = plan.snapshots.getOrElse(paneId, fail("expected the pane's snapshot")).lineHeightPx
+    val paneHeight = (column.toY - column.fromY) / scale
+    val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
+    val share      = stamped(image, column)
+    val leastShare = 1.0 - drawnRowsAtMost * rowPx / paneHeight
+
+    withClue(s"share of the pane copied, with rows of ${rowPx}px in a pane ${paneHeight}px tall: ")(
+      share should be >= leastShare
+    )
+
   private def drawnFrom(before: AppState, after: AppState): FramePixels =
     val session = Session()
     val _       = session.settle(before)
     session.draw(after, DamageProducer.forTransition(before, after))._1
 
+  /** macOS draws the gutter's divider on a boundary that falls between device pixels (cold-frame dump of run
+    * 39210220486, ScrollReusePixelsSpec "gains wrapped rows": f3 | bb | 95 across x=110..112 down every row), so the
+    * one pixel the boundary shares with two fills is blended by coverage, and where a repainted row meets a kept one
+    * (y=264) the two frames blend it with a different coverage: 0xb7 against 0xc8 where the other rows have 0xbb. Linux
+    * and Windows put the boundary on a pixel edge and the frames agree exactly. Only this pixel kind is forgiven here:
+    * at most [[MostEdgePixelsDiffering]] of them, each within [[EdgeChannelTolerance]] per channel of the other frame's
+    * and, in both frames, between the colours of the pixel to its left and right on every channel.
+    */
+  private val EdgeChannelTolerance    = 0x18
+  private val MostEdgePixelsDiffering = 2
+
+  private def isEdgeCoverage(a: FramePixels, b: FramePixels, x: Int, y: Int): Boolean =
+    def channels(frame: FramePixels, px: Int): Seq[Int] =
+      val rgb = frame.rgbAt(px, y)
+      Seq((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff)
+    def between(frame: FramePixels): Boolean =
+      channels(frame, x - 1).zip(channels(frame, x)).zip(channels(frame, x + 1)).forall {
+        case ((left, here), right) => here >= math.min(left, right) && here <= math.max(left, right)
+      }
+    x > 0 && x < a.widthPx - 1 &&
+    channels(a, x).zip(channels(b, x)).forall((first, second) => math.abs(first - second) <= EdgeChannelTolerance) &&
+    between(a) && between(b)
+
   "A scroll by one row" should "copy the rows it keeps and draw the exposed row and its neighbours" in {
     val before = stateOf(codeLines.mkString("\n"), CursorPosition(30, 0), topLine = 10)
     val after  = scrolledTo(before, 11)
 
-    withClue("share of the pane copied: ")(copiedShare(before, after) should be >= 0.85)
+    copiedAllButRows(before, after, drawnRowsAtMost = 5)
   }
 
   it should "equal a frame drawn from scratch to the last device pixel" in {
@@ -67,7 +111,7 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
     val before = stateOf(codeLines.mkString("\n"), CursorPosition(30, 0), topLine = 10)
     val after  = scrolledTo(before, 15)
 
-    withClue("share of the pane copied: ")(copiedShare(before, after) should be >= 0.7)
+    copiedAllButRows(before, after, drawnRowsAtMost = 10)
     differingPixels(drawnFrom(before, after), cold(after)) shouldBe empty
   }
 
@@ -97,7 +141,12 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
 
     withClue("share of the lower half of the pane copied: ")(stamped(image, column, from = 0.5) should be >= 0.3)
-    differingPixels(drawnFrom(before, after), cold(after)) shouldBe empty
+    val drawn    = drawnFrom(before, after)
+    val expected = cold(after)
+    val (edges, others) =
+      differingPixels(drawn, expected).partition((x, y) => isEdgeCoverage(drawn, expected, x, y))
+    withClue("pixels differing beyond a boundary's antialiasing: ")(others shouldBe empty)
+    withClue("boundary pixels differing in antialiasing: ")(edges.size should be <= MostEdgePixelsDiffering)
   }
 
   "A scroll through monospace code" should "equal a frame drawn from scratch to the last device pixel" in {
@@ -113,6 +162,23 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
     val after  = scrolledTo(before, 11)
 
     copiedShare(before, after, scale = 1.5) should be < 0.02
+  }
+
+  private def strip(values: Int*): FramePixels =
+    val frame = Java2DFrames.newFrame(values.size, 1)
+    values.zipWithIndex.foreach((value, x) => frame.stamp(x, 0, value * 0x010101))
+    frame
+
+  "The boundary tolerance" should "forgive a pixel between its neighbours that differs a little" in {
+    isEdgeCoverage(strip(0xf3, 0xb7, 0x95), strip(0xf3, 0xc8, 0x95), 1, 0) shouldBe true
+  }
+
+  it should "not forgive a pixel that differs by more than the tolerance" in {
+    isEdgeCoverage(strip(0xf3, 0x9a, 0x95), strip(0xf3, 0xe0, 0x95), 1, 0) shouldBe false
+  }
+
+  it should "not forgive a pixel outside the colours around it" in {
+    isEdgeCoverage(strip(0xf3, 0x20, 0x95), strip(0xf3, 0x30, 0x95), 1, 0) shouldBe false
   }
 
 class ScrollReusePixelsSpec extends ScrollReusePixelsBehaviour

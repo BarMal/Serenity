@@ -7,7 +7,23 @@ import java.lang.management.ManagementFactory
   */
 object BenchmarkRunner:
 
-  /** Benchmarks whose allocation per invocation is worth the second measurement pass. */
+  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
+    * covered without being listed. The set below adds the individually chosen ones from other families.
+    */
+  private val AllocationTrackedPrefixes =
+    List(
+      "laptop.",
+      "render.",
+      "command_runner.",
+      "layout.anchor_wrap.",
+      "layout.cold_font.",
+      "text.boundary.",
+      "text.counts."
+    )
+
+  private[perf] def tracksAllocation(name: String): Boolean =
+    AllocationTracked.contains(name) || AllocationTrackedPrefixes.exists(name.startsWith)
+
   private val AllocationTracked =
     Set(
       "reducer.normal_editing",
@@ -26,6 +42,7 @@ object BenchmarkRunner:
       "render.long_measured_line.java2d",
       "layout.aligned_prose.cached_snapshot",
       "layout.aligned_prose.moved_lines",
+      "layout.heading_prose.uncached_snapshot",
       "damage.single_char_long_line.rows",
       "damage.single_char_long_line.cells",
       "damage.single_char_short_line.rows",
@@ -75,7 +92,8 @@ object BenchmarkRunner:
       p95Ms: Double,
       maxMs: Double,
       allocationP50Bytes: Option[Long],
-      allocationP95Bytes: Option[Long]
+      allocationP95Bytes: Option[Long],
+      retainedBytes: Option[Long] = None
   )
 
   /** Warm up until the JIT has had a fair chance rather than a fixed handful of invocations: HotSpot needs roughly 200
@@ -113,6 +131,30 @@ object BenchmarkRunner:
   private[perf] val MaxSamples             = 1_000
 
   private val sink = new java.util.concurrent.atomic.AtomicLong(0L)
+
+  /** `-Dserenity.bench.slowdown=2` makes every timed call take that many times as long, by spinning for the extra time
+    * after it. It stands in for a real regression when the CI gate itself is being checked: a gate that cannot see an
+    * injected 2x slowdown cannot see a real one. Unset or at most 1, the benchmark runs untouched.
+    */
+  private[perf] def slowdownFactor(property: Option[String]): Option[Double] =
+    property.flatMap(_.toDoubleOption).filter(_ > 1.0)
+
+  private val Slowdown = slowdownFactor(sys.props.get("serenity.bench.slowdown"))
+
+  @annotation.tailrec
+  private def spinUntil(deadline: Long): Unit =
+    if System.nanoTime() < deadline then
+      Thread.onSpinWait()
+      spinUntil(deadline)
+
+  private def slowed(run: () => Any): () => Any =
+    Slowdown.fold(run) { factor => () =>
+      val started = System.nanoTime()
+      val result  = run()
+      val taken   = System.nanoTime() - started
+      spinUntil(System.nanoTime() + ((factor - 1.0) * taken).toLong)
+      result
+    }
 
   /** `identityHashCode` rather than `hashCode`: it reads the object header instead of traversing the value, so it does
     * not add the cost of hashing an `AppState` to every measured invocation. It pins the returned result, which escapes
@@ -194,7 +236,8 @@ object BenchmarkRunner:
   private[perf] def runMatching(prefixes: List[String], benchmarks: List[Benchmark]): List[BenchmarkResult] =
     benchmarks.filter(b => prefixes.isEmpty || prefixes.exists(b.name.startsWith)).map(runBenchmark)
 
-  private[perf] def runBenchmark(benchmark: Benchmark): BenchmarkResult =
+  private[perf] def runBenchmark(declared: Benchmark): BenchmarkResult =
+    val benchmark = declared.copy(run = slowed(declared.run))
     benchmark.verify()
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
@@ -204,7 +247,7 @@ object BenchmarkRunner:
     val batch   = calibrate(benchmark.run, 1).max(benchmark.minBatch)
     val samples = sample(benchmark.run, batch, benchmark.iterations, !benchmark.fixedSampleCount)
     val allocationSamples =
-      if AllocationTracked.contains(benchmark.name) then
+      if tracksAllocation(benchmark.name) then
         allocationBean
           .map { bean =>
             val threadId = Thread.currentThread().threadId()
@@ -244,19 +287,25 @@ object BenchmarkRunner:
       val index = math.ceil(percentile.max(0.0).min(1.0) * samples.length).toInt - 1
       samples(index.max(0).min(samples.length - 1))
 
+  /** `retained_bytes` is filled only by the `footprint.*` rows, whose timing columns are zero; timed rows leave it
+    * empty. It comes last so a reader of the older ten-column layout still parses every row.
+    */
+  private[perf] val csvHeader =
+    "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms," +
+      "allocation_p50_bytes,allocation_p95_bytes,retained_bytes"
+
   private[perf] def printResults(results: List[BenchmarkResult]): Unit =
     println("Serenity performance benchmarks")
     println(s"context,java_runtime,${System.getProperty("java.runtime.version", "unknown")}")
     println(s"context,java_vendor,${System.getProperty("java.vendor", "unknown")}")
     println(s"context,os,${System.getProperty("os.name", "unknown")} ${System.getProperty("os.version", "unknown")}")
     println(s"context,available_processors,${Runtime.getRuntime.availableProcessors()}")
-    println(
-      "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes"
-    )
+    println(csvHeader)
     results.foreach(result => println(csvRow(result)))
 
   private[perf] def csvRow(result: BenchmarkResult): String =
     val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
     val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
+    val retained      = result.retainedBytes.fold("")(_.toString)
     f"${result.name},${result.iterations},${result.warmupInvocations},${result.batch}," +
-      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95"
+      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95,$retained"

@@ -31,9 +31,7 @@ class Java2DRenderSurface(
     contentPersists: Boolean = false,
     layerCacheOwnerOverride: Option[ScreenIdentity] = None,
     imageOriginPx: DeviceOrigin = DeviceOrigin.Zero,
-    labelSprites: LabelSprites = LabelSprites.shared,
-    styledFonts: StyledFontCache = StyledFontCache.shared,
-    shapedText: ShapedTextCache = ShapedTextCache.shared,
+    textCaches: SurfaceTextCaches = SurfaceTextCaches.fresh(),
     override val activity: SurfaceActivity = SurfaceActivity()
 ) extends RenderSurface
     with TextDrawing
@@ -42,6 +40,8 @@ class Java2DRenderSurface(
     with PanelOutlineDrawing
     with LayerBufferSupport
     with PixelCopying:
+  import textCaches.{labelSprites, shapedText, styledFonts}
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
@@ -52,6 +52,10 @@ class Java2DRenderSurface(
 
   override def pixelCopying: Option[PixelCopying] =
     Option.when(isWhole(deviceScaleX) && isWhole(deviceScaleY))(this)
+
+  private val lifting = new ImagePixelLifting(image, deviceScaleX, deviceScaleY, () => painted.forgetClear())
+
+  override def pixelLifting: Option[PixelLifting] = Some(lifting)
 
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
@@ -82,6 +86,7 @@ class Java2DRenderSurface(
       deviceScaleX,
       deviceScaleY,
       image => onFlush(RenderImage.fromAwt(image)),
+      textCaches,
       recycled = recycled.map(_.toAwt),
       activity = activity,
       bounds = bounds
@@ -143,14 +148,17 @@ class Java2DRenderSurface(
     ascentPx: Int,
     stretch: String,
     from: Int,
-    until: Int
+    until: Int,
+    clipGlyphToRun: Boolean
   ): Unit =
-    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun = false) {
+    paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
       val shapedBefore = shapedText.shapings
       val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
       activity.shaped(shapedText.shapings - shapedBefore)
       shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
+
+  override def withFallbackFamily(family: String)(draw: => Unit): Unit = styledFonts.drawingIn(g, family)(draw)
 
   override def shapesStretchesOf(text: String): Boolean =
     ShapedTextCache.worthShaping(baseFontRef.get(), text)
@@ -296,15 +304,19 @@ class Java2DRenderSurface(
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
-      val px = metrics.toPixelX(x)
-      val py = pixelYForRow(y)
-      // Fill background for the whole string using nominal width
-      fillBackground(bgRef.get(), px, py, s.length * metrics.charWidth, metrics.lineHeight)
-      painted.touched(px, py, s.length * metrics.charWidth, metrics.lineHeight)
-      // Draw the foreground as one shaped string so font features like ligatures can apply.
+      val px      = metrics.toPixelX(x)
+      val py      = pixelYForRow(y)
+      val widthPx = CellRuns.cellsIn(s) * metrics.charWidth
+      // The background covers every cell the string takes, which a wide character makes more than its length.
+      fillBackground(bgRef.get(), px, py, widthPx, metrics.lineHeight)
+      painted.touched(px, py, widthPx, metrics.lineHeight)
       g.setColor(fgRef.get())
-      g.drawString(s, px, py + metrics.ascent)
-      drawUnderline(px, s.length * metrics.charWidth, py + metrics.ascent)
+      // A narrow stretch is drawn as one shaped string so font features like ligatures can apply; a wide character is
+      // drawn alone on its own cell, since its glyph's advance need not be two of them.
+      CellRuns
+        .pieces(s)
+        .foreach((cell, piece) => g.drawString(piece, px + cell * metrics.charWidth, py + metrics.ascent))
+      drawUnderline(px, widthPx, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)
@@ -471,21 +483,6 @@ object Java2DRenderSurface:
   private def awtColor(color: RenderColor, current: Color): Color =
     if current.getRGB == color.argb then current else color.toAwt
 
-  def forFrame(
-    metrics: CellMetrics,
-    font: Font,
-    canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
-  ): Java2DRenderSurface =
-    forFrame(
-      metrics,
-      font,
-      canvas,
-      onFlush,
-      (width, height, imageType) => new BufferedImage(width, height, imageType),
-      contentPersists = false
-    )
-
   /** Build a frame surface over an image supplied by `acquireImage`.
     *
     * `contentPersists` says the acquired image is recycled rather than freshly allocated, so whatever was drawn into
@@ -503,6 +500,7 @@ object Java2DRenderSurface:
     canvas: javax.swing.JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
+    textCaches: SurfaceTextCaches,
     contentPersists: Boolean = true
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
@@ -523,7 +521,8 @@ object Java2DRenderSurface:
       deviceScaleX = scale.x,
       deviceScaleY = scale.y,
       contentPersists = contentPersists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(canvas))
+      layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
+      textCaches = textCaches
     )
 
   def forImage(
@@ -531,7 +530,8 @@ object Java2DRenderSurface:
     metrics: CellMetrics,
     font: Font,
     canvas: javax.swing.JPanel,
-    onFlush: BufferedImage => Unit
+    onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches
   ): Java2DRenderSurface =
     val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
     val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
@@ -544,7 +544,8 @@ object Java2DRenderSurface:
       logicalWidthPx = logicalWidth,
       logicalHeightPx = logicalHeight,
       deviceScaleX = scale.x,
-      deviceScaleY = scale.y
+      deviceScaleY = scale.y,
+      textCaches = textCaches
     )
 
   /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of
@@ -562,6 +563,7 @@ object Java2DRenderSurface:
     deviceScaleX: Double,
     deviceScaleY: Double,
     onFlush: BufferedImage => Unit,
+    textCaches: SurfaceTextCaches,
     recycled: Option[BufferedImage] = None,
     activity: SurfaceActivity = SurfaceActivity(),
     bounds: Option[PixelRect] = None
@@ -574,6 +576,7 @@ object Java2DRenderSurface:
       deviceScaleX,
       deviceScaleY,
       onFlush,
+      textCaches,
       recycled,
       activity,
       bounds

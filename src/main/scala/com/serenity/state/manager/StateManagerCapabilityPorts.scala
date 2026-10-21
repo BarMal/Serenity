@@ -27,6 +27,11 @@ private[manager] trait EffectRuntimePort:
   def deviceTextScaleProvider: IO[Double]
   def configPersistencePath: Option[Path]
 
+  /** Ends the input method's composition on the platform's side. Only a windowed session has one; the default is the
+    * terminal's, which has no input-method context to end.
+    */
+  def endInputMethodComposition: IO[Unit] = IO.unit
+
   /** The config the config file is believed to hold, when this session keeps one and it was just read. */
   def configOnDisk: Option[AppConfig] = None
   def uiPresetStore: UiPresetStore
@@ -82,6 +87,9 @@ private[manager] trait EffectFilePort:
   def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
   def loadFile(path: Path): IO[Unit]
+
+  /** Opens `path` and returns once its buffer is in the state: for lane jobs, not the dispatcher. */
+  def openFile(path: Path): IO[Unit]
   def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit]
   def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]
   def openFileOrFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit]

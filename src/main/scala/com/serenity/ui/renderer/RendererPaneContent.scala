@@ -31,20 +31,33 @@ object RendererPaneContent:
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) =>
-          renderEditorPane(
-            pane,
-            paneLayout,
-            state,
-            context,
-            renderPlan.snapshots.get(paneId),
-            renderPlan.columnSnapshotsFor(paneId),
-            renderPlan.layoutContract,
-            pane.bufferId.flatMap(renderPlan.annotations.get),
-            dirtyRowsByPane.get(paneId),
-            chrome
-          )
+          aboveBottomOf(paneLayout.contentRect, context) {
+            renderEditorPane(
+              pane,
+              paneLayout,
+              state,
+              context,
+              renderPlan.snapshots.get(paneId),
+              renderPlan.columnSnapshotsFor(paneId),
+              renderPlan.layoutContract,
+              pane.bufferId.flatMap(renderPlan.annotations.get),
+              dirtyRowsByPane.get(paneId),
+              chrome
+            )
+          }
         case None => ()
     }
+
+  /** A last row that starts inside the pane but ends past it is cut off at the pane's bottom edge. Left unclipped its
+    * glyphs land on the status row, which a frame that repaints chrome clears and one that does not leaves covered, so
+    * the same document drew two ways depending on the frame before. Only the bottom is bounded: glyph overscan to the
+    * sides is deliberate.
+    */
+  private def aboveBottomOf(contentRect: LayoutRect, context: RenderContext)(paint: => Unit): Unit =
+    context.surface.panelOutlines match
+      case Some(clipping) if contentRect.bottom < context.surface.viewportHeight =>
+        clipping.withRectClip(0, 0, context.surface.viewportWidth, contentRect.bottom)(paint)
+      case _ => paint
 
   /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
   def renderEditorCursors(
@@ -195,7 +208,7 @@ object RendererPaneContent:
     * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining
     * band -- so a column's text never paints over its own rail or past its neighbour.
     */
-  private[renderer] def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
+  def columnRect(contentRect: LayoutRect, placement: ColumnSnapshotPlacement): LayoutRect =
     val leftX     = contentRect.x + placement.xOffsetCells + placement.gutterWidthCells
     val bandWidth = math.max(0, placement.columnWidthCells - placement.gutterWidthCells)
     val width     = math.min(bandWidth, math.max(0, contentRect.right - leftX))
@@ -244,13 +257,24 @@ object RendererPaneContent:
     val contentRightXPx   = context.cellMetrics.toPixelX(rect.right).toFloat
     val activeBodyLines   = focusedTextBodyLines(buffer, state)
     val rowMetrics        = textRowMetrics(rect, context, snapshot)
-    val findMatchesByLine = findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
+    val rowsBottomPx      = rowMetrics.lineTopPx(visualLines.size).min(rowMetrics.contentBottomPx)
+    val findMatchesByLine = RendererHighlights.findMatchesOnDrawnRows(buffer, state, visualLines, dirtyRows)
     FrameCounting.rowsPainted(context.caches.frameCounters, visualLines.size, dirtyRows)
+
+    // A terminal has no fonts to fall back between; the GUI cell grid draws what the buffer's font lacks in the chain.
+    val cellFallback =
+      Option.when(context.surface.text.fontRenderContext.isDefined)(
+        CellFallback(
+          context.fontForBuffer(buffer),
+          state.persisted.config.editorConfig.fontConfig.fallback,
+          context.caches.wrappedLines
+        )
+      )
 
     visualLines.zipWithIndex.foreach {
       case (visualLine, screenLineIndex) =>
         if dirtyRows.forall(_.contains(screenLineIndex)) && rowMetrics.lineFits(screenLineIndex) then
-          val screenY   = rect.y + screenLineIndex
+          val screenY   = rowMetrics.screenRow(screenLineIndex)
           val lineTopPx = rowMetrics.lineTopPx(screenLineIndex)
           val screenX   = rect.x + visualLineCellOffset(visualLine, context)
 
@@ -293,7 +317,8 @@ object RendererPaneContent:
                 rowHeightPxFor(visualLine, snapshot),
                 rowAscentPxFor(visualLine, snapshot),
                 contentRightXPx,
-                lineSemanticTokens
+                lineSemanticTokens,
+                rowsBottomPx
               )
             else
               CharacterRenderer.renderStyledString(
@@ -308,9 +333,19 @@ object RendererPaneContent:
                 semanticTokens = lineSemanticTokens,
                 maxColumn = Some(rect.right),
                 highlightCache = context.caches.themeHighlightCache,
-                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+                tabWidth = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize,
+                fallback = cellFallback
               )
               DropCapRenderer.paintCellHomeLineIfNeeded(snapshot, state, visualLine, context.surface, screenX, screenY)
+              RendererHeadingRules.paintCells(
+                context.surface,
+                snapshot,
+                visualLine,
+                lineTheme,
+                rect,
+                screenY,
+                dimmed = !activeBodyLines(visualLine.bufferLine)
+              )
 
             RendererMarkdownRules.paint(
               context.surface,
@@ -333,7 +368,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderDiagnosticHighlights(
@@ -348,7 +384,23 @@ object RendererPaneContent:
               snapshot,
               styledSegments,
               dimmed = !activeBodyLines(visualLine.bufferLine),
-              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight
+              blendWeight = state.persisted.config.surfaceConfig.diagnosticHighlightBlendWeight,
+              clipBottomPx = rowsBottomPx,
+              fallback = cellFallback
+            )
+
+            RendererHighlights.renderKeywordHighlights(
+              context.surface,
+              annotations.keywordsByLine.getOrElse(visualLine.bufferLine, Nil),
+              visualLine,
+              rect,
+              screenY,
+              lineTopPx,
+              state.persisted.theme,
+              context,
+              snapshot,
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderFindMatchHighlights(
@@ -361,7 +413,8 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
 
             RendererHighlights.renderSelectionHighlights(
@@ -374,21 +427,9 @@ object RendererPaneContent:
               state.persisted.theme,
               context,
               snapshot,
-              styledSegments
+              styledSegments,
+              fallback = cellFallback
             )
-    }
-
-  private def findMatchesOnDrawnRows(
-    buffer: Buffer,
-    state: AppState,
-    visualLines: Vector[TextVisualLine],
-    dirtyRows: Option[Set[Int]]
-  ): Map[Int, List[FindHighlight]] =
-    FindHighlights.paintedFindState(state, buffer.id).fold(Map.empty[Int, List[FindHighlight]]) { found =>
-      val drawnLines = visualLines.zipWithIndex.collect {
-        case (visualLine, row) if dirtyRows.forall(_.contains(row)) => visualLine.bufferLine
-      }.toSet
-      FindHighlights.onLines(buffer.document.content, found, drawnLines)
     }
 
   def visualLineFits(
@@ -420,13 +461,11 @@ object RendererPaneContent:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): TextRowMetrics =
-    TextRowMetrics(
-      contentRect = rect,
-      gridMetrics = context.cellMetrics,
-      rowLineHeightPx = snapshot.lineHeightPx,
-      usesMeasuredLayout = RendererPaneSetup.usesMeasuredDrawing(snapshot, context),
-      rowHeightsPx =
-        snapshot.visualLines.map(line => if line.heightPx > 0 then line.heightPx else snapshot.lineHeightPx)
+    TextRowMetrics.forSnapshot(
+      rect,
+      context.cellMetrics,
+      snapshot,
+      measured = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     )
 
   def visualLineCellOffset(visualLine: TextVisualLine, context: RenderContext): Int =

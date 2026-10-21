@@ -282,6 +282,16 @@ final case class FocusedKeymapConfig(
   def resetBinding[A <: KeymapEventAction[E], E <: Event](group: KeymapGroup[A, E])(action: A): FocusedKeymapConfig =
     group.set(this, group.get(this).resetBinding(action))
 
+  /** Every binding of every group, by the config key that sets it. */
+  def allBindings: List[(String, List[HotkeyTrigger])] =
+    def named[A <: KeymapEventAction[E], E <: Event](prefix: String, group: KeymapGroupConfig[A, E]) =
+      group.bindings.toList.map((action, triggers) => s"keymap.$prefix.${action.configKey}" -> triggers)
+    named("editor", editor) ++ named("command_runner", commandRunner) ++ named("modal", modal) ++ named(
+      "panel",
+      panel
+    ) ++
+      named("peek", peek)
+
 object FocusedKeymapConfig:
 
   given Encoder[FocusedKeymapConfig] = deriveEncoder

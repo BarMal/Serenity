@@ -7,6 +7,9 @@ final case class PixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
 
   def bottomPx: Int = yPx + heightPx
 
+  def contains(pixelX: Int, pixelY: Int): Boolean =
+    pixelX >= xPx && pixelX < rightPx && pixelY >= yPx && pixelY < bottomPx
+
   /** Whether this rectangle shares any pixels with `other`. Touching edges (zero-area overlap) do not count. */
   def intersects(other: PixelRect): Boolean =
     xPx < other.rightPx && other.xPx < rightPx && yPx < other.bottomPx && other.yPx < bottomPx

@@ -7,5 +7,6 @@ enum PointerGesture:
   case PanelResize
   case TextAreaResize
   case TabReorder
+  case ScrollbarDrag
   case TextSelection
   case Other

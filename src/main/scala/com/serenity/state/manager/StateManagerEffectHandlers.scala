@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.*
+import com.serenity.io.StorageLocation
 import com.serenity.keystroke.events.{CutToDarlings, RestoreDarling}
 import com.serenity.lsp.LspEffect
 import com.serenity.lsp.config.LanguageId
@@ -195,7 +196,8 @@ final private[manager] class StateManagerEffectHandlers(
       interpretWorkflowEffect,
       interpretLspQueueEffect,
       scheduleCommandRunnerBindingExpiry,
-      { case SettingsEffect.ReapplyConfig => configEffects.reapplyConfig }
+      { case SettingsEffect.ReapplyConfig => configEffects.reapplyConfig },
+      { case ImeEffect.Refused => showNotice(ImeNotices.refused) >> endInputMethodComposition }
     )
   )
 
@@ -237,6 +239,7 @@ final private[manager] class StateManagerEffectHandlers(
       case FileEffect.SaveBuffer(bufferId)         => saveBufferEffect(bufferId)
       case FileEffect.SaveBufferAs(bufferId, path) => saveBufferAsEffect(bufferId, path)
       case FileEffect.DirectLoadFile(path)         => directLoadFileEffect(path)
+      case FileEffect.OpenForRenameEdit(pending)   => openFilesForRenameEdit(pending)
 
   private def interpretExplorerEffect(effect: ExplorerEffect): IO[Unit] =
     effect match
@@ -472,6 +475,16 @@ final private[manager] class StateManagerEffectHandlers(
   /** Opens `path` in the background (#1672): the read runs on the file's lane and the buffer lands when it is done. */
   private[manager] def directLoadFileEffect(path: Path): IO[Unit] =
     loadFile(path)
+
+  /** Opens the files a rename names that no buffer holds, one after another, then applies the rename's remaining edits
+    * to them (#1965). A file that cannot be opened is reported by the open itself and left out of the rename.
+    */
+  private def openFilesForRenameEdit(pending: PendingRename): IO[Unit] =
+    val paths = pending.edits.keys.toList.flatMap(StorageLocation.localPath)
+    submitEffect(
+      Lane.Keyed(LaneKey.RenameEdit, LanePolicy.Sequential),
+      paths.traverse_(openFile) >> dispatchEffectResult(EffectResult.RenameFilesOpened(pending), _ => IO.unit)
+    )
 
   private[manager] def saveBufferEffect(bufferId: BufferId): IO[Unit] =
     currentState.flatMap { state =>

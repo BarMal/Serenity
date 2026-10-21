@@ -10,6 +10,7 @@ import com.serenity.richtext.*
 import com.serenity.rope.Rope
 import com.serenity.state.models.*
 import com.serenity.text.{LineEnding, TextEncoding}
+import com.serenity.ui.openings.OpeningOverride
 
 final case class SessionBuffer(
     id: Int,
@@ -44,7 +45,9 @@ final case class SessionBuffer(
     nextCommentId: Option[Int] = None,
     // The indentation the user chose for this buffer (see `IndentationSettings.configKey`); what is detected from the
     // text is worked out again on restore.
-    indentation: Option[String] = None
+    indentation: Option[String] = None,
+    // The chapter-opening settings the user gave this buffer; absent when it follows the global ones.
+    openings: Option[SessionOpenings] = None
 )
 
 /** One note, flattened for JSON: `kind` says whether `title` is a chapter heading (with its `occurrence`) or a keyword.
@@ -150,7 +153,8 @@ object SessionBuffer:
       revision = buffer.document.revision.map(_.value),
       hidden = buffer.hidden,
       notes = buffer.annotations.notes.toList.map(SessionNote.fromEntry).sortBy(SessionNote.order),
-      indentation = buffer.document.indentation.chosen.complete.map(IndentationSettings.configKey)
+      indentation = buffer.document.indentation.chosen.complete.map(IndentationSettings.configKey),
+      openings = SessionOpenings.fromOverride(buffer.document.openings)
     )
     (session, unsaved)
 
@@ -181,7 +185,8 @@ object SessionBuffer:
             .flatMap(IndentationSettings.fromConfigKey)
             .fold(IndentationHint.Empty)(IndentationHint.of),
           detected = IndentationDetector.of(content, language)
-        )
+        ),
+        openings = sessionBuffer.openings.fold(OpeningOverride.Empty)(SessionOpenings.toOverride)
       ),
       editing = EditingState(sessionBuffer.cursors.map(SessionCursorPosition.toCursorPosition)),
       viewport = SessionViewport.toViewport(sessionBuffer.viewport),
@@ -269,7 +274,8 @@ object SessionBuffer:
         .copy(
           document = disk.document
             .copy(language = recorded.document.language.orElse(disk.document.language))
-            .keepingChosenIndentationOf(recorded.document),
+            .keepingChosenIndentationOf(recorded.document)
+            .keepingOpeningsOf(recorded.document),
           richText = disk.richText,
           findState = None
         )

@@ -37,19 +37,29 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
     val buffer  = buffer0.copy(editing = EditingState(List(cursor)))
-    AppState.initial.copy(persisted =
-      AppState.initial.persisted.copy(
-        buffers = Map(buffer.id -> buffer),
-        bufferOrder = List(buffer.id),
-        layout = AppState.initial.persisted.layout.copy(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
-          activeEditorPaneId = Some(paneId),
-          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
-        ),
-        focus = Focus.EditorPane(paneId),
-        theme = Theme.light
+    AppState
+      .initial(com.serenity.config.AppConfig.conventional)
+      .copy(persisted =
+        AppState
+          .initial(com.serenity.config.AppConfig.conventional)
+          .persisted
+          .copy(
+            buffers = Map(buffer.id -> buffer),
+            bufferOrder = List(buffer.id),
+            layout = AppState
+              .initial(com.serenity.config.AppConfig.conventional)
+              .persisted
+              .layout
+              .copy(
+                editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, buffer.id)),
+                activeEditorPaneId = Some(paneId),
+                workspaceTree =
+                  Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId(s"editor-${paneId.value}"), paneId)))
+              ),
+            focus = Focus.EditorPane(paneId),
+            theme = Theme.light
+          )
       )
-    )
 
   /** Every string the frame asked the surface to paint, whichever text path it took. */
   private def drawnText(surface: MockRenderSurface): List[String] =
