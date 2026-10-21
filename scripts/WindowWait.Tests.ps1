@@ -25,16 +25,16 @@ function Assert-True {
 }
 
 Test-Case 'waits for a state that turns ready after several probes' {
-  $calls = @{ Count = 0 }
+  $calls = @{ Probes = 0 }
   $probe = {
-    $calls.Count++
-    [pscustomobject]@{ Ready = ($calls.Count -ge 4); Final = $false; Description = "call $($calls.Count)" }
+    $calls.Probes++
+    [pscustomobject]@{ Ready = ($calls.Probes -ge 4); Final = $false; Description = "call $($calls.Probes)" }
   }
 
   $result = Wait-Until -Probe $probe -TimeoutSeconds 10 -IntervalMilliseconds 10
 
   Assert-True $result.Ready 'expected the wait to end ready'
-  Assert-True ($calls.Count -eq 4) "expected 4 probes, saw $($calls.Count)"
+  Assert-True ($calls.Probes -eq 4) "expected 4 probes, saw $($calls.Probes)"
   Assert-True ($result.State.Description -eq 'call 4') "expected the state of the ready probe, saw '$($result.State.Description)'"
 }
 
@@ -50,16 +50,16 @@ Test-Case 'gives up at the timeout and reports the last state it saw' {
 }
 
 Test-Case 'stops at once when the probe says nothing more can change' {
-  $calls = @{ Count = 0 }
+  $calls = @{ Probes = 0 }
   $probe = {
-    $calls.Count++
+    $calls.Probes++
     [pscustomobject]@{ Ready = $false; Final = $true; Description = 'the launcher exited' }
   }
 
   $result = Wait-Until -Probe $probe -TimeoutSeconds 30 -IntervalMilliseconds 50
 
   Assert-True (-not $result.Ready) 'expected the wait to end not ready'
-  Assert-True ($calls.Count -eq 1) "expected 1 probe, saw $($calls.Count)"
+  Assert-True ($calls.Probes -eq 1) "expected 1 probe, saw $($calls.Probes)"
   Assert-True ($result.Elapsed.TotalSeconds -lt 5) "waited $($result.Elapsed.TotalSeconds) s for a final state"
 }
 
