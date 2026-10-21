@@ -67,7 +67,7 @@ class ScreenLocationSpec extends AnyFlatSpec with Matchers:
     val (screen, expected) = stripedWindowAt(60, 40)
     (66 until 90).foreach(x => (50 until 70).foreach(y => screen.setRGB(x, y, 0xffffff)))
 
-    val corners         = candidates(screen)
+    val corners    = candidates(screen)
     val (count, _) = ScreenLocation.bestAlignment(corners)(mismatchesAt(screen, expected))
 
     corners.length should be > 20
