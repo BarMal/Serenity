@@ -79,3 +79,33 @@ class GuiCellGridEmojiSpec extends AnyFlatSpec with Matchers:
     val bold    = inkPixels(painted(grin, TextStyle.bold), 1, 3)
     bold should be > regular
   }
+
+  private def s(codePoints: Int*): String = String(codePoints.toArray, 0, codePoints.length)
+
+  private val clusters = Vector(
+    "variation selector 16" -> s(0x2764, 0xfe0f),
+    "emoji modifier"        -> s(0x1f44d, 0x1f3fd),
+    "joined family"         -> s(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467),
+    "flag"                  -> s(0x1f1fa, 0x1f1f8),
+    "rainbow flag"          -> s(0x1f3f3, 0xfe0f, 0x200d, 0x1f308)
+  )
+
+  "An emoji cluster on the cell grid (#2365)" should "be drawn on its two cells, with the next character on the third" in
+    clusters.foreach { (name, cluster) =>
+      val image = painted("a" + cluster + "b", TextStyle.normal)
+      // Row cell 1 is `a`, cells 2-3 are the cluster, cell 4 is `b`.
+      withClue(name) {
+        inkPixels(image, 2, 4) should be > 20
+        inkPixels(image, 3, 4) should be > 0
+        inkPixels(image, 4, 5) should be > 0
+      }
+    }
+
+  it should "not put any ink past its two cells" in
+    clusters.foreach { (name, cluster) =>
+      val image = painted(cluster, TextStyle.normal)
+      withClue(name) {
+        inkPixels(image, 1, 3) should be > 20
+        inkPixels(image, 3, 40) shouldBe 0
+      }
+    }

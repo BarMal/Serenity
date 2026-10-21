@@ -366,9 +366,10 @@ private[layout] object TextCaretMeasurement:
 
   /** Caret stops for a display-width-aware cell grid: each codepoint advances by its own cell count ([[CharWidth]])
     * rather than one cell per character, so the stops agree with the cells `TerminalScreenBuffer` actually paints. A
-    * surrogate pair contributes one advance across its two char indices; its low half is never a grapheme boundary (see
-    * [[ParagraphMeasurement.graphemeBoundaryOffsets]]) and so never a caret stop, and taking the glyph's trailing edge
-    * there keeps the sequence non-decreasing for the callers that index it by raw column.
+    * surrogate pair or other multi-codepoint cluster contributes one advance across its char indices ([[CharWidth]]
+    * gives an emoji cluster two cells); the indices inside it are never a grapheme boundary (see
+    * [[ParagraphMeasurement.graphemeBoundaryOffsets]]) and so never a caret stop, and taking the cluster's trailing
+    * edge there keeps the sequence non-decreasing for the callers that index it by raw column.
     */
   private[layout] def displayWidthCaretXs(
     text: String,
@@ -380,15 +381,22 @@ private[layout] object TextCaretMeasurement:
     def loop(index: Int, cells: Int): Unit =
       if index >= text.length then stops(index) = cells * charWidth
       else
-        val codePoint = text.codePointAt(index)
-        val advanced  = cells + TabStops.advance(codePoint, cells, tabSize)
-        val charCount = Character.charCount(codePoint)
+        val end      = CharWidth.clusterEnd(text, index)
+        val advanced = cells + clusterAdvance(text, index, end, cells, tabSize)
         stops(index) = cells * charWidth
-        if charCount == 2 then stops(index + 1) = advanced * charWidth
-        loop(index + charCount, advanced)
+        java.util.Arrays.fill(stops, index + 1, end, advanced * charWidth)
+        loop(end, advanced)
 
     loop(0, 0)
     IArray.unsafeFromArray(stops)
+
+  /** The cells the cluster `text[from, until)` takes at cell `column`: a tab spans to the next stop, anything else its
+    * [[CharWidth.ofCluster]].
+    */
+  private def clusterAdvance(text: String, from: Int, until: Int, column: Int, tabSize: Int): Int =
+    val codePoint = text.codePointAt(from)
+    if until == from + Character.charCount(codePoint) then TabStops.advance(codePoint, column, tabSize)
+    else CharWidth.ofCluster(text, from, until)
 
   /** Caret stops for a grid where every character takes one cell and a tab takes its stop's worth. */
   private[layout] def uniformCaretXs(text: String, charWidth: Float, tabSize: Int): IArray[Float] =
@@ -431,8 +439,8 @@ private[layout] object TextCaretMeasurement:
     if hasTab(from) then math.max(1, fitting(from, 0) - from) else math.max(1, candidates)
 
   /** How many characters of `text`, starting at `from`, fit in `panelWidthPx` when each glyph costs its own cells.
-    * Never splits a wide glyph across the wrap boundary, and never splits a surrogate pair; like the uniform-advance
-    * branch it always consumes at least one glyph, so wrapping makes progress even in a panel narrower than one cell.
+    * Never splits a wide glyph across the wrap boundary, nor a grapheme cluster; like the uniform-advance branch it
+    * always consumes at least one cluster, so wrapping makes progress even in a panel narrower than one cell.
     */
   private[layout] def fittingDisplayWidthSegmentLength(
     text: String,
@@ -445,13 +453,13 @@ private[layout] object TextCaretMeasurement:
     def loop(index: Int, usedCells: Int): Int =
       if index >= text.length then index
       else
-        val codePoint = text.codePointAt(index)
-        val advance   = TabStops.advance(codePoint, usedCells, tabSize)
+        val end     = CharWidth.clusterEnd(text, index)
+        val advance = clusterAdvance(text, index, end, usedCells, tabSize)
         if (usedCells + advance) * charWidth > panelWidthPx then index
-        else loop(index + Character.charCount(codePoint), usedCells + advance)
+        else loop(end, usedCells + advance)
 
     val fitted = loop(from, 0) - from
-    if fitted > 0 then fitted else math.min(text.length - from, Character.charCount(text.codePointAt(from)))
+    if fitted > 0 then fitted else CharWidth.clusterEnd(text, from) - from
 
   /** [[normalizeCollapsedCarets]] of carets whose first character is at `absoluteStartColumn`. A hidden column's caret
     * is the next visible one's, which is no collapse to spread apart, so only the visible stops are normalised.
