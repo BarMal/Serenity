@@ -61,13 +61,29 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
+  private val oracleImages = OracleImages()
+
+  private def deviceWidthPx(window: Window, scale: Double): Int  = math.ceil(window.width * scale).toInt
+  private def deviceHeightPx(window: Window, scale: Double): Int = math.ceil(window.height * scale).toInt
+
   final private class Pooled(
       window: Window,
       pool: Int,
       scale: Double,
-      persists: Boolean = true,
-      fringe: Boolean = false
+      persists: Boolean,
+      fringe: Boolean,
+      frames: FrameImages
   ):
+
+    def this(window: Window, pool: Int, scale: Double, persists: Boolean = true, fringe: Boolean = false) =
+      this(
+        window,
+        pool,
+        scale,
+        persists,
+        fringe,
+        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pool)
+      )
 
     /** The vertical spans, in logical pixels, of the runs the last frame drew. */
     val drawnSpans = new AtomicReference[Vector[(Int, Int)]](Vector.empty)
@@ -75,15 +91,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     private def record(yPx: Int, heightPx: Int): Unit =
       val _ = drawnSpans.updateAndGet(_ :+ (yPx -> heightPx))
 
-    private val images = Vector.fill(pool)(
-      new BufferedImage(
-        math.ceil(window.width * scale).toInt,
-        math.ceil(window.height * scale).toInt,
-        BufferedImage.TYPE_INT_RGB
-      )
-    )
-
-    private val screenImage = new BufferedImage(images.head.getWidth, images.head.getHeight, BufferedImage.TYPE_INT_RGB)
+    private val images      = frames.drawn
+    private val screenImage = frames.screen
     private val caches      = RenderCaches.create()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
@@ -198,18 +207,20 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     scale: Double,
     fringe: Boolean = false
   ): Seq[(Int, Int)] =
-    val cold = Pooled(window, 1, scale, persists = false, fringe).render(state, Damage.Everything)
-    val differing =
-      for
-        x <- 0 until drawn.getWidth
-        y <- 0 until drawn.getHeight
-        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-      yield (x, y)
-    if differing.nonEmpty then
-      System.err.println(
-        FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
-      )
-    differing
+    oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), 1) { frames =>
+      val cold = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
+      val differing =
+        for
+          x <- 0 until drawn.getWidth
+          y <- 0 until drawn.getHeight
+          if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
+        yield (x, y)
+      if differing.nonEmpty then
+        System.err.println(
+          FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
+        )
+      differing
+    }
 
   private def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)

@@ -251,7 +251,7 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
         val key  = keyFor(line, frc, measured = true, cell, width)
         val expected = TextCaretMeasurement
           .fittingSegment(
-            ParagraphMeasurement.assembled(key, None, ShapedTextCache()),
+            ParagraphMeasurement.assembled(key, None, ShapedTextCache(), new BoundaryScratch),
             line.text,
             from,
             width,

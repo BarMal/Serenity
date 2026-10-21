@@ -61,6 +61,24 @@ class EditorConfigResolverSpec extends AnyFlatSpec with Matchers:
     indentation(resolver, file).tabSize shouldBe Some(6)
   }
 
+  it should "read a file again that was rewritten to the same size within one timestamp tick (#2348)" in {
+    val root     = TestTemp.directory("editorconfig-same-stamp")
+    val config   = write(root.resolve(".editorconfig"), "root = true\n[*]\nindent_size = 2\n")
+    val file     = write(root.resolve("a.txt"), "x")
+    val resolver = EditorConfigResolver()
+    val stamped  = Files.getLastModifiedTime(config)
+
+    indentation(resolver, file).tabSize shouldBe Some(2)
+
+    // Same length, and the timestamp put back: exactly what a coarse filesystem clock leaves after a fast re-save.
+    val _ = Files.writeString(config, "root = true\n[*]\nindent_size = 6\n")
+    val _ = Files.setLastModifiedTime(config, stamped)
+
+    Files.size(config) shouldBe "root = true\n[*]\nindent_size = 2\n".length.toLong
+    Files.getLastModifiedTime(config) shouldBe stamped
+    indentation(resolver, file).tabSize shouldBe Some(6)
+  }
+
   it should "forget a file that was deleted" in {
     val root     = TestTemp.directory("editorconfig-delete")
     val config   = write(root.resolve(".editorconfig"), "root = true\n[*]\nindent_size = 2\n")

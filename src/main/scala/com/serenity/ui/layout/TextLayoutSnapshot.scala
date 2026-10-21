@@ -5,9 +5,7 @@ import java.awt.geom.AffineTransform
 import java.awt.image.BufferedImage
 import java.awt.{Font, RenderingHints}
 import java.text.StringCharacterIterator
-import java.util.Locale
 
-import com.ibm.icu.text.BreakIterator
 import com.serenity.config.MarkdownViewMode
 import com.serenity.markdown.MarkdownInlineView
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
@@ -444,7 +442,7 @@ object TextLayoutSnapshot:
         measureSegment("", baseColumn, baseColumn, resolver, frc, measuredLayout, cellMetrics, shapedText, memos)
       RowWrap(Vector(empty), 1, 0, None)
     else
-      val initial   = ParagraphMeasurement(spec, 0, maxVisualLines, shapedText)
+      val initial   = ParagraphMeasurement(spec, 0, maxVisualLines, shapedText, memos.boundaries)
       val traceable = maxVisualLines == Int.MaxValue && IncrementalWrap.traceable(spec)
       @annotation.tailrec
       def loop(
@@ -486,7 +484,7 @@ object TextLayoutSnapshot:
     val wrapWidthPx      = math.max(1, spec.panelWidthPx - math.round(spanInsetPx))
     val segmentStart     = baseColumn + startColumn
     val fit              = fittingSegment(paragraph, text, startColumn, wrapWidthPx, segmentStart, spec, givenBackPx)
-    val segmentLength    = wordBoundarySegmentLength(text, startColumn, fit.length)
+    val segmentLength    = wordBoundarySegmentLength(text, startColumn, fit.length, memos.boundaries)
     val endColumnInSlice = startColumn + segmentLength
     val row = measureSegment(
       text.substring(startColumn, endColumnInSlice),
@@ -510,22 +508,18 @@ object TextLayoutSnapshot:
     * looked for a preceding whitespace character). Falls back to a forced break at `fittingLength` when no such
     * boundary exists ahead of it (a single word/run too long to fit at all), same as the old implementation's fallback.
     */
-  /** One `BreakIterator.getLineInstance` per thread, reused across calls via `setText` rather than constructed fresh
-    * each time -- constructing a line-break instance is expensive enough (it clones a larger, locale-specific rule set
-    * than the character-break instance) that doing it once per wrapped visual line measurably slowed down documents
-    * with many lines (#1277). `BreakIterator` is stateful and not thread-safe, hence `ThreadLocal` rather than one
-    * shared instance.
-    */
-  private val threadLocalLineBreakIterator: ThreadLocal[BreakIterator] =
-    ThreadLocal.withInitial(() => BreakIterator.getLineInstance(Locale.ROOT))
-
   /** Reads `line` from `from` on through a character iterator rather than a per-row substring of the paragraph's
     * remainder, which made wrapping one long paragraph quadratic in its length.
     */
-  private[layout] def wordBoundarySegmentLength(line: String, from: Int, fittingLength: Int): Int =
+  private[layout] def wordBoundarySegmentLength(
+    line: String,
+    from: Int,
+    fittingLength: Int,
+    breaks: BoundaryScratch
+  ): Int =
     if fittingLength >= line.length - from then line.length - from
     else
-      val boundary = threadLocalLineBreakIterator.get()
+      val boundary = breaks.lineBreaks
       boundary.setText(StringCharacterIterator(line, from, line.length, from))
       val candidate = boundary.preceding(from + fittingLength + 1) - from
       if candidate > 0 then candidate else fittingLength
