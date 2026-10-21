@@ -1,0 +1,12 @@
+--- a/tools/skia_release/build.py
++++ b/tools/skia_release/build.py
+@@ -104,6 +104,9 @@
+       'skia_pdf_subset_harfbuzz=true',
+       'skia_use_system_icu=false',
+       'skia_enable_skottie=true',
++      # Serenity: the RAW codec drags in the Adobe DNG SDK, whose licence conflicts with the GPL (#2028).
++      'skia_use_dng_sdk=false',
++      'skia_use_piex=false',
+       'extra_cflags=[]',
+       'extra_cflags_cc=[]',
+   ]
