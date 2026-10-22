@@ -13,7 +13,8 @@ import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
 
 /** The wrap-and-measure algorithm as it stood before per-paragraph measurement: every row fitted by laying out a
   * candidate prefix with `TextLayout`, and every row's carets read back from a `TextLayout` of that row alone. Kept as
-  * the reference the production path is checked against.
+  * the reference the production path is checked against. Its display-width paths step by grapheme cluster, as the
+  * production cell paths do since #2365: an emoji cluster takes two cells and a row never ends inside a cluster.
   */
 object LegacyLineMeasurement:
 
@@ -373,13 +374,12 @@ object LegacyLineMeasurement:
       if index >= text.length then acc :+ cells * charWidth
       else
         val codePoint = text.codePointAt(index)
-        val advanced  = cells + cellsOf(codePoint, cells, tabSize)
-        val charCount = Character.charCount(codePoint)
-        loop(
-          index + charCount,
-          advanced,
-          if charCount == 2 then acc :+ cells * charWidth :+ advanced * charWidth else acc :+ cells * charWidth
-        )
+        val end       = CharWidth.clusterEnd(text, index)
+        val advanced =
+          cells +
+            (if end == index + Character.charCount(codePoint) then cellsOf(codePoint, cells, tabSize)
+             else CharWidth.ofCluster(text, index, end))
+        loop(end, advanced, (acc :+ cells * charWidth) ++ Vector.fill(end - index - 1)(advanced * charWidth))
     loop(0, 0, Vector.empty)
 
   private def fittingDisplayWidthSegmentLength(
@@ -394,11 +394,14 @@ object LegacyLineMeasurement:
       if index >= text.length then index
       else
         val codePoint = text.codePointAt(index)
-        val advance   = cellsOf(codePoint, usedCells, tabSize)
+        val end       = CharWidth.clusterEnd(text, index)
+        val advance =
+          if end == index + Character.charCount(codePoint) then cellsOf(codePoint, usedCells, tabSize)
+          else CharWidth.ofCluster(text, index, end)
         if (usedCells + advance) * charWidth > panelWidthPx then index
-        else loop(index + Character.charCount(codePoint), usedCells + advance)
+        else loop(end, usedCells + advance)
     val fitted = loop(from, 0) - from
-    if fitted > 0 then fitted else math.min(text.length - from, Character.charCount(text.codePointAt(from)))
+    if fitted > 0 then fitted else CharWidth.clusterEnd(text, from) - from
 
   def graphemeBoundaryOffsets(text: String): Vector[Int] =
     @annotation.tailrec

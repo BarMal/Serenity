@@ -121,27 +121,33 @@ final class TerminalScreenBuffer(val width: Int, val height: Int):
 
   private def inBounds(x: Int, y: Int): Boolean = x >= 0 && x < width && y >= 0 && y < height
 
-  /** `base` is the column of the last character this call wrote, the one a combining mark composes onto, or -1 when
-    * there is none (a mark with no base before it, or whose base was clipped away, is left out rather than borrowing a
-    * cell another call wrote).
+  /** Writes the grapheme cluster at `index`: the cluster's first codepoint is the glyph of its cell (two cells when
+    * [[CharWidth.ofCluster]] says so) and the rest of the cluster rides along as marks, so a combining mark, a
+    * variation selector, a joiner and the pictograph it joins are all one cell to the buffer. `base` is the column of
+    * the last cluster this call wrote, the one a cluster of no width (a mark with no base of its own) composes onto, or
+    * -1 when there is none (a mark with no base before it, or whose base was clipped away, is left out rather than
+    * borrowing a cell another call wrote).
     */
   @tailrec private def putFrom(s: String, index: Int, col: Int, y: Int, base: Int): Unit =
     if index < s.length then
-      val codePoint  = s.codePointAt(index)
-      val glyphWidth = CharWidth.of(codePoint)
-      val next       = index + Character.charCount(codePoint)
+      val end        = CharWidth.clusterEnd(s, index)
+      val glyphWidth = CharWidth.ofCluster(s, index, end)
       if glyphWidth == 0 then
-        if base >= 0 then attachMark(base, y, codePoint)
-        putFrom(s, next, col, y, base)
+        if base >= 0 then attachMarks(base, y, s.substring(index, end))
+        putFrom(s, end, col, y, base)
       else
+        val codePoint = s.codePointAt(index)
         if glyphWidth == 2 then
           writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Wide), penStyleId.get())
           writeCell(col + 1, y, CellGrid.pack(' '.toInt, CellSpan.Continuation), penStyleId.get())
         else writeCell(col, y, CellGrid.pack(codePoint, CellSpan.Narrow), penStyleId.get())
-        putFrom(s, next, col + glyphWidth, y, if inBounds(col, y) && clipRef.get().contains(col, y) then col else -1)
+        val written = inBounds(col, y) && clipRef.get().contains(col, y)
+        val rest    = index + Character.charCount(codePoint)
+        if written && rest < end then attachMarks(col, y, s.substring(rest, end))
+        putFrom(s, end, col + glyphWidth, y, if written then col else -1)
 
-  private def attachMark(x: Int, y: Int, codePoint: Int): Unit =
-    grid.appendMarks(x, y, String(Character.toChars(codePoint)))
+  private def attachMarks(x: Int, y: Int, marks: String): Unit =
+    grid.appendMarks(x, y, marks)
     dirtyRows.set(y)
 
   /** Overwrite one cell, then repair whichever half of a wide glyph the overwrite just orphaned: if the cell replaced
