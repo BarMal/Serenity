@@ -45,12 +45,6 @@ final private[skia] class ChangeRecorder(
       )
     )
 
-  /** A line of text, across the surface: the line and a quarter of one more above and below, since the renderer already
-    * treats the ink of a row as staying within it (a damaged row is redrawn alone).
-    */
-  def paintedText(yPx: Double, lineHeightPx: Int): Unit =
-    painted(0.0, yPx - lineHeightPx / 4.0, surfaceWidthPx / deviceScaleX, lineHeightPx * 1.5)
-
   def painted(area: DeviceArea): Unit =
     val _ = recorded.updateAndGet(frame => frame.copy(paint = frame.paint :+ area))
 

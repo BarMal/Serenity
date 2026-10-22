@@ -170,8 +170,12 @@ final class SkiaRenderSurface(
       recorder.painted(xPx + shiftX, yPx + shiftY, widthPx, heightPx, growPx)
     }
 
-  private def recordText(yPx: Double, lineHeightPx: Int): Unit =
-    changes.foreach(_.paintedText(yPx + translation.get()._2, lineHeightPx))
+  /** A run of text: its box, a line more to each side, and a quarter of a line above and below. A glyph's ink can spill
+    * a few pixels into the band beside its row, which is why [[DirtyLineDiff.dilate]] redraws the neighbours of a dirty
+    * row, and no further.
+    */
+  private def recordText(xPx: Double, yPx: Double, widthPx: Double, lineHeightPx: Int): Unit =
+    recordPaint(xPx - lineHeightPx, yPx - lineHeightPx / 4.0, widthPx + 2.0 * lineHeightPx, lineHeightPx * 1.5)
 
   private def restoreTo(saveCount: Int): Unit =
     val _ = canvas.restoreToCount(saveCount)
@@ -289,7 +293,7 @@ final class SkiaRenderSurface(
         fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
       if hasText then
-        recordText(yPx.toDouble, lineHeightPx)
+        recordText(boundedLeft.toDouble, yPx.toDouble, boundedWidth.toDouble, lineHeightPx)
         val saved = canvas.save()
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
@@ -331,7 +335,7 @@ final class SkiaRenderSurface(
       val width = CellRuns.cellsIn(s) * metrics.charWidth
       fillBackground(bgRef.get(), px, py, width, metrics.lineHeight)
       painted.touched(px, py, width, metrics.lineHeight)
-      recordText(py.toDouble, metrics.lineHeight)
+      recordText(px.toDouble, py.toDouble, width.toDouble, metrics.lineHeight)
       CellRuns.pieces(s).foreach { (cell, piece) =>
         drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
       }
