@@ -104,14 +104,21 @@ private[ui] object RasterCopyPlan:
         previous <- last
         current  <- changedBesidesMoves(now, whole)
         plan <-
-          if previous.image eq acquired then Option.when(now.moves.nonEmpty)(Plan(now.moves, disjoint(current)))
+          if previous.image eq acquired then
+            Option.when(now.moves.nonEmpty)(Plan(now.moves, within(disjoint(current), whole)))
           else if beforeLast.exists(_.image eq acquired) && (now.moves.nonEmpty || previous.moves.nonEmpty) then
             changedBesidesMoves(previous, whole).map { earlier =>
-              Plan(previous.moves ++ now.moves, disjoint(current ++ earlier ++ carried(earlier, now.moves)))
+              Plan(
+                previous.moves ++ now.moves,
+                within(disjoint(current ++ earlier ++ carried(earlier, now.moves)), whole)
+              )
             }
           else None
       yield plan
     planned.getOrElse(fallback)
+
+  private def within(areas: List[DeviceArea], whole: DeviceArea): List[DeviceArea] =
+    DeviceAreas.within(areas, whole)
 
   /** What `frame` changed other than by moving rows: its damage outside the rows it moved, and what it painted over
     * them.
@@ -128,7 +135,7 @@ private[ui] object RasterCopyPlan:
   /** Where `areas` are after `moves` are made in order: the rows they lay in that a move took, at the place it took
     * them to.
     */
-  private def carried(areas: List[DeviceArea], moves: List[Move]): List[DeviceArea] =
+  private[skia] def carried(areas: List[DeviceArea], moves: List[Move]): List[DeviceArea] =
     moves.foldLeft(List.empty[DeviceArea]) { (carried, move) =>
       carried ++ DeviceAreas.intersect(areas ++ carried, List(move.area)).map(DeviceAreas.shifted(_, move.dyPx))
     }

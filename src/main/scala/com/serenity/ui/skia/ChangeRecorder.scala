@@ -20,10 +20,11 @@ final private[skia] class ChangeRecorder(
   private val recorded = new AtomicReference(Recorded.Empty)
 
   def moved(area: DeviceArea, dyPx: Int): Unit =
+    val move = RasterCopyPlan.Move(area, dyPx)
     val _ = recorded.updateAndGet(frame =>
       frame.copy(
-        moves = frame.moves :+ RasterCopyPlan.Move(area, dyPx),
-        reliable = frame.reliable && frame.paint.isEmpty
+        moves = frame.moves :+ move,
+        paint = frame.paint ++ RasterCopyPlan.carried(frame.paint.toList, List(move))
       )
     )
 
@@ -44,29 +45,23 @@ final private[skia] class ChangeRecorder(
       )
     )
 
-  /** A line of text, whose glyphs may reach past its box: the line, the one above and the one below, across the
-    * surface.
+  /** A line of text, across the surface: the line and a quarter of one more above and below, since the renderer already
+    * treats the ink of a row as staying within it (a damaged row is redrawn alone).
     */
   def paintedText(yPx: Double, lineHeightPx: Int): Unit =
-    painted(0.0, yPx - lineHeightPx, surfaceWidthPx / deviceScaleX, 3.0 * lineHeightPx)
+    painted(0.0, yPx - lineHeightPx / 4.0, surfaceWidthPx / deviceScaleX, lineHeightPx * 1.5)
 
   def painted(area: DeviceArea): Unit =
     val _ = recorded.updateAndGet(frame => frame.copy(paint = frame.paint :+ area))
 
-  /** The moves, and the paint if it is known. Paint is only worth merging when there are moves to reason about. */
   def moves: List[RasterCopyPlan.Move] = recorded.get().moves.toList
 
-  def paint: Option[List[DeviceArea]] =
-    val frame = recorded.get()
-    Option.when(frame.reliable)(RasterCopyPlan.disjoint(frame.paint.toList))
+  /** Merged on request, which is only worth doing for a frame that moved rows. */
+  def paint: List[DeviceArea] = RasterCopyPlan.disjoint(recorded.get().paint.toList)
 
 object ChangeRecorder:
 
-  final private case class Recorded(
-      moves: Vector[RasterCopyPlan.Move],
-      paint: Vector[DeviceArea],
-      reliable: Boolean
-  )
+  final private case class Recorded(moves: Vector[RasterCopyPlan.Move], paint: Vector[DeviceArea])
 
   private object Recorded:
-    val Empty: Recorded = Recorded(Vector.empty, Vector.empty, reliable = true)
+    val Empty: Recorded = Recorded(Vector.empty, Vector.empty)

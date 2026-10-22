@@ -44,8 +44,8 @@ class RasterCopyPlanSimulationSpec extends AnyFlatSpec with Matchers:
     image.getRGB(0, 0, width, height, null, 0, width).map(_ & 0xffffff)
 
   private def copy(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
-    val clipped = DeviceAreas.intersect(area, whole)
-    for y <- clipped.top until clipped.top + clipped.height; x <- clipped.left until clipped.left + clipped.width do
+    DeviceAreas.intersect(area, whole) shouldBe area
+    for y <- area.top until area.top + area.height; x <- area.left until area.left + area.width do
       image.setRGB(x, y, surface.pixels(y * width + x))
 
   /** One frame as the renderer reports it, and the plan's result on the image it is shown in. */
@@ -67,8 +67,8 @@ class RasterCopyPlanSimulationSpec extends AnyFlatSpec with Matchers:
     ): Unit =
       moves.foreach(surface.move)
       paints.foreach((area, colour) => surface.paint(area, colour))
-      val writes = paints.map((area, _) => reported(area))
-      val damage = moves.map(move => DeviceAreas.shifted(move.area, move.dyPx)) ++ writes
+      val writes = paints.map((area, _) => DeviceAreas.intersect(reported(area), whole))
+      val damage = moves.map(move => DeviceAreas.intersect(DeviceAreas.shifted(move.area, move.dyPx), whole)) ++ writes
       val image  = images(choose(frame.getAndIncrement()))
       val now = RasterCopyPlan.Filled(
         image,

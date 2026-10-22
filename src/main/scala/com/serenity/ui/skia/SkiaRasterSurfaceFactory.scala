@@ -51,7 +51,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
         if request.contentPersists then
           val damage = request.changedRegion().map(_.map(DeviceArea.around(_, scale.x, scale.y, widthPx, heightPx)))
           val moves  = changes.fold(Nil)(_.moves)
-          frames.present(surface, image, damage, moves, changes.filter(_ => moves.nonEmpty).flatMap(_.paint))
+          frames.present(surface, image, damage, moves, changes.filter(_ => moves.nonEmpty).map(_.paint))
         else
           RasterFrames.copyWhole(surface, image)
           surface.close()
