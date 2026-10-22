@@ -64,8 +64,9 @@ and Windows.
 
 To change a pin or a patch:
 
-1. Edit `ci/skiko/pins.env` or the patch, and bump `NATIVES_VERSION` (`<skiko version>-dngfree.<n>`): the cache key and the
-   Maven coordinates both follow from them.
+1. Edit `ci/skiko/pins.env` or a patch, and bump `NATIVES_VERSION` in `ci/skiko/natives-version.env`
+   (`<skiko version>-dngfree.<n>`): the Maven coordinates follow from it. The Skia cache key follows `pins.env` and the Skia
+   patch only, so a new version with the same Skia sources does not rebuild Skia.
 2. Check `git apply --check` for each patch against the new tag, and run the unit tests in `scripts/`.
 3. Open the pull request and wait for the four groups and the merge job to pass.
 4. Run the workflow manually with `groups` = `all` and `publish` = `true`, then point the build at the new `NATIVES_VERSION`.

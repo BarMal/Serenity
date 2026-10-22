@@ -349,6 +349,7 @@ jobs:
         run: |
           set -euo pipefail
           . ci/skiko/pins.env
+          . ci/skiko/natives-version.env
           mkdir -p repo
           for dir in incoming/maven-*; do cp -R "${dir}/." repo/; done
           jars=$(find repo -name "skiko-awt-runtime-*-${NATIVES_VERSION}.jar" | sort)

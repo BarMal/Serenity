@@ -30,6 +30,8 @@ phase="${4:?phase}"
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=pins.env
 . "$here/pins.env"
+# shellcheck source=natives-version.env
+. "$here/natives-version.env"
 
 case "$group" in
   linux-x64)   os=linux;   machines=(x64) ;;
