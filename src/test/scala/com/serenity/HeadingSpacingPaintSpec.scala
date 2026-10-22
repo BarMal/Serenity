@@ -59,7 +59,8 @@ class HeadingSpacingPaintSpec extends AnyFlatSpec with Matchers with PersistedFr
     )
 
   private def drawn(state: AppState): (BufferedImage, EditorPaneRenderPlan) =
-    Session(scale).draw(state, Damage.Everything)
+    val (frame, plan) = Session(scale).draw(state, Damage.Everything)
+    (frame.toImage, plan)
 
   final private case class Box(row: TextVisualLine, bandTop: Int, textTop: Int, textBottom: Int, bandBottom: Int)
 

@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
@@ -41,7 +39,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       ((bar.yPx + at.offsetPx + below) * scale).toInt
     )
 
-  private def colorAt(image: BufferedImage, at: (Int, Int)): Int = image.getRGB(at._1, at._2) & 0xffffff
+  private def colorAt(image: FramePixels, at: (Int, Int)): Int = image.rgbAt(at._1, at._2) & 0xffffff
 
   private val longDocument = codeLines.mkString("\n")
 
@@ -52,7 +50,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
 
   private def viewingFullWidthRows: AppState = stateOf(fullWidthDocument, CursorPosition(0, 0), topLine = 2)
 
-  private def drawnFrom(before: AppState, after: AppState): BufferedImage =
+  private def drawnFrom(before: AppState, after: AppState): FramePixels =
     val session = Session()
     val _       = session.settle(before)
     session.draw(after, DamageProducer.forTransition(before, after))._1
@@ -162,7 +160,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     val session = Session()
     val _       = session.settle(viewingFullWidthRows)
 
-    val last = states.foldLeft((viewingFullWidthRows, Option.empty[BufferedImage])) {
+    val last = states.foldLeft((viewingFullWidthRows, Option.empty[FramePixels])) {
       case ((before, _), after) =>
         (after, Some(session.draw(after, DamageProducer.forTransition(before, after))._1))
     }
@@ -191,7 +189,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     val session = Session()
     val plan    = session.settle(before)
     val at      = thumbPixel(plan, below = 10)
-    session.pendingImage.setRGB(at._1, at._2, 0xff00ff)
+    session.pendingImage.stamp(at._1, at._2, 0xff00ff)
 
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
 
@@ -204,7 +202,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     val session = Session()
     val plan    = session.settle(before)
     val at      = thumbPixel(plan, below = 10)
-    session.pendingImage.setRGB(at._1, at._2, 0xff00ff)
+    session.pendingImage.stamp(at._1, at._2, 0xff00ff)
 
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
 
@@ -218,7 +216,7 @@ class ScrollbarRenderSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     val session = Session()
     val plan    = session.settle(before)
     val far     = thumbPixel(plan, below = thumb(plan).getOrElse(fail("expected a thumb")).lengthPx - 6)
-    session.pendingImage.setRGB(far._1, far._2, 0xff00ff)
+    session.pendingImage.stamp(far._1, far._2, 0xff00ff)
 
     val (image, _) = session.draw(after, DamageProducer.forTransition(before, after))
 
