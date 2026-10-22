@@ -338,7 +338,8 @@ object LspConnection:
     logger: Logger[IO],
     requestTimeout: FiniteDuration = DefaultRequestTimeout,
     askServerToExit: LspConnection => IO[Unit] = _ => IO.unit,
-    endServer: IO[Unit] = IO.unit
+    endServer: IO[Unit] = IO.unit,
+    handshakeTimeout: Option[FiniteDuration] = None
   ): Resource[IO, LspConnection] =
     for
       conn <- Resource.eval(create(languageId, logger, requestTimeout))
@@ -374,7 +375,7 @@ object LspConnection:
             writerFiber.cancel >>
             readerFiber.cancel
       }
-      _ <- Resource.eval(initHandshake(conn, rootUri, logger))
+      _ <- Resource.eval(initHandshake(conn, rootUri, logger, handshakeTimeout.getOrElse(requestTimeout)))
     yield conn
 
   /** A writer still running after the flush wait is stuck in a write to a full pipe, and holds the stream's lock, so
@@ -445,12 +446,17 @@ object LspConnection:
           exited.flatMap(gone => IO.blocking(process.destroyForcibly()).void.unlessA(gone)) >>
           exited.void
 
-  private def initHandshake(conn: LspConnection, rootUri: WorkspaceRootUri, logger: Logger[IO]): IO[Unit] =
+  private def initHandshake(
+    conn: LspConnection,
+    rootUri: WorkspaceRootUri,
+    logger: Logger[IO],
+    timeout: FiniteDuration
+  ): IO[Unit] =
     for
       pid <- IO(ProcessHandle.current().pid().toInt)
       _   <- logger.info(s"[LSP] initialize ${conn.languageId.id} rootUri=${rootUri.value}")
       initializeResult <- conn
-        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri))
+        .sendRequest(LspMethod("initialize"), LspProtocol.initializeParams(pid, rootUri), timeout)
         .handleErrorWith(ex => logger.error(ex)("[LSP] initialize failed") >> IO.raiseError(ex))
       _ <- requireOfferedPositionEncoding(conn, initializeResult, logger)
       _ <- conn.recordSemanticTokensLegend(LspProtocol.parseSemanticTokensLegend(initializeResult))
