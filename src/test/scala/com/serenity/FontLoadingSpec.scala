@@ -4,7 +4,7 @@ import java.awt.Font
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontLoader, LogicalFontFamilies}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -81,7 +81,7 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
 
     val font = FontLoader.loadUiFont(config).unsafeRunSync()
 
-    font.getFamily shouldBe Font.SANS_SERIF
+    font.getFamily shouldBe LogicalFontFamilies.system.resolve(Font.SANS_SERIF)
     font.getSize2D shouldBe 13.0f
   }
 
