@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 import java.nio.ByteOrder
 import java.util.{Collections, WeakHashMap}
 
-import org.jetbrains.skia.{ColorAlphaType, Image, ImageInfo}
+import org.jetbrains.skia.{ColorAlphaType, ColorType, Image, ImageInfo}
 
 /** The Skia image behind each [[RenderImage]] a surface draws, converted once and kept for as long as the source
   * `BufferedImage` lives.
@@ -30,8 +30,8 @@ object SkiaImageCache:
 
   private val BytesPerPixel = 4
 
-  /** Skia's native 32-bit order is BGRA on every platform Skiko ships for, which is an ARGB `int` written
-    * little-endian; the pixels are copied as they are and Skia premultiplies them as it draws.
+  /** The bytes are laid out as BGRA, an ARGB `int` written little-endian, and Skia is told so, because its native
+    * 32-bit order is BGRA on some platforms and RGBA on others. Skia premultiplies the pixels as it draws.
     */
   private[skia] def convert(source: BufferedImage): Image =
     val width  = source.getWidth
@@ -40,7 +40,7 @@ object SkiaImageCache:
     val bytes  = new Array[Byte](argb.length * BytesPerPixel)
     java.nio.ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().put(argb)
     Image.Companion.makeRaster(
-      ImageInfo.Companion.makeN32(width, height, ColorAlphaType.UNPREMUL),
+      new ImageInfo(width, height, ColorType.BGRA_8888, ColorAlphaType.UNPREMUL),
       bytes,
       width * BytesPerPixel
     )
