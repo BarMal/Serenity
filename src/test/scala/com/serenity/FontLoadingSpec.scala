@@ -4,8 +4,8 @@ import java.awt.Font
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.ui.fonts.{FontLoader, LogicalFontFamilies}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.{FontLoader, LogicalFontFamilies}
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
