@@ -28,9 +28,9 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
   final private class Window(widthPx: Int, heightPx: Int):
     val canvas = new JPanel
     canvas.setSize(widthPx, heightPx)
-    val pool                                         = new ReusableImagePool()
-    val caches                                       = RenderCaches.create()
-    val changed                                      = new AtomicReference[Option[List[PixelRect]]](None)
+    val pool                                          = new ReusableImagePool()
+    val caches                                        = RenderCaches.create()
+    val changed                                       = new AtomicReference[Option[List[PixelRect]]](None)
     val shown: AtomicReference[Option[BufferedImage]] = new AtomicReference(None)
 
     def resize(widthPx: Int, heightPx: Int): Unit = canvas.setSize(widthPx, heightPx)
@@ -42,7 +42,8 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
         canvas,
         image =>
           pool.publish(image)
-          shown.set(Some(image)),
+          shown.set(Some(image))
+        ,
         pool.acquire,
         caches.surfaceText,
         caches.backendCaches,
@@ -68,13 +69,18 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
 
     def snapshot: Array[Int] = pixels.clone()
 
-  private def paint(window: Window, model: Model, fills: List[(PixelRect, RenderColor)], damage: Option[List[PixelRect]])
-    : BufferedImage =
+  private def paint(
+    window: Window,
+    model: Model,
+    fills: List[(PixelRect, RenderColor)],
+    damage: Option[List[PixelRect]]
+  ): BufferedImage =
     window.changed.set(damage)
     val surface = window.surface()
-    fills.foreach { case (rect, color) =>
-      surface.pixels.fillPixelRect(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx, color)
-      model.fill(rect, color)
+    fills.foreach {
+      case (rect, color) =>
+        surface.pixels.fillPixelRect(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx, color)
+        model.fill(rect, color)
     }
     surface.flush()
     window.shown.get().getOrElse(fail("the frame was never presented"))
@@ -100,9 +106,10 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
       Nil                   -> Some(Nil),
       List(first -> blue)   -> Some(List(first))
     )
-    frames.zipWithIndex.foreach { case ((fills, damage), index) =>
-      val image = paint(window, model, fills, damage)
-      withClue(s"frame $index: ") { pixelsOf(image) shouldBe model.snapshot }
+    frames.zipWithIndex.foreach {
+      case ((fills, damage), index) =>
+        val image = paint(window, model, fills, damage)
+        withClue(s"frame $index: ")(pixelsOf(image) shouldBe model.snapshot)
     }
   }
 
@@ -135,10 +142,10 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "copy the whole frame when the previous frame was never presented" in {
-    val window = new Window(100, 100)
-    val model  = new Model(100, 100)
-    val _      = paint(window, model, List(first -> red), None)
-    val _      = paint(window, model, List(second -> green), Some(List(second)))
+    val window  = new Window(100, 100)
+    val model   = new Model(100, 100)
+    val _       = paint(window, model, List(first -> red), None)
+    val _       = paint(window, model, List(second -> green), Some(List(second)))
     val dropped = window.surface()
     dropped.pixels.fillPixelRect(third.xPx, third.yPx, third.widthPx, third.heightPx, blue)
     model.fill(third, blue)
