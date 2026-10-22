@@ -88,7 +88,7 @@ object CharacterRenderer:
             val shown =
               if Character.isISOControl(codePoint) then " ".repeat(math.max(1, cells)) else text.substring(index, end)
             familyAt(index).fold(surface.putString(cell, y, shown))(family =>
-              surface.text.withFallbackFamily(family, CharWidth.isEmojiCluster(text, index, end))(
+              surface.text.withFallbackFamily(family, CharWidth.needsLigaturesToJoin(text, index, end))(
                 withinCells(surface, cell, y, math.max(1, cells))(surface.putString(cell, y, shown))
               )
             )
@@ -329,7 +329,7 @@ object CharacterRenderer:
           case Some(name) =>
             CellRuns.clusters(stretch).foldLeft(startCell) { (cell, shown) =>
               val cells = CellRuns.cellsIn(shown)
-              surface.text.withFallbackFamily(name, CharWidth.isEmojiCluster(shown, 0, shown.length)) {
+              surface.text.withFallbackFamily(name, CharWidth.needsLigaturesToJoin(shown, 0, shown.length)) {
                 withinCells(surface, cell, y, cells)(surface.putString(cell, y, shown))
               }
               cell + cells

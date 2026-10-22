@@ -56,9 +56,9 @@ trait TextDrawing:
 
   /** Runs `draw` with the surface font swapped for `family` at the current font's style, size and ligature setting, for
     * glyphs the current font has none of. A surface with one font for all text, such as a terminal, draws as it would
-    * anyway. An `emojiCluster` is drawn with ligatures on whatever the surface font's setting.
+    * anyway. With `ligaturesOn` the glyphs are drawn with ligatures on whatever the surface font's setting.
     */
-  def withFallbackFamily(@unused family: String, @unused emojiCluster: Boolean = false)(draw: => Unit): Unit = draw
+  def withFallbackFamily(@unused family: String, @unused ligaturesOn: Boolean = false)(draw: => Unit): Unit = draw
 
   /** As [[drawRunPx]], for a short label that repeats verbatim from frame to frame, such as a line number. A raster
     * surface may serve it from sprites of the rendered ink rather than laying the text out again; the default draws it

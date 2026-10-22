@@ -41,22 +41,22 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
 
   private val fallbacks = new ConcurrentHashMap[(Font, String, Boolean), Font]()
 
-  /** `family` at `styled`'s style, size and ligature setting; an `emojiCluster` is drawn with ligatures on whatever
-    * `styled`'s are, since that is what makes the JDK shape a flag, a skin tone or a tag sequence into one glyph.
+  /** `family` at `styled`'s style, size and ligature setting, or with ligatures on whatever `styled`'s are when
+    * `ligaturesOn`: that is what makes the JDK join a flag, a skin tone or a tag sequence into one glyph.
     */
-  def fallbackFontFor(styled: Font, family: String, emojiCluster: Boolean = false): Font =
+  def fallbackFontFor(styled: Font, family: String, ligaturesOn: Boolean = false): Font =
     if fallbacks.size >= maxBaseFonts * maxStylesPerBaseFont then fallbacks.clear()
     fallbacks.computeIfAbsent(
-      (styled, family, emojiCluster),
-      _ => FontFallback.matching(styled, Font(family, styled.getStyle, 1), ligaturesOn = emojiCluster)
+      (styled, family, ligaturesOn),
+      _ => FontFallback.matching(styled, Font(family, styled.getStyle, 1), ligaturesOn = ligaturesOn)
     )
 
   /** Runs the draw on the graphics with its font swapped for the family at the current font's style, size and ligature
-    * setting (on for an `emojiCluster`).
+    * setting, or with ligatures on when `ligaturesOn`.
     */
-  def drawingIn(g: Graphics2D, family: String, emojiCluster: Boolean = false)(draw: => Unit): Unit =
+  def drawingIn(g: Graphics2D, family: String, ligaturesOn: Boolean = false)(draw: => Unit): Unit =
     val styled = g.getFont
-    g.setFont(fallbackFontFor(styled, family, emojiCluster))
+    g.setFont(fallbackFontFor(styled, family, ligaturesOn))
     try draw
     finally g.setFont(styled)
 

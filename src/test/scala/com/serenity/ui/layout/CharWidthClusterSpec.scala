@@ -96,6 +96,33 @@ class CharWidthClusterSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  "needsLigaturesToJoin" should "be true for a regional-indicator pair, a tone sequence and a tag sequence" in
+    Vector(flagUs, thumbsTone, england, s(0x1f1ef, 0x1f1f5), s(0x270b, 0x1f3fd)).foreach(sequence =>
+      withClue(sequence.codePoints().toArray.toVector.map(_.toHexString))(
+        CharWidth.needsLigaturesToJoin(sequence, 0, sequence.length) shouldBe true
+      )
+    )
+
+  it should "be false for a cluster with a joiner, a variation selector 16 or a keycap enclosure, which the JDK shapes anyway" in
+    Vector(
+      heartVs16,
+      plane,
+      keycap,
+      family,
+      rainbow,
+      s(0x1f469, 0x1f3fd, 0x200d, 0x1f4bb),
+      s(0x1f3f4, 0x200d, 0x2620, 0xfe0f)
+    ).foreach(sequence =>
+      withClue(sequence.codePoints().toArray.toVector.map(_.toHexString))(
+        CharWidth.needsLigaturesToJoin(sequence, 0, sequence.length) shouldBe false
+      )
+    )
+
+  it should "be false for anything that is not an emoji cluster" in
+    Vector(heart, bolt, thumbs, eAcute, aVs16, loneRegion, "a").foreach(text =>
+      CharWidth.needsLigaturesToJoin(text, 0, text.length) shouldBe false
+    )
+
   "hasClusterChars" should "be false for text that cannot hold an emoji cluster" in {
     CharWidth.hasClusterChars("plain ascii, tabs\tand all") shouldBe false
     CharWidth.hasClusterChars("你好，世界 こんにちは") shouldBe false
