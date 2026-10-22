@@ -5,7 +5,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{Bitmap, ImageInfo, Surface}
+import org.jetbrains.skia.{Bitmap, ColorAlphaType, ColorType, ImageInfo, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
   *
@@ -74,7 +74,8 @@ object RasterFrames:
     copyInto(surface, image, DeviceArea(0, 0, image.getWidth, image.getHeight))
 
   private def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
-    val info   = ImageInfo.Companion.makeN32Premul(area.width, area.height)
+    // BGRA whatever the platform's native order, so the bytes read as the little-endian ARGB ints an image holds
+    val info   = new ImageInfo(area.width, area.height, ColorType.BGRA_8888, ColorAlphaType.PREMUL)
     val bitmap = Bitmap()
     val read   = bitmap.allocPixels(info) && surface.readPixels(bitmap, area.left, area.top)
     val bytes  = if read then Option(bitmap.readPixels(info, area.width * 4, 0, 0)) else None
