@@ -42,9 +42,17 @@ object FontFallback:
   /** No configured families: only the system's own resolver stands behind the primary. */
   val Default: FontFallback = FontFallback()
 
-  def matching(primary: Font, fallback: Font): Font =
+  /** `fallback` at `primary`'s style and size, with `primary`'s ligature setting unless `ligaturesOn` forces them on:
+    * the JDK joins an emoji sequence into one glyph only in a font with ligatures on.
+    */
+  def matching(primary: Font, fallback: Font, ligaturesOn: Boolean = false): Font =
     val sized = fallback.deriveFont(primary.getStyle, primary.getSize2D)
-    primary.getAttributes.get(TextAttribute.LIGATURES) match
-      case ligatures: Integer =>
-        sized.deriveFont(java.util.Map.of[TextAttribute, Integer](TextAttribute.LIGATURES, ligatures))
-      case _ => sized
+    val setting =
+      if ligaturesOn then Some(TextAttribute.LIGATURES_ON)
+      else
+        primary.getAttributes.get(TextAttribute.LIGATURES) match
+          case ligatures: Integer => Some(ligatures)
+          case _                  => None
+    setting.fold(sized)(ligatures =>
+      sized.deriveFont(java.util.Map.of[TextAttribute, Integer](TextAttribute.LIGATURES, ligatures))
+    )

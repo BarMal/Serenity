@@ -124,6 +124,21 @@ object CharWidth:
     then true
     else isExtendedPictographic(first) && hasEmojiExtension(text, afterFirst, until, afterJoiner = false)
 
+  /** Whether the cluster `text[from, until)` is an emoji cluster the JDK draws as one glyph only in a font with
+    * ligatures on: a regional-indicator pair, a tone sequence or a tag sequence. One with a joiner, a variation
+    * selector 16 or a keycap enclosure is shaped by the JDK without that, so it needs no help.
+    */
+  def needsLigaturesToJoin(text: String, from: Int, until: Int): Boolean =
+    isEmojiCluster(text, from, until) && !hasShapedAnyway(text, from, until)
+
+  @annotation.tailrec
+  private def hasShapedAnyway(text: String, index: Int, until: Int): Boolean =
+    index < until && {
+      val codePoint = text.codePointAt(index)
+      codePoint == ZeroWidthJoiner || codePoint == EmojiPresentationSelector || codePoint == KeycapEnclosure ||
+      hasShapedAnyway(text, index + Character.charCount(codePoint), until)
+    }
+
   @annotation.tailrec
   private def hasEmojiExtension(text: String, index: Int, until: Int, afterJoiner: Boolean): Boolean =
     index < until && {
