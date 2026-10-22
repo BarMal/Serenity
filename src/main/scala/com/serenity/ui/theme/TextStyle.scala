@@ -54,11 +54,28 @@ object TextStyle:
     val size     = style.fontSize.getOrElse(base.getSize2D).max(1.0f)
     val styled = style.fontFamily match
       case Some(family) => Font(resolve(family), fontMode, size.round.max(1)).deriveFont(fontMode, size)
-      case None         => base.deriveFont(fontMode, size)
+      case None         => derivedFrom(base, fontMode, size)
     if style.isStrikethrough then
       val strike: Map[TextAttribute, AnyRef] = Map(TextAttribute.STRIKETHROUGH -> TextAttribute.STRIKETHROUGH_ON)
       styled.deriveFont(strike.asJava)
     else styled
+
+  /** `base` at `mode` and `size`: drawn with the bundled Bold face when `base` is a bundled font and the mode is bold
+    * ([[BundledBoldFaces]]), still flagged bold so that whatever reads the style off the font (the fallback chain)
+    * draws bold too, and carrying the ligature setting of `base`; derived from `base` otherwise, which finds the real
+    * bold of a named family when it has one and synthesises one when it has not.
+    */
+  private def derivedFrom(base: Font, mode: Int, size: Float): Font =
+    if (mode & Font.BOLD) == 0 then base.deriveFont(mode, size)
+    else
+      BundledBoldFaces.of(base) match
+        case None => base.deriveFont(mode, size)
+        case Some(bold) =>
+          val face = bold.deriveFont(mode, size)
+          base.getAttributes.get(TextAttribute.LIGATURES) match
+            case ligatures: Integer =>
+              face.deriveFont(java.util.Map.of[TextAttribute, Integer](TextAttribute.LIGATURES, ligatures))
+            case _ => face
 
 final case class StyledText(
     content: String,

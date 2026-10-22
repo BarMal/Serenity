@@ -13,8 +13,8 @@ import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoi
 
 /** The GUI cell grid -- the layout a monospaced font with ligatures off and an exact integer advance gets -- on plain
   * ASCII code, which must cost what it did, and on code with CJK, Hangul and symbols, which it now places on two cells
-  * and draws in a fallback font, and with emoji, which the bundled emoji face draws (#1866). Courier Prime at 10 px has
-  * a 6 px advance, so it takes the cell layout.
+  * and draws in a fallback font, and with emoji and emoji clusters, which the bundled emoji face draws (#1866, #2365).
+  * Courier Prime at 10 px has a 6 px advance, so it takes the cell layout.
   */
 private[perf] object CellGridBenchmarks:
 
@@ -44,6 +44,12 @@ private[perf] object CellGridBenchmarks:
   private def emojiLine(index: Int): String =
     if index % 2 == 0 then asciiLine(index)
     else s"val reaction$index = \"\ud83d\ude00 \ud83d\ude80 \ud83c\udf89 \u2728\" // emoji $index"
+
+  private def clusterLine(index: Int): String =
+    if index % 2 == 0 then asciiLine(index)
+    else
+      s"val clusters$index = \"\u2764\ufe0f \ud83d\udc4d\ud83c\udffd \ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67 " +
+        s"\ud83c\udff3\ufe0f\u200d\ud83c\udf08 \ud83c\uddfa\ud83c\uddf8\" // clusters $index"
 
   private def text(line: Int => String): String = Vector.tabulate(Lines)(line).mkString("\n")
 
@@ -105,11 +111,13 @@ private[perf] object CellGridBenchmarks:
         .sum
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val asciiFrame  = frameOf(stateOf(text(asciiLine)))
-    val mixedFrame  = frameOf(stateOf(text(mixedLine)))
-    val emojiFrame  = frameOf(stateOf(text(emojiLine)))
-    val asciiLayout = layoutOf(asciiLine)
-    val mixedLayout = layoutOf(mixedLine)
+    val asciiFrame    = frameOf(stateOf(text(asciiLine)))
+    val mixedFrame    = frameOf(stateOf(text(mixedLine)))
+    val emojiFrame    = frameOf(stateOf(text(emojiLine)))
+    val clusterFrame  = frameOf(stateOf(text(clusterLine)))
+    val clusterLayout = layoutOf(clusterLine)
+    val asciiLayout   = layoutOf(asciiLine)
+    val mixedLayout   = layoutOf(mixedLine)
     List(
       BenchmarkRunner.Benchmark(
         "render.cell_grid.frame_ascii",
@@ -131,6 +139,21 @@ private[perf] object CellGridBenchmarks:
         12,
         () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
         () => emojiFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "render.cell_grid.frame_emoji_clusters",
+        3,
+        12,
+        () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
+        () => clusterFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "layout.cell_grid.emoji_cluster_lines",
+        BenchmarkIterationCounts.LayoutVisibleViewport,
+        BenchmarkIterationCounts.LayoutVisibleViewport,
+        () => assert(clusterLayout() >= Lines),
+        () => clusterLayout(),
+        settleJit = true
       ),
       BenchmarkRunner.Benchmark(
         "layout.cell_grid.ascii_lines",

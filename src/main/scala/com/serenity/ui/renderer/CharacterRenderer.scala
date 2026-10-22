@@ -81,14 +81,14 @@ object CharacterRenderer:
         if index < 0 then paint(column + 1)
         else
           val codePoint = text.codePointAt(index)
-          val end       = CellRuns.endOfMarks(text, index + Character.charCount(codePoint))
+          val end       = CharWidth.clusterEnd(text, index)
           val cell      = cellOf(column)
           val cells     = cellOf(column + end - index) - cell
           if cell >= leftCell && cell < rightCell then
             val shown =
               if Character.isISOControl(codePoint) then " ".repeat(math.max(1, cells)) else text.substring(index, end)
             familyAt(index).fold(surface.putString(cell, y, shown))(family =>
-              surface.text.withFallbackFamily(family)(
+              surface.text.withFallbackFamily(family, CharWidth.needsLigaturesToJoin(text, index, end))(
                 withinCells(surface, cell, y, math.max(1, cells))(surface.putString(cell, y, shown))
               )
             )
@@ -279,13 +279,13 @@ object CharacterRenderer:
           )
         else this
 
-    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX)
-    val codePoints = content.codePoints().iterator()
+    val initial = PlainRunState(Nil, StringBuilder(), startX, startX)
     @annotation.tailrec
-    def consume(state: PlainRunState): PlainRunState =
-      if !codePoints.hasNext then state.flush
+    def consume(index: Int, state: PlainRunState): PlainRunState =
+      if index >= content.length then state.flush
       else
-        val nextState = codePoints.nextInt() match
+        val end = CharWidth.clusterEnd(content, index)
+        val nextState = content.codePointAt(index) match
           case '\t' =>
             val flushed     = state.flush
             val spacesToAdd = TabStops.cellsAt(flushed.currentX - originX, tabWidth)
@@ -297,14 +297,17 @@ object CharacterRenderer:
             )
           case visible if isVisibleCodePoint(visible) =>
             val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
-            state.currentText.appendAll(Character.toChars(visible))
-            state.copy(currentStartX = start, currentX = state.currentX + CharWidth.of(visible))
+            if end == index + Character.charCount(visible) then
+              if Character.isBmpCodePoint(visible) then state.currentText.append(visible.toChar)
+              else state.currentText.appendAll(Character.toChars(visible))
+            else state.currentText.appendAll(content.substring(index, end))
+            state.copy(currentStartX = start, currentX = state.currentX + CharWidth.ofCluster(content, index, end))
           case _ =>
             val flushed = state.flush
             flushed.copy(currentStartX = flushed.currentX)
-        consume(nextState)
+        consume(end, nextState)
 
-    val finalState = consume(initial)
+    val finalState = consume(0, initial)
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
 
@@ -324,13 +327,13 @@ object CharacterRenderer:
         family match
           case None => surface.putString(startCell, y, stretch)
           case Some(name) =>
-            surface.text.withFallbackFamily(name) {
-              CellRuns.clusters(stretch).foldLeft(startCell) { (cell, shown) =>
-                val cells = CellRuns.cellsIn(shown)
+            CellRuns.clusters(stretch).foldLeft(startCell) { (cell, shown) =>
+              val cells = CellRuns.cellsIn(shown)
+              surface.text.withFallbackFamily(name, CharWidth.needsLigaturesToJoin(shown, 0, shown.length)) {
                 withinCells(surface, cell, y, cells)(surface.putString(cell, y, shown))
-                cell + cells
-              }: Unit
-            }
+              }
+              cell + cells
+            }: Unit
       }
 
   /** A fallback glyph can stand taller than the row it sits in, and ink outside the row is not ink a repaint of the
@@ -371,10 +374,10 @@ object CharacterRenderer:
           def fittingLength(index: Int, usedCells: Int): Int =
             if index >= run.content.length then index
             else
-              val codePoint = run.content.codePointAt(index)
-              val width     = CharWidth.of(codePoint)
+              val end   = CharWidth.clusterEnd(run.content, index)
+              val width = CharWidth.ofCluster(run.content, index, end)
               if usedCells + width > allowedCells then index
-              else fittingLength(index + Character.charCount(codePoint), usedCells + width)
+              else fittingLength(end, usedCells + width)
 
           Some(run.copy(content = run.content.take(fittingLength(0, 0))))
 

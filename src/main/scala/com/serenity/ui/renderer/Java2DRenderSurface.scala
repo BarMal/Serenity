@@ -158,7 +158,8 @@ class Java2DRenderSurface(
       shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
 
-  override def withFallbackFamily(family: String)(draw: => Unit): Unit = styledFonts.drawingIn(g, family)(draw)
+  override def withFallbackFamily(family: String, ligaturesOn: Boolean)(draw: => Unit): Unit =
+    styledFonts.drawingIn(g, family, ligaturesOn)(draw)
 
   override def shapesStretchesOf(text: String): Boolean =
     ShapedTextCache.worthShaping(baseFontRef.get(), text)
