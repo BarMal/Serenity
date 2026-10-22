@@ -12,6 +12,9 @@ enum RenderBackend(val configKey: String):
 /** Which renderer paints the window, decided once at startup from facts that are all known before a window exists. */
 object RenderBackendSelection:
 
+  /** `auto` stays on Java2D until the built-in benchmark (`--render-benchmark`) shows Skia on a GPU ahead of it. */
+  private val AutoReason = "auto uses Java2D until Skia is measured faster"
+
   val OverrideVariable: String        = "SERENITY_RENDER_BACKEND"
   val WaylandOverrideVariable: String = "SERENITY_WAYLAND_RENDER"
 
@@ -57,6 +60,7 @@ object RenderBackendSelection:
     val linux = inputs.osName.toLowerCase(Locale.ROOT).contains("linux")
     if inputs.setting == RenderBackendSetting.Java2D then java2d("ui.render.backend=java2d")
     else if linux && inputs.toolkit == ToolkitSelection.Choice.Wayland then onWayland(inputs)
+    else if inputs.setting == RenderBackendSetting.Auto then java2d(AutoReason)
     else if !inputs.skiaSurfaceAvailable then java2d("skia surface unavailable")
     else if linux && !inputs.x11Display then java2d("no X11 display for Skia")
     else afterProbe(inputs, RenderBackend.Skia, "native probe passed")
