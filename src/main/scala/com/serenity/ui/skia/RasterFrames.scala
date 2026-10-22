@@ -5,7 +5,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{Bitmap, ImageInfo, Surface}
+import org.jetbrains.skia.{Pixmap, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
   *
@@ -73,19 +73,43 @@ object RasterFrames:
   def copyWhole(surface: Surface, image: BufferedImage): Unit =
     copyInto(surface, image, DeviceArea(0, 0, image.getWidth, image.getHeight))
 
-  private def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
-    val info   = ImageInfo.Companion.makeN32Premul(area.width, area.height)
-    val bitmap = Bitmap()
-    val read   = bitmap.allocPixels(info) && surface.readPixels(bitmap, area.left, area.top)
-    val bytes  = if read then Option(bitmap.readPixels(info, area.width * 4, 0, 0)) else None
-    bytes.foreach { raw =>
-      val pixels = new Array[Int](area.width * area.height)
-      ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(pixels)
-      image.getRaster.getDataBuffer match
-        case target: DataBufferInt =>
-          val data = target.getData
-          (0 until area.height).foreach(row =>
-            System.arraycopy(pixels, row * area.width, data, (area.top + row) * image.getWidth + area.left, area.width)
-          )
-        case _ => image.setRGB(area.left, area.top, area.width, area.height, pixels, 0, area.width)
-    }
+  /** A read is a chunk of rows of the surface, copied into one array of about this size: a frame is copied out in many
+    * small allocations that G1 never has to treat as humongous, instead of two arrays the size of the frame.
+    */
+  private val ChunkBytes = 256 * 1024
+
+  /** A wide area reads several full rows at a time; a narrow one reads its own columns a row at a time, so a read never
+    * carries many more bytes than the area has.
+    */
+  private[skia] def rowsPerRead(areaWidthPx: Int, surfaceWidthPx: Int): Int =
+    if areaWidthPx * 2 >= surfaceWidthPx then (ChunkBytes / (surfaceWidthPx * 4)).max(1) else 1
+
+  private[skia] def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
+    val pixmap = Pixmap()
+    try
+      if surface.peekPixels(pixmap) then
+        val pixels = pixmap.getBuffer
+        try
+          val rowBytes = pixmap.getRowBytes
+          val rows     = rowsPerRead(area.width, surface.getWidth)
+          val ints     = rowBytes / 4
+          val target = image.getRaster.getDataBuffer match
+            case int: DataBufferInt => Some(int.getData)
+            case _                  => None
+          val line = new Array[Int](if target.isEmpty then area.width else 0)
+          (0 until area.height by rows).foreach { first =>
+            val count = rows.min(area.height - first)
+            val raw =
+              pixels.getBytes((area.top + first) * rowBytes + area.left * 4, (count - 1) * rowBytes + area.width * 4)
+            val read = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+            (0 until count).foreach { row =>
+              val y = area.top + first + row
+              target match
+                case Some(data) => read.get(row * ints, data, y * image.getWidth + area.left, area.width)
+                case None =>
+                  read.get(row * ints, line, 0, area.width)
+                  image.setRGB(area.left, y, area.width, 1, line, 0, area.width)
+            }
+          }
+        finally pixels.close()
+    finally pixmap.close()
