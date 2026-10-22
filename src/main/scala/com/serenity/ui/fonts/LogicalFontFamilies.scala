@@ -5,12 +5,15 @@ import java.util.concurrent.TimeUnit
 
 import scala.util.Try
 
-/** The physical family each of AWT's logical font names stands for on this machine, so the font layout measures with
-  * and the font a surface draws with are the same face. AWT's logical fonts are composites it resolves in its own way,
-  * and a surface that is not AWT cannot ask which face that is; naming one family for both makes measured equal drawn.
+/** The physical family each of AWT's logical font names stands for on Linux, so the font layout measures with and the
+  * font a surface draws with are the same face. AWT's logical fonts are composites it resolves in its own way, and a
+  * surface that is not AWT cannot ask which face that is; naming one family for both makes measured equal drawn.
   *
-  * Only the five logical names resolve. Any other family, the bundled ones included, passes through, and so does a
-  * logical name when no installed family can be found for it.
+  * Only Linux resolves, and only the five logical names. Elsewhere a logical name stays itself, because there the
+  * composite is not its first physical family: measured on a Windows runner, `SansSerif` and `Arial` advance alike but
+  * the composite's ascent is 12.06 against Arial's 10.86 (a 16-pixel line against 14), so handing AWT the physical
+  * family would change every line height. Any other family, the bundled ones included, passes through, and so does a
+  * logical name when fontconfig names no installed family for it.
   */
 final class LogicalFontFamilies(
     osName: String,
@@ -28,10 +31,7 @@ final class LogicalFontFamilies(
     LogicalFontFamilies
       .genericOf(family)
       .flatMap(generic =>
-        LogicalFontFamilies
-          .documentedFamily(family, osName)
-          .orElse(fontconfigFamilies.get(generic).flatten)
-          .filter(name => installedFamilies.contains(name.toLowerCase))
+        fontconfigFamilies.get(generic).flatten.filter(name => installedFamilies.contains(name.toLowerCase))
       )
       .getOrElse(family)
 
@@ -68,7 +68,8 @@ object LogicalFontFamilies:
   private def isMac(osName: String): Boolean = osName.toLowerCase.contains("mac")
 
   /** The family the JDK documents AWT's logical `logical` font as drawn in on Windows and macOS ("Physical and Logical
-    * Fonts"); Linux has none, as there fontconfig decides.
+    * Fonts"); Linux has none, as there fontconfig decides. It is for the Skia side only, which must draw some face for
+    * a logical name; AWT keeps the logical font there.
     */
   def documentedFamily(logical: String, osName: String): Option[String] =
     val key = logical.toLowerCase

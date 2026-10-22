@@ -35,13 +35,14 @@ class LogicalFontFamiliesSpec extends AnyFlatSpec with Matchers:
     LogicalFontFamilies.documentedFamily("Georgia", "Windows 11") shouldBe None
   }
 
-  "LogicalFontFamilies.resolve" should "use the documented family on Windows when it is installed" in {
-    resolver("Windows 11", Set("Times New Roman", "Arial")).resolve("Serif") shouldBe "Times New Roman"
-    resolver("Windows 11", Set("Times New Roman", "Arial")).resolve("SansSerif") shouldBe "Arial"
-  }
-
-  it should "keep the logical name when the documented family is not installed" in {
-    resolver("Windows 11", Set("Arial")).resolve("Serif") shouldBe "Serif"
+  "LogicalFontFamilies.resolve" should "leave AWT's logical names alone on Windows and macOS" in {
+    val installed = Set("Times New Roman", "Arial", "Courier New", "Helvetica", "Times", "Courier")
+    List("Windows 11", "Mac OS X").foreach { os =>
+      val resolver = this.resolver(os, installed)
+      List("Serif", "SansSerif", "Monospaced", "Dialog", "DialogInput").foreach(logical =>
+        withClue(s"$os $logical: ")(resolver.resolve(logical) shouldBe logical)
+      )
+    }
   }
 
   it should "ask fontconfig for the generic family on Linux" in {
