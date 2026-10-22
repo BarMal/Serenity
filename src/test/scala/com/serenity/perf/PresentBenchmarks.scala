@@ -55,21 +55,26 @@ private[perf] object PresentBenchmarks:
     def getNormalizingTransform: AffineTransform = AffineTransform.getScaleInstance(scale, scale)
     def getBounds: Rectangle                     = underlying.getBounds
 
-  final private class Window(
+  final private[perf] class Window(
       factory: FrameSurfaceFactory,
       widthPx: Int,
       heightPx: Int,
       scale: Double,
       grid: ViewportSize
   ):
+
     private val canvas = new JPanel:
-      override def getGraphicsConfiguration: GraphicsConfiguration = ScaledConfiguration(scale)
+      override def getGraphicsConfiguration: GraphicsConfiguration =
+        if scale == 1.0 then super.getGraphicsConfiguration else ScaledConfiguration(scale)
+
     canvas.setSize(widthPx, heightPx)
     private val pool   = new ReusableImagePool()
     private val caches = RenderCaches.create()
     caches.frameCounters.setEnabled(true)
     private val screen    = ScreenIdentity(canvas)
     private val published = new AtomicReference[BufferedImage]()
+
+    def backendCaches: com.serenity.ui.renderer.BackendCaches = caches.backendCaches
 
     def lastFrameCounts: String =
       val counts =

@@ -35,20 +35,34 @@ final private[ui] class RasterFrames:
         state.set(State(Some(held), None, None, inFlight = true, current.copiedPixels))
         held.surface
 
-  /** Copies what `image` lacks of the frame just painted on `surface`, then remembers the image. */
-  def present(surface: Surface, image: BufferedImage, damage: Option[List[DeviceArea]]): Unit =
+  /** Brings `image` up to the frame just painted on `surface`, then remembers the image. A frame that scrolled has the
+    * image move its rows as the surface did, so only what the frame painted over them, or changed beyond them, is
+    * copied out of Skia.
+    */
+  def present(
+    surface: Surface,
+    image: BufferedImage,
+    damage: Option[List[DeviceArea]],
+    moves: List[RasterCopyPlan.Move] = Nil,
+    writes: Option[List[DeviceArea]] = None
+  ): Unit =
     val current = state.get()
     val whole   = DeviceArea(0, 0, image.getWidth, image.getHeight)
-    val areas   = RasterCopyPlan.areas(image, current.last, current.beforeLast, damage, whole)
-    areas.foreach(copyInto(surface, image, _))
+    val now     = RasterCopyPlan.Filled(image, damage, moves, writes)
+    val plan    = RasterCopyPlan.plan(image, current.last, current.beforeLast, now, whole)
+    plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx))
+    plan.copies.foreach(copyInto(surface, image, _))
     state.set(
       current.copy(
-        last = Some(RasterCopyPlan.Filled(image, damage)),
+        last = Some(now),
         beforeLast = current.last,
         inFlight = false,
-        copiedPixels = areas.map(area => area.width.toLong * area.height).sum
+        copiedPixels = plan.copies.map(area => area.width.toLong * area.height).sum
       )
     )
+
+  /** The surface frames are painted on, for a test to compare with what was presented. */
+  private[serenity] def retainedSurface: Option[Surface] = state.get().held.map(_.surface)
 
   /** How many device pixels the last presented frame copied. */
   def copiedPixels: Long = state.get().copiedPixels
