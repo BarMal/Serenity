@@ -109,8 +109,37 @@ private[skia] object SkiaTypefaces:
   /** Skia's own oblique slant, applied when the typeface has no italic of its own. */
   private val ObliqueSkew = -0.25f
 
+  /** The family AWT draws a logical font in on `osName`, which layout measures with (JDK "Physical and Logical Fonts").
+    * A system font manager does not know the logical names, and falling through to its first family draws Arial where
+    * layout measured Times.
+    */
+  def physicalFamilyFor(logical: String, osName: String): Option[String] =
+    val os = osName.toLowerCase
+    val table =
+      if os.contains("windows") then
+        Map(
+          "serif"       -> "Times New Roman",
+          "sansserif"   -> "Arial",
+          "dialog"      -> "Arial",
+          "monospaced"  -> "Courier New",
+          "dialoginput" -> "Courier New"
+        )
+      else if os.contains("mac") then
+        Map(
+          "serif"       -> "Times",
+          "sansserif"   -> "Helvetica",
+          "dialog"      -> "Helvetica",
+          "monospaced"  -> "Courier",
+          "dialoginput" -> "Courier"
+        )
+      else Map.empty[String, String]
+    table.get(logical.toLowerCase)
+
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
     systemTypeface(family, bold, italic)
+      .orElse(
+        physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic))
+      )
       .orElse(bundledTypeface(family, bold, italic))
       .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic))
       .orElse(systemTypeface("sans-serif", bold, italic))
