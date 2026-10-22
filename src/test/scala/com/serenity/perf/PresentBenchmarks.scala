@@ -55,12 +55,20 @@ private[perf] object PresentBenchmarks:
     def getNormalizingTransform: AffineTransform = AffineTransform.getScaleInstance(scale, scale)
     def getBounds: Rectangle                     = underlying.getBounds
 
+  /** The fonts a window draws with; the cell metrics follow the code font. */
+  final private[perf] case class Fonts(code: Font, text: Font):
+    val metrics: CellMetrics = CellMetrics.fromFont(code)
+
+  private[perf] object Fonts:
+    val default: Fonts = Fonts(codeFont, textFont)
+
   final private[perf] class Window(
       factory: FrameSurfaceFactory,
       widthPx: Int,
       heightPx: Int,
       scale: Double,
-      grid: ViewportSize
+      grid: ViewportSize,
+      fonts: Fonts = Fonts.default
   ):
 
     private val canvas = new JPanel:
@@ -86,8 +94,8 @@ private[perf] object PresentBenchmarks:
       val repaintRegion = new AtomicReference[Option[List[com.serenity.ui.layout.PixelRect]]](None)
       val surface = factory.create(
         FrameSurfaceRequest(
-          metrics,
-          codeFont,
+          fonts.metrics,
+          fonts.code,
           canvas,
           image =>
             pool.publish(image)
@@ -104,11 +112,11 @@ private[perf] object PresentBenchmarks:
         cursorVisible = false,
         surface,
         grid,
-        caches.authoritativeScene.forState(state, grid, codeFont, textFont),
-        codeFont,
-        textFont,
+        caches.authoritativeScene.forState(state, grid, fonts.code, fonts.text),
+        fonts.code,
+        fonts.text,
         uiFont,
-        metrics,
+        fonts.metrics,
         uiMetrics,
         None,
         Some(FrameOutput(screen, repaintRegion)),
