@@ -5,7 +5,7 @@ import java.lang.management.ManagementFactory
 
 import com.serenity.SkiaPixels
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{Paint, Rect, Surface}
+import org.jetbrains.skia.{ColorAlphaType, ColorSpace, ColorType, ImageInfo, Paint, Rect, Surface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -62,6 +62,17 @@ class RasterFramesSpec extends AnyFlatSpec with Matchers:
         val shown = image.getRGB(x, y) & 0xffffff
         val want  = if inside(area, x, y) then expected(y * width + x) & 0xffffff else 0x123456
         withClue(s"pixel $x,$y: ")(shown shouldBe want)
+    }
+
+  for (label, colorType) <- List("BGRA" -> ColorType.BGRA_8888, "RGBA" -> ColorType.RGBA_8888) do
+    s"Copying out of a $label surface" should "show the colours that were painted, whatever the byte order of the surface" in {
+      val info    = ImageInfo(width, height, colorType, ColorAlphaType.PREMUL, ColorSpace.Companion.getSRGB())
+      val surface = Surface.Companion.makeRaster(info)
+      surface.getCanvas.clear(0xff1e3c5a)
+      val image = untouched()
+      RasterFrames.copyInto(surface, image, DeviceArea(0, 0, width, height))
+      val shown = for y <- 0 until height; x <- 0 until width yield image.getRGB(x, y) & 0xffffff
+      shown.distinct shouldBe Vector(0x1e3c5a)
     }
 
   "Copying out of a surface" should "allocate little more than the pixels it copies" in {

@@ -5,7 +5,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{Pixmap, Surface}
+import org.jetbrains.skia.{ColorType, Pixmap, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
   *
@@ -98,6 +98,15 @@ object RasterFrames:
   private[skia] def rowsPerRead(areaWidthPx: Int, surfaceWidthPx: Int): Int =
     if areaWidthPx * 2 >= surfaceWidthPx then (ChunkBytes / (surfaceWidthPx * 4)).max(1) else 1
 
+  /** The surface is the platform's native 32-bit format, which is BGRA on some platforms and RGBA on others; an image
+    * holds ARGB ints.
+    */
+  private def swapRedBlue(ints: Array[Int], from: Int, count: Int): Unit =
+    (from until from + count).foreach { i =>
+      val argb = ints(i)
+      ints(i) = (argb & 0xff00ff00) | ((argb & 0xff) << 16) | ((argb >>> 16) & 0xff)
+    }
+
   private[skia] def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
     val pixmap = Pixmap()
     try
@@ -111,6 +120,7 @@ object RasterFrames:
             case int: DataBufferInt => Some(int.getData)
             case _                  => None
           val line = new Array[Int](if target.isEmpty then area.width else 0)
+          val rgba = pixmap.getInfo.getColorType == ColorType.RGBA_8888
           (0 until area.height by rows).foreach { first =>
             val count = rows.min(area.height - first)
             val raw =
@@ -119,9 +129,13 @@ object RasterFrames:
             (0 until count).foreach { row =>
               val y = area.top + first + row
               target match
-                case Some(data) => read.get(row * ints, data, y * image.getWidth + area.left, area.width)
+                case Some(data) =>
+                  val start = y * image.getWidth + area.left
+                  read.get(row * ints, data, start, area.width)
+                  if rgba then swapRedBlue(data, start, area.width)
                 case None =>
                   read.get(row * ints, line, 0, area.width)
+                  if rgba then swapRedBlue(line, 0, area.width)
                   image.setRGB(area.left, y, area.width, 1, line, 0, area.width)
             }
           }
