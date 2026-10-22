@@ -61,3 +61,47 @@ class RasterCopyPlanSpec extends AnyFlatSpec with Matchers:
     val last = Some(filled(imageA, Some(Nil)))
     RasterCopyPlan.areas(imageA, last, None, Some(List(DeviceArea(5, 5, 0, 10), bottom)), whole) shouldBe List(bottom)
   }
+
+  private def pixelsOf(areas: List[DeviceArea]): List[(Int, Int)] =
+    areas.flatMap(area =>
+      for y <- area.top until area.top + area.height; x <- area.left until area.left + area.width yield (x, y)
+    )
+
+  private def twoFramesOld(now: List[DeviceArea], previous: List[DeviceArea]): List[DeviceArea] =
+    RasterCopyPlan.areas(
+      imageB,
+      Some(filled(imageA, Some(previous))),
+      Some(filled(imageB, Some(previous))),
+      Some(now),
+      whole
+    )
+
+  it should "copy a scroll area once when both frames scrolled it" in {
+    val scrolled = DeviceArea(0, 10, 100, 60)
+    twoFramesOld(List(scrolled), List(scrolled)) shouldBe List(scrolled)
+  }
+
+  it should "copy the pixels two overlapping areas share once" in {
+    val first  = DeviceArea(0, 0, 50, 50)
+    val second = DeviceArea(25, 25, 50, 50)
+    val copied = pixelsOf(twoFramesOld(List(first), List(second)))
+    copied.distinct shouldBe copied
+    copied.toSet shouldBe (pixelsOf(List(first)) ++ pixelsOf(List(second))).toSet
+  }
+
+  it should "join areas that touch into one" in {
+    twoFramesOld(List(DeviceArea(0, 0, 100, 10)), List(DeviceArea(0, 10, 100, 10))) shouldBe
+      List(DeviceArea(0, 0, 100, 20))
+  }
+
+  it should "copy exactly the union of any damage, with no pixel twice" in {
+    val random = new scala.util.Random(2380L)
+    def area() = DeviceArea(random.nextInt(60), random.nextInt(60), random.nextInt(40), random.nextInt(40))
+    (1 to 300).foreach { _ =>
+      val now      = List.fill(random.nextInt(5))(area())
+      val previous = List.fill(random.nextInt(5))(area())
+      val copied   = pixelsOf(twoFramesOld(now, previous))
+      copied.distinct shouldBe copied
+      copied.toSet shouldBe pixelsOf((now ++ previous).filterNot(_.isEmpty)).toSet
+    }
+  }
