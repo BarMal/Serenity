@@ -49,12 +49,13 @@ object BenchmarkScript:
       .scanLeft(start) { (state, index) =>
         val buffer = bufferOf(state)
         val edited = buffer.copy(
-          document = buffer.document.copy(
-            content = buffer.document.content
-              .insert(BenchmarkDocument.typedOffset + index, "x")
-              .getOrElse(buffer.document.content),
-            isDirty = true
-          ),
+          document = buffer.document
+            .withContent(
+              buffer.document.content
+                .insert(BenchmarkDocument.typedOffset + index, "x")
+                .getOrElse(buffer.document.content)
+            )
+            .copy(isDirty = true),
           editing = EditingState(List(CursorPosition(BenchmarkDocument.typedLine, index + 1)))
         )
         withBuffer(state, edited)

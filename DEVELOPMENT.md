@@ -240,8 +240,10 @@ its default.
 | `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `java2d` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 
-`auto` uses Skia when the native library loads and the session allows it, and Java2D otherwise (terminal and safe-mode
-launches never load Skia). The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
+`auto` uses Java2D until Skia is measured faster (see `--render-benchmark` below). `skia` uses Skia's GPU layer when the
+native library loads and the session allows it, and Java2D otherwise; if the layer itself cannot be made at run time
+(no GL context, a native failure) the window falls back to Java2D too. Terminal and safe-mode launches never load Skia.
+The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
 
 Skia's window layer needs an X11 display, so on a Wayland session where the native Wayland toolkit (`WLToolkit`) would be
 used, `ui.render.wayland` decides what happens when the backend resolves to Skia:
@@ -249,10 +251,26 @@ used, `ui.render.wayland` decides what happens when the backend resolves to Skia
 | Value | Effect |
 | --- | --- |
 | `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
-| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU; needs `ui.render.backend=skia`, since `auto` stays on Java2D. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
 | `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+#### Comparing the renderers
+
+`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, then the Skia layer), draws the same
+built-in document through the same scripted actions on both, prints a table and saves it as
+`render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
+scenarios are a cold full frame, typing one character, scrolling one line, scrolling five lines, a page down and a
+caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D) or the
+layer drew (Skia), the GPU being waited for after each draw. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
+`1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
+(untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
+
+The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
+not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a
+GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario
+except the cold full frame and its p95 is better when scrolling and on a page down; otherwise `auto` stays on Java2D.
 
 ## Codex CLI
 

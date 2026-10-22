@@ -4,9 +4,9 @@ import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, MouseAdapter, MouseEven
 import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension, GraphicsEnvironment, Point, Rectangle, Robot}
 import java.util.concurrent.atomic.AtomicReference
-import scala.annotation.tailrec
-
 import javax.swing.{JFrame, JPanel, SwingUtilities}
+
+import scala.annotation.tailrec
 
 import com.serenity.SkiaPixels
 import com.serenity.testkit.DisplayExclusive
@@ -200,3 +200,48 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       window.host.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR))
       window.host.layerCursorType shouldBe java.awt.Cursor.HAND_CURSOR
     }
+
+  it should "tell its listener after each frame it draws" in
+    withWindow { window =>
+      val drawn = new java.util.concurrent.atomic.AtomicInteger(0)
+      window.host.onRendered(() =>
+        val _ = drawn.incrementAndGet()
+      )
+      window.host.publish(record(scene))
+      eventually("a frame to be drawn")(drawn.get > 0)
+      val before = drawn.get
+      window.host.showCarets(Nil)
+      eventually("the caret frame to be drawn")(drawn.get > before)
+    }
+
+  it should "name the render API Skiko chose" in
+    withWindow { window =>
+      eventually("a frame")(window.host.renderCount >= 0)
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      List("OPENGL", "SOFTWARE_FAST", "SOFTWARE_COMPAT", "DIRECT3D", "ANGLE", "METAL", "VULKAN") should contain(
+        window.host.renderApi
+      )
+    }
+
+  it should "draw frames when told to wait for the GPU after each, as the benchmark does" in {
+    assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
+    DisplayExclusive:
+      val canvas = new JPanel(null)
+      canvas.setPreferredSize(new Dimension(width, height))
+      val frame = onEdt {
+        val f = new JFrame("synchronous layer")
+        f.setContentPane(canvas)
+        f.pack()
+        f.setLocation(0, 0)
+        f.setVisible(true)
+        f
+      }
+      val host = SkiaLayerHost.create(canvas, syncGpu = true)
+      try
+        host.publish(record(scene))
+        eventually("a synchronous frame")(host.renderCount > 0)
+      finally
+        host.dispose()
+        onEdt(frame.dispose())
+  }

@@ -4,9 +4,9 @@ import java.awt.image.BufferedImage
 import java.awt.{Dimension, GraphicsEnvironment, Rectangle, Robot}
 import java.nio.file.{Files, Path}
 import javax.imageio.ImageIO
-import scala.annotation.tailrec
-
 import javax.swing.SwingUtilities
+
+import scala.annotation.tailrec
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.input.ImeRequestsHost
@@ -128,7 +128,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
           render(window, state, RenderCaches.create(), FrameSurfaceFactory.Java2D)
           val java2d = canvasImage(window)
           // The layer is added over the canvas by the first layer frame, so the Java2D frame is taken first.
-          render(window, state, RenderCaches.create(), SkiaLayerSurfaceFactory.Default)
+          render(window, state, RenderCaches.create(), SkiaLayerSurfaceFactory)
           val layerHost = window.canvas.getComponents.length
           layerHost should be >= 1
           eventually("the layer's frame on screen")(inkMap(onScreen(window)).count(identity) > 20)
@@ -169,7 +169,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
         Some(RenderColor.fromRgba(255, 255, 255)),
         Damage.Everything,
         caches,
-        SkiaLayerSurfaceFactory.Default
+        SkiaLayerSurfaceFactory
       )
       settle()
       val bounds = window.canvas.asInstanceOf[ImeRequestsHost].caretBounds

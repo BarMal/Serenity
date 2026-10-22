@@ -38,6 +38,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
 import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
+import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
@@ -70,6 +71,16 @@ object Main extends IOApp:
         IO(println(VersionBanner.current)).as(ExitCode.Success)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
+      case Right(options) if options.renderBenchmark.isDefined =>
+        // The benchmark opens its own windows, so the toolkit is settled first, but no editor, session or config is.
+        GraphicsStartup
+          .current(GraphicsStartup.launchOf(options))
+          .flatMap(_ =>
+            options.renderBenchmark.fold(IO.pure(ExitCode.Error))(
+              RenderBenchmark.run(_, java.nio.file.Path.of("."), System.out)
+            )
+          )
+          .handleErrorWith(reportStartupFailure(options, console))
       case Right(options) =>
         // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
         // depends on the renderer, so both are settled together here.

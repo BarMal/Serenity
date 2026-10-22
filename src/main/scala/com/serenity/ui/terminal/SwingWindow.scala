@@ -71,6 +71,7 @@ class SwingWindow(
   private val pendingRepaintRef      = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
   private val baseImagePool          = new SwingWindow.ReusableImagePool
   private val layerPresenterRef      = new AtomicReference[Option[LayerPresenter]](None)
+  private val framePresentedRef      = new AtomicReference[Option[() => Unit]](None)
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef           = new AtomicBoolean(false)
   private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
@@ -119,6 +120,7 @@ class SwingWindow(
         baseImagePool.releaseLease()
         g2.dispose()
         frameTimings.paintFinished(paintStart)
+        framePresentedRef.get().foreach(_.apply())
 
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
   private val accessibilityPublishGate = new AccessibilityPublishGate
@@ -204,6 +206,14 @@ class SwingWindow(
     */
   private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
     layerPresenterRef.set(Some(presenter))
+    presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+
+  private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
+
+  /** `callback` is called on the event thread each time the canvas paints, or the GPU layer draws a frame. The render
+    * benchmark times a frame to the last of these.
+    */
+  private[serenity] def setOnFramePresented(callback: () => Unit): Unit = framePresentedRef.set(Some(callback))
 
   private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)

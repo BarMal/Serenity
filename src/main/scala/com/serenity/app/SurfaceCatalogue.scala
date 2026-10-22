@@ -23,4 +23,4 @@ object SurfaceCatalogue:
 
   /** What a release offers: the GPU layer, and the CPU rasteriser a Wayland launch can ask for. */
   val Available: SurfaceCatalogue =
-    SurfaceCatalogue(Some(() => SkiaLayerSurfaceFactory.Default), Some(() => SkiaRasterSurfaceFactory))
+    SurfaceCatalogue(Some(() => SkiaLayerSurfaceFactory), Some(() => SkiaRasterSurfaceFactory))

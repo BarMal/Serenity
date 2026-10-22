@@ -23,6 +23,9 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       val _ = cursors.updateAndGet(cursor :: _)
     def dispose(): Unit =
       val _ = disposed.incrementAndGet()
+    val rendered                               = new AtomicReference[Option[() => Unit]](None)
+    def onRendered(callback: () => Unit): Unit = rendered.set(Some(callback))
+    def renderApi: String                      = "FAKE"
 
   private def withWindow[A](body: SwingWindow => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A window needs a display")
@@ -76,5 +79,35 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
     presenter.disposed.get shouldBe 1
   }
 
+  it should "give the presenter a way to tell the window a frame was drawn" in
+    withWindow { window =>
+      val presenter = new FakePresenter(hasBase = true)
+      val presented = new AtomicInteger(0)
+      window.setOnFramePresented(() =>
+        val _ = presented.incrementAndGet()
+      )
+      window.attachLayerPresenter(presenter)
+      presenter.rendered.get().fold(fail("the presenter was given no callback"))(_.apply())
+      presented.get shouldBe 1
+    }
+
+  it should "expose the attached presenter" in
+    withWindow { window =>
+      window.layerPresenter shouldBe None
+      val presenter = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(presenter)
+      window.layerPresenter.exists(_ eq presenter) shouldBe true
+    }
+
   "SwingWindow without a presenter" should "decline the caret overlay until a base image is published, as before" in
     withWindow(window => window.onCursorOverlayReady(None)(List(caret)) shouldBe false)
+
+  it should "tell a listener each time the canvas paints" in
+    withWindow { window =>
+      val presented = new AtomicInteger(0)
+      window.setOnFramePresented(() =>
+        val _ = presented.incrementAndGet()
+      )
+      SwingUtilities.invokeAndWait(() => window.canvas.paintImmediately(window.canvas.getBounds))
+      presented.get should be >= 1
+    }

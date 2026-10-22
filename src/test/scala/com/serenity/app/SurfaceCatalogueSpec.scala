@@ -52,7 +52,7 @@ class SurfaceCatalogueSpec extends AnyFlatSpec with Matchers:
 
   it should "offer both Skia factories in the catalogue a release uses" in {
     SurfaceCatalogue.Available.factoryFor(RenderBackend.Skia) shouldBe
-      theSameInstanceAs(com.serenity.ui.skia.SkiaLayerSurfaceFactory.Default)
+      theSameInstanceAs(com.serenity.ui.skia.SkiaLayerSurfaceFactory)
     SurfaceCatalogue.Available.factoryFor(RenderBackend.SkiaRaster) shouldBe
       theSameInstanceAs(com.serenity.ui.skia.SkiaRasterSurfaceFactory)
   }

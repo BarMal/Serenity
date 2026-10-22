@@ -31,6 +31,8 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     def showCarets(carets: List[SwingWindow.CaretPaint]): Unit = ()
     def setCursor(cursor: java.awt.Cursor): Unit               = ()
     def dispose(): Unit                                        = disposed.incrementAndGet()
+    def onRendered(callback: () => Unit): Unit                 = ()
+    def renderApi: String                                      = "FAKE"
 
   final private class Harness(buildHost: JPanel => LayerHost):
     val canvas = new JPanel
@@ -38,7 +40,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val caches   = RenderCaches.create()
     val shown    = new AtomicReference(List.empty[BufferedImage])
     val attached = new AtomicReference(List.empty[LayerPresenter])
-    val factory  = new SkiaLayerSurfaceFactory(buildHost)
+    val factory  = new LayerSurfaceFactory(buildHost)
 
     private def request =
       FrameSurfaceRequest(

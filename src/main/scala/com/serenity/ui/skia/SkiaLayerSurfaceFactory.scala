@@ -24,13 +24,13 @@ import org.slf4j.LoggerFactory
   * If the layer cannot be made (no GL context, a native failure) the window keeps working: this window's frames go to
   * Java2D from then on, instead of a blank canvas.
   */
-final class SkiaLayerSurfaceFactory private[skia] (buildHost: JPanel => LayerHost) extends FrameSurfaceFactory:
+class LayerSurfaceFactory private[ui] (buildHost: JPanel => LayerHost) extends FrameSurfaceFactory:
 
-  private val HostsKey = BackendCacheKey(classOf[SkiaLayerSurfaceFactory.WindowLayer])
+  private val HostsKey = BackendCacheKey(classOf[LayerSurfaceFactory.WindowLayer])
 
   def create(request: FrameSurfaceRequest): RenderSurface =
     request.backendCaches
-      .getOrCreate(HostsKey)(new SkiaLayerSurfaceFactory.WindowLayer)
+      .getOrCreate(HostsKey)(new LayerSurfaceFactory.WindowLayer)
       .host(request, buildHost)
       .fold(FrameSurfaceFactory.Java2D.create(request))(record(request, _))
 
@@ -62,11 +62,16 @@ final class SkiaLayerSurfaceFactory private[skia] (buildHost: JPanel => LayerHos
       layerCacheOwner = Some(ScreenIdentity(canvas))
     )
 
-object SkiaLayerSurfaceFactory:
+/** The factory a window uses: a Skiko layer made on its canvas. */
+object SkiaLayerSurfaceFactory extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas))
 
-  val Default: SkiaLayerSurfaceFactory = new SkiaLayerSurfaceFactory(SkiaLayerHost.create)
+/** For a timing run: each frame is counted as drawn only once the GPU has finished it. */
+object SynchronousSkiaLayerSurfaceFactory
+    extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas, syncGpu = true))
 
-  private val log = LoggerFactory.getLogger(classOf[SkiaLayerSurfaceFactory])
+object LayerSurfaceFactory:
+
+  private val log = LoggerFactory.getLogger(classOf[LayerSurfaceFactory])
 
   /** One window's layer, made when its first frame is drawn, or the record that it could not be. */
   final private[skia] class WindowLayer:

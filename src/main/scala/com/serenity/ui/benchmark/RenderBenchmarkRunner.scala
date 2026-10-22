@@ -1,0 +1,203 @@
+package com.serenity.ui.benchmark
+
+import java.awt.Dimension
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
+import java.util.concurrent.locks.LockSupport
+import javax.swing.SwingUtilities
+
+import scala.annotation.tailrec
+
+import com.serenity.config.WindowChromeMode
+import com.serenity.rope.Balance
+import com.serenity.state.manager.RenderCaches
+import com.serenity.ui.color.RenderColor
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
+import com.serenity.ui.skia.SynchronousSkiaLayerSurfaceFactory
+import com.serenity.ui.terminal.SwingWindow
+
+/** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
+  *
+  * A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D) or the layer
+  * drew (Skia) for it, and the next frame starts only once nothing has been presented for a moment, so what a frame
+  * spread over several paints or draws costs is all counted, and in the same way on both. A frame nothing ever
+  * presented is counted as dropped.
+  */
+object RenderBenchmarkRunner:
+
+  private val QuietNanos     = 15_000_000L
+  private val DropAfterNanos = 3_000_000_000L
+  private val CaretColor     = Some(RenderColor.fromRgba(255, 255, 255))
+
+  final private case class Fonts(
+      code: FontSpec,
+      text: FontSpec,
+      ui: FontSpec,
+      codeMetrics: CellMetrics,
+      uiMetrics: CellMetrics
+  )
+
+  final private case class Measured(stats: Map[Scenario, FrameStats], deviceScale: Double, renderApi: Option[String])
+
+  def run(
+    options: RenderBenchmarkOptions,
+    skiaFactory: FrameSurfaceFactory = SynchronousSkiaLayerSurfaceFactory,
+    skiaProbe: Either[String, Unit] = Right(())
+  ): BenchmarkReport =
+    given Balance = Balance.default
+    val fonts     = loadFonts()
+    val java2d    = measure(options, "Java2D", FrameSurfaceFactory.Java2D, fonts)
+    val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts))
+    val api = skia.flatMap(
+      _.renderApi.toRight("the layer could not be made, so the window fell back to Java2D")
+    )
+    val measuredSkia = skia.toOption.filter(_ => api.isRight)
+    val results = Scenario.values.toVector.map(scenario =>
+      ScenarioResult(
+        scenario,
+        java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0)),
+        measuredSkia.flatMap(_.stats.get(scenario))
+      )
+    )
+    val environment = BenchmarkEnvironment(
+      s"${System.getProperty("os.name", "?")} ${System.getProperty("os.version", "")}".trim,
+      s"Java ${System.getProperty("java.version", "?")}",
+      options.widthPx,
+      options.heightPx,
+      java2d.deviceScale,
+      api
+    )
+    BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
+
+  private def loadFonts(): Fonts =
+    val config = FontLoader.FontConfig()
+    val code   = FontLoader.previewCodeFont(config)
+    val text   = FontLoader.previewTextFont(config)
+    val ui     = FontLoader.previewUiFont(config)
+    Fonts(
+      FontSpec.fromAwt(code),
+      FontSpec.fromAwt(text),
+      FontSpec.fromAwt(ui),
+      CellMetrics.fromFont(code),
+      CellMetrics.fromFont(ui)
+    )
+
+  private def measure(
+    options: RenderBenchmarkOptions,
+    name: String,
+    factory: FrameSurfaceFactory,
+    fonts: Fonts
+  )(using Balance): Measured =
+    val window = new SwingWindow(
+      new Dimension(options.widthPx, options.heightPx),
+      fonts.codeMetrics,
+      WindowChromeMode.Auto,
+      fonts.codeMetrics,
+      windowTitle = s"Serenity render benchmark: $name"
+    )
+    window.start()
+    settle()
+    try
+      val viewportLines = window.viewportSize.height
+      val stats = Scenario.values.toList.map { scenario =>
+        scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines)
+      }.toMap
+      Measured(
+        stats,
+        Java2DRenderSurface.deviceScaleFor(window.canvas).x,
+        window.layerPresenter.map(_.renderApi)
+      )
+    finally
+      window.stop()
+      settle()
+
+  private def timeScenario(
+    window: SwingWindow,
+    fonts: Fonts,
+    factory: FrameSurfaceFactory,
+    scenario: Scenario,
+    options: RenderBenchmarkOptions,
+    viewportLines: Int
+  )(using Balance): FrameStats =
+    val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines)
+    val shared = RenderCaches.create()
+    def cachesFor(step: BenchmarkScript.Step) =
+      if step.frame == BenchmarkScript.FrameKind.ColdFull then RenderCaches.create() else shared
+    // A frame for the caret to blink over, and a starting point that is the same on both backends.
+    steps.headOption.foreach { first =>
+      timed(window)(
+        draw(
+          window,
+          fonts,
+          factory,
+          first.copy(damage = com.serenity.state.models.Damage.Everything, frame = BenchmarkScript.FrameKind.Full),
+          shared
+        )
+      )
+    }
+    steps.take(options.warmup).foreach(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
+    val samples =
+      steps.drop(options.warmup).map(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
+    FrameStats.of(samples.flatten, dropped = samples.count(_.isEmpty))
+
+  private def draw(
+    window: SwingWindow,
+    fonts: Fonts,
+    factory: FrameSurfaceFactory,
+    step: BenchmarkScript.Step,
+    caches: RenderCaches
+  ): Unit =
+    def full(): Unit =
+      val _ = RendererCursorOverlay.renderWithCursorOverlay(
+        step.state,
+        window,
+        fonts.code,
+        fonts.text,
+        fonts.ui,
+        fonts.uiMetrics,
+        CaretColor,
+        step.damage,
+        caches,
+        factory
+      )
+    step.frame match
+      case BenchmarkScript.FrameKind.Full | BenchmarkScript.FrameKind.ColdFull => full()
+      case BenchmarkScript.FrameKind.CaretOnly(visible) =>
+        val painted = RendererCursorOverlay.renderCursorOnly(
+          step.state,
+          visible,
+          window,
+          fonts.code,
+          fonts.text,
+          fonts.ui,
+          fonts.uiMetrics,
+          CaretColor,
+          caches
+        )
+        if !painted then full()
+
+  /** The milliseconds from calling `render` to the last presentation it caused, or `None` if there was none. */
+  private def timed(window: SwingWindow)(render: => Unit): Option[Long] =
+    val presented = new AtomicInteger(0)
+    val last      = new AtomicLong(0L)
+    window.setOnFramePresented { () =>
+      last.set(System.nanoTime())
+      val _ = presented.incrementAndGet()
+    }
+    val start = System.nanoTime()
+    render
+    awaitQuiet(presented, last, start)
+
+  @tailrec
+  private def awaitQuiet(presented: AtomicInteger, last: AtomicLong, start: Long): Option[Long] =
+    val now = System.nanoTime()
+    if presented.get > 0 && now - last.get >= QuietNanos then Some(last.get - start)
+    else if now - start > DropAfterNanos then Option.when(presented.get > 0)(last.get - start)
+    else
+      LockSupport.parkNanos(1_000_000L)
+      awaitQuiet(presented, last, start)
+
+  private def settle(): Unit =
+    SwingUtilities.invokeAndWait(() => ())
+    SwingUtilities.invokeAndWait(() => ())

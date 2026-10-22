@@ -17,13 +17,14 @@ import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLa
   * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
   * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
   */
-final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer) extends LayerHost:
+final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean) extends LayerHost:
 
   private val slot      = new PictureSlot[Picture](_.close())
   private val carets    = new AtomicReference(List.empty[SwingWindow.CaretPaint])
   private val published = new AtomicBoolean(false)
   private val renders   = new AtomicInteger(0)
   private val publishes = new AtomicInteger(0)
+  private val listener  = new AtomicReference[Option[() => Unit]](None)
 
   private val followCanvas = new ComponentAdapter:
     override def componentResized(e: ComponentEvent): Unit = fitLayer()
@@ -75,8 +76,18 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer) extends Lay
       )
     }
     ink.close()
+    if syncGpu then
+      Option(surface.getRecordingContext).foreach { context =>
+        val _ = context.flush()
+        context.submit(true)
+      }
+    listener.get().foreach(_.apply())
 
   def baseAvailable: Boolean = published.get()
+
+  def onRendered(callback: () => Unit): Unit = listener.set(Some(callback))
+
+  def renderApi: String = layer.getRenderApi.toString
 
   def publish(picture: Picture): Unit =
     slot.publish(picture)
@@ -107,11 +118,13 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer) extends Lay
 
 object SkiaLayerHost:
 
-  /** The layer is made, added to `canvas` and sized to it on the event thread. */
-  def create(canvas: JPanel): SkiaLayerHost =
+  /** The layer is made, added to `canvas` and sized to it on the event thread. With `syncGpu` each frame waits for the
+    * GPU to finish before it counts as drawn, which only a timing run wants.
+    */
+  def create(canvas: JPanel, syncGpu: Boolean = false): SkiaLayerHost =
     onEventThread {
       val layer = newLayer()
-      val host  = new SkiaLayerHost(canvas, layer)
+      val host  = new SkiaLayerHost(canvas, layer, syncGpu)
       host.install()
       host
     }
