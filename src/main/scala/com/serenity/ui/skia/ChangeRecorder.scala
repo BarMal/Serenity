@@ -45,15 +45,34 @@ final private[skia] class ChangeRecorder(
       )
     )
 
+  /** A cell that continues the area recorded just before it, as a column of cells or a row of them does, extends it
+    * instead of being a record of its own, so a frame that paints a thousand cells records a handful of areas.
+    */
   def painted(area: DeviceArea): Unit =
-    val _ = recorded.updateAndGet(frame => frame.copy(paint = frame.paint :+ area))
+    val _ = recorded.updateAndGet(frame =>
+      frame.paint.lastOption.flatMap(joinedWith(_, area)) match
+        case Some(joined) => frame.copy(paint = frame.paint.dropRight(1) :+ joined)
+        case None         => frame.copy(paint = frame.paint :+ area)
+    )
 
   def moves: List[RasterCopyPlan.Move] = recorded.get().moves.toList
 
   /** Merged on request, which is only worth doing for a frame that moved rows. */
-  def paint: List[DeviceArea] = RasterCopyPlan.disjoint(recorded.get().paint.toList)
+  def paint: List[DeviceArea] = RasterCopyPlan.disjoint(paintRecords)
+
+  /** Every area painted, as it was recorded: overlapping, and the caller's to merge with whatever else it has. */
+  def paintRecords: List[DeviceArea] = recorded.get().paint.toList
 
 object ChangeRecorder:
+
+  private def joinedWith(last: DeviceArea, next: DeviceArea): Option[DeviceArea] =
+    val sameColumn = last.left == next.left && last.width == next.width
+    val sameRow    = last.top == next.top && last.height == next.height
+    if sameColumn && next.top >= last.top && next.top <= last.top + last.height then
+      Some(last.copy(height = (last.top + last.height).max(next.top + next.height) - last.top))
+    else if sameRow && next.left >= last.left && next.left <= last.left + last.width then
+      Some(last.copy(width = (last.left + last.width).max(next.left + next.width) - last.left))
+    else None
 
   final private case class Recorded(moves: Vector[RasterCopyPlan.Move], paint: Vector[DeviceArea])
 

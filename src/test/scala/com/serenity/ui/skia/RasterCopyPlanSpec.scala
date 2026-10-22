@@ -94,6 +94,13 @@ class RasterCopyPlanSpec extends AnyFlatSpec with Matchers:
       List(DeviceArea(0, 0, 100, 20))
   }
 
+  it should "join the pieces of one column that areas beside it split into bands" in {
+    val column = List(DeviceArea(0, 0, 4, 10), DeviceArea(0, 10, 4, 10), DeviceArea(0, 20, 4, 10))
+    val beside = DeviceArea(10, 10, 5, 5)
+    RasterCopyPlan.disjoint(column :+ beside) should contain theSameElementsAs
+      List(DeviceArea(0, 0, 4, 30), beside)
+  }
+
   it should "copy exactly the union of any damage, with no pixel twice" in {
     val random = new scala.util.Random(2380L)
     def area() = DeviceArea(random.nextInt(60), random.nextInt(60), random.nextInt(40), random.nextInt(40))

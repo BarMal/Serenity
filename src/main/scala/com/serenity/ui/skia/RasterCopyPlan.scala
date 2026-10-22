@@ -64,16 +64,32 @@ private[ui] object RasterCopyPlan:
       )
       Option.when(spans.nonEmpty)(Band(top, bottom, spans))
     }
-    bands
-      .foldLeft(List.empty[Band]) {
-        case (latest :: earlier, band) if latest.bottom == band.top && latest.spans == band.spans =>
-          latest.copy(bottom = band.bottom) :: earlier
-        case (done, band) => band :: done
+    stacked(
+      bands
+        .foldLeft(List.empty[Band]) {
+          case (latest :: earlier, band) if latest.bottom == band.top && latest.spans == band.spans =>
+            latest.copy(bottom = band.bottom) :: earlier
+          case (done, band) => band :: done
+        }
+        .reverse
+        .flatMap(band =>
+          band.spans.map((left, right) => DeviceArea(left, band.top, right - left, band.bottom - band.top))
+        )
+    )
+
+  /** A band boundary cuts a column through whenever another area starts or ends beside it; each piece would be a copy
+    * of its own, so pieces of one column that touch are joined again.
+    */
+  private def stacked(areas: List[DeviceArea]): List[DeviceArea] =
+    areas
+      .sortBy(area => (area.left, area.width, area.top))
+      .foldLeft(List.empty[DeviceArea]) {
+        case (latest :: earlier, area)
+            if latest.left == area.left && latest.width == area.width && latest.top + latest.height == area.top =>
+          latest.copy(height = latest.height + area.height) :: earlier
+        case (done, area) => area :: done
       }
       .reverse
-      .flatMap(band =>
-        band.spans.map((left, right) => DeviceArea(left, band.top, right - left, band.bottom - band.top))
-      )
 
   final private case class Band(top: Int, bottom: Int, spans: List[(Int, Int)])
 
