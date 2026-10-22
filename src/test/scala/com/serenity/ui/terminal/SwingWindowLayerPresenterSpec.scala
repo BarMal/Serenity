@@ -1,0 +1,80 @@
+package com.serenity.ui.terminal
+
+import java.awt.{Color, Cursor, Dimension, GraphicsEnvironment, Rectangle}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import javax.swing.SwingUtilities
+
+import com.serenity.config.WindowChromeMode
+import com.serenity.input.ImeRequestsHost
+import com.serenity.testkit.DisplayExclusive
+import com.serenity.ui.layout.CellMetrics
+import org.scalatest.flatspec.AnyFlatSpec
+import org.scalatest.matchers.should.Matchers
+
+class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
+
+  final private class FakePresenter(hasBase: Boolean) extends LayerPresenter:
+    val carets                                            = new AtomicReference(List.empty[SwingWindow.CaretPaint])
+    val cursors                                           = new AtomicReference(List.empty[Cursor])
+    val disposed                                          = new AtomicInteger(0)
+    def baseAvailable: Boolean                            = hasBase
+    def showCarets(c: List[SwingWindow.CaretPaint]): Unit = carets.set(c)
+    def setCursor(cursor: Cursor): Unit =
+      val _ = cursors.updateAndGet(cursor :: _)
+    def dispose(): Unit =
+      val _ = disposed.incrementAndGet()
+
+  private def withWindow[A](body: SwingWindow => A): A =
+    assume(!GraphicsEnvironment.isHeadless, "A window needs a display")
+    DisplayExclusive:
+      val window = new SwingWindow(
+        new Dimension(640, 480),
+        CellMetrics(8, 16, 13),
+        WindowChromeMode.Custom,
+        CellMetrics(8, 16, 13),
+        env = Map("XDG_SESSION_TYPE" -> "x11")
+      )
+      try
+        window.start()
+        SwingUtilities.invokeAndWait(() => ())
+        body(window)
+      finally
+        window.stop()
+        SwingUtilities.invokeAndWait(() => ())
+
+  private val caret = SwingWindow.CaretPaint(new Rectangle(10, 20, 2, 16), Color.WHITE)
+
+  "SwingWindow with a layer presenter" should "decline the caret overlay until the presenter has a base frame" in
+    withWindow { window =>
+      val presenter = new FakePresenter(hasBase = false)
+      window.attachLayerPresenter(presenter)
+      window.onCursorOverlayReady(None)(List(caret)) shouldBe false
+      presenter.carets.get shouldBe Nil
+    }
+
+  it should "hand the carets to the presenter once it has a base, and keep the caret bounds for the input method" in
+    withWindow { window =>
+      val presenter = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(presenter)
+      window.onCursorOverlayReady(None)(List(caret)) shouldBe true
+      presenter.carets.get shouldBe List(caret)
+      window.canvas.asInstanceOf[ImeRequestsHost].caretBounds shouldBe Some(caret.rect)
+    }
+
+  it should "mirror the pointer cursor onto the presenter" in
+    withWindow { window =>
+      val presenter = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(presenter)
+      window.updatePointerShape(com.serenity.state.models.PointerShape.Text)
+      SwingUtilities.invokeAndWait(() => ())
+      presenter.cursors.get.map(_.getType) should contain(Cursor.TEXT_CURSOR)
+    }
+
+  it should "dispose the presenter when the window stops" in {
+    val presenter = new FakePresenter(hasBase = true)
+    withWindow(window => window.attachLayerPresenter(presenter))
+    presenter.disposed.get shouldBe 1
+  }
+
+  "SwingWindow without a presenter" should "decline the caret overlay until a base image is published, as before" in
+    withWindow(window => window.onCursorOverlayReady(None)(List(caret)) shouldBe false)

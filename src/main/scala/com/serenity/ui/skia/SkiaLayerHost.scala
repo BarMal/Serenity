@@ -1,0 +1,138 @@
+package com.serenity.ui.skia
+
+import java.awt.event.{ComponentAdapter, ComponentEvent, MouseAdapter, MouseEvent}
+import java.awt.{Cursor, Rectangle}
+import java.util.concurrent.FutureTask
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import javax.swing.{JPanel, SwingUtilities}
+
+import com.serenity.ui.terminal.SwingWindow
+import org.jetbrains.skia.{Canvas, Paint, Picture, PixelGeometry, Rect}
+import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
+
+/** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
+  * renders frames records each as a `Picture` and publishes it; the layer replays the latest one and fills the carets
+  * over it, which is why a caret blink never records the frame again.
+  *
+  * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
+  * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
+  */
+final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer) extends LayerHost:
+
+  private val slot      = new PictureSlot[Picture](_.close())
+  private val carets    = new AtomicReference(List.empty[SwingWindow.CaretPaint])
+  private val published = new AtomicBoolean(false)
+  private val renders   = new AtomicInteger(0)
+  private val publishes = new AtomicInteger(0)
+
+  private val followCanvas = new ComponentAdapter:
+    override def componentResized(e: ComponentEvent): Unit = fitLayer()
+
+  private val passMouseToCanvas = new MouseAdapter:
+    private def pass(e: MouseEvent): Unit = canvas.dispatchEvent(SwingUtilities.convertMouseEvent(layer, e, canvas))
+    override def mousePressed(e: MouseEvent): Unit  = pass(e)
+    override def mouseReleased(e: MouseEvent): Unit = pass(e)
+    override def mouseClicked(e: MouseEvent): Unit  = pass(e)
+    override def mouseEntered(e: MouseEvent): Unit  = pass(e)
+    override def mouseExited(e: MouseEvent): Unit   = pass(e)
+    override def mouseMoved(e: MouseEvent): Unit    = pass(e)
+    override def mouseDragged(e: MouseEvent): Unit  = pass(e)
+
+  private def fitLayer(): Unit = layer.setBounds(0, 0, canvas.getWidth, canvas.getHeight)
+
+  private def install(): Unit =
+    layer.setFocusable(false)
+    layer.addMouseListener(passMouseToCanvas)
+    layer.addMouseMotionListener(passMouseToCanvas)
+    layer.setRenderDelegate(
+      new SkikoRenderDelegate:
+        override def onRender(surface: Canvas, width: Int, height: Int, nanoTime: Long): Unit = render(surface)
+    )
+    canvas.add(layer, 0)
+    canvas.addComponentListener(followCanvas)
+    fitLayer()
+    canvas.revalidate()
+    canvas.repaint()
+
+  private def render(surface: Canvas): Unit =
+    val _ = renders.incrementAndGet()
+    surface.clear(0xff000000)
+    val _ = slot.drawLatest(picture =>
+      val _ = picture.playback(surface, () => false)
+    )
+    val scale = layer.getContentScale
+    val ink   = new Paint()
+    carets.get().foreach { caret =>
+      ink.setColor(caret.color.getRGB)
+      surface.drawRect(
+        Rect.Companion.makeXYWH(
+          caret.rect.x * scale,
+          caret.rect.y * scale,
+          caret.rect.width * scale,
+          caret.rect.height * scale
+        ),
+        ink
+      )
+    }
+    ink.close()
+
+  def baseAvailable: Boolean = published.get()
+
+  def publish(picture: Picture): Unit =
+    slot.publish(picture)
+    published.set(true)
+    val _ = publishes.incrementAndGet()
+    layer.repaint()
+
+  def showCarets(shown: List[SwingWindow.CaretPaint]): Unit =
+    carets.set(shown)
+    layer.repaint()
+
+  def setCursor(cursor: Cursor): Unit = SkiaLayerHost.onEventThread(layer.setCursor(cursor))
+
+  def dispose(): Unit =
+    SkiaLayerHost.onEventThread {
+      canvas.removeComponentListener(followCanvas)
+      canvas.remove(layer)
+      layer.dispose()
+      canvas.repaint()
+    }
+    slot.closeAll()
+
+  private[skia] def renderCount: Int       = renders.get()
+  private[skia] def publishCount: Int      = publishes.get()
+  private[skia] def closedPictures: Int    = slot.closedCount
+  private[skia] def layerBounds: Rectangle = layer.getBounds()
+  private[skia] def layerCursorType: Int   = layer.getCursor.getType
+
+object SkiaLayerHost:
+
+  /** The layer is made, added to `canvas` and sized to it on the event thread. */
+  def create(canvas: JPanel): SkiaLayerHost =
+    onEventThread {
+      val layer = newLayer()
+      val host  = new SkiaLayerHost(canvas, layer)
+      host.install()
+      host
+    }
+
+  // Skiko's accessibility hook is a Kotlin function parameter whose default is "none".
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
+  private def newLayer(): SkiaLayer =
+    new SkiaLayer(
+      null,
+      new SkiaLayerProperties(),
+      RenderFactory.Companion.getDefault(),
+      SkiaLayerAnalytics.Companion.getEmpty(),
+      PixelGeometry.UNKNOWN,
+      false
+    )
+
+  /** Runs `body` on the event thread and waits; a failure in it comes back as the `ExecutionException` that wraps it.
+    */
+  private[skia] def onEventThread[A](body: => A): A =
+    if SwingUtilities.isEventDispatchThread then body
+    else
+      val task = new FutureTask[A](() => body)
+      SwingUtilities.invokeAndWait(task)
+      task.get()

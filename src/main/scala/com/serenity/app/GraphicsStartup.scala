@@ -36,8 +36,9 @@ object GraphicsStartup:
     )
 
   /** The production wiring: the config file and the Skiko probe, both reached only when a windowed launch gets that
-    * far, then the toolkit property is set. The catalogue offers the raster surface, which selection picks only on
-    * Wayland when `ui.render.wayland` asks for `skia-raster`.
+    * far, then the toolkit property is set. The catalogue offers the GPU layer, which selection picks wherever the
+    * probe passes, and the raster surface, which it picks only on Wayland when `ui.render.wayland` asks for
+    * `skia-raster`.
     */
   def current(launch: Launch): IO[Resolved] =
     ToolkitSelection.currentEnvironment
