@@ -1,0 +1,48 @@
+name: Debug fonts cross-OS
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-windebug-fonts
+
+permissions:
+  contents: read
+
+jobs:
+  specs:
+    name: Viewport specs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - name: Resolver ON (as the branch is)
+        shell: bash
+        continue-on-error: true
+        run: |
+          sbt -v "testOnly com.serenity.FontMetricsDebugSpec com.serenity.ViewportScrollingSpec" 2>&1 | tee run-on.log
+          for report in target/test-reports/TEST-com.serenity.ViewportScrollingSpec.xml; do
+            echo "::group::ON failures"; grep -o 'testcase name="[^"]*"\|<failure message="[^"]\{0,400\}' "$report" | grep -B1 "failure" || true; echo "::endgroup::"
+          done
+      - name: Resolver OFF (logical fonts as before)
+        shell: bash
+        continue-on-error: true
+        run: |
+          sbt -v -Dserenity.debug.noLogicalFonts=true "testOnly com.serenity.FontMetricsDebugSpec com.serenity.ViewportScrollingSpec" 2>&1 | tee run-off.log
+          for report in target/test-reports/TEST-com.serenity.ViewportScrollingSpec.xml; do
+            echo "::group::OFF failures"; grep -o 'testcase name="[^"]*"\|<failure message="[^"]\{0,400\}' "$report" | grep -B1 "failure" || true; echo "::endgroup::"
+          done
+      - name: Print the diagnostics
+        shell: bash
+        run: |
+          echo "=== ON"; grep "DIAG\|Tests:" run-on.log || true
+          echo "=== OFF"; grep "DIAG\|Tests:" run-off.log || true

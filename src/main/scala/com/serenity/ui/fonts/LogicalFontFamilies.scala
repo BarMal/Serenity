@@ -82,6 +82,7 @@ object LogicalFontFamilies:
       System.getProperty("os.name", ""),
       Try(GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.toSet)
         .getOrElse(Set.empty)
+        .filter(_ => !java.lang.Boolean.getBoolean("serenity.debug.noLogicalFonts"))
         .map(_.toLowerCase),
       Fontconfig.bestFamily
     )
