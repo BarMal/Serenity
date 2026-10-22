@@ -216,9 +216,9 @@ final class SkiaRenderSurface(
       shaped.draw(canvas, from, until, xPx, (yPx + ascentPx).toFloat, glyphPaint())
     }
 
-  override def withFallbackFamily(family: String)(draw: => Unit): Unit =
+  override def withFallbackFamily(family: String, ligaturesOn: Boolean)(draw: => Unit): Unit =
     val surfaceFont = currentFontRef.get()
-    currentFontRef.set(styledFonts.fallbackFontFor(surfaceFont, family))
+    currentFontRef.set(styledFonts.fallbackFontFor(surfaceFont, family, ligaturesOn))
     try draw
     finally currentFontRef.set(surfaceFont)
 
