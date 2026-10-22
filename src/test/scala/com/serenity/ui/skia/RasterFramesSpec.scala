@@ -5,7 +5,7 @@ import java.lang.management.ManagementFactory
 
 import com.serenity.SkiaPixels
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{ColorAlphaType, ColorSpace, ColorType, ImageInfo, Paint, Rect, Surface}
+import org.jetbrains.skia.{ColorAlphaType, ColorSpace, ColorType, ImageInfo, Paint, Pixmap, Rect, Surface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -75,17 +75,28 @@ class RasterFramesSpec extends AnyFlatSpec with Matchers:
       shown.distinct shouldBe Vector(0x1e3c5a)
     }
 
-  "Copying out of a surface" should "allocate little more than the pixels it copies" in {
-    val surface = surfaceOfRandomRects()
-    val image   = untouched()
-    val area    = DeviceArea(0, 0, width, height)
-    val bean    = ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]
-    val thread  = Thread.currentThread().threadId()
-    (1 to 50).foreach(_ => RasterFrames.copyInto(surface, image, area))
-    val before = bean.getThreadAllocatedBytes(thread)
-    (1 to 20).foreach(_ => RasterFrames.copyInto(surface, image, area))
-    val perCopy = (bean.getThreadAllocatedBytes(thread) - before) / 20
-    perCopy should be <= (width * height * 4L * 5 / 4 + 32 * 1024)
+  for (label, colorType) <- List("BGRA" -> ColorType.BGRA_8888, "RGBA" -> ColorType.RGBA_8888) do
+    s"Copying out of a $label surface" should "allocate little more than the pixels it copies" in {
+      val info    = ImageInfo(width, height, colorType, ColorAlphaType.PREMUL, ColorSpace.Companion.getSRGB())
+      val surface = Surface.Companion.makeRaster(info)
+      surface.getCanvas.clear(0xff1e3c5a)
+      val image  = untouched()
+      val area   = DeviceArea(0, 0, width, height)
+      val bean   = ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]
+      val thread = Thread.currentThread().threadId()
+      (1 to 50).foreach(_ => RasterFrames.copyInto(surface, image, area))
+      val before = bean.getThreadAllocatedBytes(thread)
+      (1 to 20).foreach(_ => RasterFrames.copyInto(surface, image, area))
+      val perCopy = (bean.getThreadAllocatedBytes(thread) - before) / 20
+      perCopy should be <= (width * height * 4L * 5 / 4 + 32 * 1024)
+    }
+
+  "A surface for a frame" should "be BGRA whatever the platform's native 32-bit format is" in {
+    val surface = new RasterFrames().surfaceFor(width, height, 1.0)
+    val pixmap  = new Pixmap()
+    surface.peekPixels(pixmap) shouldBe true
+    pixmap.getInfo.getColorType shouldBe ColorType.BGRA_8888
+    pixmap.close()
   }
 
   it should "read in chunks that stay well under the size of a humongous allocation" in

@@ -36,7 +36,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
     val frames        = request.backendCaches.getOrCreate(FramesKey)(new RasterFrames)
     val surface =
       if request.contentPersists then frames.surfaceFor(widthPx, heightPx, scale.x)
-      else Surface.Companion.makeRasterN32Premul(widthPx, heightPx)
+      else Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
     val changes = Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx))
     SkiaRenderSurface.retaining(
       surface,

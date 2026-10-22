@@ -5,7 +5,7 @@ import java.nio.{ByteBuffer, ByteOrder}
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{ColorType, Pixmap, Surface}
+import org.jetbrains.skia.{ColorType, ImageInfo, Pixmap, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
   *
@@ -31,7 +31,7 @@ final private[ui] class RasterFrames:
         held.surface
       case None =>
         current.held.foreach(_.surface.close())
-        val held = Held(Surface.Companion.makeRasterN32Premul(widthPx, heightPx), widthPx, heightPx, scale)
+        val held = Held(Surface.Companion.makeRaster(frameInfo(widthPx, heightPx)), widthPx, heightPx, scale)
         state.set(State(Some(held), None, None, inFlight = true, current.copiedPixels))
         held.surface
 
@@ -83,6 +83,10 @@ object RasterFrames:
   private object State:
     val Empty: State = State(None, None, None, inFlight = false, 0L)
 
+  /** BGRA whatever Skia's native 32-bit order is, so a surface's ints are the image's ARGB ints on every platform. */
+  private[skia] def frameInfo(widthPx: Int, heightPx: Int): ImageInfo =
+    ImageInfo.Companion.makeN32Premul(widthPx, heightPx).withColorType(ColorType.BGRA_8888)
+
   /** A frame that keeps nothing: the whole surface goes into `image`. */
   def copyWhole(surface: Surface, image: BufferedImage): Unit =
     copyInto(surface, image, DeviceArea(0, 0, image.getWidth, image.getHeight))
@@ -98,14 +102,13 @@ object RasterFrames:
   private[skia] def rowsPerRead(areaWidthPx: Int, surfaceWidthPx: Int): Int =
     if areaWidthPx * 2 >= surfaceWidthPx then (ChunkBytes / (surfaceWidthPx * 4)).max(1) else 1
 
-  /** The surface is the platform's native 32-bit format, which is BGRA on some platforms and RGBA on others; an image
-    * holds ARGB ints.
-    */
-  private def swapRedBlue(ints: Array[Int], from: Int, count: Int): Unit =
-    (from until from + count).foreach { i =>
-      val argb = ints(i)
-      ints(i) = (argb & 0xff00ff00) | ((argb & 0xff) << 16) | ((argb >>> 16) & 0xff)
-    }
+  /** A surface of any other 32-bit order than BGRA holds its pixels as ABGR ints. */
+  @annotation.tailrec
+  private def swapRedBlue(ints: Array[Int], index: Int, end: Int): Unit =
+    if index < end then
+      val argb = ints(index)
+      ints(index) = (argb & 0xff00ff00) | ((argb & 0xff) << 16) | ((argb >>> 16) & 0xff)
+      swapRedBlue(ints, index + 1, end)
 
   private[skia] def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
     val pixmap = Pixmap()
@@ -132,7 +135,7 @@ object RasterFrames:
                 case Some(data) =>
                   val start = y * image.getWidth + area.left
                   read.get(row * ints, data, start, area.width)
-                  if rgba then swapRedBlue(data, start, area.width)
+                  if rgba then swapRedBlue(data, start, start + area.width)
                 case None =>
                   read.get(row * ints, line, 0, area.width)
                   if rgba then swapRedBlue(line, 0, area.width)
