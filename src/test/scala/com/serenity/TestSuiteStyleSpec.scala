@@ -80,5 +80,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
     "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",
     "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",
-    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout"
+    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout",
+    "ui/skia/SkiaLayerHostSpec.scala"             -> "polls a native window's paint, which signals no completion",
+    "ui/skia/SkiaLayerWindowSpec.scala"           -> "polls a native window's paint, which signals no completion"
   )

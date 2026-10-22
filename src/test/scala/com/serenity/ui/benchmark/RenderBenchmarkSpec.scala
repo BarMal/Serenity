@@ -8,6 +8,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.ExitCode
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +20,7 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
   "RenderBenchmark.run" should "print the report and keep it as Markdown and JSON in the output directory" in {
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
     assume(System.getProperty("os.name", "").toLowerCase.contains("linux"), "left to the owner's machine elsewhere")
-    val directory = Files.createTempDirectory("render-benchmark")
+    val directory = TestTemp.directory("render-benchmark")
     val captured  = new ByteArrayOutputStream()
     val code      = RenderBenchmark.run(small, directory, new PrintStream(captured, true)).unsafeRunSync()
     code shouldBe ExitCode.Success
@@ -38,7 +39,7 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     assume(GraphicsEnvironment.isHeadless, "only meaningful without a display")
     val captured = new ByteArrayOutputStream()
     RenderBenchmark
-      .run(small, Files.createTempDirectory("render-benchmark"), new PrintStream(captured, true))
+      .run(small, TestTemp.directory("render-benchmark"), new PrintStream(captured, true))
       .unsafeRunSync() shouldBe ExitCode.Error
     captured.toString should include("display")
   }
