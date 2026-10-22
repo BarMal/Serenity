@@ -420,6 +420,34 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     counters.lastFrame(FrameCounter.RunsDrawn) shouldBe 2L
   }
 
+  "withFallbackFamily" should "shape a plain run only when asked to draw with ligatures on" in {
+    def shapingsOf(ligaturesOn: Boolean): Long =
+      val activity = SurfaceActivity()
+      val target   = Surface.Companion.makeRasterN32Premul(width, height)
+      val surface = new SkiaRenderSurface(
+        target.getCanvas,
+        metrics,
+        font,
+        () => (),
+        width,
+        height,
+        caches = caches,
+        styledFonts = styledFonts,
+        activity = activity
+      )
+      surface.text.withFallbackFamily(Font.SERIF, ligaturesOn) {
+        surface.text.drawRunPx(14f, 26, 56f, metrics.lineHeight, metrics.ascent, "office")
+      }
+      val counters = FrameCounters()
+      counters.setEnabled(true)
+      activity.drainInto(counters)
+      counters.frameFinished()
+      counters.lastFrame(FrameCounter.ShapingCalls)
+
+    shapingsOf(ligaturesOn = false) shouldBe 0L
+    shapingsOf(ligaturesOn = true) should be > 0L
+  }
+
   "A styled run" should "draw an underline across the run and a strikethrough through it" in {
     def rows(style: TextStyle): Canvas =
       painted(canvasAt()) { surface =>
