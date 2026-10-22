@@ -5,7 +5,12 @@ import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches}
 /** What a Skia surface paints text and images through. Their owner shares one set across every frame and layer it
   * draws, as it does for a Java2D surface ([[com.serenity.ui.renderer.SurfaceTextCaches]]).
   */
-final case class SkiaTextCaches(fonts: SkiaFontCache, shapedText: SkiaShapedTextCache, images: SkiaImageCache)
+final case class SkiaTextCaches(
+    fonts: SkiaFontCache,
+    shapedText: SkiaShapedTextCache,
+    images: SkiaImageCache,
+    inks: SkiaInkCache = new SkiaInkCache()
+)
 
 object SkiaTextCaches:
 

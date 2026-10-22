@@ -162,7 +162,75 @@ private[perf] object SkiaCostProbe:
           inner += 1
         row += rows
 
+  /** Draws lines of text on a raster surface for `seconds` seconds, for a native profiler to look at. */
+  private def textLoop(seconds: Int, size: Float): Unit =
+    val surface  = Surface.Companion.makeRasterN32Premul(3840, 2160)
+    val canvas   = surface.getCanvas
+    val typeface = FontMgr.Companion.getDefault().matchFamily("DejaVu Sans Mono").getTypeface(0)
+    val font     = new SkFont(typeface, size)
+    font.setSubpixel(true)
+    font.setLinearMetrics(true)
+    font.setHinting(FontHinting.NONE)
+    font.setEdging(FontEdging.ANTI_ALIAS)
+    val paint = Paint()
+    paint.setAntiAlias(true)
+    paint.setColor(0xffdddddd.toInt)
+    val line     = ("lorem ipsum dolor sit amet " * 4).take(100)
+    val deadline = System.nanoTime() + seconds * 1000000000L
+    var calls    = 0L
+    while System.nanoTime() < deadline do
+      var n = 0
+      while n < 20 do
+        canvas.drawString(line, 4f + (calls % 4) * 0.25f, 40f + n * 30f, font, paint)
+        n += 1
+      calls += 20
+    println(s"text loop: $calls lines of ${line.length} characters at $size px in $seconds s")
+
   def main(args: Array[String]): Unit =
+    if args.headOption.contains("text-loop") then
+      textLoop(args.lift(1).fold(20)(_.toInt), args.lift(2).fold(24f)(_.toFloat))
+    else if args.headOption.contains("paint-variants") then paintVariants()
+    else probe(args)
+
+  /** What a paint can change about the mask blit Skia picks for anti-aliased text on a raster surface. */
+  private def paintVariants(): Unit =
+    val surface  = Surface.Companion.makeRasterN32Premul(3840, 2160)
+    val canvas   = surface.getCanvas
+    val typeface = FontMgr.Companion.getDefault().matchFamily("DejaVu Sans Mono").getTypeface(0)
+    val font     = new SkFont(typeface, 24f)
+    font.setSubpixel(true)
+    font.setLinearMetrics(true)
+    font.setHinting(FontHinting.NONE)
+    font.setEdging(FontEdging.ANTI_ALIAS)
+    val line = ("lorem ipsum dolor sit amet " * 4).take(100)
+    val ink  = 0xffdddddd.toInt
+    def paintOf(configure: Paint => Unit): Paint =
+      val paint = Paint()
+      paint.setAntiAlias(true)
+      paint.setColor(ink)
+      configure(paint)
+      paint
+    val variants = List(
+      "opaque colour (what the app does)" -> paintOf(_ => ()),
+      "alpha 254"                         -> paintOf(_.setAlpha(254)),
+      "colour as a shader"                -> paintOf(_.setShader(org.jetbrains.skia.Shader.Companion.makeColor(ink))),
+      "colour filter (blend with the colour)" -> paintOf(
+        _.setColorFilter(org.jetbrains.skia.ColorFilter.Companion.makeBlend(ink, BlendMode.SRC_IN))
+      ),
+      "dither"                                    -> paintOf(_.setDither(true)),
+      "blend mode SRC_ATOP"                       -> paintOf(_.setBlendMode(BlendMode.SRC_ATOP)),
+      "blend mode SRC (replaces the destination)" -> paintOf(_.setBlendMode(BlendMode.SRC))
+    )
+    variants.foreach { (label, paint) =>
+      measure(f"skia raster drawString x20 lines, $label", 40) {
+        var n = 0
+        while n < 20 do
+          canvas.drawString(line, 4f, 40f + n * 30f, font, paint)
+          n += 1
+      }
+    }
+
+  private def probe(args: Array[String]): Unit =
     val width   = args.headOption.map(_.toInt).getOrElse(3840)
     val height  = args.lift(1).map(_.toInt).getOrElse(2160)
     val surface = filled(width, height)

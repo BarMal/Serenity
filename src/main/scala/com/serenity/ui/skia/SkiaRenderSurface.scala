@@ -68,7 +68,7 @@ final class SkiaRenderSurface(
     with PanelOutlineDrawing
     with PixelCopying:
   import SkiaRenderSurface.*
-  import caches.{fonts, images, shapedText}
+  import caches.{fonts, images, inks, shapedText}
 
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
@@ -260,9 +260,11 @@ final class SkiaRenderSurface(
     else
       val _ = canvas.drawString(s.substring(from, until), x, baseline, face.font, ink)
 
+  /** The colour goes in as a shader, which keeps the paint's own alpha at full: see [[SkiaInkCache]]. */
   private def glyphPaint(): Paint =
     glyphs.setBlendMode(BlendMode.SRC_OVER)
-    glyphs.setColor(blended(fgRef.get().getRGB))
+    glyphs.setColor(OpaqueBlack)
+    glyphs.setShader(inks.shaderOf(blended(fgRef.get().getRGB)))
     glyphs
 
   private def paintRun(
