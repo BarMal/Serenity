@@ -50,8 +50,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
       onFlush = () =>
         if request.contentPersists then
           val reported = request.changedRegion().map(_.map(DeviceArea.around(_, scale.x, scale.y, widthPx, heightPx)))
-          val painted  = changes.fold(Nil)(_.paint)
-          val damage   = reported.map(areas => RasterCopyPlan.disjoint(areas ++ painted))
+          val damage   = reported.map(areas => RasterCopyPlan.disjoint(areas ++ changes.fold(Nil)(_.paint)))
           val moves    = changes.fold(Nil)(_.moves)
           frames.present(surface, image, damage, moves, changes.filter(_ => moves.nonEmpty).map(_.paint))
         else
