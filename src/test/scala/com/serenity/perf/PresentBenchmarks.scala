@@ -139,45 +139,40 @@ private[perf] object PresentBenchmarks:
     val files = Files.list(root).iterator().asScala.filter(_.toString.endsWith(".scala")).toList.sortBy(_.toString)
     files.flatMap(file => Files.readAllLines(file).asScala).take(6000).mkString("\n")
 
-  def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val backend  = sys.props.getOrElse("present.backend", "java2d")
-    val widthPx  = sys.props.getOrElse("present.width", "1920").toInt
-    val heightPx = sys.props.getOrElse("present.height", "1080").toInt
-    val scale    = sys.props.getOrElse("present.scale", "1").toDouble
-    val label    = s"${heightPx}p_${scale.toInt}x"
-    val factory =
-      backend match
-        case "java2d" => FrameSurfaceFactory.Java2D
-        case "skia"   => SkiaRasterSurfaceFactory
-        case other    => throw IllegalArgumentException(s"present.backend must be java2d or skia, not $other")
+  /** The states and windows every row draws, made once for a window size and scale. */
+  final private class Scenarios(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double)(using
+      IORuntime
+  ):
     val grid = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
 
-    val (prose, _)                  = LaptopFrameBenchmarks.proseStateManager(grid = grid)
-    val (beforeTyping, afterTyping) = TypingTransition.of(prose)
+    private val (prose, _)                  = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    private val (beforeTyping, afterTyping) = TypingTransition.of(prose)
     prose.applyEvent(ScrollDown(3)).unsafeRunSync()
-    val afterScroll = prose.getCurrentState.unsafeRunSync()
-    val proseFull   = afterScroll
-    val (code, _) = LaptopFrameBenchmarks.stateManagerHolding(
+    val proseFull: AppState = prose.getCurrentState.unsafeRunSync()
+
+    private val (code, _) = LaptopFrameBenchmarks.stateManagerHolding(
       codeText,
       AppConfig.conventional,
       cursorLine = 200,
       cursorColumn = 10,
       grid = grid
     )
-    val codeFull = code.getCurrentState.unsafeRunSync()
 
-    def window() = Window(factory, widthPx, heightPx, scale, grid)
-    val typing   = Alternating(window(), beforeTyping, afterTyping)
-    val scroll   = Alternating(window(), afterTyping, afterScroll)
-    val proseWin = window()
-    val codeWin  = window()
-    val _        = proseWin.render(proseFull, Damage.Everything)
-    val __       = codeWin.render(codeFull, Damage.Everything)
+    val codeFull: AppState = code.getCurrentState.unsafeRunSync()
 
-    val (long, _)  = LaptopFrameBenchmarks.proseStateManager(paragraphs = 6000, grid = grid)
-    val longWindow = window()
-    val longShown  = new AtomicReference(long.getCurrentState.unsafeRunSync())
-    val _____      = longWindow.render(longShown.get, Damage.Everything)
+    private def window() = Window(factory, widthPx, heightPx, scale, grid)
+    val typing           = Alternating(window(), beforeTyping, afterTyping)
+    val scroll           = Alternating(window(), afterTyping, proseFull)
+    val proseWin         = window()
+    val codeWin          = window()
+    val _                = proseWin.render(proseFull, Damage.Everything)
+    val __               = codeWin.render(codeFull, Damage.Everything)
+
+    private val (long, _) = LaptopFrameBenchmarks.proseStateManager(paragraphs = 6000, grid = grid)
+    val longWindow        = window()
+    val longShown         = new AtomicReference(long.getCurrentState.unsafeRunSync())
+    val _____             = longWindow.render(longShown.get, Damage.Everything)
+
     def scrollDown(): BufferedImage =
       val before = longShown.get
       long.applyEvent(ScrollDown(3)).unsafeRunSync()
@@ -185,10 +180,8 @@ private[perf] object PresentBenchmarks:
       longShown.set(after)
       longWindow.render(after, DamageProducer.forTransition(before, after))
 
-    def row(name: String, verify: () => Unit, run: () => Any): BenchmarkRunner.Benchmark =
-      BenchmarkRunner.Benchmark(s"render.present.$label.$name", 3, 20, verify, run, settleJit = true)
-
-    if sys.props.contains("present.diag") then
+    /** What each kind of frame drew, by the renderer's own counters. */
+    def printCounters(): Unit =
       (0 until 4).foreach { i =>
         val _ = scrollDown()
         println(s"DIAG scroll_down ${widthPx}x$heightPx@${scale}x frame $i: ${longWindow.lastFrameCounts}")
@@ -204,6 +197,25 @@ private[perf] object PresentBenchmarks:
           val _ = win.render(state, Damage.Everything)
           println(s"DIAG full_$label: ${win.lastFrameCounts}")
       }
+
+  def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+    val backend  = sys.props.getOrElse("present.backend", "java2d")
+    val widthPx  = sys.props.getOrElse("present.width", "1920").toInt
+    val heightPx = sys.props.getOrElse("present.height", "1080").toInt
+    val scale    = sys.props.getOrElse("present.scale", "1").toDouble
+    val label    = s"${heightPx}p_${scale.toInt}x"
+    val factory =
+      backend match
+        case "java2d" => FrameSurfaceFactory.Java2D
+        case "skia"   => SkiaRasterSurfaceFactory
+        case other    => throw IllegalArgumentException(s"present.backend must be java2d or skia, not $other")
+    val scenarios = Scenarios(factory, widthPx, heightPx, scale)
+    import scenarios.{codeFull, codeWin, longShown, proseFull, proseWin, scroll, scrollDown, typing}
+
+    def row(name: String, verify: () => Unit, run: () => Any): BenchmarkRunner.Benchmark =
+      BenchmarkRunner.Benchmark(s"render.present.$label.$name", 3, 20, verify, run, settleJit = true)
+
+    if sys.props.contains("present.diag") then scenarios.printCounters()
 
     List(
       row(

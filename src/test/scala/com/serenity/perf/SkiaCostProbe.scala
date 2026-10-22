@@ -8,9 +8,9 @@ import java.nio.{ByteBuffer, ByteOrder}
 import org.jetbrains.skia.{
   Bitmap,
   BlendMode,
+  Font as SkFont,
   FontEdging,
   FontHinting,
-  Font as SkFont,
   FontMgr,
   IRect,
   ImageInfo,
@@ -18,6 +18,9 @@ import org.jetbrains.skia.{
   Pixmap,
   Surface
 }
+
+// The loops and counters here are what is being measured: a copy loop written as a fold would time the fold.
+// scalafix:off DisableSyntax
 
 /** Scratch probe for #2380: the unit cost of each step the Skia raster path takes, against the alternatives that could
   * replace it. Nothing here is production code.
@@ -175,7 +178,7 @@ private[perf] object SkiaCostProbe:
     val paint = Paint()
     paint.setAntiAlias(true)
     paint.setColor(0xffdddddd.toInt)
-    val line     = ("lorem ipsum dolor sit amet " * 4).take(100)
+    val line     = sampleLine
     val deadline = System.nanoTime() + seconds * 1000000000L
     var calls    = 0L
     while System.nanoTime() < deadline do
@@ -230,14 +233,39 @@ private[perf] object SkiaCostProbe:
       }
     }
 
-  private def probe(args: Array[String]): Unit =
-    val width   = args.headOption.map(_.toInt).getOrElse(3840)
-    val height  = args.lift(1).map(_.toInt).getOrElse(2160)
-    val surface = filled(width, height)
-    val image   = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-    val pixmap  = new Pixmap()
-    println(s"surface ${width}x$height (${width.toLong * height * 4 / 1000000} MB)")
+  /** The surface a probe copies out of, the image it copies into, and the pixmap that views the surface. */
+  final private class Rig(val width: Int, val height: Int):
+    val surface: Surface     = filled(width, height)
+    val image: BufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val pixmap: Pixmap       = new Pixmap()
 
+  private def skiaFont(
+    typeface: org.jetbrains.skia.Typeface,
+    subpixel: Boolean,
+    edging: FontEdging,
+    hinting: FontHinting
+  ): SkFont =
+    val font = new SkFont(typeface, 24f)
+    font.setSubpixel(subpixel)
+    font.setLinearMetrics(true)
+    font.setHinting(hinting)
+    font.setEdging(edging)
+    font
+
+  private val sampleLine = ("lorem ipsum dolor sit amet " * 4).take(100)
+
+  private def probe(args: Array[String]): Unit =
+    val rig = new Rig(args.headOption.map(_.toInt).getOrElse(3840), args.lift(1).map(_.toInt).getOrElse(2160))
+    println(s"surface ${rig.width}x${rig.height} (${rig.width.toLong * rig.height * 4 / 1000000} MB)")
+    copyOutProbe(rig)
+    reusedBufferProbe(rig)
+    scrollProbe(rig)
+    textProbe(rig)
+    java2dTextProbe(rig)
+    rectProbe(rig)
+
+  private def copyOutProbe(rig: Rig): Unit =
+    import rig.{height, image, pixmap, surface, width}
     println("\n-- copy-out of one area into the image")
     val areas = List(
       "whole frame"                    -> (0, 0, width, height),
@@ -257,6 +285,8 @@ private[perf] object SkiaCostProbe:
         measure(s"peeked    (Unsafe)   $label", 40)(peekedCopyInto(surface, pixmap, image, l, t, w, h))
     }
 
+  private def reusedBufferProbe(rig: Rig): Unit =
+    import rig.{height, image, surface, width}
     println("\n-- copy-out of the whole frame without a fresh array per chunk (can a buffer be reused?)")
     val rowBytesOfSurface = width * 4
     val rowsPerChunk      = 16
@@ -289,6 +319,8 @@ private[perf] object SkiaCostProbe:
       s"installPixels(byte[]) wraps without copying: ${borrowed.exists(_ != 0)} (surface.readPixels wrote into the Java array)"
     )
 
+  private def scrollProbe(rig: Rig): Unit =
+    import rig.{height, image, pixmap, surface, width}
     println("\n-- scroll: move the scroll area up by 6 device rows inside the surface")
     val (sl, st, sw, sh) = (0, 80, width, height - 160)
     val ink              = Paint()
@@ -337,16 +369,13 @@ private[perf] object SkiaCostProbe:
       System.arraycopy(data, st * width, data, (st - 6) * width, sh * width)
     }
 
+  private def textProbe(rig: Rig): Unit =
+    import rig.surface
     println("\n-- text: one 100-character line, 2x, same string")
-    val line     = ("lorem ipsum dolor sit amet " * 4).take(100)
+    val line     = sampleLine
     val typeface = FontMgr.Companion.getDefault().matchFamily("DejaVu Sans Mono").getTypeface(0)
     def skFont(subpixel: Boolean, edging: FontEdging, hinting: FontHinting): SkFont =
-      val font = new SkFont(typeface, 24f)
-      font.setSubpixel(subpixel)
-      font.setLinearMetrics(true)
-      font.setHinting(hinting)
-      font.setEdging(edging)
-      font
+      skiaFont(typeface, subpixel, edging, hinting)
     val glyphPaint = Paint()
     glyphPaint.setAntiAlias(true)
     glyphPaint.setColor(0xffdddddd.toInt)
@@ -416,7 +445,11 @@ private[perf] object SkiaCostProbe:
         canvas.drawString(line, 4.0f, 40f + n * 30f, lcd, glyphPaint)
         n += 1
     }
-    val g = image.createGraphics()
+
+  private def java2dTextProbe(rig: Rig): Unit =
+    import rig.image
+    val line = sampleLine
+    val g    = image.createGraphics()
     g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
     g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
     g.setFont(new AwtFont("DejaVu Sans Mono", AwtFont.PLAIN, 24))
@@ -429,7 +462,12 @@ private[perf] object SkiaCostProbe:
         g.drawString(line, ax, 40f + n * 30f)
         n += 1
     }
+    g.dispose()
 
+  private def rectProbe(rig: Rig): Unit =
+    import rig.{image, surface}
+    val canvas = surface.getCanvas
+    val g      = image.createGraphics()
     println("\n-- 1 px high rect (misspelling squiggle segments), x500")
     val rectPaint = Paint()
     rectPaint.setAntiAlias(false)
