@@ -189,6 +189,38 @@ private[perf] object SkiaCostProbe:
         measure(s"peeked    (Unsafe)   $label", 40)(peekedCopyInto(surface, pixmap, image, l, t, w, h))
     }
 
+    println("\n-- copy-out of the whole frame without a fresh array per chunk (can a buffer be reused?)")
+    val rowBytesOfSurface = width * 4
+    val rowsPerChunk      = 16
+    val chunkInfo         = ImageInfo.Companion.makeN32Premul(width, rowsPerChunk)
+    val chunkBitmap       = Bitmap()
+    chunkBitmap.allocPixels(chunkInfo)
+    val chunkBytes = new Array[Byte](rowsPerChunk * rowBytesOfSurface)
+    measure("pooled   Surface.readPixels(kept Bitmap) + readPixels$skiko(kept byte[])", 40) {
+      val data = image.getRaster.getDataBuffer.asInstanceOf[DataBufferInt].getData
+      var row  = 0
+      while row < height do
+        val rows = math.min(rowsPerChunk, height - row)
+        val info = if rows == rowsPerChunk then chunkInfo else ImageInfo.Companion.makeN32Premul(width, rows)
+        val dst =
+          if rows == rowsPerChunk then chunkBitmap
+          else
+            val b = Bitmap(); b.allocPixels(info); b
+        surface.readPixels(dst, 0, row)
+        dst.`readPixels$skiko`(chunkBytes, info, rowBytesOfSurface, 0, 0)
+        val ints = ByteBuffer.wrap(chunkBytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+        ints.get(0, data, row * width, rows * width)
+        row += rows
+    }
+    val borrowed    = new Array[Byte](rowsPerChunk * rowBytesOfSurface)
+    val borrowedMap = Bitmap()
+    borrowedMap.installPixels(chunkInfo, borrowed, rowBytesOfSurface)
+    java.util.Arrays.fill(borrowed, 0.toByte)
+    surface.readPixels(borrowedMap, 0, 40)
+    println(
+      s"installPixels(byte[]) wraps without copying: ${borrowed.exists(_ != 0)} (surface.readPixels wrote into the Java array)"
+    )
+
     println("\n-- scroll: move the scroll area up by 6 device rows inside the surface")
     val (sl, st, sw, sh) = (0, 80, width, height - 160)
     val ink              = Paint()
@@ -201,6 +233,27 @@ private[perf] object SkiaCostProbe:
     }
     val scratch = Bitmap()
     scratch.allocPixels(ImageInfo.Companion.makeN32Premul(sw, sh))
+
+    /** In place, public API only: bands of the scroll area copied inside the surface's own memory, in an order that
+      * never reads a row already overwritten.
+      */
+    def moveInPlace(left: Int, top: Int, w: Int, h: Int, dy: Int): Unit =
+      if surface.peekPixels(pixmap) then
+        val bandRows = 256
+        val starts   = if dy < 0 then (0 until h by bandRows).toList else (0 until h by bandRows).toList.reverse
+        starts.foreach { start =>
+          val rows   = math.min(bandRows, h - start)
+          val source = new Pixmap()
+          val target = new Pixmap()
+          try
+            if pixmap.extractSubset(source, IRect.Companion.makeXYWH(left, top + start, w, rows)) &&
+                pixmap.extractSubset(target, IRect.Companion.makeXYWH(left, top + start + dy, w, rows))
+            then source.readPixels(target, 0, 0)
+          finally
+            source.close()
+            target.close()
+        }
+    measure("in place  Pixmap.extractSubset + readPixels, 256-row bands", 40)(moveInPlace(sl, st, sw, sh, -6))
     measure("kept      readPixels(kept bitmap) + writePixels", 40) {
       surface.readPixels(scratch, sl, st)
       surface.writePixels(scratch, sl, st - 6)

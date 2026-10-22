@@ -10,6 +10,7 @@ import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.renderer.{
   CellRuns,
+  DeviceArea,
   Effects,
   FontSpec,
   Java2DRenderSurface,
@@ -409,9 +410,10 @@ final class SkiaRenderSurface(
       val _ = canvas.drawImageRect(skia, source, target, ink)
     finally restoreTo(saved)
 
-  /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. The source is snapshotted
-    * before anything is drawn, so an overlapping copy reads every source pixel as it was. A clip in force (inside
-    * [[withRectClip]]) still bounds the copy, which Java2D's raw graphics would ignore.
+  /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read
+    * as it was before the copy. A clip in force (inside [[withRectClip]]) still bounds the copy, which Java2D's raw
+    * graphics would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows
+    * of one.
     */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
@@ -421,17 +423,19 @@ final class SkiaRenderSurface(
       val width  = math.round(from.widthPx * deviceScaleX).toInt
       val height = math.round(from.heightPx * deviceScaleY).toInt
       val moved  = math.round(dyPx * deviceScaleY).toInt
-      val snap   = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
-      val saved  = canvas.save()
-      try
-        val _ = canvas.resetMatrix()
-        fill.setBlendMode(BlendMode.SRC)
-        fill.setColor(OpaqueBlack)
-        val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
-        fill.setBlendMode(BlendMode.SRC_OVER)
-      finally
-        restoreTo(saved)
-        snap.close()
+      if userClipDepth.get() == 0 then PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
+      else
+        val snap  = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
+        val saved = canvas.save()
+        try
+          val _ = canvas.resetMatrix()
+          fill.setBlendMode(BlendMode.SRC)
+          fill.setColor(OpaqueBlack)
+          val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
+          fill.setBlendMode(BlendMode.SRC_OVER)
+        finally
+          restoreTo(saved)
+          snap.close()
     }
 
   def hideCursor(): Unit = ()
