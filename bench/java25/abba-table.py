@@ -9,7 +9,7 @@ def load(side):
     runs = []
     for i in range(1, 5):
         try:
-            runs.append(parse_csv(open(f"{out}/{side}-{i}.csv").read()))
+            runs.append(parse_csv(f"{out}/{side}-{i}.csv"))
         except Exception as e:  # noqa
             print(f"# {side}-{i}: {e}", file=sys.stderr)
     return runs
