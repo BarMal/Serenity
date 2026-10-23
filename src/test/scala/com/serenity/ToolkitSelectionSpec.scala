@@ -73,3 +73,23 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
     Choice.X11.toolkitProperty shouldBe Some("XToolkit")
     Choice.PlatformDefault.toolkitProperty shouldBe None
   }
+
+  "ToolkitSelection.choose with xwaylandForSkia" should "pick X11 on a JetBrains Runtime in a Wayland session" in {
+    val decision = ToolkitSelection.choose(jbr(wayland).copy(xwaylandForSkia = true))
+    decision.choice shouldBe Choice.X11
+    decision.reason should include("xwayland")
+  }
+
+  it should "change nothing outside a Wayland session" in {
+    ToolkitSelection.choose(jbr(x11Only).copy(xwaylandForSkia = true)).choice shouldBe Choice.PlatformDefault
+  }
+
+  it should "lose to an explicit SERENITY_TOOLKIT=wayland" in {
+    val explicit = jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland")).copy(xwaylandForSkia = true)
+    ToolkitSelection.choose(explicit).choice shouldBe Choice.Wayland
+  }
+
+  it should "lose to a toolkit named on the command line" in {
+    val explicit = jbr(wayland, jbrProperties + ("awt.toolkit.name" -> "WLToolkit")).copy(xwaylandForSkia = true)
+    ToolkitSelection.choose(explicit).choice shouldBe Choice.PlatformDefault
+  }
