@@ -26,3 +26,22 @@ jobs:
         run: python3 -m unittest scripts.test_smoke_test_app_image -v 2>&1 | tail -n 25
       - name: Scala guard (expected red before the fix)
         run: sbt -v "testOnly com.serenity.AssemblyManifestSpec" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E "AssemblyManifestSpec|did not|FAILED|Tests: succeeded|All tests passed|error\]" | head -n 20
+
+  native-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: JNA and JLine natives on Java 25, with and without the flag
+        run: |
+          M=https://repo1.maven.org/maven2
+          curl -fsSL -o jna.jar $M/net/java/dev/jna/jna/5.19.1/jna-5.19.1.jar
+          curl -fsSL -o jna-platform.jar $M/net/java/dev/jna/jna-platform/5.19.1/jna-platform-5.19.1.jar
+          curl -fsSL -o jline-native.jar $M/org/jline/jline-native/3.30.16/jline-native-3.30.16.jar
+          curl -fsSL -o jline-terminal.jar $M/org/jline/jline-terminal/3.30.16/jline-terminal-3.30.16.jar
+          CP=jna.jar:jna-platform.jar:jline-native.jar:jline-terminal.jar
+          echo "=== without --enable-native-access"; java -cp $CP bench/java25/NativeProbe.java 2>&1 | cut -c1-220
+          echo "=== with --enable-native-access=ALL-UNNAMED"; java --enable-native-access=ALL-UNNAMED -cp $CP bench/java25/NativeProbe.java 2>&1 | cut -c1-220
