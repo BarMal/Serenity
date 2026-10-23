@@ -45,5 +45,7 @@ jobs:
           curl -fsSL -o jline-native.jar $M/org/jline/jline-native/3.30.16/jline-native-3.30.16.jar
           curl -fsSL -o jline-terminal.jar $M/org/jline/jline-terminal/3.30.16/jline-terminal-3.30.16.jar
           CP=jna.jar:jna-platform.jar:jline-native.jar:jline-terminal.jar
-          echo "=== without --enable-native-access"; java -cp $CP bench/java25/NativeProbe.java 2>&1 | cut -c1-220
-          echo "=== with --enable-native-access=ALL-UNNAMED"; java --enable-native-access=ALL-UNNAMED -cp $CP bench/java25/NativeProbe.java 2>&1 | cut -c1-220
+          for lib in jna jline; do
+            echo "=== $lib without --enable-native-access"; java -cp $CP bench/java25/NativeProbe.java $lib 2>&1 | cut -c1-200
+            echo "=== $lib with --enable-native-access=ALL-UNNAMED"; java --enable-native-access=ALL-UNNAMED -cp $CP bench/java25/NativeProbe.java $lib 2>&1 | cut -c1-200
+          done
