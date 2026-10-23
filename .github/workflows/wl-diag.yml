@@ -1,0 +1,143 @@
+name: WL diag (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-wl-diag
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Install
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway grim wtype xvfb imagemagick python3-pil adwaita-icon-theme xwayland
+      - name: Fetch JBR 21 and 25
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          fetch() { # major dir
+            TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq "[.[] | select(.tagName | startswith(\"jbr-release-$1\"))] | sort_by(.publishedAt) | last | .tagName")"
+            VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+            curl -fsSL -o "$2.tgz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${VER}-linux-x64-b${BUILD}.tar.gz"
+            mkdir "$2" && tar -xzf "$2.tgz" -C "$2"; echo "$TAG"
+          }
+          echo "JBR21: $(fetch 21 jbr21)"; echo "JBR25: $(fetch 25 jbr25)"
+          echo "J21=$(ls -d $PWD/jbr21/*)" >> "$GITHUB_ENV"; echo "J25=$(ls -d $PWD/jbr25/*)" >> "$GITHUB_ENV"
+          mkdir classes && javac --release 21 -d classes bench/wl-diag/PresentProbe.java
+      - name: Matrix
+        continue-on-error: true
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+          export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
+          mkdir -p out
+          run_wl() { # label jhome scale mode
+            label="$1"; jh="$2"; scale="$3"; mode="$4"; d="out/$label-s$scale-$mode"; mkdir -p "$d"; rm -f "$d"/go.*
+            printf 'output HEADLESS-1 mode 1920x1080 scale %s\ndefault_border none\nfor_window [title="steal"] floating enable\n' "$scale" > sway.conf
+            (sway -c sway.conf > "$d/sway.log" 2>&1 &) ; sleep 4
+            export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
+            export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
+            "$jh/bin/java" -Dawt.toolkit.name=WLToolkit -Djava.util.logging.config.file=bench/wl-diag/logging.properties -cp classes PresentProbe "$mode" "$d" > "$d/probe.log" 2>&1 &
+            pid=$!; sleep 6
+            swaymsg seat seat0 cursor set 400 300 >> "$d/sway.log" 2>&1 || true; sleep 1
+            for k in 1 2 3 4; do
+              for i in $(seq 1 50); do grep -q "^PHASE $k " "$d/probe.log" && break; sleep 0.2; done
+              colour="$(grep "^PHASE $k " "$d/probe.log" | awk '{print $3}')"; sleep 1.5
+              grim "$d/p$k.png" 2>> "$d/grim.log"; n="$(python3 -I bench/wl-diag/count_colour.py "$d/p$k.png" "$colour" 2>&1)"
+              echo "[$label scale=$scale mode=$mode] phase $k colour=$colour pixels-on-screen=$n"
+              if [ "$k" = 2 ]; then grim -c "$d/with-cursor.png" 2>> "$d/grim.log"; fi
+              touch "$d/go.$k"
+            done
+            wait $pid || true
+            grep -E "TOOLKIT|setCursor|serial|WARN|SEVERE|Exception" "$d/probe.log" | head -8 | sed "s/^/  log: /"
+            swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; sleep 2; unset WAYLAND_DISPLAY SWAYSOCK
+          }
+          for scale in 1 2; do for mode in rect whole repaint; do
+            run_wl jbr21 "$J21" $scale $mode; run_wl jbr25 "$J25" $scale $mode
+          done; done
+      - name: Control, XToolkit on Xvfb
+        continue-on-error: true
+        run: |
+          for mode in rect whole repaint; do
+            d="out/x11-$mode"; mkdir -p "$d"
+            Xvfb :99 -screen 0 1920x1080x24 > "$d/xvfb.log" 2>&1 & xv=$!; sleep 2
+            DISPLAY=:99 "$J21/bin/java" -Dawt.toolkit.name=XToolkit -cp classes PresentProbe $mode "$d" > "$d/probe.log" 2>&1 & pid=$!
+            sleep 5
+            for k in 1 2 3 4; do
+              for i in $(seq 1 50); do grep -q "^PHASE $k " "$d/probe.log" && break; sleep 0.2; done
+              colour="$(grep "^PHASE $k " "$d/probe.log" | awk '{print $3}')"; sleep 1
+              DISPLAY=:99 import -window root "$d/p$k.png"
+              echo "[x11 mode=$mode] phase $k colour=$colour pixels-on-screen=$(python3 -I bench/wl-diag/count_colour.py "$d/p$k.png" "$colour")"
+              touch "$d/go.$k"
+            done
+            wait $pid || true; kill $xv || true
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: wl-diag-out, path: out, retention-days: 3 }
+
+  app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: { jbr: ['21', '25'], scale: ['1', '2'] }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: sbt }
+      - uses: sbt/setup-sbt@v1
+      - run: sbt -v clean assembly
+      - name: Install
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway grim wtype python3-pil adwaita-icon-theme
+      - name: Fetch JBR
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq "[.[] | select(.tagName | startswith(\"jbr-release-${{ matrix.jbr }}\"))] | sort_by(.publishedAt) | last | .tagName")"
+          VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          curl -fsSL -o jbr.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${VER}-linux-x64-b${BUILD}.tar.gz"
+          mkdir jbr && tar -xzf jbr.tgz -C jbr; echo "JBR tag $TAG"; echo "JH=$(ls -d $PWD/jbr/*)" >> "$GITHUB_ENV"
+      - name: Drive the real app
+        continue-on-error: true
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+          export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME"; echo "start" > "$HOME/doc.txt"
+          d=out; mkdir -p $d
+          printf 'output HEADLESS-1 mode 1920x1080 scale ${{ matrix.scale }}\ndefault_border none\n' > sway.conf
+          (sway -c sway.conf > $d/sway.log 2>&1 &); sleep 4
+          export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
+          export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
+          jar="$(ls target/scala-*/Serenity.jar)"
+          SERENITY_TOOLKIT=wayland "$JH/bin/java" -Djava.util.logging.config.file=bench/wl-diag/logging.properties -jar "$jar" "$HOME/doc.txt" > $d/app.log 2>&1 &
+          sleep 25; grim $d/a0-initial.png
+          wtype "hello wayland typing test"; sleep 2; grim $d/a1-after-typing.png
+          wtype -M ctrl a -m ctrl; sleep 1; grim $d/a2-after-select-all.png
+          swaymsg seat seat0 cursor set 600 400; swaymsg seat seat0 cursor press button3; swaymsg seat seat0 cursor release button3; sleep 2; grim -c $d/a3-context-menu.png
+          wtype -k Escape; sleep 1; swaymsg seat seat0 cursor set 700 500; swaymsg seat seat0 cursor press button1; swaymsg seat seat0 cursor release button1; sleep 2; grim $d/a4-click-away.png
+          python3 -I - <<'PY'
+          from PIL import Image, ImageChops
+          names = ["a0-initial","a1-after-typing","a2-after-select-all","a3-context-menu","a4-click-away"]
+          ims = [Image.open(f"out/{n}.png").convert("RGB") for n in names]
+          for i in range(1, len(ims)):
+              box = ImageChops.difference(ims[i-1], ims[i]).getbbox()
+              print(f"{names[i-1]} -> {names[i]}: changed bbox {box}")
+          PY
+          grep -E "TOOLKIT|setCursor|serial|SEVERE|WARN|Exception|chrome" $d/app.log | head -20
+          pkill -f Serenity.jar || true; pkill sway || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'wl-diag-app-jbr${{ matrix.jbr }}-s${{ matrix.scale }}', path: out, retention-days: 3 }
