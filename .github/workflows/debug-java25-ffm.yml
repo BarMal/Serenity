@@ -1,0 +1,43 @@
+name: Debug Java 25 FFM
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-ffm
+
+permissions:
+  contents: read
+
+jobs:
+  ffm:
+    name: FFM ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: temurin25, java: '25', flags: '--enable-native-access=ALL-UNNAMED' }
+          - { name: temurin25-no-native-access-flag, java: '25', flags: '' }
+          - { name: temurin21-preview, java: '21', flags: '--enable-preview --source 21' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Fetch Skiko 0.153.0
+        run: |
+          B=https://repo1.maven.org/maven2/org/jetbrains/skiko
+          curl -fsSL -o skiko-awt.jar $B/skiko-awt/0.153.0/skiko-awt-0.153.0.jar
+          curl -fsSL -o runtime.jar $B/skiko-awt-runtime-linux-x64/0.153.0/skiko-awt-runtime-linux-x64-0.153.0.jar
+          sudo apt-get update && sudo apt-get install -y xvfb libfontconfig1 libgl1 || true
+      - name: Run
+        run: |
+          xvfb-run -a java ${{ matrix.flags }} -cp skiko-awt.jar:runtime.jar bench/java25/FfmBench.java 2>&1 | tee ffm.log
+          { echo '```'; cat ffm.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ffm-${{ matrix.name }}
+          path: ffm.log
