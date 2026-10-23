@@ -33,10 +33,12 @@ jobs:
           curl -fsSL -o runtime.jar $B/skiko-awt-runtime-linux-x64/0.153.0/skiko-awt-runtime-linux-x64-0.153.0.jar
           curl -fsSL -o kotlin-stdlib.jar https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.3.20/kotlin-stdlib-2.3.20.jar
           curl -fsSL -o jbr-api.jar https://repo1.maven.org/maven2/org/jetbrains/runtime/jbr-api/1.5.0/jbr-api-1.5.0.jar
+          curl -fsSL -o coroutines.jar https://repo1.maven.org/maven2/org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.10.2/kotlinx-coroutines-core-jvm-1.10.2.jar
           sudo apt-get update && sudo apt-get install -y xvfb libfontconfig1 libgl1 || true
       - name: Run
         run: |
-          xvfb-run -a java ${{ matrix.flags }} -cp skiko-awt.jar:runtime.jar:kotlin-stdlib.jar:jbr-api.jar bench/java25/FfmBench.java 2>&1 | tee ffm.log
+          set -o pipefail
+          xvfb-run -a java ${{ matrix.flags }} -cp skiko-awt.jar:runtime.jar:kotlin-stdlib.jar:jbr-api.jar:coroutines.jar bench/java25/FfmBench.java 2>&1 | tee ffm.log
           { echo '```'; cat ffm.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
