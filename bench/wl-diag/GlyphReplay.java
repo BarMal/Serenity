@@ -48,6 +48,12 @@ public class GlyphReplay {
     list.add(new Object[]{"CourierPrime", load(fonts + "/CourierPrime-Regular.ttf", 18)});
     list.add(new Object[]{"MonaspaceNeon-otf", load(fonts + "/MonaspaceNeon-Regular.otf", 18)});
     list.add(new Object[]{"MonaspaceNeonVar", load(fonts + "/MonaspaceNeonVarVF[wght,wdth,slnt].ttf", 18)});
+    // Serenity derives its fonts with TextAttribute.LIGATURES_ON (FontLoader.scala:273, FontFallback.scala:51-57),
+    // which makes font.hasLayoutAttributes true and so routes every run through ShapedTextCache.
+    java.util.function.UnaryOperator<Font> liga = f -> f.deriveFont(java.util.Map.of(java.awt.font.TextAttribute.LIGATURES, java.awt.font.TextAttribute.LIGATURES_ON));
+    var withLiga = new java.util.ArrayList<Object[]>();
+    for (var e : list) withLiga.add(new Object[]{e[0] + "+liga", liga.apply((Font) e[1])});
+    list.addAll(withLiga);
     for (double scale : new double[]{1.0, 2.0}) {
       for (var e : list) {
         String name = (String) e[0]; Font font = (Font) e[1];
@@ -64,10 +70,11 @@ public class GlyphReplay {
         for (int i = 0; i < n; i++) rebuilt.setGlyphPosition(i, new Point2D.Float(pos[2 * i], pos[2 * i + 1]));
         var imB = canvas(); var gB = g(imB, scale);
         gB.setFont(font); gB.drawGlyphVector(rebuilt, 10f, 40f); gB.dispose();
-        // replay into a graphics with a different FRC (cache keyed on frc in the app; here we deliberately reuse codes at the other scale)
-        var imC = canvas(); var gC = g(imC, scale == 1.0 ? 2.0 : 1.0);
-        gC.setFont(font); gC.drawGlyphVector(rebuilt, 10f, 40f); gC.dispose();
-        System.out.printf("scale=%.0f font=%-18s glyphs=%d inkA=%d inkB=%d diff(drawString,replay)=%d%n", scale, name, n, ink(imA), ink(imB), diff(imA, imB));
+        // the vector layoutGlyphVector itself returned, drawn without being rebuilt from codes
+        var imD = canvas(); var gD = g(imD, scale);
+        gD.setFont(font); gD.drawGlyphVector(gv, 10f, 40f); gD.dispose();
+        System.out.printf("scale=%.0f font=%-24s glyphs=%d inkA=%d inkB=%d inkD=%d diff(drawString,replay)=%d diff(drawString,original)=%d%n", scale, name, n, ink(imA), ink(imB), ink(imD), diff(imA, imB), diff(imA, imD));
+        ImageIO.write(imD, "png", new File(out, name + "-s" + (int) scale + "-D-original.png"));
         ImageIO.write(imA, "png", new File(out, name + "-s" + (int) scale + "-A-drawString.png"));
         ImageIO.write(imB, "png", new File(out, name + "-s" + (int) scale + "-B-replay.png"));
       }

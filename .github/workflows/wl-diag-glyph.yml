@@ -35,6 +35,8 @@ jobs:
           }
           echo "JBR21: $(fetch 21 jbr21)"; echo "JBR25: $(fetch 25 jbr25)"
           echo "J21=$(ls -d $PWD/jbr21/*)" >> "$GITHUB_ENV"; echo "J25=$(ls -d $PWD/jbr25/*)" >> "$GITHUB_ENV"
+      - name: Install tesseract
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends tesseract-ocr imagemagick
       - name: Compile and run on all four runtimes
         continue-on-error: true
         run: |
@@ -44,6 +46,11 @@ jobs:
             home="${!rt}"; echo "######## $rt"
             "$home/bin/java" -Djava.awt.headless=true -cp classes GlyphReplay src/main/resources/fonts "out/$rt" 2>&1 | grep -v "Picked up"
           done
+          echo "######## OCR of the 2x renders (expect: Hello, wayland: the quick brown fox 0123456789 fi AVATAR)"
+          for rt in T25 J21 J25; do for f in CourierPrime+liga Monospaced+liga MonaspaceNeon-otf+liga; do for v in A-drawString B-replay D-original; do
+            convert "out/$rt/$f-s2-$v.png" -colorspace Gray -negate -resize 150% /tmp/ocr.png
+            echo "$rt $f $v: $(tesseract /tmp/ocr.png - --psm 7 2>/dev/null | tr -s '\n ' ' ')"
+          done; done; done
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: glyph-out, path: out, retention-days: 3 }
