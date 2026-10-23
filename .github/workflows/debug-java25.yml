@@ -78,9 +78,9 @@ jobs:
           export A_OPTS="$base ${{ matrix.a_opts }}" B_OPTS="$base ${{ matrix.b_opts }}"
           "$A_JAVA" -version; "$B_JAVA" -version
           nproc; free -m | head -2
-          bash bench/java25/abba-jdk.sh laptop. render. footprint. layout. 2>&1 | tail -n 120 | tee abba-summary.txt
+          bash bench/java25/abba-jdk.sh laptop. render. footprint. layout. 2>&1 | tail -n 120 | tee abba-summary.txt || true
           for f in abba-out/b-1.csv.err abba-out/b-1.csv.raw; do echo "=== $f"; head -n 40 "$f" || true; done
-          python3 bench/java25/abba-table.py "$OUT" | tee abba-table.txt
+          python3 bench/java25/abba-table.py "$OUT" | tee abba-table.txt || true
           {
             echo "## ABBA ${{ matrix.name }} (A=${{ matrix.a }} ${{ matrix.a_opts }}, B=${{ matrix.b }} ${{ matrix.b_opts }})"
             echo '```'; cat abba-summary.txt; echo '--- table'; cat abba-table.txt; echo '```'
