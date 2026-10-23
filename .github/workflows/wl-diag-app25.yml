@@ -1,0 +1,116 @@
+name: WL diag app25 (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-wl-diag
+
+permissions:
+  contents: read
+
+jobs:
+  jar:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21', cache: sbt }
+      - uses: sbt/setup-sbt@v1
+      - run: sbt -v clean assembly
+      - run: mkdir -p out && cp target/scala-*/Serenity.jar out/Serenity.jar
+      - uses: actions/upload-artifact@v4
+        with: { name: jar, path: out/Serenity.jar, retention-days: 1 }
+
+  app:
+    needs: jar
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rt: jbr25, tk: x11, cfg: default }
+          - { rt: jbr25, tk: x11, cfg: logical }
+          - { rt: jbr25, tk: wl,  cfg: default }
+          - { rt: jbr25, tk: wl,  cfg: logical }
+          - { rt: tem25, tk: x11, cfg: default }
+          - { rt: tem25, tk: x11, cfg: logical }
+          - { rt: jbr21, tk: x11, cfg: logical }
+          - { rt: jbr21, tk: wl,  cfg: logical }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        if: matrix.rt == 'tem25'
+        with: { distribution: temurin, java-version: '25' }
+      - uses: actions/download-artifact@v4
+        with: { name: jar, path: jar }
+      - name: Install
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway grim wtype xvfb xdotool imagemagick tesseract-ocr python3-pil adwaita-icon-theme
+      - name: Fetch JBR
+        if: startsWith(matrix.rt, 'jbr')
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          MAJOR="${{ matrix.rt }}"; MAJOR="${MAJOR#jbr}"
+          TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq "[.[] | select(.tagName | startswith(\"jbr-release-$MAJOR\"))] | sort_by(.publishedAt) | last | .tagName")"
+          VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          curl -fsSL -o jbr.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${VER}-linux-x64-b${BUILD}.tar.gz"
+          mkdir jbr && tar -xzf jbr.tgz -C jbr; echo "JBR tag $TAG"; echo "JH=$(ls -d $PWD/jbr/*)" >> "$GITHUB_ENV"
+      - name: Select runtime
+        if: matrix.rt == 'tem25'
+        run: echo "JH=$JAVA_HOME" >> "$GITHUB_ENV"
+      - name: Drive the real app and OCR
+        continue-on-error: true
+        env:
+          RT: ${{ matrix.rt }}
+          TK: ${{ matrix.tk }}
+          CFG: ${{ matrix.cfg }}
+        run: |
+          mkdir -p out
+          export HOME="$RUNNER_TEMP/home"; mkdir -p "$HOME/.serenity"; echo "start" > "$HOME/doc.txt"
+          if [ "$CFG" = logical ]; then
+            printf 'typography.code.family = Monospaced\ntypography.prose.family = Monospaced\ntypography.code.ligatures = true\ntypography.prose.ligatures = true\n' > "$HOME/.serenity/config.conf"
+          fi
+          "$JH/bin/java" -version 2>&1 | grep -v "Picked up" | head -2
+          jar=jar/Serenity.jar
+          PHRASE="The quick brown fox jumps over the lazy dog 0123456789"
+          if [ "$TK" = x11 ]; then
+            Xvfb :90 -screen 0 1920x1080x24 > out/xvfb.log 2>&1 & sleep 2
+            export DISPLAY=:90; unset WAYLAND_DISPLAY
+            "$JH/bin/java" -Dawt.toolkit.name=XToolkit -Dsun.java2d.uiScale=2 -jar "$jar" "$HOME/doc.txt" > out/app.log 2>&1 &
+            sleep 25; xdotool mousemove 700 500 click 1; sleep 1
+            xdotool type --delay 40 "$PHRASE"; sleep 3
+            import -window root out/shot.png
+          else
+            export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+            export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
+            printf 'output HEADLESS-1 mode 1920x1080 scale 2\ndefault_border none\n' > sway.conf
+            (sway -c sway.conf > out/sway.log 2>&1 &); sleep 4
+            export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
+            export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
+            "$JH/bin/java" -Dawt.toolkit.name=WLToolkit -jar "$jar" "$HOME/doc.txt" > out/app.log 2>&1 &
+            sleep 25; wtype "$PHRASE"; sleep 3
+            # force a full repaint so the bounded-rect repaint bug is not what is under test
+            swaymsg fullscreen toggle >/dev/null 2>&1 || true; sleep 2; swaymsg fullscreen toggle >/dev/null 2>&1 || true; sleep 2
+            grim out/shot.png
+          fi
+          convert out/shot.png -resize 200% -colorspace Gray -negate out/shot-ocr.png
+          echo "=== $RT / $TK / $CFG: OCR (expect: $PHRASE)"
+          tesseract out/shot-ocr.png - --psm 6 2>/dev/null | grep -v '^\s*$' | head -12
+          python3 -I - <<'PY'
+          from PIL import Image
+          im = Image.open("out/shot.png").convert("RGB")
+          w, h = im.size
+          px = im.getdata()
+          bg = px[0]
+          print("screenshot", w, "x", h, "non-background px:", sum(1 for p in px if p != bg))
+          PY
+          grep -E "TOOLKIT|SEVERE|Exception|ERROR|font" out/app.log | head -8
+          pkill -f Serenity.jar || true; pkill sway || true; pkill Xvfb || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'app25-${{ matrix.rt }}-${{ matrix.tk }}-${{ matrix.cfg }}', path: out, retention-days: 3 }
