@@ -6,8 +6,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The attributes `sbt assembly` writes into Serenity.jar's manifest, as build.sbt hands them to the tests. JDK 24
-  * warns on every native library load and will later block it unless native access is granted. An executable jar
-  * grants it from its manifest, so `java -jar Serenity.jar` needs the attribute even where a package passes the option.
+  * warns on every native library load and will later block it unless native access is granted. An executable jar grants
+  * it from its manifest, so `java -jar Serenity.jar` needs the attribute even where a package passes the option.
   */
 class AssemblyManifestSpec extends AnyFlatSpec with Matchers:
 
