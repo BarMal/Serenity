@@ -73,8 +73,11 @@ class SwingWindowQueuedPaintSpec extends AnyFlatSpec with Matchers:
     case PaintImmediately(rect: Rectangle)
     case RepaintWhole
 
+  /** `JPanel`'s constructor already repaints, before this class's own fields exist, so the recorder is lazy and
+    * [[recordingCanvas]] forgets what construction recorded.
+    */
   private class RecordingCanvas extends JPanel:
-    val calls = ListBuffer.empty[Call]
+    lazy val calls = ListBuffer.empty[Call]
 
     override def repaint(rect: Rectangle): Unit =
       calls += Call.Repaint(new Rectangle(rect))
@@ -85,4 +88,7 @@ class SwingWindowQueuedPaintSpec extends AnyFlatSpec with Matchers:
     override def repaint(): Unit =
       calls += Call.RepaintWhole
 
-  private def recordingCanvas(): RecordingCanvas = new RecordingCanvas
+  private def recordingCanvas(): RecordingCanvas =
+    val canvas = new RecordingCanvas
+    canvas.calls.clear()
+    canvas
