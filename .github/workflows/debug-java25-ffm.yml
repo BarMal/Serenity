@@ -31,10 +31,11 @@ jobs:
           B=https://repo1.maven.org/maven2/org/jetbrains/skiko
           curl -fsSL -o skiko-awt.jar $B/skiko-awt/0.153.0/skiko-awt-0.153.0.jar
           curl -fsSL -o runtime.jar $B/skiko-awt-runtime-linux-x64/0.153.0/skiko-awt-runtime-linux-x64-0.153.0.jar
+          curl -fsSL -o kotlin-stdlib.jar https://repo1.maven.org/maven2/org/jetbrains/kotlin/kotlin-stdlib/2.2.20/kotlin-stdlib-2.2.20.jar
           sudo apt-get update && sudo apt-get install -y xvfb libfontconfig1 libgl1 || true
       - name: Run
         run: |
-          xvfb-run -a java ${{ matrix.flags }} -cp skiko-awt.jar:runtime.jar bench/java25/FfmBench.java 2>&1 | tee ffm.log
+          xvfb-run -a java ${{ matrix.flags }} -cp skiko-awt.jar:runtime.jar:kotlin-stdlib.jar bench/java25/FfmBench.java 2>&1 | tee ffm.log
           { echo '```'; cat ffm.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
