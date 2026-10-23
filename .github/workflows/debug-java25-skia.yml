@@ -1,0 +1,49 @@
+name: Debug Java 25 Skia
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-skia
+
+permissions:
+  contents: read
+
+jobs:
+  skia:
+    name: Skia specs ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: temurin25-linux, os: ubuntu-latest, java: '25' }
+          - { label: temurin21-linux, os: ubuntu-latest, java: '21' }
+          - { label: temurin25-windows, os: windows-latest, java: '25' }
+          - { label: temurin25-macos, os: macos-latest, java: '25' }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb libfontconfig1 libgl1
+      - name: Skia and render-backend specs
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cmd='sbt -v "testOnly com.serenity.ui.skia.* com.serenity.app.Skia* com.serenity.app.RenderBackend* com.serenity.config.RenderBackendPeekSpec com.serenity.ChromeRepaintPixelsSpec"'
+          if [ "$RUNNER_OS" = Linux ]; then eval "xvfb-run -a -s '-screen 0 1920x1200x24' $cmd" > skia.log 2>&1; else eval "$cmd" > skia.log 2>&1; fi
+          echo "rc=$?"
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "SKIA ${{ matrix.label }}"
+          sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -E "Run completed in|Total number of tests|Tests: succeeded|All tests passed|TESTS FAILED|Total time:|^\[error\]|^WARNING|FAILED \*\*\*" | sort | uniq -c | sort -rn | head -n 40
