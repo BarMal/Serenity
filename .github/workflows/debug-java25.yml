@@ -1,4 +1,4 @@
-name: Debug Java 25 JBR ABBA
+name: Debug Java 25 JBR ABBA relaxed
 
 on:
   push:
@@ -43,8 +43,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: t21-vs-t25, a: t21, b: t25, a_opts: "", b_opts: "" }
-          - { name: t25-vs-t25-coh, a: t25, b: t25, a_opts: "", b_opts: "-XX:+UseCompactObjectHeaders" }
           - { name: t21-vs-jbr25, a: t21, b: jbr25, a_opts: "", b_opts: "" }
     env:
       GH_TOKEN: ${{ github.token }}

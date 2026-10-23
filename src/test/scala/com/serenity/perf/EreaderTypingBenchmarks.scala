@@ -20,7 +20,7 @@ private[perf] object EreaderTypingBenchmarks:
 
   given Balance = Balance.default
 
-  private val MaxRowsDrawn = 20L
+  private val MaxRowsDrawn = 40L
 
   /** The paragraph [[LaptopFrameBenchmarks.proseStateManager]] types into; the ghosted manuscripts type into the same
     * one, since paragraphs differ in length and so in how many rows a keystroke reflows.
