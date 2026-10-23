@@ -419,6 +419,7 @@ final class RendererFrameState(initialCapacity: Int):
     */
   private val panelLayerBuffers =
     new BoundedRefCache[ScreenIdentity, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
+  val paintedPanels = new PaintedPanelRecords(cacheCapacity)
 
   def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
     panelLayerBuffers.get(surface.layerCacheOwner).getOrElse(Map.empty)
