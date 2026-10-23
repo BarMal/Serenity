@@ -42,7 +42,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val attached = new AtomicReference(List.empty[LayerPresenter])
     val factory  = new LayerSurfaceFactory(buildHost)
 
-    private def request =
+    private def request(caches: RenderCaches) =
       FrameSurfaceRequest(
         CellMetrics(8, 16, 12),
         new Font(Font.MONOSPACED, Font.PLAIN, 12),
@@ -58,8 +58,11 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
           val _ = attached.updateAndGet(presenter :: _)
       )
 
-    def frame(): Unit =
-      val surface = factory.create(request)
+    def frame(): Unit = frameWith(caches)
+
+    /** A frame drawn with `frameCaches`, as the render benchmark's cold frames are: new caches, the same window. */
+    def frameWith(frameCaches: RenderCaches): Unit =
+      val surface = factory.create(request(frameCaches))
       surface.pixels.fillPixelRect(0, 0, 20, 20, red)
       surface.flush()
 
@@ -77,6 +80,28 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     harness.attached.get should have size 1
     harness.attached.get.head shouldBe theSameInstanceAs(host)
     harness.shown.get shouldBe empty
+  }
+
+  it should "keep one host for a window whatever caches its frames come with" in {
+    val host   = new FakeHost
+    val builds = new AtomicInteger(0)
+    val harness = new Harness(_ =>
+      builds.incrementAndGet(); host
+    )
+    List.fill(5)(RenderCaches.create()).foreach(harness.frameWith)
+    builds.get shouldBe 1
+    harness.attached.get should have size 1
+    host.published.get shouldBe 5
+  }
+
+  it should "not try to build a layer that failed again because the caches changed" in {
+    val builds = new AtomicInteger(0)
+    val harness = new Harness(_ =>
+      builds.incrementAndGet(); throw new IllegalStateException("no GL context")
+    )
+    List.fill(3)(RenderCaches.create()).foreach(harness.frameWith)
+    builds.get shouldBe 1
+    harness.shown.get should have size 3
   }
 
   it should "fall back to Java2D, and show frames, when the layer cannot be created" in {

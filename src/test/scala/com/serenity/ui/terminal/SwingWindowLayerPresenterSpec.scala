@@ -64,6 +64,19 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       window.canvas.asInstanceOf[ImeRequestsHost].caretBounds shouldBe Some(caret.rect)
     }
 
+  it should "dispose a presenter that another replaces, and leave the same one attached alone" in
+    withWindow { window =>
+      val first  = new FakePresenter(hasBase = true)
+      val second = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(first)
+      window.attachLayerPresenter(first)
+      first.disposed.get shouldBe 0
+      window.attachLayerPresenter(second)
+      first.disposed.get shouldBe 1
+      second.disposed.get shouldBe 0
+      window.layerPresenter.exists(_ eq second) shouldBe true
+    }
+
   it should "mirror the pointer cursor onto the presenter" in
     withWindow { window =>
       val presenter = new FakePresenter(hasBase = true)
