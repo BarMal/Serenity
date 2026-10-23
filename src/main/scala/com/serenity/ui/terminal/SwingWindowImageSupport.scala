@@ -13,6 +13,7 @@ import com.serenity.ui.layout.PixelRect
   * within the architecture ratchet's line target.
   */
 private[terminal] trait SwingWindowImageSupport:
+  this: SwingWindowChromeSupport =>
 
   final private[serenity] case class CaretPaint(rect: Rectangle, color: Color)
 
@@ -123,6 +124,31 @@ private[terminal] trait SwingWindowImageSupport:
       case (CanvasRepaint.Rects(earlier), CanvasRepaint.Rects(later)) =>
         CanvasRepaint.Rects(coalescedRectangles(earlier ::: later))
       case _ => CanvasRepaint.Whole
+
+  /** One call that gets pixels of the canvas onto the screen. */
+  private[serenity] enum PaintRequest:
+    case WholeCanvas
+    case Immediate(rect: Rectangle)
+    case Queued(rect: Rectangle)
+
+  /** WLToolkit draws what `paintImmediately` paints but never commits it to the compositor (JBR 21 and 25), so under it
+    * a bounded repaint goes through `repaint(rect)`, whose paint event does commit. Every other toolkit paints each
+    * rect at once, which keeps rects apart where the `RepaintManager` would fold them into their union.
+    */
+  private[serenity] def paintRequests(toolkitClassName: String, repaint: CanvasRepaint): scala.List[PaintRequest] =
+    repaint match
+      case CanvasRepaint.Whole => scala.List(PaintRequest.WholeCanvas)
+      case CanvasRepaint.Rects(rects) =>
+        val request: Rectangle => PaintRequest =
+          if isNativeWaylandToolkit(toolkitClassName) then PaintRequest.Queued(_) else PaintRequest.Immediate(_)
+        rects.map(request)
+
+  private[serenity] def applyPaintRequests(canvas: JComponent, requests: scala.List[PaintRequest]): Unit =
+    requests.foreach {
+      case PaintRequest.WholeCanvas     => canvas.repaint()
+      case PaintRequest.Immediate(rect) => canvas.paintImmediately(rect)
+      case PaintRequest.Queued(rect)    => canvas.repaint(rect)
+    }
 
   private def coalescedRectangles(rects: scala.List[Rectangle]): scala.List[Rectangle] =
     PixelRect
