@@ -38,13 +38,16 @@ APP=$!
 for i in $(seq 1 300); do grep -q '^PHASE ime-ready' "$OUT/app.log" 2>/dev/null && break; sleep 0.2; done
 wtype -s 800 -M shift -m shift > /dev/null 2>&1 &   # create the virtual keyboard, give focus time to settle
 wtype -s 600 -M shift -m shift ; sleep 1
-echo "[$LABEL] fcitx5-remote -s pinyin: $(fcitx5-remote -s pinyin 2>&1); -o: $(fcitx5-remote -o 2>&1); state now: $(fcitx5-remote 2>&1)"
+fcitx5-remote -s pinyin >/dev/null 2>&1
+for i in $(seq 1 15); do fcitx5-remote -o >/dev/null 2>&1; st="$(fcitx5-remote 2>&1)"; [ "$st" = 2 ] && break; sleep 1; done
+echo "[$LABEL] fcitx5-remote state after retries: $st (2 = input method active, 1 = inactive)"
 sleep 1
 wtype -s 500 "nihao" -s 800 -P space -p space -s 800 "shijie" -s 800 -k Return -s 500
 sleep 1
 touch "$OUT/go.99"; sleep 2
 echo "[$LABEL] text events:"
 grep -E ' (text_editing|text_input|text_editing_candidates)' "$OUT/app.log" | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] fcitx5 log tail:"; tail -n 8 "$OUT/fcitx5.log" | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] key events: $(grep -c ' key down' "$OUT/app.log")"
 echo "[$LABEL] input-method wire: $(grep -cE 'zwp_text_input_v3@[0-9]+\.(preedit_string|commit_string|done)' "$OUT/wire.log")"
 kill $APP $FC >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; kill $DBUS_SESSION_BUS_PID >/dev/null 2>&1 || true
