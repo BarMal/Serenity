@@ -84,6 +84,7 @@ jobs:
 
   ime:
     runs-on: ubuntu-24.04
+    container: ubuntu:24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -93,8 +94,8 @@ jobs:
         timeout-minutes: 12
         env: { DEBIAN_FRONTEND: noninteractive, NEEDRESTART_MODE: a }
         run: |
-          sudo -E apt-get update -q
-          sudo -E apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme
+          apt-get update -q
+          apt-get install -y -q --no-install-recommends ca-certificates curl git sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme
       - name: Fetch jars
         run: |
           set -euo pipefail
@@ -109,7 +110,7 @@ jobs:
           L="$PWD/lib"
           CP="$PWD/classes:$L/lwjgl-3.4.3.jar:$L/lwjgl-3.4.3-natives-linux.jar:$L/lwjgl-sdl-3.4.3.jar:$L/lwjgl-sdl-3.4.3-natives-linux.jar"
           mkdir -p out
-          sudo -E env "PATH=$PATH" bash bench/nojbr/sdl/ime_sdl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/ime" 2>&1 | tee out/ime.txt
+          bash bench/nojbr/sdl/ime_sdl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/ime" 2>&1 | tee out/ime.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: nojbr-sdl-ime, path: out, retention-days: 3 }
