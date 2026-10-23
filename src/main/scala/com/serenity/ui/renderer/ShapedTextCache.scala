@@ -15,7 +15,10 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
   * newer, and when the newer fills, the older is dropped, so what the last frames painted survives and the cache holds
   * at most twice `capacityPerGeneration` stretches.
   */
-final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity):
+final class ShapedTextCache(
+    capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity,
+    replayCheck: GlyphReplayCheck = GlyphReplayCheck()
+):
   import ShapedTextCache.*
 
   private val generations = AtomicReference(Generations(newMap(), newMap()))
@@ -39,6 +42,12 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
 
   private[serenity] def countExactMeasurement(): Unit =
     val _ = exactN.incrementAndGet()
+
+  /** Whether the glyphs of a stretch in `font` may be drawn from its cached codes, or the font is one whose rebuilt
+    * glyphs differ from `drawString`'s and must be drawn by it.
+    */
+  def replaysFaithfully(font: Font, fontRenderContext: FontRenderContext): Boolean =
+    replayCheck.faithful(font, fontRenderContext)
 
   def holds(text: String, font: Font, fontRenderContext: FontRenderContext): Boolean =
     val key  = Key(text, font, fontRenderContext)
