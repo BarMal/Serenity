@@ -31,12 +31,14 @@ class SwingWindow(
     windowTitle: String = SwingWindow.WindowTitle
 ):
 
+  private val toolkitClassName = Toolkit.getDefaultToolkit.getClass.getName
+
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
       chromeMode,
       System.getProperty("os.name", ""),
       env,
-      SwingWindow.isNativeWaylandToolkit(Toolkit.getDefaultToolkit.getClass.getName)
+      SwingWindow.isNativeWaylandToolkit(toolkitClassName)
     )
 
   private val effectiveChromeMode        = if usesCustomChrome then WindowChromeMode.Custom else chromeMode
@@ -159,13 +161,13 @@ class SwingWindow(
 
   /** Each rect is painted on its own and at once: `canvas.repaint(rect)` would let Swing's `RepaintManager` fold them
     * into one dirty rect spanning all of them, the very copy splitting them avoids. Frames published before this runs
-    * have already merged into the pending repaint, so a burst of frames is still painted once.
+    * have already merged into the pending repaint, so a burst of frames is still painted once. Under WLToolkit the
+    * rects are queued instead, because it never commits an immediate paint ([[SwingWindow.paintRequests]]).
     */
   private def paintPendingRepaint(): Unit =
-    pendingRepaintRef.getAndSet(None).foreach {
-      case SwingWindow.CanvasRepaint.Whole        => canvas.repaint()
-      case SwingWindow.CanvasRepaint.Rects(rects) => rects.foreach(rect => canvas.paintImmediately(rect))
-    }
+    pendingRepaintRef
+      .getAndSet(None)
+      .foreach(repaint => SwingWindow.applyPaintRequests(canvas, SwingWindow.paintRequests(toolkitClassName, repaint)))
 
   def onBaseImageReady(image: BufferedImage): Unit =
     publishedCaretsRef.set(Nil)

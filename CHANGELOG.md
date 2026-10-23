@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-10-23
+
+- Fixed the window not repainting while it has focus under native Wayland (`WLToolkit` on a JetBrains Runtime): typed text, shortcut results and pasted text only appeared after focus moved away, because that toolkit never commits what `paintImmediately` draws. Frames now go through `repaint(rect)` there; X11, Windows and macOS are unchanged (#2380)
+
 ### 2026-10-20
 
 - Fixed the terminal interface dropping characters outside the Basic Multilingual Plane (emoji and rare CJK ideographs such as 𠮷): they now insert whole, as one edit, under the same undo grouping as typed text (#2008).
