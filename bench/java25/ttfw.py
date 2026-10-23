@@ -6,13 +6,14 @@
 Starts the launcher with --smoke-test --safe-mode, which prints SERENITY_SMOKE_READY after the first painted frame and
 quits, and reports the wall time to that line and to process exit. Needs a display ($DISPLAY).
 """
+import os
 import statistics
 import subprocess
 import sys
 import tempfile
 import time
 
-launcher, runs, label = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+launcher, runs, label = os.path.abspath(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
 ready, total = [], []
 for _ in range(runs):
     with tempfile.TemporaryDirectory() as work:
