@@ -47,6 +47,7 @@ jobs:
           cfg() { echo "$1/Serenity/lib/app/Serenity.cfg"; }
           appdir() { echo "$1/Serenity/lib/app"; }
 
+          (cd dist && zip -qr ../fresh.zip Serenity) && ls -l fresh.zip | awk '{printf "fresh image zip bytes (no jsa, no aot): %s\n", $5}'
           echo "=== sizes before any run"
           du -sm dist/Serenity | sed 's/^/image MB: /'
 
@@ -71,13 +72,19 @@ jobs:
           cat "$(cfg b)"
           python3 bench/java25/ttfw.py b/Serenity/bin/Serenity 12 "AOT cache"
           echo "=== was the cache used? (-Xlog:aot on one run)"
-          JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout" python3 bench/java25/ttfw.py b/Serenity/bin/Serenity 1 "AOT log" 2>&1 | head -n 8
+          (cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout -Xlog:cds=info:stdout" "$root/b/Serenity/bin/Serenity" --smoke-test --safe-mode 2>&1 | grep -v "Picked up" | head -n 12) || true
 
           # Arm C: the AOT image zipped, unzipped elsewhere (new path, new mtimes), as a user would
           (cd b && zip -qr ../b.zip Serenity)
           rm -rf elsewhere && mkdir -p elsewhere/deep/er && (cd elsewhere/deep/er && unzip -q "$root/b.zip")
           python3 bench/java25/ttfw.py elsewhere/deep/er/Serenity/bin/Serenity 12 "AOT cache after unzip elsewhere"
-          JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout -Xlog:cds=info:stdout" python3 bench/java25/ttfw.py elsewhere/deep/er/Serenity/bin/Serenity 1 "AOT elsewhere log" 2>&1 | grep -iE "mismatch|disabled|invalid|fail|not match|ignor|error|warn" | head -n 8
+          (cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout -Xlog:cds=info:stdout" "$root/elsewhere/deep/er/Serenity/bin/Serenity" --smoke-test --safe-mode 2>&1 | grep -iE "mismatch|disabled|invalid|fail|not match|ignor|error|warn|opened|mapped" | head -n 8) || true
+          echo "=== zip sizes (image zipped as released, AppCDS image has no jsa yet at zip time only if zipped before first run)"
+          ls -l b.zip | awk '{printf "AOT image zip bytes: %s\n", $5}'
+          # Arm E: a stale cache (the jar touched after training)
+          touch "elsewhere/deep/er/Serenity/lib/app/Serenity.jar"
+          python3 bench/java25/ttfw.py elsewhere/deep/er/Serenity/bin/Serenity 6 "AOT cache with the jar touched" || true
+          (cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout -Xlog:cds=info:stdout" "$root/elsewhere/deep/er/Serenity/bin/Serenity" --smoke-test --safe-mode 2>&1 | grep -iE "mismatch|disabled|invalid|fail|not match|ignor|error|warn|timestamp|modified" | head -n 8) || true
 
           # Arm D: the AppCDS image unzipped elsewhere (what ships today)
           (cd a && zip -qr ../a.zip Serenity)
