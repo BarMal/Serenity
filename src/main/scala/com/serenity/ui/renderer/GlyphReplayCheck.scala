@@ -1,8 +1,8 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Color, Font, Graphics2D, RenderingHints}
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
+import java.awt.{Color, Font, Graphics2D, RenderingHints}
 import java.util.concurrent.ConcurrentHashMap
 
 /** Whether a font's glyph codes can be turned back into the glyphs `drawString` draws. A shaped stretch keeps only

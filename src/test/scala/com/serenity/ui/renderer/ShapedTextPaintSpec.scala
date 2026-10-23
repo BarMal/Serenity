@@ -252,7 +252,7 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
         val expected = paintedWith(ShapedTextCache()) { surface =>
           surface.drawRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text)
         }
-        val cache  = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
+        val cache = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
         val actual = paintedWith(cache) { surface =>
           surface.drawShapedRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text, 0, text.length)
         }
@@ -264,9 +264,9 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "draw only its own part of the line when the line is split into runs" in {
-    val text     = "AVAWAY To the office, fi ffl waffle"
-    val split    = text.indexOf(' ', text.length / 2) + 1
-    val cache    = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
+    val text  = "AVAWAY To the office, fi ffl waffle"
+    val split = text.indexOf(' ', text.length / 2) + 1
+    val cache = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
     val expected = paintedWith(ShapedTextCache()) { surface =>
       surface.drawRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text.substring(0, split))
     }
