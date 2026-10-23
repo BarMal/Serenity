@@ -202,8 +202,12 @@ private class Spike(val app: Application) {
                         ),
                     ),
                 )
+                return EventHandlerResult.Stop
             }
-            is Event.WindowDraw -> onDraw(e)
+            is Event.WindowDraw -> {
+                onDraw(e)
+                return EventHandlerResult.Stop // upstream's sample returns Stop once the frame is drawn; Continue leaves it uncommitted
+            }
             is Event.WindowConfigure -> {
                 ev("window_configure size=${e.size.width.rawLogical}x${e.size.height.rawLogical} active=${e.active} decoration=${e.decorationMode}")
                 say("SCALE logical=${e.size.width.rawLogical}x${e.size.height.rawLogical} scaleSoFar=$scale decoration=${e.decorationMode}")

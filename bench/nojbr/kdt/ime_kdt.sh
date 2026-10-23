@@ -3,8 +3,9 @@
 # usage: APP_LAUNCH=<command using $OUT, with -Dspike.mode=ime> ime_kdt.sh OUTDIR
 set -u
 OUT="$1"; LABEL="$(basename "$OUT")"
-trap 'kill $ANCHOR $APP $FC >/dev/null 2>&1; pkill sway >/dev/null 2>&1; pkill -x java >/dev/null 2>&1; pkill -x wtype >/dev/null 2>&1' EXIT
+trap 'kill $WATCHDOG $ANCHOR $APP $FC >/dev/null 2>&1; pkill sway >/dev/null 2>&1; pkill -x java >/dev/null 2>&1; pkill -x wtype >/dev/null 2>&1' EXIT
 ( sleep 300; echo "[$LABEL] WATCHDOG fired"; tail -n 40 "$OUT/app.log"; tail -n 30 "$OUT/wire.log"; tail -n 30 "$OUT/native.log" 2>&1; kill -9 $$ ) > /dev/stderr 2>&1 &
+WATCHDOG=$!
 mkdir -p "$OUT"; rm -f "$OUT"/go.* "$OUT"/*.log
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-spike}"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman

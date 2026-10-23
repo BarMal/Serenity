@@ -4,7 +4,7 @@
 set -u
 OUT="$1"; MODE="$2"; SCALE="$3"; DEBUG="${4:-0}"; VPTR="${VPTR:-vptr}"
 LABEL="$(basename "$OUT")"
-cleanup() { exec 3>&- 2>/dev/null; kill $ANCHOR $VP $APP >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1; pkill sway >/dev/null 2>&1; pkill -x java >/dev/null 2>&1; pkill -x wtype >/dev/null 2>&1; pkill -x vptr >/dev/null 2>&1; }
+cleanup() { exec 3>&- 2>/dev/null; kill $WATCHDOG $ANCHOR $VP $APP >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1; pkill sway >/dev/null 2>&1; pkill -x java >/dev/null 2>&1; pkill -x wtype >/dev/null 2>&1; pkill -x vptr >/dev/null 2>&1; }
 trap cleanup EXIT
 ( sleep 420; echo "[$LABEL] WATCHDOG fired after 420 s"; echo "--- app.log tail"; tail -n 40 "$OUT/app.log" 2>&1; echo "--- wire/stderr tail"; tail -n 30 "$OUT/wire.log" 2>&1; echo "--- native log tail"; tail -n 40 "$OUT/native.log" 2>&1; kill -9 $$ ) > /dev/stderr 2>&1 &
 WATCHDOG=$!
