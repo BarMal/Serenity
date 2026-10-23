@@ -17,10 +17,11 @@ final class GlyphReplayCheck(
 ):
   import GlyphReplayCheck.*
 
-  private val verdicts = new ConcurrentHashMap[Font, ConcurrentHashMap[FontRenderContext, Verdict]]()
+  private val verdicts   = new ConcurrentHashMap[Font, ConcurrentHashMap[FontRenderContext, Verdict]]()
+  private val noVerdicts = new ConcurrentHashMap[FontRenderContext, Verdict]()
 
   def faithful(font: Font, fontRenderContext: FontRenderContext): Boolean =
-    verdicts.getOrDefault(font, NoVerdicts).getOrDefault(fontRenderContext, Verdict.Unknown) match
+    verdicts.getOrDefault(font, noVerdicts).getOrDefault(fontRenderContext, Verdict.Unknown) match
       case Verdict.Faithful   => true
       case Verdict.Unfaithful => false
       case Verdict.Unknown    => judge(font, fontRenderContext)
@@ -37,8 +38,6 @@ object GlyphReplayCheck:
 
   private enum Verdict:
     case Unknown, Faithful, Unfaithful
-
-  private val NoVerdicts = new ConcurrentHashMap[FontRenderContext, Verdict]()
 
   private val MaxFonts = 4096
 

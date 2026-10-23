@@ -28,11 +28,13 @@ class GlyphReplayCheckSpec extends AnyFlatSpec with Matchers:
     }
     (check, asked)
 
-  "A font whose replay matched drawString" should "be trusted" in
+  "A font whose replay matched drawString" should "be trusted" in {
     GlyphReplayCheck((_, _) => true).faithful(serif, frc) shouldBe true
+  }
 
-  "A font whose replay differed from drawString" should "not be trusted" in
+  "A font whose replay differed from drawString" should "not be trusted" in {
     GlyphReplayCheck((_, _) => false).faithful(serif, frc) shouldBe false
+  }
 
   "The check" should "judge a font and render context once, however often it is asked" in {
     val (check, asked) = countingCheck((_, _) => false)
@@ -83,8 +85,9 @@ class GlyphReplayCheckSpec extends AnyFlatSpec with Matchers:
     GlyphReplayCheck.sameRaster(a, b) shouldBe false
   }
 
-  it should "reject images of different sizes" in
+  it should "reject images of different sizes" in {
     GlyphReplayCheck.sameRaster(
       new BufferedImage(4, 3, BufferedImage.TYPE_INT_ARGB),
       new BufferedImage(3, 4, BufferedImage.TYPE_INT_ARGB)
     ) shouldBe false
+  }
