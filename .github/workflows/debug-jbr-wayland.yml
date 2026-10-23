@@ -1,9 +1,7 @@
 name: Debug JBR Wayland
 
 on:
-  push:
-    branches:
-      - ccr-157ed55f-u6khhf-jbr-measure
+  workflow_dispatch:
 
 permissions:
   contents: read

@@ -178,6 +178,12 @@ jobs:
         run: |
           body="$(python3 -c "import sys; t=open('measure-report.txt').read().replace('\r',''); print(t.replace('%','%25').replace('\n','%0A'), end='')")"
           echo "::notice title=report-$PLAT::$body"
+          body25="$(python3 -c "
+t=open('measure-report.txt').read().replace('\r','')
+i=t.find('=== temurin25')
+keep=[l for l in t[i:].split('\n') if not l.startswith('java -version') and not l.startswith('base CDS') and not l.startswith('launch')]
+print('\n'.join(keep).replace('%','%25').replace('\n','%0A'), end='')")"
+          echo "::notice title=report25-$PLAT::$body25"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
