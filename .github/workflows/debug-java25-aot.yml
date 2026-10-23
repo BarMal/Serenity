@@ -1,0 +1,90 @@
+name: Debug Java 25 AOT
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-aot
+
+permissions:
+  contents: read
+
+jobs:
+  aot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Build the app image with the release command
+        run: |
+          set -euo pipefail
+          sbt -v clean assembly writePackageVersion
+          mkdir -p package-input dist
+          cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          cp LICENSE THIRD-PARTY-NOTICES.md package-input/
+          jpackage --type app-image --name Serenity --input package-input --main-jar Serenity.jar --main-class Main \
+            --app-version "$(cat target/package/app-version.txt)" --vendor BarMal --dest dist \
+            --java-options '-XX:+UseG1GC' --java-options '-XX:MaxRAMPercentage=25' --java-options '-XX:G1PeriodicGCInterval=60000' \
+            --java-options '--enable-native-access=ALL-UNNAMED' --java-options '--sun-misc-unsafe-memory-access=allow' \
+            --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive" \
+            --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa' --java-options '-XX:+AutoCreateSharedArchive'
+          cat dist/Serenity/lib/app/Serenity.cfg
+      - name: Measure time to first frame, AppCDS against AOT cache, and a relocated AOT image
+        run: |
+          set -uo pipefail
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          export DISPLAY=:99
+          sleep 3
+          root="$PWD"
+          cfg() { echo "$1/Serenity/lib/app/Serenity.cfg"; }
+          appdir() { echo "$1/Serenity/lib/app"; }
+
+          echo "=== sizes before any run"
+          du -sm dist/Serenity | sed 's/^/image MB: /'
+
+          # Arm Z: base CDS only (no AppCDS archive)
+          rm -rf z && mkdir z && cp -r dist/Serenity z/Serenity
+          grep -v "SharedArchiveFile\|AutoCreateSharedArchive" "$(cfg z)" > cfg.tmp && cp cfg.tmp "$(cfg z)"
+          python3 bench/java25/ttfw.py z/Serenity/bin/Serenity 12 "base CDS only"
+
+          # Arm A: AppCDS (the release configuration); one run writes serenity.jsa, then twelve are timed
+          rm -rf a && mkdir a && cp -r dist/Serenity a/Serenity
+          python3 bench/java25/ttfw.py a/Serenity/bin/Serenity 1 "AppCDS warm-up (discarded)" >/dev/null
+          ls -l "$(appdir a)"/serenity.jsa | awk '{printf "serenity.jsa bytes: %s\n", $5}'
+          python3 bench/java25/ttfw.py a/Serenity/bin/Serenity 12 "AppCDS"
+
+          # Arm B: AOT cache instead of AppCDS, trained by the same smoke run through JAVA_TOOL_OPTIONS
+          rm -rf b && mkdir b && cp -r dist/Serenity b/Serenity
+          grep -v "SharedArchiveFile\|AutoCreateSharedArchive" "$(cfg b)" > cfg.tmp && cp cfg.tmp "$(cfg b)"
+          aot="$root/$(appdir b)/serenity.aot"
+          JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$aot" python3 bench/java25/ttfw.py b/Serenity/bin/Serenity 1 "AOT training run" 2>&1 | grep -v "Picked up" | head -n 6
+          ls -l "$aot" | awk '{printf "serenity.aot bytes: %s\n", $5}'
+          sed -i 's#^\[JavaOptions\]#[JavaOptions]\njava-options=-XX:AOTCache=$APPDIR/serenity.aot#' "$(cfg b)"
+          cat "$(cfg b)"
+          python3 bench/java25/ttfw.py b/Serenity/bin/Serenity 12 "AOT cache"
+          echo "=== was the cache used? (-Xlog:aot on one run)"
+          JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout" python3 bench/java25/ttfw.py b/Serenity/bin/Serenity 1 "AOT log" 2>&1 | head -n 8
+
+          # Arm C: the AOT image zipped, unzipped elsewhere (new path, new mtimes), as a user would
+          (cd b && zip -qr ../b.zip Serenity)
+          rm -rf elsewhere && mkdir -p elsewhere/deep/er && (cd elsewhere/deep/er && unzip -q "$root/b.zip")
+          python3 bench/java25/ttfw.py elsewhere/deep/er/Serenity/bin/Serenity 12 "AOT cache after unzip elsewhere"
+          JAVA_TOOL_OPTIONS="-Xlog:aot=info:stdout -Xlog:cds=info:stdout" python3 bench/java25/ttfw.py elsewhere/deep/er/Serenity/bin/Serenity 1 "AOT elsewhere log" 2>&1 | grep -iE "mismatch|disabled|invalid|fail|not match|ignor|error|warn" | head -n 8
+
+          # Arm D: the AppCDS image unzipped elsewhere (what ships today)
+          (cd a && zip -qr ../a.zip Serenity)
+          rm -rf elsewhere2 && mkdir -p elsewhere2/deep/er && (cd elsewhere2/deep/er && unzip -q "$root/a.zip")
+          python3 bench/java25/ttfw.py elsewhere2/deep/er/Serenity/bin/Serenity 1 "AppCDS elsewhere warm-up (discarded)" >/dev/null
+          python3 bench/java25/ttfw.py elsewhere2/deep/er/Serenity/bin/Serenity 12 "AppCDS after unzip elsewhere"
+
+          echo "=== sizes"
+          du -sm a/Serenity b/Serenity | sed 's/^/MB: /'
+          ls -l a.zip b.zip | awk '{printf "zip %s bytes: %s\n", $9, $5}'
