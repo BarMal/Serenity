@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          cmd='sbt -v "testOnly com.serenity.ui.skia.* com.serenity.app.Skia* com.serenity.app.RenderBackend* com.serenity.config.RenderBackendPeekSpec com.serenity.ChromeRepaintPixelsSpec"'
+          cmd='sbt -v "set Test / scalacOptions += \"-deprecation\"" "Test / compile"'
           if [ "$RUNNER_OS" = Linux ]; then eval "xvfb-run -a -s '-screen 0 1920x1200x24' $cmd" > skia.log 2>&1; else eval "$cmd" > skia.log 2>&1; fi
           echo "rc=$?"
       - name: Summary
@@ -45,4 +45,4 @@ jobs:
           echo "SKIA ${{ matrix.label }}"
           sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -E "Run completed in|Total number of tests|Tests: succeeded|All tests passed|TESTS FAILED|Total time:|^\[error\]|^WARNING|FAILED \*\*\*" | sort | uniq -c | sort -rn | head -n 40
           echo "WARN/ERROR LINES:"
-          sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -nE "\[warn\]|\[error\]" | cut -c1-400 | head -n 60
+          sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -nE "\[warn\]|\[error\]" | cut -c1-500 | head -n 80
