@@ -1,0 +1,49 @@
+name: WL diag glyph (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-wl-diag
+
+permissions:
+  contents: read
+
+jobs:
+  glyph:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - name: Remember Temurin 21
+        run: echo "T21=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '25' }
+      - name: Remember Temurin 25
+        run: echo "T25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - name: Fetch JBR 21 and 25
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          fetch() {
+            TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq "[.[] | select(.tagName | startswith(\"jbr-release-$1\"))] | sort_by(.publishedAt) | last | .tagName")"
+            VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+            curl -fsSL -o "$2.tgz" "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${VER}-linux-x64-b${BUILD}.tar.gz"
+            mkdir "$2" && tar -xzf "$2.tgz" -C "$2"; echo "$TAG"
+          }
+          echo "JBR21: $(fetch 21 jbr21)"; echo "JBR25: $(fetch 25 jbr25)"
+          echo "J21=$(ls -d $PWD/jbr21/*)" >> "$GITHUB_ENV"; echo "J25=$(ls -d $PWD/jbr25/*)" >> "$GITHUB_ENV"
+      - name: Compile and run on all four runtimes
+        continue-on-error: true
+        run: |
+          mkdir classes && "$T21/bin/javac" --release 21 -d classes bench/wl-diag/GlyphReplay.java
+          mkdir -p out
+          for rt in T21 T25 J21 J25; do
+            home="${!rt}"; echo "######## $rt"
+            "$home/bin/java" -Djava.awt.headless=true -cp classes GlyphReplay src/main/resources/fonts "out/$rt" 2>&1 | grep -v "Picked up"
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: glyph-out, path: out, retention-days: 3 }
