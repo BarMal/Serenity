@@ -61,7 +61,7 @@ jobs:
           grep '^KDT_PROFILE=' gradle.log
           mkdir -p bundle/cp bundle/native
           i=0; IFS=':' read -ra ELEMS <<< "$CP"
-          for e in "${ELEMS[@]}"; do i=$((i+1)); if [ -d "$e" ]; then mkdir -p "bundle/cp/${i}-dir"; cp -r "$e"/. "bundle/cp/${i}-dir/"; else cp "$e" "bundle/cp/${i}-$(basename "$e")"; fi; done
+          for e in "${ELEMS[@]}"; do i=$((i+1)); [ -e "$e" ] || { echo "skip missing $e"; continue; }; if [ -d "$e" ]; then mkdir -p "bundle/cp/${i}-dir"; cp -r "$e"/. "bundle/cp/${i}-dir/"; else cp "$e" "bundle/cp/${i}-$(basename "$e")"; fi; done
           echo "--- native libraries built by the Rust crates"
           find kdt -name 'libdesktop_linux*' -type f -not -path '*/deps/*' -not -path '*/incremental/*' -not -path '*/build/*/*/*.d' | sort | tee native-libs.txt
           # the loader looks for libdesktop_linux_x64.so (release) next to -Dkdt.library.folder.path

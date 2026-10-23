@@ -51,7 +51,7 @@ sleep 1
 touch "$OUT/go.99"; sleep 2
 echo "[$LABEL] text events:"
 grep -E ' (text_editing|text_input|text_editing_candidates)' "$OUT/app.log" | sed "s/^/[$LABEL]   /"
-echo "[$LABEL] fcitx5 log tail:"; tail -n 8 "$OUT/fcitx5.log" | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] fcitx5 current IM: $(fcitx5-remote -n 2>&1)"; echo "[$LABEL] fcitx5 log (wayland/frontend/input-method lines):"; grep -iE "wayland|frontend|zwp|input.?method|text.?input|virtual" "$OUT/fcitx5.log" | grep -v portalsetting | head -25 | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] key events: $(grep -c ' key down' "$OUT/app.log")"
 echo "[$LABEL] input-method wire: $(grep -cE 'zwp_text_input_v3@[0-9]+\.(preedit_string|commit_string|done)' "$OUT/wire.log")"
 kill $ANCHOR $APP $FC >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; kill $DBUS_SESSION_BUS_PID >/dev/null 2>&1 || true
