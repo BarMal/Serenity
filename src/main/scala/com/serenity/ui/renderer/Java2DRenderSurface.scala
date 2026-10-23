@@ -152,10 +152,12 @@ class Java2DRenderSurface(
     clipGlyphToRun: Boolean
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
-      val shapedBefore = shapedText.shapings
-      val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
-      activity.shaped(shapedText.shapings - shapedBefore)
-      shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
+      if shapedText.replaysFaithfully(g.getFont, renderContext) then
+        val shapedBefore = shapedText.shapings
+        val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
+        activity.shaped(shapedText.shapings - shapedBefore)
+        shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
+      else g.drawString(stretch.substring(from, until), xPx, (yPx + ascentPx).toFloat)
     }
 
   override def withFallbackFamily(family: String, ligaturesOn: Boolean)(draw: => Unit): Unit =
