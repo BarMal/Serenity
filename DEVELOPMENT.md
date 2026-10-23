@@ -235,9 +235,16 @@ The startup log names the choice: `[TOOLKIT] Wayland (Wayland session on JetBrai
 
 | Value | Effect |
 | --- | --- |
-| `auto` (or unset) | Native Wayland on JBR in a Wayland session; the JVM's default otherwise |
-| `wayland` | Native Wayland whenever the runtime has it, even without `WAYLAND_DISPLAY` |
+| `auto` (or unset) | Native Wayland on JBR in a Wayland session whose socket connects; the JVM's default otherwise |
+| `wayland` | Native Wayland whenever the runtime has it and the socket connects, even without `WAYLAND_DISPLAY` |
 | `x11` | X11, through XWayland on a Wayland desktop |
+
+Before choosing native Wayland, Serenity connects to the compositor's socket once, the way libwayland does
+(`$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY`, `wayland-0` when unset, an absolute `WAYLAND_DISPLAY` as given; a set
+`WAYLAND_SOCKET` is trusted). If it does not connect, for example a `WAYLAND_DISPLAY` left over from a compositor that has
+exited, the JVM's default toolkit is used instead, even with `SERENITY_TOOLKIT=wayland`, and the startup log says why:
+`[TOOLKIT] PlatformDefault (WAYLAND_DISPLAY is set, but the socket does not connect (/run/user/1000/wayland-1: Connection refused))`.
+Without the check the JetBrains Runtime would try `WLToolkit` anyway and end up headless.
 
 Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
 which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`
