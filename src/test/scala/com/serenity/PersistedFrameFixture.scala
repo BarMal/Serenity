@@ -27,16 +27,16 @@ trait PersistedFrameFixture:
 
   protected def frames: FrameBackend = Java2DFrames
 
-  protected val paneId: PaneId           = PaneId(0)
-  protected val bufferId: BufferId       = BufferId(1)
-  protected val codeFont: Font           = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  protected val textFont: Font           = Font(Font.SERIF, Font.PLAIN, 14)
-  protected val uiFont: Font             = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  protected val cellMetrics: CellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics                  = CellMetrics.fromFont(uiFont)
-  protected val logicalW                 = 900
-  protected val logicalH                 = 600
-  protected val viewport: ViewportSize =
+  protected val paneId: PaneId                = PaneId(0)
+  protected val bufferId: BufferId            = BufferId(1)
+  protected lazy val codeFont: Font           = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  protected val textFont: Font                = Font(Font.SERIF, Font.PLAIN, 14)
+  protected val uiFont: Font                  = Font(Font.SANS_SERIF, Font.PLAIN, 12)
+  protected lazy val cellMetrics: CellMetrics = CellMetrics.fromFont(codeFont)
+  private val uiMetrics                       = CellMetrics.fromFont(uiFont)
+  protected lazy val logicalW: Int            = 900
+  protected lazy val logicalH: Int            = 600
+  protected lazy val viewport: ViewportSize =
     ViewportSize(logicalW / cellMetrics.charWidth, logicalH / cellMetrics.lineHeight)
 
   protected val codeLines: Vector[String] = Vector.tabulate(120)(line => s"line $line")

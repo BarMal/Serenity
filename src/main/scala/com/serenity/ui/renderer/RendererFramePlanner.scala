@@ -297,6 +297,7 @@ object RendererFramePlanner:
       // so they go with the rest of them. `preparedScenes` stays: it is a layout memo, not a promise about pixels, and
       // its own `matches` check is what decides whether it still applies.
       caches.frameState.forgetPreviousFrameState(key)
+      caches.frameState.paintedPanels.forget(key)
     }
     output.foreach { value =>
       caches.frameState.forgetScreenState(value.screenToken)
@@ -404,7 +405,7 @@ object RendererFramePlanner:
 
         val blits = redraws.values.flatMap(_.blits).toList
         val keptPanels =
-          if Damage.isEverything(effectiveDamage) || blits.nonEmpty || PanelLayers.supportFor(state, context).isEmpty ||
+          if Damage.isEverything(effectiveDamage) || blits.nonEmpty || !PanelLayers.canKeep(state, context) ||
               state.runtime.modalStack.nonEmpty
           then Set.empty[SurfaceId]
           else
@@ -415,11 +416,11 @@ object RendererFramePlanner:
                 }
                 .map(RendererChromePlan.withBleed(context)) ++
                 Option.when(chrome.paintsAny)(RendererChromePlan.regions(context, renderPlan)).toList.flatten
+            val frame =
+              PanelReuse.Frame(context.surface.viewportWidth, context.surface.viewportHeight, context.cursorVisible)
             PanelReuse.kept(
               panels,
-              context.caches.frameState.cachedPanelLayersFor(context.surface),
-              persistenceKey,
-              PanelReuse.Frame(context.surface.viewportWidth, context.surface.viewportHeight, context.cursorVisible),
+              PanelLayers.holds(state, context, persistenceKey, frame),
               panelDirtyCheck(damage),
               repainted,
               context.caches.frameState.previousFloatingSurfaceRectsFor(persistenceKey)
