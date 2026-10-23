@@ -32,7 +32,13 @@ jobs:
           curl -fsSL -o jbr.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbr-${VER}-linux-x64-b${BUILD}.tar.gz"
           mkdir jbr && tar -xzf jbr.tgz -C jbr
           echo "JBR=$(ls -d $PWD/jbr/*)" >> "$GITHUB_ENV"
-          mkdir -p classes && javac -d classes bench/debug-wl/*.java
+          TAG25="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq '[.[] | select(.tagName | startswith("jbr-release-25"))] | sort_by(.publishedAt) | last | .tagName')"
+          VER25="$(echo "$TAG25" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD25="$(echo "$TAG25" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          curl -fsSL -o jbr25.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbr-${VER25}-linux-x64-b${BUILD25}.tar.gz"
+          mkdir jbr25 && tar -xzf jbr25.tgz -C jbr25
+          echo "JBR25=$(ls -d $PWD/jbr25/*)" >> "$GITHUB_ENV"
+          echo "JBR 21 tag $TAG / JBR 25 tag $TAG25"
+          mkdir -p classes && javac --release 21 -d classes bench/debug-wl/*.java
         env:
           GH_TOKEN: ${{ github.token }}
       - name: Wayland sessions at several scales
@@ -51,7 +57,8 @@ jobs:
             echo "######## sway output scale $s"
             echo "--- WlProbe (pure-JDK Wayland registry + xdg-output probe)"; java -cp classes WlProbe || true
             for tk in WLToolkit auto; do
-              echo "--- JBR awt.toolkit.name=$tk"; timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=$tk -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+              echo "--- JBR21 awt.toolkit.name=$tk"; timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=$tk -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+              echo "--- JBR25 awt.toolkit.name=$tk"; timeout 60 "$JBR25/bin/java" -Dawt.toolkit.name=$tk -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
             done
             echo "--- JBR default toolkit (no property), WAYLAND_DISPLAY set"; timeout 60 "$JBR/bin/java" -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
             echo "--- Temurin through XWayland"

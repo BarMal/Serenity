@@ -54,6 +54,13 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
+          java-version: '25'
+      - name: Remember Temurin 25
+        shell: bash
+        run: echo "T25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
           java-version: '21'
       - uses: actions/download-artifact@v4
         with:
@@ -81,6 +88,22 @@ jobs:
             else
               echo "no download for $flavour ($name)" | tee -a jbr-assets.txt
             fi
+          done
+      - name: Fetch JBR 25
+        shell: bash
+        run: |
+          set -uo pipefail
+          TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq '[.[] | select(.tagName | startswith("jbr-release-25"))] | sort_by(.publishedAt) | last | .tagName')"
+          echo "JBR25 tag: $TAG"; echo "$TAG" > jbr25-tag.txt
+          gh release view "$TAG" -R JetBrains/JetBrainsRuntime --json publishedAt --jq .publishedAt | tee -a jbr-assets.txt
+          VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          mkdir -p jbr25
+          for flavour in jbrsdk jbr; do
+            name="${flavour}-${VER}-${PLAT}-b${BUILD}.tar.gz"
+            if curl -fsSL -o "jbr25/$name" "https://cache-redirector.jetbrains.com/intellij-jbr/$name"; then
+              mkdir -p "jbr25/$flavour"; tar -xzf "jbr25/$name" -C "jbr25/$flavour"
+              echo "JBR25 $flavour -> $name ($(du -k "jbr25/$name" | awk '{printf "%.1f MB", $1/1024}') download)" | tee -a jbr-assets.txt
+            else echo "no download for JBR25 $flavour ($name)" | tee -a jbr-assets.txt; fi
           done
       - name: Measure
         shell: bash
@@ -141,6 +164,10 @@ jobs:
               jh="$(home_of "jbr/$flavour")"
               if [ -n "$jh" ]; then run_one "$flavour" "$jh"; else say "=== $flavour: no bin/java found"; fi
             fi
+          done
+          run_one temurin25 "$T25"
+          for flavour in jbrsdk; do
+            if [ -d "jbr25/$flavour" ]; then jh="$(home_of "jbr25/$flavour")"; [ -n "$jh" ] && run_one "jbr25-$flavour" "$jh"; fi
           done
           echo "---- assets"; cat jbr-assets.txt | tee -a "$report"
           echo "JBR tag: $(cat jbr-tag.txt)" | tee -a "$report"
