@@ -5,6 +5,7 @@ import java.awt.{Color, Font as AwtFont, RenderingHints}
 import java.lang.management.ManagementFactory
 import java.nio.{ByteBuffer, ByteOrder}
 
+import org.jetbrains.skia.impl.BufferUtil
 import org.jetbrains.skia.{
   Bitmap,
   BlendMode,
@@ -28,11 +29,6 @@ import org.jetbrains.skia.{
 private[perf] object SkiaCostProbe:
 
   private val bean = ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]
-
-  private val unsafe =
-    val field = classOf[sun.misc.Unsafe].getDeclaredField("theUnsafe")
-    field.setAccessible(true)
-    field.get(null).asInstanceOf[sun.misc.Unsafe]
 
   final case class Cost(ms: Double, allocMb: Double)
 
@@ -111,10 +107,10 @@ private[perf] object SkiaCostProbe:
         row += 1
     }
 
-  /** The floor: straight from the surface's own memory into the image's array, no intermediate at all. Uses
-    * `sun.misc.Unsafe`, so it shows what the best case costs, not something to ship as is.
+  /** The floor: straight from the surface's own memory into the image's array, through a direct buffer over it with no
+    * intermediate at all. This is the route `RasterFrames.copyInto` takes.
     */
-  private def peekedCopyInto(
+  private def mappedCopyInto(
     surface: Surface,
     pixmap: Pixmap,
     image: BufferedImage,
@@ -125,17 +121,14 @@ private[perf] object SkiaCostProbe:
   ): Unit =
     if surface.peekPixels(pixmap) then
       val data     = image.getRaster.getDataBuffer.asInstanceOf[DataBufferInt].getData
-      val rowBytes = pixmap.getRowBytes.toLong
-      val base     = pixmap.getAddr
-      var row      = 0
+      val rowBytes = pixmap.getRowBytes
+      val ints = BufferUtil.INSTANCE
+        .getByteBufferFromPointer(pixmap.getAddr, rowBytes * surface.getHeight)
+        .order(ByteOrder.LITTLE_ENDIAN)
+        .asIntBuffer()
+      var row = 0
       while row < height do
-        unsafe.copyMemory(
-          null,
-          base + (top + row) * rowBytes + left * 4L,
-          data,
-          sun.misc.Unsafe.ARRAY_INT_BASE_OFFSET.toLong + ((top + row).toLong * image.getWidth + left) * 4L,
-          width * 4L
-        )
+        ints.get((top + row) * (rowBytes / 4) + left, data, (top + row) * image.getWidth + left, width)
         row += 1
 
   /** Public API only: the surface's own memory is viewed as a `Data` and `rowsPerRead` rows are copied out at a time.
@@ -282,7 +275,7 @@ private[perf] object SkiaCostProbe:
             bufferedCopyInto(surface, pixmap, image, l, t, w, h, n)
           )
         )
-        measure(s"peeked    (Unsafe)   $label", 40)(peekedCopyInto(surface, pixmap, image, l, t, w, h))
+        measure(s"mapped    (BufferUtil) $label", 40)(mappedCopyInto(surface, pixmap, image, l, t, w, h))
     }
 
   private def reusedBufferProbe(rig: Rig): Unit =
@@ -357,12 +350,6 @@ private[perf] object SkiaCostProbe:
     measure("kept      readPixels(kept bitmap) + writePixels", 40) {
       surface.readPixels(scratch, sl, st)
       surface.writePixels(scratch, sl, st - 6)
-    }
-    measure("peeked    memmove inside the surface (Unsafe)", 40) {
-      if surface.peekPixels(pixmap) then
-        val rowBytes = pixmap.getRowBytes.toLong
-        val base     = pixmap.getAddr
-        unsafe.copyMemory(base + (st.toLong) * rowBytes, base + (st - 6).toLong * rowBytes, sh.toLong * rowBytes)
     }
     measure("java2d    System.arraycopy rows inside the int[]", 40) {
       val data = image.getRaster.getDataBuffer.asInstanceOf[DataBufferInt].getData

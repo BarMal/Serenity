@@ -76,7 +76,7 @@ class RasterFramesSpec extends AnyFlatSpec with Matchers:
     }
 
   for (label, colorType) <- List("BGRA" -> ColorType.BGRA_8888, "RGBA" -> ColorType.RGBA_8888) do
-    s"Copying out of a $label surface" should "allocate little more than the pixels it copies" in {
+    s"Copying out of a $label surface" should "allocate next to nothing" in {
       val info    = ImageInfo(width, height, colorType, ColorAlphaType.PREMUL, ColorSpace.Companion.getSRGB())
       val surface = Surface.Companion.makeRaster(info)
       surface.getCanvas.clear(0xff1e3c5a)
@@ -88,7 +88,7 @@ class RasterFramesSpec extends AnyFlatSpec with Matchers:
       val before = bean.getThreadAllocatedBytes(thread)
       (1 to 20).foreach(_ => RasterFrames.copyInto(surface, image, area))
       val perCopy = (bean.getThreadAllocatedBytes(thread) - before) / 20
-      perCopy should be <= (width * height * 4L * 5 / 4 + 32 * 1024)
+      perCopy should be <= (8 * 1024L)
     }
 
   "A surface for a frame" should "be BGRA whatever the platform's native 32-bit format is" in {
@@ -97,17 +97,4 @@ class RasterFramesSpec extends AnyFlatSpec with Matchers:
     surface.peekPixels(pixmap) shouldBe true
     pixmap.getInfo.getColorType shouldBe ColorType.BGRA_8888
     pixmap.close()
-  }
-
-  it should "read in chunks that stay well under the size of a humongous allocation" in
-    List(301, 1920, 3840, 5120, 8192).foreach { surfaceWidth =>
-      List(1, surfaceWidth / 4, surfaceWidth / 2, surfaceWidth).foreach { areaWidth =>
-        val rows = RasterFrames.rowsPerRead(areaWidth, surfaceWidth)
-        rows should be >= 1
-        ((rows - 1).toLong * surfaceWidth * 4 + areaWidth * 4L) should be <= 256L * 1024
-      }
-    }
-
-  it should "read a narrow area a row at a time" in {
-    RasterFrames.rowsPerRead(10, 3840) shouldBe 1
   }

@@ -1,10 +1,11 @@
 package com.serenity.ui.skia
 
 import java.awt.image.{BufferedImage, DataBufferInt}
-import java.nio.{ByteBuffer, ByteOrder}
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
+import org.jetbrains.skia.impl.BufferUtil
 import org.jetbrains.skia.{ColorType, ImageInfo, Pixmap, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
@@ -91,17 +92,6 @@ object RasterFrames:
   def copyWhole(surface: Surface, image: BufferedImage): Unit =
     copyInto(surface, image, DeviceArea(0, 0, image.getWidth, image.getHeight))
 
-  /** A read is a chunk of rows of the surface, copied into one array of about this size: a frame is copied out in many
-    * small allocations that G1 never has to treat as humongous, instead of two arrays the size of the frame.
-    */
-  private val ChunkBytes = 256 * 1024
-
-  /** A wide area reads several full rows at a time; a narrow one reads its own columns a row at a time, so a read never
-    * carries many more bytes than the area has.
-    */
-  private[skia] def rowsPerRead(areaWidthPx: Int, surfaceWidthPx: Int): Int =
-    if areaWidthPx * 2 >= surfaceWidthPx then (ChunkBytes / (surfaceWidthPx * 4)).max(1) else 1
-
   /** A surface of any other 32-bit order than BGRA holds its pixels as ABGR ints. */
   @annotation.tailrec
   private def swapRedBlue(ints: Array[Int], index: Int, end: Int): Unit =
@@ -110,37 +100,32 @@ object RasterFrames:
       ints(index) = (argb & 0xff00ff00) | ((argb & 0xff) << 16) | ((argb >>> 16) & 0xff)
       swapRedBlue(ints, index + 1, end)
 
+  /** The surface's own memory is viewed as a direct buffer and read straight into the image's array, so a copy
+    * allocates nothing the size of what it copies: no array a read of Skia's `Data` fills, and none to put it in the
+    * image from.
+    */
   private[skia] def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
     val pixmap = Pixmap()
     try
       if surface.peekPixels(pixmap) then
-        val pixels = pixmap.getBuffer
-        try
-          val rowBytes = pixmap.getRowBytes
-          val rows     = rowsPerRead(area.width, surface.getWidth)
-          val ints     = rowBytes / 4
-          val target = image.getRaster.getDataBuffer match
-            case int: DataBufferInt => Some(int.getData)
-            case _                  => None
-          val line = new Array[Int](if target.isEmpty then area.width else 0)
-          val rgba = pixmap.getInfo.getColorType == ColorType.RGBA_8888
-          (0 until area.height by rows).foreach { first =>
-            val count = rows.min(area.height - first)
-            val raw =
-              pixels.getBytes((area.top + first) * rowBytes + area.left * 4, (count - 1) * rowBytes + area.width * 4)
-            val read = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
-            (0 until count).foreach { row =>
-              val y = area.top + first + row
-              target match
-                case Some(data) =>
-                  val start = y * image.getWidth + area.left
-                  read.get(row * ints, data, start, area.width)
-                  if rgba then swapRedBlue(data, start, start + area.width)
-                case None =>
-                  read.get(row * ints, line, 0, area.width)
-                  if rgba then swapRedBlue(line, 0, area.width)
-                  image.setRGB(area.left, y, area.width, 1, line, 0, area.width)
+        val rowBytes = pixmap.getRowBytes
+        val view = BufferUtil.INSTANCE
+          .getByteBufferFromPointer(pixmap.getAddr, rowBytes * surface.getHeight)
+          .order(ByteOrder.LITTLE_ENDIAN)
+          .asIntBuffer()
+        val rgba = pixmap.getInfo.getColorType == ColorType.RGBA_8888
+        image.getRaster.getDataBuffer match
+          case target: DataBufferInt =>
+            (area.top until area.top + area.height).foreach { y =>
+              val start = y * image.getWidth + area.left
+              view.get(y * (rowBytes / 4) + area.left, target.getData, start, area.width)
+              if rgba then swapRedBlue(target.getData, start, start + area.width)
             }
-          }
-        finally pixels.close()
+          case _ =>
+            val line = new Array[Int](area.width)
+            (area.top until area.top + area.height).foreach { y =>
+              view.get(y * (rowBytes / 4) + area.left, line, 0, area.width)
+              if rgba then swapRedBlue(line, 0, area.width)
+              image.setRGB(area.left, y, area.width, 1, line, 0, area.width)
+            }
     finally pixmap.close()
