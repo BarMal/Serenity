@@ -246,6 +246,48 @@ class ShapedTextPaintSpec extends AnyFlatSpec with Matchers:
         }
     }
 
+  "A run in a font whose replay is not faithful" should "be drawn by drawString, with nothing shaped" in
+    representativeLines.foreach {
+      case (name, text) =>
+        val expected = paintedWith(ShapedTextCache()) { surface =>
+          surface.drawRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text)
+        }
+        val cache  = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
+        val actual = paintedWith(cache) { surface =>
+          surface.drawShapedRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text, 0, text.length)
+        }
+
+        withClue(s"$name: ") {
+          cache.shapings shouldBe 0L
+          differingPixels(actual, expected).take(6) shouldBe Nil
+        }
+    }
+
+  it should "draw only its own part of the line when the line is split into runs" in {
+    val text     = "AVAWAY To the office, fi ffl waffle"
+    val split    = text.indexOf(' ', text.length / 2) + 1
+    val cache    = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => false))
+    val expected = paintedWith(ShapedTextCache()) { surface =>
+      surface.drawRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text.substring(0, split))
+    }
+    val actual = paintedWith(cache) { surface =>
+      surface.drawShapedRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text, 0, split)
+    }
+
+    differingPixels(actual, expected).take(6) shouldBe Nil
+  }
+
+  "A run in a font whose replay is faithful" should "still be drawn from the shaped glyphs" in {
+    val text  = "AVAWAY To the office, fi ffl waffle"
+    val cache = ShapedTextCache(replayCheck = GlyphReplayCheck((_, _) => true))
+
+    val _ = paintedWith(cache) { surface =>
+      surface.drawShapedRunPx(4.0f, 4, 560.0f, metrics.lineHeight, metrics.ascent, text, 0, text.length)
+    }
+
+    cache.shapings shouldBe 1L
+  }
+
   private val kernedInter    = kerned(BundledInterFont.plain(14f))
   private val ligaturedInter = kerned(BundledInterFont.ligatured(14f))
 
