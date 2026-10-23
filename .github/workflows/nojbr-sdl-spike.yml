@@ -61,6 +61,13 @@ jobs:
           export VPTR="$PWD/vptr"
           mkdir -p out
           bash bench/nojbr/sdl/run_sdl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/${{ matrix.name }}" "${{ matrix.mode }}" "${{ matrix.scale }}" "${{ matrix.debug }}" 2>&1 | tee "out/${{ matrix.name }}.txt"
+      - name: Summary (gates)
+        if: always()
+        run: |
+          echo "=== SUMMARY ${{ matrix.name }} ==="
+          grep -E 'JAVA |DRIVER|SCALE|SURFACE|GATE1|GATE5|GATE6|GATE4 mouse|TIMING|COEXIST|SKIA|FAIL|WARN|WIRE count|WIRE set_shape|WIRE sample|sway outputs|text_editing|key down=true repeat=true' "out/${{ matrix.name }}.txt" | grep -v 'repeat=true scancode' | sed -E 's/^[0-9TZ:.-]+ //' || true
+          echo "repeat key events: $(grep -c 'repeat=true' "out/${{ matrix.name }}.txt")"
+          echo "=== END SUMMARY ==="
       - name: Footprint (gate 7)
         if: matrix.name == '1080p-s1'
         run: |

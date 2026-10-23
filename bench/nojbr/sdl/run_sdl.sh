@@ -101,7 +101,7 @@ await '^DONE' 20
 sleep 1
 
 echo "[$LABEL] GATE4 events (key/text/mouse/clipboard):"
-grep -E '^EV ' "$OUT/app.log" | grep -vE 'mouse_motion' | head -60 | sed "s/^/[$LABEL]   /"
+grep -E '^EV ' "$OUT/app.log" | grep -vE 'mouse_motion|repeat=true' | head -40 | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] GATE4 mouse_button count: $(grep -c 'mouse_button' "$OUT/app.log")"
 echo "[$LABEL] GATE4 mouse_motion count: $(grep -c 'mouse_motion' "$OUT/app.log")  wheel count: $(grep -c 'mouse_wheel' "$OUT/app.log")  repeat-key count: $(grep -c 'repeat=true' "$OUT/app.log")"
 if [ "$DEBUG" = 1 ]; then
