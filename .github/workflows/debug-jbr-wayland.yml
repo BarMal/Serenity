@@ -61,10 +61,13 @@ jobs:
               echo "--- JBR25 awt.toolkit.name=$tk"; timeout 60 "$JBR25/bin/java" -Dawt.toolkit.name=$tk -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
             done
             echo "--- JBR default toolkit (no property), WAYLAND_DISPLAY set"; timeout 60 "$JBR/bin/java" -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
-            echo "--- Temurin through XWayland"
-            export DISPLAY="$(grep -o ':[0-9]*' sway.log | head -1)"; echo "DISPLAY=${DISPLAY:-unset}"
-            timeout 60 java -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
-            unset DISPLAY
+            echo "--- through XWayland (rootful :90): Temurin 21, then JBR 21 XToolkit, then JBR 25 XToolkit"
+            Xwayland :90 -geometry 1280x720 > xwl.log 2>&1 &
+            xw=$!; sleep 3
+            DISPLAY=:90 timeout 60 java -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            DISPLAY=:90 timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=XToolkit -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            DISPLAY=:90 timeout 60 "$JBR25/bin/java" -Dawt.toolkit.name=XToolkit -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            kill $xw 2>/dev/null; sleep 1
           done
           echo "--- sway log tail"; tail -5 sway.log
       - name: Control, no Wayland (Xvfb)
@@ -90,7 +93,7 @@ jobs:
             export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
             sway > sway2.log 2>&1 & sleep 4
             export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
-            "$JBR/bin/java" -Dawt.toolkit.name=WLToolkit $ATK A11yApp 15000 > a11y-app.log 2>&1 &
+            "${A11Y_JBR:-$JBR}/bin/java" -Dawt.toolkit.name=WLToolkit $ATK A11yApp 15000 > a11y-app.log 2>&1 &
           fi
           sleep 6
           echo "--- AT-SPI tree ($MODE)"; python3 bench/debug-wl/atspi_list.py 2>&1 | head -40
@@ -98,6 +101,7 @@ jobs:
           kill %1 2>/dev/null; pkill -f A11yApp; pkill sway; pkill Xvfb; true
           INNER
           for mode in x wl; do echo "################ $mode"; MODE=$mode dbus-run-session -- bash a11y.sh 2>&1 | grep -v "Picked up"; done
+          echo "################ wl with JBR 25"; A11Y_JBR="$JBR25" MODE=wl dbus-run-session -- bash a11y.sh 2>&1 | grep -v "Picked up"
       - name: Report
         if: always()
         run: echo done
