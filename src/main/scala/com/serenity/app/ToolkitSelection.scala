@@ -16,6 +16,9 @@ object ToolkitSelection:
   val OverrideVariable: String = "SERENITY_TOOLKIT"
   val ToolkitProperty: String  = "awt.toolkit.name"
 
+  /** The values `SERENITY_TOOLKIT` takes; anything else stops the launch (see [[LaunchEnvironment]]). */
+  val Accepted: List[String] = List("auto", "x11", "wayland")
+
   private val WaylandToolkitClassFile = "sun/awt/wl/WLToolkit.class"
 
   enum Choice(val toolkitProperty: Option[String]):
@@ -29,7 +32,8 @@ object ToolkitSelection:
       osName: String,
       properties: Map[String, String],
       env: Map[String, String],
-      waylandToolkitAvailable: Boolean
+      waylandToolkitAvailable: Boolean,
+      xwaylandForSkia: Boolean = false
   )
 
   def choose(environment: Environment): Decision =
@@ -55,7 +59,9 @@ object ToolkitSelection:
 
   private def detected(environment: Environment, note: String): Decision =
     val waylandSession = environment.env.get("WAYLAND_DISPLAY").exists(_.trim.nonEmpty)
-    if waylandSession && environment.waylandToolkitAvailable then
+    if waylandSession && environment.waylandToolkitAvailable && environment.xwaylandForSkia then
+      Decision(Choice.X11, s"ui.render.wayland=xwayland: Skia needs X11$note")
+    else if waylandSession && environment.waylandToolkitAvailable then
       Decision(Choice.Wayland, s"Wayland session on ${vendor(environment)}$note")
     else if waylandSession then
       Decision(Choice.PlatformDefault, s"Wayland session, but ${vendor(environment)} has no WLToolkit$note")
@@ -79,7 +85,7 @@ object ToolkitSelection:
     }
 
   /** Must run before the first `java.awt` class is touched. */
-  def install: IO[Decision] =
-    currentEnvironment
-      .map(choose)
-      .flatTap(decision => IO(decision.choice.toolkitProperty.foreach(System.setProperty(ToolkitProperty, _))).void)
+  def install: IO[Decision] = currentEnvironment.map(choose).flatTap(apply)
+
+  def apply(decision: Decision): IO[Unit] =
+    IO(decision.choice.toolkitProperty.foreach(System.setProperty(ToolkitProperty, _))).void

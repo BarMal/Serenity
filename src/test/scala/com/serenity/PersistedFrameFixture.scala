@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.{AppConfig, TextAreaInsets}
@@ -11,23 +10,22 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.FrameMismatchDump
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
-import com.serenity.ui.renderer.{
-  EditorPaneRenderPlan,
-  FrameOutput,
-  Java2DRenderSurface,
-  RendererFramePlanner,
-  ScreenIdentity
-}
+import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RenderSurface, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
 import org.scalatest.matchers.should.Matchers
 
 /** A window's frame loop at the laptop's device scale, for specs that compare what a damaged frame leaves in a
   * persisting image with a frame drawn from scratch: two pooled images drawn in turn, as `SwingWindow` alternates them.
+  *
+  * Which renderer paints the frames is [[frames]]: Java2D unless a spec overrides it, so one body of assertions runs
+  * against every [[RenderSurface]] that claims to persist and copy pixels.
   */
 trait PersistedFrameFixture:
   self: Matchers =>
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+
+  protected def frames: FrameBackend = Java2DFrames
 
   protected val paneId: PaneId           = PaneId(0)
   protected val bufferId: BufferId       = BufferId(1)
@@ -100,25 +98,8 @@ trait PersistedFrameFixture:
       )
     )
 
-  private def surfaceOver(
-    image: BufferedImage,
-    scale: Double,
-    persists: Boolean,
-    caches: RenderCaches
-  ): Java2DRenderSurface =
-    new Java2DRenderSurface(
-      image,
-      cellMetrics,
-      codeFont,
-      _ => (),
-      logicalWidthPx = logicalW,
-      logicalHeightPx = logicalH,
-      deviceScaleX = scale,
-      deviceScaleY = scale,
-      contentPersists = persists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(image)),
-      textCaches = caches.surfaceText
-    )
+  private def surfaceOver(frame: FramePixels, scale: Double, persists: Boolean, caches: RenderCaches): RenderSurface =
+    frames.surfaceOver(frame, cellMetrics, codeFont, logicalW, logicalH, scale, persists, caches)
 
   final protected class Session(scale: Double = 2.0):
     private val caches = RenderCaches.create()
@@ -126,15 +107,9 @@ trait PersistedFrameFixture:
     caches.frameCounters.setEnabled(true)
 
     private val pool =
-      Vector.fill(2)(
-        new BufferedImage(
-          deviceSize(logicalW, scale),
-          deviceSize(logicalH, scale),
-          BufferedImage.TYPE_INT_RGB
-        )
-      )
+      Vector.fill(2)(frames.newFrame(deviceSize(logicalW, scale), deviceSize(logicalH, scale)))
 
-    private val frames = new AtomicInteger(0)
+    private val drawn  = new AtomicInteger(0)
     private val region = new AtomicReference[Option[List[PixelRect]]](None)
 
     /** The pixel region the last frame bounded its present to, `None` when it asked for the whole canvas. */
@@ -144,11 +119,11 @@ trait PersistedFrameFixture:
     def lastFrame: FrameCounts = caches.frameCounters.lastFrame
 
     /** The image the next frame draws into, which holds the frame before the last. */
-    def pendingImage: BufferedImage = pool(frames.get() % pool.size)
+    def pendingImage: FramePixels = pool(drawn.get() % pool.size)
 
-    def draw(state: AppState, damage: Damage): (BufferedImage, EditorPaneRenderPlan) =
+    def draw(state: AppState, damage: Damage): (FramePixels, EditorPaneRenderPlan) =
       val image = pendingImage
-      frames.incrementAndGet()
+      drawn.incrementAndGet()
       val plan = RendererFramePlanner
         .renderFrame(
           state,
@@ -175,8 +150,8 @@ trait PersistedFrameFixture:
       val _         = draw(state, Damage.Nothing)
       plan
 
-  protected def cold(state: AppState, scale: Double = 2.0): BufferedImage =
-    val image  = new BufferedImage(deviceSize(logicalW, scale), deviceSize(logicalH, scale), BufferedImage.TYPE_INT_RGB)
+  protected def cold(state: AppState, scale: Double = 2.0): FramePixels =
+    val image  = frames.newFrame(deviceSize(logicalW, scale), deviceSize(logicalH, scale))
     val caches = RenderCaches.create()
     val _ = RendererFramePlanner.renderFrame(
       state,
@@ -196,13 +171,15 @@ trait PersistedFrameFixture:
     )
     image
 
-  protected def differingPixels(a: BufferedImage, b: BufferedImage): Seq[(Int, Int)] =
+  protected def differingPixels(a: FramePixels, b: FramePixels): Seq[(Int, Int)] =
+    val left  = a.rgbPixels
+    val right = b.rgbPixels
     val differing =
       for
-        x <- 0 until a.getWidth
-        y <- 0 until a.getHeight
-        if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
+        y <- 0 until a.heightPx
+        x <- 0 until a.widthPx
+        if (left(y * a.widthPx + x) & 0xffffff) != (right(y * b.widthPx + x) & 0xffffff)
       yield (x, y)
     if differing.nonEmpty then
-      val _ = FrameMismatchDump.write(getClass.getSimpleName, a, b, differing)
+      val _ = FrameMismatchDump.write(getClass.getSimpleName, a.toImage, b.toImage, differing)
     differing
