@@ -29,9 +29,11 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '25' }
       - name: Install
+        timeout-minutes: 10
+        env: { DEBIAN_FRONTEND: noninteractive, NEEDRESTART_MODE: a }
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard python3-pil gcc libc6-dev libwayland-dev wayland-protocols adwaita-icon-theme
+          sudo -E apt-get update -q
+          sudo -E apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard python3-pil gcc libc6-dev libwayland-dev wayland-protocols adwaita-icon-theme
       - name: Fetch jars and build the virtual pointer
         run: |
           set -euo pipefail
@@ -88,9 +90,11 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '25' }
       - name: Install
+        timeout-minutes: 12
+        env: { DEBIAN_FRONTEND: noninteractive, NEEDRESTART_MODE: a }
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme
+          sudo -E apt-get update -q
+          sudo -E apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme
       - name: Fetch jars
         run: |
           set -euo pipefail
