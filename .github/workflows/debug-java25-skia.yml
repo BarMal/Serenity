@@ -18,9 +18,6 @@ jobs:
       matrix:
         include:
           - { label: temurin25-linux, os: ubuntu-latest, java: '25' }
-          - { label: temurin21-linux, os: ubuntu-latest, java: '21' }
-          - { label: temurin25-windows, os: windows-latest, java: '25' }
-          - { label: temurin25-macos, os: macos-latest, java: '25' }
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,3 +44,5 @@ jobs:
         run: |
           echo "SKIA ${{ matrix.label }}"
           sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -E "Run completed in|Total number of tests|Tests: succeeded|All tests passed|TESTS FAILED|Total time:|^\[error\]|^WARNING|FAILED \*\*\*" | sort | uniq -c | sort -rn | head -n 40
+          echo "WARN/ERROR LINES:"
+          sed 's/\x1b\[[0-9;]*m//g' skia.log | grep -nE "\[warn\]|\[error\]" | cut -c1-400 | head -n 60
