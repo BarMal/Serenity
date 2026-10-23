@@ -36,8 +36,12 @@ echo "[$LABEL] fcitx5 running: $(kill -0 $FC 2>/dev/null && echo yes || echo NO)
 SDL_VIDEO_DRIVER=wayland "$JAVA" --enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -Dspike.mode=ime -cp "$CP" SdlSpike "$OUT" 1 > "$OUT/app.log" 2> "$OUT/wire.log" &
 APP=$!
 for i in $(seq 1 300); do grep -q '^PHASE ime-ready' "$OUT/app.log" 2>/dev/null && break; sleep 0.2; done
-wtype -s 800 -M shift -m shift > /dev/null 2>&1 &   # create the virtual keyboard, give focus time to settle
-wtype -s 600 -M shift -m shift ; sleep 1
+# A held virtual keyboard gives the seat its keyboard (and the window its focus) before any text is typed.
+wtype -s 600000 > "$OUT/anchor.log" 2>&1 &
+ANCHOR=$!
+for i in $(seq 1 100); do grep -q 'window_focus_gained' "$OUT/app.log" 2>/dev/null && break; sleep 0.2; done
+echo "[$LABEL] window focused: $(grep -c window_focus_gained "$OUT/app.log")"
+sleep 1
 fcitx5-remote -s pinyin >/dev/null 2>&1
 for i in $(seq 1 15); do fcitx5-remote -o >/dev/null 2>&1; st="$(fcitx5-remote 2>&1)"; [ "$st" = 2 ] && break; sleep 1; done
 echo "[$LABEL] fcitx5-remote state after retries: $st (2 = input method active, 1 = inactive)"
@@ -50,4 +54,4 @@ grep -E ' (text_editing|text_input|text_editing_candidates)' "$OUT/app.log" | se
 echo "[$LABEL] fcitx5 log tail:"; tail -n 8 "$OUT/fcitx5.log" | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] key events: $(grep -c ' key down' "$OUT/app.log")"
 echo "[$LABEL] input-method wire: $(grep -cE 'zwp_text_input_v3@[0-9]+\.(preedit_string|commit_string|done)' "$OUT/wire.log")"
-kill $APP $FC >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; kill $DBUS_SESSION_BUS_PID >/dev/null 2>&1 || true
+kill $ANCHOR $APP $FC >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; kill $DBUS_SESSION_BUS_PID >/dev/null 2>&1 || true
