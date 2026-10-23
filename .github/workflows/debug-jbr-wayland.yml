@@ -1,0 +1,96 @@
+name: Debug JBR Wayland
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-jbr-measure
+
+permissions:
+  contents: read
+
+jobs:
+  wayland:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install a compositor, AT-SPI and the Java ATK wrapper
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway xwayland xvfb wayland-utils at-spi2-core libatk-wrapper-java libatk-wrapper-java-jni python3-gi gir1.2-atspi-2.0 dbus-x11 libglib2.0-bin xdotool
+          ls /usr/share/java | grep -i atk || true
+          find /usr/lib -name 'libatk-wrapper*' | head
+      - name: Fetch and compile
+        run: |
+          set -euo pipefail
+          TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 200 --json tagName,publishedAt --jq '[.[] | select(.tagName | startswith("jbr-release-21"))] | sort_by(.publishedAt) | last | .tagName')"
+          VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          curl -fsSL -o jbr.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbr-${VER}-linux-x64-b${BUILD}.tar.gz"
+          mkdir jbr && tar -xzf jbr.tgz -C jbr
+          echo "JBR=$(ls -d $PWD/jbr/*)" >> "$GITHUB_ENV"
+          mkdir -p classes && javac -d classes bench/debug-wl/*.java
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Wayland sessions at several scales
+        continue-on-error: true
+        run: |
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+          export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
+          printf 'output HEADLESS-1 mode 1920x1080 scale 1.5\n' > sway.conf
+          (sway -c sway.conf > sway.log 2>&1 &)
+          sleep 4
+          export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
+          export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
+          echo "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"; wayland-info | grep -E "wp_fractional|zxdg_output_manager|zwp_text_input|wp_viewporter|wl_output|xdg_wm_base" || true
+          for s in 1 1.5 2; do
+            swaymsg "output HEADLESS-1 scale $s" > /dev/null; sleep 1
+            echo "######## sway output scale $s"
+            echo "--- WlProbe (pure-JDK Wayland registry + xdg-output probe)"; java -cp classes WlProbe || true
+            for tk in WLToolkit auto; do
+              echo "--- JBR awt.toolkit.name=$tk"; timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=$tk -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            done
+            echo "--- JBR default toolkit (no property), WAYLAND_DISPLAY set"; timeout 60 "$JBR/bin/java" -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            echo "--- Temurin through XWayland"
+            export DISPLAY="$(grep -o ':[0-9]*' sway.log | head -1)"; echo "DISPLAY=${DISPLAY:-unset}"
+            timeout 60 java -cp classes AwtProbe 2>&1 | grep -v "Picked up" || true
+            unset DISPLAY
+          done
+          echo "--- sway log tail"; tail -5 sway.log
+      - name: Control, no Wayland (Xvfb)
+        continue-on-error: true
+        run: |
+          env -u WAYLAND_DISPLAY xvfb-run -a bash -c 'echo "--- JBR auto without Wayland"; timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=auto -cp classes AwtProbe 2>&1 | grep -v "Picked up"; echo "--- JBR WLToolkit without Wayland"; timeout 60 "$JBR/bin/java" -Dawt.toolkit.name=WLToolkit -cp classes AwtProbe 2>&1 | grep -v "Picked up" | head -8'
+      - name: AT-SPI, XToolkit versus WLToolkit
+        continue-on-error: true
+        run: |
+          cat > a11y.sh <<'INNER'
+          set -u
+          export XDG_RUNTIME_DIR="$RUNNER_TEMP/xdg2"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
+          /usr/libexec/at-spi-bus-launcher --launch-immediately > atspi-launcher.log 2>&1 &
+          sleep 2
+          busctl --user set-property org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled b true
+          echo "IsEnabled: $(busctl --user get-property org.a11y.Bus /org/a11y/bus org.a11y.Status IsEnabled)"
+          echo "ScreenReaderEnabled: $(busctl --user get-property org.a11y.Bus /org/a11y/bus org.a11y.Status ScreenReaderEnabled)"
+          ATK="-Djavax.accessibility.assistive_technologies=org.GNOME.Accessibility.AtkWrapper -cp /usr/share/java/java-atk-wrapper.jar:classes -Djava.library.path=/usr/lib/x86_64-linux-gnu/jni"
+          if [ "$MODE" = x ]; then
+            Xvfb :77 -screen 0 1280x800x24 > xvfb.log 2>&1 & sleep 2
+            DISPLAY=:77 "$JBR/bin/java" -Dawt.toolkit.name=XToolkit $ATK A11yApp 15000 > a11y-app.log 2>&1 &
+          else
+            export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
+            sway > sway2.log 2>&1 & sleep 4
+            export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
+            "$JBR/bin/java" -Dawt.toolkit.name=WLToolkit $ATK A11yApp 15000 > a11y-app.log 2>&1 &
+          fi
+          sleep 6
+          echo "--- AT-SPI tree ($MODE)"; python3 bench/debug-wl/atspi_list.py 2>&1 | head -40
+          echo "--- app log"; head -15 a11y-app.log
+          kill %1 2>/dev/null; pkill -f A11yApp; pkill sway; pkill Xvfb; true
+          INNER
+          for mode in x wl; do echo "################ $mode"; MODE=$mode dbus-run-session -- bash a11y.sh 2>&1 | grep -v "Picked up"; done
+      - name: Report
+        if: always()
+        run: echo done

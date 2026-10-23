@@ -145,6 +145,12 @@ jobs:
           echo "---- assets"; cat jbr-assets.txt | tee -a "$report"
           echo "JBR tag: $(cat jbr-tag.txt)" | tee -a "$report"
           cat "$report" >> "$GITHUB_STEP_SUMMARY"
+      - name: Report as an annotation
+        if: always()
+        shell: bash
+        run: |
+          body="$(sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g' measure-report.txt)"
+          echo "::notice title=report-$PLAT::$body"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
