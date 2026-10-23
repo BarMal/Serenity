@@ -222,7 +222,7 @@ object RendererCursorOverlay:
           uiMetrics,
           caches
         )
-        caretPaints(surface)
+        caretPaints(surface, CaretOcclusion.obstructions(renderPlan, swingWin.metrics))
       }
     }
 
@@ -417,12 +417,18 @@ object RendererCursorOverlay:
               uiMetrics,
               caches
             )
-            caretPaints(cursorSurface)
+            caretPaints(cursorSurface, CaretOcclusion.obstructions(renderPlan, swingWin.metrics))
           }
         }
     }
 
-  private def caretPaints(surface: CaretRecordingSurface): List[com.serenity.ui.terminal.SwingWindow.CaretPaint] =
-    surface.recordedFills.map(fill =>
-      com.serenity.ui.terminal.SwingWindow.CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color)
+  private def caretPaints(
+    surface: CaretRecordingSurface,
+    obstructions: List[PixelRect]
+  ): List[com.serenity.ui.terminal.SwingWindow.CaretPaint] =
+    CaretOcclusion.visible(
+      surface.recordedFills.map(fill =>
+        com.serenity.ui.terminal.SwingWindow.CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color)
+      ),
+      obstructions
     )
