@@ -41,7 +41,7 @@ jobs:
           export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
           mkdir -p out
           run_wl() { # label jhome scale mode
-            label="$1"; jh="$2"; scale="$3"; mode="$4"; d="out/$label-s$scale-$mode"; mkdir -p "$d"; rm -f "$d"/go.*
+            label="$1"; jh="$2"; scale="$3"; mode="$4"; d="out/$label-s$scale-${mode//+/_}"; mkdir -p "$d"; rm -f "$d"/go.*
             printf 'output HEADLESS-1 mode 1920x1080 scale %s\ndefault_border none\nfor_window [title="steal"] floating enable\n' "$scale" > sway.conf
             (sway -c sway.conf > "$d/sway.log" 2>&1 &) ; sleep 4
             export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
@@ -61,42 +61,49 @@ jobs:
             grep -E "TOOLKIT|setCursor|serial|WARN|SEVERE|Exception" "$d/probe.log" | head -8 | sed "s/^/  log: /"
             swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; sleep 2; unset WAYLAND_DISPLAY SWAYSOCK
           }
-          for scale in 1 2; do for mode in rect whole repaint; do
+          for scale in 2; do for mode in rect repaintrect rect+sync rect+repaintrect root repaint; do
             run_wl jbr21 "$J21" $scale $mode; run_wl jbr25 "$J25" $scale $mode
           done; done
       - name: Control, XToolkit on Xvfb
         continue-on-error: true
         run: |
-          for mode in rect whole repaint; do
-            d="out/x11-$mode"; mkdir -p "$d"
-            Xvfb :99 -screen 0 1920x1080x24 > "$d/xvfb.log" 2>&1 & xv=$!; sleep 2
-            DISPLAY=:99 "$J21/bin/java" -Dawt.toolkit.name=XToolkit -cp classes PresentProbe $mode "$d" > "$d/probe.log" 2>&1 & pid=$!
+          n=100
+          for mode in rect whole repaint repaintrect; do
+            n=$((n+1)); d="out/x11-$mode"; mkdir -p "$d"
+            Xvfb :$n -screen 0 1920x1080x24 > "$d/xvfb.log" 2>&1 & xv=$!; sleep 2
+            DISPLAY=:$n "$J21/bin/java" -Dawt.toolkit.name=XToolkit -cp classes PresentProbe $mode "$d" > "$d/probe.log" 2>&1 & pid=$!
             sleep 5
             for k in 1 2 3 4; do
               for i in $(seq 1 50); do grep -q "^PHASE $k " "$d/probe.log" && break; sleep 0.2; done
               colour="$(grep "^PHASE $k " "$d/probe.log" | awk '{print $3}')"; sleep 1
-              DISPLAY=:99 import -window root "$d/p$k.png"
+              DISPLAY=:$n import -window root "$d/p$k.png"
               echo "[x11 mode=$mode] phase $k colour=$colour pixels-on-screen=$(python3 -I bench/wl-diag/count_colour.py "$d/p$k.png" "$colour")"
               touch "$d/go.$k"
             done
-            wait $pid || true; kill $xv || true
+            wait $pid || true; kill $xv || true; sleep 1
           done
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: wl-diag-out, path: out, retention-days: 3 }
 
   app:
+    needs: []
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: { jbr: ['21', '25'], scale: ['1', '2'] }
+      matrix: { jbr: ['21', '25'], scale: ['2'], patch: ['none', 'repaint'] }
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: '21', cache: sbt }
       - uses: sbt/setup-sbt@v1
+      - name: Patch (throwaway experiment only)
+        if: matrix.patch == 'repaint'
+        run: |
+          sed -i 's/rects.foreach(rect => canvas.paintImmediately(rect))/rects.foreach(rect => canvas.repaint(rect))/' src/main/scala/com/serenity/ui/terminal/SwingWindow.scala
+          git diff --stat; grep -n "canvas.repaint(rect)" src/main/scala/com/serenity/ui/terminal/SwingWindow.scala
       - run: sbt -v clean assembly
       - name: Install
         run: |
@@ -122,8 +129,9 @@ jobs:
           export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
           export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
           jar="$(ls target/scala-*/Serenity.jar)"
-          SERENITY_TOOLKIT=wayland "$JH/bin/java" -Djava.util.logging.config.file=bench/wl-diag/logging.properties -jar "$jar" "$HOME/doc.txt" > $d/app.log 2>&1 &
-          sleep 25; grim $d/a0-initial.png
+          "$JH/bin/java" -XshowSettings:properties -version 2>&1 | grep -E "awt|java.vendor|java.version" || true
+          "$JH/bin/java" -Dawt.toolkit.name=WLToolkit -Djava.util.logging.config.file=bench/wl-diag/logging.properties -jar "$jar" "$HOME/doc.txt" > $d/app.log 2>&1 &
+          sleep 25; swaymsg -t get_tree | grep -E '"(name|app_id|focused|width|height)"' | head -12; grim $d/a0-initial.png
           wtype "hello wayland typing test"; sleep 2; grim $d/a1-after-typing.png
           wtype -M ctrl a -m ctrl; sleep 1; grim $d/a2-after-select-all.png
           swaymsg seat seat0 cursor set 600 400; swaymsg seat seat0 cursor press button3; swaymsg seat seat0 cursor release button3; sleep 2; grim -c $d/a3-context-menu.png
@@ -140,4 +148,4 @@ jobs:
           pkill -f Serenity.jar || true; pkill sway || true
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: 'wl-diag-app-jbr${{ matrix.jbr }}-s${{ matrix.scale }}', path: out, retention-days: 3 }
+        with: { name: 'wl-diag-app-jbr${{ matrix.jbr }}-s${{ matrix.scale }}-${{ matrix.patch }}', path: out, retention-days: 3 }

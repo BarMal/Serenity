@@ -27,6 +27,10 @@ public class PresentProbe {
       switch (mode) {
         case "rect" -> canvas.paintImmediately(REGION);
         case "whole" -> canvas.paintImmediately(0, 0, canvas.getWidth(), canvas.getHeight());
+        case "repaintrect" -> canvas.repaint(REGION);
+        case "rect+sync" -> { canvas.paintImmediately(REGION); Toolkit.getDefaultToolkit().sync(); }
+        case "rect+repaintrect" -> { canvas.paintImmediately(REGION); canvas.repaint(REGION); }
+        case "root" -> canvas.getRootPane().paintImmediately(REGION);
         default -> canvas.repaint();
       }
     });
