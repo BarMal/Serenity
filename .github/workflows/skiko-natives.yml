@@ -1,7 +1,8 @@
 name: Skiko Natives
 
 # Builds the Skiko natives Serenity ships without the Adobe DNG SDK (#2028): Skia and Skiko from the pinned upstream tags in
-# ci/skiko/pins.env, with the reviewed patches beside it. Each build is scanned for DNG, and the scan itself is proved on a
+# ci/skiko/pins.env, with the reviewed patches beside it (the DNG removal, the Maven coordinates, and one addition to Skiko's
+# Bitmap, `readPixelsInto`, which reads pixels into an array the caller keeps; its API jar is published beside the natives). Each build is scanned for DNG, and the scan itself is proved on a
 # stock library first. Publishing adds attested jars to the Maven repository on the `skiko-maven` branch, which GitHub Pages
 # serves; see DEVELOPMENT.md for the rebuild-on-bump procedure.
 #
@@ -115,6 +116,9 @@ jobs:
       - name: Build the Skiko runtime jars
         timeout-minutes: 90
         run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-x64 /w/work /w/repo skiko
+      - name: Build the Skiko API jar
+        timeout-minutes: 60
+        run: docker run --rm -v "$GITHUB_WORKSPACE:/w" -w /w skiko-linux-compat bash ci/skiko/build-natives.sh linux-x64 /w/work /w/repo skiko-api
       - name: Collect the repository tree
         timeout-minutes: 10
         run: ci/skiko/build-natives.sh linux-x64 "$GITHUB_WORKSPACE/work" "$GITHUB_WORKSPACE/repo" collect
@@ -331,7 +335,7 @@ jobs:
           if-no-files-found: error
 
   merge:
-    name: Merge and scan all six jars
+    name: Merge and scan all seven jars
     needs: [build-linux-x64, build-linux-arm64, build-macos, build-windows]
     if: needs.build-linux-x64.result == 'success' && needs.build-linux-arm64.result == 'success' && needs.build-macos.result == 'success' && needs.build-windows.result == 'success'
     runs-on: ubuntu-latest
@@ -341,16 +345,22 @@ jobs:
         with:
           pattern: maven-*
           path: incoming
-      - name: Merge the groups into one repository tree and scan all six jars
+      - name: Merge the groups into one repository tree and scan all seven jars
         run: |
           set -euo pipefail
           . ci/skiko/pins.env
+          . ci/skiko/natives-version.env
           mkdir -p repo
           for dir in incoming/maven-*; do cp -R "${dir}/." repo/; done
           jars=$(find repo -name "skiko-awt-runtime-*-${NATIVES_VERSION}.jar" | sort)
           echo "${jars}"
           test "$(echo "${jars}" | wc -l)" -eq 6
-          python3 scripts/check_no_dng.py ${jars}
+          api=$(find repo -name "skiko-awt-${NATIVES_VERSION}.jar")
+          echo "${api}"
+          test "$(echo "${api}" | wc -l)" -eq 1
+          # The API jar is the one that carries the Serenity patch to Skiko's Kotlin classes.
+          unzip -p "${api}" org/jetbrains/skia/Bitmap.class | grep -aq readPixelsInto
+          python3 scripts/check_no_dng.py ${jars} ${api}
       - uses: actions/upload-artifact@v4
         with:
           name: maven-merged

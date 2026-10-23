@@ -52,16 +52,21 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 The stock Skiko natives link the Adobe DNG SDK, whose licence terms conflict with GPLv3 (#2028). `.github/workflows/skiko-natives.yml`
 rebuilds them from the upstream Skia and Skiko tags in `ci/skiko/pins.env` with the reviewed patches beside it, scans every
 jar with `scripts/check_no_dng.py` (after proving the scanner on the stock library), and on a manual run publishes the six
-jars, attested, to the `skiko-maven` branch that GitHub Pages serves.
+native jars and the patched Kotlin API jar (`skiko-awt`), attested, to the `skiko-maven` branch that GitHub Pages serves.
 
-A pull request builds all four runner groups and merges and scans the six jars; nothing is published. Skia is cached by pin and
+The patch `ci/skiko/skiko-read-pixels-into.patch` adds `Bitmap.readPixelsInto` (and `readPixelsArraySize`) to Skiko's Kotlin
+classes, which let the Skia raster path read a frame into an array it reuses instead of allocating one per chunk. Those classes
+are the same on every platform, so the linux-x64 group builds the `skiko-awt` jar once.
+
+A pull request builds all four runner groups and merges and scans the six native jars and the API jar; nothing is published. Skia is cached by pin and
 patch, so a warm run takes about ten minutes. A cold run builds Skia for every target: roughly 20 minutes on Linux, 50 on macOS
 and Windows.
 
 To change a pin or a patch:
 
-1. Edit `ci/skiko/pins.env` or the patch, and bump `NATIVES_VERSION` (`<skiko version>-dngfree.<n>`): the cache key and the
-   Maven coordinates both follow from them.
+1. Edit `ci/skiko/pins.env` or a patch, and bump `NATIVES_VERSION` in `ci/skiko/natives-version.env`
+   (`<skiko version>-dngfree.<n>`): the Maven coordinates follow from it. The Skia cache key follows `pins.env` and the Skia
+   patch only, so a new version with the same Skia sources does not rebuild Skia.
 2. Check `git apply --check` for each patch against the new tag, and run the unit tests in `scripts/`.
 3. Open the pull request and wait for the four groups and the merge job to pass.
 4. Run the workflow manually with `groups` = `all` and `publish` = `true`, then point the build at the new `NATIVES_VERSION`.
