@@ -270,6 +270,15 @@ lazy val root = (project in file("."))
       IO.write(file, classpath.map(_.getAbsolutePath).mkString(java.io.File.pathSeparator))
       Seq(file)
     }.taskValue,
+    // The attributes `sbt assembly` writes into Serenity.jar's manifest, for AssemblyManifestSpec.
+    Test / resourceGenerators += Def.task {
+      val file = (Test / resourceManaged).value / "assembly" / "manifest-attributes.txt"
+      val lines = (assembly / packageOptions).value.collect { case Package.ManifestAttributes(entries @ _*) =>
+        entries.map { case (name, value) => s"${name.toString}: $value" }
+      }.flatten
+      IO.write(file, lines.mkString("\n"))
+      Seq(file)
+    }.taskValue,
     Compile / mainClass        := Some("Main"),
     assembly / mainClass       := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
