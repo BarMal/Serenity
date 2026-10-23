@@ -4,6 +4,10 @@
 set -u
 OUT="$1"; MODE="$2"; SCALE="$3"; DEBUG="${4:-0}"; VPTR="${VPTR:-vptr}"
 LABEL="$(basename "$OUT")"
+cleanup() { exec 3>&- 2>/dev/null; kill $ANCHOR $VP $APP >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1; pkill sway >/dev/null 2>&1; pkill -x java >/dev/null 2>&1; pkill -x wtype >/dev/null 2>&1; pkill -x vptr >/dev/null 2>&1; }
+trap cleanup EXIT
+( sleep 420; echo "[$LABEL] WATCHDOG fired after 420 s"; echo "--- app.log tail"; tail -n 40 "$OUT/app.log" 2>&1; echo "--- wire/stderr tail"; tail -n 30 "$OUT/wire.log" 2>&1; echo "--- native log tail"; tail -n 40 "$OUT/native.log" 2>&1; kill -9 $$ ) > /dev/stderr 2>&1 &
+WATCHDOG=$!
 mkdir -p "$OUT"; rm -f "$OUT"/go.* "$OUT"/*.log
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/tmp/xdg-spike}"; mkdir -p "$XDG_RUNTIME_DIR"; chmod 700 "$XDG_RUNTIME_DIR"
 export WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman
@@ -25,7 +29,7 @@ await() { # pattern [seconds]
 }
 shot() { grim "$OUT/$1.png" 2>> "$OUT/grim.log"; }
 
-if ! await '^SURFACE' 90; then echo "[$LABEL] FAIL: app never reached SURFACE"; tail -20 "$OUT/app.log"; tail -5 "$OUT/wire.log"; pkill sway; exit 1; fi
+if ! await '^SURFACE' 90; then echo "[$LABEL] FAIL: app never reached SURFACE"; echo "--- app.log"; tail -n 40 "$OUT/app.log"; echo "--- stderr"; tail -n 30 "$OUT/wire.log"; echo "--- native.log"; tail -n 40 "$OUT/native.log" 2>&1; kill $WATCHDOG >/dev/null 2>&1; exit 1; fi
 grep -E '^(JAVA|DRIVER|SCALE|SURFACE)' "$OUT/app.log" | sed "s/^/[$LABEL] /"
 swaymsg -t get_tree | python3 -I -c '
 import sys,json

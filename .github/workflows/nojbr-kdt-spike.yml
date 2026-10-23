@@ -116,6 +116,7 @@ jobs:
           wayland-scanner private-code wlr-virtual-pointer-unstable-v1.xml wlr-virtual-pointer-unstable-v1-protocol.c
           gcc -O1 -o "$GITHUB_WORKSPACE/vptr" vptr.c wlr-virtual-pointer-unstable-v1-protocol.c -lwayland-client
       - name: Run gates (${{ matrix.name }})
+        timeout-minutes: 10
         run: |
           mkdir -p out
           export VPTR="$PWD/vptr"
@@ -151,6 +152,7 @@ jobs:
           sudo -E apt-get update -q
           sudo -E apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme libxkbcommon0
       - name: Pre-edit from a real input method (fcitx5 + pinyin)
+        timeout-minutes: 8
         run: |
           mkdir -p out
           export APP_LAUNCH='"$JAVA_HOME/bin/java" --enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -Dspike.mode=ime -Dkdt.library.folder.path='"$PWD"'/bundle/native -Dkdt.native.log.path="$OUT/native.log" -Dspike.out="$OUT" -cp "'"$PWD"'/bundle/cp/*" org.jetbrains.desktop.sample.linux.KdtSpikeKt'
