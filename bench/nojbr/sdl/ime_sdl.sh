@@ -51,7 +51,7 @@ sleep 1
 touch "$OUT/go.99"; sleep 2
 echo "[$LABEL] text events:"
 grep -E ' (text_editing|text_input|text_editing_candidates)' "$OUT/app.log" | sed "s/^/[$LABEL]   /"
-echo "[$LABEL] fcitx5 current IM: $(fcitx5-remote -n 2>&1)"; echo "[$LABEL] fcitx5 log (wayland/frontend/input-method lines):"; grep -iE "wayland|frontend|zwp|input.?method|text.?input|virtual" "$OUT/fcitx5.log" | grep -v portalsetting | head -25 | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] fcitx5 current IM: $(fcitx5-remote -n 2>&1)"; echo "[$LABEL] fcitx5.log first 45 lines:"; head -45 "$OUT/fcitx5.log" | cut -c1-220 | sed "s/^/[$LABEL]   /"; echo "[$LABEL] env: XDG_SESSION_TYPE=${XDG_SESSION_TYPE:-} WAYLAND_DISPLAY=$WAYLAND_DISPLAY DBUS=${DBUS_SESSION_BUS_ADDRESS:-} user=$(id -un)"; echo "[$LABEL] fcitx5 log (wayland/frontend/input-method lines):"; grep -iE "wayland|frontend|zwp|input.?method|text.?input|virtual" "$OUT/fcitx5.log" | grep -v portalsetting | head -25 | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] sway log (input method/text input):"; grep -iE "input.method|text.input|virtual" "$OUT/sway.log" | head -8 | sed "s/^/[$LABEL]   /"
 echo "[$LABEL] globals seen by the app:"; grep -E "bind\(" "$OUT/wire.log" | head -0
 echo "[$LABEL] key events: $(grep -c ' key down' "$OUT/app.log")"
