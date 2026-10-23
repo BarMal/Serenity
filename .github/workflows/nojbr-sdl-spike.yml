@@ -1,0 +1,104 @@
+name: nojbr SDL3 spike (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-nojbr-sdl-spike
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: 1080p-s1,     mode: 1920x1080, scale: '1',   debug: '0' }
+          - { name: 1080p-s2,     mode: 3840x2160, scale: '2',   debug: '0' }
+          - { name: 1440p-s1,     mode: 2560x1440, scale: '1',   debug: '0' }
+          - { name: 1440p-s2,     mode: 5120x2880, scale: '2',   debug: '0' }
+          - { name: frac-s1.5,    mode: 1920x1080, scale: '1.5', debug: '0' }
+          - { name: wire-s1.5,    mode: 1920x1080, scale: '1.5', debug: '1' }
+          - { name: wire-s1,      mode: 1920x1080, scale: '1',   debug: '1' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '25' }
+      - name: Install
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard python3-pil gcc libc6-dev libwayland-dev wayland-protocols adwaita-icon-theme
+      - name: Fetch jars and build the virtual pointer
+        run: |
+          set -euo pipefail
+          mkdir -p lib classes
+          M=https://repo1.maven.org/maven2
+          for f in org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3.jar org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-linux.jar \
+                   org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3.jar org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3-natives-linux.jar \
+                   org/jetbrains/skiko/skiko-awt/0.153.0/skiko-awt-0.153.0.jar org/jetbrains/skiko/skiko-awt-runtime-linux-x64/0.153.0/skiko-awt-runtime-linux-x64-0.153.0.jar \
+                   org/jetbrains/kotlin/kotlin-stdlib/2.1.0/kotlin-stdlib-2.1.0.jar org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.9.0/kotlinx-coroutines-core-jvm-1.9.0.jar; do
+            curl -fsSL --retry 3 -o "lib/$(basename "$f")" "$M/$f"
+          done
+          ls -l lib
+          cd bench/nojbr/sdl
+          curl -fsSL -o wlr-virtual-pointer-unstable-v1.xml https://raw.githubusercontent.com/swaywm/wlr-protocols/master/unstable/wlr-virtual-pointer-unstable-v1.xml
+          wayland-scanner client-header wlr-virtual-pointer-unstable-v1.xml wlr-virtual-pointer-unstable-v1-client-protocol.h
+          wayland-scanner private-code wlr-virtual-pointer-unstable-v1.xml wlr-virtual-pointer-unstable-v1-protocol.c
+          gcc -O1 -o "$GITHUB_WORKSPACE/vptr" vptr.c wlr-virtual-pointer-unstable-v1-protocol.c -lwayland-client
+          cd "$GITHUB_WORKSPACE"
+          L="$PWD/lib"
+          javac -cp "$L/lwjgl-3.4.3.jar:$L/lwjgl-sdl-3.4.3.jar:$L/skiko-awt-0.153.0.jar:$L/kotlin-stdlib-2.1.0.jar" -d classes bench/nojbr/sdl/SkiaCoexist.java bench/nojbr/sdl/SdlSpike.java
+          java -version
+      - name: Run gates (${{ matrix.name }})
+        run: |
+          L="$PWD/lib"
+          CP="$PWD/classes:$L/lwjgl-3.4.3.jar:$L/lwjgl-3.4.3-natives-linux.jar:$L/lwjgl-sdl-3.4.3.jar:$L/lwjgl-sdl-3.4.3-natives-linux.jar:$L/skiko-awt-0.153.0.jar:$L/skiko-awt-runtime-linux-x64-0.153.0.jar:$L/kotlin-stdlib-2.1.0.jar:$L/kotlin-coroutines-placeholder"
+          CP="${CP%:*}:$L/kotlinx-coroutines-core-jvm-1.9.0.jar"
+          export VPTR="$PWD/vptr"
+          mkdir -p out
+          bash bench/nojbr/sdl/run_sdl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/${{ matrix.name }}" "${{ matrix.mode }}" "${{ matrix.scale }}" "${{ matrix.debug }}" 2>&1 | tee "out/${{ matrix.name }}.txt"
+      - name: Footprint (gate 7)
+        if: matrix.name == '1080p-s1'
+        run: |
+          ls -l lib/lwjgl-3.4.3.jar lib/lwjgl-3.4.3-natives-linux.jar lib/lwjgl-sdl-3.4.3.jar lib/lwjgl-sdl-3.4.3-natives-linux.jar
+          mkdir -p x && cd x && unzip -qo ../lib/lwjgl-sdl-3.4.3-natives-linux.jar 'linux/x64/org/lwjgl/sdl/libSDL3.so' && ls -l linux/x64/org/lwjgl/sdl/libSDL3.so
+          echo "SDL3 build dlopens (from its embedded metadata):"; strings -a linux/x64/org/lwjgl/sdl/libSDL3.so | grep -oE 'libwayland-[a-z]+\.so\.[0-9]+|libxkbcommon\.so\.[0-9]+|libdecor-0\.so\.[0-9]+|libdbus-1\.so\.[0-9]+' | sort -u
+          for l in libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl.so.1 libxkbcommon.so.0 libdecor-0.so.0; do printf '%s: ' "$l"; (ldconfig -p | grep -q "$l" && echo present-on-runner) || echo absent-on-runner; done
+          ls -l ~/.skiko 2>/dev/null | head -3 || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'nojbr-sdl-${{ matrix.name }}', path: out, retention-days: 3 }
+
+  ime:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '25' }
+      - name: Install
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends sway grim wtype wl-clipboard fcitx5 fcitx5-chinese-addons dbus-x11 adwaita-icon-theme
+      - name: Fetch jars
+        run: |
+          set -euo pipefail
+          mkdir -p lib classes
+          M=https://repo1.maven.org/maven2
+          for f in org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3.jar org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-linux.jar org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3.jar org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3-natives-linux.jar; do curl -fsSL --retry 3 -o "lib/$(basename "$f")" "$M/$f"; done
+          L="$PWD/lib"
+          # SkiaCoexist is not needed for the IME probe; SdlSpike reaches it only by reflection.
+          javac -cp "$L/lwjgl-3.4.3.jar:$L/lwjgl-sdl-3.4.3.jar" -d classes bench/nojbr/sdl/SdlSpike.java
+      - name: Pre-edit from a real input method (fcitx5 + pinyin)
+        run: |
+          L="$PWD/lib"
+          CP="$PWD/classes:$L/lwjgl-3.4.3.jar:$L/lwjgl-3.4.3-natives-linux.jar:$L/lwjgl-sdl-3.4.3.jar:$L/lwjgl-sdl-3.4.3-natives-linux.jar"
+          mkdir -p out
+          bash bench/nojbr/sdl/ime_sdl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/ime" 2>&1 | tee out/ime.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: nojbr-sdl-ime, path: out, retention-days: 3 }
