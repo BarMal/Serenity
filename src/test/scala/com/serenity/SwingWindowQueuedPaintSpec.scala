@@ -27,28 +27,25 @@ class SwingWindowQueuedPaintSpec extends AnyFlatSpec with Matchers:
       scala.List(PaintRequest.Queued(caret), PaintRequest.Queued(line))
   }
 
-  it should "paint every bounded rect at once on any other toolkit" in {
+  it should "paint every bounded rect at once on any other toolkit" in
     OtherToolkits.foreach { toolkit =>
       withClue(toolkit)(
         SwingWindow.paintRequests(toolkit, CanvasRepaint.Rects(scala.List(caret, line))) shouldBe
           scala.List(PaintRequest.Immediate(caret), PaintRequest.Immediate(line))
       )
     }
-  }
 
-  it should "repaint the whole canvas for a whole-canvas repaint on every toolkit" in {
+  it should "repaint the whole canvas for a whole-canvas repaint on every toolkit" in
     (NativeWayland :: OtherToolkits).foreach { toolkit =>
       withClue(toolkit)(
         SwingWindow.paintRequests(toolkit, CanvasRepaint.Whole) shouldBe scala.List(PaintRequest.WholeCanvas)
       )
     }
-  }
 
-  it should "request nothing for a repaint with no rects" in {
+  it should "request nothing for a repaint with no rects" in
     (NativeWayland :: OtherToolkits).foreach { toolkit =>
       withClue(toolkit)(SwingWindow.paintRequests(toolkit, CanvasRepaint.Rects(Nil)) shouldBe Nil)
     }
-  }
 
   "SwingWindow.applyPaintRequests" should "queue a Queued rect with repaint and paint nothing at once" in {
     val canvas = recordingCanvas()
