@@ -35,7 +35,7 @@ jobs:
         continue-on-error: true
         run: |
           set -o pipefail
-          cmd='sbt -v "set Test / scalacOptions += \"-deprecation\"" "Test / compile"'
+          cmd='sbt -v "set Test / unmanagedSources / excludeFilter := HiddenFileFilter || \"SkiaCostProbe.scala\"" "testOnly com.serenity.ui.skia.* com.serenity.app.Skia* com.serenity.app.RenderBackend* com.serenity.config.RenderBackendPeekSpec com.serenity.ChromeRepaintPixelsSpec"'
           if [ "$RUNNER_OS" = Linux ]; then eval "xvfb-run -a -s '-screen 0 1920x1200x24' $cmd" > skia.log 2>&1; else eval "$cmd" > skia.log 2>&1; fi
           echo "rc=$?"
       - name: Summary
