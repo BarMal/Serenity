@@ -82,5 +82,6 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",
     "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout",
     "ui/skia/SkiaLayerHostSpec.scala"             -> "polls a native window's paint, which signals no completion",
-    "ui/skia/SkiaLayerWindowSpec.scala"           -> "polls a native window's paint, which signals no completion"
+    "ui/skia/SkiaLayerRedrawSpec.scala" -> "polls a native window's draws, which signal no completion; and waits to see that none follow",
+    "ui/skia/SkiaLayerWindowSpec.scala" -> "polls a native window's paint, which signals no completion"
   )
