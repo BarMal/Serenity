@@ -203,7 +203,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: corretto
-          java-version: '21'
+          java-version: '25'
       - name: Install LLVM, as Skiko's own workflow does
         run: brew install llvm
       - name: Fetch Skiko and patch it
@@ -264,7 +264,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: corretto
-          java-version: '21'
+          java-version: '25'
       - uses: microsoft/setup-msbuild@v1
       - uses: ilammy/msvc-dev-cmd@v1
       - uses: msys2/setup-msys2@v2

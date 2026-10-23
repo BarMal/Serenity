@@ -32,6 +32,15 @@ fi
 probe_dir="$(mktemp -d)"
 trap 'rm -rf "$probe_dir"' EXIT
 
+# An executable jar grants native access from its manifest, so `java -jar Serenity.jar` stays free of the JDK's warning
+# on every native library load.
+absolute_jar="$(cd "$(dirname "$jar_path")" && pwd)/$(basename "$jar_path")"
+(cd "$probe_dir" && jar xf "$absolute_jar" META-INF/MANIFEST.MF)
+if ! tr -d '\r' < "$probe_dir/META-INF/MANIFEST.MF" | grep -Fxq "Enable-Native-Access: ALL-UNNAMED"; then
+  echo "Assembled JAR manifest does not grant native access (Enable-Native-Access: ALL-UNNAMED)" >&2
+  exit 1
+fi
+
 cat > "$probe_dir/SerenitySlf4jProbe.java" <<'EOF'
 import org.slf4j.ILoggerFactory;
 import org.slf4j.LoggerFactory;
