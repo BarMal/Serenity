@@ -5,15 +5,7 @@ import javax.swing.JPanel
 
 import scala.util.{Failure, Success, Try}
 
-import com.serenity.ui.renderer.{
-  BackendCacheKey,
-  FontSpec,
-  FrameSurfaceFactory,
-  FrameSurfaceRequest,
-  Java2DRenderSurface,
-  RenderSurface,
-  ScreenIdentity
-}
+import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface, RenderSurface, ScreenIdentity}
 import org.jetbrains.skia.PictureRecorder
 import org.slf4j.LoggerFactory
 
@@ -26,11 +18,9 @@ import org.slf4j.LoggerFactory
   */
 class LayerSurfaceFactory private[ui] (buildHost: JPanel => LayerHost) extends FrameSurfaceFactory:
 
-  private val HostsKey = BackendCacheKey(classOf[LayerSurfaceFactory.WindowLayer])
-
   def create(request: FrameSurfaceRequest): RenderSurface =
-    request.backendCaches
-      .getOrCreate(HostsKey)(new LayerSurfaceFactory.WindowLayer)
+    LayerSurfaceFactory.WindowLayer
+      .of(request.canvas)
       .host(request, buildHost)
       .fold(FrameSurfaceFactory.Java2D.create(request))(record(request, _))
 
@@ -73,7 +63,10 @@ object LayerSurfaceFactory:
 
   private val log = LoggerFactory.getLogger(classOf[LayerSurfaceFactory])
 
-  /** One window's layer, made when its first frame is drawn, or the record that it could not be. */
+  /** One window's layer, made when its first frame is drawn, or the record that it could not be. It belongs to the
+    * canvas, not to the caches a frame is drawn with: a frame may come with caches of its own, but the canvas holds one
+    * heavyweight layer, and a second would be repainted along with the first by every publish.
+    */
   final private[skia] class WindowLayer:
 
     private enum State:
@@ -97,3 +90,18 @@ object LayerSurfaceFactory:
               state.set(State.Failed)
               log.warn("The Skia layer could not be made; this window paints with Java2D", error)
               None
+
+  object WindowLayer:
+
+    private val Property = "serenity.skia.windowLayer"
+
+    /** The canvas's layer holder, made on first use. */
+    def of(canvas: JPanel): WindowLayer =
+      classOf[WindowLayer].synchronized {
+        canvas.getClientProperty(Property) match
+          case existing: WindowLayer => existing
+          case _ =>
+            val made = new WindowLayer
+            canvas.putClientProperty(Property, made)
+            made
+      }
