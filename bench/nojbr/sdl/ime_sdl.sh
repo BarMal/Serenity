@@ -33,7 +33,7 @@ export SWAYSOCK="$(ls "$XDG_RUNTIME_DIR"/sway-ipc*.sock | head -1)"
 fcitx5 -D --verbose '*=3' > "$OUT/fcitx5.log" 2>&1 &
 FC=$!; sleep 4
 echo "[$LABEL] fcitx5 running: $(kill -0 $FC 2>/dev/null && echo yes || echo NO); remote: $(fcitx5-remote 2>&1)"
-SDL_VIDEO_DRIVER=wayland "$JAVA" --enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -Dspike.mode=ime -cp "$CP" SdlSpike "$OUT" 1 > "$OUT/app.log" 2> "$OUT/wire.log" &
+WAYLAND_DEBUG=1 SDL_VIDEO_DRIVER=wayland "$JAVA" --enable-native-access=ALL-UNNAMED -Dstdout.encoding=UTF-8 -Dfile.encoding=UTF-8 -Djava.awt.headless=true -Dspike.mode=ime -cp "$CP" SdlSpike "$OUT" 1 > "$OUT/app.log" 2> "$OUT/wire.log" &
 APP=$!
 for i in $(seq 1 300); do grep -q '^PHASE ime-ready' "$OUT/app.log" 2>/dev/null && break; sleep 0.2; done
 # A held virtual keyboard gives the seat its keyboard (and the window its focus) before any text is typed.
@@ -51,7 +51,9 @@ sleep 1
 touch "$OUT/go.99"; sleep 2
 echo "[$LABEL] text events:"
 grep -E ' (text_editing|text_input|text_editing_candidates)' "$OUT/app.log" | sed "s/^/[$LABEL]   /"
-echo "[$LABEL] fcitx5 log tail:"; tail -n 8 "$OUT/fcitx5.log" | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] fcitx5 current IM: $(fcitx5-remote -n 2>&1)"; echo "[$LABEL] fcitx5 log (wayland/frontend/input-method lines):"; grep -iE "wayland|frontend|zwp|input.?method|text.?input|virtual" "$OUT/fcitx5.log" | grep -v portalsetting | head -25 | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] sway log (input method/text input):"; grep -iE "input.method|text.input|virtual" "$OUT/sway.log" | head -8 | sed "s/^/[$LABEL]   /"
+echo "[$LABEL] globals seen by the app:"; grep -E "bind\(" "$OUT/wire.log" | head -0
 echo "[$LABEL] key events: $(grep -c ' key down' "$OUT/app.log")"
-echo "[$LABEL] input-method wire: $(grep -cE 'zwp_text_input_v3@[0-9]+\.(preedit_string|commit_string|done)' "$OUT/wire.log")"
+echo "[$LABEL] text_input_v3 wire (enable/disable/preedit/commit/done): $(grep -cE 'zwp_text_input_v3@[0-9]+\.(enable|disable|preedit_string|commit_string|done)' "$OUT/wire.log")"
 kill $ANCHOR $APP $FC >/dev/null 2>&1; swaymsg exit >/dev/null 2>&1 || true; pkill sway || true; kill $DBUS_SESSION_BUS_PID >/dev/null 2>&1 || true
