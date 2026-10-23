@@ -52,7 +52,7 @@ jobs:
         run: |
           set -o pipefail
           cd kdt
-          ./gradlew --no-daemon --console=plain --stacktrace :spike:printKdtPaths 2>&1 | tee ../gradle.log | tail -n 120
+          ./gradlew --no-daemon --no-configuration-cache --console=plain :spike:printKdtPaths 2>&1 | tee ../gradle.log | tail -n 120
       - name: Bundle
         run: |
           set -euo pipefail
@@ -62,8 +62,14 @@ jobs:
           mkdir -p bundle/cp bundle/native
           i=0; IFS=':' read -ra ELEMS <<< "$CP"
           for e in "${ELEMS[@]}"; do i=$((i+1)); if [ -d "$e" ]; then mkdir -p "bundle/cp/${i}-dir"; cp -r "$e"/. "bundle/cp/${i}-dir/"; else cp "$e" "bundle/cp/${i}-$(basename "$e")"; fi; done
-          IFS=':' read -ra NAT <<< "$NATIVE"
-          for n in "${NAT[@]}"; do if [ -d "$n" ]; then cp -r "$n"/. bundle/native/; else cp "$n" bundle/native/; fi; done
+          echo "--- native libraries built by the Rust crates"
+          find kdt -name 'libdesktop_linux*' -type f -not -path '*/deps/*' -not -path '*/incremental/*' -not -path '*/build/*/*/*.d' | sort | tee native-libs.txt
+          # the loader looks for libdesktop_linux_x64.so (release) next to -Dkdt.library.folder.path
+          while read -r f; do cp "$f" bundle/native/; done < <(grep -E 'libdesktop_linux_(x64|arm64)(\+debug)?\.so$' native-libs.txt || true)
+          if ! ls bundle/native/libdesktop_linux_x64.so >/dev/null 2>&1; then
+            f="$(grep -E 'libdesktop_linux\.so$' native-libs.txt | grep -v debug | head -1 || true)"
+            [ -n "$f" ] && cp "$f" bundle/native/libdesktop_linux_x64.so
+          fi
           echo "--- classpath"; ls -l bundle/cp
           echo "--- native"; ls -l bundle/native
           du -sh bundle bundle/native
