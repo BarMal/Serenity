@@ -1,0 +1,218 @@
+name: Debug Java 25
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-matrix
+
+permissions:
+  contents: read
+
+jobs:
+  jar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - run: |
+          cp bench/ci/perf-assembly.sbt perf-assembly.sbt
+          sbt -v clean assembly "Test / assembly" writePackageVersion
+          mkdir -p out
+          cp target/scala-*/Serenity.jar target/scala-*/serenity-perf.jar out/
+          cp LICENSE THIRD-PARTY-NOTICES.md out/
+          cp target/package/app-version.txt out/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: out/*
+          retention-days: 3
+
+  test:
+    name: Test ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: temurin25-linux, os: ubuntu-latest, jdk: temurin, plat: linux-x64 }
+          - { label: jbr25-linux, os: ubuntu-latest, jdk: jbr, plat: linux-x64 }
+          - { label: temurin25-windows, os: windows-latest, jdk: temurin, plat: windows-x64 }
+          - { label: temurin25-macos, os: macos-latest, jdk: temurin, plat: osx-aarch64 }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PLAT: ${{ matrix.plat }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - if: matrix.jdk == 'temurin'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - if: matrix.jdk == 'jbr'
+        name: Install JBR 25
+        shell: bash
+        run: |
+          home="$(bash bench/java25/fetch-jbr25.sh "$RUNNER_TEMP/jbr25")"
+          echo "JAVA_HOME=$home" >> "$GITHUB_ENV"
+          echo "$home/bin" >> "$GITHUB_PATH"
+          echo "JBR tag: $(cat "$RUNNER_TEMP/jbr25/TAG")"
+      - uses: sbt/setup-sbt@v1
+      - name: Show JVM
+        shell: bash
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+          java -XshowSettings:properties -version 2>&1 | grep -E "java.vendor|java.vm.name|java.runtime.version|java.specification.version" || true
+      - name: Install Xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Enable JVM diagnostics
+        shell: bash
+        run: |
+          mkdir -p jvm-diag
+          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
+      - name: sbt test
+        id: test
+        continue-on-error: true
+        shell: bash
+        env:
+          HANG_MINUTES: '70'
+        run: |
+          set -o pipefail
+          if [ "$RUNNER_OS" = Linux ]; then
+            xvfb-run -a -s "-screen 0 1920x1200x24" bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test 2>&1 | tee test.log
+          else
+            bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test 2>&1 | tee test.log
+          fi
+      - name: Real boundary and heap specs
+        if: always() && runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v realBoundaryTest heapMeasurementTest 2>&1 | tee boundary.log
+      - name: Style, architecture, notices (scalafix + semanticdb)
+        if: always() && runner.os == 'Linux'
+        continue-on-error: true
+        shell: bash
+        run: |
+          sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix" architectureCheck checkThirdPartyNotices 2>&1 | tee style.log
+          git diff --stat | tee -a style.log
+      - name: Assemble and launch the jar
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          sbt -v assembly 2>&1 | tee assembly.log
+          bash scripts/check-assembled-jar.sh target/scala-*/Serenity.jar 2>&1 | tee -a assembly.log
+          java -jar target/scala-*/Serenity.jar --version 2>&1 | tee launch.log
+      - name: Summarise
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## ${{ matrix.label }}"
+            echo '```'
+            java -version 2>&1
+            echo '--- sbt test result lines'
+            grep -E "Tests: succeeded|All tests passed|\*\*\* FAILED|Failed tests|error\]|Passed:|Failed:|Total number of tests|Suites: completed|\[warn\]" test.log | sort | uniq -c | sort -rn | head -60 || true
+            echo '--- JVM WARNING / restricted / deprecated lines (all logs)'
+            grep -hE "^WARNING|WARNING:|restricted method|will be removed|deprecated for removal|enable-native-access|sun.misc.Unsafe" *.log 2>/dev/null | sort | uniq -c | sort -rn | head -40 || true
+            echo '--- style/architecture/notices'
+            tail -n 25 style.log 2>/dev/null || true
+            echo '--- boundary'
+            grep -E "Tests: succeeded|FAILED|error\]" boundary.log 2>/dev/null | head -20 || true
+            echo '--- launch'
+            head -n 8 launch.log 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          head -n 150 "$GITHUB_STEP_SUMMARY"
+      - name: Print test failure detail
+        if: always()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for report in target/test-reports/*.xml; do
+            if grep -q -e '<failure' -e '<error' "$report"; then echo "::group::$report"; head -c 6000 "$report"; echo; echo "::endgroup::"; fi
+          done
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: java25-test-${{ matrix.label }}
+          path: |
+            *.log
+            target/test-reports/**
+            jvm-diag/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  abba:
+    name: ABBA ${{ matrix.name }}
+    needs: jar
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: t21-vs-t25, a: t21, b: t25, a_opts: "", b_opts: "" }
+          - { name: t25-vs-t25-coh, a: t25, b: t25, a_opts: "", b_opts: "-XX:+UseCompactObjectHeaders" }
+          - { name: t21-vs-jbr25, a: t21, b: jbr25, a_opts: "", b_opts: "" }
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PLAT: linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - run: echo "T25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: echo "T21=$JAVA_HOME" >> "$GITHUB_ENV"
+      - name: Install JBR 25 and Xvfb
+        run: |
+          sudo apt-get update && sudo apt-get install -y xvfb
+          echo "JBR25=$(bash bench/java25/fetch-jbr25.sh "$RUNNER_TEMP/jbr25")" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@v4
+        with:
+          name: jars
+          path: jars
+      - name: ABBA (${{ matrix.name }})
+        shell: bash
+        run: |
+          set -uo pipefail
+          home_of() { case "$1" in t21) echo "$T21";; t25) echo "$T25";; jbr25) echo "$JBR25";; esac; }
+          export JAR="$PWD/jars/serenity-perf.jar" OUT="$PWD/abba-out"
+          export A_JAVA="$(home_of '${{ matrix.a }}')/bin/java" B_JAVA="$(home_of '${{ matrix.b }}')/bin/java"
+          base="-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicGCInterval=60000"
+          export A_OPTS="$base ${{ matrix.a_opts }}" B_OPTS="$base ${{ matrix.b_opts }}"
+          "$A_JAVA" -version; "$B_JAVA" -version
+          nproc; free -m | head -2
+          bash bench/java25/abba-jdk.sh laptop. render. footprint. layout. 2>&1 | tail -n 120 | tee abba-summary.txt
+          python3 bench/java25/abba-table.py "$OUT" | tee abba-table.txt
+          {
+            echo "## ABBA ${{ matrix.name }} (A=${{ matrix.a }} ${{ matrix.a_opts }}, B=${{ matrix.b }} ${{ matrix.b_opts }})"
+            echo '```'; cat abba-summary.txt; echo '--- table'; cat abba-table.txt; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: abba-${{ matrix.name }}
+          path: |
+            abba-out/**
+            abba-summary.txt
+            abba-table.txt
+          retention-days: 14
