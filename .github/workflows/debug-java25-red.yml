@@ -23,9 +23,11 @@ jobs:
       - uses: sbt/setup-sbt@v1
       - name: Python guard (expected red before the fix)
         continue-on-error: true
-        run: python3 -m unittest scripts.test_smoke_test_app_image -v 2>&1 | tail -n 25
+        run: |
+          python3 -m unittest scripts.test_smoke_test_app_image -v 2>&1 | tail -n 25
       - name: Scala guard (expected red before the fix)
-        run: sbt -v "testOnly com.serenity.AssemblyManifestSpec" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E "AssemblyManifestSpec|did not|FAILED|Tests: succeeded|All tests passed|error\]" | head -n 20
+        run: |
+          sbt -v "testOnly com.serenity.AssemblyManifestSpec" 2>&1 | sed 's/\x1b\[[0-9;]*m//g' | grep -E "AssemblyManifestSpec|did not|FAILED|Tests: succeeded|All tests passed|error\]" | head -n 20
 
   native-probe:
     runs-on: ubuntu-latest
