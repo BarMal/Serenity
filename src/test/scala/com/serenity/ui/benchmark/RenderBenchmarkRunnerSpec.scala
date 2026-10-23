@@ -36,6 +36,18 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "end with one Skia layer, say which toolkit drew, and count the layer's draws" in {
+    onLinuxWithDisplay()
+    val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory, startup = "X11 (test)")
+    report.environment.skiaLayers shouldBe Some(1)
+    report.environment.toolkit should include("Toolkit")
+    report.environment.startup shouldBe "X11 (test)"
+    val draws = report.environment.skiaDraws.getOrElse(fail("the layer's draws were not counted"))
+    draws.publishes should be > 0
+    draws.renders should be >= 1
+    draws.renders should be <= (draws.publishes * 3)
+  }
+
   it should "name the render API and refuse a verdict when Skiko drew in software" in {
     onLinuxWithDisplay()
     val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory)
@@ -52,6 +64,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     val report  = RenderBenchmarkRunner.run(small, failing)
     report.environment.skiaRenderApi.isLeft shouldBe true
     report.results.foreach(result => result.skia shouldBe None)
+    report.environment.skiaLayers shouldBe None
     report.results.foreach(result => result.java2d.count shouldBe 3)
     report.verdict match
       case Verdict.NotMeasured(reason) => reason should include("Skia layer unavailable")

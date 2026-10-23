@@ -22,10 +22,12 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     assume(System.getProperty("os.name", "").toLowerCase.contains("linux"), "left to the owner's machine elsewhere")
     val directory = TestTemp.directory("render-benchmark")
     val captured  = new ByteArrayOutputStream()
-    val code      = RenderBenchmark.run(small, directory, new PrintStream(captured, true)).unsafeRunSync()
+    val code =
+      RenderBenchmark.run(small, directory, new PrintStream(captured, true), startup = "X11 (test)").unsafeRunSync()
     code shouldBe ExitCode.Success
     val printed = captured.toString
     printed should include("# Render benchmark")
+    printed should include("X11 (test)")
     Scenario.values.foreach(scenario => printed should include(scenario.label))
     val files = Files.list(directory).iterator().asScala.toList.map(_.getFileName.toString)
     files.exists(name => name.startsWith("render-benchmark-") && name.endsWith(".md")) shouldBe true

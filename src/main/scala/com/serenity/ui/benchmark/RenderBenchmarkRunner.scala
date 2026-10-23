@@ -14,8 +14,8 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
-import com.serenity.ui.skia.SynchronousSkiaLayerSurfaceFactory
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.skia.{SkiaLayerHost, SynchronousSkiaLayerSurfaceFactory}
+import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 
 /** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
   *
@@ -38,12 +38,19 @@ object RenderBenchmarkRunner:
       uiMetrics: CellMetrics
   )
 
-  final private case class Measured(stats: Map[Scenario, FrameStats], deviceScale: Double, renderApi: Option[String])
+  final private case class Measured(
+      stats: Map[Scenario, FrameStats],
+      deviceScale: Double,
+      renderApi: Option[String],
+      layers: Option[Int],
+      draws: Option[LayerDrawStats]
+  )
 
   def run(
     options: RenderBenchmarkOptions,
     skiaFactory: FrameSurfaceFactory = SynchronousSkiaLayerSurfaceFactory,
-    skiaProbe: Either[String, Unit] = Right(())
+    skiaProbe: Either[String, Unit] = Right(()),
+    startup: String = ""
   ): BenchmarkReport =
     given Balance = Balance.default
     val fonts     = loadFonts()
@@ -66,7 +73,11 @@ object RenderBenchmarkRunner:
       options.widthPx,
       options.heightPx,
       java2d.deviceScale,
-      api
+      api,
+      toolkit = java.awt.Toolkit.getDefaultToolkit.getClass.getName,
+      startup = startup,
+      skiaLayers = measuredSkia.flatMap(_.layers),
+      skiaDraws = measuredSkia.flatMap(_.draws)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -106,7 +117,9 @@ object RenderBenchmarkRunner:
       Measured(
         stats,
         Java2DRenderSurface.deviceScaleFor(window.canvas).x,
-        window.layerPresenter.map(_.renderApi)
+        window.layerPresenter.map(_.renderApi),
+        window.layerPresenter.map(_ => SkiaLayerHost.layersOn(window.canvas)),
+        window.layerPresenter.map(_.drawStats)
       )
     finally
       window.stop()

@@ -121,6 +121,18 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       rgb(window.capture(), 250, 160) shouldBe 0x30c060
     }
 
+  it should "count its draws and publishes and time the wait from publish to draw" in
+    withWindow { window =>
+      window.host.drawStats.renders shouldBe 0
+      window.host.publish(record(scene))
+      eventually("the picture drawn and timed")(window.host.drawStats.publishToRenderMaxMs > 0.0)
+      val stats = window.host.drawStats
+      stats.publishes shouldBe 1
+      stats.renders should be >= 1
+      stats.publishToRenderMeanMs should be > 0.0
+      stats.replayMeanMs should be >= 0.0
+    }
+
   it should "report a base frame only once a picture has been published" in
     withWindow { window =>
       window.host.baseAvailable shouldBe false

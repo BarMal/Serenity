@@ -272,6 +272,13 @@ layer drew (Skia), the GPU being waited for after each draw. Options: `--render-
 `1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
 (untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
 
+The benchmark settles the toolkit and renderer like an editor launch does, so `SERENITY_TOOLKIT` and `-Dawt.toolkit.name`
+apply to it too (on a runtime without `WLToolkit`, `SERENITY_TOOLKIT=wayland` falls back to the default toolkit). The report
+records the toolkit class that drew and the launch's choice, how many Skia layers the window ended with, and what the
+layer's draws cost: draws against published frames, the mean wait from publishing a frame to its first draw, and the mean
+time per draw in the picture replay, the carets and the GPU wait. A window that ends with more than one layer gets no
+verdict, since each frame would have waited behind the others' draws.
+
 The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
 not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a
 GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario

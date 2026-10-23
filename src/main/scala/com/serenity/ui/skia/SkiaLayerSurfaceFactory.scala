@@ -5,7 +5,14 @@ import javax.swing.JPanel
 
 import scala.util.{Failure, Success, Try}
 
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface, RenderSurface, ScreenIdentity}
+import com.serenity.ui.renderer.{
+  FontSpec,
+  FrameSurfaceFactory,
+  FrameSurfaceRequest,
+  Java2DRenderSurface,
+  RenderSurface,
+  ScreenIdentity
+}
 import org.jetbrains.skia.PictureRecorder
 import org.slf4j.LoggerFactory
 

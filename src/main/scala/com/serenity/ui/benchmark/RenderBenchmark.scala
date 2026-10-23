@@ -17,14 +17,20 @@ object RenderBenchmark:
 
   private val Stamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")
 
-  def run(options: RenderBenchmarkOptions, outputDirectory: Path, out: PrintStream): IO[ExitCode] =
+  /** `startup` is the launch's toolkit and renderer choice, which the report records. */
+  def run(
+    options: RenderBenchmarkOptions,
+    outputDirectory: Path,
+    out: PrintStream,
+    startup: String = ""
+  ): IO[ExitCode] =
     if GraphicsEnvironment.isHeadless then
       IO(out.println("The render benchmark opens real windows and needs a display; none is available."))
         .as(ExitCode.Error)
     else
       for
         probe  <- SkiaProbe.run
-        report <- IO.blocking(RenderBenchmarkRunner.run(options, skiaProbe = skiaProbe(probe)))
+        report <- IO.blocking(RenderBenchmarkRunner.run(options, skiaProbe = skiaProbe(probe), startup = startup))
         _      <- IO.blocking(keep(report, outputDirectory, out))
       yield ExitCode.Success
 

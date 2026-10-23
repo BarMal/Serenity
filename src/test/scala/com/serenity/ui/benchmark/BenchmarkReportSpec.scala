@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,6 +24,35 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     Scenario.values.foreach(scenario => text should include(scenario.label))
     text should include("0.50x")
     text should include("Skia wins")
+  }
+
+  it should "name the toolkit, the startup choice, the layer count and what the draws cost" in {
+    val draws = LayerDrawStats(
+      renders = 330,
+      publishes = 300,
+      publishToRenderMeanMs = 4.5,
+      publishToRenderMaxMs = 40.0,
+      replayMeanMs = 1.25,
+      caretsMeanMs = 0.05,
+      syncMeanMs = 0.5
+    )
+    val detailed = BenchmarkReport(
+      environment.copy(
+        toolkit = "sun.awt.X11.XToolkit",
+        startup = "X11 (SERENITY_TOOLKIT=x11)",
+        skiaLayers = Some(1),
+        skiaDraws = Some(draws)
+      ),
+      results,
+      Verdict.SkiaWins
+    )
+    val text = detailed.markdown
+    List("sun.awt.X11.XToolkit", "SERENITY_TOOLKIT=x11", "1 layer", "330 draws for 300 published frames", "4.50")
+      .foreach(part => text should include(part))
+    val cursor = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment")
+    cursor.downField("toolkit").as[String] shouldBe Right("sun.awt.X11.XToolkit")
+    cursor.downField("skiaLayers").as[Int] shouldBe Right(1)
+    cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
   it should "show every figure of both backends in a scenario's row" in {

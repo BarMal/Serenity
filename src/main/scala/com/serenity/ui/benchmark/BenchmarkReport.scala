@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.Json
 import io.circe.syntax.*
 
@@ -11,7 +12,11 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "| Scenario | Java2D p50 | p95 | max | Skia p50 | p95 | max | Skia/Java2D p50 | p95 |\n" +
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
     val rows = results.map(row)
-    (List("# Render benchmark", "", environmentLine, "", header) ++ rows ++ List("", verdictText)).mkString("\n") + "\n"
+    (List("# Render benchmark", "", environmentLine) ++ launchLines ++ List("", header) ++ rows ++ List(
+      "",
+      verdictText
+    ))
+      .mkString("\n") + "\n"
 
   def json: String =
     Json
@@ -25,7 +30,17 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
   private def environmentLine: String =
     val api = environment.skiaRenderApi.fold(cause => s"Skia layer unavailable ($cause)", identity)
     s"Window ${environment.widthPx}x${environment.heightPx}, scale ${environment.deviceScale}, Skia render API $api, " +
-      s"${environment.os}, ${environment.java}."
+      s"toolkit ${environment.toolkit}, ${environment.os}, ${environment.java}."
+
+  private def launchLines: List[String] =
+    val startup = Option.when(environment.startup.nonEmpty)(s"Launch: ${environment.startup}.")
+    val layers =
+      environment.skiaLayers.map(count => s"Skia window ended with $count ${if count == 1 then "layer" else "layers"}.")
+    val draws = environment.skiaDraws.map { stats =>
+      f"Skia layer: ${stats.renders} draws for ${stats.publishes} published frames; publish to draw mean ${stats.publishToRenderMeanMs}%.2f ms (max ${stats.publishToRenderMaxMs}%.2f); " +
+        f"per draw: replay ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
+    }
+    List(startup, layers, draws).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -59,12 +74,28 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val api =
       environment.skiaRenderApi.fold(cause => "skiaUnavailable" -> cause.asJson, api => "skiaRenderApi" -> api.asJson)
     Json.obj(
-      "os"          -> environment.os.asJson,
-      "java"        -> environment.java.asJson,
-      "width"       -> environment.widthPx.asJson,
-      "height"      -> environment.heightPx.asJson,
-      "deviceScale" -> environment.deviceScale.asJson,
-      api
+      List(
+        "os"          -> environment.os.asJson,
+        "java"        -> environment.java.asJson,
+        "width"       -> environment.widthPx.asJson,
+        "height"      -> environment.heightPx.asJson,
+        "deviceScale" -> environment.deviceScale.asJson,
+        "toolkit"     -> environment.toolkit.asJson,
+        "startup"     -> environment.startup.asJson,
+        api
+      ) ++ environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
+        environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList*
+    )
+
+  private def drawsJson(stats: LayerDrawStats): Json =
+    Json.obj(
+      "renders"               -> stats.renders.asJson,
+      "publishes"             -> stats.publishes.asJson,
+      "publishToRenderMeanMs" -> stats.publishToRenderMeanMs.asJson,
+      "publishToRenderMaxMs"  -> stats.publishToRenderMaxMs.asJson,
+      "replayMeanMs"          -> stats.replayMeanMs.asJson,
+      "caretsMeanMs"          -> stats.caretsMeanMs.asJson,
+      "syncMeanMs"            -> stats.syncMeanMs.asJson
     )
 
   private def verdictJson: Json =

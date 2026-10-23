@@ -28,6 +28,18 @@ class BenchmarkVerdictSpec extends AnyFlatSpec with Matchers:
     BenchmarkVerdict.of(results(allFaster), gpu) shouldBe Verdict.SkiaWins
   }
 
+  it should "refuse a verdict when the window ended with more than one Skia layer" in {
+    BenchmarkVerdict.of(results(allFaster), gpu.copy(skiaLayers = Some(3))) match
+      case Verdict.NotMeasured(reason) =>
+        reason should include("3")
+        reason should include("layer")
+      case other => fail(s"stacked layers got a verdict: $other")
+  }
+
+  it should "judge as usual with exactly one Skia layer" in {
+    BenchmarkVerdict.of(results(allFaster), gpu.copy(skiaLayers = Some(1))) shouldBe Verdict.SkiaWins
+  }
+
   it should "forgive a slower cold full frame" in {
     val slowerCold = allFaster.updated(Scenario.ColdFullFrame, stats(40, 60))
     BenchmarkVerdict.of(results(slowerCold), gpu) shouldBe Verdict.SkiaWins

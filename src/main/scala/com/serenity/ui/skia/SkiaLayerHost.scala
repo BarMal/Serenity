@@ -3,10 +3,10 @@ package com.serenity.ui.skia
 import java.awt.event.{ComponentAdapter, ComponentEvent, MouseAdapter, MouseEvent}
 import java.awt.{Cursor, Rectangle}
 import java.util.concurrent.FutureTask
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, AtomicReference}
 import javax.swing.{JPanel, SwingUtilities}
 
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 import org.jetbrains.skia.{Canvas, Paint, Picture, PixelGeometry, Rect}
 import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
 
@@ -25,6 +25,8 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private val renders   = new AtomicInteger(0)
   private val publishes = new AtomicInteger(0)
   private val listener  = new AtomicReference[Option[() => Unit]](None)
+  private val draws     = new AtomicReference(SkiaLayerHost.Draws.Empty)
+  private val awaiting  = new AtomicLong(0L)
 
   private val followCanvas = new ComponentAdapter:
     override def componentResized(e: ComponentEvent): Unit = fitLayer()
@@ -56,13 +58,16 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
-    val _ = renders.incrementAndGet()
+    val _       = renders.incrementAndGet()
+    val started = System.nanoTime()
+    val pending = awaiting.get()
     surface.clear(0xff000000)
-    val _ = slot.drawLatest(picture =>
+    val drawn = slot.drawLatest(picture =>
       val _ = picture.playback(surface, () => false)
     )
-    val scale = layer.getContentScale
-    val ink   = new Paint()
+    val replayed = System.nanoTime()
+    val scale    = layer.getContentScale
+    val ink      = new Paint()
     carets.get().foreach { caret =>
       ink.setColor(caret.color.getRGB)
       surface.drawRect(
@@ -76,11 +81,23 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
       )
     }
     ink.close()
+    val inked = System.nanoTime()
     if syncGpu then
       Option(surface.getRecordingContext).foreach { context =>
         val _ = context.flush()
         context.submit(true)
       }
+    val synced = System.nanoTime()
+    val _ = draws.updateAndGet(
+      _.drawn(
+        waitedNanos = Option.when(drawn && pending != 0L && started >= pending && awaiting.compareAndSet(pending, 0L))(
+          started - pending
+        ),
+        replayNanos = replayed - started,
+        caretNanos = inked - replayed,
+        syncNanos = synced - inked
+      )
+    )
     listener.get().foreach(_.apply())
 
   def baseAvailable: Boolean = published.get()
@@ -89,7 +106,10 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
 
   def renderApi: String = layer.getRenderApi.toString
 
+  override def drawStats: LayerDrawStats = draws.get().stats(publishes.get())
+
   def publish(picture: Picture): Unit =
+    val _ = awaiting.compareAndSet(0L, System.nanoTime())
     slot.publish(picture)
     published.set(true)
     val _ = publishes.incrementAndGet()
@@ -117,6 +137,50 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private[skia] def layerCursorType: Int   = layer.getCursor.getType
 
 object SkiaLayerHost:
+
+  /** The totals of a layer's draws, in nanoseconds. */
+  final private case class Draws(
+      renders: Int,
+      waits: Int,
+      waitNanos: Long,
+      longestWaitNanos: Long,
+      replayNanos: Long,
+      caretNanos: Long,
+      syncNanos: Long
+  ):
+
+    def drawn(waitedNanos: Option[Long], replayNanos: Long, caretNanos: Long, syncNanos: Long): Draws =
+      copy(
+        renders = renders + 1,
+        waits = waits + waitedNanos.size,
+        waitNanos = waitNanos + waitedNanos.getOrElse(0L),
+        longestWaitNanos = longestWaitNanos.max(waitedNanos.getOrElse(0L)),
+        replayNanos = this.replayNanos + replayNanos,
+        caretNanos = this.caretNanos + caretNanos,
+        syncNanos = this.syncNanos + syncNanos
+      )
+
+    def stats(publishes: Int): LayerDrawStats =
+      def mean(nanos: Long, count: Int): Double = if count == 0 then 0.0 else nanos / 1e6 / count
+      LayerDrawStats(
+        renders = renders,
+        publishes = publishes,
+        publishToRenderMeanMs = mean(waitNanos, waits),
+        publishToRenderMaxMs = longestWaitNanos / 1e6,
+        replayMeanMs = mean(replayNanos, renders),
+        caretsMeanMs = mean(caretNanos, renders),
+        syncMeanMs = mean(syncNanos, renders)
+      )
+
+  private object Draws:
+    val Empty: Draws = Draws(0, 0, 0L, 0L, 0L, 0L, 0L)
+
+  /** How many Skia layers `canvas` holds; more than one means they are stacked, and every publish redraws all of them.
+    */
+  def layersOn(canvas: JPanel): Int = canvas.getComponents.count {
+    case _: SkiaLayer => true
+    case _            => false
+  }
 
   /** The layer is made, added to `canvas` and sized to it on the event thread. With `syncGpu` each frame waits for the
     * GPU to finish before it counts as drawn, which only a timing run wants.

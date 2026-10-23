@@ -75,9 +75,15 @@ object Main extends IOApp:
         // The benchmark opens its own windows, so the toolkit is settled first, but no editor, session or config is.
         GraphicsStartup
           .current(GraphicsStartup.launchOf(options))
-          .flatMap(_ =>
+          .flatMap(graphics =>
             options.renderBenchmark.fold(IO.pure(ExitCode.Error))(
-              RenderBenchmark.run(_, java.nio.file.Path.of("."), System.out)
+              RenderBenchmark.run(
+                _,
+                java.nio.file.Path.of("."),
+                System.out,
+                startup =
+                  s"toolkit ${graphics.toolkit.choice} (${graphics.toolkit.reason}); ${graphics.backend.logLine}"
+              )
             )
           )
           .handleErrorWith(reportStartupFailure(options, console))

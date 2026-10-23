@@ -1,7 +1,11 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.terminal.LayerDrawStats
+
 /** The machine and window a run was made on, and the render API Skia actually used: `Left` with the cause when the
-  * layer could not be made at all.
+  * layer could not be made at all. `toolkit` is the AWT toolkit class that drew and `startup` the launch's toolkit and
+  * renderer choice; `skiaLayers` is how many layers the Skia window ended with (more than one makes every figure
+  * unusable) and `skiaDraws` what the layer's draws cost.
   */
 final case class BenchmarkEnvironment(
     os: String,
@@ -9,7 +13,11 @@ final case class BenchmarkEnvironment(
     widthPx: Int,
     heightPx: Int,
     deviceScale: Double,
-    skiaRenderApi: Either[String, String]
+    skiaRenderApi: Either[String, String],
+    toolkit: String = "unknown",
+    startup: String = "",
+    skiaLayers: Option[Int] = None,
+    skiaDraws: Option[LayerDrawStats] = None
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")
@@ -35,6 +43,10 @@ object BenchmarkVerdict:
       case Left(cause) => Verdict.NotMeasured(s"Skia layer unavailable: $cause")
       case Right(api) if !environment.gpuUsed =>
         Verdict.NotMeasured(s"GPU NOT USED (software fallback: $api)")
+      case Right(_) if environment.skiaLayers.exists(_ > 1) =>
+        Verdict.NotMeasured(
+          s"the Skia window ended with ${environment.skiaLayers.getOrElse(0)} layers, and each frame waited for the others to draw"
+        )
       case Right(_) => judge(results)
 
   private def judge(results: Vector[ScenarioResult]): Verdict =
