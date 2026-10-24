@@ -134,7 +134,10 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
   it should "count its draws and publishes and time the wait from publish to draw" in
     withWindow { window =>
-      window.host.drawStats.renders shouldBe 0
+      onEdt(window.canvas.repaint())
+      eventually("a draw before any picture")(window.host.renderCount > 0)
+      window.host.drawStats.publishes shouldBe 0
+      window.host.drawStats.publishToRenderMaxMs shouldBe 0.0
       window.host.publish(record(scene))
       eventually("the picture drawn and timed")(window.host.drawStats.publishToRenderMaxMs > 0.0)
       val stats = window.host.drawStats
