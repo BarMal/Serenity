@@ -206,8 +206,15 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
 
   it should "give a reason for each scenario that keeps Java2D" in {
     val stays = BenchmarkReport(environment, results, Verdict.Java2DStays(List("scroll one line: p95 not better")))
-    stays.markdown should include("auto stays on Java2D")
+    stays.markdown should include("Skia does not win")
     stays.markdown should include("scroll one line: p95 not better")
+  }
+
+  it should "say that auto no longer depends on the verdict, whichever it is" in {
+    val wins  = BenchmarkReport(environment, results, Verdict.SkiaWins).markdown
+    val stays = BenchmarkReport(environment, results, Verdict.Java2DStays(List("scroll one line"))).markdown
+    List(wins, stays).foreach(text => text should include("`auto` picks the Skia layer whatever this says"))
+    List(wins, stays).foreach(text => text should not include "auto stays on Java2D")
   }
 
   "BenchmarkReport.json" should "carry the environment, every scenario's figures and the verdict" in {

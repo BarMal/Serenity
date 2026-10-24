@@ -21,15 +21,18 @@ import org.slf4j.LoggerFactory
   * pixels must.
   *
   * If the layer cannot be made (no GL context, a native failure) the window keeps working: this window's frames go to
-  * Java2D from then on, instead of a blank canvas.
+  * `fallback` from then on, instead of a blank canvas.
   */
-class LayerSurfaceFactory private[ui] (buildHost: JPanel => LayerHost) extends FrameSurfaceFactory:
+class LayerSurfaceFactory private[ui] (
+    buildHost: JPanel => LayerHost,
+    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+) extends FrameSurfaceFactory:
 
   def create(request: FrameSurfaceRequest): RenderSurface =
     LayerSurfaceFactory.WindowLayer
       .of(request.canvas)
       .host(request, buildHost)
-      .fold(FrameSurfaceFactory.Java2D.create(request))(record(request, _))
+      .fold(fallback.create(request))(record(request, _))
 
   private def record(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
     val canvas        = request.canvas
@@ -59,8 +62,20 @@ class LayerSurfaceFactory private[ui] (buildHost: JPanel => LayerHost) extends F
       layerCacheOwner = Some(ScreenIdentity(canvas))
     )
 
-/** The factory a window uses: a Skiko layer made on its canvas. */
-object SkiaLayerSurfaceFactory extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas))
+/** Frames for a window whose layer could not be made: painted by Skia on the CPU, and by Java2D only if that cannot
+  * make a surface either.
+  */
+final class RasterThenJava2D(raster: FrameSurfaceFactory) extends FrameSurfaceFactory:
+
+  def create(request: FrameSurfaceRequest): RenderSurface =
+    Try(raster.create(request)).getOrElse(FrameSurfaceFactory.Java2D.create(request))
+
+/** The factory a window uses: a Skiko layer made on its canvas, with the Skia raster surface behind it. */
+object SkiaLayerSurfaceFactory
+    extends LayerSurfaceFactory(
+      canvas => SkiaLayerHost.create(canvas),
+      new RasterThenJava2D(SkiaRasterSurfaceFactory)
+    )
 
 /** For a timing run: asks the layer to wait for the GPU after each draw, which Skiko only allows where the canvas has a
   * GPU context; it has none, so this draws like [[SkiaLayerSurfaceFactory]], and the layer's draw stats say so.
@@ -97,7 +112,7 @@ object LayerSurfaceFactory:
               Some(host)
             case Failure(error) =>
               state.set(State.Failed)
-              log.warn("The Skia layer could not be made; this window paints with Java2D", error)
+              log.warn("The Skia layer could not be made; this window paints with the fallback surface", error)
               None
 
   object WindowLayer:

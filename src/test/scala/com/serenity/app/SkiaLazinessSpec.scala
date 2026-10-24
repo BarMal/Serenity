@@ -53,8 +53,7 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
   private val cases = List(
     ("a terminal launch", "terminal", Nil),
     ("safe mode", "safe", Nil),
-    ("a window with ui.render.backend = java2d", "window", List("ui.render.backend = java2d")),
-    ("a window while no Skia surface is registered", "window", Nil)
+    ("a window with ui.render.backend = java2d", "window", List("ui.render.backend = java2d"))
   )
 
   private val waylandEnvironment = Map("WAYLAND_DISPLAY" -> "wayland-1", "DISPLAY" -> ":0")
@@ -79,6 +78,13 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
       run.output.exists(_.startsWith("resolved backend=java2d")) shouldBe true
       loadedForbidden(run) shouldBe Nil
     }
+  }
+
+  "Resolving the renderer for a window under auto" should "load Skiko once and choose a Skia backend" in {
+    val run = runChild("window", Nil)
+    run.exitCode shouldBe 0
+    run.output.exists(_.startsWith("resolved backend=skia")) shouldBe true
+    loadedForbidden(run) should not be empty
   }
 
   "The class-loading check" should "recognise a loaded Skiko class line" in {

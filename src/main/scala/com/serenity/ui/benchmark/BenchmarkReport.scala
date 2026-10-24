@@ -110,9 +110,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
   private def verdictText: String =
     verdict match
       case Verdict.SkiaWins =>
-        "**Skia wins** on this machine under the owner's rule: auto may pick Skia."
+        "**Skia wins** on this machine under the owner's rule. (`auto` picks the Skia layer whatever this says.)"
       case Verdict.Java2DStays(reasons) =>
-        ("**auto stays on Java2D.**" :: reasons.map(reason => s"- $reason")).mkString("\n")
+        ("**Skia does not win** on this machine under the owner's rule. (`auto` picks the Skia layer whatever this says.)" :: reasons
+          .map(reason => s"- $reason")).mkString("\n")
       case Verdict.NotMeasured(reason) => s"**No verdict:** $reason."
 
   private def scenarioJson(result: ScenarioResult): Json =

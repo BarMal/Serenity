@@ -8,7 +8,7 @@ import javax.swing.JPanel
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.FrameSurfaceRequest
+import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface}
 import com.serenity.ui.terminal.{LayerPresenter, SwingWindow}
 import org.jetbrains.skia.Picture
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,13 +34,16 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     def onRendered(callback: () => Unit): Unit                 = ()
     def renderApi: String                                      = "FAKE"
 
-  final private class Harness(buildHost: JPanel => LayerHost):
+  final private class Harness(
+      buildHost: JPanel => LayerHost,
+      fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+  ):
     val canvas = new JPanel
     canvas.setSize(100, 60)
     val caches   = RenderCaches.create()
     val shown    = new AtomicReference(List.empty[BufferedImage])
     val attached = new AtomicReference(List.empty[LayerPresenter])
-    val factory  = new LayerSurfaceFactory(buildHost)
+    val factory  = new LayerSurfaceFactory(buildHost, fallback)
 
     private def request(caches: RenderCaches) =
       FrameSurfaceRequest(
@@ -57,6 +60,8 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
         attachLayer = presenter =>
           val _ = attached.updateAndGet(presenter :: _)
       )
+
+    def rawRequest: FrameSurfaceRequest = request(caches)
 
     def frame(): Unit = frameWith(caches)
 
@@ -114,6 +119,39 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     harness.shown.get should have size 2
     harness.attached.get shouldBe empty
     builds.get shouldBe 1
+  }
+
+  it should "draw with the fallback factory it was given, and attach no layer, when the layer cannot be created" in {
+    val created = new AtomicInteger(0)
+    val counting: FrameSurfaceFactory = request =>
+      created.incrementAndGet()
+      FrameSurfaceFactory.Java2D.create(request)
+    val harness = new Harness(_ => throw new IllegalStateException("no GL context"), counting)
+    harness.frame()
+    harness.frame()
+    harness.frame()
+    created.get shouldBe 3
+    harness.shown.get should have size 3
+    harness.attached.get shouldBe empty
+  }
+
+  "RasterThenJava2D" should "paint with the Skia raster surface when it can" in {
+    val harness =
+      new Harness(_ => throw new IllegalStateException("no GL context"), RasterThenJava2D(SkiaRasterSurfaceFactory))
+    harness.frame()
+    harness.shown.get should have size 1
+    val surface = RasterThenJava2D(SkiaRasterSurfaceFactory).create(harness.rawRequest)
+    surface match
+      case _: SkiaRenderSurface => succeed
+      case other                => fail(s"expected a Skia surface, got ${other.getClass.getName}")
+  }
+
+  it should "paint with Java2D when the raster surface cannot be made" in {
+    val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
+    val harness                      = new Harness(_ => new FakeHost)
+    RasterThenJava2D(failing).create(harness.rawRequest) match
+      case _: Java2DRenderSurface => succeed
+      case other                  => fail(s"expected a Java2D surface, got ${other.getClass.getName}")
   }
 
   it should "keep its text caches in the owner's backend slot" in {
