@@ -4,6 +4,9 @@ import java.awt.Dimension
 import java.util.concurrent.locks.LockSupport
 import javax.swing.SwingUtilities
 
+import scala.util.Try
+
+import cats.syntax.either.*
 import com.serenity.config.WindowChromeMode
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
@@ -47,13 +50,22 @@ object RenderBenchmarkRunner:
     options: RenderBenchmarkOptions,
     skiaFactory: FrameSurfaceFactory = SynchronousSkiaLayerSurfaceFactory,
     skiaProbe: Either[String, Unit] = Right(()),
-    startup: String = ""
+    startup: String = "",
+    rasterFactory: Option[FrameSurfaceFactory] = None
   ): BenchmarkReport =
     given Balance = Balance.default
     val fonts     = loadFonts()
     val refresh   = RefreshRate.current
     val java2d    = measure(options, "Java2D", FrameSurfaceFactory.Java2D, fonts, refresh)
     val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts, refresh))
+    val raster = rasterFactory.fold("no raster arm was asked for".asLeft[Measured]) { factory =>
+      skiaProbe.left
+        .map(cause => s"Skia is not available: $cause")
+        .flatMap(_ =>
+          Try(measure(options, "Skia raster", factory, fonts, refresh)).toEither.left
+            .map(failure => s"the raster arm failed: ${Option(failure.getMessage).getOrElse(failure.toString)}")
+        )
+    }
     val api = skia.flatMap(
       _.renderApi.toRight("the layer could not be made, so the window fell back to Java2D")
     )
@@ -62,7 +74,8 @@ object RenderBenchmarkRunner:
       ScenarioResult(
         scenario,
         java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0, refreshNanos = refresh.nanos)),
-        measuredSkia.flatMap(_.stats.get(scenario))
+        measuredSkia.flatMap(_.stats.get(scenario)),
+        raster.toOption.flatMap(_.stats.get(scenario))
       )
     )
     val environment = BenchmarkEnvironment(
@@ -76,7 +89,8 @@ object RenderBenchmarkRunner:
       startup = startup,
       skiaLayers = measuredSkia.flatMap(_.layers),
       skiaDraws = measuredSkia.flatMap(_.draws),
-      refresh = refresh
+      refresh = refresh,
+      rasterNote = raster.left.toOption
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 

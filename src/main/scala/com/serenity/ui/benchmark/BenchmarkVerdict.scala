@@ -19,12 +19,21 @@ final case class BenchmarkEnvironment(
     startup: String = "",
     skiaLayers: Option[Int] = None,
     skiaDraws: Option[LayerDrawStats] = None,
-    refresh: RefreshRate = RefreshRate.Assumed60
+    refresh: RefreshRate = RefreshRate.Assumed60,
+    rasterNote: Option[String] = Some("no raster arm was asked for")
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")
 
-final case class ScenarioResult(scenario: Scenario, java2d: FrameStats, skia: Option[FrameStats])
+/** One scenario on each backend: Java2D, the Skia layer and the Skia CPU raster. Only Java2D and the layer decide the
+  * verdict.
+  */
+final case class ScenarioResult(
+    scenario: Scenario,
+    java2d: FrameStats,
+    skia: Option[FrameStats],
+    raster: Option[FrameStats] = None
+)
 
 enum Verdict:
   case SkiaWins

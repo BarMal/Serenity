@@ -37,6 +37,7 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     val json =
       parse(Files.readString(directory.resolve(jsonName.getOrElse(fail("no JSON file"))))).getOrElse(fail("not JSON"))
     json.hcursor.downField("scenarios").as[Vector[io.circe.Json]].map(_.size) shouldBe Right(Scenario.values.length)
+    json.hcursor.downField("scenarios").downArray.downField("raster").downField("count").as[Int] shouldBe Right(2)
   }
 
   it should "say it needs a display, and fail, on a headless machine" in {

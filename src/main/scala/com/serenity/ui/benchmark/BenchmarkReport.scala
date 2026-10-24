@@ -13,12 +13,14 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
     val rows = results.map(row)
     val tailHeader =
-      "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early |\n" +
-        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+      "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early |" +
+        (if hasRaster then " Raster p75 | p90 | p99 | >33 ms | early |" else "") +
+        "\n" + "|---|" + "---:|" * (10 + (if hasRaster then 5 else 0))
     val framesHeader =
-      "| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed |\n" +
-        "|---|---:|---:|---:|---:|---:|---:|"
-    (List("# Render benchmark", "", environmentLine) ++ launchLines ++ List("", header) ++ rows ++ List(
+      "| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed |" +
+        (if hasRaster then " Raster p50 | p95 | missed |" else "") +
+        "\n" + "|---|" + "---:|" * (6 + (if hasRaster then 3 else 0))
+    (List("# Render benchmark", "", environmentLine) ++ launchLines ++ List("", header) ++ rows ++ rasterLines ++ List(
       "",
       "Tail of each scenario; early is the samples whose last presentation came before the render call returned.",
       "",
@@ -66,6 +68,25 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     )
     s"| ${result.scenario.label} | ${f(java2d.p50Ms)} | ${f(java2d.p95Ms)} | ${f(java2d.maxMs)} $skia"
 
+  private def hasRaster: Boolean = results.exists(_.raster.isDefined)
+
+  private def rasterLines: List[String] =
+    if hasRaster then
+      val rasterHeader =
+        "| Scenario | Raster p50 | p95 | max | Raster/Java2D p50 | p95 |\n|---|---:|---:|---:|---:|---:|"
+      List(
+        "",
+        "Skia raster (CPU), the same scenarios painted by Skia on the CPU and presented through Java2D:",
+        "",
+        rasterHeader
+      ) ++
+        results.flatMap(result =>
+          result.raster.map(r =>
+            s"| ${result.scenario.label} | ${f(r.p50Ms)} | ${f(r.p95Ms)} | ${f(r.maxMs)} | ${ratio(r.p50Ms, result.java2d.p50Ms)} | ${ratio(r.p95Ms, result.java2d.p95Ms)} |"
+          )
+        )
+    else List("", s"Skia raster (CPU): not measured (${environment.rasterNote.getOrElse("no reason given")}).")
+
   private def refreshLine: String =
     val refresh = environment.refresh
     if refresh.assumed then f"Refresh: ${refresh.hz}%.0f Hz (assumed: the display reported no rate)."
@@ -75,14 +96,16 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     def cells(s: FrameStats) =
       val share = if s.count == 0 then 0 else math.round(100.0 * s.missedRefresh / s.count)
       s"${s.p50Frames} | ${s.p95Frames} | ${s.missedRefresh} ($share%) |"
-    val skia = result.skia.fold("- | - | - |")(cells)
-    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia"
+    val skia   = result.skia.fold("- | - | - |")(cells)
+    val raster = if hasRaster then result.raster.fold(" - | - | - |")(r => s" ${cells(r)}") else ""
+    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia$raster"
 
   private def tailRow(result: ScenarioResult): String =
     def cells(s: FrameStats) =
       s"${f(s.p75Ms)} | ${f(s.p90Ms)} | ${f(s.p99Ms)} | ${s.over33Ms} | ${s.endedBeforeReturn} |"
-    val skia = result.skia.fold("- | - | - | - | - |")(cells)
-    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia"
+    val skia   = result.skia.fold("- | - | - | - | - |")(cells)
+    val raster = if hasRaster then result.raster.fold(" - | - | - | - | - |")(r => s" ${cells(r)}") else ""
+    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia$raster"
 
   private def verdictText: String =
     verdict match
@@ -94,7 +117,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
 
   private def scenarioJson(result: ScenarioResult): Json =
     val base = List("scenario" -> result.scenario.label.asJson, "java2d" -> statsJson(result.java2d))
-    Json.obj(base ++ result.skia.map(stats => "skia" -> statsJson(stats)).toList*)
+    Json.obj(
+      base ++ result.skia.map(stats => "skia" -> statsJson(stats)).toList ++
+        result.raster.map(stats => "raster" -> statsJson(stats)).toList*
+    )
 
   private def statsJson(stats: FrameStats): Json =
     Json.obj(
@@ -128,7 +154,8 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         "refreshHz"      -> environment.refresh.hz.asJson,
         "refreshAssumed" -> environment.refresh.assumed.asJson,
         api
-      ) ++ environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
+      ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
+        environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList*
     )
 

@@ -285,21 +285,28 @@ The renderer and the toolkit are settled together before any AWT class loads, so
 
 #### Comparing the renderers
 
-`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, then the Skia layer), draws the same
-built-in document through the same scripted actions on both, prints a table and saves it as
+`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
+raster, which paints with Skia and presents through Java2D), draws the same built-in document through the same scripted
+actions on each, prints the tables and saves them as
 `render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
 scenarios are a cold full frame, typing one character, scrolling one line, scrolling five lines, a page down and a
-caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D) or the
-layer drew (Skia), the GPU being waited for after each draw. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
+caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
+or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
+its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
+Skiko's frame pacing (with vsync on, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
 `1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
 (untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
 
 The benchmark settles the toolkit and renderer like an editor launch does, so `SERENITY_TOOLKIT` and `-Dawt.toolkit.name`
 apply to it too (on a runtime without `WLToolkit`, `SERENITY_TOOLKIT=wayland` falls back to the default toolkit). The report
 records the toolkit class that drew and the launch's choice, how many Skia layers the window ended with, and what the
-layer's draws cost: draws against published frames, the mean wait from publishing a frame to its first draw, and the mean
-time per draw in the picture replay, the carets and the GPU wait. A window that ends with more than one layer gets no
-verdict, since each frame would have waited behind the others' draws.
+layer's draws cost: draws against published frames, the mean wait from publishing a frame to its first draw, the mean
+time per draw adding the picture and filling the carets, whether a GPU wait was possible, and the size of the published
+pictures. Besides the p50, p95 and max of each scenario the report has a tail table (p75, p90, p99, the frames over 33 ms
+and the samples that ended before the render call returned) and a frames-to-present table: each time rounded up to whole
+display refreshes, using the rate Java reports for the screen or an assumed 60 Hz that the report says it assumed, with
+the samples that took more than one refresh. A window that ends with more than one layer gets no verdict, since each
+frame would have waited behind the others' draws. The raster arm does not take part in the verdict.
 
 The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
 not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a

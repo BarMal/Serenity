@@ -4,7 +4,7 @@ import java.awt.{GraphicsEnvironment, Window}
 
 import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.renderer.FrameSurfaceFactory
-import com.serenity.ui.skia.{LayerSurfaceFactory, SynchronousSkiaLayerSurfaceFactory}
+import com.serenity.ui.skia.{LayerSurfaceFactory, SkiaRasterSurfaceFactory, SynchronousSkiaLayerSurfaceFactory}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,9 +20,10 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     options: RenderBenchmarkOptions,
     skiaFactory: FrameSurfaceFactory,
     skiaProbe: Either[String, Unit] = Right(()),
-    startup: String = ""
+    startup: String = "",
+    rasterFactory: Option[FrameSurfaceFactory] = None
   ): BenchmarkReport =
-    DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup))
+    DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup, rasterFactory))
 
   private def onLinuxWithDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
@@ -99,6 +100,41 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, skiaProbe = Left("no libGL"))
     report.environment.skiaRenderApi shouldBe Left("no libGL")
     report.results.foreach(result => result.skia shouldBe None)
+  }
+
+  it should "time the Skia raster arm with exactly the frames asked for, beside the other two" in {
+    onLinuxWithDisplay()
+    val report =
+      runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(SkiaRasterSurfaceFactory))
+    report.results.foreach { result =>
+      withClue(result.scenario.label) {
+        result.raster.map(_.count) shouldBe Some(3)
+        result.raster.map(_.dropped) shouldBe Some(0)
+        result.raster.map(_.p50Ms).getOrElse(0.0) should be > 0.0
+        result.java2d.count shouldBe 3
+      }
+    }
+    report.environment.rasterNote shouldBe None
+  }
+
+  it should "leave the raster arm out, and say so, when none was asked for" in {
+    onLinuxWithDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    report.results.foreach(result => result.raster shouldBe None)
+    report.environment.rasterNote shouldBe Some("no raster arm was asked for")
+  }
+
+  it should "report a raster arm that fails, and still report the other two" in {
+    onLinuxWithDisplay()
+    val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(failing))
+    report.results.foreach { result =>
+      result.raster shouldBe None
+      result.java2d.count shouldBe 3
+      result.skia.map(_.count) shouldBe Some(3)
+    }
+    report.environment.rasterNote.getOrElse("") should include("no raster surface")
+    Window.getWindows.filter(_.isShowing) shouldBe empty
   }
 
   it should "leave no window open" in {

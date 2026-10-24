@@ -28,6 +28,11 @@ class BenchmarkVerdictSpec extends AnyFlatSpec with Matchers:
     BenchmarkVerdict.of(results(allFaster), gpu) shouldBe Verdict.SkiaWins
   }
 
+  it should "not let a raster arm change the verdict" in {
+    val withRaster = results(allFaster).map(_.copy(raster = Some(stats(1000, 2000))))
+    BenchmarkVerdict.of(withRaster, gpu) shouldBe BenchmarkVerdict.of(results(allFaster), gpu)
+  }
+
   it should "refuse a verdict when the window ended with more than one Skia layer" in {
     BenchmarkVerdict.of(results(allFaster), gpu.copy(skiaLayers = Some(3))) match
       case Verdict.NotMeasured(reason) =>

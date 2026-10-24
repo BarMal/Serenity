@@ -137,6 +137,57 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     java2d.downField("missedRefresh").as[Int] shouldBe Right(50)
   }
 
+  it should "show the raster arm beside the other two in every table, and give the reason when it is missing" in {
+    val raster = FrameStats(
+      200,
+      8,
+      16,
+      24,
+      0,
+      p75Ms = 9,
+      p90Ms = 14,
+      p99Ms = 22,
+      over33Ms = 2,
+      endedBeforeReturn = 1,
+      p50Frames = 1,
+      p95Frames = 1,
+      missedRefresh = 10
+    )
+    val withRaster = BenchmarkReport(
+      environment,
+      Scenario.values.toVector.map(scenario =>
+        ScenarioResult(scenario, stats(10, 20), Some(stats(5, 10)), Some(raster))
+      ),
+      Verdict.SkiaWins
+    )
+    val text = withRaster.markdown
+    text should include("Skia raster (CPU)")
+    val rasterRow = text.linesIterator
+      .dropWhile(!_.contains("Skia raster (CPU)"))
+      .find(_.contains("page down"))
+      .getOrElse(fail("no raster row"))
+    List("8.00", "16.00", "24.00", "0.80x", "0.80x").foreach(figure => rasterRow should include(figure))
+    text should include(
+      "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early | Raster p75 | p90 | p99 | >33 ms | early |"
+    )
+    text should include(
+      "| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed | Raster p50 | p95 | missed |"
+    )
+    parse(withRaster.json)
+      .getOrElse(fail("not JSON"))
+      .hcursor
+      .downField("scenarios")
+      .downArray
+      .downField("raster")
+      .downField("p99Ms")
+      .as[Double] shouldBe Right(22.0)
+    val without = report
+      .copy(environment = environment.copy(rasterNote = Some("the raster arm failed: no raster surface")))
+      .markdown
+    without should include("Skia raster (CPU): not measured (the raster arm failed: no raster surface)")
+    without should not include "Raster p75"
+  }
+
   it should "show every figure of both backends in a scenario's row" in {
     val row = report.markdown.linesIterator.find(_.contains("type one character")).getOrElse(fail("no row"))
     List("10.00", "20.00", "25.00", "5.00", "10.00", "15.00").foreach(figure => row should include(figure))

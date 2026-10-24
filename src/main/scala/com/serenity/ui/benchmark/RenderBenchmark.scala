@@ -8,7 +8,7 @@ import java.time.format.DateTimeFormatter
 
 import cats.effect.{ExitCode, IO}
 import com.serenity.app.RenderBackendSelection.Probe
-import com.serenity.ui.skia.SkiaProbe
+import com.serenity.ui.skia.{SkiaProbe, SkiaRasterSurfaceFactory}
 
 /** `--render-benchmark`: runs the side-by-side timing, prints the report and keeps it as Markdown and JSON, without
   * starting the editor.
@@ -29,9 +29,16 @@ object RenderBenchmark:
         .as(ExitCode.Error)
     else
       for
-        probe  <- SkiaProbe.run
-        report <- IO.blocking(RenderBenchmarkRunner.run(options, skiaProbe = skiaProbe(probe), startup = startup))
-        _      <- IO.blocking(keep(report, outputDirectory, out))
+        probe <- SkiaProbe.run
+        report <- IO.blocking(
+          RenderBenchmarkRunner.run(
+            options,
+            skiaProbe = skiaProbe(probe),
+            startup = startup,
+            rasterFactory = Some(SkiaRasterSurfaceFactory)
+          )
+        )
+        _ <- IO.blocking(keep(report, outputDirectory, out))
       yield ExitCode.Success
 
   private def skiaProbe(probe: Probe): Either[String, Unit] =
