@@ -47,10 +47,6 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
   private def withWindow[A](body: Window => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "reads the screen back from a layer Skiko draws with its software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val canvas = new JPanel(null)
       canvas.setFocusable(true)

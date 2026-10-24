@@ -38,10 +38,6 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
 
   private def withWindow[A](body: SwingWindow => A): A =
     assume(!GraphicsEnvironment.isHeadless, "Presenting frames needs a real window, which needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "reads the screen back from a layer Skiko draws with its software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val window = new SwingWindow(
         new Dimension(logicalW, logicalH),

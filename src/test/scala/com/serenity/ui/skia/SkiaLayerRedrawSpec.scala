@@ -86,10 +86,6 @@ class SkiaLayerRedrawSpec extends AnyFlatSpec with Matchers:
 
   private def withSession[A](body: Session => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "counts the draws of Skiko's software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val canvas = new JPanel(null)
       canvas.setPreferredSize(new Dimension(width, height))

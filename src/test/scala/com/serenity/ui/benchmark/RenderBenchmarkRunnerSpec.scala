@@ -27,10 +27,6 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   private def onLinuxWithDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "other systems draw the layer with their GPU API, which this check leaves to the owner's machine"
-    )
 
   "RenderBenchmarkRunner.run" should "time every scenario on both backends, with exactly the frames asked for" in {
     onLinuxWithDisplay()
