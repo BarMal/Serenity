@@ -11,6 +11,8 @@ here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 # shellcheck source=pins.env
 . "$here/pins.env"
+# shellcheck source=natives-version.env
+. "$here/natives-version.env"
 
 case "$group" in
   linux-x64)   targets=(linux-x64);            control=(linux-x64) ;;
