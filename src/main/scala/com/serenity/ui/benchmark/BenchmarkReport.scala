@@ -40,7 +40,11 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       f"Skia layer: ${stats.renders} draws for ${stats.publishes} published frames; publish to draw mean ${stats.publishToRenderMeanMs}%.2f ms (max ${stats.publishToRenderMaxMs}%.2f); " +
         f"per draw: replay ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
     }
-    List(startup, layers, draws).flatten.map(line => s"\n$line")
+    val cache = environment.skiaDraws.map { stats =>
+      s"Skia layer: replay cache: ${stats.replayCacheNote}; ${stats.replays} replays in ${stats.renders} draws; " +
+        s"GPU sync: ${stats.gpuSyncNote}."
+    }
+    List(startup, layers, draws, cache).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -95,7 +99,12 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "publishToRenderMaxMs"  -> stats.publishToRenderMaxMs.asJson,
       "replayMeanMs"          -> stats.replayMeanMs.asJson,
       "caretsMeanMs"          -> stats.caretsMeanMs.asJson,
-      "syncMeanMs"            -> stats.syncMeanMs.asJson
+      "syncMeanMs"            -> stats.syncMeanMs.asJson,
+      "replays"               -> stats.replays.asJson,
+      "cachedDraws"           -> stats.cachedDraws.asJson,
+      "syncedDraws"           -> stats.syncedDraws.asJson,
+      "gpuContext"            -> stats.gpuContext.asJson,
+      "replayCacheEngaged"    -> stats.replayCacheEngaged.asJson
     )
 
   private def verdictJson: Json =

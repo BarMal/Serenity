@@ -55,6 +55,31 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
+  it should "say whether the replay cache engaged, how often the picture was replayed and whether the GPU was waited on" in {
+    val base = LayerDrawStats(1460, 1156, 9.0, 54.0, 3.4, 0.05, 0.0)
+    def textFor(stats: LayerDrawStats): String =
+      BenchmarkReport(environment.copy(skiaDraws = Some(stats)), results, Verdict.SkiaWins).markdown
+    val off = textFor(base.copy(replays = 1460, cachedDraws = 0, syncedDraws = 0, gpuContext = false))
+    List(
+      "replay cache: off (no GPU context",
+      "1460 replays in 1460 draws",
+      "GPU sync: not done (no GPU context"
+    ).foreach(part => off should include(part))
+    val on = textFor(base.copy(replays = 1156, cachedDraws = 300, syncedDraws = 1460, gpuContext = true))
+    List("replay cache: on (300 of 1460 draws", "1156 replays in 1460 draws", "GPU sync: 1460 of 1460 draws").foreach(
+      part => on should include(part)
+    )
+    val json =
+      parse(BenchmarkReport(environment.copy(skiaDraws = Some(base.copy(replays = 7))), results, Verdict.SkiaWins).json)
+        .getOrElse(fail("not JSON"))
+        .hcursor
+        .downField("environment")
+        .downField("skiaDraws")
+    json.downField("replays").as[Int] shouldBe Right(7)
+    json.downField("replayCacheEngaged").as[Boolean] shouldBe Right(false)
+    json.downField("gpuContext").as[Boolean] shouldBe Right(false)
+  }
+
   it should "show every figure of both backends in a scenario's row" in {
     val row = report.markdown.linesIterator.find(_.contains("type one character")).getOrElse(fail("no row"))
     List("10.00", "20.00", "25.00", "5.00", "10.00", "15.00").foreach(figure => row should include(figure))

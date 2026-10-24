@@ -11,10 +11,10 @@ import org.jetbrains.skia.{Canvas, Image, ImageInfo, Paint, Picture, PixelGeomet
 import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
 
 /** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
-  * renders frames records each as a `Picture` and publishes it. On a GPU a published picture is replayed once, into an
-  * offscreen image; every draw after that, a caret blink among them, paints that image and fills the carets over it, so
-  * a blink costs one blit and never replays the frame. A software redrawer has no GPU context and replays the picture
-  * on every draw: there the extra full-window copy costs more than the replay it would save.
+  * renders frames records each as a `Picture` and publishes it. Skiko hands `onRender` a canvas that records into its
+  * own picture, which it draws on the GPU later, so the canvas has no GPU context: the picture is replayed into it on
+  * every draw and the replay cache, which needs a context to make its offscreen image, stays off unless a test forces
+  * it on. The draw stats say which it was.
   *
   * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
   * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
@@ -72,8 +72,9 @@ final class SkiaLayerHost private (
     val started = System.nanoTime()
     val pending = awaiting.get()
     surface.clear(0xff000000)
-    val version  = publishes.get()
-    val useCache = cacheReplay.getOrElse(Option(surface.getRecordingContext).isDefined)
+    val version    = publishes.get()
+    val hasContext = Option(surface.getRecordingContext).isDefined
+    val useCache   = cacheReplay.getOrElse(hasContext)
     val drawn =
       if useCache then
         val shown = replayed
@@ -83,9 +84,12 @@ final class SkiaLayerHost private (
         shown.foreach(frame => surface.drawImage(frame.image, 0f, 0f))
         shown.isDefined
       else
-        slot.drawLatest(picture =>
+        val played = slot.drawLatest(picture =>
           val _ = picture.playback(surface, () => false)
         )
+        if played then
+          val _ = replays.incrementAndGet()
+        played
     val replayedAt = System.nanoTime()
     val scale      = layer.getContentScale
     val ink        = new Paint()
@@ -103,12 +107,12 @@ final class SkiaLayerHost private (
     }
     ink.close()
     val inked = System.nanoTime()
-    if syncGpu then
-      Option(surface.getRecordingContext).foreach { context =>
-        val _ = context.flush()
-        context.submit(true)
-      }
-    val synced = System.nanoTime()
+    val synced = syncGpu && Option(surface.getRecordingContext).fold(false) { context =>
+      val _ = context.flush()
+      context.submit(true)
+      true
+    }
+    val syncedAt = System.nanoTime()
     val _ = draws.updateAndGet(
       _.drawn(
         waitedNanos = Option.when(drawn && pending != 0L && started >= pending && awaiting.compareAndSet(pending, 0L))(
@@ -116,7 +120,10 @@ final class SkiaLayerHost private (
         ),
         replayNanos = replayedAt - started,
         caretNanos = inked - replayedAt,
-        syncNanos = synced - inked
+        syncNanos = syncedAt - inked,
+        cached = useCache && drawn,
+        synced = synced,
+        gpuContext = hasContext
       )
     )
     listener.get().foreach(_.apply())
@@ -156,7 +163,7 @@ final class SkiaLayerHost private (
 
   def renderApi: String = layer.getRenderApi.toString
 
-  override def drawStats: LayerDrawStats = draws.get().stats(publishes.get())
+  override def drawStats: LayerDrawStats = draws.get().stats(publishes.get(), replays.get())
 
   def publish(picture: Picture): Unit =
     val _ = awaiting.compareAndSet(0L, System.nanoTime())
@@ -208,10 +215,21 @@ object SkiaLayerHost:
       longestWaitNanos: Long,
       replayNanos: Long,
       caretNanos: Long,
-      syncNanos: Long
+      syncNanos: Long,
+      cachedDraws: Int,
+      syncedDraws: Int,
+      gpuContext: Boolean
   ):
 
-    def drawn(waitedNanos: Option[Long], replayNanos: Long, caretNanos: Long, syncNanos: Long): Draws =
+    def drawn(
+      waitedNanos: Option[Long],
+      replayNanos: Long,
+      caretNanos: Long,
+      syncNanos: Long,
+      cached: Boolean,
+      synced: Boolean,
+      gpuContext: Boolean
+    ): Draws =
       copy(
         renders = renders + 1,
         waits = waits + waitedNanos.size,
@@ -219,10 +237,13 @@ object SkiaLayerHost:
         longestWaitNanos = longestWaitNanos.max(waitedNanos.getOrElse(0L)),
         replayNanos = this.replayNanos + replayNanos,
         caretNanos = this.caretNanos + caretNanos,
-        syncNanos = this.syncNanos + syncNanos
+        syncNanos = this.syncNanos + syncNanos,
+        cachedDraws = cachedDraws + (if cached then 1 else 0),
+        syncedDraws = syncedDraws + (if synced then 1 else 0),
+        gpuContext = gpuContext
       )
 
-    def stats(publishes: Int): LayerDrawStats =
+    def stats(publishes: Int, replays: Int): LayerDrawStats =
       def mean(nanos: Long, count: Int): Double = if count == 0 then 0.0 else nanos / 1e6 / count
       LayerDrawStats(
         renders = renders,
@@ -231,11 +252,15 @@ object SkiaLayerHost:
         publishToRenderMaxMs = longestWaitNanos / 1e6,
         replayMeanMs = mean(replayNanos, renders),
         caretsMeanMs = mean(caretNanos, renders),
-        syncMeanMs = mean(syncNanos, renders)
+        syncMeanMs = mean(syncNanos, renders),
+        replays = replays,
+        cachedDraws = cachedDraws,
+        syncedDraws = syncedDraws,
+        gpuContext = gpuContext
       )
 
   private object Draws:
-    val Empty: Draws = Draws(0, 0, 0L, 0L, 0L, 0L, 0L)
+    val Empty: Draws = Draws(0, 0, 0L, 0L, 0L, 0L, 0L, 0, 0, false)
 
   /** How many Skia layers `canvas` holds; more than one means they are stacked, and every publish redraws all of them.
     */

@@ -131,15 +131,19 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
           render(window, state, RenderCaches.create(), SkiaLayerSurfaceFactory)
           val layerHost = window.canvas.getComponents.length
           layerHost should be >= 1
+          val left = inkMap(java2d)
+          def agreement(shown: BufferedImage): Double =
+            val right = inkMap(shown)
+            left.zip(right).count(_ == _).toDouble / left.length
           eventually("the layer's frame on screen")(inkMap(onScreen(window)).count(identity) > 20)
+          eventually("the layer's whole frame on screen")(agreement(onScreen(window)) >= 0.95)
           val skia = onScreen(window)
           keep(s"$name-java2d", java2d)
           keep(s"$name-skia-layer", skia)
-          val (left, right) = (inkMap(java2d), inkMap(skia))
-          left.length shouldBe right.length
-          withClue(s"$name: share of cells where Java2D and the layer agree on ink: ") {
-            left.zip(right).count(_ == _).toDouble / left.length should be >= 0.95
-          }
+          left.length shouldBe inkMap(skia).length
+          withClue(s"$name: share of cells where Java2D and the layer agree on ink: ")(
+            agreement(skia) should be >= 0.95
+          )
       }
     }
 

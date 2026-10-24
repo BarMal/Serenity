@@ -56,7 +56,9 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     def capture(): BufferedImage =
       new Robot().createScreenCapture(new Rectangle(screenOrigin, new Dimension(canvas.getWidth, canvas.getHeight)))
 
-  private def withWindow[A](body: Window => A): A =
+  private def withWindow[A](body: Window => A): A = withHost(Some(true))(body)
+
+  private def withHost[A](cacheReplay: Option[Boolean])(body: Window => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
     assume(
       System.getProperty("os.name", "").toLowerCase.contains("linux"),
@@ -74,7 +76,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         f.setVisible(true)
         f
       }
-      val host = SkiaLayerHost.create(canvas, cacheReplay = Some(true))
+      val host = SkiaLayerHost.create(canvas, cacheReplay = cacheReplay)
       try
         val _ = onEdt(canvas.requestFocusInWindow())
         body(new Window(frame, canvas, host))
@@ -145,6 +147,42 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.renders should be >= 1
       stats.publishToRenderMeanMs should be > 0.0
       stats.replayMeanMs should be >= 0.0
+    }
+
+  it should "report that it replays the picture for every draw when the canvas has no GPU context" in
+    withHost(None) { window =>
+      window.host.publish(record(scene))
+      eventually("the picture replayed")(window.host.drawStats.replays >= 1)
+      val settled = quiet(window.host.drawStats.renders)
+      val before  = window.host.drawStats
+      val caret   = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
+      List(List(caret), Nil, List(caret)).foreach { carets =>
+        val seen = window.host.renderCount
+        window.host.showCarets(carets)
+        eventually("a redraw")(window.host.renderCount > seen)
+      }
+      val after = window.host.drawStats
+      after.replays should be >= before.replays + 3
+      withClue(s"$settled draws settled; ")(after.cachedDraws shouldBe 0)
+      after.replayCacheEngaged shouldBe false
+      after.gpuContext shouldBe false
+    }
+
+  it should "report the replay cache as engaged and the picture replayed once when it is forced on" in
+    withHost(Some(true)) { window =>
+      window.host.publish(record(scene))
+      eventually("the picture replayed")(window.host.drawStats.replays >= 1)
+      val replayed = quiet(window.host.replayCount)
+      val caret    = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
+      List(List(caret), Nil, List(caret)).foreach { carets =>
+        val seen = window.host.renderCount
+        window.host.showCarets(carets)
+        eventually("a redraw")(window.host.renderCount > seen)
+      }
+      val stats = window.host.drawStats
+      stats.replayCacheEngaged shouldBe true
+      stats.cachedDraws should be >= 3
+      stats.replays shouldBe replayed
     }
 
   it should "replay the picture when a new one is published, not for each caret blink" in
@@ -321,6 +359,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       try
         host.publish(record(scene))
         eventually("a synchronous frame")(host.renderCount > 0)
+        host.drawStats.syncedDraws shouldBe 0
       finally
         host.dispose()
         onEdt(frame.dispose())
