@@ -1,0 +1,107 @@
+name: Debug Java 25 AOT fallback
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-aot2
+
+permissions:
+  contents: read
+
+jobs:
+  fallback:
+    name: AOT fallback ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: linux, os: ubuntu-latest, cfg: lib/app/Serenity.cfg, appdir: lib/app, exe: bin/Serenity }
+          - { label: windows, os: windows-latest, cfg: app/Serenity.cfg, appdir: app, exe: Serenity.exe }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Build the app image with the release command
+        run: |
+          set -euo pipefail
+          sbt -v clean assembly writePackageVersion
+          mkdir -p package-input dist
+          cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          cp LICENSE THIRD-PARTY-NOTICES.md package-input/
+          ICON=()
+          if [ "$RUNNER_OS" = Windows ]; then ICON=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico"); fi
+          jpackage --type app-image --name Serenity --input package-input --main-jar Serenity.jar --main-class Main \
+            --app-version "$(cat target/package/app-version.txt)" --vendor BarMal --dest dist "${ICON[@]}" \
+            --java-options '-XX:+UseG1GC' --java-options '-XX:MaxRAMPercentage=25' --java-options '-XX:G1PeriodicGCInterval=60000' \
+            --java-options '--enable-native-access=ALL-UNNAMED' --java-options '--sun-misc-unsafe-memory-access=allow' \
+            --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive" \
+            --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa' --java-options '-XX:+AutoCreateSharedArchive'
+          cat dist/Serenity/${{ matrix.cfg }}
+      - name: Start a display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 3
+      - name: Fallback and timing experiments
+        run: |
+          set -uo pipefail
+          root="$PWD"; CFG='${{ matrix.cfg }}'; APPDIR='${{ matrix.appdir }}'; EXE='${{ matrix.exe }}'
+          TT="python bench/java25/ttfw.py"; command -v python >/dev/null || TT="python3 bench/java25/ttfw.py"
+          say() { echo; echo "##### $*"; }
+          fresh() { rm -rf "$1" && mkdir "$1" && cp -r dist/Serenity "$1/Serenity"; }
+          native_path() { if [ "$RUNNER_OS" = Windows ]; then cygpath -m "$1"; else echo "$1"; fi; }
+          launch_log() { # run once with JVM logging, show the interesting lines and the exit code
+            ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="$2" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > launch.out 2>&1; echo "exit=$?"; grep -iE "AOT cache|aot\]|cds\]|shared|archive|error|warn|mismatch|Opened|Unable|conflict" launch.out | grep -v "Picked up" | head -n "${3:-10}" ); }
+
+          say "AppCDS only (today)"
+          fresh a; $TT a/Serenity/$EXE 1 "warm-up" >/dev/null
+          $TT a/Serenity/$EXE 10 "AppCDS"
+
+          say "AOT only: train, then time"
+          fresh b
+          python bench/java25/cfgtool.py "b/Serenity/$CFG" "drop:SharedArchiveFile" "drop:AutoCreateSharedArchive" 2>/dev/null || python3 bench/java25/cfgtool.py "b/Serenity/$CFG" "drop:SharedArchiveFile" "drop:AutoCreateSharedArchive"
+          AOT="$(native_path "$root/b/Serenity/$APPDIR/serenity.aot")"
+          JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$AOT" $TT b/Serenity/$EXE 1 "training" 2>&1 | grep -v "Picked up" | head -n 3
+          ls -l "b/Serenity/$APPDIR/serenity.aot" | awk '{printf "serenity.aot bytes: %s\n", $5}'
+          cp "b/Serenity/$CFG" cfg.aot-only.backup
+          (python bench/java25/cfgtool.py "b/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot' || python3 bench/java25/cfgtool.py "b/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot')
+          $TT b/Serenity/$EXE 10 "AOT only"
+
+          say "F1: AOT cache AND AppCDS options together (the proposed fallback design)"
+          fresh c
+          cp "b/Serenity/$APPDIR/serenity.aot" "c/Serenity/$APPDIR/serenity.aot"
+          (python bench/java25/cfgtool.py "c/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot' || python3 bench/java25/cfgtool.py "c/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot')
+          cat "c/Serenity/$CFG" | grep java-options | head -n 4
+          launch_log c "-Xlog:aot=info:stdout -Xlog:cds=info:stdout" 12
+          $TT c/Serenity/$EXE 10 "AOT + AppCDS options (valid cache)"
+          ls -l "c/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "%s %s bytes\n", $9, $5}'
+
+          say "F2: the same, jar touched (stale AOT cache): does AppCDS take over and regenerate?"
+          touch "c/Serenity/$APPDIR/Serenity.jar"
+          launch_log c "-Xlog:aot=info:stdout -Xlog:cds=info:stdout" 14
+          ls -l "c/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "after 1st stale run: %s %s bytes\n", $9, $5}'
+          $TT c/Serenity/$EXE 1 "stale run 2 (discarded)" >/dev/null
+          $TT c/Serenity/$EXE 10 "AOT + AppCDS options, stale cache, after regeneration"
+          ls -l "c/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "after stale runs: %s %s bytes\n", $9, $5}'
+
+          say "F3: AOT only, jar touched (no fallback)"
+          fresh d
+          cp "b/Serenity/$APPDIR/serenity.aot" "d/Serenity/$APPDIR/serenity.aot"
+          cp cfg.aot-only.backup "d/Serenity/$CFG"
+          (python bench/java25/cfgtool.py "d/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot' || python3 bench/java25/cfgtool.py "d/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot')
+          touch "d/Serenity/$APPDIR/Serenity.jar"
+          $TT d/Serenity/$EXE 6 "AOT only, stale"
