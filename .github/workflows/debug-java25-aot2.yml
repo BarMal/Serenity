@@ -58,14 +58,14 @@ jobs:
           sleep 3
       - name: Fallback and timing experiments
         run: |
-          set -uo pipefail
+          set +e -uo pipefail
           root="$PWD"; CFG='${{ matrix.cfg }}'; APPDIR='${{ matrix.appdir }}'; EXE='${{ matrix.exe }}'
           TT="python bench/java25/ttfw.py"; command -v python >/dev/null || TT="python3 bench/java25/ttfw.py"
           say() { echo; echo "##### $*"; }
           fresh() { rm -rf "$1" && mkdir "$1" && cp -r dist/Serenity "$1/Serenity"; }
           native_path() { if [ "$RUNNER_OS" = Windows ]; then cygpath -m "$1"; else echo "$1"; fi; }
           launch_log() { # run once with JVM logging, show the interesting lines and the exit code
-            ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="$2" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > launch.out 2>&1; echo "exit=$?"; grep -iE "AOT cache|aot\]|cds\]|shared|archive|error|warn|mismatch|Opened|Unable|conflict" launch.out | grep -v "Picked up" | head -n "${3:-10}" ); }
+            ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="$2" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > launch.out 2>&1; echo "exit=$?"; echo "--- first lines of the launch output:"; grep -v "Picked up" launch.out | head -n 8; echo "--- matching lines:"; grep -iE "AOT cache|aot\]|cds\]|shared|archive|error|warn|mismatch|Opened|Unable|conflict" launch.out | grep -v "Picked up" | head -n "${3:-10}" ); }
 
           say "AppCDS only (today)"
           fresh a; $TT a/Serenity/$EXE 1 "warm-up" >/dev/null
