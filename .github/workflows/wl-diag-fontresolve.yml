@@ -44,3 +44,11 @@ jobs:
             home="${!rt}"; echo "######## $rt"
             "$home/bin/java" -Djava.awt.headless=true -cp classes FontResolve 2>&1 | grep -v "Picked up"
           done
+      - name: Replay probe (drawString vs rebuilt-from-codes vs original vector)
+        continue-on-error: true
+        run: |
+          mkdir -p classes2 && "$T25/bin/javac" -d classes2 bench/wl-diag/GlyphReplay.java
+          for rt in T25 J25; do
+            home="${!rt}"; echo "######## $rt"
+            "$home/bin/java" -Djava.awt.headless=true -cp classes2 GlyphReplay src/main/resources/fonts "out/$rt" 2>&1 | grep -v "Picked up" | grep "RUNTIME\|scale=2"
+          done
