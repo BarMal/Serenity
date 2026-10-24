@@ -105,3 +105,19 @@ jobs:
           (python bench/java25/cfgtool.py "d/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot' || python3 bench/java25/cfgtool.py "d/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot')
           touch "d/Serenity/$APPDIR/Serenity.jar"
           $TT d/Serenity/$EXE 6 "AOT only, stale"
+
+          say "F4: the AOT file used as the SharedArchiveFile of AutoCreateSharedArchive (valid cache)"
+          fresh e
+          cp "b/Serenity/$APPDIR/serenity.aot" "e/Serenity/$APPDIR/serenity.aot"
+          python bench/java25/cfgtool.py "e/Serenity/$CFG" "drop:SharedArchiveFile" 'add:-XX:SharedArchiveFile=$APPDIR/serenity.aot' 2>/dev/null || python3 bench/java25/cfgtool.py "e/Serenity/$CFG" "drop:SharedArchiveFile" 'add:-XX:SharedArchiveFile=$APPDIR/serenity.aot'
+          grep java-options "e/Serenity/$CFG" | head -n 3
+          launch_log e "-Xlog:aot=info:stdout -Xlog:cds=info:stdout" 12
+          $TT e/Serenity/$EXE 10 "SharedArchiveFile=serenity.aot + AutoCreate (valid)"
+          ls -l "e/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "after valid runs: %s %s bytes\n", $9, $5}'
+
+          say "F5: the same with the jar touched: regenerated?"
+          touch "e/Serenity/$APPDIR/Serenity.jar"
+          launch_log e "-Xlog:aot=info:stdout -Xlog:cds=info:stdout" 14
+          ls -l "e/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "after 1st stale run: %s %s bytes\n", $9, $5}'
+          $TT e/Serenity/$EXE 10 "same, stale then regenerated"
+          ls -l "e/Serenity/$APPDIR/" | grep -E "serenity\.(jsa|aot)" | awk '{printf "after stale runs: %s %s bytes\n", $9, $5}'
