@@ -32,7 +32,7 @@ private[renderer] object PanelLayers:
     kept: Boolean
   )(paintPanel: RenderContext => Unit): Unit =
     supportFor(state, context) match
-      case None => paintPanel(context)
+      case None => paintDirectly(context, site, kept)(paintPanel)
       case Some(support) =>
         val surface = context.surface
         val cached  = context.caches.frameState.cachedPanelLayersFor(surface).get(site.id)
@@ -63,6 +63,62 @@ private[renderer] object PanelLayers:
             surface.pixels.compositeLayer(image, site.bounds)
           }
 
+  /** Whether a frame can leave a panel as its surface already holds it: through a cached layer, or, without layer
+    * buffers, because the surface keeps its own pixels from frame to frame.
+    */
+  def canKeep(state: AppState, context: RenderContext): Boolean =
+    supportFor(state, context).isDefined ||
+      (context.surface.addressesPixels && context.surface.persistentContentKey.isDefined)
+
+  /** What tells [[PanelReuse.kept]] that the pixels `key` holds are this panel as the frame would paint it. */
+  def holds(
+    state: AppState,
+    context: RenderContext,
+    key: SurfaceContentIdentity,
+    frame: PanelReuse.Frame
+  ): PanelSite => Boolean =
+    val frameState = context.caches.frameState
+    if supportFor(state, context).isDefined then
+      val cached = frameState.cachedPanelLayersFor(context.surface)
+      site =>
+        cached.get(site.id).exists { layer =>
+          layer.compositedOnto.contains(key) &&
+          layer.matches(frame.viewportWidth, frame.viewportHeight, frame.cursorVisible, site.rect, site.bounds)
+        }
+    else
+      val painted = frameState.paintedPanels.of(context.surface)
+      site =>
+        painted.get(site.id -> key).exists { panel =>
+          panel.content == site.content &&
+          panel.matches(frame.viewportWidth, frame.viewportHeight, frame.cursorVisible, site.rect, site.bounds)
+        }
+
+  /** A panel without a layer buffer is painted into the frame, unless the frame keeps what its surface holds. What was
+    * painted is recorded against the pixels it went into, with the content it showed: a surface that alternates between
+    * two images has a record for each, and an image keeps the panel only while the content it holds is the content now.
+    */
+  private def paintDirectly(context: RenderContext, site: PanelSite, kept: Boolean)(
+    paintPanel: RenderContext => Unit
+  ): Unit =
+    if !kept then
+      paintPanel(context)
+      val surface = context.surface
+      surface.persistentContentKey.foreach { key =>
+        context.caches.frameState.paintedPanels.remember(
+          surface,
+          site.id,
+          key,
+          PaintedPanel(
+            surface.viewportWidth,
+            surface.viewportHeight,
+            context.cursorVisible,
+            site.rect,
+            site.bounds,
+            site.content
+          )
+        )
+      }
+
   /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
     * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
     * value, not an object [[RendererFrameState]] can bound the lifetime of any other way).
@@ -70,4 +126,6 @@ private[renderer] object PanelLayers:
   def forgetStale(state: AppState, panels: FramePanels, surface: RenderSurface, caches: RenderCaches): Unit =
     if state.persisted.config.surfaceConfig.layerCachingEnabled then
       caches.frameState.pruneStalePanelLayers(surface, panels.activeIds(state))
-    else caches.frameState.forgetLayerBuffers(surface)
+    else
+      caches.frameState.forgetLayerBuffers(surface)
+      caches.frameState.paintedPanels.prune(surface, panels.activeIds(state))

@@ -203,6 +203,21 @@ JIT compiles those paths before the first real keystrokes. It never touches your
 language servers, and stops at the first key press or click. Turn it off with `startup.warm_up = false`; the log
 reports how it ended (`[WARMUP] Completed(...)` or `[WARMUP] Interrupted`).
 
+### Java version and launch options
+
+CI, the benchmarks and the packages use Temurin 25 (LTS); the app images bundle it through jlink. Two launch options come
+with JDK 24 and later, and both packages pass them (`desktop-publish.yml`, `desktop-release.yml`):
+
+- `--enable-native-access=ALL-UNNAMED`. Skiko, JNA and JLine load native libraries, which JDK 24 warns about on every
+  load and a later JDK will block. The assembled jar grants the same access from its manifest
+  (`Enable-Native-Access: ALL-UNNAMED`, `AssemblyManifestSpec`), so `java -jar Serenity.jar` needs no option.
+- `--sun-misc-unsafe-memory-access=allow`. Scala's lazy vals (`scala.runtime.LazyVals`, unchanged in Scala 3.10) still call
+  `sun.misc.Unsafe.objectFieldOffset`, which JDK 24 and later report on the first call. A manifest cannot carry this
+  option, so `java -jar Serenity.jar` prints that warning on stderr until Scala drops the call; it is harmless.
+
+`scripts/smoke-test-app-image.sh` fails when the packaged app prints either warning. The JetBrains Runtime 25 is not
+supported yet: it fails 194 tests and garbles some text (#2380, #2390).
+
 ### JetBrains Runtime and native Wayland
 
 On a Wayland desktop, a stock JDK draws through XWayland. The [JetBrains Runtime](https://github.com/JetBrains/JetBrainsRuntime/releases)
@@ -220,9 +235,16 @@ The startup log names the choice: `[TOOLKIT] Wayland (Wayland session on JetBrai
 
 | Value | Effect |
 | --- | --- |
-| `auto` (or unset) | Native Wayland on JBR in a Wayland session; the JVM's default otherwise |
-| `wayland` | Native Wayland whenever the runtime has it, even without `WAYLAND_DISPLAY` |
+| `auto` (or unset) | Native Wayland on JBR in a Wayland session whose socket connects; the JVM's default otherwise |
+| `wayland` | Native Wayland whenever the runtime has it and the socket connects, even without `WAYLAND_DISPLAY` |
 | `x11` | X11, through XWayland on a Wayland desktop |
+
+Before choosing native Wayland, Serenity connects to the compositor's socket once, the way libwayland does
+(`$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY`, `wayland-0` when unset, an absolute `WAYLAND_DISPLAY` as given; a set
+`WAYLAND_SOCKET` is trusted). If it does not connect, for example a `WAYLAND_DISPLAY` left over from a compositor that has
+exited, the JVM's default toolkit is used instead, even with `SERENITY_TOOLKIT=wayland`, and the startup log says why:
+`[TOOLKIT] PlatformDefault (WAYLAND_DISPLAY is set, but the socket does not connect (/run/user/1000/wayland-1: Connection refused))`.
+Without the check the JetBrains Runtime would try `WLToolkit` anyway and end up headless.
 
 Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
 which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`

@@ -14,13 +14,14 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
 
   private val jbr = Map("java.vendor" -> "JetBrains s.r.o.", "java.vm.vendor" -> "JetBrains s.r.o.")
 
-  private val x11Env = ToolkitSelection.Environment("Linux", Map.empty, Map("DISPLAY" -> ":0"), false)
+  private val x11Env = ToolkitSelection.Environment("Linux", Map.empty, Map("DISPLAY" -> ":0"), false, None)
 
   private val waylandEnv = ToolkitSelection.Environment(
     "Linux",
     jbr,
     Map("DISPLAY" -> ":0", "WAYLAND_DISPLAY" -> "wayland-1"),
-    waylandToolkitAvailable = true
+    waylandToolkitAvailable = true,
+    waylandSocketProblem = None
   )
 
   final private class Counters:

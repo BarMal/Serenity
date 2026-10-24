@@ -3,8 +3,9 @@
 # cleanly. Usable locally: scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity (under xvfb-run on a headless
 # Linux box). Runs in safe mode, so it reads and writes nothing in the user's own configuration or session.
 #
-# Fails when the launcher is missing, exits non-zero, never prints the ready line, prints an uncaught exception, leaves
-# a JVM crash log (hs_err_pid*.log), or does not finish within the time limit.
+# Fails when the launcher is missing, exits non-zero, never prints the ready line, prints an uncaught exception or a
+# warning from the JVM itself (a restricted native-access call, a deprecated sun.misc.Unsafe call: the package is
+# missing a launch option the JDK expects), leaves a JVM crash log (hs_err_pid*.log), or does not finish in time.
 set -euo pipefail
 
 launcher="${1:?usage: $0 path/to/launcher [timeout-seconds]}"
@@ -59,6 +60,9 @@ if ! grep -Fxq "$ready_line" "$log"; then
 fi
 if grep -Eq '^Exception in thread|^Caused by:' "$log"; then
   fail "App image printed an uncaught exception."
+fi
+if grep -Eq '^WARNING: (A restricted method|A terminally deprecated method|Use --enable-native-access|Restricted methods)' "$log"; then
+  fail "App image printed a JVM warning; the package is missing a launch option the JDK expects."
 fi
 if compgen -G "$work_dir/hs_err_pid*.log" >/dev/null; then
   cat "$work_dir"/hs_err_pid*.log >&2
