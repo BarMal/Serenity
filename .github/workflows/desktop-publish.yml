@@ -141,6 +141,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Build libSDL3 (Linux)
+        id: sdl3
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/build-sdl3
+
       - name: Prepare app image
         shell: bash
         run: |
@@ -165,6 +170,13 @@ jobs:
           fi
           if [ "${RUNNER_OS:-}" = "Windows" ]; then
             APP_ARGS+=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico")
+          fi
+          # The Wayland window library (#2380): the copy built from the pinned SDL tag travels beside the jar, and the
+          # launcher tells the binding where it is. jpackage expands $APPDIR in --java-options.
+          if [ "${RUNNER_OS:-}" = "Linux" ]; then
+            mkdir -p package-input/natives
+            cp "${{ steps.sdl3.outputs.directory }}/libSDL3.so.0" "${{ steps.sdl3.outputs.directory }}/LICENSE-SDL.txt" package-input/natives/
+            APP_ARGS+=(--java-options '-Dserenity.sdl3.library.path=$APPDIR/natives')
           fi
           # Heap policy (see DEVELOPMENT.md), on every OS. A cap of a quarter of RAM stops an editor that is left open
           # from growing to the JVM default of a quarter-to-a-half of the machine. G1 is named explicitly because the
@@ -220,6 +232,12 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y xvfb
+          # The Wayland window library must be in the image, and be the library the binding asks the loader for.
+          sdl="$(find dist -type f -path '*/app/natives/libSDL3.so.0' -print -quit)"
+          if [ -z "$sdl" ] || ! readelf -d "$sdl" | grep -q 'SONAME.*libSDL3.so.0'; then
+            echo "App image is missing natives/libSDL3.so.0" >&2
+            exit 1
+          fi
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity 120
 
       - name: Import macOS Developer ID certificate

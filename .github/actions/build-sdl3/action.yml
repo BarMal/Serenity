@@ -1,0 +1,36 @@
+name: Build libSDL3
+description: >-
+  Builds libSDL3.so.0 from the upstream tag pinned in ci/sdl3/pins.env (#2380) inside ubuntu:22.04, so the library asks no
+  more of the glibc it runs on than that release does. The result is cached by the pins and the build script.
+outputs:
+  directory:
+    description: Directory holding libSDL3.so.0, LICENSE-SDL.txt and the SDL headers the library was built from
+    value: ${{ steps.paths.outputs.directory }}
+
+runs:
+  using: composite
+  steps:
+    - id: paths
+      shell: bash
+      run: echo "directory=$GITHUB_WORKSPACE/sdl3-natives" >> "$GITHUB_OUTPUT"
+
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: sdl3-natives
+        key: sdl3-natives-linux-x64-${{ hashFiles('ci/sdl3/pins.env', 'ci/sdl3/build-sdl3.sh') }}
+
+    - name: Build libSDL3.so.0 in ubuntu:22.04
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        docker run --rm -e DEBIAN_FRONTEND=noninteractive -v "$GITHUB_WORKSPACE:/w" -w /w ubuntu:22.04 bash -c '
+          set -euo pipefail
+          apt-get update -q
+          apt-get install -y -q --no-install-recommends ca-certificates git cmake ninja-build gcc g++ pkg-config \
+            libwayland-dev wayland-protocols libxkbcommon-dev libegl-dev libdecor-0-dev libdbus-1-dev libudev-dev binutils
+          ci/sdl3/build-sdl3.sh /w/sdl3-work /w/sdl3-natives
+          rm -rf /w/sdl3-work
+          chown -R "$(stat -c %u:%g /w)" /w/sdl3-natives
+        '

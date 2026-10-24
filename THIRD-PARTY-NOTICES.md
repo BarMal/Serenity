@@ -66,6 +66,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | British English dictionary (en_GB) | 4.0.1 | LGPL-3.0-or-later (phonetic rules in the .aff: LGPL-2.1) | Kevin Atkinson (Aspell word list); David Bartlett, Brian Kelk, Andrew Brown and Marco A.G.Pinto (en_GB); Björn Jacke (phonetic rules) | <https://github.com/LibreOffice/dictionaries/tree/master/en> | README_en_GB, LGPL-3.0, LGPL-2.1 |
 | Courier Prime | 3.018 | OFL-1.1 | Copyright 2015 The Courier Prime Project Authors (https://github.com/quoteunquoteapps/CourierPrime); full notice in the licence file. Regular, Italic, Bold and Bold Italic TTFs from commit 7fd585a2dd4c1612c79b3308e300923d1c13df93 (fonts/ttf) | <https://github.com/quoteunquoteapps/CourierPrime> | COURIER_PRIME_OFL |
 | Noto Emoji (monochrome) | - | OFL-1.1 | Copyright 2013 Google LLC; full notice in the licence file. MODIFIED: NotoEmoji-Regular.ttf and NotoEmoji-Bold.ttf are static instances (wght=400 and wght=700) cut from NotoEmoji[wght].ttf (SHA-256 de6c18832938afc99caf132b39d6a30a19bac7f2e812e28db2535b4608d27551) with fontTools varLib.instancer --update-name-table; reproduce with scripts/make-noto-emoji-instances.sh | <https://github.com/google/fonts/tree/main/ofl/notoemoji> | NOTO_EMOJI_OFL |
+| SDL3 (libSDL3.so.0, Linux packages) | 3.4.14 | Zlib | Copyright (C) 1997-2026 Sam Lantinga; built unmodified from the release-3.4.14 tag (ci/sdl3) and loaded through our own FFM binding | <https://github.com/libsdl-org/SDL> | Zlib-SDL |
 
 ## Licence and notice texts
 
@@ -3449,4 +3450,26 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+```
+
+### Zlib-SDL
+
+```text
+Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
+  
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+  
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required. 
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
 ```
