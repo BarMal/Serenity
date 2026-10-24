@@ -41,24 +41,15 @@ final case class LayerDrawStats(
     replayMeanMs: Double,
     caretsMeanMs: Double,
     syncMeanMs: Double,
-    replays: Int = 0,
-    cachedDraws: Int = 0,
     syncedDraws: Int = 0,
     gpuContext: Boolean = false,
     pictureOpsMean: Double = 0.0,
     pictureBytesMean: Double = 0.0
 ):
 
-  def replayCacheEngaged: Boolean = cachedDraws > 0
-
-  def replayCacheNote: String =
-    if replayCacheEngaged then s"on ($cachedDraws of $renders draws show the cached picture)"
-    else if gpuContext then "off (not selected)"
-    else "off (no GPU context on the canvas Skiko draws the layer with, which records into a picture)"
-
   def gpuSyncNote: String =
     if syncedDraws > 0 then s"$syncedDraws of $renders draws"
-    else "not done (no GPU context to wait on)"
+    else "not done (no GPU context on the canvas Skiko draws the layer with, which records into a picture)"
 
 object LayerDrawStats:
 

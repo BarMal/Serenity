@@ -55,28 +55,18 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
-  it should "say whether the replay cache engaged, how often the picture was replayed and whether the GPU was waited on" in {
+  it should "say whether the GPU was waited on after each draw, and why not when it could not be" in {
     val base = LayerDrawStats(1460, 1156, 9.0, 54.0, 3.4, 0.05, 0.0)
     def textFor(stats: LayerDrawStats): String =
       BenchmarkReport(environment.copy(skiaDraws = Some(stats)), results, Verdict.SkiaWins).markdown
-    val off = textFor(base.copy(replays = 1460, cachedDraws = 0, syncedDraws = 0, gpuContext = false))
-    List(
-      "replay cache: off (no GPU context",
-      "1460 replays in 1460 draws",
-      "GPU sync: not done (no GPU context"
-    ).foreach(part => off should include(part))
-    val on = textFor(base.copy(replays = 1156, cachedDraws = 300, syncedDraws = 1460, gpuContext = true))
-    List("replay cache: on (300 of 1460 draws", "1156 replays in 1460 draws", "GPU sync: 1460 of 1460 draws").foreach(
-      part => on should include(part)
+    textFor(base.copy(syncedDraws = 0, gpuContext = false)) should include(
+      "GPU sync: not done (no GPU context on the canvas Skiko draws the layer with, which records into a picture)"
     )
-    val json =
-      parse(BenchmarkReport(environment.copy(skiaDraws = Some(base.copy(replays = 7))), results, Verdict.SkiaWins).json)
-        .getOrElse(fail("not JSON"))
-        .hcursor
-        .downField("environment")
-        .downField("skiaDraws")
-    json.downField("replays").as[Int] shouldBe Right(7)
-    json.downField("replayCacheEngaged").as[Boolean] shouldBe Right(false)
+    textFor(base.copy(syncedDraws = 1460, gpuContext = true)) should include("GPU sync: 1460 of 1460 draws")
+    val json = parse(
+      BenchmarkReport(environment.copy(skiaDraws = Some(base.copy(syncedDraws = 7))), results, Verdict.SkiaWins).json
+    ).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("skiaDraws")
+    json.downField("syncedDraws").as[Int] shouldBe Right(7)
     json.downField("gpuContext").as[Boolean] shouldBe Right(false)
   }
 

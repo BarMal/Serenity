@@ -43,16 +43,13 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       environment.skiaLayers.map(count => s"Skia window ended with $count ${if count == 1 then "layer" else "layers"}.")
     val draws = environment.skiaDraws.map { stats =>
       f"Skia layer: ${stats.renders} draws for ${stats.publishes} published frames; publish to draw mean ${stats.publishToRenderMeanMs}%.2f ms (max ${stats.publishToRenderMaxMs}%.2f); " +
-        f"per draw: replay ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
+        f"per draw: picture ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
     }
-    val cache = environment.skiaDraws.map { stats =>
-      s"Skia layer: replay cache: ${stats.replayCacheNote}; ${stats.replays} replays in ${stats.renders} draws; " +
-        s"GPU sync: ${stats.gpuSyncNote}."
-    }
+    val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    List(startup, layers, draws, cache, pictures).flatten.map(line => s"\n$line")
+    List(startup, layers, draws, sync, pictures).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -119,11 +116,8 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "replayMeanMs"          -> stats.replayMeanMs.asJson,
       "caretsMeanMs"          -> stats.caretsMeanMs.asJson,
       "syncMeanMs"            -> stats.syncMeanMs.asJson,
-      "replays"               -> stats.replays.asJson,
-      "cachedDraws"           -> stats.cachedDraws.asJson,
       "syncedDraws"           -> stats.syncedDraws.asJson,
       "gpuContext"            -> stats.gpuContext.asJson,
-      "replayCacheEngaged"    -> stats.replayCacheEngaged.asJson,
       "pictureOpsMean"        -> stats.pictureOpsMean.asJson,
       "pictureBytesMean"      -> stats.pictureBytesMean.asJson
     )

@@ -36,17 +36,6 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       Thread.sleep(25)
       awaited(condition, deadlineNanos)
 
-  /** Waits until `value` has not changed for half a second, then returns it. */
-  private def quiet(value: => Int): Int =
-    @tailrec
-    def loop(last: Int, since: Long): Int =
-      Thread.sleep(25)
-      val now = value
-      if now != last then loop(now, System.nanoTime())
-      else if System.nanoTime() - since >= 500_000_000L then now
-      else loop(last, since)
-    loop(value, System.nanoTime())
-
   private def eventually(what: String)(condition: => Boolean): Unit =
     withClue(s"timed out waiting for $what: ")(awaited(condition, System.nanoTime() + 15_000_000_000L) shouldBe true)
 
@@ -56,9 +45,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     def capture(): BufferedImage =
       new Robot().createScreenCapture(new Rectangle(screenOrigin, new Dimension(canvas.getWidth, canvas.getHeight)))
 
-  private def withWindow[A](body: Window => A): A = withHost(Some(true))(body)
-
-  private def withHost[A](cacheReplay: Option[Boolean])(body: Window => A): A =
+  private def withWindow[A](body: Window => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
     assume(
       System.getProperty("os.name", "").toLowerCase.contains("linux"),
@@ -76,7 +63,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         f.setVisible(true)
         f
       }
-      val host = SkiaLayerHost.create(canvas, cacheReplay = cacheReplay)
+      val host = SkiaLayerHost.create(canvas)
       try
         val _ = onEdt(canvas.requestFocusInWindow())
         body(new Window(frame, canvas, host))
@@ -173,57 +160,23 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.pictureBytesMean should be > 0.0
     }
 
-  it should "report that it replays the picture for every draw when the canvas has no GPU context" in
-    withHost(None) { window =>
-      window.host.publish(record(scene))
-      eventually("the picture replayed")(window.host.drawStats.replays >= 1)
-      val settled = quiet(window.host.drawStats.renders)
-      val before  = window.host.drawStats
-      val caret   = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
-      List(List(caret), Nil, List(caret)).foreach { carets =>
-        val seen = window.host.renderCount
-        window.host.showCarets(carets)
-        eventually("a redraw")(window.host.renderCount > seen)
-      }
-      val after = window.host.drawStats
-      after.replays should be >= before.replays + 3
-      withClue(s"$settled draws settled; ")(after.cachedDraws shouldBe 0)
-      after.replayCacheEngaged shouldBe false
-      after.gpuContext shouldBe false
-    }
-
-  it should "report the replay cache as engaged and the picture replayed once when it is forced on" in
-    withHost(Some(true)) { window =>
-      window.host.publish(record(scene))
-      eventually("the picture replayed")(window.host.drawStats.replays >= 1)
-      val replayed = quiet(window.host.replayCount)
-      val caret    = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
-      List(List(caret), Nil, List(caret)).foreach { carets =>
-        val seen = window.host.renderCount
-        window.host.showCarets(carets)
-        eventually("a redraw")(window.host.renderCount > seen)
-      }
-      val stats = window.host.drawStats
-      stats.replayCacheEngaged shouldBe true
-      stats.cachedDraws should be >= 3
-      stats.replays shouldBe replayed
-    }
-
-  it should "replay the picture when a new one is published, not for each caret blink" in
+  it should "record the published picture as one op in the canvas it draws into" in
     withWindow { window =>
-      window.host.publish(record(scene))
-      eventually("the first frame")(window.host.renderCount > 0)
-      eventually("the picture replayed")(window.host.replayCount >= 1)
-      val replayed = quiet(window.host.replayCount)
-      val caret    = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
-      List(List(caret), Nil, List(caret), Nil, List(caret), Nil).foreach { carets =>
-        val before = window.host.renderCount
-        window.host.showCarets(carets)
-        eventually("a redraw")(window.host.renderCount > before)
-      }
-      window.host.replayCount shouldBe replayed
-      window.host.publish(record(scene))
-      eventually("the new picture replayed")(window.host.replayCount > replayed)
+      val ink = new Paint()
+      ink.setColor(0xffff8000)
+      val busy = record(canvas =>
+        (0 until 300).foreach(i => canvas.drawRect(Rect.Companion.makeXYWH(i % 20 * 5f, i / 20 * 5f, 4f, 4f), ink))
+      )
+      busy.getApproximateOpCount should be >= 300
+      window.host.publish(busy)
+      val recorder = new PictureRecorder()
+      val target   = PictureRecording.begin(recorder, width, height)
+      onEdt(window.host.renderInto(target))
+      val drawn = recorder.finishRecordingAsPicture()
+      try drawn.getApproximateOpCount should be < 20
+      finally
+        drawn.close()
+        recorder.close()
     }
 
   it should "show the carets over the picture exactly as a full replay would" in
@@ -248,18 +201,17 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       withClue(s"first differing pixels (x,y): $differing; ")(differing shouldBe empty)
     }
 
-  it should "replay the picture again when the canvas is resized, and keep showing it" in
+  it should "keep showing the picture when the canvas is resized" in
     withWindow { window =>
       window.host.publish(record(scene))
       eventually("the first frame")(window.host.renderCount > 0)
-      eventually("the picture replayed")(window.host.replayCount >= 1)
-      val replayed = quiet(window.host.replayCount)
+      val drawn = window.host.renderCount
       onEdt {
         window.canvas.setPreferredSize(new Dimension(width + 100, height + 50))
         window.canvas.setSize(width + 100, height + 50)
         window.canvas.doLayout()
       }
-      eventually("the picture replayed at the new size")(window.host.replayCount > replayed)
+      eventually("a frame at the new size")(window.host.renderCount > drawn)
       eventually("the picture still on screen")(rgb(window.capture(), 300, 20) == 0x203040)
     }
 
