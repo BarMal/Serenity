@@ -215,10 +215,10 @@ object RenderBenchmarkRunner:
   private def timed(window: SwingWindow)(render: => Unit): Option[FrameTimer.Sample] =
     val timer =
       new FrameTimer(() => System.nanoTime(), () => LockSupport.parkNanos(1_000_000L), QuietNanos, DropAfterNanos)
-    window.setOnFramePresented(() => timer.presented(window.layerPresenter.fold(0)(_.shownFrames)))
+    window.setOnFramePresented(() => timer.presented(window.shownFrames))
     val start = System.nanoTime()
     render
-    timer.await(start, window.layerPresenter.fold(0)(_.publishedFrames))
+    timer.await(start, window.publishedFrames)
 
   private def settle(): Unit =
     SwingUtilities.invokeAndWait(() => ())

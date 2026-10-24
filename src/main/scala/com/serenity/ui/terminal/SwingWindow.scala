@@ -5,7 +5,7 @@ import java.awt.event.*
 import java.awt.im.InputMethodRequests
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import javax.imageio.ImageIO
 import javax.swing.*
 
@@ -72,6 +72,8 @@ class SwingWindow(
   private val baseImagePool          = new SwingWindow.ReusableImagePool
   private val layerPresenterRef      = new AtomicReference[Option[LayerPresenter]](None)
   private val framePresentedRef      = new AtomicReference[Option[() => Unit]](None)
+  private val baseImagesPublished    = new AtomicInteger(0)
+  private val baseImagesShown        = new AtomicInteger(0)
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef           = new AtomicBoolean(false)
   private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
@@ -112,7 +114,9 @@ class SwingWindow(
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       val paintStart = frameTimings.paintStarted()
-      val g2         = g.create().asInstanceOf[Graphics2D]
+      // Read before the lease: an image published in between is then counted as not yet shown, never as shown early.
+      val shownAtPaint = baseImagesPublished.get()
+      val g2           = g.create().asInstanceOf[Graphics2D]
       try
         val base = baseImagePool.leasePublished()
         SwingWindow.paintPresentedFrame(g2, base, publishedCaretsRef.get(), getWidth, getHeight)
@@ -120,6 +124,7 @@ class SwingWindow(
         baseImagePool.releaseLease()
         g2.dispose()
         frameTimings.paintFinished(paintStart)
+        baseImagesShown.set(shownAtPaint)
         framePresentedRef.get().foreach(_.apply())
 
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
@@ -154,6 +159,7 @@ class SwingWindow(
     val displayedCarets = publishedCaretsRef.getAndSet(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
+    val _ = baseImagesPublished.incrementAndGet()
     requestRepaint(SwingWindow.cursorRepaint(dirtyRects, displayedCarets.map(_.rect), Nil))
 
   private def requestRepaint(repaint: SwingWindow.CanvasRepaint): Unit =
@@ -177,6 +183,7 @@ class SwingWindow(
     publishedCaretsRef.set(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
+    val _ = baseImagesPublished.incrementAndGet()
 
   /** Publish the carets to fill over the current base frame and repaint just the pixels they changed.
     *
@@ -209,6 +216,13 @@ class SwingWindow(
     presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
 
   private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
+
+  /** The frames published to this window, and how many of them the latest paint or layer draw showed: what the render
+    * benchmark waits on, so a paint of an older frame is not taken for the frame it is timing.
+    */
+  private[serenity] def publishedFrames: Int = layerPresenter.fold(baseImagesPublished.get)(_.publishedFrames)
+
+  private[serenity] def shownFrames: Int = layerPresenter.fold(baseImagesShown.get)(_.shownFrames)
 
   /** `callback` is called on the event thread each time the canvas paints, or the GPU layer draws a frame. The render
     * benchmark times a frame to the last of these.

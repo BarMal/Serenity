@@ -17,6 +17,10 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
     val carets                                            = new AtomicReference(List.empty[SwingWindow.CaretPaint])
     val cursors                                           = new AtomicReference(List.empty[Cursor])
     val disposed                                          = new AtomicInteger(0)
+    val published                                         = new AtomicInteger(0)
+    val shown                                             = new AtomicInteger(0)
+    override def publishedFrames: Int                     = published.get
+    override def shownFrames: Int                         = shown.get
     def baseAvailable: Boolean                            = hasBase
     def showCarets(c: List[SwingWindow.CaretPaint]): Unit = carets.set(c)
     def setCursor(cursor: Cursor): Unit =
@@ -117,6 +121,31 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
 
   "SwingWindow without a presenter" should "decline the caret overlay until a base image is published, as before" in
     withWindow(window => window.onCursorOverlayReady(None)(List(caret)) shouldBe false)
+
+  it should "count the base images published and how many the latest paint showed" in
+    withWindow { window =>
+      def paint(): Unit = SwingUtilities.invokeAndWait(() => window.canvas.paintImmediately(window.canvas.getBounds))
+      def publish(): Unit =
+        window.onBaseImageReady(window.acquireBaseImage(64, 48, java.awt.image.BufferedImage.TYPE_INT_RGB))
+      (window.publishedFrames, window.shownFrames) shouldBe (0, 0)
+      publish()
+      window.publishedFrames shouldBe 1
+      paint()
+      window.shownFrames shouldBe 1
+      publish()
+      (window.publishedFrames, window.shownFrames) shouldBe (2, 1)
+      paint()
+      (window.publishedFrames, window.shownFrames) shouldBe (2, 2)
+    }
+
+  it should "take the frame counts from an attached presenter instead" in
+    withWindow { window =>
+      val presenter = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(presenter)
+      presenter.published.set(5)
+      presenter.shown.set(4)
+      (window.publishedFrames, window.shownFrames) shouldBe (5, 4)
+    }
 
   it should "tell a listener each time the canvas paints" in
     withWindow { window =>
