@@ -345,7 +345,8 @@ lazy val root = (project in file("."))
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.SdlNativeTest")
     )
   )
 
@@ -359,6 +360,15 @@ realBoundaryTest := (Test / testOnly)
   .toTask(
     " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
   )
+  .value
+
+// Runs the specs that load the real libSDL3 through the FFM binding on SDL's dummy video driver (#2380). The library is
+// a build product (ci/sdl3/build-sdl3.sh), so `sbt test` leaves them out; hand the directory holding libSDL3.so.0 to
+// the sbt JVM: `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
+lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
+
+sdlNativeTest := (Test / testOnly)
+  .toTask(" com.serenity.ui.sdl.SdlBindingSpec")
   .value
 
 // Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
