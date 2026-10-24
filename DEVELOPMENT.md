@@ -218,6 +218,24 @@ with JDK 24 and later, and both packages pass them (`desktop-publish.yml`, `desk
 `scripts/smoke-test-app-image.sh` fails when the packaged app prints either warning. The JetBrains Runtime 25 is not
 supported yet: it fails 194 tests and garbles some text (#2380, #2390).
 
+### SDL3 (the window library behind native Wayland, #2380)
+
+`com.serenity.ui.sdl` binds SDL3 through the JDK's foreign-function API, with no binding library. Nothing selects it yet:
+the Swing window is still the only one the application opens. `libSDL3.so.0` is built from the upstream tag pinned in
+`ci/sdl3/pins.env` (`ci/sdl3/build-sdl3.sh`, in an `ubuntu:22.04` container so it asks no more of glibc than that release
+does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launcher passes
+`-Dserenity.sdl3.library.path=$APPDIR/natives`. Without that property the binding asks the system loader for
+`libSDL3.so.0`.
+
+- `SdlLayouts` holds the byte offsets of the SDL structs the binding reads and the values of the constants it passes.
+  `ci/sdl3/layout.c` prints the same from the pinned SDL headers; its output is checked in as
+  `src/test/resources/sdl3/layout.txt`, `SdlLayoutsSpec` holds the Scala table against it, and the `SDL3 binding` CI job
+  diffs the file against a fresh build of the program. When the pin moves, regenerate the file with
+  `cc -I <SDL>/include -o layout ci/sdl3/layout.c && ./layout > src/test/resources/sdl3/layout.txt` and read the diff.
+- `sbt test` leaves out the specs that load the real library. To run them: build it with
+  `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
+  `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` video driver, so no compositor is needed.
+
 ### JetBrains Runtime and native Wayland
 
 On a Wayland desktop, a stock JDK draws through XWayland. The [JetBrains Runtime](https://github.com/JetBrains/JetBrainsRuntime/releases)
