@@ -15,6 +15,17 @@ class FrameStatsSpec extends AnyFlatSpec with Matchers:
     stats.maxMs shouldBe 100.0
   }
 
+  it should "take the tail of the frame times and count the frames slower than 33 ms" in {
+    val stats = FrameStats.of(millis(1 to 100*), dropped = 0)
+    (stats.p75Ms, stats.p90Ms, stats.p99Ms) shouldBe (75.0, 90.0, 99.0)
+    stats.over33Ms shouldBe 67
+    FrameStats.of(millis(33, 34), dropped = 0).over33Ms shouldBe 1
+  }
+
+  it should "keep the number of frames that ended before the render returned" in {
+    FrameStats.of(millis(1, 2, 3), dropped = 0, endedBeforeReturn = 2).endedBeforeReturn shouldBe 2
+  }
+
   it should "not depend on the order the frames were timed in" in {
     FrameStats.of(millis(5, 1, 9, 3, 7), dropped = 0) shouldBe FrameStats.of(millis(1, 3, 5, 7, 9), dropped = 0)
   }

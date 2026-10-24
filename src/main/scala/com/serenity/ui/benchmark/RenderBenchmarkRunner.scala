@@ -149,7 +149,11 @@ object RenderBenchmarkRunner:
     steps.take(options.warmup).foreach(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
     val samples =
       steps.drop(options.warmup).map(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
-    FrameStats.of(samples.flatten, dropped = samples.count(_.isEmpty))
+    FrameStats.of(
+      samples.flatten.map(_.nanos),
+      dropped = samples.count(_.isEmpty),
+      endedBeforeReturn = samples.flatten.count(_.endedBeforeReturn)
+    )
 
   private def draw(
     window: SwingWindow,
@@ -189,7 +193,7 @@ object RenderBenchmarkRunner:
 
   /** The nanoseconds from calling `render` to the last presentation of what it published, or `None` if there was none.
     */
-  private def timed(window: SwingWindow)(render: => Unit): Option[Long] =
+  private def timed(window: SwingWindow)(render: => Unit): Option[FrameTimer.Sample] =
     val timer =
       new FrameTimer(() => System.nanoTime(), () => LockSupport.parkNanos(1_000_000L), QuietNanos, DropAfterNanos)
     window.setOnFramePresented(() => timer.presented(window.layerPresenter.fold(0)(_.shownFrames)))

@@ -19,14 +19,25 @@ final class FrameTimer(clock: () => Long, pause: () => Unit, quietNanos: Long, d
     val at = clock()
     val _  = seen.updateAndGet(_ :+ Presentation(at, shownPublishes))
 
-  /** The nanoseconds from `start` to the last presentation, or `None` if the frame's publishes were never shown. */
-  @tailrec
-  def await(start: Long, publishesNeeded: Int): Option[Long] =
-    val now     = clock()
-    val shown   = seen.get().filter(_.shownPublishes >= publishesNeeded)
-    val settled = shown.lastOption.filter(last => now - last.atNanos >= quietNanos)
-    if settled.isDefined then settled.map(_.atNanos - start)
-    else if now - start > dropAfterNanos then shown.lastOption.map(_.atNanos - start)
-    else
-      pause()
-      await(start, publishesNeeded)
+  /** The frame's time, or `None` if its publishes were never shown. Called once the frame's render call has returned.
+    */
+  def await(start: Long, publishesNeeded: Int): Option[FrameTimer.Sample] =
+    val returned = clock()
+    @tailrec
+    def loop(): Option[FrameTimer.Sample] =
+      val now   = clock()
+      val shown = seen.get().filter(_.shownPublishes >= publishesNeeded)
+      def sample(last: Presentation) =
+        FrameTimer.Sample(last.atNanos - start, endedBeforeReturn = last.atNanos < returned)
+      val settled = shown.lastOption.filter(last => now - last.atNanos >= quietNanos)
+      if settled.isDefined then settled.map(sample)
+      else if now - start > dropAfterNanos then shown.lastOption.map(sample)
+      else
+        pause()
+        loop()
+    loop()
+
+object FrameTimer:
+
+  /** The nanoseconds a frame took, and whether its last presentation came before its render call returned. */
+  final case class Sample(nanos: Long, endedBeforeReturn: Boolean)

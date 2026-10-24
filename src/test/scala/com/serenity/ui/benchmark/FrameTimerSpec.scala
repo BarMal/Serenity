@@ -34,19 +34,25 @@ class FrameTimerSpec extends AnyFlatSpec with Matchers:
     val harness = new Harness(List(210L -> 5))
     harness.presentAt(1_500_000L, 4)
     harness.now.set(200 * ms)
-    harness.timer.await(start = 0L, publishesNeeded = 5) shouldBe Some(210 * ms)
+    harness.timer.await(start = 0L, publishesNeeded = 5) shouldBe Some(
+      FrameTimer.Sample(210 * ms, endedBeforeReturn = false)
+    )
   }
 
   it should "end at the last draw once nothing more is drawn for a quiet moment" in {
     val harness = new Harness(List(3L -> 0, 10L -> 0))
-    harness.timer.await(start = 0L, publishesNeeded = 0) shouldBe Some(10 * ms)
+    harness.timer.await(start = 0L, publishesNeeded = 0) shouldBe Some(
+      FrameTimer.Sample(10 * ms, endedBeforeReturn = false)
+    )
   }
 
   it should "count the draw of the publish even when it came before the render returned" in {
     val harness = new Harness(Nil)
     harness.presentAt(120 * ms, 5)
     harness.now.set(125 * ms)
-    harness.timer.await(start = 0L, publishesNeeded = 5) shouldBe Some(120 * ms)
+    harness.timer.await(start = 0L, publishesNeeded = 5) shouldBe Some(
+      FrameTimer.Sample(120 * ms, endedBeforeReturn = true)
+    )
   }
 
   it should "give up on a frame whose publish was never drawn, however many other draws there were" in {

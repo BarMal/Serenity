@@ -163,6 +163,16 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       window.host.publishedFrames shouldBe 2
     }
 
+  it should "report how large the pictures it was given were" in
+    withWindow { window =>
+      window.host.drawStats.pictureOpsMean shouldBe 0.0
+      window.host.publish(record(scene))
+      window.host.publish(record(scene))
+      val stats = window.host.drawStats
+      stats.pictureOpsMean should be > 0.0
+      stats.pictureBytesMean should be > 0.0
+    }
+
   it should "report that it replays the picture for every draw when the canvas has no GPU context" in
     withHost(None) { window =>
       window.host.publish(record(scene))

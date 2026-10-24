@@ -26,17 +26,19 @@ final class SkiaLayerHost private (
     cacheReplay: Option[Boolean]
 ) extends LayerHost:
 
-  private val slot      = new PictureSlot[Picture](_.close())
-  private val carets    = new AtomicReference(List.empty[SwingWindow.CaretPaint])
-  private val published = new AtomicBoolean(false)
-  private val renders   = new AtomicInteger(0)
-  private val publishes = new AtomicInteger(0)
-  private val listener  = new AtomicReference[Option[() => Unit]](None)
-  private val draws     = new AtomicReference(SkiaLayerHost.Draws.Empty)
-  private val replayed  = new AtomicReference(Option.empty[SkiaLayerHost.Replayed])
-  private val replays   = new AtomicInteger(0)
-  private val shown     = new AtomicInteger(0)
-  private val awaiting  = new AtomicLong(0L)
+  private val slot         = new PictureSlot[Picture](_.close())
+  private val carets       = new AtomicReference(List.empty[SwingWindow.CaretPaint])
+  private val published    = new AtomicBoolean(false)
+  private val renders      = new AtomicInteger(0)
+  private val publishes    = new AtomicInteger(0)
+  private val listener     = new AtomicReference[Option[() => Unit]](None)
+  private val draws        = new AtomicReference(SkiaLayerHost.Draws.Empty)
+  private val replayed     = new AtomicReference(Option.empty[SkiaLayerHost.Replayed])
+  private val replays      = new AtomicInteger(0)
+  private val shown        = new AtomicInteger(0)
+  private val pictureOps   = new AtomicLong(0L)
+  private val pictureBytes = new AtomicLong(0L)
+  private val awaiting     = new AtomicLong(0L)
 
   private val followCanvas = new ComponentAdapter:
     override def componentResized(e: ComponentEvent): Unit = fitLayer()
@@ -169,10 +171,18 @@ final class SkiaLayerHost private (
 
   def renderApi: String = layer.getRenderApi.toString
 
-  override def drawStats: LayerDrawStats = draws.get().stats(publishes.get(), replays.get())
+  override def drawStats: LayerDrawStats =
+    val count                     = publishes.get()
+    def mean(total: Long): Double = if count == 0 then 0.0 else total.toDouble / count
+    draws
+      .get()
+      .stats(count, replays.get())
+      .copy(pictureOpsMean = mean(pictureOps.get()), pictureBytesMean = mean(pictureBytes.get()))
 
   def publish(picture: Picture): Unit =
     val _ = awaiting.compareAndSet(0L, System.nanoTime())
+    val _ = pictureOps.addAndGet(picture.getApproximateOpCount.toLong)
+    val _ = pictureBytes.addAndGet(picture.getApproximateBytesUsed.toLong)
     slot.publish(picture)
     published.set(true)
     val _ = publishes.incrementAndGet()

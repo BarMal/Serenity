@@ -12,10 +12,15 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "| Scenario | Java2D p50 | p95 | max | Skia p50 | p95 | max | Skia/Java2D p50 | p95 |\n" +
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|"
     val rows = results.map(row)
+    val tailHeader =
+      "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early |\n" +
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
     (List("# Render benchmark", "", environmentLine) ++ launchLines ++ List("", header) ++ rows ++ List(
       "",
-      verdictText
-    ))
+      "Tail of each scenario; early is the samples whose last presentation came before the render call returned.",
+      "",
+      tailHeader
+    ) ++ results.map(tailRow) ++ List("", verdictText))
       .mkString("\n") + "\n"
 
   def json: String =
@@ -44,7 +49,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       s"Skia layer: replay cache: ${stats.replayCacheNote}; ${stats.replays} replays in ${stats.renders} draws; " +
         s"GPU sync: ${stats.gpuSyncNote}."
     }
-    List(startup, layers, draws, cache).flatten.map(line => s"\n$line")
+    val pictures = environment.skiaDraws.map { stats =>
+      f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
+    }
+    List(startup, layers, draws, cache, pictures).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -52,6 +60,12 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       s"| ${f(s.p50Ms)} | ${f(s.p95Ms)} | ${f(s.maxMs)} | ${ratio(s.p50Ms, java2d.p50Ms)} | ${ratio(s.p95Ms, java2d.p95Ms)} |"
     )
     s"| ${result.scenario.label} | ${f(java2d.p50Ms)} | ${f(java2d.p95Ms)} | ${f(java2d.maxMs)} $skia"
+
+  private def tailRow(result: ScenarioResult): String =
+    def cells(s: FrameStats) =
+      s"${f(s.p75Ms)} | ${f(s.p90Ms)} | ${f(s.p99Ms)} | ${s.over33Ms} | ${s.endedBeforeReturn} |"
+    val skia = result.skia.fold("- | - | - | - | - |")(cells)
+    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia"
 
   private def verdictText: String =
     verdict match
@@ -67,11 +81,16 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
 
   private def statsJson(stats: FrameStats): Json =
     Json.obj(
-      "count"   -> stats.count.asJson,
-      "p50Ms"   -> stats.p50Ms.asJson,
-      "p95Ms"   -> stats.p95Ms.asJson,
-      "maxMs"   -> stats.maxMs.asJson,
-      "dropped" -> stats.dropped.asJson
+      "count"             -> stats.count.asJson,
+      "p50Ms"             -> stats.p50Ms.asJson,
+      "p95Ms"             -> stats.p95Ms.asJson,
+      "maxMs"             -> stats.maxMs.asJson,
+      "dropped"           -> stats.dropped.asJson,
+      "p75Ms"             -> stats.p75Ms.asJson,
+      "p90Ms"             -> stats.p90Ms.asJson,
+      "p99Ms"             -> stats.p99Ms.asJson,
+      "over33Ms"          -> stats.over33Ms.asJson,
+      "endedBeforeReturn" -> stats.endedBeforeReturn.asJson
     )
 
   private def environmentJson: Json =
@@ -104,7 +123,9 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "cachedDraws"           -> stats.cachedDraws.asJson,
       "syncedDraws"           -> stats.syncedDraws.asJson,
       "gpuContext"            -> stats.gpuContext.asJson,
-      "replayCacheEngaged"    -> stats.replayCacheEngaged.asJson
+      "replayCacheEngaged"    -> stats.replayCacheEngaged.asJson,
+      "pictureOpsMean"        -> stats.pictureOpsMean.asJson,
+      "pictureBytesMean"      -> stats.pictureBytesMean.asJson
     )
 
   private def verdictJson: Json =

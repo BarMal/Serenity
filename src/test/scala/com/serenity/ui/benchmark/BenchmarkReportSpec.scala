@@ -80,6 +80,28 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("gpuContext").as[Boolean] shouldBe Right(false)
   }
 
+  it should "show the tail of each scenario and the pictures the layer was given" in {
+    val tail =
+      FrameStats(200, 10, 20, 30, 0, p75Ms = 12.5, p90Ms = 17.5, p99Ms = 27.5, over33Ms = 4, endedBeforeReturn = 3)
+    val withTail = BenchmarkReport(
+      environment.copy(skiaDraws =
+        Some(LayerDrawStats(1, 1, 1.0, 1.0, 1.0, 1.0, 1.0, pictureOpsMean = 812.0, pictureBytesMean = 65536.0))
+      ),
+      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, tail, Some(tail))),
+      Verdict.SkiaWins
+    )
+    val text = withTail.markdown
+    text should include("| Scenario | Java2D p75 |")
+    val row = text.linesIterator.filter(_.contains("caret blink")).toList.lastOption.getOrElse(fail("no tail row"))
+    List("12.50", "17.50", "27.50", "| 4 |", "| 3 |").foreach(figure => row should include(figure))
+    text should include("pictures: 812 ops, 64.0 KB on average")
+    val skia =
+      parse(withTail.json).getOrElse(fail("not JSON")).hcursor.downField("scenarios").downArray.downField("skia")
+    skia.downField("p99Ms").as[Double] shouldBe Right(27.5)
+    skia.downField("over33Ms").as[Int] shouldBe Right(4)
+    skia.downField("endedBeforeReturn").as[Int] shouldBe Right(3)
+  }
+
   it should "show every figure of both backends in a scenario's row" in {
     val row = report.markdown.linesIterator.find(_.contains("type one character")).getOrElse(fail("no row"))
     List("10.00", "20.00", "25.00", "5.00", "10.00", "15.00").foreach(figure => row should include(figure))

@@ -44,7 +44,9 @@ final case class LayerDrawStats(
     replays: Int = 0,
     cachedDraws: Int = 0,
     syncedDraws: Int = 0,
-    gpuContext: Boolean = false
+    gpuContext: Boolean = false,
+    pictureOpsMean: Double = 0.0,
+    pictureBytesMean: Double = 0.0
 ):
 
   def replayCacheEngaged: Boolean = cachedDraws > 0
