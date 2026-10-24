@@ -149,6 +149,20 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.replayMeanMs should be >= 0.0
     }
 
+  it should "say how many published frames its latest draw showed" in
+    withWindow { window =>
+      window.host.publishedFrames shouldBe 0
+      window.host.publish(record(scene))
+      eventually("the first publish shown")(window.host.shownFrames == 1)
+      window.host.publish(record(scene))
+      eventually("the second publish shown")(window.host.shownFrames == 2)
+      val seen = window.host.renderCount
+      window.host.showCarets(Nil)
+      eventually("a redraw")(window.host.renderCount > seen)
+      window.host.shownFrames shouldBe 2
+      window.host.publishedFrames shouldBe 2
+    }
+
   it should "report that it replays the picture for every draw when the canvas has no GPU context" in
     withHost(None) { window =>
       window.host.publish(record(scene))

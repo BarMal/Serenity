@@ -35,6 +35,7 @@ final class SkiaLayerHost private (
   private val draws     = new AtomicReference(SkiaLayerHost.Draws.Empty)
   private val replayed  = new AtomicReference(Option.empty[SkiaLayerHost.Replayed])
   private val replays   = new AtomicInteger(0)
+  private val shown     = new AtomicInteger(0)
   private val awaiting  = new AtomicLong(0L)
 
   private val followCanvas = new ComponentAdapter:
@@ -90,6 +91,7 @@ final class SkiaLayerHost private (
         if played then
           val _ = replays.incrementAndGet()
         played
+    if drawn then shown.set(version)
     val replayedAt = System.nanoTime()
     val scale      = layer.getContentScale
     val ink        = new Paint()
@@ -158,6 +160,10 @@ final class SkiaLayerHost private (
       None
 
   def baseAvailable: Boolean = published.get()
+
+  override def publishedFrames: Int = publishes.get()
+
+  override def shownFrames: Int = shown.get()
 
   def onRendered(callback: () => Unit): Unit = listener.set(Some(callback))
 

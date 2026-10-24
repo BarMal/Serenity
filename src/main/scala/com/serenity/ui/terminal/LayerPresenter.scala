@@ -16,6 +16,11 @@ trait LayerPresenter:
   /** `callback` is called, on the event thread, each time the layer has drawn a frame. */
   def onRendered(callback: () => Unit): Unit
 
+  /** How many frames have been published to the layer, and how many of them its latest draw showed. */
+  def publishedFrames: Int = 0
+
+  def shownFrames: Int = 0
+
   /** The render API the layer ended up with, which is a software one where the GPU's could not start. */
   def renderApi: String
 

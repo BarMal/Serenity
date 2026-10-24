@@ -1,11 +1,8 @@
 package com.serenity.ui.benchmark
 
 import java.awt.Dimension
-import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.locks.LockSupport
 import javax.swing.SwingUtilities
-
-import scala.annotation.tailrec
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.rope.Balance
@@ -190,26 +187,15 @@ object RenderBenchmarkRunner:
         )
         if !painted then full()
 
-  /** The milliseconds from calling `render` to the last presentation it caused, or `None` if there was none. */
+  /** The nanoseconds from calling `render` to the last presentation of what it published, or `None` if there was none.
+    */
   private def timed(window: SwingWindow)(render: => Unit): Option[Long] =
-    val presented = new AtomicInteger(0)
-    val last      = new AtomicLong(0L)
-    window.setOnFramePresented { () =>
-      last.set(System.nanoTime())
-      val _ = presented.incrementAndGet()
-    }
+    val timer =
+      new FrameTimer(() => System.nanoTime(), () => LockSupport.parkNanos(1_000_000L), QuietNanos, DropAfterNanos)
+    window.setOnFramePresented(() => timer.presented(window.layerPresenter.fold(0)(_.shownFrames)))
     val start = System.nanoTime()
     render
-    awaitQuiet(presented, last, start)
-
-  @tailrec
-  private def awaitQuiet(presented: AtomicInteger, last: AtomicLong, start: Long): Option[Long] =
-    val now = System.nanoTime()
-    if presented.get > 0 && now - last.get >= QuietNanos then Some(last.get - start)
-    else if now - start > DropAfterNanos then Option.when(presented.get > 0)(last.get - start)
-    else
-      LockSupport.parkNanos(1_000_000L)
-      awaitQuiet(presented, last, start)
+    timer.await(start, window.layerPresenter.fold(0)(_.publishedFrames))
 
   private def settle(): Unit =
     SwingUtilities.invokeAndWait(() => ())
