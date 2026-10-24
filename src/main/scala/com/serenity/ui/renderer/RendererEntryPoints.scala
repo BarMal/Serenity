@@ -7,7 +7,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 
-/** The package's entry point for painting a whole frame: a full frame either on a `SwingWindow` or a surface-generic
+/** The package's entry point for painting a whole frame: a full frame either on a [[RenderTarget]] or a surface-generic
   * [[RenderSurface]], plus the startup-page plumbing every frame goes through first. Cursor-only and cursor-overlay
   * frames are a separate entry point, [[RendererCursorOverlay]]; it composes the same plumbing exposed here
   * ([[withSceneIfNeeded]], [[renderStartPageFrame]]), which is why those are public rather than private to this object
@@ -59,7 +59,7 @@ object RendererEntryPoints:
   def render(
     state: AppState,
     cursorVisible: Boolean,
-    swingWin: com.serenity.ui.terminal.SwingWindow,
+    target: RenderTarget,
     codeFont: FontSpec,
     textFont: FontSpec,
     uiFont: FontSpec,
@@ -72,20 +72,20 @@ object RendererEntryPoints:
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rects) for a
     // repaint bounded to the rects this frame actually changed.
     val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
-    val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
+    val output        = Some(FrameOutput(target.geometry.identity, repaintRegion))
     val publishFrame: java.awt.image.BufferedImage => Unit =
       if repaintOnFlush then
-        image => swingWin.onImageReady(image, repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle)))
-      else swingWin.onBaseImageReady
+        image => target.onImageReady(image, repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle)))
+      else target.onBaseImageReady
     val surface = Java2DRenderSurface.forFrame(
-      swingWin.metrics,
+      target.metrics,
       codeFont.toAwt,
-      swingWin.canvas,
+      target.geometry,
       publishFrame,
-      swingWin.acquireBaseImage,
+      target.acquireBaseImage,
       caches.surfaceText
     )
-    val viewportSize = swingWin.viewportSize
+    val viewportSize = target.viewportSize
     // A Swing/Java2D surface always has a real FontRenderContext to measure against, so this scene keeps its
     // long-standing behaviour of deriving cell metrics from `codeFont` and letting `TextLayoutSnapshot` auto-detect
     // measured vs. cell layout per buffer font -- no override needed (#1215's cellMetrics override is for a surface
@@ -95,7 +95,7 @@ object RendererEntryPoints:
       state,
       caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt)
     )(page =>
-      renderStartPageFrame(state, page, surface, viewportSize, uiFont, swingWin.metrics, uiMetrics, output, caches)
+      renderStartPageFrame(state, page, surface, viewportSize, uiFont, target.metrics, uiMetrics, output, caches)
     ) { scene =>
       RendererFramePlanner.renderFrame(
         state,
@@ -106,7 +106,7 @@ object RendererEntryPoints:
         codeFont.toAwt,
         textFont.toAwt,
         uiFont.toAwt,
-        swingWin.metrics,
+        target.metrics,
         uiMetrics,
         cursorColor,
         output,
@@ -305,8 +305,8 @@ object RendererEntryPoints:
       caches
     ).map(rects => PixelRect.unionOf(rects).getOrElse(PixelRect(0, 0, 0, 0)))
 
-  /** Report the pixel rects the visible cursors in `state` would be painted at, without needing a real `SwingWindow`.
-    * Exposed for testing #963's bounded-repaint region: `onCursorOverlayReady` unions this same geometry (from both the
+  /** Report the pixel rects the visible cursors in `state` would be painted at, without needing a real window. Exposed
+    * for testing #963's bounded-repaint region: `onCursorOverlayReady` unions this same geometry (from both the
     * previous and current frame) with the base frame's own dirty region.
     */
   private[serenity] def cursorRepaintRects(

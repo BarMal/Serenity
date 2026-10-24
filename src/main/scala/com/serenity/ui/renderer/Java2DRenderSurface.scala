@@ -465,7 +465,7 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  final private[serenity] case class DeviceScale(x: Double, y: Double)
+  final case class DeviceScale(x: Double, y: Double)
 
   /** `Graphics2D` can only express "no clip" as a null `Shape`. */
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
@@ -498,31 +498,24 @@ object Java2DRenderSurface:
   def forFrame(
     metrics: CellMetrics,
     font: Font,
-    canvas: javax.swing.JPanel,
+    geometry: SurfaceGeometry,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
     textCaches: SurfaceTextCaches,
     contentPersists: Boolean = true
   ): Java2DRenderSurface =
-    val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-    val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-    val scale         = deviceScaleFor(canvas)
-    val image = acquireImage(
-      deviceImageDimension(logicalWidth, scale.x),
-      deviceImageDimension(logicalHeight, scale.y),
-      BufferedImage.TYPE_INT_RGB
-    )
+    val image = acquireImage(geometry.deviceWidthPx, geometry.deviceHeightPx, BufferedImage.TYPE_INT_RGB)
     new Java2DRenderSurface(
       image,
       metrics,
       font,
       onFlush,
-      logicalWidthPx = logicalWidth,
-      logicalHeightPx = logicalHeight,
-      deviceScaleX = scale.x,
-      deviceScaleY = scale.y,
+      logicalWidthPx = geometry.logicalWidthPx,
+      logicalHeightPx = geometry.logicalHeightPx,
+      deviceScaleX = geometry.deviceScale.x,
+      deviceScaleY = geometry.deviceScale.y,
       contentPersists = contentPersists,
-      layerCacheOwnerOverride = Some(ScreenIdentity(canvas)),
+      layerCacheOwnerOverride = Some(geometry.identity),
       textCaches = textCaches
     )
 
@@ -530,28 +523,25 @@ object Java2DRenderSurface:
     image: BufferedImage,
     metrics: CellMetrics,
     font: Font,
-    canvas: javax.swing.JPanel,
+    geometry: SurfaceGeometry,
     onFlush: BufferedImage => Unit,
     textCaches: SurfaceTextCaches
   ): Java2DRenderSurface =
-    val logicalWidth  = logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-    val logicalHeight = logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-    val scale         = deviceScaleFor(canvas)
     new Java2DRenderSurface(
       image,
       metrics,
       font,
       onFlush,
-      logicalWidthPx = logicalWidth,
-      logicalHeightPx = logicalHeight,
-      deviceScaleX = scale.x,
-      deviceScaleY = scale.y,
+      logicalWidthPx = geometry.logicalWidthPx,
+      logicalHeightPx = geometry.logicalHeightPx,
+      deviceScaleX = geometry.deviceScale.x,
+      deviceScaleY = geometry.deviceScale.y,
       textCaches = textCaches
     )
 
-  /** Build a layer surface from numbers alone -- no `JPanel` required, unlike [[forFrame]]/[[forImage]]. Stage 1 of
-    * #1100 flagged those two as "tied to a Swing `JPanel` for device-scale/logical-size derivation" as the open design
-    * problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
+  /** Build a layer surface from numbers alone -- no [[SurfaceGeometry]] required, unlike [[forFrame]]/[[forImage]].
+    * Stage 1 of #1100 flagged those two as tied to a window's canvas for device-scale/logical-size derivation as the
+    * open design problem blocking per-surface buffering; this resolves it by deriving the same inputs from an existing
     * [[Java2DRenderSurface]] that already computed them (see [[Java2DRenderSurface.newLayerSurface]]) instead of from a
     * canvas. The image starts fully transparent: `recycled` is cleared and reused when its size matches, otherwise a
     * new image is allocated.
@@ -589,9 +579,3 @@ object Java2DRenderSurface:
   private[serenity] def logicalCanvasDimension(currentPx: Int, preferredPx: Int): Int =
     if currentPx > 0 then currentPx
     else preferredPx.max(1)
-
-  private[serenity] def deviceScaleFor(canvas: javax.swing.JPanel): DeviceScale =
-    Option(canvas.getGraphicsConfiguration)
-      .map(_.getDefaultTransform)
-      .map(transform => DeviceScale(transform.getScaleX.max(1.0), transform.getScaleY.max(1.0)))
-      .getOrElse(DeviceScale(1.0, 1.0))
