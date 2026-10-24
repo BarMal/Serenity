@@ -31,6 +31,6 @@ runs:
           apt-get install -y -q --no-install-recommends ca-certificates git cmake ninja-build gcc g++ pkg-config \
             libwayland-dev wayland-protocols libxkbcommon-dev libegl-dev libdecor-0-dev libdbus-1-dev libudev-dev binutils
           ci/sdl3/build-sdl3.sh /w/sdl3-work /w/sdl3-natives
+          rm -rf /w/sdl3-work
+          chown -R "$(stat -c %u:%g /w)" /w/sdl3-natives
         '
-        sudo chown -R "$(id -u):$(id -g)" sdl3-natives
-        rm -rf sdl3-work
