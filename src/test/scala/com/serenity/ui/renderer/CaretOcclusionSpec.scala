@@ -15,8 +15,8 @@ import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The caret is filled over the presented frame, above everything in it, so a surface floating over the text would
-  * have the caret drawn across it. The caret leaves out the pixels a floating surface covers.
+/** The caret is filled over the presented frame, above everything in it, so a surface floating over the text would have
+  * the caret drawn across it. The caret leaves out the pixels a floating surface covers.
   */
 class CaretOcclusionSpec extends AnyFlatSpec with Matchers:
 
