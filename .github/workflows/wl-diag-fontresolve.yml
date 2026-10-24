@@ -1,0 +1,46 @@
+name: WL diag font resolve (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-wl-diag
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '25' }
+      - name: Remember Temurin 25
+        run: echo "T25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - name: Fetch JBR 25
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          PLAT=linux; [ "${{ runner.os }}" = Windows ] && PLAT=windows
+          TAG="$(gh release list -R JetBrains/JetBrainsRuntime --limit 300 --json tagName,publishedAt --jq '[.[] | select(.tagName | startswith("jbr-release-25"))] | sort_by(.publishedAt) | last | .tagName')"
+          VER="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\1/')"; BUILD="$(echo "$TAG" | sed -E 's/^jbr-release-([0-9.]+)b([0-9.]+)$/\2/')"
+          curl -fsSL -o jbr25.tgz "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk-${VER}-${PLAT}-x64-b${BUILD}.tar.gz"
+          mkdir jbr25 && tar -xzf jbr25.tgz -C jbr25; echo "$TAG"
+          echo "J25=$(ls -d $PWD/jbr25/*)" >> "$GITHUB_ENV"
+      - name: Compile and run
+        continue-on-error: true
+        run: |
+          mkdir classes && "$T25/bin/javac" -d classes bench/wl-diag/FontResolve.java
+          for rt in T25 J25; do
+            home="${!rt}"; echo "######## $rt"
+            "$home/bin/java" -Djava.awt.headless=true -cp classes FontResolve 2>&1 | grep -v "Picked up"
+          done
