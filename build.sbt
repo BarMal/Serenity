@@ -270,9 +270,22 @@ lazy val root = (project in file("."))
       IO.write(file, classpath.map(_.getAbsolutePath).mkString(java.io.File.pathSeparator))
       Seq(file)
     }.taskValue,
+    // The attributes `sbt assembly` writes into Serenity.jar's manifest, for AssemblyManifestSpec.
+    Test / resourceGenerators += Def.task {
+      val file  = (Test / resourceManaged).value / "assembly" / "manifest-attributes.txt"
+      val lines = (assembly / packageOptions).value.collect { case Package.ManifestAttributes(entries @ _*) =>
+        entries.map { case (name, value) => s"${name.toString}: $value" }
+      }.flatten
+      IO.write(file, lines.mkString("\n"))
+      Seq(file)
+    }.taskValue,
     Compile / mainClass        := Some("Main"),
     assembly / mainClass       := Some("Main"),
     assembly / assemblyJarName := "Serenity.jar",
+    // JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native access
+    // is granted. An executable jar grants it from its manifest, so `java -jar Serenity.jar` needs this even though the
+    // packages also pass --enable-native-access (desktop-publish.yml, desktop-release.yml).
+    assembly / packageOptions += Package.ManifestAttributes("Enable-Native-Access" -> "ALL-UNNAMED"),
     assembly / assemblyMergeStrategy := {
       case PathList("META-INF", "serenity", _*) => MergeStrategy.first
       case PathList("META-INF", "services", _*) => MergeStrategy.concat
