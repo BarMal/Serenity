@@ -7,17 +7,24 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicLong, At
 import javax.swing.{JPanel, SwingUtilities}
 
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
-import org.jetbrains.skia.{Canvas, Paint, Picture, PixelGeometry, Rect}
+import org.jetbrains.skia.{Canvas, Image, ImageInfo, Paint, Picture, PixelGeometry, Rect, Surface}
 import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
 
 /** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
-  * renders frames records each as a `Picture` and publishes it; the layer replays the latest one and fills the carets
-  * over it, which is why a caret blink never records the frame again.
+  * renders frames records each as a `Picture` and publishes it. On a GPU a published picture is replayed once, into an
+  * offscreen image; every draw after that, a caret blink among them, paints that image and fills the carets over it, so
+  * a blink costs one blit and never replays the frame. A software redrawer has no GPU context and replays the picture
+  * on every draw: there the extra full-window copy costs more than the replay it would save.
   *
   * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
   * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
   */
-final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean) extends LayerHost:
+final class SkiaLayerHost private (
+    canvas: JPanel,
+    layer: SkiaLayer,
+    syncGpu: Boolean,
+    cacheReplay: Option[Boolean]
+) extends LayerHost:
 
   private val slot      = new PictureSlot[Picture](_.close())
   private val carets    = new AtomicReference(List.empty[SwingWindow.CaretPaint])
@@ -26,6 +33,8 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private val publishes = new AtomicInteger(0)
   private val listener  = new AtomicReference[Option[() => Unit]](None)
   private val draws     = new AtomicReference(SkiaLayerHost.Draws.Empty)
+  private val replayed  = new AtomicReference(Option.empty[SkiaLayerHost.Replayed])
+  private val replays   = new AtomicInteger(0)
   private val awaiting  = new AtomicLong(0L)
 
   private val followCanvas = new ComponentAdapter:
@@ -49,7 +58,8 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     layer.addMouseMotionListener(passMouseToCanvas)
     layer.setRenderDelegate(
       new SkikoRenderDelegate:
-        override def onRender(surface: Canvas, width: Int, height: Int, nanoTime: Long): Unit = render(surface)
+        override def onRender(surface: Canvas, width: Int, height: Int, nanoTime: Long): Unit =
+          render(surface, width, height)
     )
     canvas.add(layer, 0)
     canvas.addComponentListener(followCanvas)
@@ -57,17 +67,28 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     canvas.revalidate()
     canvas.repaint()
 
-  private def render(surface: Canvas): Unit =
+  private def render(surface: Canvas, widthPx: Int, heightPx: Int): Unit =
     val _       = renders.incrementAndGet()
     val started = System.nanoTime()
     val pending = awaiting.get()
     surface.clear(0xff000000)
-    val drawn = slot.drawLatest(picture =>
-      val _ = picture.playback(surface, () => false)
-    )
-    val replayed = System.nanoTime()
-    val scale    = layer.getContentScale
-    val ink      = new Paint()
+    val version  = publishes.get()
+    val useCache = cacheReplay.getOrElse(Option(surface.getRecordingContext).isDefined)
+    val drawn =
+      if useCache then
+        val shown = replayed
+          .get()
+          .filter(_.fits(widthPx, heightPx, version))
+          .orElse(replay(surface, widthPx, heightPx, version))
+        shown.foreach(frame => surface.drawImage(frame.image, 0f, 0f))
+        shown.isDefined
+      else
+        slot.drawLatest(picture =>
+          val _ = picture.playback(surface, () => false)
+        )
+    val replayedAt = System.nanoTime()
+    val scale      = layer.getContentScale
+    val ink        = new Paint()
     carets.get().foreach { caret =>
       ink.setColor(caret.color.getRGB)
       surface.drawRect(
@@ -93,12 +114,41 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
         waitedNanos = Option.when(drawn && pending != 0L && started >= pending && awaiting.compareAndSet(pending, 0L))(
           started - pending
         ),
-        replayNanos = replayed - started,
-        caretNanos = inked - replayed,
+        replayNanos = replayedAt - started,
+        caretNanos = inked - replayedAt,
         syncNanos = synced - inked
       )
     )
     listener.get().foreach(_.apply())
+
+  /** Replays the latest picture into an offscreen image of the window's size. The offscreen surface is kept while the
+    * size holds, and the image of the picture before is closed first, so drawing again does not copy it.
+    */
+  private def replay(target: Canvas, widthPx: Int, heightPx: Int, version: Int): Option[SkiaLayerHost.Replayed] =
+    val before = replayed.getAndSet(None)
+    before.foreach(_.image.close())
+    val offscreen = before
+      .filter(frame => frame.widthPx == widthPx && frame.heightPx == heightPx)
+      .map(_.surface)
+      .getOrElse {
+        before.foreach(_.surface.close())
+        val info = ImageInfo.Companion.makeN32Premul(widthPx, heightPx)
+        Option(target.getRecordingContext).fold(Surface.Companion.makeRaster(info))(context =>
+          Surface.Companion.makeRenderTarget(context, false, info)
+        )
+      }
+    offscreen.getCanvas.clear(0xff000000)
+    val drawn = slot.drawLatest(picture =>
+      val _ = picture.playback(offscreen.getCanvas, () => false)
+    )
+    if drawn then
+      val frame = SkiaLayerHost.Replayed(offscreen, offscreen.makeImageSnapshot(), widthPx, heightPx, version)
+      replayed.set(Some(frame))
+      val _ = replays.incrementAndGet()
+      Some(frame)
+    else
+      offscreen.close()
+      None
 
   def baseAvailable: Boolean = published.get()
 
@@ -129,7 +179,9 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
       canvas.repaint()
     }
     slot.closeAll()
+    replayed.getAndSet(None).foreach(_.close())
 
+  private[skia] def replayCount: Int       = replays.get()
   private[skia] def renderCount: Int       = renders.get()
   private[skia] def publishCount: Int      = publishes.get()
   private[skia] def closedPictures: Int    = slot.closedCount
@@ -137,6 +189,16 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private[skia] def layerCursorType: Int   = layer.getCursor.getType
 
 object SkiaLayerHost:
+
+  /** The latest picture as an image the size of the window, and the publish it came from. */
+  final private case class Replayed(surface: Surface, image: Image, widthPx: Int, heightPx: Int, version: Int):
+
+    def fits(width: Int, height: Int, current: Int): Boolean =
+      widthPx == width && heightPx == height && version == current
+
+    def close(): Unit =
+      image.close()
+      surface.close()
 
   /** The totals of a layer's draws, in nanoseconds. */
   final private case class Draws(
@@ -183,12 +245,13 @@ object SkiaLayerHost:
   }
 
   /** The layer is made, added to `canvas` and sized to it on the event thread. With `syncGpu` each frame waits for the
-    * GPU to finish before it counts as drawn, which only a timing run wants.
+    * GPU to finish before it counts as drawn, which only a timing run wants. `cacheReplay` forces the offscreen image
+    * on or off; left out, it is used where the layer has a GPU context.
     */
-  def create(canvas: JPanel, syncGpu: Boolean = false): SkiaLayerHost =
+  def create(canvas: JPanel, syncGpu: Boolean = false, cacheReplay: Option[Boolean] = None): SkiaLayerHost =
     onEventThread {
       val layer = newLayer()
-      val host  = new SkiaLayerHost(canvas, layer, syncGpu)
+      val host  = new SkiaLayerHost(canvas, layer, syncGpu, cacheReplay)
       host.install()
       host
     }

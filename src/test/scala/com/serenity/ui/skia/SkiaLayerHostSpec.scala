@@ -36,6 +36,17 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       Thread.sleep(25)
       awaited(condition, deadlineNanos)
 
+  /** Waits until `value` has not changed for half a second, then returns it. */
+  private def quiet(value: => Int): Int =
+    @tailrec
+    def loop(last: Int, since: Long): Int =
+      Thread.sleep(25)
+      val now = value
+      if now != last then loop(now, System.nanoTime())
+      else if System.nanoTime() - since >= 500_000_000L then now
+      else loop(last, since)
+    loop(value, System.nanoTime())
+
   private def eventually(what: String)(condition: => Boolean): Unit =
     withClue(s"timed out waiting for $what: ")(awaited(condition, System.nanoTime() + 15_000_000_000L) shouldBe true)
 
@@ -63,7 +74,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         f.setVisible(true)
         f
       }
-      val host = SkiaLayerHost.create(canvas)
+      val host = SkiaLayerHost.create(canvas, cacheReplay = Some(true))
       try
         val _ = onEdt(canvas.requestFocusInWindow())
         body(new Window(frame, canvas, host))
@@ -131,6 +142,60 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.renders should be >= 1
       stats.publishToRenderMeanMs should be > 0.0
       stats.replayMeanMs should be >= 0.0
+    }
+
+  it should "replay the picture when a new one is published, not for each caret blink" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      eventually("the picture replayed")(window.host.replayCount >= 1)
+      val replayed = quiet(window.host.replayCount)
+      val caret    = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
+      List(List(caret), Nil, List(caret), Nil, List(caret), Nil).foreach { carets =>
+        val before = window.host.renderCount
+        window.host.showCarets(carets)
+        eventually("a redraw")(window.host.renderCount > before)
+      }
+      window.host.replayCount shouldBe replayed
+      window.host.publish(record(scene))
+      eventually("the new picture replayed")(window.host.replayCount > replayed)
+    }
+
+  it should "show the carets over the picture exactly as a full replay would" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      val caret = SwingWindow.CaretPaint(new Rectangle(300, 40, 4, 20), Color.WHITE)
+      window.host.showCarets(List(caret))
+      val expected = Surface.Companion.makeRasterN32Premul(width, height)
+      scene(expected.getCanvas)
+      val ink = new Paint()
+      ink.setColor(Color.WHITE.getRGB)
+      expected.getCanvas.drawRect(Rect.Companion.makeXYWH(300f, 40f, 4f, 20f), ink)
+      val raster = SkiaPixels.read(expected)
+      eventually("the caret on screen")(rgb(window.capture(), 301, 50) == 0xffffff)
+      val shown = window.capture()
+      val differing = (for
+        y <- 0 until height
+        x <- 0 until width
+        if (raster(y * width + x) & 0xffffff) != rgb(shown, x, y)
+      yield (x, y)).take(5)
+      withClue(s"first differing pixels (x,y): $differing; ")(differing shouldBe empty)
+    }
+
+  it should "replay the picture again when the canvas is resized, and keep showing it" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      eventually("the picture replayed")(window.host.replayCount >= 1)
+      val replayed = quiet(window.host.replayCount)
+      onEdt {
+        window.canvas.setPreferredSize(new Dimension(width + 100, height + 50))
+        window.canvas.setSize(width + 100, height + 50)
+        window.canvas.doLayout()
+      }
+      eventually("the picture replayed at the new size")(window.host.replayCount > replayed)
+      eventually("the picture still on screen")(rgb(window.capture(), 300, 20) == 0x203040)
     }
 
   it should "report a base frame only once a picture has been published" in
