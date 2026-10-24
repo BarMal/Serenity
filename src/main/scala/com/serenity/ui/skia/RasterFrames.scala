@@ -1,11 +1,12 @@
 package com.serenity.ui.skia
 
 import java.awt.image.{BufferedImage, DataBufferInt}
-import java.nio.{ByteBuffer, ByteOrder}
+import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.renderer.DeviceArea
-import org.jetbrains.skia.{Bitmap, ColorAlphaType, ColorType, ImageInfo, Surface}
+import org.jetbrains.skia.impl.BufferUtil
+import org.jetbrains.skia.{ColorType, ImageInfo, Pixmap, Surface}
 
 /** The raster surface one window's frames are painted on, and what is known about the images it was copied into.
   *
@@ -31,24 +32,38 @@ final private[ui] class RasterFrames:
         held.surface
       case None =>
         current.held.foreach(_.surface.close())
-        val held = Held(Surface.Companion.makeRasterN32Premul(widthPx, heightPx), widthPx, heightPx, scale)
+        val held = Held(Surface.Companion.makeRaster(frameInfo(widthPx, heightPx)), widthPx, heightPx, scale)
         state.set(State(Some(held), None, None, inFlight = true, current.copiedPixels))
         held.surface
 
-  /** Copies what `image` lacks of the frame just painted on `surface`, then remembers the image. */
-  def present(surface: Surface, image: BufferedImage, damage: Option[List[DeviceArea]]): Unit =
+  /** Brings `image` up to the frame just painted on `surface`, then remembers the image. A frame that scrolled has the
+    * image move its rows as the surface did, so only what the frame painted over them, or changed beyond them, is
+    * copied out of Skia.
+    */
+  def present(
+    surface: Surface,
+    image: BufferedImage,
+    damage: Option[List[DeviceArea]],
+    moves: List[RasterCopyPlan.Move] = Nil,
+    writes: Option[List[DeviceArea]] = None
+  ): Unit =
     val current = state.get()
     val whole   = DeviceArea(0, 0, image.getWidth, image.getHeight)
-    val areas   = RasterCopyPlan.areas(image, current.last, current.beforeLast, damage, whole)
-    areas.foreach(copyInto(surface, image, _))
+    val now     = RasterCopyPlan.Filled(image, damage, moves, writes)
+    val plan    = RasterCopyPlan.plan(image, current.last, current.beforeLast, now, whole)
+    plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx))
+    plan.copies.foreach(copyInto(surface, image, _))
     state.set(
       current.copy(
-        last = Some(RasterCopyPlan.Filled(image, damage)),
+        last = Some(now),
         beforeLast = current.last,
         inFlight = false,
-        copiedPixels = areas.map(area => area.width.toLong * area.height).sum
+        copiedPixels = plan.copies.map(area => area.width.toLong * area.height).sum
       )
     )
+
+  /** The surface frames are painted on, for a test to compare with what was presented. */
+  private[serenity] def retainedSurface: Option[Surface] = state.get().held.map(_.surface)
 
   /** How many device pixels the last presented frame copied. */
   def copiedPixels: Long = state.get().copiedPixels
@@ -69,24 +84,48 @@ object RasterFrames:
   private object State:
     val Empty: State = State(None, None, None, inFlight = false, 0L)
 
+  /** BGRA whatever Skia's native 32-bit order is, so a surface's ints are the image's ARGB ints on every platform. */
+  private[skia] def frameInfo(widthPx: Int, heightPx: Int): ImageInfo =
+    ImageInfo.Companion.makeN32Premul(widthPx, heightPx).withColorType(ColorType.BGRA_8888)
+
   /** A frame that keeps nothing: the whole surface goes into `image`. */
   def copyWhole(surface: Surface, image: BufferedImage): Unit =
     copyInto(surface, image, DeviceArea(0, 0, image.getWidth, image.getHeight))
 
-  private def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
-    // BGRA whatever the platform's native order, so the bytes read as the little-endian ARGB ints an image holds
-    val info   = new ImageInfo(area.width, area.height, ColorType.BGRA_8888, ColorAlphaType.PREMUL)
-    val bitmap = Bitmap()
-    val read   = bitmap.allocPixels(info) && surface.readPixels(bitmap, area.left, area.top)
-    val bytes  = if read then Option(bitmap.readPixels(info, area.width * 4, 0, 0)) else None
-    bytes.foreach { raw =>
-      val pixels = new Array[Int](area.width * area.height)
-      ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(pixels)
-      image.getRaster.getDataBuffer match
-        case target: DataBufferInt =>
-          val data = target.getData
-          (0 until area.height).foreach(row =>
-            System.arraycopy(pixels, row * area.width, data, (area.top + row) * image.getWidth + area.left, area.width)
-          )
-        case _ => image.setRGB(area.left, area.top, area.width, area.height, pixels, 0, area.width)
-    }
+  /** A surface of any other 32-bit order than BGRA holds its pixels as ABGR ints. */
+  @annotation.tailrec
+  private def swapRedBlue(ints: Array[Int], index: Int, end: Int): Unit =
+    if index < end then
+      val argb = ints(index)
+      ints(index) = (argb & 0xff00ff00) | ((argb & 0xff) << 16) | ((argb >>> 16) & 0xff)
+      swapRedBlue(ints, index + 1, end)
+
+  /** The surface's own memory is viewed as a direct buffer and read straight into the image's array, so a copy
+    * allocates nothing the size of what it copies: no array a read of Skia's `Data` fills, and none to put it in the
+    * image from.
+    */
+  private[skia] def copyInto(surface: Surface, image: BufferedImage, area: DeviceArea): Unit =
+    val pixmap = Pixmap()
+    try
+      if surface.peekPixels(pixmap) then
+        val rowBytes = pixmap.getRowBytes
+        val view = BufferUtil.INSTANCE
+          .getByteBufferFromPointer(pixmap.getAddr, rowBytes * surface.getHeight)
+          .order(ByteOrder.LITTLE_ENDIAN)
+          .asIntBuffer()
+        val rgba = pixmap.getInfo.getColorType == ColorType.RGBA_8888
+        image.getRaster.getDataBuffer match
+          case target: DataBufferInt =>
+            (area.top until area.top + area.height).foreach { y =>
+              val start = y * image.getWidth + area.left
+              view.get(y * (rowBytes / 4) + area.left, target.getData, start, area.width)
+              if rgba then swapRedBlue(target.getData, start, start + area.width)
+            }
+          case _ =>
+            val line = new Array[Int](area.width)
+            (area.top until area.top + area.height).foreach { y =>
+              view.get(y * (rowBytes / 4) + area.left, line, 0, area.width)
+              if rgba then swapRedBlue(line, 0, area.width)
+              image.setRGB(area.left, y, area.width, 1, line, 0, area.width)
+            }
+    finally pixmap.close()
