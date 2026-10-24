@@ -1,0 +1,62 @@
+name: nojbr SDL3 GL spike (throwaway, never merge)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-sdl-gl-spike
+
+permissions:
+  contents: read
+
+jobs:
+  gl:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: es-vsync,   profile: es, swap: '1', shim: 'preload' }
+          - { name: es-novsync, profile: es, swap: '0', shim: 'preload' }
+          - { name: gl-vsync,   profile: gl, swap: '1', shim: 'preload' }
+          - { name: es-dlopen,  profile: es, swap: '1', shim: 'dlopen' }
+          - { name: es-noshim,  profile: es, swap: '1', shim: 'none' }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '25' }
+      - name: Install
+        timeout-minutes: 10
+        env: { DEBIAN_FRONTEND: noninteractive, NEEDRESTART_MODE: a }
+        run: |
+          sudo -E apt-get update -q
+          sudo -E apt-get install -y -q --no-install-recommends sway grim python3-pil gcc libc6-dev libegl1 libgl1 libgles2 libglx-mesa0 libgl1-mesa-dri fonts-dejavu-core adwaita-icon-theme
+      - name: Fetch jars, build shim and spike
+        run: |
+          set -euo pipefail
+          mkdir -p lib classes
+          M=https://repo1.maven.org/maven2
+          for f in org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3.jar org/lwjgl/lwjgl/3.4.3/lwjgl-3.4.3-natives-linux.jar \
+                   org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3.jar org/lwjgl/lwjgl-sdl/3.4.3/lwjgl-sdl-3.4.3-natives-linux.jar \
+                   org/jetbrains/skiko/skiko-awt/0.153.0/skiko-awt-0.153.0.jar org/jetbrains/skiko/skiko-awt-runtime-linux-x64/0.153.0/skiko-awt-runtime-linux-x64-0.153.0.jar \
+                   org/jetbrains/kotlin/kotlin-stdlib/2.1.0/kotlin-stdlib-2.1.0.jar org/jetbrains/kotlinx/kotlinx-coroutines-core-jvm/1.9.0/kotlinx-coroutines-core-jvm-1.9.0.jar; do
+            curl -fsSL --retry 3 -o "lib/$(basename "$f")" "$M/$f"
+          done
+          gcc -shared -fPIC -o glxshim.so bench/nojbr/sdl/gl/glxshim.c
+          L="$PWD/lib"
+          javac -cp "$L/lwjgl-3.4.3.jar:$L/lwjgl-sdl-3.4.3.jar:$L/skiko-awt-0.153.0.jar:$L/kotlin-stdlib-2.1.0.jar" -d classes bench/nojbr/sdl/gl/GlSpike.java
+          java -version; dpkg -l | grep -E 'mesa|libegl1|libgl1' | awk '{print $2, $3}' | head
+      - name: Run (${{ matrix.name }})
+        run: |
+          L="$PWD/lib"
+          CP="$PWD/classes:$L/lwjgl-3.4.3.jar:$L/lwjgl-3.4.3-natives-linux.jar:$L/lwjgl-sdl-3.4.3.jar:$L/lwjgl-sdl-3.4.3-natives-linux.jar:$L/skiko-awt-0.153.0.jar:$L/skiko-awt-runtime-linux-x64-0.153.0.jar:$L/kotlin-stdlib-2.1.0.jar:$L/kotlinx-coroutines-core-jvm-1.9.0.jar"
+          mkdir -p out
+          case "${{ matrix.shim }}" in
+            preload) export LD_PRELOAD="$PWD/glxshim.so" ;;
+            dlopen)  export SHIM="$PWD/glxshim.so" ;;
+          esac
+          bash bench/nojbr/sdl/gl/run_gl.sh "$JAVA_HOME/bin/java" "$CP" "$PWD/out/${{ matrix.name }}" "${{ matrix.profile }}" "${{ matrix.swap }}" 2>&1 | grep -v WARNING | tee "out/${{ matrix.name }}.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: 'nojbr-sdl-gl-${{ matrix.name }}', path: out, retention-days: 3 }
