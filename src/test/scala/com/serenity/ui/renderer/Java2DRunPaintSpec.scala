@@ -1,18 +1,23 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
+import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
+import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** What a run paints on a [[Java2DRenderSurface]]: its background only where the pixels are not already that colour,
-  * its glyphs inside the clip in force, and an underline as a rule rather than a font attribute.
+/** What a run paints on a [[RenderSurface]]: its background only where the pixels are not already that colour, its
+  * glyphs inside the clip in force, and an underline as a rule rather than a font attribute. The scenes and assertions
+  * are shared by every backend; each asserts pixel colours and ink presence only, never the shape of a glyph, so the
+  * tolerance between rasterisers is none needed.
   */
-class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
+abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
+
+  protected def frames: FrameBackend
 
   private val metrics    = CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
   private val font       = new Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -24,20 +29,20 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
   private val runTopPx   = 26
   private val runWidthPx = 56
 
-  private def freshImage() = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+  private def freshImage(): FramePixels = frames.newFrame(width, height)
 
-  private def surfaceOver(image: BufferedImage): Java2DRenderSurface =
-    new Java2DRenderSurface(image, metrics, font, _ => (), width, height, 1.0, 1.0)
+  private def surfaceOver(image: FramePixels): RenderSurface =
+    frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
 
-  private def drawBlankRun(surface: Java2DRenderSurface, background: Color): Unit =
+  private def drawBlankRun(surface: RenderSurface, background: Color): Unit =
     surface.setBackgroundColor(RenderColor.fromAwt(background))
-    surface.drawRunPx(runLeftPx.toFloat, runTopPx, runWidthPx.toFloat, metrics.lineHeight, metrics.ascent, "")
+    surface.text.drawRunPx(runLeftPx.toFloat, runTopPx, runWidthPx.toFloat, metrics.lineHeight, metrics.ascent, "")
 
   private val insideRun = (runLeftPx + 20, runTopPx + 5)
 
-  private def markInsideRun(image: BufferedImage): Unit = image.setRGB(insideRun._1, insideRun._2, marker)
+  private def markInsideRun(image: FramePixels): Unit = image.stamp(insideRun._1, insideRun._2, marker)
 
-  private def pixelInsideRun(image: BufferedImage): Int = image.getRGB(insideRun._1, insideRun._2)
+  private def pixelInsideRun(image: FramePixels): Int = image.rgbAt(insideRun._1, insideRun._2)
 
   "A run whose background is the colour the viewport was just cleared to" should "not paint that background again" in {
     val image   = freshImage()
@@ -67,7 +72,7 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     surface.clearViewport(RenderColor.fromAwt(navy))
     markInsideRun(image)
 
-    surface.withPixelTranslation(0.0, 0.0)(drawBlankRun(surface, navy))
+    surface.pixels.withPixelTranslation(0.0, 0.0)(drawBlankRun(surface, navy))
 
     pixelInsideRun(image) shouldBe marker
   }
@@ -97,13 +102,13 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     val image   = freshImage()
     val surface = surfaceOver(image)
     surface.clearViewport(RenderColor.fromAwt(navy))
-    surface.fillPixelRect(runLeftPx, runTopPx, 6, metrics.lineHeight, RenderColor.fromAwt(Color.RED))
+    surface.pixels.fillPixelRect(runLeftPx, runTopPx, 6, metrics.lineHeight, RenderColor.fromAwt(Color.RED))
     markInsideRun(image)
 
     drawBlankRun(surface, navy)
 
     pixelInsideRun(image) shouldBe navy.getRGB
-    image.getRGB(runLeftPx + 2, runTopPx + 2) shouldBe navy.getRGB
+    image.rgbAt(runLeftPx + 2, runTopPx + 2) shouldBe navy.getRGB
   }
 
   "A run in a rectangle the clear preserved" should "paint its background" in {
@@ -138,7 +143,7 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     surface.clearViewport(RenderColor.fromAwt(navy))
     markInsideRun(image)
 
-    surface.setAlpha(0.5f)
+    surface.effects.getOrElse(fail("expected alpha compositing")).setAlpha(0.5f)
     drawBlankRun(surface, navy)
 
     pixelInsideRun(image) should not be marker
@@ -151,11 +156,11 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
       (77.0f, 28.0f, "again", navy, Color.WHITE),
       (105.5f, 28.5f, "last.", navy, Color.CYAN)
     )
-    def paint(forceEveryFill: Boolean): BufferedImage =
+    def paint(forceEveryFill: Boolean): FramePixels =
       val image   = freshImage()
       val surface = surfaceOver(image)
       surface.clearViewport(RenderColor.fromAwt(navy))
-      if forceEveryFill then surface.fillPixelRect(0, 0, width, height, RenderColor.fromAwt(navy))
+      if forceEveryFill then surface.pixels.fillPixelRect(0, 0, width, height, RenderColor.fromAwt(navy))
       List(26, 52).foreach { top =>
         runs.foreach { (x, runWidth, text, background, foreground) =>
           surface.setBackgroundColor(RenderColor.fromAwt(background))
@@ -169,11 +174,9 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     val skipped   = paint(forceEveryFill = false)
     val repainted = paint(forceEveryFill = true)
 
-    val differing = for
-      y <- 0 until height
-      x <- 0 until width
-      if skipped.getRGB(x, y) != repainted.getRGB(x, y)
-    yield (x, y)
+    val differing = skipped.rgbPixels.zip(repainted.rgbPixels).zipWithIndex.collect {
+      case ((left, right), index) if left != right => (index % width, index / width)
+    }
     differing shouldBe empty
   }
 
@@ -184,16 +187,16 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     surface.setForegroundColor(RenderColor.fromAwt(Color.WHITE))
     surface.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
 
-    surface.withRectClip(1, 2, 2, 1) {
-      surface.drawRunPx(0f, 26, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
-      surface.drawRunPx(0f, 26, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
+    surface.panelOutlines.getOrElse(fail("expected rect clipping")).withRectClip(1, 2, 2, 1) {
+      surface.text.drawRunPx(0f, 26, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
+      surface.text.drawRunPx(0f, 26, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
     }
     val insideClip  = inkIn(image, 7, 21, 26, 39)
     val outsideClip = inkIn(image, 0, 7, 26, 39) + inkIn(image, 21, 140, 26, 39)
     insideClip should be > 0
     outsideClip shouldBe 0
 
-    surface.drawRunPx(0f, 52, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
+    surface.text.drawRunPx(0f, 52, 140f, metrics.lineHeight, metrics.ascent, "MMMMMMMMMMMMMMMMMMMM")
     inkIn(image, 0, 7, 52, 65) should be > 0
     inkIn(image, 100, 140, 52, 65) should be > 0
   }
@@ -206,22 +209,28 @@ class Java2DRunPaintSpec extends AnyFlatSpec with Matchers:
     surface.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
 
     surface.enableStyle(TextStyle.underlined)
-    surface.drawRunPx(14f, 26, 56f, metrics.lineHeight, metrics.ascent, "MMMMMMMM")
+    surface.text.drawRunPx(14f, 26, 56f, metrics.lineHeight, metrics.ascent, "MMMMMMMM")
     surface.disableStyle(TextStyle.underlined)
-    surface.drawRunPx(14f, 52, 56f, metrics.lineHeight, metrics.ascent, "MMMMMMMM")
+    surface.text.drawRunPx(14f, 52, 56f, metrics.lineHeight, metrics.ascent, "MMMMMMMM")
 
     hasFullInkRow(image, 26) shouldBe true
     hasFullInkRow(image, 52) shouldBe false
   }
 
-  private def inkIn(image: BufferedImage, left: Int, right: Int, top: Int, bottom: Int): Int =
+  private def inkIn(image: FramePixels, left: Int, right: Int, top: Int, bottom: Int): Int =
     (for
       y <- top until bottom
       x <- left until right
-      if image.getRGB(x, y) != Color.BLACK.getRGB
+      if image.rgbAt(x, y) != Color.BLACK.getRGB
     yield 1).size
 
-  private def hasFullInkRow(image: BufferedImage, top: Int): Boolean =
+  private def hasFullInkRow(image: FramePixels, top: Int): Boolean =
     ((top + metrics.ascent) until (top + metrics.lineHeight + 2)).exists { y =>
-      (runLeftPx + 2 until runLeftPx + runWidthPx - 2).forall(x => image.getRGB(x, y) != Color.BLACK.getRGB)
+      (runLeftPx + 2 until runLeftPx + runWidthPx - 2).forall(x => image.rgbAt(x, y) != Color.BLACK.getRGB)
     }
+
+class Java2DRunPaintSpec extends RunPaintBehaviour:
+  override protected def frames: FrameBackend = Java2DFrames
+
+class SkiaRunPaintSpec extends RunPaintBehaviour:
+  override protected def frames: FrameBackend = SkiaFrames

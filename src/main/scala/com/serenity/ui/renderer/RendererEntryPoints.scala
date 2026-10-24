@@ -67,7 +67,8 @@ object RendererEntryPoints:
     cursorColor: Option[RenderColor],
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
-    caches: RenderCaches = RenderCaches.create()
+    caches: RenderCaches = RenderCaches.create(),
+    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
   ): Unit =
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rects) for a
     // repaint bounded to the rects this frame actually changed.
@@ -77,13 +78,18 @@ object RendererEntryPoints:
       if repaintOnFlush then
         image => swingWin.onImageReady(image, repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle)))
       else swingWin.onBaseImageReady
-    val surface = Java2DRenderSurface.forFrame(
-      swingWin.metrics,
-      codeFont.toAwt,
-      swingWin.canvas,
-      publishFrame,
-      swingWin.acquireBaseImage,
-      caches.surfaceText
+    val surface = surfaces.create(
+      FrameSurfaceRequest(
+        swingWin.metrics,
+        codeFont.toAwt,
+        swingWin.canvas,
+        publishFrame,
+        swingWin.acquireBaseImage,
+        caches.surfaceText,
+        caches.backendCaches,
+        () => repaintRegion.get(),
+        attachLayer = swingWin.attachLayerPresenter
+      )
     )
     val viewportSize = swingWin.viewportSize
     // A Swing/Java2D surface always has a real FontRenderContext to measure against, so this scene keeps its

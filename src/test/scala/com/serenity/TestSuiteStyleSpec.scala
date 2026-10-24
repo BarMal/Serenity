@@ -64,7 +64,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     }
 
   // Entry points a spec launches as a separate JVM: their stdout is the channel the parent spec reads, not test noise.
-  private val ChildProcessMains = Set("crash/KillRecoveryChild.scala")
+  private val ChildProcessMains = Set("crash/KillRecoveryChild.scala", "app/SkiaLazinessChild.scala")
 
   private val DebugSuitePattern         = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
   private val ConsoleOutputPattern      = ("println" + raw"\s*\(").r
@@ -80,5 +80,8 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
     "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",
     "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",
-    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout"
+    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout",
+    "ui/skia/SkiaLayerHostSpec.scala"             -> "polls a native window's paint, which signals no completion",
+    "ui/skia/SkiaLayerRedrawSpec.scala" -> "polls a native window's draws, which signal no completion; and waits to see that none follow",
+    "ui/skia/SkiaLayerWindowSpec.scala" -> "polls a native window's paint, which signals no completion"
   )

@@ -70,6 +70,8 @@ class SwingWindow(
   private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
   private val pendingRepaintRef      = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
   private val baseImagePool          = new SwingWindow.ReusableImagePool
+  private val layerPresenterRef      = new AtomicReference[Option[LayerPresenter]](None)
+  private val framePresentedRef      = new AtomicReference[Option[() => Unit]](None)
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef           = new AtomicBoolean(false)
   private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
@@ -118,6 +120,7 @@ class SwingWindow(
         baseImagePool.releaseLease()
         g2.dispose()
         frameTimings.paintFinished(paintStart)
+        framePresentedRef.get().foreach(_.apply())
 
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
   private val accessibilityPublishGate = new AccessibilityPublishGate
@@ -131,7 +134,10 @@ class SwingWindow(
       else SwingUtilities.invokeLater(publish)
 
   private val pointerCursorSync = new PointerCursorSync(shape =>
-    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    val apply: Runnable = () =>
+      val cursor = Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape))
+      canvas.setCursor(cursor)
+      layerPresenterRef.get().foreach(_.setCursor(cursor))
     if SwingUtilities.isEventDispatchThread then apply.run()
     else SwingUtilities.invokeLater(apply)
   )
@@ -182,17 +188,32 @@ class SwingWindow(
   def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
     paintCarets: => scala.List[SwingWindow.CaretPaint]
   ): Boolean =
-    baseImageRef.get() match
-      case Some(_) =>
-        val carets = paintCarets
-        publishedCaretsRef.set(carets)
-        carets.headOption.foreach(caret => lastCaretRef.set(Some(caret.rect)))
-        val currentCursorRects  = carets.map(_.rect)
-        val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
+    val presenter = layerPresenterRef.get()
+    if baseImageRef.get().isDefined || presenter.exists(_.baseAvailable) then
+      val carets = paintCarets
+      publishedCaretsRef.set(carets)
+      carets.headOption.foreach(caret => lastCaretRef.set(Some(caret.rect)))
+      val currentCursorRects  = carets.map(_.rect)
+      val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
+      presenter.fold(
         requestRepaint(SwingWindow.cursorRepaint(baseDirtyRects, previousCursorRects, currentCursorRects))
-        true
-      case None =>
-        false
+      )(_.showCarets(carets))
+      true
+    else false
+
+  /** From now on a GPU layer shows the base frame: it is handed the carets and the pointer cursor, and disposed when
+    * the window stops.
+    */
+  private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
+    layerPresenterRef.getAndSet(Some(presenter)).filterNot(_ eq presenter).foreach(_.dispose())
+    presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+
+  private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
+
+  /** `callback` is called on the event thread each time the canvas paints, or the GPU layer draws a frame. The render
+    * benchmark times a frame to the last of these.
+    */
+  private[serenity] def setOnFramePresented(callback: () => Unit): Unit = framePresentedRef.set(Some(callback))
 
   private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
@@ -357,6 +378,7 @@ class SwingWindow(
 
   def stop(): Unit =
     val dispose: Runnable = () =>
+      layerPresenterRef.getAndSet(None).foreach(_.dispose())
       frame.setVisible(false)
       frame.dispose()
     if SwingUtilities.isEventDispatchThread then dispose.run()

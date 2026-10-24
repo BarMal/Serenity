@@ -340,7 +340,8 @@ object RendererCursorOverlay:
     uiMetrics: CellMetrics,
     cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
-    caches: RenderCaches = RenderCaches.create()
+    caches: RenderCaches = RenderCaches.create(),
+    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
   ): Boolean =
     val viewportSize = swingWin.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
@@ -349,13 +350,18 @@ object RendererCursorOverlay:
     val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // carets are filled over it separately, so the base frame here is pure pane content and chrome.
-    val surface = Java2DRenderSurface.forFrame(
-      swingWin.metrics,
-      codeFont.toAwt,
-      swingWin.canvas,
-      swingWin.onBaseImageReady,
-      swingWin.acquireBaseImage,
-      caches.surfaceText
+    val surface = surfaces.create(
+      FrameSurfaceRequest(
+        swingWin.metrics,
+        codeFont.toAwt,
+        swingWin.canvas,
+        swingWin.onBaseImageReady,
+        swingWin.acquireBaseImage,
+        caches.surfaceText,
+        caches.backendCaches,
+        () => repaintRegion.get(),
+        attachLayer = swingWin.attachLayerPresenter
+      )
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.

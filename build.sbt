@@ -425,6 +425,42 @@ libraryDependencies ++= Seq(
 // RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
 libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl")
 
+// Skia render backend (#2028). Each OS build ships only its own Skiko natives, so the runtime artifact is picked per
+// target: detected from the build host, or forced with -Dserenity.skiko.target / SERENITY_SKIKO_TARGET so CI can
+// assemble any target from any host. The Skiko API jar and its Kotlin dependencies are not loaded on the TUI and
+// headless paths; that is enforced at runtime, not here.
+val skikoVersion = "0.153.0"
+
+val skikoTargets = Set("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
+
+val skikoTarget: String = {
+  def hostOs: String =
+    sys.props.getOrElse("os.name", "").toLowerCase match {
+      case name if name.contains("win")                            => "windows"
+      case name if name.contains("mac") || name.contains("darwin") => "macos"
+      case _                                                       => "linux"
+    }
+  def hostArch: String =
+    sys.props.getOrElse("os.arch", "").toLowerCase match {
+      case "aarch64" | "arm64" => "arm64"
+      case _                   => "x64"
+    }
+  val target = sys.props
+    .get("serenity.skiko.target")
+    .orElse(sys.env.get("SERENITY_SKIKO_TARGET"))
+    .map(_.trim)
+    .filter(_.nonEmpty)
+    .getOrElse(s"$hostOs-$hostArch")
+  if (!skikoTargets.contains(target))
+    sys.error(s"Unknown Skiko target '$target'; expected one of ${skikoTargets.toList.sorted.mkString(", ")}")
+  target
+}
+
+libraryDependencies ++= Seq(
+  "org.jetbrains.skiko" % "skiko-awt"                       % skikoVersion,
+  "org.jetbrains.skiko" % s"skiko-awt-runtime-$skikoTarget" % skikoVersion
+)
+
 val jlineVersion = "3.30.16"
 
 // TUI shell (#1107): raw mode, alternate screen, resize signals, terminal size. jline-terminal-jni is the modern
