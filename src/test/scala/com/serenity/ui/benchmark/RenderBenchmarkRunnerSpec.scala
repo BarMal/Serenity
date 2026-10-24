@@ -2,6 +2,8 @@ package com.serenity.ui.benchmark
 
 import java.awt.{GraphicsEnvironment, Window}
 
+import com.serenity.testkit.DisplayExclusive
+import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.{LayerSurfaceFactory, SynchronousSkiaLayerSurfaceFactory}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,6 +15,15 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   private val small = RenderBenchmarkOptions(widthPx = 640, heightPx = 400, frames = 3, warmup = 1)
 
+  /** The windows the run opens show on the shared display, so other specs' screen captures must not overlap them. */
+  private def runExclusively(
+    options: RenderBenchmarkOptions,
+    skiaFactory: FrameSurfaceFactory,
+    skiaProbe: Either[String, Unit] = Right(()),
+    startup: String = ""
+  ): BenchmarkReport =
+    DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup))
+
   private def onLinuxWithDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
     assume(
@@ -22,7 +33,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   "RenderBenchmarkRunner.run" should "time every scenario on both backends, with exactly the frames asked for" in {
     onLinuxWithDisplay()
-    val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory)
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.results.map(_.scenario) shouldBe Scenario.values.toVector
     report.results.foreach { result =>
       withClue(result.scenario.label) {
@@ -38,7 +49,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "end with one Skia layer, say which toolkit drew, and count the layer's draws" in {
     onLinuxWithDisplay()
-    val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory, startup = "X11 (test)")
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, startup = "X11 (test)")
     report.environment.skiaLayers shouldBe Some(1)
     report.environment.toolkit should include("Toolkit")
     report.environment.startup shouldBe "X11 (test)"
@@ -50,7 +61,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "name the render API and refuse a verdict when Skiko drew in software" in {
     onLinuxWithDisplay()
-    val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory)
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.environment.skiaRenderApi.isRight shouldBe true
     if !report.environment.gpuUsed then
       report.verdict match
@@ -61,7 +72,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   it should "report the layer as unavailable, and still time Java2D, when the window fell back to Java2D" in {
     onLinuxWithDisplay()
     val failing = new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"))
-    val report  = RenderBenchmarkRunner.run(small, failing)
+    val report  = runExclusively(small, failing)
     report.environment.skiaRenderApi.isLeft shouldBe true
     report.results.foreach(result => result.skia shouldBe None)
     report.environment.skiaLayers shouldBe None
@@ -73,13 +84,13 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "not time Skia, and say why, when the native library did not load" in {
     onLinuxWithDisplay()
-    val report = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory, skiaProbe = Left("no libGL"))
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, skiaProbe = Left("no libGL"))
     report.environment.skiaRenderApi shouldBe Left("no libGL")
     report.results.foreach(result => result.skia shouldBe None)
   }
 
   it should "leave no window open" in {
     onLinuxWithDisplay()
-    val _ = RenderBenchmarkRunner.run(small, SynchronousSkiaLayerSurfaceFactory)
+    val _ = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     Window.getWindows.filter(_.isShowing) shouldBe empty
   }

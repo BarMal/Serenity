@@ -9,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.ExitCode
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
+import com.serenity.testkit.DisplayExclusive
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,8 +23,9 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     assume(System.getProperty("os.name", "").toLowerCase.contains("linux"), "left to the owner's machine elsewhere")
     val directory = TestTemp.directory("render-benchmark")
     val captured  = new ByteArrayOutputStream()
-    val code =
+    val code = DisplayExclusive(
       RenderBenchmark.run(small, directory, new PrintStream(captured, true), startup = "X11 (test)").unsafeRunSync()
+    )
     code shouldBe ExitCode.Success
     val printed = captured.toString
     printed should include("# Render benchmark")

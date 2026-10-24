@@ -100,8 +100,11 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
         val _ = presented.incrementAndGet()
       )
       window.attachLayerPresenter(presenter)
+      SwingUtilities.invokeAndWait(() => ())
+      // The window's own paints also report a frame, so only a rise can be asked of the presenter's callback.
+      val before = presented.get
       presenter.rendered.get().fold(fail("the presenter was given no callback"))(_.apply())
-      presented.get shouldBe 1
+      presented.get should be > before
     }
 
   it should "expose the attached presenter" in
