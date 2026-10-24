@@ -18,13 +18,16 @@ object Repaint:
   *
   * `columnRails` names, for a multi-column pane, the pane rows ([[ColumnPaneRows]]) whose line-number rail bands the
   * frame repaints; a pane it does not name repaints its rails whole.
+  *
+  * `slack` names the panes whose room below the last row ([[RendererChromePlan.roomBelowRows]]) the frame repaints.
   */
 final case class ChromeRepaint(
     spacers: Boolean,
     statusRow: Boolean,
     headers: Repaint[PaneId],
     lineNumberRows: Repaint[Int],
-    columnRails: Map[PaneId, Repaint[Int]] = Map.empty
+    columnRails: Map[PaneId, Repaint[Int]] = Map.empty,
+    slack: Repaint[PaneId] = Repaint.all
 ):
   def paintsAny: Boolean =
     spacers || statusRow || headers.nonEmpty || lineNumberRows.nonEmpty || columnRails.values.exists(_.nonEmpty)
@@ -71,7 +74,8 @@ private[renderer] object RendererChromePlan:
       geometryChanged: Boolean,
       rowsOverflow: Boolean,
       surfaceOverChrome: Boolean,
-      lastRowMoved: Set[Int]
+      lastRowMoved: Set[Int],
+      staleSlack: Set[PaneId] = Set.empty
   )
 
   /** The chrome this frame repaints: [[repaintFor]] over [[Signals]] read off the frame's panes and surfaces. */
@@ -92,7 +96,8 @@ private[renderer] object RendererChromePlan:
         geometryChanged || !context.surface.addressesPixels,
         rowsOverflow(context, renderPlan, panes, persistenceKey),
         surfacesMayTouch(context, renderPlan, persistenceKey, damage, chromeRegions(context, renderPlan)),
-        lastRowIfRowCountChanged(context, renderPlan.layoutContract.activePaneId, panes, persistenceKey)
+        lastRowIfRowCountChanged(context, renderPlan.layoutContract.activePaneId, panes, persistenceKey),
+        staleRoomBelowRows(context, renderPlan, panes.keySet, persistenceKey)
       )
     )
 
@@ -118,7 +123,8 @@ private[renderer] object RendererChromePlan:
         lineNumberRows =
           if signals.rowsOverflow && contract.rightLineNumberRect.isDefined then Repaint.all[Int]
           else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved),
-        columnRails = dirtyRowsByPane.map((paneId, rows) => paneId -> Repaint.only(rows))
+        columnRails = dirtyRowsByPane.map((paneId, rows) => paneId -> Repaint.only(rows)),
+        slack = Repaint.only(signals.staleSlack)
       )
 
   /** Whether a surface `damage` names may have left pixels in `regions`: it is, or was last frame, over one, or its
@@ -168,7 +174,51 @@ private[renderer] object RendererChromePlan:
     }
     (List(contract.leftSpacerRect, contract.rightSpacerRect) ++ contract.gutterRect.toList ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
-      .map(pixelRectOf(context.cellMetrics))
+      .map(pixelRectOf(context.cellMetrics)) ++ roomsBelowRows(context, renderPlan, renderPlan.paneLayouts.keySet)
+
+  /** The room below a pane's last row, when it is less than a row: the rows are tiled from the top of the content, so
+    * what is left of the content rect under the last one is too short for another. Row ink is clipped to the rows
+    * ([[RendererPaneContent]]'s `rowsBottomPx`), so only the clear paints it, and a kept one is the background the
+    * surface already holds. Taller room, below a short document, is left to be cleared: it is where a row appears.
+    */
+  private[renderer] def roomBelowRows(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    paneId: PaneId,
+    snapshot: TextLayoutSnapshot
+  ): Option[PixelRect] =
+    for
+      layout <- renderPlan.paneLayouts.get(paneId)
+      if context.surface.addressesPixels && renderPlan.columnSnapshotsFor(paneId).isEmpty
+      last <- RendererPaneSetup.paneRowRects(layout.contentRect, context, snapshot).lastOption
+      topPx    = last.yPx + last.heightPx
+      bottomPx = context.cellMetrics.toPixelY(layout.contentRect.bottom)
+      if bottomPx > topPx && bottomPx - topPx < last.heightPx
+    yield PixelRect(last.xPx, topPx, last.widthPx, bottomPx - topPx)
+
+  private def roomsBelowRows(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    paneIds: Set[PaneId]
+  ): List[PixelRect] =
+    paneIds.toList.flatMap(paneId =>
+      renderPlan.snapshots.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _))
+    )
+
+  /** The panes whose room below the last row is not the one this surface last drew: a different place, or none known.
+    * Only a room kept in the same place holds what is there now.
+    */
+  private def staleRoomBelowRows(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    paneIds: Set[PaneId],
+    persistenceKey: SurfaceContentIdentity
+  ): Set[PaneId] =
+    val previous = context.caches.frameState.previousSnapshotsFor(persistenceKey)
+    paneIds.filter { paneId =>
+      val now = renderPlan.snapshots.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _))
+      now.exists(room => !previous.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _)).contains(room))
+    }
 
   /** The active pane's last row when the pane showed another number of rows in the frame this surface last drew: the
     * counter below the last row belongs to it, and what lay there then is no longer what lies there now.
@@ -246,7 +296,8 @@ private[renderer] object RendererChromePlan:
       case (paneId, layout) if !repaint.headers.includes(paneId) =>
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
-    spacers ++ (statusRow ++ headers).map(toPixels) ++
+    val rooms = panes.keys.filterNot(repaint.slack.includes).toSet
+    spacers ++ (statusRow ++ headers).map(toPixels) ++ roomsBelowRows(context, renderPlan, rooms) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 
