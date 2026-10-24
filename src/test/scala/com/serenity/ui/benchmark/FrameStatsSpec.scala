@@ -26,6 +26,19 @@ class FrameStatsSpec extends AnyFlatSpec with Matchers:
     FrameStats.of(millis(1, 2, 3), dropped = 0, endedBeforeReturn = 2).endedBeforeReturn shouldBe 2
   }
 
+  it should "round each frame time up to whole refresh intervals and count the frames that miss one or more" in {
+    val sixty = RefreshRate.Assumed60.nanos
+    val stats =
+      FrameStats.of(Vector(16_000_000L, 16_666_667L, 16_700_000L, 33_400_000L), dropped = 0, refreshNanos = sixty)
+    (stats.p50Frames, stats.p95Frames) shouldBe (1, 3)
+    stats.missedRefresh shouldBe 2
+  }
+
+  it should "count a frame as presented within a refresh when no frame was timed to take longer" in {
+    val stats = FrameStats.of(millis(1, 5, 16), dropped = 0)
+    (stats.p50Frames, stats.p95Frames, stats.missedRefresh) shouldBe (1, 1, 0)
+  }
+
   it should "not depend on the order the frames were timed in" in {
     FrameStats.of(millis(5, 1, 9, 3, 7), dropped = 0) shouldBe FrameStats.of(millis(1, 3, 5, 7, 9), dropped = 0)
   }

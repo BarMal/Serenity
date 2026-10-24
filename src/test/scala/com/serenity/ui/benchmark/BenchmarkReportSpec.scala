@@ -82,7 +82,8 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     )
     val text = withTail.markdown
     text should include("| Scenario | Java2D p75 |")
-    val row = text.linesIterator.filter(_.contains("caret blink")).toList.lastOption.getOrElse(fail("no tail row"))
+    val tailTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Java2D p75 |")).takeWhile(_.nonEmpty).toList
+    val row       = tailTable.find(_.contains("caret blink")).getOrElse(fail("no tail row"))
     List("12.50", "17.50", "27.50", "| 4 |", "| 3 |").foreach(figure => row should include(figure))
     text should include("pictures: 812 ops, 64.0 KB on average")
     val skia =
@@ -90,6 +91,50 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     skia.downField("p99Ms").as[Double] shouldBe Right(27.5)
     skia.downField("over33Ms").as[Int] shouldBe Right(4)
     skia.downField("endedBeforeReturn").as[Int] shouldBe Right(3)
+  }
+
+  it should "say what the refresh rate is, and whether it was assumed" in {
+    val assumed = report.copy(environment = environment.copy(refresh = RefreshRate.of(0))).markdown
+    assumed should include("Refresh: 60 Hz (assumed: the display reported no rate)")
+    val reported = report.copy(environment = environment.copy(refresh = RefreshRate.of(144))).markdown
+    reported should include("Refresh: 144 Hz")
+    reported should not include "assumed"
+  }
+
+  it should "show the frames to present of each scenario, and how many samples missed a refresh" in {
+    val slow = FrameStats(
+      200,
+      10,
+      20,
+      30,
+      0,
+      p75Ms = 12,
+      p90Ms = 18,
+      p99Ms = 28,
+      over33Ms = 0,
+      endedBeforeReturn = 0,
+      p50Frames = 2,
+      p95Frames = 4,
+      missedRefresh = 50
+    )
+    val fast = FrameStats(200, 5, 10, 15, 0, p50Frames = 1, p95Frames = 1, missedRefresh = 0)
+    val withFrames = BenchmarkReport(
+      environment,
+      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, slow, Some(fast))),
+      Verdict.SkiaWins
+    )
+    val text = withFrames.markdown
+    text should include("Frames to present")
+    text should include("| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed |")
+    val framesTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Java2D p50 | p95 | missed |")).toList
+    val row         = framesTable.find(_.contains("page down")).getOrElse(fail("no frames row"))
+    List("| 2 |", "| 4 |", "50 (25%)", "0 (0%)").foreach(cell => row should include(cell))
+    val json = parse(withFrames.json).getOrElse(fail("not JSON")).hcursor
+    json.downField("environment").downField("refreshHz").as[Double] shouldBe Right(60.0)
+    json.downField("environment").downField("refreshAssumed").as[Boolean] shouldBe Right(true)
+    val java2d = json.downField("scenarios").downArray.downField("java2d")
+    java2d.downField("p50Frames").as[Int] shouldBe Right(2)
+    java2d.downField("missedRefresh").as[Int] shouldBe Right(50)
   }
 
   it should "show every figure of both backends in a scenario's row" in {

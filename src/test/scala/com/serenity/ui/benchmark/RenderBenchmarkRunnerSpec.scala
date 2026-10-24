@@ -47,6 +47,18 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "round every scenario's time up to the display's refresh intervals" in {
+    onLinuxWithDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    report.environment.refresh.hz should be > 0.0
+    report.results.foreach { result =>
+      withClue(result.scenario.label) {
+        result.java2d.p50Frames should be >= 1
+        result.java2d.missedRefresh should be <= result.java2d.count
+      }
+    }
+  }
+
   it should "end with one Skia layer, say which toolkit drew, and count the layer's draws" in {
     onLinuxWithDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, startup = "X11 (test)")

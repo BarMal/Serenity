@@ -15,12 +15,20 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val tailHeader =
       "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early |\n" +
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+    val framesHeader =
+      "| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed |\n" +
+        "|---|---:|---:|---:|---:|---:|---:|"
     (List("# Render benchmark", "", environmentLine) ++ launchLines ++ List("", header) ++ rows ++ List(
       "",
       "Tail of each scenario; early is the samples whose last presentation came before the render call returned.",
       "",
       tailHeader
-    ) ++ results.map(tailRow) ++ List("", verdictText))
+    ) ++ results.map(tailRow) ++ List(
+      "",
+      s"Frames to present: each time rounded up to whole refreshes; missed is the samples that took more than one. $refreshLine",
+      "",
+      framesHeader
+    ) ++ results.map(framesRow) ++ List("", verdictText))
       .mkString("\n") + "\n"
 
   def json: String =
@@ -58,6 +66,18 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     )
     s"| ${result.scenario.label} | ${f(java2d.p50Ms)} | ${f(java2d.p95Ms)} | ${f(java2d.maxMs)} $skia"
 
+  private def refreshLine: String =
+    val refresh = environment.refresh
+    if refresh.assumed then f"Refresh: ${refresh.hz}%.0f Hz (assumed: the display reported no rate)."
+    else f"Refresh: ${refresh.hz}%.0f Hz."
+
+  private def framesRow(result: ScenarioResult): String =
+    def cells(s: FrameStats) =
+      val share = if s.count == 0 then 0 else math.round(100.0 * s.missedRefresh / s.count)
+      s"${s.p50Frames} | ${s.p95Frames} | ${s.missedRefresh} ($share%) |"
+    val skia = result.skia.fold("- | - | - |")(cells)
+    s"| ${result.scenario.label} | ${cells(result.java2d)} $skia"
+
   private def tailRow(result: ScenarioResult): String =
     def cells(s: FrameStats) =
       s"${f(s.p75Ms)} | ${f(s.p90Ms)} | ${f(s.p99Ms)} | ${s.over33Ms} | ${s.endedBeforeReturn} |"
@@ -87,7 +107,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "p90Ms"             -> stats.p90Ms.asJson,
       "p99Ms"             -> stats.p99Ms.asJson,
       "over33Ms"          -> stats.over33Ms.asJson,
-      "endedBeforeReturn" -> stats.endedBeforeReturn.asJson
+      "endedBeforeReturn" -> stats.endedBeforeReturn.asJson,
+      "p50Frames"         -> stats.p50Frames.asJson,
+      "p95Frames"         -> stats.p95Frames.asJson,
+      "missedRefresh"     -> stats.missedRefresh.asJson
     )
 
   private def environmentJson: Json =
@@ -95,13 +118,15 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       environment.skiaRenderApi.fold(cause => "skiaUnavailable" -> cause.asJson, api => "skiaRenderApi" -> api.asJson)
     Json.obj(
       List(
-        "os"          -> environment.os.asJson,
-        "java"        -> environment.java.asJson,
-        "width"       -> environment.widthPx.asJson,
-        "height"      -> environment.heightPx.asJson,
-        "deviceScale" -> environment.deviceScale.asJson,
-        "toolkit"     -> environment.toolkit.asJson,
-        "startup"     -> environment.startup.asJson,
+        "os"             -> environment.os.asJson,
+        "java"           -> environment.java.asJson,
+        "width"          -> environment.widthPx.asJson,
+        "height"         -> environment.heightPx.asJson,
+        "deviceScale"    -> environment.deviceScale.asJson,
+        "toolkit"        -> environment.toolkit.asJson,
+        "startup"        -> environment.startup.asJson,
+        "refreshHz"      -> environment.refresh.hz.asJson,
+        "refreshAssumed" -> environment.refresh.assumed.asJson,
         api
       ) ++ environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList*

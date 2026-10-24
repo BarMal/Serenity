@@ -51,8 +51,9 @@ object RenderBenchmarkRunner:
   ): BenchmarkReport =
     given Balance = Balance.default
     val fonts     = loadFonts()
-    val java2d    = measure(options, "Java2D", FrameSurfaceFactory.Java2D, fonts)
-    val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts))
+    val refresh   = RefreshRate.current
+    val java2d    = measure(options, "Java2D", FrameSurfaceFactory.Java2D, fonts, refresh)
+    val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts, refresh))
     val api = skia.flatMap(
       _.renderApi.toRight("the layer could not be made, so the window fell back to Java2D")
     )
@@ -60,7 +61,7 @@ object RenderBenchmarkRunner:
     val results = Scenario.values.toVector.map(scenario =>
       ScenarioResult(
         scenario,
-        java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0)),
+        java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0, refreshNanos = refresh.nanos)),
         measuredSkia.flatMap(_.stats.get(scenario))
       )
     )
@@ -74,7 +75,8 @@ object RenderBenchmarkRunner:
       toolkit = java.awt.Toolkit.getDefaultToolkit.getClass.getName,
       startup = startup,
       skiaLayers = measuredSkia.flatMap(_.layers),
-      skiaDraws = measuredSkia.flatMap(_.draws)
+      skiaDraws = measuredSkia.flatMap(_.draws),
+      refresh = refresh
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -95,7 +97,8 @@ object RenderBenchmarkRunner:
     options: RenderBenchmarkOptions,
     name: String,
     factory: FrameSurfaceFactory,
-    fonts: Fonts
+    fonts: Fonts,
+    refresh: RefreshRate
   )(using Balance): Measured =
     val window = new SwingWindow(
       new Dimension(options.widthPx, options.heightPx),
@@ -109,7 +112,7 @@ object RenderBenchmarkRunner:
     try
       val viewportLines = window.viewportSize.height
       val stats = Scenario.values.toList.map { scenario =>
-        scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines)
+        scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, refresh)
       }.toMap
       Measured(
         stats,
@@ -128,7 +131,8 @@ object RenderBenchmarkRunner:
     factory: FrameSurfaceFactory,
     scenario: Scenario,
     options: RenderBenchmarkOptions,
-    viewportLines: Int
+    viewportLines: Int,
+    refresh: RefreshRate
   )(using Balance): FrameStats =
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines)
     val shared = RenderCaches.create()
@@ -152,7 +156,8 @@ object RenderBenchmarkRunner:
     FrameStats.of(
       samples.flatten.map(_.nanos),
       dropped = samples.count(_.isEmpty),
-      endedBeforeReturn = samples.flatten.count(_.endedBeforeReturn)
+      endedBeforeReturn = samples.flatten.count(_.endedBeforeReturn),
+      refreshNanos = refresh.nanos
     )
 
   private def draw(
