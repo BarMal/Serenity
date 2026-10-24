@@ -2,21 +2,22 @@ package com.serenity.ui.skia
 
 import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, MouseAdapter, MouseEvent}
 import java.awt.image.BufferedImage
-import java.awt.{Color, Dimension, GraphicsEnvironment, Point, Rectangle, Robot}
+import java.awt.{Color, Dimension, GraphicsEnvironment, Point, Rectangle, Robot, Toolkit}
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import scala.annotation.tailrec
 
 import com.serenity.SkiaPixels
-import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.{DisplayExclusive, ScreenLocation}
 import com.serenity.ui.terminal.SwingWindow
 import org.jetbrains.skia.{Paint, Picture, PictureRecorder, Rect, Surface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The Skia layer hosted in a window canvas, on a display (Xvfb in CI). Skiko falls back to its software redrawers
-  * where there is no GL context, so what is exercised is the hosting, the replay and the input routing; no GPU API is.
+/** The Skia layer hosted in a window canvas, on a display: Xvfb on Linux, where Skiko falls back to its software
+  * redrawer, and the Windows and macOS runners, where it uses Direct3D and Metal. What is exercised is the hosting, the
+  * drawing of a picture and the input routing.
   */
 class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
@@ -47,10 +48,6 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
   private def withWindow[A](body: Window => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "reads the screen back from a layer Skiko draws with its software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val canvas = new JPanel(null)
       canvas.setFocusable(true)
@@ -88,6 +85,40 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
   private def rgb(image: BufferedImage, x: Int, y: Int): Int = image.getRGB(x, y) & 0xffffff
 
+  /** Waits for the screen to show `expected` exactly, with the picture's first pixel being `marker`. The window is
+    * looked for where the toolkit says it is and around the first pixel of the picture's colour, since a window system
+    * may put it a pixel or two away (see [[ScreenLocation]]); the best of those alignments is judged, and it must have
+    * no mismatches. What is reported on a failure is the closest alignment's first differences.
+    */
+  private def showsExactly(window: Window, expected: Array[Int], marker: Int): Unit =
+    val closest = new AtomicReference("nothing was captured")
+    def attempt(): Boolean =
+      val screen = new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit.getScreenSize))
+      def onScreen(x: Int, y: Int): Int =
+        if x < 0 || y < 0 || x >= screen.getWidth || y >= screen.getHeight then -1 else screen.getRGB(x, y) & 0xffffff
+      def differing(corner: (Int, Int)) =
+        for
+          y <- 0 until height
+          x <- 0 until width
+          if onScreen(corner._1 + x, corner._2 + y) != (expected(y * width + x) & 0xffffff)
+        yield (x, y)
+      val reported = window.screenOrigin
+      val found    = ScreenLocation.firstPixelOf(screen, marker)
+      val (best, corner) = ScreenLocation.bestAlignment(
+        ScreenLocation.candidateCorners((reported.x, reported.y), found, slack = 2)
+      )(differing(_).size)
+      val first = differing(corner)
+        .take(5)
+        .map((x, y) =>
+          f"($x,$y) screen ${onScreen(corner._1 + x, corner._2 + y)}%06x expected ${expected(y * width + x) & 0xffffff}%06x"
+        )
+      closest.set(
+        s"$best pixels differ at the best corner $corner (toolkit says $reported, first marker pixel $found): $first"
+      )
+      best == 0
+    val shown = awaited(attempt(), System.nanoTime() + 15_000_000_000L)
+    withClue(s"the screen never showed exactly the picture; ${closest.get}; ")(shown shouldBe true)
+
   "A hosted Skia layer" should "show a published picture exactly as the raster rasteriser draws it" in
     withWindow { window =>
       window.host.publish(record(scene))
@@ -95,14 +126,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val expected = Surface.Companion.makeRasterN32Premul(width, height)
       scene(expected.getCanvas)
       val raster = SkiaPixels.read(expected)
-      eventually("the picture on screen")(rgb(window.capture(), 300, 20) == 0x203040)
-      val shown = window.capture()
-      val differing = (for
-        y <- 0 until height
-        x <- 0 until width
-        if (raster(y * width + x) & 0xffffff) != rgb(shown, x, y)
-      yield (x, y)).take(5)
-      withClue(s"first differing pixels (x,y): $differing; ")(differing shouldBe empty)
+      showsExactly(window, raster, marker = 0x203040)
     }
 
   it should "draw the carets over the retained picture without recording the picture again" in
@@ -191,14 +215,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       ink.setColor(Color.WHITE.getRGB)
       expected.getCanvas.drawRect(Rect.Companion.makeXYWH(300f, 40f, 4f, 20f), ink)
       val raster = SkiaPixels.read(expected)
-      eventually("the caret on screen")(rgb(window.capture(), 301, 50) == 0xffffff)
-      val shown = window.capture()
-      val differing = (for
-        y <- 0 until height
-        x <- 0 until width
-        if (raster(y * width + x) & 0xffffff) != rgb(shown, x, y)
-      yield (x, y)).take(5)
-      withClue(s"first differing pixels (x,y): $differing; ")(differing shouldBe empty)
+      showsExactly(window, raster, marker = 0x203040)
     }
 
   it should "keep showing the picture when the canvas is resized" in

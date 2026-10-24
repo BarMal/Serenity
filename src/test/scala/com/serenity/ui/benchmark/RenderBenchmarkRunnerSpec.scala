@@ -8,8 +8,8 @@ import com.serenity.ui.skia.{LayerSurfaceFactory, SkiaRasterSurfaceFactory, Sync
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The harness itself, on a display (Xvfb in CI): where Skiko has no GL context it draws with its software redrawer, so
-  * what is checked is the mechanics, the figures' shape and the 'GPU NOT USED' guard, never a GPU's speed.
+/** The harness itself, on a display (Xvfb on Linux, a desktop session on Windows and macOS): what is checked is the
+  * mechanics, the figures' shape and the 'GPU NOT USED' guard, never a GPU's speed.
   */
 class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
@@ -25,15 +25,11 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   ): BenchmarkReport =
     DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup, rasterFactory))
 
-  private def onLinuxWithDisplay(): Unit =
+  private def withDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "other systems draw the layer with their GPU API, which this check leaves to the owner's machine"
-    )
 
   "RenderBenchmarkRunner.run" should "time every scenario on both backends, with exactly the frames asked for" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.results.map(_.scenario) shouldBe Scenario.values.toVector
     report.results.foreach { result =>
@@ -49,7 +45,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round every scenario's time up to the display's refresh intervals" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.environment.refresh.hz should be > 0.0
     report.results.foreach { result =>
@@ -61,7 +57,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "end with one Skia layer, say which toolkit drew, and count the layer's draws" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, startup = "X11 (test)")
     report.environment.skiaLayers shouldBe Some(1)
     report.environment.toolkit should include("Toolkit")
@@ -73,7 +69,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "name the render API and refuse a verdict when Skiko drew in software" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.environment.skiaRenderApi.isRight shouldBe true
     if !report.environment.gpuUsed then
@@ -83,7 +79,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report the layer as unavailable, and still time Java2D, when the window fell back to Java2D" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val failing = new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"))
     val report  = runExclusively(small, failing)
     report.environment.skiaRenderApi.isLeft shouldBe true
@@ -96,14 +92,14 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not time Skia, and say why, when the native library did not load" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, skiaProbe = Left("no libGL"))
     report.environment.skiaRenderApi shouldBe Left("no libGL")
     report.results.foreach(result => result.skia shouldBe None)
   }
 
   it should "time the Skia raster arm with exactly the frames asked for, beside the other two" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report =
       runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(SkiaRasterSurfaceFactory))
     report.results.foreach { result =>
@@ -118,14 +114,14 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave the raster arm out, and say so, when none was asked for" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.results.foreach(result => result.raster shouldBe None)
     report.environment.rasterNote shouldBe Some("no raster arm was asked for")
   }
 
   it should "report a raster arm that fails, and still report the other two" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(failing))
     report.results.foreach { result =>
@@ -138,7 +134,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave no window open" in {
-    onLinuxWithDisplay()
+    withDisplay()
     val _ = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     Window.getWindows.filter(_.isShowing) shouldBe empty
   }

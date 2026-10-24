@@ -21,9 +21,9 @@ import com.serenity.{FrameBackend, Java2DFrames, PersistedFrameFixture}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The GPU layer behind a real `SwingWindow` on a display (Xvfb in CI): frames and carets go through the renderer's
-  * entry points. Skiko falls back to its software redrawers where there is no GL context, so no GPU API is exercised.
-  * Cancelled without a display.
+/** The GPU layer behind a real `SwingWindow` on a display (Xvfb on Linux, a desktop session on Windows and macOS):
+  * frames and carets go through the renderer's entry points. Where Skiko has no GL context it falls back to its
+  * software redrawer; the Windows and macOS runners use Direct3D and Metal. Cancelled without a display.
   */
 class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
@@ -38,10 +38,6 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
 
   private def withWindow[A](body: SwingWindow => A): A =
     assume(!GraphicsEnvironment.isHeadless, "Presenting frames needs a real window, which needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "reads the screen back from a layer Skiko draws with its software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val window = new SwingWindow(
         new Dimension(logicalW, logicalH),

@@ -18,7 +18,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** What the Skia layer costs per frame in a window: how many layers there are, how often they draw, and whether every
-  * picture is closed. Counted, not timed, on the software redrawer Skiko falls back to where there is no GL context.
+  * picture is closed. Counted, not timed.
   *
   * The render benchmark draws its cold frames with caches of their own. Each used to get a layer of its own on the same
   * canvas, and every publish repainted all of them (a heavyweight child's `repaint` goes through the parent, which
@@ -86,10 +86,6 @@ class SkiaLayerRedrawSpec extends AnyFlatSpec with Matchers:
 
   private def withSession[A](body: Session => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
-    assume(
-      System.getProperty("os.name", "").toLowerCase.contains("linux"),
-      "counts the draws of Skiko's software redrawer; other systems use their GPU APIs and need a real display, which the owner checks"
-    )
     DisplayExclusive:
       val canvas = new JPanel(null)
       canvas.setPreferredSize(new Dimension(width, height))
