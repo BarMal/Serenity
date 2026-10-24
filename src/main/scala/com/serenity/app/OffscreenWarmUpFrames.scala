@@ -1,7 +1,6 @@
 package com.serenity.app
 
 import java.awt.image.BufferedImage
-import javax.swing.JPanel
 
 import cats.effect.{IO, Resource}
 import com.serenity.frontend.FrontendRuntime
@@ -10,6 +9,7 @@ import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{
   FontSpec,
   Java2DRenderSurface,
+  RenderTarget,
   RendererCursorOverlay,
   RendererEntryPoints,
   ScreenIdentity
@@ -18,24 +18,21 @@ import com.serenity.ui.renderer.{
 /** Window-sized Java2D frames for the startup warm-up, drawn into an image of their own that is never presented. */
 object OffscreenWarmUpFrames:
 
-  /** Sized and scaled like `canvas`, so the warm-up takes the same paths a real frame does. The image is allocated when
+  /** Sized and scaled like `target`, so the warm-up takes the same paths a real frame does. The image is allocated when
     * the warm-up starts and dropped with it, rather than held for the life of the window.
     */
-  def forCanvas(
-    canvas: JPanel,
+  def forTarget(
+    target: RenderTarget,
     viewportSize: () => ViewportSize,
     display: () => RuntimeDisplayState.Snapshot
   ): Resource[IO, FrontendRuntime.OffscreenFrames] =
     Resource.eval(IO {
-      val width  = Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-      val height = Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-      val scale  = Java2DRenderSurface.deviceScaleFor(canvas)
-      val screen = ScreenIdentity(new Object)
-      val image = new BufferedImage(
-        Java2DRenderSurface.deviceImageDimension(width, scale.x),
-        Java2DRenderSurface.deviceImageDimension(height, scale.y),
-        BufferedImage.TYPE_INT_ARGB
-      )
+      val geometry = target.geometry
+      val width    = geometry.logicalWidthPx
+      val height   = geometry.logicalHeightPx
+      val scale    = geometry.deviceScale
+      val screen   = ScreenIdentity(new Object)
+      val image    = new BufferedImage(geometry.deviceWidthPx, geometry.deviceHeightPx, BufferedImage.TYPE_INT_ARGB)
       def surface(snapshot: RuntimeDisplayState.Snapshot, caches: RenderCaches): Java2DRenderSurface =
         new Java2DRenderSurface(
           image,

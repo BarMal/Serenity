@@ -6,6 +6,7 @@ import javax.swing.JPanel
 
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{Java2DRenderSurface, SurfaceTextCaches}
+import com.serenity.ui.terminal.SwingCanvasGeometry
 
 /** A frame surface over a freshly allocated image, as a test wants one: nothing persists between frames. */
 object SingleUseFrameSurface:
@@ -19,7 +20,7 @@ object SingleUseFrameSurface:
     Java2DRenderSurface.forFrame(
       metrics,
       font,
-      canvas,
+      SwingCanvasGeometry.of(canvas),
       onFlush,
       (width, height, imageType) => new BufferedImage(width, height, imageType),
       SurfaceTextCaches.fresh(),

@@ -13,6 +13,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.ui.terminal.SwingCanvasGeometry
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -71,7 +72,14 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
     val panel = new JPanel
     panel.setPreferredSize(new Dimension(widthPx, heightPx))
     panel.setSize(new Dimension(widthPx, heightPx))
-    val surface = Java2DRenderSurface.forImage(image, metrics, codeFont, panel, _ => (), SurfaceTextCaches.fresh())
+    val surface = Java2DRenderSurface.forImage(
+      image,
+      metrics,
+      codeFont,
+      SwingCanvasGeometry.of(panel),
+      _ => (),
+      SurfaceTextCaches.fresh()
+    )
     RendererEntryPoints.render(
       CompositionPreview.displayed(state, revisions),
       cursorVisible = true,

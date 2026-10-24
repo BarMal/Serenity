@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.renderer.Java2DRenderSurface
 import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingWindow}
 
 /** Frames for the present benchmarks, shaped like the renderer's: device-size and opaque, taken from the window's own
   * two-image pool, and changed before every present.
@@ -36,5 +36,5 @@ private[perf] object PresentedFrames:
       window.acquireBaseImage,
       canvas.getWidth.max(1),
       canvas.getHeight.max(1),
-      Java2DRenderSurface.deviceScaleFor(canvas)
+      SwingCanvasGeometry.deviceScaleOf(canvas)
     )
