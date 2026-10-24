@@ -62,7 +62,9 @@ class LayerSurfaceFactory private[ui] (buildHost: JPanel => LayerHost) extends F
 /** The factory a window uses: a Skiko layer made on its canvas. */
 object SkiaLayerSurfaceFactory extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas))
 
-/** For a timing run: each frame is counted as drawn only once the GPU has finished it. */
+/** For a timing run: asks the layer to wait for the GPU after each draw, which Skiko only allows where the canvas has a
+  * GPU context; it has none, so this draws like [[SkiaLayerSurfaceFactory]], and the layer's draw stats say so.
+  */
 object SynchronousSkiaLayerSurfaceFactory
     extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas, syncGpu = true))
 
