@@ -45,6 +45,13 @@ private[sdl] enum SdlFunction(val symbol: String, val descriptor: FunctionDescri
       extends SdlFunction("SDL_UpdateWindowSurfaceRects", FunctionDescriptor.of(Bool, Pointer, Pointer, Int32))
   case SetWindowSurfaceVSync
       extends SdlFunction("SDL_SetWindowSurfaceVSync", FunctionDescriptor.of(Bool, Pointer, Int32))
+  case GlSetAttribute        extends SdlFunction("SDL_GL_SetAttribute", FunctionDescriptor.of(Bool, Int32, Int32))
+  case GlCreateContext       extends SdlFunction("SDL_GL_CreateContext", FunctionDescriptor.of(Pointer, Pointer))
+  case GlMakeCurrent         extends SdlFunction("SDL_GL_MakeCurrent", FunctionDescriptor.of(Bool, Pointer, Pointer))
+  case GlDestroyContext      extends SdlFunction("SDL_GL_DestroyContext", FunctionDescriptor.of(Bool, Pointer))
+  case GlSetSwapInterval     extends SdlFunction("SDL_GL_SetSwapInterval", FunctionDescriptor.of(Bool, Int32))
+  case GlSwapWindow          extends SdlFunction("SDL_GL_SwapWindow", FunctionDescriptor.of(Bool, Pointer))
+  case GlGetProcAddress      extends SdlFunction("SDL_GL_GetProcAddress", FunctionDescriptor.of(Pointer, Pointer))
   case GetDisplayForWindow   extends SdlFunction("SDL_GetDisplayForWindow", FunctionDescriptor.of(Int32, Pointer))
   case GetCurrentDisplayMode extends SdlFunction("SDL_GetCurrentDisplayMode", FunctionDescriptor.of(Pointer, Int32))
   case PollEvent             extends SdlFunction("SDL_PollEvent", FunctionDescriptor.of(Bool, Pointer))

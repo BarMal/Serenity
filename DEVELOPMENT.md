@@ -234,7 +234,16 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
   `cc -I <SDL>/include -o layout ci/sdl3/layout.c && ./layout > src/test/resources/sdl3/layout.txt` and read the diff.
 - `sbt test` leaves out the specs that load the real library. To run them: build it with
   `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
-  `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` video driver, so no compositor is needed.
+  `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` and `offscreen` video drivers, so no
+  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1-mesa-dri libgles2`), and run on its
+  software rasteriser when there is no GPU.
+- `SdlGlWindow` is the window host with a GL context (phase 3): window, EGL context, event pump, resize and scale,
+  clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
+  EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
+  `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 draws with
+  `makeGLWithInterface` instead, handing Skia an upcall to `SDL_GL_GetProcAddress`, so no native library of ours is
+  involved. Skiko's natives still need `libGL.so.1` and `libX11` installed.
 
 ### JetBrains Runtime and native Wayland
 

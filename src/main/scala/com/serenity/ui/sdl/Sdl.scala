@@ -169,6 +169,41 @@ final class Sdl private (
   def setSurfaceVsync(window: SdlWindow, vsync: Int): Either[SdlError, Unit] =
     checked(SetWindowSurfaceVSync)(handle(SetWindowSurfaceVSync).invokeExact(window.handle, vsync): Boolean)
 
+  // ---- OpenGL ----
+
+  /** Sets an attribute the next window's context is created with: set them, then create the window. */
+  def glSetAttribute(attribute: SdlLayouts.GlAttribute, value: Int): Either[SdlError, Unit] =
+    checked(GlSetAttribute)(handle(GlSetAttribute).invokeExact(attribute.id, value): Boolean)
+
+  /** A context for a window made with `SDL_WINDOW_OPENGL`; SDL's own text says why not, e.g. on a driver without GL. */
+  def glCreateContext(window: SdlWindow): Either[SdlError, SdlGlContext] =
+    val context = handle(GlCreateContext).invokeExact(window.handle): MemorySegment
+    Either.cond(context.address() != 0L, SdlGlContext(context), failed(GlCreateContext))
+
+  /** Makes `context` current on the calling thread. */
+  def glMakeCurrent(window: SdlWindow, context: SdlGlContext): Either[SdlError, Unit] =
+    checked(GlMakeCurrent)(handle(GlMakeCurrent).invokeExact(window.handle, context.handle): Boolean)
+
+  def glDestroyContext(context: SdlGlContext): Unit =
+    val _ = handle(GlDestroyContext).invokeExact(context.handle): Boolean
+
+  /** 0 swaps at once, 1 waits for the display's refresh, -1 asks for late-swap tearing where the driver has it. */
+  def glSetSwapInterval(interval: Int): Either[SdlError, Unit] =
+    checked(GlSetSwapInterval)(handle(GlSetSwapInterval).invokeExact(interval): Boolean)
+
+  /** Shows what was drawn since the last swap; with an interval of 1 it returns when the display is ready for more. */
+  def glSwapWindow(window: SdlWindow): Either[SdlError, Unit] =
+    checked(GlSwapWindow)(handle(GlSwapWindow).invokeExact(window.handle): Boolean)
+
+  /** The address of a GL function of the current context, by name. An EGL implementation may answer for a name it does
+    * not know, so a name that is not a GL function can still come back with an address.
+    */
+  def glProcAddress(name: String): Option[MemorySegment] =
+    scratch { area =>
+      val address = handle(GlGetProcAddress).invokeExact(area.allocateFrom(name)): MemorySegment
+      Option.when(address.address() != 0L)(address)
+    }
+
   // ---- events ----
 
   def pollEvent(): Either[SdlError, Option[SdlEvent]] =

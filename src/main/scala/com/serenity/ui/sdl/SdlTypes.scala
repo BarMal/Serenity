@@ -5,6 +5,9 @@ import java.lang.foreign.MemorySegment
 /** An `SDL_Window *`. Valid until [[Sdl.destroyWindow]]. */
 final case class SdlWindow private[sdl] (handle: MemorySegment)
 
+/** An `SDL_GLContext`. Current on one thread at a time; valid until [[Sdl.glDestroyContext]]. */
+final case class SdlGlContext private[sdl] (handle: MemorySegment)
+
 /** An `SDL_Cursor *`. */
 final case class SdlCursor private[sdl] (handle: MemorySegment)
 
