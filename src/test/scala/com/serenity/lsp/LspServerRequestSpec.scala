@@ -140,7 +140,8 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
         server.clientOut,
         WorkspaceRootUri("file:///workspace"),
         logger,
-        requestTimeout = 300.millis
+        requestTimeout = 300.millis,
+        handshakeTimeout = Some(testTimeout)
       )
       _ <- Resource.eval(server.drainReceived(2))
       _ <- Resource.make(connection.processIncoming((_, _) => IO.unit, hooks).start)(_.cancel)

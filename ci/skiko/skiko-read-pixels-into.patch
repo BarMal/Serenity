@@ -1,0 +1,32 @@
+diff --git a/skiko/src/commonMain/kotlin/org/jetbrains/skia/Bitmap.kt b/skiko/src/commonMain/kotlin/org/jetbrains/skia/Bitmap.kt
+index 9523db6..d9a4e79 100644
+--- a/skiko/src/commonMain/kotlin/org/jetbrains/skia/Bitmap.kt
++++ b/skiko/src/commonMain/kotlin/org/jetbrains/skia/Bitmap.kt
+@@ -924,6 +924,27 @@ class Bitmap internal constructor(ptr: NativePointer) : Managed(ptr, _FinalizerH
+         return bitmapPixels.takeIf { successfulRead }
+     }
+ 
++    /**
++     * Serenity: [readPixels] into an array the caller keeps and reuses, so a frame is copied out of a surface without
++     * allocating an array for it. [byteArray] must be exactly [readPixelsArraySize] bytes.
++     *
++     * @return true if the pixels were read
++     */
++    fun readPixelsInto(
++        byteArray: ByteArray,
++        dstInfo: ImageInfo = imageInfo,
++        dstRowBytes: Int = rowBytes,
++        srcX: Int = 0,
++        srcY: Int = 0
++    ): Boolean = readPixels(byteArray, dstInfo, dstRowBytes, srcX, srcY)
++
++    /** Serenity: the exact size of the array [readPixelsInto] fills for these arguments. */
++    fun readPixelsArraySize(
++        dstInfo: ImageInfo = imageInfo,
++        dstRowBytes: Int = rowBytes,
++        srcY: Int = 0
++    ): Int = getReadPixelsArraySize(dstInfo, dstRowBytes, srcY)
++
+     /**
+      * See documentation for [readPixels]
+      *

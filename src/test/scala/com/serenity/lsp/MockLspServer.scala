@@ -3,6 +3,8 @@ package com.serenity.lsp
 import java.io.{InputStream, OutputStream}
 import java.util.concurrent.LinkedBlockingQueue
 
+import scala.concurrent.duration.FiniteDuration
+
 import cats.effect.std.Queue
 import cats.effect.{IO, Resource}
 import com.serenity.lsp.client.LspFramer
@@ -80,6 +82,7 @@ final private[lsp] class QueueBytePipe:
 class MockLspServer private (
     fixtures: Map[String, Json],
     closeOnMethods: Set[String],
+    replyDelays: Map[String, FiniteDuration],
     received: Queue[IO, Json],
     outQueue: Queue[IO, Option[Json]],
     serverIn: InputStream,
@@ -159,7 +162,7 @@ class MockLspServer private (
       if closeOnMethods.contains(method) then closeQuietly(serverOut)
       else
         val result = fixtures.getOrElse(method, Json.obj())
-        outQueue.offer(
+        IO.sleep(replyDelays.getOrElse(method, FiniteDuration(0, "ms"))) >> outQueue.offer(
           Some(
             Json.obj(
               "jsonrpc" -> "2.0".asJson,
@@ -178,7 +181,8 @@ object MockLspServer:
   def create(
     fixtures: Map[String, Json],
     logger: Logger[IO],
-    closeOnMethods: Set[String] = Set.empty
+    closeOnMethods: Set[String] = Set.empty,
+    replyDelays: Map[String, FiniteDuration] = Map.empty
   ): IO[MockLspServer] =
     for
       received <- Queue.unbounded[IO, Json]
@@ -190,6 +194,7 @@ object MockLspServer:
     yield new MockLspServer(
       fixtures,
       closeOnMethods,
+      replyDelays,
       received,
       outQueue,
       serverIn = clientToServer.in,
@@ -202,10 +207,11 @@ object MockLspServer:
   def resource(
     fixtures: Map[String, Json],
     logger: Logger[IO],
-    closeOnMethods: Set[String] = Set.empty
+    closeOnMethods: Set[String] = Set.empty,
+    replyDelays: Map[String, FiniteDuration] = Map.empty
   ): Resource[IO, MockLspServer] =
     for
-      server <- Resource.eval(create(fixtures, logger, closeOnMethods))
+      server <- Resource.eval(create(fixtures, logger, closeOnMethods, replyDelays))
       _ <- Resource.make {
         for
           writerFiber <- server.writerLoop.start

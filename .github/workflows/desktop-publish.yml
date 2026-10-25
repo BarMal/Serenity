@@ -63,11 +63,11 @@ jobs:
             exit 1
           fi
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -175,6 +175,15 @@ jobs:
             --java-options '-XX:+UseG1GC'
             --java-options '-XX:MaxRAMPercentage=25'
             --java-options '-XX:G1PeriodicGCInterval=60000'
+          )
+          # JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native
+          # access is granted, so the launcher grants it. The other warning is sun.misc.Unsafe: Scala's lazy vals
+          # (scala.runtime.LazyVals, still so in Scala 3.10) call Unsafe.objectFieldOffset, which JDK 24+ reports on the
+          # first call. "allow" keeps the output as quiet as on JDK 21 until Scala drops that call. The smoke test in
+          # scripts/smoke-test-app-image.sh fails when either warning comes back.
+          APP_ARGS+=(
+            --java-options '--enable-native-access=ALL-UNNAMED'
+            --java-options '--sun-misc-unsafe-memory-access=allow'
           )
           # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
           # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
