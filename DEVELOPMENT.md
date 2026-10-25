@@ -241,10 +241,9 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
   clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
   EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
   `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
-- `libserenity-glx-shim.so` (built from `ci/sdl3/glx-shim.c` beside libSDL3, one function) is what lets Skiko draw on
-  that EGL context. Skiko's Skia is built for GLX and gives up when `glXGetCurrentContext` says no context is current,
-  which is always so under EGL; the shim says yes. `GlxShim.load` opens it `RTLD_GLOBAL` before Skiko's library, which
-  puts it ahead of libGL's in symbol lookup. Skiko's natives still need `libGL.so.1` and `libX11` installed.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 draws with
+  `makeGLWithInterface` instead, handing Skia an upcall to `SDL_GL_GetProcAddress`, so no native library of ours is
+  involved. Skiko's natives still need `libGL.so.1` and `libX11` installed.
 
 ### JetBrains Runtime and native Wayland
 

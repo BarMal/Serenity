@@ -10,6 +10,5 @@ class SdlNativeSuite
     extends Sequential(
       new SdlBindingSpec,
       new SdlGlBindingSpec,
-      new SdlGlWindowSpec,
-      new GlxShimNativeSpec
+      new SdlGlWindowSpec
     )

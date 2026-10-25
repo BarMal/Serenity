@@ -5,8 +5,6 @@
 #   OUT_DIR receives libSDL3.so.0 (a real file, stripped), LICENSE-SDL.txt (zlib) and include/SDL3 (the headers).
 # env: SDL_SOURCE_DIR  use this checkout instead of cloning (it must still be the pinned commit)
 #
-# OUT_DIR also receives libserenity-glx-shim.so, built from ci/sdl3/glx-shim.c (see com.serenity.ui.sdl.GlxShim).
-#
 # Build dependencies (Debian/Ubuntu): git cmake ninja-build gcc pkg-config libwayland-dev wayland-protocols
 #   libxkbcommon-dev libegl-dev libdecor-0-dev libdbus-1-dev libudev-dev. At run time SDL dlopens libwayland-client,
 #   libxkbcommon, libdecor-0 and libdbus-1 from the system; a missing one disables that feature, not the library.
@@ -41,9 +39,6 @@ rm -f "$out/libSDL3.so.0"
 cp "$(readlink -f "$build/libSDL3.so.0")" "$out/libSDL3.so.0"
 strip --strip-unneeded "$out/libSDL3.so.0"
 cp "$source_dir/LICENSE.txt" "$out/LICENSE-SDL.txt"
-rm -f "$out/libserenity-glx-shim.so"
-gcc -O2 -shared -fPIC -Wl,-soname,libserenity-glx-shim.so -o "$out/libserenity-glx-shim.so" "$here/glx-shim.c"
-strip --strip-unneeded "$out/libserenity-glx-shim.so"
 # The headers the library was built from, for ci/sdl3/layout.c to check the Scala binding against.
 rm -rf "$out/include" && mkdir -p "$out/include" && cp -r "$source_dir/include/SDL3" "$out/include/SDL3"
 echo "built $out/libSDL3.so.0 from $SDL_TAG ($SDL_COMMIT)"

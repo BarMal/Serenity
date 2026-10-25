@@ -175,7 +175,7 @@ jobs:
           # launcher tells the binding where it is. jpackage expands $APPDIR in --java-options.
           if [ "${RUNNER_OS:-}" = "Linux" ]; then
             mkdir -p package-input/natives
-            cp "${{ steps.sdl3.outputs.directory }}/libSDL3.so.0" "${{ steps.sdl3.outputs.directory }}/libserenity-glx-shim.so" "${{ steps.sdl3.outputs.directory }}/LICENSE-SDL.txt" package-input/natives/
+            cp "${{ steps.sdl3.outputs.directory }}/libSDL3.so.0" "${{ steps.sdl3.outputs.directory }}/LICENSE-SDL.txt" package-input/natives/
             APP_ARGS+=(--java-options '-Dserenity.sdl3.library.path=$APPDIR/natives')
           fi
           # Heap policy (see DEVELOPMENT.md), on every OS. A cap of a quarter of RAM stops an editor that is left open
@@ -236,10 +236,6 @@ jobs:
           sdl="$(find dist -type f -path '*/app/natives/libSDL3.so.0' -print -quit)"
           if [ -z "$sdl" ] || ! readelf -d "$sdl" | grep -q 'SONAME.*libSDL3.so.0'; then
             echo "App image is missing natives/libSDL3.so.0" >&2
-            exit 1
-          fi
-          if ! find dist -type f -path '*/app/natives/libserenity-glx-shim.so' | grep -q .; then
-            echo "App image is missing natives/libserenity-glx-shim.so" >&2
             exit 1
           fi
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity 120

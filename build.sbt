@@ -363,7 +363,7 @@ realBoundaryTest := (Test / testOnly)
   .value
 
 // Runs the specs that load the real libSDL3 through the FFM binding (#2380): on SDL's dummy video driver, and, for the GL
-// specs, on its offscreen driver, which needs Mesa's EGL. The library and the GLX shim are build products
+// specs, on its offscreen driver, which needs Mesa's EGL. The library is a build product
 // (ci/sdl3/build-sdl3.sh), so `sbt test` leaves them out; hand the directory holding libSDL3.so.0 to the sbt JVM:
 // `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
 lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")

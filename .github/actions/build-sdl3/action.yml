@@ -4,7 +4,7 @@ description: >-
   more of the glibc it runs on than that release does. The result is cached by the pins and the build script.
 outputs:
   directory:
-    description: Directory holding libSDL3.so.0, libserenity-glx-shim.so, LICENSE-SDL.txt and the SDL headers the library was built from
+    description: Directory holding libSDL3.so.0, LICENSE-SDL.txt and the SDL headers the library was built from
     value: ${{ steps.paths.outputs.directory }}
 
 runs:
@@ -18,7 +18,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: sdl3-natives
-        key: sdl3-natives-linux-x64-${{ hashFiles('ci/sdl3/pins.env', 'ci/sdl3/build-sdl3.sh', 'ci/sdl3/glx-shim.c') }}
+        key: sdl3-natives-linux-x64-${{ hashFiles('ci/sdl3/pins.env', 'ci/sdl3/build-sdl3.sh') }}
 
     - name: Build libSDL3.so.0 in ubuntu:22.04
       if: steps.cache.outputs.cache-hit != 'true'
