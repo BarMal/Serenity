@@ -21,6 +21,8 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     * see (a font registered with `GraphicsEnvironment`); they go with the class.
     */
   private val java2dOnly: Set[String] = Set(
+    "CaretFollowsCursorAcrossFramesSpec.scala",
+    "CommandRunnerEditorPaneAccumulationSpec.scala",
     "FrameBackend.scala",
     "Java2DFrameImageTypeSpec.scala",
     "Java2DLayerSurfaceSpec.scala",
@@ -38,16 +40,11 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
   /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
   private val notYetMoved: Set[String] = Set(
-    "CaretFollowsCursorAcrossFramesSpec.scala",
-    "CommandRunnerEditorPaneAccumulationSpec.scala",
     "CursorPixelAlignmentSpec.scala",
-    "GuiPopupAnchorSpec.scala",
     "MockRenderSurface.scala",
     "ModalLayerCompositingSpec.scala",
     "RenderSurfaceDrawRunPxSpec.scala",
-    "RendererRepaintRectsSpec.scala",
     "SingleUseFrameSurface.scala",
-    "SpellCheckToggleUnderCommandRunnerSpec.scala",
     "SummonedChromeFrameSpec.scala",
     "UiScenarioDriver.scala",
     "perf/CellGridBenchmarks.scala",

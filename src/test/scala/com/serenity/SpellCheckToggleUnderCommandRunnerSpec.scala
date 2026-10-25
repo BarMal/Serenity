@@ -1,8 +1,8 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.image.BufferedImage
-import java.util.concurrent.atomic.AtomicReference
+
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -15,7 +15,7 @@ import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -107,25 +107,25 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
   /** Frames painted the way the window paints them: one set of render caches, one screen, two backing images taken in
     * turn, and only the damage each transition reports.
     */
-  final private class Frames:
-    private val caches    = RenderCaches.create()
-    private val screen    = ScreenIdentity(new Object)
-    private val published = new AtomicReference[Option[BufferedImage]](None)
-    private val spare     = new AtomicReference[Option[BufferedImage]](None)
+  private val referenceFrames: FrameBackend = SkiaFrames
 
-    def paint(state: AppState, damage: Damage): BufferedImage =
-      val image =
-        spare.getAndSet(None).getOrElse(new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_ARGB))
-      val captured = new AtomicReference[Option[BufferedImage]](None)
-      val surface = new Java2DRenderSurface(
+  final private class Frames:
+    private val caches = RenderCaches.create()
+    private val screen = ScreenIdentity(new Object)
+    private val pool   = Vector.fill(2)(referenceFrames.newFrame(widthPx, heightPx))
+    private val drawn  = new AtomicInteger(0)
+
+    def paint(state: AppState, damage: Damage): FramePixels =
+      val image = pool(drawn.getAndIncrement() % pool.size)
+      val surface = referenceFrames.surfaceOver(
         image,
         cellMetrics,
         codeFont,
-        out => captured.set(Option(out)),
-        logicalWidthPx = widthPx,
-        logicalHeightPx = heightPx,
-        contentPersists = true,
-        textCaches = caches.surfaceText
+        widthPx,
+        heightPx,
+        1.0,
+        persists = true,
+        caches
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -143,17 +143,11 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
         damage,
         caches
       )
-      val out = captured.get().getOrElse(image)
-      published.getAndSet(Some(out)).filterNot(_ eq out).foreach(previous => spare.set(Some(previous)))
-      out
+      image
 
-  private def errorPixels(image: BufferedImage): Int =
+  private def errorPixels(image: FramePixels): Int =
     val error = Theme.light.error.foreground.argb
-    (for
-      y <- 0 until image.getHeight
-      x <- 0 until image.getWidth
-      if image.getRGB(x, y) == error
-    yield 1).size
+    image.rgbPixels.count(_ == error)
 
   for
     runnerShown  <- List(true, false)
