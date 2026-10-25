@@ -27,7 +27,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | io.circe:circe-jawn_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
 | io.circe:circe-numbers_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
 | io.circe:circe-parser_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
-| io.github.barmal:skiko-awt-runtime-linux-x64 | 0.153.0-dngfree.1 | Apache-2.0 | JetBrains s.r.o. and Skiko contributors; rebuilt by the Serenity project without the Adobe DNG SDK; the embedded native libraries are listed under Bundled assets | <https://github.com/JetBrains/skiko> | Apache-2.0, NOTICE-skiko |
+| io.github.barmal:skiko-awt-runtime-linux-x64 | 0.153.0-dngfree.2 | Apache-2.0 | JetBrains s.r.o. and Skiko contributors; rebuilt by the Serenity project without the Adobe DNG SDK; the embedded native libraries are listed under Bundled assets | <https://github.com/JetBrains/skiko> | Apache-2.0, NOTICE-skiko |
 | net.java.dev.jna:jna | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | net.java.dev.jna:jna-platform | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | org.apache.pdfbox:fontbox | 3.0.8 | Apache-2.0 | The Apache Software Foundation | <https://pdfbox.apache.org/> | Apache-2.0, NOTICE-pdfbox |

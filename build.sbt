@@ -435,7 +435,7 @@ val skikoVersion = "0.153.0"
 // GPL. CI rebuilds them without it from the pinned upstream sources (.github/workflows/skiko-natives.yml, ci/skiko) and
 // publishes them as a Maven repository, which is why the version here is its own. Another repository, such as a local
 // mirror, can stand in with -Dserenity.skiko.natives.repo or SERENITY_SKIKO_NATIVES_REPO.
-val skikoNativesVersion = "0.153.0-dngfree.1"
+val skikoNativesVersion = "0.153.0-dngfree.2"
 
 val skikoNativesRepository: String = sys.props
   .get("serenity.skiko.natives.repo")

@@ -50,3 +50,15 @@ class DngFreeNativesSpec extends AnyFlatSpec with Matchers:
   "The third-party texts" should "hold no Adobe DNG SDK licence" in {
     Files.exists(Paths.get("third-party", "texts", "Adobe-DNG-SDK.txt")) shouldBe false
   }
+
+  "The natives version the build asks for" should "be the one the Skiko workflow publishes" in {
+    def valueOf(path: String, pattern: scala.util.matching.Regex): Option[String] =
+      pattern.findFirstMatchIn(Files.readString(Paths.get(path))).map(_.group(1))
+
+    val asked     = valueOf("build.sbt", """val skikoNativesVersion = "([^"]+)"""".r)
+    val published = valueOf("ci/skiko/natives-version.env", """(?m)^NATIVES_VERSION=(\S+)""".r)
+
+    asked should not be empty
+    published should not be empty
+    asked shouldBe published
+  }
