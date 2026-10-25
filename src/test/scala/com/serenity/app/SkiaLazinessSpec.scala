@@ -60,6 +60,10 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
 
   "Resolving the renderer with --wayland-render=java2d on a Wayland session" should
     "not load any Skiko or Kotlin class, even when the config asks for xwayland" in {
+      assume(
+        System.getProperty("os.name", "").toLowerCase.contains("linux"),
+        "a Wayland session exists only on Linux; elsewhere auto loads Skia, which the test for auto covers"
+      )
       val run = runChild(
         "wayland-java2d",
         List("ui.render.wayland = xwayland"),
