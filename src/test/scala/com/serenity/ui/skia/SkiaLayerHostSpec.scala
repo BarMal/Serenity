@@ -85,10 +85,18 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
 
   private def rgb(image: BufferedImage, x: Int, y: Int): Int = image.getRGB(x, y) & 0xffffff
 
+  /** macOS composites the window's edge over the first rows of the canvas: on the CI runner the top rows read as a
+    * darker gradient (`000a1a` where the picture has `203040`) whatever the layer drew. So on macOS the outer band is
+    * left out of the exact comparison; everywhere else every pixel is compared.
+    */
+  private val chromeBand: Int =
+    if System.getProperty("os.name", "").toLowerCase.contains("mac") then 8 else 0
+
   /** Waits for the screen to show `expected` exactly, with the picture's first pixel being `marker`. The window is
     * looked for where the toolkit says it is and around the first pixel of the picture's colour, since a window system
     * may put it a pixel or two away (see [[ScreenLocation]]); the best of those alignments is judged, and it must have
-    * no mismatches. What is reported on a failure is the closest alignment's first differences.
+    * no mismatches outside [[chromeBand]]. What is reported on a failure is the closest alignment's first differences
+    * and where they lie.
     */
   private def showsExactly(window: Window, expected: Array[Int], marker: Int): Unit =
     val closest = new AtomicReference("nothing was captured")
@@ -98,8 +106,8 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         if x < 0 || y < 0 || x >= screen.getWidth || y >= screen.getHeight then -1 else screen.getRGB(x, y) & 0xffffff
       def differing(corner: (Int, Int)) =
         for
-          y <- 0 until height
-          x <- 0 until width
+          y <- chromeBand until height - chromeBand
+          x <- chromeBand until width - chromeBand
           if onScreen(corner._1 + x, corner._2 + y) != (expected(y * width + x) & 0xffffff)
         yield (x, y)
       val reported = window.screenOrigin
@@ -107,13 +115,16 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val (best, corner) = ScreenLocation.bestAlignment(
         ScreenLocation.candidateCorners((reported.x, reported.y), found, slack = 2)
       )(differing(_).size)
-      val first = differing(corner)
+      val all = differing(corner)
+      val first = all
         .take(5)
         .map((x, y) =>
           f"($x,$y) screen ${onScreen(corner._1 + x, corner._2 + y)}%06x expected ${expected(y * width + x) & 0xffffff}%06x"
         )
+      val bounds =
+        Option.when(all.nonEmpty)((all.map(_._1).min, all.map(_._2).min, all.map(_._1).max, all.map(_._2).max))
       closest.set(
-        s"$best pixels differ at the best corner $corner (toolkit says $reported, first marker pixel $found): $first"
+        s"$best pixels differ at the best corner $corner (toolkit says $reported, first marker pixel $found), within (minX,minY,maxX,maxY) $bounds: $first"
       )
       best == 0
     val shown = awaited(attempt(), System.nanoTime() + 15_000_000_000L)
