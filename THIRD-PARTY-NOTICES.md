@@ -67,7 +67,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 
 | Component | Version | Licence | Copyright | URL | Texts |
 | --- | --- | --- | --- | --- | --- |
-| Monaspace Neon | 1.101 | OFL-1.1 | Copyright (c) 2023, GitHub (reserved font name Monaspace); full notice in the licence file | <https://github.com/githubnext/monaspace> | OFL |
+| Monaspace Neon | 1.101 | OFL-1.1 | Copyright (c) 2023, GitHub (reserved font name Monaspace); full notice in the licence file. Used unmodified: MonaspaceNeon-Regular.otf, MonaspaceNeon-Bold.otf (the Bold drawn for bold text) and the variable MonaspaceNeonVarVF[wght,wdth,slnt].ttf (the code font) | <https://github.com/githubnext/monaspace> | OFL |
 | Material Icons Round | - | Apache-2.0 | Google LLC | <https://github.com/google/material-design-icons> | MATERIAL_ICONS_ROUND_LICENSE |
 | British English dictionary (en_GB) | 4.0.1 | LGPL-3.0-or-later (phonetic rules in the .aff: LGPL-2.1) | Kevin Atkinson (Aspell word list); David Bartlett, Brian Kelk, Andrew Brown and Marco A.G.Pinto (en_GB); Björn Jacke (phonetic rules) | <https://github.com/LibreOffice/dictionaries/tree/master/en> | README_en_GB, LGPL-3.0, LGPL-2.1 |
 | Courier Prime | 3.018 | OFL-1.1 | Copyright 2015 The Courier Prime Project Authors (https://github.com/quoteunquoteapps/CourierPrime); full notice in the licence file. Regular, Italic, Bold and Bold Italic TTFs from commit 7fd585a2dd4c1612c79b3308e300923d1c13df93 (fonts/ttf) | <https://github.com/quoteunquoteapps/CourierPrime> | COURIER_PRIME_OFL |

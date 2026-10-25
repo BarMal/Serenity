@@ -9,7 +9,13 @@ import com.serenity.ui.layout.*
   * `painted` is what the panel can change on the frame; `bounds` is that with a margin, so a buffer cut to it still
   * holds everything the panel draws.
   */
-final private[renderer] case class PanelSite(id: SurfaceId, rect: LayoutRect, painted: PixelRect, bounds: PixelRect)
+final private[renderer] case class PanelSite(
+    id: SurfaceId,
+    rect: LayoutRect,
+    painted: PixelRect,
+    bounds: PixelRect,
+    content: Any
+)
 
 private[renderer] object PanelSite:
   private val MarginCells = 2
@@ -19,7 +25,8 @@ private[renderer] object PanelSite:
     rect: LayoutRect,
     verticalOffsetRows: Double,
     metrics: CellMetrics,
-    window: PixelRect
+    window: PixelRect,
+    content: Any
   ): PanelSite =
     val left    = metrics.toPixelX(rect.x)
     val top     = metrics.toPixelY(rect.y)
@@ -36,7 +43,7 @@ private[renderer] object PanelSite:
         painted.widthPx + 2 * marginX,
         painted.heightPx + 2 * marginY
       )
-    PanelSite(id, rect, painted, inflated.intersection(window).getOrElse(window))
+    PanelSite(id, rect, painted, inflated.intersection(window).getOrElse(window), content)
 
 /** What one frame knows about its panels, worked out once: the overlay view model every layer reads from, where each
   * panel sits, and which panels the frame keeps from the pixels it started with instead of compositing them again.
@@ -77,11 +84,13 @@ private[renderer] object FramePanels:
     val pinned = RendererFloatingPanels.pinnedAndExpandedSurfaces(state).flatMap { surface =>
       scene.workspace.collectFirst {
         case node @ SceneNode(SceneNodeId.Surface(surfaceId), _, _, _, _, _) if surfaceId == surface.id =>
-          PanelSite(surface.id, node.frameRect, 0.0, context.cellMetrics, window)
+          PanelSite(surface.id, node.frameRect, 0.0, context.cellMetrics, window, surface)
       }
     }
     val floating = panels.floating.flatMap { overlay =>
-      overlay.surfaceId.map(PanelSite(_, overlay.rect, overlay.verticalOffsetRows, context.cellMetrics, window))
+      overlay.surfaceId.map(
+        PanelSite(_, overlay.rect, overlay.verticalOffsetRows, context.cellMetrics, window, overlay)
+      )
     }
     panels.copy(sites = (pinned ++ floating).map(site => site.id -> site).toMap)
 
@@ -90,15 +99,13 @@ private[renderer] object PanelReuse:
 
   final case class Frame(viewportWidth: Int, viewportHeight: Int, cursorVisible: Boolean)
 
-  /** A panel is kept when its buffer is current, the surface `key` was last composited with it and no other layer has
-    * repainted, or will repaint, the pixels it covers: nothing in `repainted` touches it, no other panel shares them,
-    * and no other floating panel stood there last frame (what it left behind would be kept with it).
+  /** A panel is kept when what `holds` says the surface holds is current, and no other layer has repainted, or will
+    * repaint, the pixels it covers: nothing in `repainted` touches it, no other panel shares them, and no other
+    * floating panel stood there last frame (what it left behind would be kept with it).
     */
   def kept(
     panels: FramePanels,
-    cached: Map[SurfaceId, CachedPanelLayer],
-    key: SurfaceContentIdentity,
-    frame: Frame,
+    holds: PanelSite => Boolean,
     isDirty: SurfaceId => Boolean,
     repainted: List[PixelRect],
     previousFloating: Map[SurfaceId, PixelRect]
@@ -106,12 +113,7 @@ private[renderer] object PanelReuse:
     val sites = panels.sites.values.toList
     sites.collect {
       case site
-          if !isDirty(site.id) &&
-            cached.get(site.id).exists { layer =>
-              layer.compositedOnto.contains(key) &&
-              layer.matches(frame.viewportWidth, frame.viewportHeight, frame.cursorVisible, site.rect, site.bounds)
-            } &&
-            !repainted.exists(_.intersects(site.painted)) &&
+          if !isDirty(site.id) && holds(site) && !repainted.exists(_.intersects(site.painted)) &&
             !sites.exists(other => other.id != site.id && other.painted.intersects(site.painted)) &&
             !previousFloating.exists((id, rect) => id != site.id && rect.intersects(site.painted)) =>
         site.id
