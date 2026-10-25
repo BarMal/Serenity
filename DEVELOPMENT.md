@@ -266,6 +266,13 @@ its default.
 | --- | --- | --- | --- | --- |
 | `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
+
+`ui.render.skia_vsync` makes Skia's GPU layer wait for the display's vertical blank before presenting. It is off by default: on
+Hyprland the owner saw no tearing with it off and a frame is 4-8 ms quicker, and compositors on Windows, macOS and most
+Linux desktops do not tear either. Turn it on if you see tearing, for example on X11 without a compositor. Serenity sets
+Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a restart, and `SKIKO_VSYNC_ENABLED` or
+`-Dskiko.vsync.enabled`, when given, win. The Skia CPU raster and Java2D ignore it.
 
 `auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
@@ -296,7 +303,7 @@ scenarios are a cold full frame, typing one character, scrolling one line, scrol
 caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
 or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
 its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
-Skiko's frame pacing (with vsync on, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
+Skiko's frame pacing (with vsync on, which is now opt-in, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
 `1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
 (untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
 

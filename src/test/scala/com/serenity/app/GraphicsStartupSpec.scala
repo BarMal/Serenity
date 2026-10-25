@@ -83,6 +83,28 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.built.get shouldBe 0
   }
 
+  it should "carry the configured Skia vsync, off by default, for a windowed launch" in {
+    resolve(new Counters).skiaVsync shouldBe false
+    resolve(
+      new Counters,
+      configured = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
+    ).skiaVsync shouldBe true
+  }
+
+  it should "leave Skia vsync off for a terminal or safe-mode launch whatever the config says" in {
+    val on = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = false, safeMode = false),
+      configured = on
+    ).skiaVsync shouldBe false
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = true, safeMode = true),
+      configured = on
+    ).skiaVsync shouldBe false
+  }
+
   it should "not probe, read the config or build Skia for a terminal launch" in {
     val counters = new Counters
     val resolved = resolve(counters, launch = GraphicsStartup.Launch(windowed = false, safeMode = false))
