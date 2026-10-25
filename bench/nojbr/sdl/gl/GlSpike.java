@@ -35,6 +35,12 @@ public final class GlSpike {
     }
   }
 
+  /** GrGLGetProc: void *(*)(void *ctx, const char *name). */
+  static MemorySegment getProc(MemorySegment ctx, MemorySegment name) {
+    long address = SDL_GL_GetProcAddress(name.reinterpret(256).getString(0));
+    return MemorySegment.ofAddress(address);
+  }
+
   static double pct(long[] sorted, double p) { return sorted[(int) Math.min(sorted.length - 1, Math.floor(p * sorted.length))] / 1e6; }
 
   public static void main(String[] args) throws Throwable {
@@ -66,7 +72,7 @@ public final class GlSpike {
     }
     say("SIZE " + w + "x" + h);
 
-    if (args.length > 3) {
+    if (args.length > 3 && !args[3].equals("-")) {
       // RTLD_NOW|RTLD_GLOBAL so the symbol wins over libGL's when libskiko resolves it
       MethodHandle dl = Linker.nativeLinker().downcallHandle(Linker.nativeLinker().defaultLookup().find("dlopen").get(),
           FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.JAVA_INT));
@@ -77,8 +83,22 @@ public final class GlSpike {
     }
     org.jetbrains.skiko.Library.INSTANCE.load();
     DirectContext dc;
-    try { dc = DirectContext.Companion.makeGL(); say("SKIA makeGL ok"); }
-    catch (Throwable t) { say("FAIL SKIA makeGL " + t); return; }
+    try {
+      if (args.length > 4 && args[4].equals("assembled")) {
+        // No shim: Skia asks SDL for every GL function, through an upcall stub with GrGLGetProc's signature.
+        MethodHandle lookup = java.lang.invoke.MethodHandles.lookup().findStatic(GlSpike.class, "getProc",
+            java.lang.invoke.MethodType.methodType(MemorySegment.class, MemorySegment.class, MemorySegment.class));
+        MemorySegment stub = Linker.nativeLinker().upcallStub(lookup,
+            FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.ADDRESS, ValueLayout.ADDRESS), Arena.global());
+        GLAssembledInterface iface = GLAssembledInterface.Companion.createFromNativePointers(0L, stub.address());
+        say("SKIA assembled interface " + (iface == null ? "null" : "created"));
+        dc = DirectContext_jvmKt.makeGLWithInterface(DirectContext.Companion, iface);
+        say("SKIA makeGLWithInterface " + (dc == null ? "null" : "ok"));
+      } else {
+        dc = DirectContext.Companion.makeGL(); say("SKIA makeGL ok");
+      }
+    } catch (Throwable t) { say("FAIL SKIA context " + t); t.printStackTrace(System.out); return; }
+    if (dc == null) { say("FAIL SKIA context null"); return; }
     BackendRenderTarget rt = BackendRenderTarget.Companion.makeGL(w, h, 0, 8, 0, 0x8058);
     Surface surface = Surface.Companion.makeFromBackendRenderTarget(dc, rt, SurfaceOrigin.BOTTOM_LEFT,
         SurfaceColorFormat.RGBA_8888, null, null);

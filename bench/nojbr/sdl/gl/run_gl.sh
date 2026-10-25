@@ -10,7 +10,7 @@ printf 'output HEADLESS-1 mode %s scale %s\ndefault_border none\n' "$MODE" "$SCA
 (sway -c "$OUT/sway.conf" > "$OUT/sway.log" 2>&1 &); sleep 4
 export WAYLAND_DISPLAY="$(ls "$XDG_RUNTIME_DIR" | grep -E '^wayland-[0-9]+$' | head -1)"
 unset DISPLAY
-SDL_VIDEO_DRIVER=wayland "$JAVA" --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp "$CP" GlSpike "$OUT" "$PROFILE" "$SWAP" ${SHIM:-} > "$OUT/app.log" 2> "$OUT/err.log" &
+SDL_VIDEO_DRIVER=wayland "$JAVA" --enable-native-access=ALL-UNNAMED -Djava.awt.headless=true -cp "$CP" GlSpike "$OUT" "$PROFILE" "$SWAP" "${SHIM:--}" ${MODE5:-} > "$OUT/app.log" 2> "$OUT/err.log" &
 APP=$!
 for i in $(seq 1 600); do grep -qE '^(PHASE hold|FAIL)' "$OUT/app.log" && break; kill -0 $APP 2>/dev/null || break; sleep 0.2; done
 if grep -q '^PHASE hold' "$OUT/app.log"; then

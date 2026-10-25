@@ -22,6 +22,8 @@ jobs:
           - { name: gl-vsync,   profile: gl, swap: '1', shim: 'preload' }
           - { name: es-dlopen,  profile: es, swap: '1', shim: 'dlopen' }
           - { name: es-noshim,  profile: es, swap: '1', shim: 'none' }
+          - { name: es-assembled, profile: es, swap: '1', shim: 'none', mode: assembled }
+          - { name: gl-assembled, profile: gl, swap: '1', shim: 'none', mode: assembled }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -52,6 +54,7 @@ jobs:
           L="$PWD/lib"
           CP="$PWD/classes:$L/lwjgl-3.4.3.jar:$L/lwjgl-3.4.3-natives-linux.jar:$L/lwjgl-sdl-3.4.3.jar:$L/lwjgl-sdl-3.4.3-natives-linux.jar:$L/skiko-awt-0.153.0.jar:$L/skiko-awt-runtime-linux-x64-0.153.0.jar:$L/kotlin-stdlib-2.1.0.jar:$L/kotlinx-coroutines-core-jvm-1.9.0.jar"
           mkdir -p out
+          export MODE5="${{ matrix.mode }}"
           case "${{ matrix.shim }}" in
             preload) export LD_PRELOAD="$PWD/glxshim.so" ;;
             dlopen)  export SHIM="$PWD/glxshim.so" ;;
