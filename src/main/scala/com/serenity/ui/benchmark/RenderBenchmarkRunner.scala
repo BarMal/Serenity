@@ -67,7 +67,7 @@ object RenderBenchmarkRunner:
         )
     }
     val api = skia.flatMap(
-      _.renderApi.toRight("the layer could not be made, so the window fell back to Java2D")
+      _.renderApi.toRight("the layer could not be made, so the window painted with its fallback surface")
     )
     val measuredSkia = skia.toOption.filter(_ => api.isRight)
     val results = Scenario.values.toVector.map(scenario =>

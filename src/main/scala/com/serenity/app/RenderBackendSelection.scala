@@ -12,9 +12,6 @@ enum RenderBackend(val configKey: String):
 /** Which renderer paints the window, decided once at startup from facts that are all known before a window exists. */
 object RenderBackendSelection:
 
-  /** `auto` stays on Java2D until the built-in benchmark (`--render-benchmark`) shows Skia on a GPU ahead of it. */
-  private val AutoReason = "auto uses Java2D until Skia is measured faster"
-
   val OverrideVariable: String        = "SERENITY_RENDER_BACKEND"
   val WaylandOverrideVariable: String = "SERENITY_WAYLAND_RENDER"
 
@@ -30,7 +27,7 @@ object RenderBackendSelection:
       probe: Probe,
       setting: RenderBackendSetting,
       skiaSurfaceAvailable: Boolean,
-      waylandRender: WaylandRender = WaylandRender.Java2D,
+      waylandRender: WaylandRender = WaylandRender.SkiaRaster,
       rasterSurfaceAvailable: Boolean = false
   )
 
@@ -60,25 +57,28 @@ object RenderBackendSelection:
     val linux = inputs.osName.toLowerCase(Locale.ROOT).contains("linux")
     if inputs.setting == RenderBackendSetting.Java2D then java2d("ui.render.backend=java2d")
     else if linux && inputs.toolkit == ToolkitSelection.Choice.Wayland then onWayland(inputs)
-    else if inputs.setting == RenderBackendSetting.Auto then java2d(AutoReason)
     else if !inputs.skiaSurfaceAvailable then java2d("skia surface unavailable")
-    else if linux && !inputs.x11Display then java2d("no X11 display for Skia")
+    else if linux && !inputs.x11Display then
+      raster(inputs, "no X11 display for Skia; using the Skia raster surface", "no X11 display for Skia")
     else afterProbe(inputs, RenderBackend.Skia, "native probe passed")
 
   /** WLToolkit cannot host Skia's GLX layer, so what happens next is the Wayland render mode's call. */
   private def onWayland(inputs: Inputs): Decision =
     inputs.waylandRender match
-      case WaylandRender.Java2D =>
-        java2d(
-          if inputs.setting == RenderBackendSetting.Skia then "skia needs X11; running on Wayland"
-          else "WLToolkit cannot host Skia"
-        )
+      case WaylandRender.Java2D => java2d("ui.render.wayland=java2d")
       case WaylandRender.XWayland =>
-        java2d("ui.render.wayland=xwayland needs XToolkit, but WLToolkit is in force")
-      case WaylandRender.SkiaRaster if !inputs.rasterSurfaceAvailable =>
-        java2d("skia raster surface unavailable")
+        raster(
+          inputs,
+          "ui.render.wayland=xwayland needs XToolkit, but WLToolkit is in force; using the Skia raster surface",
+          "ui.render.wayland=xwayland needs XToolkit, but WLToolkit is in force"
+        )
       case WaylandRender.SkiaRaster =>
-        afterProbe(inputs, RenderBackend.SkiaRaster, "ui.render.wayland=skia-raster")
+        raster(inputs, "ui.render.wayland=skia-raster", "skia raster surface unavailable")
+
+  /** The CPU rasteriser where the GPU layer cannot run; Java2D only if there is none. */
+  private def raster(inputs: Inputs, rasterReason: String, noRasterReason: String): Decision =
+    if inputs.rasterSurfaceAvailable then afterProbe(inputs, RenderBackend.SkiaRaster, rasterReason)
+    else java2d(noRasterReason)
 
   private def afterProbe(inputs: Inputs, backend: RenderBackend, loadedReason: String): Decision =
     val explicit = inputs.setting == RenderBackendSetting.Skia

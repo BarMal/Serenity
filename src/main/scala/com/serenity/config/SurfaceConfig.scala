@@ -65,7 +65,7 @@ final case class SurfaceConfig(
     renderFpsTarget: RenderFpsTarget = RenderFpsTarget.Fps60,
     renderDamageGranularity: RenderDamageGranularity = RenderDamageGranularity.Rows,
     renderBackend: RenderBackendSetting = RenderBackendSetting.Auto,
-    renderWayland: WaylandRender = WaylandRender.Java2D,
+    renderWayland: WaylandRender = WaylandRender.SkiaRaster,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
     // insets above.

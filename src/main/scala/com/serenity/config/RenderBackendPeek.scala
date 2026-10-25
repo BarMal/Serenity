@@ -18,7 +18,7 @@ object RenderBackendPeek:
 
   private val SettingKeys = Set("ui.render.backend", "ui.render.wayland")
 
-  private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.Java2D)
+  private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
 
   def read(path: Path = ConfigManager.defaultConfigPath): IO[RenderStartupSettings] =
     IO.blocking {

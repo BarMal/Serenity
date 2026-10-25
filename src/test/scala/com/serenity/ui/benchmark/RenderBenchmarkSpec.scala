@@ -20,7 +20,6 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
 
   "RenderBenchmark.run" should "print the report and keep it as Markdown and JSON in the output directory" in {
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
-    assume(System.getProperty("os.name", "").toLowerCase.contains("linux"), "left to the owner's machine elsewhere")
     val directory = TestTemp.directory("render-benchmark")
     val captured  = new ByteArrayOutputStream()
     val code = DisplayExclusive(
