@@ -10,12 +10,12 @@ import com.serenity.config.{AppConfig, StatusLinePlacement, TabStripMode}
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.richtext.RichTextDocument
-import com.serenity.setCursorPosition
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 
 /** Draws a document through the window's incremental path, one image of a pool at a time, and compares each frame with
   * a cold frame of the same state. The window shows only the rects each frame names, as in
@@ -44,6 +44,9 @@ trait ColdFrameHarness:
       .withScrollbar(false)
       .withTabStrip(TabStripMode.Off)
 
+  /** The renderer the frames are drawn with. A spec pins another only for a gap the suite records. */
+  protected def referenceFrames: FrameBackend = SkiaFrames
+
   private def imagePoolSize(persists: Boolean): Int = if persists then 2 else 1
 
   private def deviceWidthPx(scale: Double): Int  = math.ceil(windowWidth * scale).toInt
@@ -52,7 +55,11 @@ trait ColdFrameHarness:
   final protected class Pooled(scale: Double, persists: Boolean, frames: FrameImages):
 
     def this(scale: Double, persists: Boolean = true) =
-      this(scale, persists, FrameImages(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists)))
+      this(
+        scale,
+        persists,
+        FrameImages(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists), referenceFrames)
+      )
 
     private val images      = frames.drawn
     private val screenImage = frames.screen
@@ -63,18 +70,16 @@ trait ColdFrameHarness:
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % images.length)
-      val surface = new Java2DRenderSurface(
+      val surface = referenceFrames.surfaceOver(
         image,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = windowWidth,
-        logicalHeightPx = windowHeight,
-        deviceScaleX = scale,
-        deviceScaleY = scale,
-        contentPersists = persists,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        windowWidth,
+        windowHeight,
+        scale,
+        persists,
+        caches,
+        Some(screen)
       )
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       val _ = RendererFramePlanner.renderFrame(
@@ -94,33 +99,24 @@ trait ColdFrameHarness:
         caches = caches
       )
       present(image, repaintRegion.get())
-      screenImage
+      screenImage.toImage
 
     def rowsDrawn: Long = caches.frameCounters.lastFrame(FrameCounter.RowsDrawn)
 
-    private def present(image: BufferedImage, region: Option[List[PixelRect]]): Unit =
-      val g = screenImage.createGraphics()
-      try
-        region match
-          case None => g.drawImage(image, 0, 0, null)
-          case Some(rects) =>
-            rects.foreach { rect =>
-              val x       = math.floor(rect.xPx * scale).toInt
-              val y       = math.floor(rect.yPx * scale).toInt
-              val w       = math.ceil(rect.widthPx * scale).toInt
-              val h       = math.ceil(rect.heightPx * scale).toInt
-              val clipped = new Rectangle(x, y, w, h).intersection(new Rectangle(0, 0, image.getWidth, image.getHeight))
-              if !clipped.isEmpty then
-                g.drawImage(
-                  image.getSubimage(clipped.x, clipped.y, clipped.width, clipped.height),
-                  clipped.x,
-                  clipped.y,
-                  null
-                )
-            }
-      finally g.dispose()
+    private def present(image: FramePixels, region: Option[List[PixelRect]]): Unit =
+      region match
+        case None => screenImage.blit(image, 0, 0, image.widthPx, image.heightPx)
+        case Some(rects) =>
+          rects.foreach { rect =>
+            val x       = math.floor(rect.xPx * scale).toInt
+            val y       = math.floor(rect.yPx * scale).toInt
+            val w       = math.ceil(rect.widthPx * scale).toInt
+            val h       = math.ceil(rect.heightPx * scale).toInt
+            val clipped = new Rectangle(x, y, w, h).intersection(new Rectangle(0, 0, image.widthPx, image.heightPx))
+            if !clipped.isEmpty then screenImage.blit(image, clipped.x, clipped.y, clipped.width, clipped.height)
+          }
 
-  protected val oracleImages: OracleImages = OracleImages()
+  protected val oracleImages: OracleImages = OracleImages(referenceFrames)
 
   /** Draws the cold frame of `state` into lent images, with caches made for this frame alone, and runs `use` on it
     * before the images go back; the frame is valid only inside `use`.

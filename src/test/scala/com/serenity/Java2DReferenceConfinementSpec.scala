@@ -8,10 +8,9 @@ import scala.util.Using
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The pixel specs take their reference renderer from [[ReferenceFrames]] and [[PersistedFrameFixture]], which paint
-  * with Skia. A test file that names `Java2DRenderSurface` has to be on one of two lists: the specs that exist to pin
-  * Java2D itself, and the ones not yet moved. A new file cannot join either, and a file that stops naming it has to
-  * leave its list.
+/** The pixel specs take their reference renderer from [[ReferenceFrames]], [[PersistedFrameFixture]] and the cold-frame
+  * harness, which paint with Skia. A test file that names `Java2DRenderSurface` or `Java2DFrames` has to be on a list
+  * that says why: a new file cannot join one, and a file that stops naming them has to leave its list.
   */
 class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
@@ -26,6 +25,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "Java2DFrameImageTypeSpec.scala",
     "Java2DLayerSurfaceSpec.scala",
     "Java2DRenderSurfaceSpec.scala",
+    "perf/PageDownRichDocumentFramesSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
     "ui/renderer/GuiCellGridFallbackPaintSpec.scala",
@@ -52,7 +52,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "UiScenarioDriver.scala",
     "perf/CellGridBenchmarks.scala",
     "perf/ChapterGhostRowReuseSpec.scala",
-    "perf/ColdFrameHarness.scala",
     "perf/ColumnPaneRowReuseSpec.scala",
     "perf/FontFallbackColdFrameSpec.scala",
     "perf/FontFallbackSelectionSpec.scala",
@@ -60,10 +59,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/GuiCellGridClusterSelectionSpec.scala",
     "perf/GuiCellGridColdFrameSpec.scala",
     "perf/GuiCellGridSelectionSpec.scala",
-    "perf/HeadingSpacingFramesSpec.scala",
     "perf/LaptopFrameBenchmarks.scala",
     "perf/LaptopFramesMatchColdSpec.scala",
-    "perf/PageDownRichDocumentFramesSpec.scala",
+    "perf/OracleImages.scala",
     "perf/PanelLayerGeometrySpec.scala",
     "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
@@ -77,7 +75,35 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/RenderSurfaceCapabilitiesSpec.scala",
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/SurfaceActivitySpec.scala",
+    "ui/skia/SkiaLayerSurfaceFactorySpec.scala",
     "ui/theme/TextStyleFontSpec.scala"
+  )
+
+  /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
+  private val bothRenderers: Set[String] = Set(
+    "FrameBackend.scala",
+    "perf/SkiaFrameBenchmarks.scala",
+    "ui/renderer/Java2DRunPaintSpec.scala",
+    "ui/renderer/PixelLiftingContractSpec.scala",
+    "ui/renderer/SurfaceTextContractSpec.scala"
+  )
+
+  /** On Skia an incrementally drawn rich-text frame is the cold frame shifted one device pixel to the left, so these
+    * suites stay on Java2D until that is fixed (#2380); each flips by deleting its `referenceFrames` override.
+    */
+  private val pinnedBySkiaGap: Set[String] = Set(
+    "perf/ColumnPagingFramesSpec.scala",
+    "perf/DropCapIncrementalFrameSpec.scala",
+    "perf/HeadingSpacingFramesSpec.scala",
+    "perf/RaisedLetterIncrementalFrameSpec.scala",
+    "perf/VirtualDropCapIncrementalFrameSpec.scala"
+  )
+
+  /** Window specs that still use Java2D as the reference for what Skia paints; the list only shrinks. */
+  private val windowSpecsNotYetMoved: Set[String] = Set(
+    "ScrollReusePixelsSpec.scala",
+    "ui/skia/SkiaLayerWindowSpec.scala",
+    "ui/skia/SkiaRasterWindowSpec.scala"
   )
 
   private def testSources: List[Path] =
@@ -91,21 +117,35 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
   private def relative(path: Path): String = testRoot.relativize(path).toString.replace('\\', '/')
 
-  private val namingJava2D: Set[String] =
+  private def naming(word: String): Set[String] =
     testSources
       .filterNot(path => relative(path) == selfName)
-      .filter(path => Files.readAllLines(path).asScala.exists(_.contains("Java2DRenderSurface")))
+      .filter(path => Files.readAllLines(path).asScala.exists(_.contains(word)))
       .map(relative)
       .toSet
 
+  private val namingSurface: Set[String] = naming("Java2DRenderSurface")
+  private val namingFrames: Set[String]  = naming("Java2DFrames")
+
+  private val surfaceLists = java2dOnly ++ notYetMoved
+  private val framesLists  = bothRenderers ++ pinnedBySkiaGap ++ windowSpecsNotYetMoved
+
   "Test files naming Java2DRenderSurface" should "be on a list" in {
-    (namingJava2D -- java2dOnly -- notYetMoved) shouldBe Set.empty
+    (namingSurface -- surfaceLists) shouldBe Set.empty
   }
 
   it should "leave the lists once they stop naming it" in {
-    ((java2dOnly ++ notYetMoved) -- namingJava2D) shouldBe Set.empty
+    (surfaceLists -- namingSurface) shouldBe Set.empty
   }
 
   it should "not sit on both lists" in {
     (java2dOnly intersect notYetMoved) shouldBe Set.empty
+  }
+
+  "Test files naming Java2DFrames" should "be on a list" in {
+    (namingFrames -- framesLists) shouldBe Set.empty
+  }
+
+  it should "leave the lists once they stop naming it" in {
+    (framesLists -- namingFrames) shouldBe Set.empty
   }

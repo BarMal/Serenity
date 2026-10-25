@@ -8,12 +8,12 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.keystroke.events.{InsertChar, PageDown, PageUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
-import com.serenity.setCursorPosition
+import com.serenity.{FrameBackend, FramePixels, Java2DFrames, setCursorPosition}
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -66,7 +66,12 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  private val oracleImages = OracleImages()
+  /** The renderer the frames are drawn with. */
+  // Pinned to Java2D: on Skia an incrementally drawn rich-text frame is the cold frame shifted one device pixel to the
+  // left (every pixel matches once shifted), so this suite cannot yet hold Skia to its own cold frame (#2380).
+  private def referenceFrames: FrameBackend = Java2DFrames
+
+  private val oracleImages = OracleImages(referenceFrames)
 
   private val pooledImages = 2
 
@@ -80,7 +85,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
         window,
         scale,
         persists,
-        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages)
+        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages, referenceFrames)
       )
 
     private val images      = frames.drawn
@@ -91,18 +96,16 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % images.size)
-      val surface = new Java2DRenderSurface(
+      val surface = referenceFrames.surfaceOver(
         image,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = window.width,
-        logicalHeightPx = window.height,
-        deviceScaleX = scale,
-        deviceScaleY = scale,
-        contentPersists = persists,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        window.width,
+        window.height,
+        scale,
+        persists,
+        caches,
+        Some(screen)
       )
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
       val _ = RendererFramePlanner.renderFrame(
@@ -122,28 +125,19 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
         caches = caches
       )
       present(image, repaintRegion.get())
-      screenImage
+      screenImage.toImage
 
-    private def present(image: BufferedImage, region: Option[List[PixelRect]]): Unit =
-      val g = screenImage.createGraphics()
-      try
-        region match
-          case None => g.drawImage(image, 0, 0, null)
-          case Some(rects) =>
-            rects.foreach { rect =>
-              val (x, y) = (math.floor(rect.xPx * scale).toInt, math.floor(rect.yPx * scale).toInt)
-              val (w, h) = (math.ceil(rect.widthPx * scale).toInt, math.ceil(rect.heightPx * scale).toInt)
-              val clipped = new java.awt.Rectangle(x, y, w, h)
-                .intersection(new java.awt.Rectangle(0, 0, image.getWidth, image.getHeight))
-              if !clipped.isEmpty then
-                g.drawImage(
-                  image.getSubimage(clipped.x, clipped.y, clipped.width, clipped.height),
-                  clipped.x,
-                  clipped.y,
-                  null
-                )
-            }
-      finally g.dispose()
+    private def present(image: FramePixels, region: Option[List[PixelRect]]): Unit =
+      region match
+        case None => screenImage.blit(image, 0, 0, image.widthPx, image.heightPx)
+        case Some(rects) =>
+          rects.foreach { rect =>
+            val (x, y) = (math.floor(rect.xPx * scale).toInt, math.floor(rect.yPx * scale).toInt)
+            val (w, h) = (math.ceil(rect.widthPx * scale).toInt, math.ceil(rect.heightPx * scale).toInt)
+            val clipped = new java.awt.Rectangle(x, y, w, h)
+              .intersection(new java.awt.Rectangle(0, 0, image.widthPx, image.heightPx))
+            if !clipped.isEmpty then screenImage.blit(image, clipped.x, clipped.y, clipped.width, clipped.height)
+          }
 
   private def differing(window: Window, drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages) { frames =>
