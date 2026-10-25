@@ -1,10 +1,10 @@
 package com.serenity.input
 
-import java.awt.event.{InputMethodEvent, InputMethodListener, KeyEvent}
+import java.awt.Component
+import java.awt.event.{InputMethodEvent, KeyEvent}
 import java.awt.font.{TextAttribute, TextHitInfo}
 import java.awt.im.{InputMethodHighlight, InputMethodRequests}
-import java.awt.{Component, IllegalComponentStateException, Point, Rectangle}
-import java.text.{Annotation, AttributedCharacterIterator, AttributedString}
+import java.text.{Annotation, AttributedCharacterIterator}
 
 import scala.annotation.tailrec
 import scala.jdk.CollectionConverters.*
@@ -28,11 +28,6 @@ object ImeDiagnostics:
       line => log.info(line)
     }
 
-  def listener(sink: Sink, now: () => Long = () => System.currentTimeMillis()): InputMethodListener =
-    new InputMethodListener:
-      override def inputMethodTextChanged(event: InputMethodEvent): Unit = sink(describe(event, now()))
-      override def caretPositionChanged(event: InputMethodEvent): Unit   = sink(describe(event, now()))
-
   def describe(event: InputMethodEvent, nowMillis: Long): String =
     val text   = Option(event.getText)
     val chars  = text.fold("")(characters)
@@ -47,60 +42,15 @@ object ImeDiagnostics:
     s"t=$nowMillis $name char=${event.getKeyChar.toInt.toHexString.toUpperCase} " +
       s"keyCode=${event.getKeyCode} modifiers=${event.getModifiersEx}"
 
-  /** Enough to make the input method treat the component as a text client and place its candidate window at the
-    * component's origin; the document is reported empty because nothing here reads it back yet. `null` is the AWT
-    * contract's own answer for "no offset" and "nothing to cancel".
-    */
-  @SuppressWarnings(Array("org.wartremover.warts.Null"))
   def requests(component: Component, sink: Sink): InputMethodRequests =
-    new InputMethodRequests:
-      override def getTextLocation(offset: TextHitInfo): Rectangle =
-        sink(s"REQ getTextLocation offset=${hit(offset)}")
-        val origin =
-          try component.getLocationOnScreen
-          catch case _: IllegalComponentStateException => new Point(0, 0)
-        new Rectangle(origin.x, origin.y, 1, 16)
-
-      override def getLocationOffset(x: Int, y: Int): TextHitInfo =
-        sink(s"REQ getLocationOffset x=$x y=$y")
-        null
-
-      override def getInsertPositionOffset: Int =
-        sink("REQ getInsertPositionOffset")
-        0
-
-      override def getCommittedText(
-        beginIndex: Int,
-        endIndex: Int,
-        attributes: Array[AttributedCharacterIterator.Attribute]
-      ): AttributedCharacterIterator =
-        sink(s"REQ getCommittedText begin=$beginIndex end=$endIndex")
-        empty
-
-      override def getCommittedTextLength: Int =
-        sink("REQ getCommittedTextLength")
-        0
-
-      override def cancelLatestCommittedText(
-        attributes: Array[AttributedCharacterIterator.Attribute]
-      ): AttributedCharacterIterator =
-        sink("REQ cancelLatestCommittedText")
-        null
-
-      override def getSelectedText(
-        attributes: Array[AttributedCharacterIterator.Attribute]
-      ): AttributedCharacterIterator =
-        sink("REQ getSelectedText")
-        empty
-
-  private def empty: AttributedCharacterIterator = new AttributedString("").getIterator
+    ImeRequests.forComponent(component, () => None, sink)
 
   private def idName(id: Int): String = id match
     case InputMethodEvent.INPUT_METHOD_TEXT_CHANGED => "INPUT_METHOD_TEXT_CHANGED"
     case InputMethodEvent.CARET_POSITION_CHANGED    => "CARET_POSITION_CHANGED"
     case other                                      => other.toString
 
-  private def hit(info: TextHitInfo): String =
+  private[input] def hit(info: TextHitInfo): String =
     Option(info).fold("none")(h => s"${h.getCharIndex} ${if h.isLeadingEdge then "leading" else "trailing"}")
 
   private def characters(text: AttributedCharacterIterator): String =
@@ -132,7 +82,7 @@ object ImeDiagnostics:
     val extra = if others.isEmpty then "" else s" +${others.mkString(",")}"
     s"[$start,$end) $state$extra"
 
-  private def highlightOf(value: AnyRef): Option[InputMethodHighlight] = value match
+  private[input] def highlightOf(value: AnyRef): Option[InputMethodHighlight] = value match
     case highlight: InputMethodHighlight => Some(highlight)
     case annotation: Annotation          => Option(annotation.getValue).flatMap(highlightOf)
     case _                               => None

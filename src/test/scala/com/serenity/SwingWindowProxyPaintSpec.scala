@@ -9,7 +9,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.WindowChromeMode
-import com.serenity.testkit.{AwaitCondition, DisplayExclusive}
+import com.serenity.testkit.{AwaitCondition, DisplayExclusive, ScreenLocation}
 import com.serenity.ui.accessibility.{
   AccessibilityRole,
   AccessibilitySnapshot,
@@ -29,6 +29,15 @@ import org.scalatest.matchers.should.Matchers
 class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
 
   private def onEventThread(action: => Unit): Unit = SwingUtilities.invokeAndWait(() => action)
+
+  private val StripeColor = 0x40a0ff
+
+  /** Every window the JVM has showing, so a capture that shows something else says what was on the screen. */
+  private def showingWindows(): String =
+    java.awt.Window.getWindows.toList
+      .filter(_.isShowing)
+      .map(window => s"${window.getClass.getName}@${window.getBounds}")
+      .mkString("[", ", ", "]")
 
   private def node(role: AccessibilityRole, bounds: LayoutRect): AccessibleNode =
     AccessibleNode(s"node:${role.toString}", role, role.toString, Some(AccessibleValue.Plain("x")), false, true, bounds)
@@ -78,7 +87,7 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
     s"A shown SwingWindow ($mode chrome) with a dialog proxy over the frame" should "keep showing the frame after a RepaintManager repaint" in {
       assume(!GraphicsEnvironment.isHeadless, "Reading pixels back from the screen needs a display")
 
-      val mismatches = DisplayExclusive(
+      val (mismatches, seen) = DisplayExclusive(
         SwingWindow
           .resource(chromeMode = mode)
           .use { window =>
@@ -94,7 +103,7 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
               try
                 g.setColor(new Color(0x202020))
                 g.fillRect(0, 0, width, height)
-                g.setColor(new Color(0x40a0ff))
+                g.setColor(new Color(StripeColor))
                 (0 until height by 6).foreach(y => g.fillRect(0, y, width, 2))
               finally g.dispose()
 
@@ -118,27 +127,41 @@ class SwingWindowProxyPaintSpec extends AnyFlatSpec with Matchers:
               onEventThread(())
               Toolkit.getDefaultToolkit.sync()
 
-              val origin = canvas.getLocationOnScreen
-              def mismatchesOnScreen: Int =
-                val shot = new Robot().createScreenCapture(
-                  new Rectangle(origin.x + region.x, origin.y + region.y, region.width, region.height)
-                )
-                (for
-                  y <- 0 until region.height
-                  x <- 0 until region.width
-                  if (shot.getRGB(x, y) & 0xffffff) != (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
-                yield 1).size
+              // The toolkit's idea of where the window is can be stale (see ScreenLocation), and the first stripe pixel on
+              // the screen is not always the canvas's own corner (macOS rounds the window's edge), so the capture is
+              // compared at each position either could mean and the best alignment is the one judged. A region the dialog
+              // proxy corrupted matches at none of them.
+              def mismatchesOnScreen: (Int, String) =
+                val screen =
+                  new Robot().createScreenCapture(new Rectangle(Toolkit.getDefaultToolkit.getScreenSize))
+                val reported = canvas.getLocationOnScreen
+                val found    = ScreenLocation.firstPixelOf(screen, StripeColor)
+                // A pixel the screen does not have cannot match.
+                def onScreen(x: Int, y: Int): Int =
+                  if x < 0 || y < 0 || x >= screen.getWidth || y >= screen.getHeight then -1
+                  else screen.getRGB(x, y) & 0xffffff
+                def mismatchesAt(corner: (Int, Int)): Int =
+                  (for
+                    y <- 0 until region.height
+                    x <- 0 until region.width
+                    if onScreen(corner._1 + region.x + x, corner._2 + region.y + y) !=
+                      (frame.getRGB(region.x + x, region.y + y) & 0xffffff)
+                  yield 1).size
+                val (best, corner) = ScreenLocation.bestAlignment(
+                  ScreenLocation.candidateCorners((reported.x, reported.y), found, slack = 2)
+                )(mismatchesAt)
+                best -> s"best alignment at $corner of the toolkit's (${reported.x},${reported.y}) and the first stripe pixel $found; windows: ${showingWindows()}"
               () => mismatchesOnScreen
             }.flatMap { capture =>
               // The screen shows a frame once the window system has composited it, which on macOS lags behind
               // Toolkit.sync; a stale buffer left by the repaint stays wrong, so waiting cannot hide it.
               AwaitCondition
-                .awaitValue(IO.blocking(capture()), 10.seconds)(_ == 0)
+                .awaitValue(IO.blocking(capture()), 10.seconds)(_._1 == 0)
                 .handleErrorWith(_ => IO.blocking(capture()))
             }
           }
           .unsafeRunSync()
       )
 
-      mismatches shouldBe 0
+      withClue(s"$seen; ")(mismatches shouldBe 0)
     }

@@ -305,52 +305,27 @@ object ArchitectureChecks {
     PurityChecks.Allowed(
       "main/scala/com/serenity/text/TextCounts.scala",
       "TextCounts.threadLocalWords",
-      "A `BreakIterator` is neither thread-safe nor cheap to build, so each thread keeps one as scratch. Confined to its thread and never shared, it holds no state a runtime could observe; moving it into per-runtime state was a perf problem (#1277)."
+      "A `BreakIterator` is neither thread-safe nor cheap to build, so each thread keeps one as scratch; thread-confined, never shared, and the answers are pure in the text. Kept by owner decision (#2350): a fresh iterator per `TextCounts.of` made `text.counts.rope_build` allocate 5.9x (867 KB to 5.13 MB, time +7%) and `rope_edit` 13x (9.7 KB to 125 KB, time +15%). The only caller path is `Rope`'s parameterless `lazy val textSummary`, so a scratch would need the whole rope API (docs/allowlist-review.md, L4)."
     ),
     PurityChecks.Allowed(
       "main/scala/com/serenity/text/TextCounts.scala",
       "TextCounts.threadLocalCharacters",
-      "Thread-confined `BreakIterator` scratch, as `threadLocalWords`: not shareable, expensive to rebuild, and moving it cost performance (#1277)."
+      "Thread-confined `BreakIterator` scratch, the character-instance twin of `threadLocalWords`; kept with it by owner decision (#2350), same measurements (docs/allowlist-review.md, L5)."
     ),
     PurityChecks.Allowed(
       "main/scala/com/serenity/text/TextEditing.scala",
       "TextEditing.threadLocalBreakIterator",
-      "Thread-confined `BreakIterator` scratch plus the identity of the text last set on it, which spares each boundary question a `setText`. Moving it was a perf problem (#1277)."
+      "Thread-confined `BreakIterator` scratch plus the identity of the text last set on it, which spares each boundary question a `setText`. Kept by owner decision (#2350): with no caching, `text.boundary.word_motion` was 2.45x slower, `grapheme_motion` 4.98x, `keystroke_after_edit` 1.97x, and `find_whole_word` 1.26x with 12x the allocation, and about 16 files on the reducer path have no natural owner for a scratch (docs/allowlist-review.md, L1)."
     ),
     PurityChecks.Allowed(
       "main/scala/com/serenity/text/TextEditing.scala",
       "TextEditing.threadLocalWordBreakIterator",
-      "The word-boundary twin of `threadLocalBreakIterator`, kept separate so word motion's grapheme questions do not evict its text; same thread confinement and the same perf constraint (#1277)."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/ParagraphMeasurement.scala",
-      "ParagraphMeasurement.threadLocalCharacterBreaks",
-      "Thread-confined `BreakIterator` scratch on the paragraph-measurement hot path; moving it was a perf problem (#1277)."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/layout/TextLayoutSnapshot.scala",
-      "TextLayoutSnapshot.threadLocalLineBreakIterator",
-      "Thread-confined line-break `BreakIterator` scratch used while wrapping; moving it was a perf problem (#1277)."
+      "The word-boundary twin of `threadLocalBreakIterator`, kept separate so word motion's grapheme questions do not evict its text; kept with it by owner decision (#2350), same measurements (docs/allowlist-review.md, L2)."
     ),
     PurityChecks.Allowed(
       "main/scala/com/serenity/rope/RopeCharacterSource.scala",
       "RopeCharacterSource.lastUsed",
-      "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/diagnostics/TuiConsoleLogFilter.scala",
-      "TuiConsoleLogFilter.suppressConsole",
-      "logback builds this filter by reflection from `logback.xml`, so no value can be injected into it; a static flag set once from `Frontend.logRouting` before the first logger exists is the only channel."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/presets/UiPresetIndex.scala",
-      "UiPresetStore.inProcessLocks",
-      "One lock per preset file must be shared by every `UiPresetStore` in the process that names it; per-instance locks would let two stores write the same file at once. The mutual exclusion is the point, so the state is inherently process-wide."
-    ),
-    PurityChecks.Allowed(
-      "main/scala/com/serenity/ui/renderer/FontFirstUse.scala",
-      "FontFirstUse.NoContexts",
-      "An empty sentinel map that is only ever read (`getOrDefault`), never written, so the miss path allocates nothing. It carries no state."
+      "Per-thread memo of the last adapter made for a rope. Its identity is the anchor the thread's `BreakIterator` cache compares, so it must live and die with those thread-locals; kept with them by owner decision (#2350), same measurements (docs/allowlist-review.md, L3)."
     )
   )
 

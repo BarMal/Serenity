@@ -65,19 +65,28 @@ class SwingWindow(
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
   private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
-  private val previousCursorRectsRef   = new AtomicReference[scala.List[Rectangle]](Nil)
-  private val pendingRepaintRef        = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
-  private val baseImagePool            = new SwingWindow.ReusableImagePool
-  private val savedBoundsRef           = new AtomicReference[Option[Rectangle]](None)
-  private val maximizedRef             = new AtomicBoolean(false)
-  private val maxBtnRef                = new AtomicReference[Option[ChromeControlButton]](None)
-  private val controlButtonsRef        = new AtomicReference[scala.List[ChromeControlButton]](Nil)
-  private val controlPanelRef          = new AtomicReference[Option[JPanel]](None)
-  private val titleBarRef              = new AtomicReference[Option[JPanel]](None)
-  private val titleLabelRef            = new AtomicReference[Option[JLabel]](None)
-  private val titleSpacerRef           = new AtomicReference[Option[JPanel]](None)
-  private val onResizeCallbackRef      = new AtomicReference[Option[() => Unit]](None)
-  private val onFocusCallbackRef       = new AtomicReference[Option[Boolean => Unit]](None)
+  // Kept through the caret's blink-off phases, so the input method's candidate window has somewhere to be.
+  private val lastCaretRef           = new AtomicReference[Option[Rectangle]](None)
+  private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
+  private val pendingRepaintRef      = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
+  private val baseImagePool          = new SwingWindow.ReusableImagePool
+  private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
+  private val maximizedRef           = new AtomicBoolean(false)
+  private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
+  private val controlButtonsRef      = new AtomicReference[scala.List[ChromeControlButton]](Nil)
+  private val controlPanelRef        = new AtomicReference[Option[JPanel]](None)
+  private val titleBarRef            = new AtomicReference[Option[JPanel]](None)
+  private val titleLabelRef          = new AtomicReference[Option[JLabel]](None)
+  private val titleSpacerRef         = new AtomicReference[Option[JPanel]](None)
+  private val onResizeCallbackRef    = new AtomicReference[Option[() => Unit]](None)
+  private val onFocusCallbackRef     = new AtomicReference[Option[Boolean => Unit]](None)
+
+  /** Ends the input method's composition from the platform's side. It commits or discards by the platform's own rule;
+    * either way the editor has been told to drop what arrives (see `ImeReducer`).
+    */
+  def endInputMethodComposition(): Unit =
+    val end: Runnable = () => Option(canvas.getInputContext).foreach(_.endComposition())
+    if SwingUtilities.isEventDispatchThread then end.run() else SwingUtilities.invokeLater(end)
 
   def setOnResize(cb: () => Unit): Unit = onResizeCallbackRef.set(Some(cb))
 
@@ -89,6 +98,7 @@ class SwingWindow(
     override def installInputMethodRequests(requests: InputMethodRequests): Unit =
       inputMethodRequestsRef.set(Some(requests))
     override def getInputMethodRequests: InputMethodRequests = inputMethodRequestsRef.get().orNull
+    override def caretBounds: Option[Rectangle]              = lastCaretRef.get()
     setBackground(Color.BLACK)
     setPreferredSize(initialCanvasPixelSize)
     setFocusable(true)
@@ -176,6 +186,7 @@ class SwingWindow(
       case Some(_) =>
         val carets = paintCarets
         publishedCaretsRef.set(carets)
+        carets.headOption.foreach(caret => lastCaretRef.set(Some(caret.rect)))
         val currentCursorRects  = carets.map(_.rect)
         val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
         requestRepaint(SwingWindow.cursorRepaint(baseDirtyRects, previousCursorRects, currentCursorRects))

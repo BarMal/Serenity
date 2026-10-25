@@ -43,14 +43,17 @@ object PerformanceBenchmarks:
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
       LayoutSnapshotBenchmarks.benchmarks() ++
+      CellGridBenchmarks.benchmarks() ++
       ReducerBenchmarks.benchmarks() ++
       ProseTypingBenchmarks.benchmarks() ++
       DamageBenchmarks.benchmarks() ++
       TuiBenchmarks.benchmarks() ++
       CommandRunnerBenchmarks.benchmarks() ++
       ModalWrapBenchmarks.benchmarks() ++
+      EditorConfigBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
+      BoundaryCacheBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 

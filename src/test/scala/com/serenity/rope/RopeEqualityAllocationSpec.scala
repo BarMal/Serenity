@@ -12,6 +12,10 @@ class RopeEqualityAllocationSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private val Bound = 256L
+
+  private val UnderTheBound: ((Long, Long)) => Boolean = _._2 <= Bound
+
   private val text = "the cat sat on the mat and looked at the dog\n" * 25_000
 
   "Comparing independently built ropes of equal content" should "allocate nothing that grows with the rope" in {
@@ -21,19 +25,19 @@ class RopeEqualityAllocationSpec extends AnyFlatSpec with Matchers:
       (left eq right) shouldBe false
       left.height should be > smallLeft.height
     }
-    SettledAllocation.perCall(() => smallLeft == smallRight, () => left == right) match
+    SettledAllocation.perCall(() => smallLeft == smallRight, () => left == right, UnderTheBound) match
       case Some((small, large)) =>
-        withClue(s"20 KB ropes allocated ${small}B, 1 MB ropes allocated ${large}B: ")(large should be <= 256L)
+        withClue(s"20 KB ropes allocated ${small}B, 1 MB ropes allocated ${large}B: ")(large should be <= Bound)
       case None =>
         info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
   }
 
   "Hashing a rope" should "allocate nothing that grows with the rope" in {
     val (small, large) = (Rope(text.take(20_000)), Rope(text))
-    SettledAllocation.perCall(() => small.hashCode, () => large.hashCode) match
+    SettledAllocation.perCall(() => small.hashCode, () => large.hashCode, UnderTheBound) match
       case Some((smallBytes, largeBytes)) =>
         withClue(s"20 KB rope allocated ${smallBytes}B, 1 MB rope allocated ${largeBytes}B: ")(
-          largeBytes should be <= 256L
+          largeBytes should be <= Bound
         )
       case None =>
         info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")

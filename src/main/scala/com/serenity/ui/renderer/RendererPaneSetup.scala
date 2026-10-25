@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 
+import com.serenity.document.{KeywordHighlight, KeywordHighlights}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -54,7 +55,9 @@ final case class BufferRenderAnnotations(
     // is where this is derived.
     semanticTokensAvailability: SemanticTokensAvailability,
     // A chapter note's overview, keyed by the blank buffer line it is painted faded on (see `ChapterGhosts`).
-    ghostsByLine: Map[Int, String] = Map.empty
+    ghostsByLine: Map[Int, String] = Map.empty,
+    // Keyword occurrences painted while the notes pane is open on the document (see `KeywordHighlights`).
+    keywordsByLine: Map[Int, List[KeywordHighlight]] = Map.empty
 )
 
 /** Answers "what does each pane's content look like this frame": the per-frame [[EditorPaneRenderPlan]] (buffer layout
@@ -126,6 +129,8 @@ object RendererPaneSetup:
       state.runtime.bufferIndexMemos,
       state.runtime.languageService,
       java.lang.Boolean.valueOf(state.runtime.chapterGhostsVisible),
+      state.runtime.notesPane,
+      java.lang.Boolean.valueOf(state.runtime.keywordHighlightsVisible),
       java.lang.Boolean.valueOf(state.runtime.resolvedCommentsVisible),
       state.persisted.config.markdownViewMode
     )
@@ -172,11 +177,18 @@ object RendererPaneSetup:
             if state.runtime.chapterGhostsVisible then
               context.caches.chapterGhosts.ghostsFor(buffer, state.persisted.buffers)
             else Map.empty[Int, String]
+          val keywordsByLine =
+            KeywordHighlights.onLines(
+              buffer.document.content,
+              KeywordHighlights.paintedTerms(state, bufferId),
+              visibleLines
+            )
           bufferId -> BufferRenderAnnotations(
             commentsByLine,
             diagnosticsByLine,
             semanticTokensAvailability,
-            ghostsByLine
+            ghostsByLine,
+            keywordsByLine
           )
         }
       }

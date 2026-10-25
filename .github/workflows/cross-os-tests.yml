@@ -1,30 +1,37 @@
 name: Cross-OS Tests
 
-# Runs the test suite on Windows and macOS for master pushes, nightly, and on demand. It does not run on pull requests:
-# macOS runners are scarce, and Auto Squash Merge waits on every check, so a queued or hung macOS job stalled every PR
-# for hours. A Windows/macOS regression shows up on the next master push or nightly run and is fixed forward. Kept out
-# of the CI workflow while known Windows/macOS failures remain (#2016).
+# Runs the test suite on Windows and macOS for every pull request, master pushes, nightly, and on demand. The job names
+# below ("Test (windows)", "Test (macos)") are what branch protection lists as required checks: renaming a job or a
+# matrix label un-requires it, so change them only together with the repository's required-check settings (#2016).
+# Auto Squash Merge waits for these checks before merging, as for every other check on the pull request.
 on:
+  pull_request:
   push:
     branches:
       - master
   schedule:
     - cron: '17 3 * * *'
   workflow_dispatch:
+    inputs:
+      jvm_opts:
+        description: Extra JVM options appended to SBT_OPTS for this run, for example -Xmx5g, to compare GC behaviour
+        required: false
+        default: ''
 
 permissions:
   contents: read
 
-# Only the newest master commit matters here; a newer push cancels the older run so runs don't queue behind each other.
+# Only the newest commit of a branch or pull request matters here; a newer push cancels the older run so runs don't queue
+# behind each other (macOS runners especially).
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test-cross-os:
     name: Test (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 50
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -38,11 +45,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -53,13 +60,19 @@ jobs:
       # wall-clock time. Written outside target/ because `clean` deletes that directory.
       - name: Enable JVM stall diagnostics
         shell: bash
+        # The extra options come last, so an -Xmx there wins over the one in .jvmopts.
+        env:
+          EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}
         run: |
           mkdir -p jvm-diag
-          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
+          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log $EXTRA_JVM_OPTS" >> "$GITHUB_ENV"
 
       - name: Run tests
         shell: bash
-        # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
+        # Fails with a thread dump after HANG_MINUTES instead of holding the runner for 6 hours on a hang. The script's
+        # default of 40 stops a macOS run that takes 39 minutes, so the limit is raised to sit inside the job's 60.
+        env:
+          HANG_MINUTES: '52'
         run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
       # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
@@ -86,6 +99,12 @@ jobs:
           path: target/test-reports/**
           if-no-files-found: ignore
           retention-days: 14
+
+      # The reports above cannot be read from every environment either, so the slowest suites go into the log.
+      - name: Summarise slowest test suites
+        if: always()
+        shell: bash
+        run: bash .github/scripts/summarize-test-durations.sh target/test-reports 30 | tee -a "$GITHUB_STEP_SUMMARY"
 
       # The artifact below cannot be read from every environment, so the headline numbers go into the log as well.
       - name: Summarise JVM stall diagnostics

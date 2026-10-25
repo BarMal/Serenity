@@ -51,6 +51,50 @@ object CharacterRenderer:
     val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
     flushPlainRuns(surface, y, collectedRuns.runs)
 
+  /** The characters of `visualLine` in buffer columns `[rangeStart, rangeEnd)` painted on the cell grid in the colours
+    * and style the surface has, each on the cell the row's caret stops give it (so after a wide character, a tab or a
+    * character a fallback font draws, it is still where the row measured it) and in the fallback font the row draws it
+    * in. `originCell` is the cell of the row's first caret stop; cells outside `[leftCell, rightCell)` are not painted.
+    */
+  def renderCellRange(
+    surface: RenderSurface,
+    visualLine: TextVisualLine,
+    rangeStart: Int,
+    rangeEnd: Int,
+    originCell: Int,
+    y: Int,
+    leftCell: Int,
+    rightCell: Int,
+    cellPx: Int,
+    fallback: Option[CellFallback]
+  ): Unit =
+    val text      = visualLine.text
+    val stretches = fallback.fold(Vector.empty)(_.stretchesOf(text))
+    def cellOf(column: Int): Int =
+      originCell + math.round(visualLine.xForColumn(column).getOrElse(visualLine.widthPx) / cellPx.toFloat)
+    def familyAt(index: Int): Option[String] =
+      stretches.collectFirst { case (from, until, family) if index >= from && index < until => family }.flatten
+    @annotation.tailrec
+    def paint(column: Int): Unit =
+      val index = column - visualLine.startColumn
+      if column < rangeEnd && index < text.length then
+        if index < 0 then paint(column + 1)
+        else
+          val codePoint = text.codePointAt(index)
+          val end       = CharWidth.clusterEnd(text, index)
+          val cell      = cellOf(column)
+          val cells     = cellOf(column + end - index) - cell
+          if cell >= leftCell && cell < rightCell then
+            val shown =
+              if Character.isISOControl(codePoint) then " ".repeat(math.max(1, cells)) else text.substring(index, end)
+            familyAt(index).fold(surface.putString(cell, y, shown))(family =>
+              surface.text.withFallbackFamily(family, CharWidth.needsLigaturesToJoin(text, index, end))(
+                withinCells(surface, cell, y, math.max(1, cells))(surface.putString(cell, y, shown))
+              )
+            )
+          paint(column + end - index)
+    paint(rangeStart)
+
   def renderChar(
     surface: RenderSurface,
     x: Int,
@@ -80,16 +124,17 @@ object CharacterRenderer:
     semanticTokens: Option[List[SemanticToken]] = None,
     maxColumn: Option[Int] = None,
     highlightCache: com.serenity.ui.theme.ThemeHighlightCache = com.serenity.ui.theme.ThemeHighlightCache(),
-    tabWidth: Int = IndentationSettings.DefaultTabSize
+    tabWidth: Int = IndentationSettings.DefaultTabSize,
+    fallback: Option[CellFallback] = None
   ): Unit =
     styledSegments match
       case Some(styledTexts) =>
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth, fallback)
       case None if syntaxHighlightingEnabled =>
         val styledTexts = highlightCache.highlightLine(content, theme, language, semanticTokens)
-        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth)
+        renderStyledLine(surface, x, y, styledTexts, theme, maxColumn, tabWidth, fallback)
       case None =>
-        renderThemedPlain(surface, x, y, content, theme, tabWidth, maxColumn)
+        renderThemedPlain(surface, x, y, content, theme, tabWidth, maxColumn, fallback)
 
   def renderThemedPlain(
     surface: RenderSurface,
@@ -98,10 +143,11 @@ object CharacterRenderer:
     content: String,
     theme: Theme,
     tabWidth: Int = IndentationSettings.DefaultTabSize,
-    maxColumn: Option[Int] = None
+    maxColumn: Option[Int] = None,
+    fallback: Option[CellFallback] = None
   ): Unit =
     val collectedRuns = collectPlainRuns(x, x, content, tabWidth)
-    renderThemedRuns(surface, y, collectedRuns.runs, theme, maxColumn)
+    renderThemedRuns(surface, y, collectedRuns.runs, theme, maxColumn, fallback)
 
   /** Render a visual line using pixel-precision caret stops.
     *
@@ -198,7 +244,8 @@ object CharacterRenderer:
     styledTexts: List[com.serenity.ui.theme.StyledText],
     theme: Theme,
     maxColumn: Option[Int],
-    tabWidth: Int
+    tabWidth: Int,
+    fallback: Option[CellFallback]
   ): Unit =
     styledTexts.foldLeft(x) { (currentX, styledText) =>
       val segmentTheme = theme.copy(
@@ -207,7 +254,7 @@ object CharacterRenderer:
       )
       val collectedRuns = collectPlainRuns(x, currentX, styledText.content, tabWidth)
       withStyle(surface, styledText.style) {
-        renderThemedRuns(surface, y, collectedRuns.runs, segmentTheme, maxColumn)
+        renderThemedRuns(surface, y, collectedRuns.runs, segmentTheme, maxColumn, fallback)
       }
       collectedRuns.endX
     }: Unit
@@ -232,13 +279,13 @@ object CharacterRenderer:
           )
         else this
 
-    val initial    = PlainRunState(Nil, StringBuilder(), startX, startX)
-    val codePoints = content.codePoints().iterator()
+    val initial = PlainRunState(Nil, StringBuilder(), startX, startX)
     @annotation.tailrec
-    def consume(state: PlainRunState): PlainRunState =
-      if !codePoints.hasNext then state.flush
+    def consume(index: Int, state: PlainRunState): PlainRunState =
+      if index >= content.length then state.flush
       else
-        val nextState = codePoints.nextInt() match
+        val end = CharWidth.clusterEnd(content, index)
+        val nextState = content.codePointAt(index) match
           case '\t' =>
             val flushed     = state.flush
             val spacesToAdd = TabStops.cellsAt(flushed.currentX - originX, tabWidth)
@@ -250,49 +297,65 @@ object CharacterRenderer:
             )
           case visible if isVisibleCodePoint(visible) =>
             val start = if state.currentText.length == 0 then state.currentX else state.currentStartX
-            state.currentText.appendAll(Character.toChars(visible))
-            state.copy(currentStartX = start, currentX = state.currentX + displayWidth(visible))
+            if end == index + Character.charCount(visible) then
+              if Character.isBmpCodePoint(visible) then state.currentText.append(visible.toChar)
+              else state.currentText.appendAll(Character.toChars(visible))
+            else state.currentText.appendAll(content.substring(index, end))
+            state.copy(currentStartX = start, currentX = state.currentX + CharWidth.ofCluster(content, index, end))
           case _ =>
             val flushed = state.flush
             flushed.copy(currentStartX = flushed.currentX)
-        consume(nextState)
+        consume(end, nextState)
 
-    val finalState = consume(initial)
+    val finalState = consume(0, initial)
 
     CollectedRuns(finalState.completed.reverse, finalState.currentX)
 
   private def isVisibleCodePoint(codePoint: Int): Boolean =
     !Character.isISOControl(codePoint)
 
-  /** How many cells a codepoint occupies on the grid: none for a combining mark, which composes onto the glyph before
-    * it, otherwise its display width. [[com.serenity.ui.tui.TerminalScreenBuffer.putString]] advances by exactly this,
-    * so a run laid out here lands on the cells the one before it actually filled -- counting one per codepoint instead
-    * left every run after a wide glyph starting inside that glyph.
+  /** A run on the cell grid: the stretches the primary font draws as one string, and each character a fallback font
+    * draws alone on the cell the caret stops put it on, since its glyph's advance has nothing to do with the grid.
     */
-  private def displayWidth(codePoint: Int): Int =
-    val category = Character.getType(codePoint)
-    if category == Character.NON_SPACING_MARK ||
-        category == Character.COMBINING_SPACING_MARK ||
-        category == Character.ENCLOSING_MARK
-    then 0
-    else CharWidth.of(codePoint)
+  private def flushRun(surface: RenderSurface, y: Int, run: TextRun, fallback: Option[CellFallback]): Unit =
+    val stretches = fallback.fold(Vector.empty)(_.stretchesOf(run.content))
+    if stretches.isEmpty then surface.putString(run.startX, y, run.content)
+    else
+      stretches.foreach { (from, until, family) =>
+        val startCell = run.startX + CellRuns.cellsIn(run.content.substring(0, from))
+        val stretch   = run.content.substring(from, until)
+        family match
+          case None => surface.putString(startCell, y, stretch)
+          case Some(name) =>
+            CellRuns.clusters(stretch).foldLeft(startCell) { (cell, shown) =>
+              val cells = CellRuns.cellsIn(shown)
+              surface.text.withFallbackFamily(name, CharWidth.needsLigaturesToJoin(shown, 0, shown.length)) {
+                withinCells(surface, cell, y, cells)(surface.putString(cell, y, shown))
+              }
+              cell + cells
+            }: Unit
+      }
 
-  private def flushRun(surface: RenderSurface, y: Int, run: TextRun): Unit =
-    surface.putString(run.startX, y, run.content)
+  /** A fallback glyph can stand taller than the row it sits in, and ink outside the row is not ink a repaint of the
+    * rows beside it would put back, so it is cut to its own cells.
+    */
+  private def withinCells(surface: RenderSurface, cell: Int, y: Int, cells: Int)(draw: => Unit): Unit =
+    surface.panelOutlines.fold(draw)(_.withRectClip(cell, y, cells, 1)(draw))
 
   private def flushPlainRuns(surface: RenderSurface, y: Int, runs: List[TextRun]): Unit =
-    runs.foreach(flushRun(surface, y, _))
+    runs.foreach(flushRun(surface, y, _, None))
 
   private def renderThemedRuns(
     surface: RenderSurface,
     y: Int,
     runs: List[TextRun],
     theme: Theme,
-    maxColumn: Option[Int]
+    maxColumn: Option[Int],
+    fallback: Option[CellFallback]
   ): Unit =
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
-    runs.flatMap(clipRunToColumn(_, maxColumn)).foreach(flushRun(surface, y, _))
+    runs.flatMap(clipRunToColumn(_, maxColumn)).foreach(flushRun(surface, y, _, fallback))
 
   /** Cell-grid runs need no sub-character precision (unlike the measured pixel path's `clipRightXPx`), but a column is
     * a cell rather than a character: the content is truncated at the last glyph that fits whole, so a wide one is
@@ -311,10 +374,10 @@ object CharacterRenderer:
           def fittingLength(index: Int, usedCells: Int): Int =
             if index >= run.content.length then index
             else
-              val codePoint = run.content.codePointAt(index)
-              val width     = displayWidth(codePoint)
+              val end   = CharWidth.clusterEnd(run.content, index)
+              val width = CharWidth.ofCluster(run.content, index, end)
               if usedCells + width > allowedCells then index
-              else fittingLength(index + Character.charCount(codePoint), usedCells + width)
+              else fittingLength(end, usedCells + width)
 
           Some(run.copy(content = run.content.take(fittingLength(0, 0))))
 

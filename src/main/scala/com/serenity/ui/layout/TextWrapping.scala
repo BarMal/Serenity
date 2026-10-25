@@ -2,14 +2,12 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 import java.awt.font.FontRenderContext
-import java.util.concurrent.ConcurrentHashMap
 
 import scala.annotation.tailrec
 
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache, SurfaceTextInset}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, SurfaceTextInset}
 
 /** What a line of dialog text is measured against: terminal cells, or the pixels of the GUI font it is drawn in.
   * `cellPx` is the grid cell a frame's width is counted in, and `insetPx` the room a GUI frame's text inset takes from
@@ -28,32 +26,12 @@ enum TextMeasure:
 
 object TextMeasure:
 
-  final private case class GuiFont(font: Font, cellPx: Int)
-
-  private val guiFonts = ConcurrentHashMap[FontConfig, GuiFont]()
-
-  private val GuiWrapsInPixels = false
-
-  /** Pixel measuring needs a font to measure against, which a terminal does not have. */
-  def forState(state: AppState): TextMeasure =
-    if GuiWrapsInPixels && !state.runtime.capabilities.isCellGrid then
-      pixelsFor(state, MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache()))
-    else Cells
-
   def pixelsFor(state: AppState, advances: MeasuredTextAdvances): Pixels =
     val fontConfig = state.persisted.config.editorConfig.fontConfig
-    val gui = guiFonts.computeIfAbsent(
-      fontConfig,
-      (config: FontConfig) =>
-        GuiFont(
-          FontLoader.previewUiFont(config),
-          CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
-        )
-    )
     Pixels(
-      gui.font,
+      FontLoader.previewUiFont(fontConfig),
       TextLayoutSnapshot.defaultFontRenderContext(),
-      gui.cellPx,
+      CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth,
       SurfaceTextInset.px(state.persisted.config),
       advances
     )
@@ -87,25 +65,31 @@ object TextWrapping:
         row => advances.advanceOf(row, font, frc) <= limitPx
 
   private def cellsOf(row: String): Int =
-    row.codePoints().map(codePoint => if codePoint < NarrowBelow then 1 else CharWidth.of(codePoint)).sum()
+    @tailrec
+    def sum(index: Int, cells: Int): Int =
+      if index >= row.length then cells
+      else
+        val end = CharWidth.clusterEnd(row, index)
+        sum(end, cells + CharWidth.ofCluster(row, index, end))
+    if row.forall(_ < NarrowBelow) then row.length else sum(0, 0)
 
-  // Nothing below Hangul Jamo is East Asian wide, so the common case never reaches the ICU property lookup.
-  private val NarrowBelow = 0x1100
+  // Nothing below U+0300 is wide, zero-width or extends a cluster, so the common case never reaches the ICU lookups.
+  private val NarrowBelow = 0x0300
 
-  /** `word` as rows, each starting with `prefix` and as long as still fits -- one code point at least, so a row too
-    * narrow for any glyph still makes progress.
+  /** `word` as rows, each starting with `prefix` and as long as still fits -- one grapheme cluster at least, so a row
+    * too narrow for any glyph still makes progress, and a row never ends inside a cluster.
     */
   private def breakToFit(word: String, prefix: String, fits: String => Boolean): List[String] =
     @tailrec
     def fittingEnd(rest: String, end: Int): Int =
       if end >= rest.length then end
       else
-        val next = end + Character.charCount(rest.codePointAt(end))
+        val next = CharWidth.clusterEnd(rest, end)
         if fits(prefix + rest.substring(0, next)) then fittingEnd(rest, next) else end
     @tailrec
     def pieces(rest: String, done: List[String]): List[String] =
       if rest.isEmpty then done.reverse
       else
-        val end = math.max(Character.charCount(rest.codePointAt(0)), fittingEnd(rest, 0))
+        val end = math.max(CharWidth.clusterEnd(rest, 0), fittingEnd(rest, 0))
         pieces(rest.substring(end), (prefix + rest.substring(0, end)) :: done)
     pieces(word, Nil)

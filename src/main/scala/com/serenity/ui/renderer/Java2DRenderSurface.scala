@@ -158,7 +158,8 @@ class Java2DRenderSurface(
       shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
 
-  override def withFallbackFamily(family: String)(draw: => Unit): Unit = styledFonts.drawingIn(g, family)(draw)
+  override def withFallbackFamily(family: String, ligaturesOn: Boolean)(draw: => Unit): Unit =
+    styledFonts.drawingIn(g, family, ligaturesOn)(draw)
 
   override def shapesStretchesOf(text: String): Boolean =
     ShapedTextCache.worthShaping(baseFontRef.get(), text)
@@ -304,15 +305,19 @@ class Java2DRenderSurface(
 
   def putString(x: Int, y: Int, s: String): Unit =
     if s.nonEmpty then
-      val px = metrics.toPixelX(x)
-      val py = pixelYForRow(y)
-      // Fill background for the whole string using nominal width
-      fillBackground(bgRef.get(), px, py, s.length * metrics.charWidth, metrics.lineHeight)
-      painted.touched(px, py, s.length * metrics.charWidth, metrics.lineHeight)
-      // Draw the foreground as one shaped string so font features like ligatures can apply.
+      val px      = metrics.toPixelX(x)
+      val py      = pixelYForRow(y)
+      val widthPx = CellRuns.cellsIn(s) * metrics.charWidth
+      // The background covers every cell the string takes, which a wide character makes more than its length.
+      fillBackground(bgRef.get(), px, py, widthPx, metrics.lineHeight)
+      painted.touched(px, py, widthPx, metrics.lineHeight)
       g.setColor(fgRef.get())
-      g.drawString(s, px, py + metrics.ascent)
-      drawUnderline(px, s.length * metrics.charWidth, py + metrics.ascent)
+      // A narrow stretch is drawn as one shaped string so font features like ligatures can apply; a wide character is
+      // drawn alone on its own cell, since its glyph's advance need not be two of them.
+      CellRuns
+        .pieces(s)
+        .foreach((cell, piece) => g.drawString(piece, px + cell * metrics.charWidth, py + metrics.ascent))
+      drawUnderline(px, widthPx, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
     val px = metrics.toPixelX(x)

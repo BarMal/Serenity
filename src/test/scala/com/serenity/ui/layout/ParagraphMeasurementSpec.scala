@@ -15,7 +15,7 @@ import com.serenity.richtext.{
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -118,7 +118,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   "Per-paragraph measurement" should "wrap measured plain text exactly where per-row measurement did" in
     forAll(measuredFonts) { font =>
-      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
+      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
       forAll(corpus) { line =>
         widths.foreach { widthPx =>
           withClue(s"$font at $widthPx px: ") {
@@ -168,7 +168,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   )
 
   private def assertShapedLatinMatchesPerRowMeasurement(font: Font): Assertion =
-    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc) shouldBe true
+    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
     forAll(shapedLatinCorpus) { line =>
       widths.foreach { widthPx =>
         withClue(s"$font at $widthPx px: ") {
@@ -368,7 +368,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   "Grapheme boundaries" should "come from one sweep, matching a scan cluster by cluster" in
     forAll(corpus) { line =>
-      ParagraphMeasurement.graphemeBoundaryOffsets(line).toVector shouldBe LegacyLineMeasurement
+      ParagraphMeasurement.graphemeBoundaryOffsets(line, new BoundaryScratch).toVector shouldBe LegacyLineMeasurement
         .graphemeBoundaryOffsets(line)
     }
 

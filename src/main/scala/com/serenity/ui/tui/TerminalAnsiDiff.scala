@@ -158,12 +158,15 @@ object TerminalAnsiDiff:
     else
       val pen     = frame.styleAt(x, y).sgr
       val advance = if span == CellSpan.Wide then 2 else 1
+      val marks   = frame.marksAt(x, y)
       val _ = appendCodePoint(
         sb.append(CursorMotion.between(pass.cursor, CursorPos(x, y), frame.width))
           .append(SgrState.transition(pass.pen, pen)),
         CellGrid.codePointOf(glyph)
-      )
-      Pass(Some(pen), Some(CursorPos(x + advance, y)), wrote = true)
+      ).append(marks)
+      // A cluster of several codepoints is not advanced alike by every terminal (one counting by codepoints takes an
+      // emoji sequence for several cells), so the cursor is unknown after one and the next cell is addressed absolutely.
+      Pass(Some(pen), Option.when(marks.isEmpty)(CursorPos(x + advance, y)), wrote = true)
 
   private def appendCodePoint(sb: StringBuilder, codePoint: Int): StringBuilder =
     if Character.isBmpCodePoint(codePoint) then sb.append(codePoint.toChar)

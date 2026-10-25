@@ -11,4 +11,13 @@ inConfig(Test)(baseAssemblySettings)
 Test / assembly / assemblyJarName := "serenity-perf.jar"
 Test / assembly / mainClass       := None
 // `baseAssemblySettings` resets the Test-scoped strategy to the plugin default; reuse the main jar's rules instead.
-Test / assembly / assemblyMergeStrategy := (assembly / assemblyMergeStrategy).value
+// The Test classpath also carries jing and epubcheck, which both bundle `com/thaiopensource` with differing
+// `Messages.properties` and `Localizer.class`; either copy will do for the benchmarks.
+Test / assembly / assemblyMergeStrategy := {
+  val main = (assembly / assemblyMergeStrategy).value
+  (path: String) =>
+    path match {
+      case PathList("com", "thaiopensource", _*) => MergeStrategy.first
+      case other                                 => main(other)
+    }
+}
