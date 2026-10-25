@@ -1,9 +1,9 @@
 package com.serenity.ui.sdl
 
 import com.serenity.testkit.SdlNativeTest
-import org.scalatest.{BeforeAndAfterAll, DoNotDiscover}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, DoNotDiscover}
 
 /** The GL half of the binding against the real library. SDL's `offscreen` driver makes an EGL context with no
   * compositor; its `dummy` driver has no GL at all, which is how a machine without one looks. Run with

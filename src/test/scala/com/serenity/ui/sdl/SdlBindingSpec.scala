@@ -3,9 +3,9 @@ package com.serenity.ui.sdl
 import java.lang.foreign.ValueLayout
 
 import com.serenity.testkit.SdlNativeTest
-import org.scalatest.{BeforeAndAfterAll, DoNotDiscover}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.{BeforeAndAfterAll, DoNotDiscover}
 
 /** The binding against the real library, on SDL's `dummy` video driver (no compositor needed). Run with
   * `sbt sdlNativeTest -Dserenity.sdl3.library.path=<directory holding libSDL3.so.0>`.

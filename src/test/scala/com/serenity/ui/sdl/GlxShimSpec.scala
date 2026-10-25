@@ -23,7 +23,14 @@ class GlxShimSpec extends AnyFlatSpec with Matchers:
     GlxShim.candidate(Map(SdlLibrary.PathProperty -> "/opt/serenity/natives"), _ => false) shouldBe None
   }
 
-  "GlxShim.load" should "say what dlopen said when the file is not a library" in {
+  "GlxShim.load" should "refuse, without trying, anywhere but Linux" in {
+    GlxShim.load(Path.of("libserenity-glx-shim.so"), osName = "Windows 11") shouldBe
+      Left(SdlError.Call("GlxShim.load", "the GLX shim is for Linux, not Windows 11"))
+    GlxShim.load(Path.of("libserenity-glx-shim.so"), osName = "Mac OS X").isLeft shouldBe true
+  }
+
+  it should "say what dlopen said when the file is not a library" in {
+    assume(sys.props.get("os.name").exists(_.toLowerCase.contains("linux")), "the shim loads on Linux only")
     GlxShim.load(Path.of("/nonexistent/libserenity-glx-shim.so")) match
       case Left(SdlError.Call("dlopen", message)) => message should include("libserenity-glx-shim.so")
       case other                                  => fail(s"expected a dlopen failure, got $other")

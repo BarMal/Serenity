@@ -36,8 +36,15 @@ object GlxShim:
       }
       .filter(fileExists)
 
-  /** Loads the shim into the global symbol scope. It stays loaded for the life of the process. */
-  def load(shim: Path): Either[SdlError, Unit] =
+  /** Loads the shim into the global symbol scope. It stays loaded for the life of the process. Only Linux has the GLX
+    * dependency and the `dlopen` flag values used here, so anywhere else this is refused rather than attempted.
+    */
+  def load(shim: Path, osName: String = System.getProperty("os.name", "")): Either[SdlError, Unit] =
+    if !osName.toLowerCase.contains("linux") then
+      Left(SdlError.Call("GlxShim.load", s"the GLX shim is for Linux, not $osName"))
+    else loadOnLinux(shim)
+
+  private def loadOnLinux(shim: Path): Either[SdlError, Unit] =
     val linker = Linker.nativeLinker()
     // glibc before 2.34 keeps dlopen in libdl
     val lookups =
