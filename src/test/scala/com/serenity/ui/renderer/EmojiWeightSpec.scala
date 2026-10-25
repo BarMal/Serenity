@@ -56,8 +56,8 @@ class EmojiWeightSpec extends AnyFlatSpec with Matchers:
   private def textStyle(style: Int): TextStyle = if style == Font.BOLD then TextStyle.bold else TextStyle.normal
 
   private def paint(style: Int): BufferedImage =
-    val line    = rowOf(grin, style)
-    val metrics = CellMetrics(charWidth = 8, lineHeight = line.heightPx, ascent = line.ascentPx)
+    val line      = rowOf(grin, style)
+    val metrics   = CellMetrics(charWidth = 8, lineHeight = line.heightPx, ascent = line.ascentPx)
     val reference = ReferenceFrames.over(120, 80, metrics, fontOf(Font.PLAIN), 120, 80)
     val surface   = reference.surface
     surface.setForegroundColor(black)

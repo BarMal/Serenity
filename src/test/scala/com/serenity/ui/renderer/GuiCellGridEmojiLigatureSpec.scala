@@ -41,7 +41,8 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
   private def s(codePoints: Int*): String = String(codePoints.toArray, 0, codePoints.length)
 
   private def painted(text: String, style: TextStyle, primary: Font): BufferedImage =
-    val reference = ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
     val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
@@ -59,7 +60,8 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
     reference.image
 
   private def repainted(text: String, primary: Font): BufferedImage =
-    val reference = ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
     val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)

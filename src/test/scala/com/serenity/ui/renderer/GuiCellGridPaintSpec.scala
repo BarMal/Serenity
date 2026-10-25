@@ -25,7 +25,8 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
 
   /** `text` painted from cell 1 in the foreground `ink` on the red background. */
   private def painted(text: String, ink: RenderColor = black): BufferedImage =
-    val reference = ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, font, 40 * cell, 3 * metrics.lineHeight)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, font, 40 * cell, 3 * metrics.lineHeight)
     val surface = reference.surface
     surface.setForegroundColor(ink)
     surface.setBackgroundColor(white)

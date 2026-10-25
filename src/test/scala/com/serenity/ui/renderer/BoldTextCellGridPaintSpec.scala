@@ -32,7 +32,8 @@ class BoldTextCellGridPaintSpec extends AnyFlatSpec with Matchers:
   )
 
   private def painted(text: String, style: TextStyle): BufferedImage =
-    val reference = ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
     val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
