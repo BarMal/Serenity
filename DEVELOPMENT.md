@@ -316,6 +316,10 @@ not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a v
 GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario
 except the cold full frame and its p95 is better when scrolling and on a page down. The verdict is information about this machine: `auto` no longer depends on it.
 
+The header also records the CPU model, the CPU frequency governor and whether the machine was on AC or battery (`unknown`
+where the platform does not say: Linux reads `/proc/cpuinfo`, cpufreq and `/sys/class/power_supply`; Windows gives only the CPU
+model, macOS the CPU model), so a shift between days can be told from a code change.
+
 ## Codex CLI
 
 Codex CLI is installed in the Codespace image. Start it from the repository root:

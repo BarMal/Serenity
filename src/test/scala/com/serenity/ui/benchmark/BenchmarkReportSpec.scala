@@ -26,6 +26,25 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     text should include("Skia wins")
   }
 
+  it should "state the CPU, its governor and the power source, in the text and the JSON" in {
+    val machine     = environment.copy(machine = MachineState("AMD Ryzen 7 7840U", "powersave", "battery"))
+    val withMachine = BenchmarkReport(machine, results, Verdict.SkiaWins)
+
+    withMachine.markdown should include("AMD Ryzen 7 7840U")
+    withMachine.markdown should include("governor powersave")
+    withMachine.markdown should include("battery")
+    val json = parse(withMachine.json).toOption.get.hcursor.downField("environment")
+    json.downField("cpuModel").as[String] shouldBe Right("AMD Ryzen 7 7840U")
+    json.downField("cpuGovernor").as[String] shouldBe Right("powersave")
+    json.downField("power").as[String] shouldBe Right("battery")
+  }
+
+  it should "say unknown for a machine it could not read" in {
+    report.markdown should include("governor unknown")
+    val json = parse(report.json).toOption.get.hcursor.downField("environment")
+    json.downField("cpuGovernor").as[String] shouldBe Right("unknown")
+  }
+
   it should "name the toolkit, the startup choice, the layer count and what the draws cost" in {
     val draws = LayerDrawStats(
       renders = 330,
