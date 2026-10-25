@@ -1,10 +1,10 @@
 package com.serenity.perf
 
-import com.serenity.{FrameBackend, Java2DFrames}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{ColumnLeft, ColumnRight, DeleteBackward, Enter, InsertChar}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.ColumnPagingFixture
+import com.serenity.{FrameBackend, Java2DFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

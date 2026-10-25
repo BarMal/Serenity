@@ -10,12 +10,12 @@ import com.serenity.config.{AppConfig, StatusLinePlacement, TabStripMode}
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.richtext.RichTextDocument
-import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 
 /** Draws a document through the window's incremental path, one image of a pool at a time, and compares each frame with
   * a cold frame of the same state. The window shows only the rects each frame names, as in

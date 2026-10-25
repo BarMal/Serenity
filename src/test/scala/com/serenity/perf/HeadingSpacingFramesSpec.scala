@@ -8,12 +8,12 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.keystroke.events.{InsertChar, PageDown, PageUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, setCursorPosition}
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
+import com.serenity.{FrameBackend, FramePixels, Java2DFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

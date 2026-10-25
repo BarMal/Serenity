@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import java.awt.image.BufferedImage
 
-import com.serenity.{FrameBackend, Java2DFrames}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{
   DeleteBackward,
@@ -17,6 +16,7 @@ import com.serenity.keystroke.events.{
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.models.AppState
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningOverride, OpeningRules, OpeningSettings}
+import com.serenity.{FrameBackend, Java2DFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

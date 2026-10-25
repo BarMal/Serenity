@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.IO

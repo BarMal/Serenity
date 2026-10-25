@@ -1,6 +1,5 @@
 package com.serenity.perf
 
-import com.serenity.{FrameBackend, Java2DFrames}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{
   DeleteBackward,
@@ -24,6 +23,7 @@ import com.serenity.ui.openings.{
   RaisedRowRule
 }
 import com.serenity.ui.theme.DropCapColour
+import com.serenity.{FrameBackend, Java2DFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
