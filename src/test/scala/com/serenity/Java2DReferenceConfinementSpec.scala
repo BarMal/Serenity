@@ -41,12 +41,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
   private val notYetMoved: Set[String] = Set(
     "CursorPixelAlignmentSpec.scala",
-    "MockRenderSurface.scala",
     "ModalLayerCompositingSpec.scala",
     "RenderSurfaceDrawRunPxSpec.scala",
     "SingleUseFrameSurface.scala",
-    "SummonedChromeFrameSpec.scala",
-    "UiScenarioDriver.scala",
     "perf/CellGridBenchmarks.scala",
     "perf/ChapterGhostRowReuseSpec.scala",
     "perf/ColumnPaneRowReuseSpec.scala",
@@ -69,11 +66,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/layout/RaisedLetterGeometrySpec.scala",
     "ui/renderer/ImePreEditScreenshotSpec.scala",
     "ui/renderer/LigatureFontShapingSpec.scala",
-    "ui/renderer/RenderSurfaceCapabilitiesSpec.scala",
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/SurfaceActivitySpec.scala",
-    "ui/skia/SkiaLayerSurfaceFactorySpec.scala",
-    "ui/theme/TextStyleFontSpec.scala"
+    "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
   )
 
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
