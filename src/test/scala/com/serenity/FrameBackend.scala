@@ -85,6 +85,36 @@ object Java2DFrames extends FrameBackend:
         )
       case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
 
+/** The renderer the pixel specs paint with: a frame and a surface painting into it, read back as an image. */
+object ReferenceFrames:
+
+  final case class Painted(frame: FramePixels, surface: RenderSurface):
+    def image: BufferedImage = frame.toImage
+
+  def over(
+    widthPx: Int,
+    heightPx: Int,
+    metrics: CellMetrics,
+    font: Font,
+    logicalWidthPx: Int,
+    logicalHeightPx: Int,
+    scale: Double = 1.0
+  ): Painted =
+    val frame = SkiaFrames.newFrame(widthPx, heightPx)
+    Painted(
+      frame,
+      SkiaFrames.surfaceOver(
+        frame,
+        metrics,
+        font,
+        logicalWidthPx,
+        logicalHeightPx,
+        scale,
+        persists = false,
+        RenderCaches.create()
+      )
+    )
+
 /** Reading a raster `Surface` back: the CPU pixels, as `0xAARRGGBB` ints, row by row. */
 object SkiaPixels:
 
