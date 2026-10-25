@@ -45,11 +45,11 @@ jobs:
           ref: ${{ inputs.spike_ref }}
           path: spike-src
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -108,7 +108,7 @@ jobs:
             fi
             echo "built by:     $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "build java:   $(java -version 2>&1 | head -n 1)"
-            echo "run with:     any Java 21+ (the jars target Java 21 bytecode)"
+            echo "run with:     Java 25 or later (the jars are built and tested on Java 25)"
             echo
             echo "Artifact zips drop the executable bit, so run scripts through their interpreter (or chmod +x bench/*.sh)."
             echo

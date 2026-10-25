@@ -54,6 +54,8 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/lsp/LspManager.scala",
       "com/serenity/io/StorageLocation.scala",
       "com/serenity/app/instance/InstanceMessenger.scala",
+      // A Unix domain socket to the local compositor, like InstanceMessenger's: no network is involved.
+      "com/serenity/app/WaylandSocket.scala",
       "com/serenity/io/ExternalBrowser.scala",
       "com/serenity/io/ReleasesPage.scala",
       "com/serenity/state/manager/ReleasesPageEffect.scala",
