@@ -14,13 +14,13 @@ is rebuilt from `master` every night (04:43 UTC) and marked as a pre-release; us
 | `Serenity-linux-x64.zip` | App image for Linux. Unzip it and run `Serenity/bin/Serenity`. |
 | `Serenity-windows-x64.zip` | App image for Windows. Unzip it and run `Serenity\Serenity.exe`. |
 | `Serenity-macos-arm64.zip` | `Serenity.app` for Apple silicon Macs. Unzip it and open it. |
-| `Serenity.jar` | Runnable jar for any OS with Java 21 or later: `java -jar Serenity.jar`. |
+| `Serenity.jar` | Runnable jar for any OS with Java 25 or later: `java -jar Serenity.jar`. |
 
 The app images carry their own Java runtime.
 
 ### From source
 
-Install JDK 21 and [sbt](https://www.scala-sbt.org/), then from a checkout:
+Install JDK 25 and [sbt](https://www.scala-sbt.org/), then from a checkout:
 
 ```bash
 sbt run                    # start the editor
