@@ -256,9 +256,18 @@ jobs:
           cc -I "${{ steps.sdl3.outputs.directory }}/include" -o "$RUNNER_TEMP/sdl3-layout" ci/sdl3/layout.c
           "$RUNNER_TEMP/sdl3-layout" | diff -u src/test/resources/sdl3/layout.txt -
 
-      # `sbt test` excludes these specs (they load the library built above, on SDL's dummy video driver).
+      # The GL specs run on SDL's offscreen driver, which makes an EGL context from Mesa's software rasteriser.
+      - name: Install Mesa EGL for the GL specs
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1-mesa-dri libgles2 sway
+
+      # `sbt test` excludes these specs (they load the library built above, on SDL's dummy and offscreen drivers).
       - name: Run the SDL native specs
         run: sbt -v -Dserenity.sdl3.library.path="${{ steps.sdl3.outputs.directory }}" sdlNativeTest
+
+      # The same specs again with a Wayland compositor present (headless sway), so the GL window host also opens on a
+      # real Wayland surface instead of canceling that spec.
+      - name: Run the SDL native specs on a headless Wayland compositor
+        run: ci/sdl3/with-sway.sh sbt -v -Dserenity.sdl3.library.path="${{ steps.sdl3.outputs.directory }}" sdlNativeTest
 
   perf:
     # The 2x entry runs the suite on a HiDPI virtual display with Java2D at 2x, matching the target laptop, so Swing's
