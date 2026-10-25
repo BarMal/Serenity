@@ -73,7 +73,7 @@ private[perf] object EreaderTypingBenchmarks:
       typingBenchmark("laptop.render.typing_frame_2x.ereader_railed_ghosts", ghostedStateManager(config)) ::
       typingBenchmark("laptop.render.typing_frame_2x.chapter_ghosts", ghostedStateManager(singleColumnConfig)) :: Nil
 
-  private def typingBenchmark(name: String, stateManager: StateManager)(using
+  private[perf] def typingBenchmark(name: String, stateManager: StateManager)(using
     IORuntime
   ): BenchmarkRunner.Benchmark =
     val (before, after) = TypingTransition.of(stateManager)

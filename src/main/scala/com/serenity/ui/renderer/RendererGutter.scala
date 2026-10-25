@@ -151,17 +151,21 @@ object RendererGutter:
     // of it. The neighbours' markers are drawn again below, as the divider paints over them.
     val dividerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
     surface.setBackgroundColor(state.persisted.theme.panelBorder)
-    if kept.isEmpty then surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
-    else
-      val divider = toPixels(LayoutRect(dividerX, lineRect.y, 1, lineRect.height))
-      repainted
-        .flatMap(rect =>
+    val dividerRepaints =
+      if kept.isEmpty then Nil
+      else
+        val divider = toPixels(LayoutRect(dividerX, lineRect.y, 1, lineRect.height))
+        repainted.flatMap(rect =>
           divider.intersection(rect.copy(yPx = rect.yPx - InkSpillPx, heightPx = rect.heightPx + 2 * InkSpillPx))
         )
-        .foreach(fillPixelRect(surface, _))
+    if kept.isEmpty then surface.fillRect(dividerX, lineRect.y, 1, lineRect.height, ' ')
+    else dividerRepaints.foreach(fillPixelRect(surface, _))
     surface.setBackgroundColor(background)
 
-    diagnosticRows.foreach(renderDiagnosticIndicator(surface, lineRect, _, state, dividerOnLeft))
+    // A marker the divider did not paint over is still on a persisting surface, as the digits beside it are.
+    diagnosticRows
+      .filter(marker => kept.isEmpty || dividerRepaints.exists(_.intersection(marker.bandPx).isDefined))
+      .foreach(renderDiagnosticIndicator(surface, lineRect, _, state, dividerOnLeft))
 
   /** The bands of `lineRect` whose rows `rows` leaves alone, each reaching the inset past the counter on both sides: a
     * measured label is drawn shifted by that much and fills its background there.
@@ -359,7 +363,16 @@ object RendererGutter:
         annotation <- renderPlan.annotations.get(bufferId).toList
         diagnostics = annotation.diagnosticsByLine.getOrElse(visualLine.bufferLine, Nil)
         if diagnostics.nonEmpty
-      yield DiagnosticMarker(rowY, Option.when(measuredFont.isDefined)(lineTopPx), diagnostics)
+      yield
+        val top     = if measuredFont.isDefined then lineTopPx else context.cellMetrics.toPixelY(rowY)
+        val height  = if measuredFont.isDefined then snapshot.lineHeightPx else context.cellMetrics.lineHeight
+        val markerX = if dividerOnLeft then lineRect.x else lineRect.x + lineRect.width - 1
+        DiagnosticMarker(
+          rowY,
+          Option.when(measuredFont.isDefined)(lineTopPx),
+          PixelRect(context.cellMetrics.toPixelX(markerX), top, context.cellMetrics.charWidth, height),
+          diagnostics
+        )
     else Nil
 
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
@@ -424,6 +437,7 @@ object RendererGutter:
   final private case class DiagnosticMarker(
       rowY: Int,
       lineTopPx: Option[Int],
+      bandPx: PixelRect,
       diagnostics: List[com.serenity.lsp.model.Diagnostic]
   )
 
