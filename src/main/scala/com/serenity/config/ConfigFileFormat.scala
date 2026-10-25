@@ -385,6 +385,15 @@ object ConfigFileFormat:
     comment("Java2D; xwayland switches to the X11 toolkit so Skia's GPU layer can run."),
     comment("SERENITY_WAYLAND_RENDER overrides this. Needs a restart."),
     field("ui.render.wayland"),
+    comment(
+      "Make Skia's GPU layer wait for the display's vertical blank before it presents a frame. Off by default: it"
+    ),
+    comment(
+      "adds a few milliseconds of latency, and compositors (Hyprland, GNOME, Windows, macOS) do not tear without it."
+    ),
+    comment("Turn it on if you see tearing, for example on X11 without a compositor. SKIKO_VSYNC_ENABLED or"),
+    comment("-Dskiko.vsync.enabled beat this. Needs a restart."),
+    field("ui.render.skia_vsync"),
     comment("Per-cache capacity for the renderer's bounded frame-state caches (issue #1433). Default 64 suits a"),
     comment("single window; raise it for a session with many concurrently open surfaces."),
     field("ui.render.cache_capacity"),

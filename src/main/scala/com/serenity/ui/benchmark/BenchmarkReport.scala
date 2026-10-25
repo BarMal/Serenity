@@ -45,7 +45,8 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
   private def environmentLine: String =
     val api = environment.skiaRenderApi.fold(cause => s"Skia layer unavailable ($cause)", identity)
     s"Window ${environment.widthPx}x${environment.heightPx}, scale ${environment.deviceScale}, Skia render API $api, " +
-      s"toolkit ${environment.toolkit}, ${environment.os}, ${environment.java}."
+      s"toolkit ${environment.toolkit}, ${environment.os}, ${environment.java}.\n\n" +
+      s"Machine: ${environment.machine.cpuModel}, governor ${environment.machine.cpuGovernor}, power ${environment.machine.power}."
 
   private def launchLines: List[String] =
     val startup = Option.when(environment.startup.nonEmpty)(s"Launch: ${environment.startup}.")
@@ -154,6 +155,9 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         "startup"        -> environment.startup.asJson,
         "refreshHz"      -> environment.refresh.hz.asJson,
         "refreshAssumed" -> environment.refresh.assumed.asJson,
+        "cpuModel"       -> environment.machine.cpuModel.asJson,
+        "cpuGovernor"    -> environment.machine.cpuGovernor.asJson,
+        "power"          -> environment.machine.power.asJson,
         api
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++

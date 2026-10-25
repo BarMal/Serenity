@@ -411,27 +411,33 @@ final class SkiaRenderSurface(
 
   /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. The source is snapshotted
     * before anything is drawn, so an overlapping copy reads every source pixel as it was. A clip in force (inside
-    * [[withRectClip]]) still bounds the copy, which Java2D's raw graphics would ignore.
+    * [[withRectClip]]) still bounds the copy, which Java2D's raw graphics would ignore. A source that reaches past the
+    * surface (a row's rect starts a pixel left of it where a glyph overhangs) copies only the part inside, to where
+    * that part belongs: a snapshot is cut to the surface, so drawing it at the rect's own corner would move it
+    * sideways.
     */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
     retainedSurface.foreach { surface =>
-      val left   = math.round(from.xPx * deviceScaleX).toInt
-      val top    = math.round(from.yPx * deviceScaleY).toInt
-      val width  = math.round(from.widthPx * deviceScaleX).toInt
-      val height = math.round(from.heightPx * deviceScaleY).toInt
-      val moved  = math.round(dyPx * deviceScaleY).toInt
-      val snap   = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
-      val saved  = canvas.save()
-      try
-        val _ = canvas.resetMatrix()
-        fill.setBlendMode(BlendMode.SRC)
-        fill.setColor(OpaqueBlack)
-        val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
-        fill.setBlendMode(BlendMode.SRC_OVER)
-      finally
-        restoreTo(saved)
-        snap.close()
+      val left = math.round(from.xPx * deviceScaleX).toInt.max(0)
+      val top  = math.round(from.yPx * deviceScaleY).toInt.max(0)
+      val right =
+        (math.round(from.xPx * deviceScaleX) + math.round(from.widthPx * deviceScaleX)).toInt.min(surface.getWidth)
+      val bottom =
+        (math.round(from.yPx * deviceScaleY) + math.round(from.heightPx * deviceScaleY)).toInt.min(surface.getHeight)
+      val moved = math.round(dyPx * deviceScaleY).toInt
+      if right > left && bottom > top then
+        val snap  = surface.makeImageSnapshot(IRect.Companion.makeLTRB(left, top, right, bottom))
+        val saved = canvas.save()
+        try
+          val _ = canvas.resetMatrix()
+          fill.setBlendMode(BlendMode.SRC)
+          fill.setColor(OpaqueBlack)
+          val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
+          fill.setBlendMode(BlendMode.SRC_OVER)
+        finally
+          restoreTo(saved)
+          snap.close()
     }
 
   def hideCursor(): Unit = ()

@@ -6,7 +6,7 @@ import com.serenity.ui.terminal.LayerDrawStats
   * layer could not be made at all. `toolkit` is the AWT toolkit class that drew and `startup` the launch's toolkit and
   * renderer choice; `skiaLayers` is how many layers the Skia window ended with (more than one makes every figure
   * unusable) and `skiaDraws` what the layer's draws cost. `refresh` is the display's rate, the unit of the frame
-  * counts.
+  * counts. `machine` is the CPU, governor and power source the figures were taken under.
   */
 final case class BenchmarkEnvironment(
     os: String,
@@ -20,7 +20,8 @@ final case class BenchmarkEnvironment(
     skiaLayers: Option[Int] = None,
     skiaDraws: Option[LayerDrawStats] = None,
     refresh: RefreshRate = RefreshRate.Assumed60,
-    rasterNote: Option[String] = Some("no raster arm was asked for")
+    rasterNote: Option[String] = Some("no raster arm was asked for"),
+    machine: MachineState = MachineState.Unknown
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")

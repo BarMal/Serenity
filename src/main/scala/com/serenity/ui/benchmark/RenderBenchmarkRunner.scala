@@ -90,7 +90,8 @@ object RenderBenchmarkRunner:
       skiaLayers = measuredSkia.flatMap(_.layers),
       skiaDraws = measuredSkia.flatMap(_.draws),
       refresh = refresh,
-      rasterNote = raster.left.toOption
+      rasterNote = raster.left.toOption,
+      machine = MachineState.current
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
