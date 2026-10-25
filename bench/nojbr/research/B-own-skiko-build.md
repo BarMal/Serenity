@@ -1,0 +1,118 @@
+# Research B: owning a Skiko native build (EGL, no GLX, Vulkan, cost)
+
+Labels: [read] = read in a file/URL (cited), [measured] = I ran it, [inferred] = my reasoning (reason given).
+Snapshot: Skiko master 16bca5be (2026-10-23, 1317 commits), JetBrains/skia branch `skiko` 0eb449140d (2026-10-12), skia-pack main (archived), Serenity branch ccr-157ed55f-... .
+Access: raw.githubusercontent.com returned 200 for files at the repo root of Skiko but 404 for guessed buildSrc paths, and the GitHub MCP is limited to BarMal/Serenity, so I used `git clone --filter=blob:none` of github.com/JetBrains/{skiko,skia,skia-pack} (works from this sandbox) [measured]. Citations are repo paths at the commits above; raw form is `https://raw.githubusercontent.com/JetBrains/skiko/16bca5bed16bb926b6ae62c0a3fd937a7a159690/<path>`. I did not open them as raw URLs [measured: I read the clone, not raw].
+
+## 0. Most important finding: Serenity already owns this build
+
+- [read] `ci/skiko/build-natives.sh`, `ci/skiko/pins.env` (SKIA_TAG=m153-e63f5d6129, SKIKO_TAG=v0.153.0), `ci/skiko/natives-version.env` (0.153.0-dngfree.2), `.github/workflows/skiko-natives.yml` (4 runner groups, publish to `skiko-maven` branch served by GitHub Pages, build-provenance attestation, lines ~370-406).
+- [read] 4 patches: `skia-no-dng.patch` (12 lines, adds `skia_use_dng_sdk=false`, `skia_use_piex=false` to Skia's build.py), `skiko-no-dng.patch` (10), `skiko-coordinates.patch` (12, groupId `io.github.barmal`), `skiko-read-pixels-into.patch` (32).
+- [read] Reason it exists: the Adobe DNG SDK licence conflicts with GPLv3 (`DEVELOPMENT.md` "DNG-free Skiko natives", ~line 50-53). So the question is not "should we start owning a build" but "is another patch worth it on a pipeline that is already paid for".
+- [read] Issue #2381 (BarMal/Serenity, via GitHub MCP, state closed) records: the PR run was "probably a cold Skia build for every target (about an hour; macOS about 47 minutes in the earlier runs)"; Pages had to be enabled by the owner; `NATIVES_VERSION` is bumped per patch/pin change.
+- [measured] `skiko-maven` branch has exactly 1 commit ("Add the DNG-free Skiko natives 5a7358f556"), version `0.153.0-dngfree.1`; the six runtime jars are 8.34 MB (linux-x64), 8.22 (linux-arm64), 13.06 (macos-arm64), 6.67 (macos-x64), 8.14 (windows-x64), 7.41 (windows-arm64) = 51.8 MB per version (git ls-tree -l). `dngfree.2` is not on that branch yet.
+- [measured] Serenity is 3 minors behind: pins.env says v0.153.0, upstream tags go to v0.156.1 (2026-10-23).
+- [measured] Repo visibility: `gh api repos/BarMal/Serenity` -> public.
+
+## 1. How the Skiko Linux native is built
+
+### 1.1 Two stages: Skia static libs (prebuilt zip) + Skiko JNI shared lib
+- [read] Skiko does not build Skia by default. `skiko/buildSrc/.../context/SkikoProjectContext.kt:108-135` (`declareSkiaTasks`) downloads `https://github.com/JetBrains/skia/releases/download/<tag>/Skia-<tag>-<os>-<buildType>-<arch>.zip` for linux/macos/windows x {arm64,x64} (plus android, ios, tvos, wasm). The tag is `dependencies.skia=m156-6416302ae5` in `skiko/gradle.properties:16` (master); `m153-e63f5d6129` at v0.153.0 [measured: `git show v0.153.0:skiko/gradle.properties`].
+- [read] Overrides: per-platform `dependencies.skia.linux-x64` etc. (`gradle.properties:19-35`), or `-Pskia.dir` / `SKIA_DIR` for a local Skia dir (`DEVELOPMENT.md` "Working with Skia sources"), or `prepareLocalSkiaBuild` (`skiko/build.gradle.kts:554-572`, `BuildLocalSkiaTask.kt`) which runs the Skia fork's `tools/skia_release/{build,archive}.py`.
+- [read] The Skia zips come from `JetBrains/skia` branch `skiko`: `.github/workflows/build_for_skiko.yml` + `tools/skia_release/build.py`. The older `JetBrains/skia-pack` repo is archived: its README says "Archived. The active Skiko prebuilts workflow now lives in JetBrains/skia" and the only commit is "Prepare repository for archival (#80)" (2026-03-25) [read + measured via git log]. Anything online that points at skia-pack is stale.
+- [read] Skia is a rebased fork: skia-pack README "Rebase `skiko` branch in Skia fork repository on [the chrome/mXXX] commit and force push".
+- [read] Skiko stage: C++ JNI sources `src/commonMain/cpp/common`, `src/jvmMain/cpp/common`, `src/awtMain/cpp/common`, `src/awtMain/cpp/<os>` are compiled and linked with the Skia `.a` files (`JvmTasksConfiguration.kt:222-228`). Compiler: `g++` on Linux x64 (`utils/properties.kt:46-53`, with a "TODO: Use clang++ for all Linux targets"), `clang-cl.exe` on Windows, `clang++` on macOS. Linux link flags `-shared -static-libgcc -Wl,-z,relro,-z,now -Wl,--gc-sections` (`JvmTasksConfiguration.kt:~526-540`). `-z now` matters below: every undefined symbol must resolve when the library loads.
+- [read] Linux then runs `tools/sealer-x64` / `sealer-arm64` (prebuilt binaries in the Skiko repo, 885 KB / 625 KB [measured]) on the .so "to run on wider set of platforms" (`JvmTasksConfiguration.kt:~699-707`); source is a separate project (olonho/sealer, referenced in the comment, not inspected).
+
+### 1.2 Where GLX/X11/libGL come from (two independent sources)
+1. Skia side: `JetBrains/skia` `BUILD.gn:1001-1019` and `1134-1150`: an if/else-if chain `is_android` -> `skia_use_egl` -> `skia_use_webgl` -> `is_linux && skia_use_x11` -> `is_mac`... picks exactly one native GL interface. EGL branch compiles `src/gpu/ganesh/gl/egl/GrGLMakeEGLInterface.cpp` + `GrGLMakeNativeInterface_egl.cpp` and links `EGL`; the X11 branch compiles `glx/GrGLMakeGLXInterface.cpp` + `GrGLMakeNativeInterface_glx.cpp` and links `GL`. Defaults: `gn/skia.gni:53` `skia_use_egl = false`, `gn/skia.gni:103` `skia_use_x11 = is_linux`. So the stock x64 Skia zip has GLX and no EGL; they are mutually exclusive in one build [read].
+2. Skiko side: `skiko/build.gradle.kts:149-150` (master; same at v0.153.0 lines 99-100 [measured]):
+   `dynamicSystemLibs("GL", "X11", "fontconfig")` then `arm64 { dynamicSystemLibs("EGL") }`. Also `src/awtMain/cpp/linux/{renderer,drawlayer,awt,swingRenderer}.cc` include `<GL/glx.h>`, `<X11/Xlib.h>` and call `glXGetProcAddress`, `XQueryTree`, etc. (`renderer.cc:3-33`, `drawlayer.cc:3,12,26-36`, `awt.cc:3-24`) [read].
+- [read] Why `makeGL()` fails on EGL: `DirectContext.cc:8-10` `_nMakeGL` calls `GrDirectContexts::MakeGL()` (no interface) -> `GrGLMakeNativeInterface()` -> in the GLX build `GrGLInterfaces::MakeGLX()`, `GrGLMakeGLXInterface.cpp:33-37`: `if (nullptr == glXGetCurrentContext()) return nullptr;`. This is exactly your measured shim point.
+- [read] Why `makeGLWithInterface` works: `src/jvmMain/cpp/common/DirectContext.cc:13-16` takes a `GrGLInterface*`; `GLAssembledInterface.cc:6-10` wraps `GrGLMakeAssembledInterface(ctx, f)`. Skiko itself uses this exact path for ANGLE on Windows (`AngleRenderer.kt:97-98`). So your route is the same one upstream uses for non-native GL, not a hack [read].
+
+### 1.3 Is EGL already compiled in anywhere?
+- [read] Linux arm64 only. `JetBrains/skia` `tools/skia_release/build.py:178-193`: for `machine == 'arm64'` it passes `skia_gl_standard="gles"`, `skia_use_egl=true`, `-mno-outline-atomics`; x64 passes neither. And Skiko adds `-lEGL` only for arm64 (`build.gradle.kts:150`). So the upstream arm64 Linux native already resolves `makeGL()` through `eglGetProcAddress` (`GrGLMakeEGLInterface.cpp:17-24`: statically resolves GL core names, else `eglGetProcAddress`; no current-context check). [inferred] that `makeGL()` therefore works on EGL on linux-arm64 upstream today; I did not run it (no arm64 box).
+- [read] Android: `GLESv3`, `EGL` (`build.gradle.kts:156`). Not relevant.
+
+### 1.4 The build-flag change, concretely
+- Minimal EGL on x64 (two lines, [inferred] to be sufficient, not tried):
+  - Skia patch `tools/skia_release/build.py` x64 branch (line ~189): add `'skia_use_egl=true'` (leave `skia_gl_standard` unset so Skia keeps run-time GL/GLES detection; arm64's `"gles"` sets `SK_ASSUME_GL_ES=1` at `BUILD.gn:44-45`, which would be wrong for a desktop-GL context [inferred]).
+  - Skiko patch `build.gradle.kts:150`: move `-lEGL` out of the `arm64 { }` block so it applies to x64.
+  - Side effect [inferred, from 1.2]: the same libskiko can no longer create a Skia GL interface from a GLX context via `makeGL()`: Skiko's own `AbstractOpenGLRenderer.kt:54`, `LinuxOpenGLSwingRenderer.kt:67`, `OpenGLOffscreenContext.kt:43` all call `DirectContext.makeGL()` on GLX contexts. If Serenity keeps any AWT/GLX fallback path, it would break. If Serenity is SDL-only, it does not matter.
+- Dropping `libGL.so.1`/`libX11` from the load-time dependencies is NOT one flag [inferred]:
+  - remove `"GL", "X11"` from `build.gradle.kts:149`;
+  - stop compiling `src/awtMain/cpp/linux/*` (or stub the GLX/X11 callers), because `-z now` (1.1) makes an unresolved `glX*`/`X*` symbol a load failure;
+  - EGL-built `libskia.a` still references GLES2 core entry points (`GrGLMakeEGLInterface.cpp:15-16` includes `<GLES2/gl2.h>`; `GR_GL_CORE_FUNCTIONS_EACH` at line 19-20), so the link needs `-lGLESv2` (or libOpenGL) instead of `-lGL`; Skia's own `BUILD.gn:2464-2466` adds `GLESv2` for `is_linux && skia_use_egl`. Different symbol sets, not tried.
+  - I could not find a supported "JNI core without AWT" switch for Linux (`skiko.awt.enabled=false` disables the JVM/AWT target entirely, `gradle.properties` plus `build.gradle.kts` sources list); a source-list patch is needed [inferred].
+- Dropping GLX from the Skia static lib is the easy half; dropping it from Skiko's own AWT sources is the hard half.
+
+### 1.5 Vulkan: upstream, not an own-build feature
+- [read] `DirectContext.makeVulkan` and `BackendRenderTarget.makeVulkan` exist in the Kotlin API in v0.154.0, v0.155.0, v0.156.0 and master, absent at v0.153.0 [measured: `git show vX:skiko/src/commonMain/kotlin/org/jetbrains/skia/DirectContext.kt | grep -c makeVulkan` = 0 / 1 / 1 / 1]. Introduced by commit 6f5dbdb7 "Implement support for Skia's Vulkan backend (#1201)" (dated 2026-09-30 in `git log`).
+- [read] Native side: `CommonTasksConfiguration.kt:~104-143` defines `-DSK_VULKAN` for Linux, Windows, macOS, Android; `DirectContext.cc:~45` implements `_nMakeVulkan` under `#ifdef SK_VULKAN`. Skia side: `build.py:179` `skia_use_vulkan=true` for Linux (also macOS line 155, Windows 198).
+- Consequence [inferred]: Vulkan needs Serenity to move from 0.153.0 to >= 0.154.0, which the existing pipeline does (bump `pins.env`, re-check four patches). It does not need a new native build capability. Whether Vulkan works in practice on Wayland (surface creation, swapchain via SDL3) is untested by me; Skiko's `VulkanInteropTest.jvm.kt` only checks argument validation (lines 12-30).
+
+## 2. Cost of owning the build (the incremental cost, since it exists)
+
+### 2.1 Toolchains per platform (as Serenity's pipeline and upstream do it)
+| Target | Skia build | Skiko build | Source |
+|---|---|---|---|
+| Linux x64 | ubuntu:20.04 container, gcc-10/g++-10, ninja, python3.9, binutils 2.26 | Skiko's Amazon Linux 2 image (`skiko/docker/linux-compat/Dockerfile`: gcc10, mesa-libGL/EGL/GLU, libX11, Xrandr, vulkan-devel, Corretto 21) so the .so keeps glibc 2.26 compatibility | [read] `build_for_skiko.yml:98-125`, `prepare_linux.sh`, Dockerfile, `skiko-natives.yml:65-70` |
+| Linux arm64 | native `ubuntu-24.04-arm` runner, arm64v8/ubuntu:20.04 in docker, `prepare_linux_arm.sh` | same compat image, native arm64 runner ("cross-compilation on x64 fails", `publish-dry-run.yml:~152`) | [read] |
+| macOS x64+arm64 | `macos-15` runner, Xcode, `-mmacosx-version-min=10.13` (x64), `-stdlib=libc++`, Metal (+Vulkan flag) | same runner, `brew install llvm` (Serenity workflow line ~207 "Install LLVM, as Skiko's own workflow does") | [read] `build.py:153-177`, `DEVELOPMENT.md` |
+| Windows x64+arm64 | `windows-2022`, MSVC dev cmd + msbuild, clang-cl (LLVM) via msys2, Python 3.9; arm64 is cross-compiled on the x64 runner with `/clang:--target=arm64-windows` | same runner; Skiko needs `SKIKO_VSBT_PATH` (VS Build Tools 2022) and clang-cl on PATH | [read] `build_for_skiko.yml:227-262`, `JvmTasksConfiguration.kt:~275`, `DEVELOPMENT.md` |
+- Skiko requires JDK 17+ for Gradle (`JvmTasksConfiguration.kt:~213`) and CI uses Corretto 21 [read]. Skia needs git-sync-deps network fetches (ICU, harfbuzz, freetype, ...) every cold build (`build.py:12-32` retries 3x) [read].
+- A Skia source build IS needed for Serenity only because of the DNG patch. For an EGL-only change the Skia zip also has to be rebuilt (the GL native interface is compiled into `libskia.a`), so Linux Skia would be rebuilt anyway [inferred from BUILD.gn chain]. macOS/Windows Skia need not change for EGL: they would reuse the cache (cache key = pins.env + the Skia patch; a new Linux-only Skia patch would invalidate the key for all targets unless the key is made per-OS) [inferred from `DEVELOPMENT.md` "The Skia cache key follows `pins.env` and the Skia patch only"].
+
+### 2.2 CI time (public repo; runner minutes are free for public repos, [inferred] general GitHub policy, not verified here)
+- [read] Serenity docs: warm run (Skia cached) about 10 minutes; cold run roughly 20 minutes on Linux, 50 on macOS and Windows (`DEVELOPMENT.md` ~line 62-64). #2381 body quotes about an hour wall time for a cold full run, macOS ~47 min.
+- [read] Per-step timeouts in `skiko-natives.yml`: Skia build 240 min, Skiko jars 90 min, image 45 min, job 360 min (upper bounds, not durations).
+- Summed machine time for one cold full rebuild [inferred from the two figures above]: Linux x64 ~20 + arm64 ~20 + macOS ~50 + Windows ~50 = ~140 runner-minutes, ~1 h wall. Warm: ~10 min per group, ~40 runner-minutes.
+- Upstream Skiko CI for comparison: tests on macos-15/-latest, ubuntu-24.04, ubuntu-24.04-arm, windows-2022 (`tests.yml`), publish dry-run on the same runners (`publish-dry-run.yml`); the real release is on JetBrains' internal TeamCity, "Skiko_PublishRelease" (`skiko/RELEASE.md:1-12`). Anything TeamCity-specific (macOS codesign client, `signHost`) is skipped in our build [read].
+
+### 2.3 Artefact size and hosting
+- [measured] Upstream Skia input zips (m153, Release): linux-x64 43.6 MB, linux-arm64 43.6, macos-x64 42.2, macos-arm64 40.2, windows-x64 58.7, windows-arm64 55.5 (HEAD of github.com/JetBrains/skia/releases/download/m153-e63f5d6129/...).
+- [measured] Upstream runtime jars at 0.153.0 from repo1.maven.org: linux-x64 8,705,431 B, linux-arm64 8,575,692, macos-arm64 13,692,395. The macos-x64, windows-x64, windows-arm64 URLs of the form `skiko-awt-runtime-<os>-<arch>-0.153.0.jar` returned 404 (and some responses were 429), so I do not have those sizes and I do not know their real artefact names.
+- [measured] Our six jars total 51.8 MB per version (section 0). The `skiko-maven` branch stores them as plain git blobs, so the branch grows by ~52 MB per published version and never shrinks unless it is re-created [inferred from the publish script: it commits on top of the previous tip, `skiko-natives.yml:~395-406`].
+- Hosting options [all inferred from general knowledge, not checked in this sandbox]: (a) current: GitHub Pages from branch `skiko-maven` (works, free, but GitHub documents soft limits on site size and bandwidth, so repo bloat/bandwidth should be watched); (b) GitHub Releases assets plus a resolver script (no Maven metadata); (c) GitHub Packages Maven (requires an auth token even for public reads, awkward for contributors); (d) Maven Central under `io.github.barmal` (needs namespace verification, GPG, Sonatype process; strongest for downstream consumers; makes users trust our binaries as `io.github.barmal` rather than JetBrains).
+- Attestation exists (`actions/attest-build-provenance@v2`, `skiko-natives.yml:~385`) [read], good for the "not JetBrains' binaries" provenance story.
+
+### 2.4 Tracking Skiko releases
+- [measured, `git for-each-ref refs/tags`] Non-pre-release tags per year: 2023: 40, 2024: 31, 2025: 37, 2026 (to Oct 25): 35. Since 2026-02-18 the version number follows the Skia milestone (v0.144.0 ... v0.156.1): 13 minor lines in ~8 months, i.e. a new line roughly every 3 weeks, plus patch releases (v0.153.0 2026-09-23, v0.154.0 10-05, v0.155.0 10-09, v0.156.0 10-12, v0.156.1 10-23). Before that the line was 0.9.x. Release branches exist (`release/0.144`, `release/0.150`, `release/0.156`) [measured via ls-remote].
+- [measured] JetBrains/skia has tags for m144 through m156 (1-4 tags each); 49 branches.
+- Per-bump chores [inferred from ci/skiko and DEVELOPMENT.md steps 1-4]: edit pins, check 4 patches apply (`git apply --check`), bump `NATIVES_VERSION`, PR run, manual publish run, update Serenity's consumer version. Patch rot risk: I ran `git apply --check` of the Serenity patches against Skiko master 16bca5be [measured]: `skiko-no-dng.patch` and `skiko-read-pixels-into.patch` apply cleanly; `skiko-coordinates.patch` FAILS because Skiko moved `publishing.kt` to `skiko/buildSrc/src/main/kotlin/org/jetbrains/skiko/build/publishing/publishing.kt`. So one of three Skiko patches already needs rework for the next bump (the Skia DNG patch was not checked against newer Skia). That is the real per-bump cost, and an EGL hunk in `build.gradle.kts` would sit next to the DNG hunk that already touches that file's dependency block.
+- If Serenity skips milestones, security-relevant fixes in the bundled codecs (libpng, libjpeg-turbo, libwebp, freetype, harfbuzz, ICU, zlib are built from source into the Skia zip: `build.py:97-105` `skia_use_system_*=false`) arrive only when we rebuild [inferred - this is a general consequence, not a documented Skiko statement]. Our pinned 0.153.0 is already 3 lines behind.
+
+## 3. Licence and governance
+- [read] Skiko: Apache-2.0 (`LICENSE` first lines "Apache License Version 2.0"); `NOTICE` records Android Open Source Project code. Skia fork: `JetBrains/skia/LICENSE` is the BSD-style Google licence ("Copyright (c) 2011 Google Inc.", clause "Neither the name ..." present, so BSD-3-Clause form). skia-pack: Apache-2.0.
+- [read] Ownership: github.com/JetBrains/skiko and /skia (Skia is a JetBrains fork of google/skia), skia-pack README carries the "internal JetBrains project" badge. Release signing and publishing run on JetBrains infra (TeamCity, `RELEASE.md`, `downloadCodeSignClient` from `codesign-distribution.labs.jb.gg`, `JvmTasksConfiguration.kt:~665-675`). We cannot reproduce JetBrains' macOS signing; our macOS jars are unsigned/ad-hoc [inferred from the TeamCity-only gating `isTeamcityCIBuild`]. Whether unsigned dylibs extracted from a jar load without Gatekeeper trouble on macOS 15 is untested by me.
+- [measured] Bus factor, last 12 months (since 2025-10-25) on Skiko master: 188 commits, 31 distinct author names; top 3 authors (Hubert Blaszczyk 47, Ivan Matkov 44, Alexander Maryanovsky 26) = 117/188 = 62%; 75 commits in the last 3 months. Commit email domains: 68 users.noreply.github.com, 66 jetbrains.com, 48 gmail.com, 5 composevisualdesigner.com, 1 macrofocus.com (JetBrains share not derivable from this: noreply/gmail authors may be employees) [measured]. 84 distinct authors over the repo lifetime.
+- Governance reading [inferred]: a single vendor drives both Skiko and the Skia fork, and its primary consumer is Compose Multiplatform. Linux x64 desktop with EGL/Wayland is not a priority upstream (the x64 pack has no EGL while arm64 does, `build.py:178-193`, plausibly because Android-class devices need EGL). Upstream PRs would be our route for a permanent fix; I did not search Skiko's issue tracker (api.github.com blocked) [not verified].
+
+## 4. Verdict
+
+### What an own EGL/no-GLX build buys over `makeGLWithInterface`
+1. `DirectContext.makeGL()` works on EGL with no upcall glue. Value: removes roughly a small FFM upcall wrapper (you wrote it already, and it works) [inferred].
+2. Possibly drop `libGL.so.1`/`libX11.so.6` from the load-time deps on a Wayland-only box. Cost is the non-trivial part (1.4: awt Linux sources, GLESv2 vs GL). Value only if real users lack those libraries [inferred]; I have no evidence that they do (libglvnd's libGL.so.1 ships with Mesa on mainstream distros, from general knowledge, not checked).
+3. Vulkan: no, not from an own build; it comes from upgrading Skiko to >= 0.154.0 (section 1.5).
+4. Independence from JetBrains' release cadence: already achieved by the existing pipeline (we publish under our coordinates); an EGL patch adds no more.
+
+### What it costs (incremental)
+- 2-line Skia+Skiko patch for EGL-on-x64 (section 1.4) is cheap to write. Real cost is: (a) Linux Skia rebuild (~20 min cold), (b) the cache key splitting by OS or a full 4-group Skia rebuild, (c) losing GLX `makeGL()` for any remaining AWT/GLX path, (d) another patch to re-check on every Skiko line (~every 3 weeks upstream; the existing `skiko-coordinates.patch` already fails `git apply --check` on master [measured]), (e) the true libGL/libX11 removal is a bigger, unproven patch, (f) 52 MB per published version on the Pages branch.
+- Everything else (toolchains, runners, attestation, Pages) is already sunk.
+
+### Recommendation
+1. Keep `makeGLWithInterface` + `SDL_GL_GetProcAddress` upcall. It needs no native change, is the path Skiko itself uses for ANGLE, and works on EGL today [measured by you, read for Skiko's own use].
+2. Do not add an EGL/GLX patch to the pipeline now. Revisit only if (i) a user hits a missing libGL.so.1/libX11 on Wayland-only systems, or (ii) you drop AWT entirely and want to shed the AWT Linux sources for size/security reasons.
+3. Use the existing pipeline for the one change that is actually valuable: bump to >= 0.154.0 to get `makeVulkan`, after fixing the drifted `skiko-coordinates.patch` hunk. That is a pin bump, not a new capability.
+4. If you still want an EGL experiment, cheapest safe spike: a branch with the two-line change, one PR run (`linux-x64` only; ~20 min cold), then `ldd`/`nm -D` on the resulting `libskiko-linux-x64.so` and a run of your SDL3 Wayland `makeGL()` test. Success criterion: no `glX*` imports and `makeGL()` returns non-null. Expect `libGL.so.1`/`libX11` to remain in `ldd` (section 1.4).
+
+## Evidence limits (what I could not verify)
+- Not run: any build. Section 1.4 patches and the cold/warm timings are not mine; timings are quoted from Serenity's DEVELOPMENT.md and #2381 body, not from CI logs (GitHub Actions API not queried).
+- Skia/Skiko line numbers are from master/`skiko` branch HEAD (2026-10); the 0.153.0 pin was checked only for gradle.properties and the `dynamicSystemLibs` lines. BUILD.gn chain, `build.py` flags and `GrGLMake*` sources may differ at tag m153 (I did not check them out).
+- Not verified that `skia_use_egl=true` alone yields `makeGL()` success on x64 desktop GL/GLES via SDL3; not verified that libskiko links cleanly without GLX callers.
+- No arm64 or macOS/Windows machine: nothing tested about arm64 `makeGL()`, macOS unsigned-dylib loading, or Windows.
+- Maven Central: rate-limited (429) and 404 for macos-x64/windows-x64/windows-arm64 jar URLs; metadata/search blocked, so upstream sizes for those three and exact artefact names are unknown. skia.org and api.github.com not used. Release counts come from git tags (annotated/lightweight creation dates), not the GitHub Releases page.
+- Contributor/bus-factor numbers come from `git shortlog` on the master history; they say nothing about employer. I did not read Skia-fork contributor stats or Skiko issue/PR responsiveness.
+- Hosting options in 2.3 and runner pricing for public repos are from general knowledge, not checked. Sealer's source/licence not inspected.
+- #2381 only readable as the PR body; I did not read its comments or the review thread, and `dngfree.2` is not yet on the `skiko-maven` branch tip I cloned.
