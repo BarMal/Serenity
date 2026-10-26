@@ -302,7 +302,11 @@ lazy val root = (project in file("."))
           case _ => (assembly / assemblyMergeStrategy).value(x)
         }
       case PathList("module-info.class") => MergeStrategy.discard
-      case x                             => (assembly / assemblyMergeStrategy).value(x)
+      // Skiko natives sit at the root of their runtime jar; a build that puts two runtime jars on the classpath
+      // (the macOS jars both carry the same two dylibs) would otherwise fail on the duplicate entries.
+      case PathList(name) if name == "icudtl.dat" || name.matches("(lib)?skiko-.*\\.(so|dylib|dll)(\\.sha256)?") =>
+        MergeStrategy.first
+      case x => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
       // One folder per test run holds everything the suites create (`TestTemp`, and the session folder of every
@@ -431,6 +435,19 @@ libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerce
 // headless paths; that is enforced at runtime, not here.
 val skikoVersion = "0.153.0"
 
+// The runtime natives are not JetBrains' jars: those carry the Adobe DNG SDK, whose licence conflicts with this project's
+// GPL. CI rebuilds them without it from the pinned upstream sources (.github/workflows/skiko-natives.yml, ci/skiko) and
+// publishes them as a Maven repository, which is why the version here is its own. Another repository, such as a local
+// mirror, can stand in with -Dserenity.skiko.natives.repo or SERENITY_SKIKO_NATIVES_REPO.
+val skikoNativesVersion = "0.153.0-dngfree.2"
+
+val skikoNativesRepository: String = sys.props
+  .get("serenity.skiko.natives.repo")
+  .orElse(sys.env.get("SERENITY_SKIKO_NATIVES_REPO"))
+  .map(_.trim)
+  .filter(_.nonEmpty)
+  .getOrElse("https://barmal.github.io/Serenity/")
+
 val skikoTargets = Set("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
 
 val skikoTarget: String = {
@@ -456,9 +473,13 @@ val skikoTarget: String = {
   target
 }
 
+// Last in the list, so only what Maven Central lacks, these natives, is ever asked of it. The POM Skiko generates for a
+// runtime jar depends on skiko-awt at the jar's own version, which is not published, hence intransitive.
+externalResolvers += "Serenity Skiko natives" at skikoNativesRepository
+
 libraryDependencies ++= Seq(
-  "org.jetbrains.skiko" % "skiko-awt"                       % skikoVersion,
-  "org.jetbrains.skiko" % s"skiko-awt-runtime-$skikoTarget" % skikoVersion
+  "org.jetbrains.skiko" % "skiko-awt" % skikoVersion,
+  ("io.github.barmal" % s"skiko-awt-runtime-$skikoTarget" % skikoNativesVersion).intransitive()
 )
 
 val jlineVersion = "3.30.16"
