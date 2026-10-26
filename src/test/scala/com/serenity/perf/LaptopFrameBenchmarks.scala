@@ -38,7 +38,7 @@ import com.serenity.ui.renderer.{
   ScreenIdentity
 }
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
+import com.serenity.{DockedPanelFixtures, FrameBackend, FramePixels, TestTemp, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
@@ -123,6 +123,41 @@ private[perf] object LaptopFrameBenchmarks:
       caches
     )
     image
+
+  val DeviceWidthPx: Int  = math.ceil(LogicalWidthPx * DeviceScale).toInt
+  val DeviceHeightPx: Int = math.ceil(LogicalHeightPx * DeviceScale).toInt
+
+  /** A frame drawn from scratch with `backend`, as [[renderedFrame]] draws one with Java2D. */
+  def coldFrame(
+    backend: FrameBackend,
+    state: AppState,
+    caches: RenderCaches,
+    cursorVisible: Boolean = true
+  ): FramePixels =
+    val frame = backend.newFrame(DeviceWidthPx, DeviceHeightPx)
+    val surface = backend.surfaceOver(
+      frame,
+      cellMetrics,
+      codeFont,
+      LogicalWidthPx,
+      LogicalHeightPx,
+      DeviceScale,
+      persists = false,
+      caches
+    )
+    RendererEntryPoints.render(
+      state,
+      cursorVisible,
+      surface,
+      viewport,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      cellMetrics,
+      None,
+      caches
+    )
+    surface.flush()
+    frame
 
   private[perf] def hasPixels(image: BufferedImage): Boolean =
     val row = image.getHeight / 2

@@ -58,15 +58,10 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
   /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
   private val notYetMoved: Set[String] = Set(
-    "perf/ChapterGhostRowReuseSpec.scala",
-    "perf/ColumnPaneRowReuseSpec.scala",
-    "perf/FrameCountersRenderSpec.scala",
     "perf/LaptopFrameBenchmarks.scala",
-    "perf/LaptopFramesMatchColdSpec.scala",
     "perf/OracleImages.scala",
     "perf/PanelLayerGeometrySpec.scala",
-    "perf/RenderBenchmarks.scala",
-    "perf/TypingFramePresentSpec.scala"
+    "perf/RenderBenchmarks.scala"
   )
 
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */

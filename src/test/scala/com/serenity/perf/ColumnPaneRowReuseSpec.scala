@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.SkiaFrames
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
@@ -12,7 +13,7 @@ import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -44,24 +45,22 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
   private val railedConfig = columnConfig.withLineNumbers(true)
 
   final private class PersistingImage:
-    private val image  = LaptopFrameBenchmarks.frameImage()
+    private val frame  = SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
     def render(state: AppState, damage: Damage): (BufferedImage, FrameCounts) =
-      val surface = new Java2DRenderSurface(
-        image,
+      val surface = SkiaFrames.surfaceOver(
+        frame,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
-        logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
-        deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-        deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
-        contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        LaptopFrameBenchmarks.LogicalWidthPx,
+        LaptopFrameBenchmarks.LogicalHeightPx,
+        LaptopFrameBenchmarks.DeviceScale,
+        persists = true,
+        caches,
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -79,7 +78,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
         damage,
         caches = caches
       )
-      (image, caches.frameCounters.lastFrame)
+      (frame.toImage, caches.frameCounters.lastFrame)
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
     val (cold, _) = PersistingImage().render(state, Damage.Everything)
