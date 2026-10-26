@@ -18,9 +18,10 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val selfName = "Java2DReferenceConfinementSpec.scala"
 
   /** They test `Java2DRenderSurface`, its image types, layer buffers, font render context, shaped-text cache and
-    * activity counters, `Graphics2D` state, its use as the fallback, how Java2D caches a presented image, or a fixture
-    * only AWT can see (a font registered with `GraphicsEnvironment`); they go with the class. Skia has its own specs
-    * for the same behaviours (`SkiaRenderSurfaceSpec`).
+    * activity counters, `Graphics2D` state, its use as the fallback, how Java2D caches a presented image, a layer-buffer
+    * recording wrapper around it, its timing benchmarks, or a fixture only AWT can see (a font registered with
+    * `GraphicsEnvironment`); they go with the class. Skia has its own specs for the same behaviours
+    * (`SkiaRenderSurfaceSpec`).
     */
   private val java2dOnly: Set[String] = Set(
     "CaretFollowsCursorAcrossFramesSpec.scala",
@@ -38,9 +39,13 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/GuiCellGridClusterSelectionSpec.scala",
     "perf/GuiCellGridColdFrameSpec.scala",
     "perf/GuiCellGridSelectionSpec.scala",
+    "perf/LaptopFrameBenchmarks.scala",
+    "perf/OracleImages.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
+    "perf/PanelLayerGeometrySpec.scala",
     "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
+    "perf/RenderBenchmarks.scala",
     "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
@@ -54,14 +59,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/StyledFontCacheSpec.scala",
     "ui/renderer/SurfaceActivitySpec.scala",
     "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
-  )
-
-  /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
-  private val notYetMoved: Set[String] = Set(
-    "perf/LaptopFrameBenchmarks.scala",
-    "perf/OracleImages.scala",
-    "perf/PanelLayerGeometrySpec.scala",
-    "perf/RenderBenchmarks.scala"
   )
 
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
@@ -115,7 +112,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val namingSurface: Set[String] = naming("Java2DRenderSurface")
   private val namingFrames: Set[String]  = naming("Java2DFrames")
 
-  private val surfaceLists = java2dOnly ++ notYetMoved
+  private val surfaceLists = java2dOnly
   private val framesLists  = bothRenderers ++ pinnedBySkiaGap ++ windowSpecsNotYetMoved
 
   "Test files naming Java2DRenderSurface" should "be on a list" in {
@@ -124,10 +121,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
   it should "leave the lists once they stop naming it" in {
     (surfaceLists -- namingSurface) shouldBe Set.empty
-  }
-
-  it should "not sit on both lists" in {
-    (java2dOnly intersect notYetMoved) shouldBe Set.empty
   }
 
   "Test files naming Java2DFrames" should "be on a list" in {
