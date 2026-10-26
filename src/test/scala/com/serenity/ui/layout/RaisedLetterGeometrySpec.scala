@@ -2,13 +2,13 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
-import com.serenity.{MockRenderSurface, ReferenceFrames}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings, RaisedRowRule}
 import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.TextStyle
+import com.serenity.{MockRenderSurface, ReferenceFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
