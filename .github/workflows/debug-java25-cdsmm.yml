@@ -100,5 +100,5 @@ jobs:
           AOT="$(cd e/Serenity/${CFG%/*} && pwd)/serenity.aot"; [ "$RUNNER_OS" = Windows ] && AOT="$(cygpath -m "$AOT")"
           ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$AOT" "$root/e/Serenity/$EXE" --smoke-test --safe-mode > train.txt 2>&1; echo "training exit=$?"; grep -v "Picked up" train.txt | grep -iE "$PAT" | head -n 10 )
           $PY bench/java25/cfgtool.py "e/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot'
-          launch e "-Xlog:aot*=info:stdout,cds"
+          launch e "-Xlog:aot*=info -Xlog:cds"
           echo "--- cpu:"; (lscpu 2>/dev/null | grep -iE "model name|flags" | cut -c1-200) || true
