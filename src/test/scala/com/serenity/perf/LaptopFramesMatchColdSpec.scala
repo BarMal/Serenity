@@ -31,7 +31,7 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
   final private class PersistingImage:
-    private val frame  = SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx)
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
@@ -66,7 +66,7 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
       frame.toImage
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
-    val cold = LaptopFrameBenchmarks.coldFrame(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
+    val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
     val diffs = for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight

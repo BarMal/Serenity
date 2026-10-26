@@ -45,7 +45,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
   private val railedConfig = columnConfig.withLineNumbers(true)
 
   final private class PersistingImage:
-    private val frame  = SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx)
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)

@@ -71,7 +71,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
     )
 
   final private class PersistingImage:
-    private val frame  = SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx)
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
@@ -107,7 +107,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
       (frame.toImage, caches.frameCounters.lastFrame)
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
-    val cold = LaptopFrameBenchmarks.coldFrame(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
+    val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
     for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight

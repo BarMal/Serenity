@@ -30,7 +30,7 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
   private val wholeGridPx = viewport.width.toLong * cellMetrics.charWidth * viewport.height * cellMetrics.lineHeight
 
   final private class CountedFrames:
-    private val frame  = SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx)
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
@@ -145,7 +145,7 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
     val (before, _) = transition(InsertChar('x'))
     val caches      = RenderCaches.create()
     val surface = SkiaFrames.surfaceOver(
-      SkiaFrames.newFrame(LaptopFrameBenchmarks.DeviceWidthPx, LaptopFrameBenchmarks.DeviceHeightPx),
+      SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx),
       cellMetrics,
       codeFont,
       LaptopFrameBenchmarks.LogicalWidthPx,
