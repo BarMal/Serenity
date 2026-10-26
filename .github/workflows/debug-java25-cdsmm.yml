@@ -1,0 +1,104 @@
+name: Debug Java 25 CDS mismatch
+
+on:
+  push:
+    branches:
+      - ccr-157ed55f-u6khhf-java25-cdsmm
+
+permissions:
+  contents: read
+
+jobs:
+  mismatch:
+    name: CDS mismatch ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { label: linux, os: ubuntu-latest, cfg: lib/app/Serenity.cfg, rt: lib/runtime, exe: bin/Serenity, java: bin/java, base: lib/server/classes.jsa }
+          - { label: windows, os: windows-latest, cfg: app/Serenity.cfg, rt: runtime, exe: Serenity.exe, java: bin/java.exe, base: bin/server/classes.jsa }
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Build the app image with the release command
+        run: |
+          set -euo pipefail
+          sbt -v clean assembly writePackageVersion
+          mkdir -p package-input dist
+          cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          cp LICENSE THIRD-PARTY-NOTICES.md package-input/
+          ICON=()
+          if [ "$RUNNER_OS" = Windows ]; then ICON=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico"); fi
+          jpackage --type app-image --name Serenity --input package-input --main-jar Serenity.jar --main-class Main \
+            --app-version "$(cat target/package/app-version.txt)" --vendor BarMal --dest dist "${ICON[@]}" \
+            --java-options '-XX:+UseG1GC' --java-options '-XX:MaxRAMPercentage=25' --java-options '-XX:G1PeriodicGCInterval=60000' \
+            --java-options '--enable-native-access=ALL-UNNAMED' --java-options '--sun-misc-unsafe-memory-access=allow' \
+            --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive" \
+            --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa' --java-options '-XX:+AutoCreateSharedArchive'
+          cat dist/Serenity/${{ matrix.cfg }}
+      - name: Start a display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &
+          echo "DISPLAY=:99" >> "$GITHUB_ENV"
+          sleep 3
+      - name: Experiments
+        run: |
+          set +e -uo pipefail
+          root="$PWD"; CFG='${{ matrix.cfg }}'; RT='${{ matrix.rt }}'; EXE='${{ matrix.exe }}'; JAVA='${{ matrix.java }}'; BASE='${{ matrix.base }}'
+          PY=python; command -v python >/dev/null || PY=python3
+          PAT='error|warning|mismatch|disabling|native.access|optimized module'
+          say() { echo; echo "##### $*"; }
+          fresh() { rm -rf "$1" && mkdir "$1" && cp -r dist/Serenity "$1/Serenity"; }
+          # launch <image> <JAVA_TOOL_OPTIONS>: exit code, every line that matches the pattern, and how many lines matched
+          launch() {
+            ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="$2" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > out.txt 2>&1; echo "exit=$?"
+              grep -v "Picked up" out.txt | grep -iE "$PAT" | sort | uniq -c | sort -rn | head -n 25; echo "(matching lines: $(grep -v 'Picked up' out.txt | grep -ciE "$PAT"))" )
+          }
+
+          say "E1. today's AppCDS image, run 1 (dumps the dynamic archive) with -Xlog:cds"
+          fresh a; launch a "-Xlog:cds"
+          say "E1. run 2 (maps it)"
+          launch a "-Xlog:cds"
+          ls -l a/Serenity/${CFG%/*}/serenity.jsa
+
+          say "E2. the runtime's own base archive, java -version with and without --enable-native-access"
+          echo "--- with the option:";    "a/Serenity/$RT/$JAVA" -Xlog:cds --enable-native-access=ALL-UNNAMED -version 2>&1 | grep -v "Picked up" | grep -iE "$PAT" | head -n 10
+          echo "--- without the option:"; "a/Serenity/$RT/$JAVA" -Xlog:cds -version 2>&1 | grep -v "Picked up" | grep -iE "$PAT" | head -n 10
+
+          say "E3. diagnostic: --enable-native-access removed from the launcher options (run 1, run 2)"
+          fresh c; $PY bench/java25/cfgtool.py "c/Serenity/$CFG" "drop:enable-native-access"
+          launch c "-Xlog:cds"; launch c "-Xlog:cds"
+
+          say "E4. candidate fix: regenerate the runtime's base archive with the option, then AppCDS run 1, run 2"
+          fresh d
+          "d/Serenity/$RT/$JAVA" -Xshare:dump -Xlog:cds=warning --enable-native-access=ALL-UNNAMED 2>&1 | grep -v "Picked up" | tail -n 8
+          ls -l "d/Serenity/$RT/$BASE"
+          launch d "-Xlog:cds"; launch d "-Xlog:cds"
+
+          say "E5. time to first frame: today vs candidate fix (warm-up discarded, n=10)"
+          $PY bench/ttfw.py "a/Serenity/$EXE" 10 "today"
+          $PY bench/ttfw.py "d/Serenity/$EXE" 10 "regenerated base"
+          $PY bench/ttfw.py "c/Serenity/$EXE" 10 "no native-access option"
+
+          say "E6. AOT cache: train, then run with -Xlog:aot*,cds (does the AdapterHandlerEntry warning appear on this CPU?)"
+          fresh e; $PY bench/java25/cfgtool.py "e/Serenity/$CFG" "drop:SharedArchiveFile" "drop:AutoCreateSharedArchive"
+          AOT="$(cd e/Serenity/${CFG%/*} && pwd)/serenity.aot"; [ "$RUNNER_OS" = Windows ] && AOT="$(cygpath -m "$AOT")"
+          ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$AOT" "$root/e/Serenity/$EXE" --smoke-test --safe-mode > train.txt 2>&1; echo "training exit=$?"; grep -v "Picked up" train.txt | grep -iE "$PAT" | head -n 10 )
+          $PY bench/java25/cfgtool.py "e/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot'
+          launch e "-Xlog:aot*=info:stdout,cds"
+          echo "--- cpu:"; (lscpu 2>/dev/null | grep -iE "model name|flags" | cut -c1-200) || true
