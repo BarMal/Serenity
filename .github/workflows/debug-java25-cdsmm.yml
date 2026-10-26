@@ -59,46 +59,28 @@ jobs:
       - name: Experiments
         run: |
           set +e -uo pipefail
-          root="$PWD"; CFG='${{ matrix.cfg }}'; RT='${{ matrix.rt }}'; EXE='${{ matrix.exe }}'; JAVA='${{ matrix.java }}'; BASE='${{ matrix.base }}'
+          root="$PWD"; CFG='${{ matrix.cfg }}'; RT='${{ matrix.rt }}'; EXE='${{ matrix.exe }}'; JAVA='${{ matrix.java }}'
           PY=python; command -v python >/dev/null || PY=python3
-          PAT='error|warning|mismatch|disabling|native.access|optimized module'
+          PAT='mismatch|disabling|optimized module|adapter|codecache|stubs|\[warning\]|\[error\]'
           say() { echo; echo "##### $*"; }
           fresh() { rm -rf "$1" && mkdir "$1" && cp -r dist/Serenity "$1/Serenity"; }
-          # launch <image> <JAVA_TOOL_OPTIONS>: exit code, every line that matches the pattern, and how many lines matched
           launch() {
             ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="$2" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > out.txt 2>&1; echo "exit=$?"
-              grep -v "Picked up" out.txt | grep -iE "$PAT" | sort | uniq -c | sort -rn | head -n 25; echo "(matching lines: $(grep -v 'Picked up' out.txt | grep -ciE "$PAT"))" )
+              grep -v "Picked up" out.txt | grep -v "Skipping" | grep -iE "$PAT" | head -n 20; echo "(matching lines: $(grep -v 'Picked up' out.txt | grep -v Skipping | grep -ciE "$PAT"))" )
           }
-
-          say "E1. today's AppCDS image, run 1 (dumps the dynamic archive) with -Xlog:cds"
-          fresh a; launch a "-Xlog:cds"
-          say "E1. run 2 (maps it)"
-          launch a "-Xlog:cds"
-          ls -l a/Serenity/${CFG%/*}/serenity.jsa
-
-          say "E2. the runtime's own base archive, java -version with and without --enable-native-access"
-          echo "--- with the option:";    "a/Serenity/$RT/$JAVA" -Xlog:cds --enable-native-access=ALL-UNNAMED -version 2>&1 | grep -v "Picked up" | grep -iE "$PAT" | head -n 10
-          echo "--- without the option:"; "a/Serenity/$RT/$JAVA" -Xlog:cds -version 2>&1 | grep -v "Picked up" | grep -iE "$PAT" | head -n 10
-
-          say "E3. diagnostic: --enable-native-access removed from the launcher options (run 1, run 2)"
-          fresh c; $PY bench/java25/cfgtool.py "c/Serenity/$CFG" "drop:enable-native-access"
-          launch c "-Xlog:cds"; launch c "-Xlog:cds"
-
-          say "E4. candidate fix: regenerate the runtime's base archive with the option, then AppCDS run 1, run 2"
-          fresh d
-          "d/Serenity/$RT/$JAVA" -Xshare:dump -Xlog:cds=warning --enable-native-access=ALL-UNNAMED 2>&1 | grep -v "Picked up" | tail -n 8
-          ls -l "d/Serenity/$RT/$BASE"
-          launch d "-Xlog:cds"; launch d "-Xlog:cds"
-
-          say "E5. time to first frame: today vs candidate fix (warm-up discarded, n=10)"
-          $PY bench/ttfw.py "a/Serenity/$EXE" 10 "today"
-          $PY bench/ttfw.py "d/Serenity/$EXE" 10 "regenerated base"
-          $PY bench/ttfw.py "c/Serenity/$EXE" 10 "no native-access option"
-
-          say "E6. AOT cache: train, then run with -Xlog:aot*,cds (does the AdapterHandlerEntry warning appear on this CPU?)"
-          fresh e; $PY bench/java25/cfgtool.py "e/Serenity/$CFG" "drop:SharedArchiveFile" "drop:AutoCreateSharedArchive"
-          AOT="$(cd e/Serenity/${CFG%/*} && pwd)/serenity.aot"; [ "$RUNNER_OS" = Windows ] && AOT="$(cygpath -m "$AOT")"
-          ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$AOT" "$root/e/Serenity/$EXE" --smoke-test --safe-mode > train.txt 2>&1; echo "training exit=$?"; grep -v "Picked up" train.txt | grep -iE "$PAT" | head -n 10 )
-          $PY bench/java25/cfgtool.py "e/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot'
-          launch e "-Xlog:aot*=info -Xlog:cds"
-          echo "--- cpu:"; (lscpu 2>/dev/null | grep -iE "model name|flags" | cut -c1-200) || true
+          train() { # <image>: drop AppCDS options, write the AOT cache, point the launcher at it
+            $PY bench/java25/cfgtool.py "$1/Serenity/$CFG" "drop:SharedArchiveFile" "drop:AutoCreateSharedArchive"
+            AOT="$(cd $1/Serenity/${CFG%/*} && pwd)/serenity.aot"; [ "$RUNNER_OS" = Windows ] && AOT="$(cygpath -m "$AOT")"
+            ( cd "$(mktemp -d)" && JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$AOT" "$root/$1/Serenity/$EXE" --smoke-test --safe-mode > train.txt 2>&1; echo "training exit=$?"
+              grep -v "Picked up" train.txt | grep -v Skipping | grep -iE "$PAT" | head -n 10 )
+            $PY bench/java25/cfgtool.py "$1/Serenity/$CFG" 'add:-XX:AOTCache=$APPDIR/serenity.aot'
+          }
+          say "F1. AOT cache trained on today's image (jlink base archive): run 1, run 2"
+          fresh e; train e; launch e "-Xlog:aot*=info -Xlog:cds=info"; launch e "-Xlog:aot*=info -Xlog:cds=info"
+          say "F2. AOT cache trained after regenerating the base archive with --enable-native-access"
+          fresh f; "f/Serenity/$RT/$JAVA" -Xshare:dump -Xlog:cds=warning --enable-native-access=ALL-UNNAMED 2>&1 | grep -v "Picked up" | tail -n 3
+          train f; launch f "-Xlog:aot*=info -Xlog:cds=info"; launch f "-Xlog:aot*=info -Xlog:cds=info"
+          say "F3. time to first frame of both AOT images (warm-up discarded, n=10)"
+          $PY bench/ttfw.py "e/Serenity/$EXE" 10 "AOT, jlink base"
+          $PY bench/ttfw.py "f/Serenity/$EXE" 10 "AOT, regenerated base"
+          echo "--- cpu:"; (lscpu 2>/dev/null | grep -iE "model name" | cut -c1-200) || true
