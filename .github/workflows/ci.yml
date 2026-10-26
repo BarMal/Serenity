@@ -25,11 +25,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -54,11 +54,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -120,11 +120,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -143,11 +143,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -207,11 +207,11 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -251,11 +251,11 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -263,7 +263,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises

@@ -27,6 +27,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | io.circe:circe-jawn_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
 | io.circe:circe-numbers_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
 | io.circe:circe-parser_3 | 0.14.16 | Apache-2.0 | circe contributors | <https://github.com/circe/circe> | Apache-2.0, NOTICE-circe |
+| io.github.barmal:skiko-awt-runtime-linux-x64 | 0.153.0-dngfree.2 | Apache-2.0 | JetBrains s.r.o. and Skiko contributors; rebuilt by the Serenity project without the Adobe DNG SDK; the embedded native libraries are listed under Bundled assets | <https://github.com/JetBrains/skiko> | Apache-2.0, NOTICE-skiko |
 | net.java.dev.jna:jna | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | net.java.dev.jna:jna-platform | 5.19.1 | Apache-2.0 (used under this option of Apache-2.0 OR LGPL-2.1-or-later) | Timothy Wall, Matthias Bläsing and JNA contributors | <https://github.com/java-native-access/jna> | Apache-2.0 |
 | org.apache.pdfbox:fontbox | 3.0.8 | Apache-2.0 | The Apache Software Foundation | <https://pdfbox.apache.org/> | Apache-2.0, NOTICE-pdfbox |
@@ -39,7 +40,6 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm | 1.8.0 | Apache-2.0 | JetBrains s.r.o. and Kotlin contributors | <https://github.com/Kotlin/kotlinx.coroutines> | Apache-2.0 |
 | org.jetbrains.runtime:jbr-api | 1.5.0 | Apache-2.0 | JetBrains s.r.o. | <https://github.com/JetBrains/JetBrainsRuntimeApi> | Apache-2.0 |
 | org.jetbrains.skiko:skiko-awt | 0.153.0 | Apache-2.0 | JetBrains s.r.o. and Skiko contributors | <https://github.com/JetBrains/skiko> | Apache-2.0, NOTICE-skiko |
-| org.jetbrains.skiko:skiko-awt-runtime-linux-x64 | 0.153.0 | Apache-2.0 | JetBrains s.r.o. and Skiko contributors; the embedded native libraries are listed under Bundled assets | <https://github.com/JetBrains/skiko> | Apache-2.0, NOTICE-skiko |
 | org.jetbrains:annotations | 23.0.0 | Apache-2.0 | JetBrains s.r.o. | <https://github.com/JetBrains/java-annotations> | Apache-2.0 |
 | org.jline:jline-native | 3.30.16 | BSD-3-Clause | the original JLine authors | <https://github.com/jline/jline3> | BSD-3-Clause-jline |
 | org.jline:jline-terminal | 3.30.16 | BSD-3-Clause | the original JLine authors | <https://github.com/jline/jline3> | BSD-3-Clause-jline |
@@ -67,7 +67,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 
 | Component | Version | Licence | Copyright | URL | Texts |
 | --- | --- | --- | --- | --- | --- |
-| Monaspace Neon | 1.101 | OFL-1.1 | Copyright (c) 2023, GitHub (reserved font name Monaspace); full notice in the licence file | <https://github.com/githubnext/monaspace> | OFL |
+| Monaspace Neon | 1.101 | OFL-1.1 | Copyright (c) 2023, GitHub (reserved font name Monaspace); full notice in the licence file. Used unmodified: MonaspaceNeon-Regular.otf, MonaspaceNeon-Bold.otf (the Bold drawn for bold text) and the variable MonaspaceNeonVarVF[wght,wdth,slnt].ttf (the code font) | <https://github.com/githubnext/monaspace> | OFL |
 | Material Icons Round | - | Apache-2.0 | Google LLC | <https://github.com/google/material-design-icons> | MATERIAL_ICONS_ROUND_LICENSE |
 | British English dictionary (en_GB) | 4.0.1 | LGPL-3.0-or-later (phonetic rules in the .aff: LGPL-2.1) | Kevin Atkinson (Aspell word list); David Bartlett, Brian Kelk, Andrew Brown and Marco A.G.Pinto (en_GB); Björn Jacke (phonetic rules) | <https://github.com/LibreOffice/dictionaries/tree/master/en> | README_en_GB, LGPL-3.0, LGPL-2.1 |
 | Courier Prime | 3.018 | OFL-1.1 | Copyright 2015 The Courier Prime Project Authors (https://github.com/quoteunquoteapps/CourierPrime); full notice in the licence file. Regular, Italic, Bold and Bold Italic TTFs from commit 7fd585a2dd4c1612c79b3308e300923d1c13df93 (fonts/ttf) | <https://github.com/quoteunquoteapps/CourierPrime> | COURIER_PRIME_OFL |
@@ -82,119 +82,11 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | zlib | 646b7f569718 | Zlib | Jean-loup Gailly and Mark Adler | <https://zlib.net/> | Zlib |
 | Wuffs | e3f919ccfe3e | Apache-2.0 (Apache-2.0 OR MIT; Apache-2.0 is the one used) | The Wuffs Authors | <https://github.com/google/wuffs> | Apache-2.0 |
 | ICU4C (including embedded ICU data) | d578f2e8b793 | Unicode-3.0 | Unicode, Inc. and others named in the licence file | <https://icu.unicode.org/> | Unicode-3.0-icu4c |
-| PIEX | bb217acdca1c | Apache-2.0 | Google Inc. | <https://android.googlesource.com/platform/external/piex> | Apache-2.0 |
-| Adobe DNG SDK | dbe0a676450d | LicenseRef-Adobe-DNG-SDK | Adobe Systems Incorporated; security patches by Google Inc. | <https://android.googlesource.com/platform/external/dng_sdk> | Adobe-DNG-SDK |
 | ETC1 (Android PKM decoder) | a17429660467 | Apache-2.0 | The Android Open Source Project | <https://android.googlesource.com/platform/frameworks/native/+/master/opengl/> | Apache-2.0 |
 | D3D12 Memory Allocator (Windows native library) | 169895d529df | MIT | Advanced Micro Devices, Inc. | <https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator> | MIT-d3d12-memory-allocator |
 | PartitionAlloc (Windows native library) | 03cc513177b4 | BSD-3-Clause | The Chromium Authors | <https://chromium.googlesource.com/chromium/src/base/allocator/partition_allocator.git> | BSD-3-Clause-chromium |
 
 ## Licence and notice texts
-
-### Adobe-DNG-SDK
-
-```text
-This version (dng_sdk 1.4) contains security patches from Google Inc.
-The changes were sent to Adobe Inc. (psirt@adobe.com) on Dec. 18th 2015 by kinan@google.com.
-
--------
-
-This product includes DNG technology under license by Adobe Systems
-Incorporated.
-
--------
-
-DNG SDK License Agreement
-NOTICE TO USER:
-Adobe Systems Incorporated provides the Software and Documentation for use under
-the terms of this Agreement. Any download, installation, use, reproduction,
-modification or distribution of the Software or Documentation, or any
-derivatives or portions thereof, constitutes your acceptance of this Agreement.
-
-As used in this Agreement, "Adobe" means Adobe Systems Incorporated. "Software"
-means the software code, in any format, including sample code and source code,
-accompanying this Agreement. "Documentation" means the documents, specifications
-and all other items accompanying this Agreement other than the Software.
-
-1. LICENSE GRANT
-Software License.  Subject to the restrictions below and other terms of this
-Agreement, Adobe hereby grants you a non-exclusive, worldwide, royalty free
-license to use, reproduce, prepare derivative works from, publicly display,
-publicly perform, distribute and sublicense the Software for any purpose.
-
-Document License.  Subject to the terms of this Agreement, Adobe hereby grants
-you a non-exclusive, worldwide, royalty free license to make a limited number of
-copies of the Documentation for your development purposes and to publicly
-display, publicly perform and distribute such copies.  You may not modify the
-Documentation.
-
-2. RESTRICTIONS AND OWNERSHIP
-You will not remove any copyright or other notice included in the Software or
-Documentation and you will include such notices in any copies of the Software
-that you distribute in human-readable format.
-
-You will not copy, use, display, modify or distribute the Software or
-Documentation in any manner not permitted by this Agreement. No title to the
-intellectual property in the Software or Documentation is transferred to you
-under the terms of this Agreement. You do not acquire any rights to the Software
-or the Documentation except as expressly set forth in this Agreement. All rights
-not granted are reserved by Adobe.
-
-3. DISCLAIMER OF WARRANTY
-ADOBE PROVIDES THE SOFTWARE AND DOCUMENTATION ONLY ON AN "AS IS" BASIS WITHOUT
-WARRANTIES OR CONDITIONS OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING
-WITHOUT LIMITATION ANY WARRANTIES OR CONDITIONS OF TITLE, NON-INFRINGEMENT,
-MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. ADOBE MAKES NO WARRANTY
-THAT THE SOFTWARE OR DOCUMENTATION WILL BE ERROR-FREE. To the extent
-permissible, any warranties that are not and cannot be excluded by the foregoing
-are limited to ninety (90) days.
-
-4. LIMITATION OF LIABILITY
-ADOBE AND ITS SUPPLIERS SHALL NOT BE LIABLE FOR LOSS OR DAMAGE ARISING OUT OF
-THIS AGREEMENT OR FROM THE USE OF THE SOFTWARE OR DOCUMENTATION. IN NO EVENT
-WILL ADOBE BE LIABLE TO YOU OR ANY THIRD PARTY FOR ANY DIRECT, INDIRECT,
-CONSEQUENTIAL, INCIDENTAL, OR SPECIAL DAMAGES INCLUDING LOST PROFITS, LOST
-SAVINGS, COSTS, FEES, OR EXPENSES OF ANY KIND ARISING OUT OF ANY PROVISION OF
-THIS AGREEMENT OR THE USE OR THE INABILITY TO USE THE SOFTWARE OR DOCUMENTATION,
-HOWEVER CAUSED AND UNDER ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-LIABILITY OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE), EVEN IF ADVISED OF THE
-POSSIBILITY OF SUCH DAMAGES. ADOBE'S AGGREGATE LIABILITY AND THAT OF ITS
-SUPPLIERS UNDER OR IN CONNECTION WITH THIS AGREEMENT SHALL BE LIMITED TO THE
-AMOUNT PAID BY YOU FOR THE SOFTWARE AND DOCUMENTATION.
-
-5. INDEMNIFICATION
-If you choose to distribute the Software in a commercial product, you do so with
-the understanding that you agree to defend, indemnify and hold harmless Adobe
-against any losses, damages and costs arising from the claims, lawsuits or other
-legal actions arising out of such distribution.
-
-6. TRADEMARK USAGE
-Adobe and the DNG logo are the trademarks or registered trademarks of Adobe
-Systems Incorporated in the United States and other countries. Such trademarks
-may not be used to endorse or promote any product unless expressly permitted
-under separate agreement with Adobe. For information on how to license the DNG
-logo please go to www.adobe.com.
-
-7. TERM
-Your rights under this Agreement shall terminate if you fail to comply with any
-of the material terms or conditions of this Agreement. If all your rights under
-this Agreement terminate, you will immediately cease use and distribution of the
-Software and Documentation.
-
-8. GOVERNING LAW AND JURISDICTION. This Agreement is governed by the statutes
-and laws of the State of California, without regard to the conflicts of law
-principles thereof. The federal and state courts located in Santa Clara County,
-California, USA, will have non-exclusive jurisdiction over any dispute arising
-out of this Agreement.
-
-9. GENERAL
-This Agreement supersedes any prior agreement, oral or written, between Adobe
-and you with respect to the licensing to you of the Software and Documentation.
-No variation of the terms of this Agreement will be enforceable against Adobe
-unless Adobe gives its express consent in writing signed by an authorized
-signatory of Adobe. If any part of this Agreement is found void and
-unenforceable, it will not affect the validity of the balance of the Agreement,
-which shall remain valid and enforceable according to its terms.
-```
 
 ### Apache-2.0
 

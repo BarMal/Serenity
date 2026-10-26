@@ -9,8 +9,10 @@
 #   skia-linux-inside  run inside ubuntu:20.04, as upstream's Skia workflow does: toolchain, build, archive
 #   skia               macOS and Windows, on the runner: build and archive
 #   skiko              build the Skiko runtime jars from the Skia archives (Linux: inside Skiko's own build image)
+#   skiko-api          build the patched Kotlin API jar (skiko-awt); the same for every platform, so one group builds it
 #   collect            copy the Maven tree to the output directory
-#   all                every phase but skia-linux-inside, in order (Linux needs the container, so use the workflow)
+#   all                every phase but skia-linux-inside, in order (the API jar only for linux-x64; Linux needs the container,
+#                      so use the workflow)
 #
 # The Skia archives are what Skiko itself downloads from JetBrains/skia releases; building Skiko from them, and caching
 # them, means a failure in the Skiko step costs minutes, not another Skia build. Steps follow JetBrains/skia's
@@ -28,6 +30,8 @@ phase="${4:?phase}"
 here="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=pins.env
 . "$here/pins.env"
+# shellcheck source=natives-version.env
+. "$here/natives-version.env"
 
 case "$group" in
   linux-x64)   os=linux;   machines=(x64) ;;
@@ -57,7 +61,7 @@ skia_flags() {
 
 fetch_skiko() {
   git clone --quiet --depth 1 --branch "$SKIKO_TAG" https://github.com/JetBrains/skiko "$skiko"
-  git -C "$skiko" apply --verbose "$here/skiko-no-dng.patch" "$here/skiko-coordinates.patch"
+  git -C "$skiko" apply --verbose "$here/skiko-no-dng.patch" "$here/skiko-coordinates.patch" "$here/skiko-read-pixels-into.patch"
 }
 
 fetch_skia() {
@@ -134,6 +138,22 @@ build_skiko() {
   done
 }
 
+# The Kotlin classes Serenity compiles against, with the patched Bitmap. They hold no native code and do not depend on the
+# platform, so the linux-x64 group builds them once; the runtime jars each group builds carry the natives.
+build_skiko_api() {
+  trust_checkouts
+  unpack_skia
+  echo "::group::Build the Skiko API jar"
+  (cd "$skiko" && ./gradlew --no-daemon --stacktrace \
+    -Pskia.dir="$skia_dir" \
+    -Pskiko.awt.enabled=true \
+    -Pskiko.arch="${machines[0]}" \
+    -Pdeploy.release=true \
+    -Pdeploy.version="$NATIVES_VERSION" \
+    ":skiko:publishAwtPublicationToBuildRepoRepository")
+  echo "::endgroup::"
+}
+
 collect() {
   mkdir -p "$out"
   repos="$(find "$skiko" -maxdepth 3 -type d -path '*/build/repo' -not -path '*/node_modules/*')"
@@ -149,7 +169,8 @@ case "$phase" in
   skia-linux-inside) skia_linux_inside ;;
   skia)              build_skia; archive_skia ;;
   skiko)             build_skiko ;;
+  skiko-api)         build_skiko_api ;;
   collect)           collect ;;
-  all)               fetch_skiko; fetch_skia; build_skia; archive_skia; build_skiko; collect ;;
+  all)               fetch_skiko; fetch_skia; build_skia; archive_skia; build_skiko; if [ "$group" = linux-x64 ]; then build_skiko_api; fi; collect ;;
   *) echo "unknown phase: $phase" >&2; exit 2 ;;
 esac

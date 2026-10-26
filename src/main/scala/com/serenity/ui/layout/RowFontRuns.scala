@@ -27,10 +27,10 @@ private[layout] object RowFontRuns:
           if openStart >= 0 then found ++ Vector(openStart, end, openSlot) else found
         if index >= text.length then closed(index)
         else
-          val codePoint = text.codePointAt(index)
-          val next      = index + Character.charCount(codePoint)
-          val slot      = slots(index)
-          if snapping && WideCells.isSnapped(codePoint, slot != 0) then
+          val next =
+            if snapping then CharWidth.clusterEnd(text, index) else index + Character.charCount(text.codePointAt(index))
+          val slot = slots(index)
+          if snapping && WideCells.snapCells(text, index, next, slot != 0) > 0 then
             walk(next, -1, 0, closed(index) ++ Vector(index, next, slot))
           else if slot == 0 then walk(next, -1, 0, closed(index))
           else if openStart >= 0 && openSlot == slot then walk(next, openStart, openSlot, found)
