@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.AppConfig
+import com.serenity.config.AppConfigOps.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -57,8 +58,15 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
     items = List(command("Save"), command("Cut"), command("Copy"))
   )
 
-  private val expectedWidthCells  = "editor".length + 2 + 2
-  private val expectedHeightCells = ContextMenuSurfaceComposition.frameHeight(menu, itemGapRows = 0.0)
+  private val expectedWidthCells = "editor".length + 2 + 2
+
+  private def expectedHeightCells(state: AppState): Int =
+    ContextMenuSurfaceComposition.frameHeight(
+      menu,
+      itemGapRows = state.persisted.config.effectiveCommandRunnerItemGapRows,
+      itemTargetRows =
+        SurfaceFrameLayout.itemTargetRowsFor(SurfaceContent.ContextMenu(menu), state.persisted.config.interfaceDensity)
+    )
 
   private def menuRect(state: AppState): LayoutRect =
     LayoutEngine
@@ -74,7 +82,7 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.width shouldBe expectedWidthCells
-    rect.height shouldBe expectedHeightCells
+    rect.height shouldBe expectedHeightCells(state)
     rect.width should be < contentRect.width
   }
 
@@ -91,7 +99,8 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
 
   for scale <- List(1.0, 2.0) do
     it should s"cover exactly its content's device pixels at scale $scale" in {
-      val rect = menuRect(stateWithMenu(menu))
+      val state = stateWithMenu(menu)
+      val rect  = menuRect(state)
       val bounds = PixelRect(
         rect.x * CellWidthPx,
         rect.y * CellHeightPx,
@@ -100,6 +109,6 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
       )
 
       DeviceOrigin.widthOf(bounds, scale) shouldBe (expectedWidthCells * CellWidthPx * scale).toInt
-      DeviceOrigin.heightOf(bounds, scale) shouldBe (expectedHeightCells * CellHeightPx * scale).toInt
+      DeviceOrigin.heightOf(bounds, scale) shouldBe (expectedHeightCells(state) * CellHeightPx * scale).toInt
     }
 end ContextMenuLayoutSpec

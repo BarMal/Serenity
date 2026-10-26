@@ -88,7 +88,7 @@ class CharWidthSpec extends AnyFlatSpec with Matchers:
 
   it should "count an emoji cluster as two cells whatever its parts are" in {
     CharWidth.ofText("\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67") shouldBe 2 // family: man, woman, girl
-    CharWidth.ofText("a\uD83C\uDDEB\uD83C\uDDF7b") shouldBe 4 // a, the French flag, b
+    CharWidth.ofText("a\uD83C\uDDEB\uD83C\uDDF7b") shouldBe 4                       // a, the French flag, b
   }
 
   it should "give a combining mark no cell of its own" in {

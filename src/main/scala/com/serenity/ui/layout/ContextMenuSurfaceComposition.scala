@@ -26,8 +26,8 @@ object ContextMenuSurfaceComposition:
       itemTargetRows = itemTargetRows
     )
 
-  /** The cells of the menu's widest row (title, item label or selection-count footer) with a cell of padding each
-    * side -- the content width, before the frame's border.
+  /** The cells of the menu's widest row (title, item label or selection-count footer) with a cell of padding each side
+    * -- the content width, before the frame's border.
     */
   def preferredWidth(menu: ContextMenu): Int =
     val footer = Option.when(menu.items.nonEmpty)(s"${menu.items.length}/${menu.items.length}")
