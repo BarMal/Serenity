@@ -18,9 +18,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val selfName = "Java2DReferenceConfinementSpec.scala"
 
   /** They test `Java2DRenderSurface`, its image types, layer buffers, font render context, shaped-text cache and
-    * activity counters, `Graphics2D` state, its use as the fallback, or a fixture only AWT can see (a font registered
-    * with `GraphicsEnvironment`); they go with the class. Skia has its own specs for the same behaviours
-    * (`SkiaRenderSurfaceSpec`).
+    * activity counters, `Graphics2D` state, its use as the fallback, how Java2D caches a presented image, or a fixture
+    * only AWT can see (a font registered with `GraphicsEnvironment`); they go with the class. Skia has its own specs
+    * for the same behaviours (`SkiaRenderSurfaceSpec`).
     */
   private val java2dOnly: Set[String] = Set(
     "CaretFollowsCursorAcrossFramesSpec.scala",
@@ -32,7 +32,15 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "Java2DRenderSurfaceSpec.scala",
     "RenderSurfaceDrawRunPxSpec.scala",
     "SingleUseFrameSurface.scala",
+    "perf/CellGridBenchmarks.scala",
+    "perf/FontFallbackColdFrameSpec.scala",
+    "perf/FontFallbackSelectionSpec.scala",
+    "perf/GuiCellGridClusterSelectionSpec.scala",
+    "perf/GuiCellGridColdFrameSpec.scala",
+    "perf/GuiCellGridSelectionSpec.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
+    "perf/PresentedFrames.scala",
+    "perf/PresentedFramesSpec.scala",
     "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
@@ -50,21 +58,13 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
 
   /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
   private val notYetMoved: Set[String] = Set(
-    "perf/CellGridBenchmarks.scala",
     "perf/ChapterGhostRowReuseSpec.scala",
     "perf/ColumnPaneRowReuseSpec.scala",
-    "perf/FontFallbackColdFrameSpec.scala",
-    "perf/FontFallbackSelectionSpec.scala",
     "perf/FrameCountersRenderSpec.scala",
-    "perf/GuiCellGridClusterSelectionSpec.scala",
-    "perf/GuiCellGridColdFrameSpec.scala",
-    "perf/GuiCellGridSelectionSpec.scala",
     "perf/LaptopFrameBenchmarks.scala",
     "perf/LaptopFramesMatchColdSpec.scala",
     "perf/OracleImages.scala",
     "perf/PanelLayerGeometrySpec.scala",
-    "perf/PresentedFrames.scala",
-    "perf/PresentedFramesSpec.scala",
     "perf/RenderBenchmarks.scala",
     "perf/TypingFramePresentSpec.scala"
   )
