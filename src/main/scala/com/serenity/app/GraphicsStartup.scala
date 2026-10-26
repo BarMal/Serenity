@@ -36,8 +36,8 @@ object GraphicsStartup:
     )
 
   /** The production wiring: the config file and the Skiko probe, both reached only when a windowed launch gets that
-    * far, then the toolkit property is set. No Skia surface exists yet, so until one is registered the catalogue offers
-    * Java2D alone.
+    * far, then the toolkit property is set. The catalogue offers the raster surface, which selection picks only on
+    * Wayland when `ui.render.wayland` asks for `skia-raster`.
     */
   def current(launch: Launch): IO[Resolved] =
     ToolkitSelection.currentEnvironment
@@ -45,7 +45,7 @@ object GraphicsStartup:
         resolve(
           launch,
           environment,
-          SurfaceCatalogue.Java2DOnly,
+          SurfaceCatalogue.Available,
           RenderBackendPeek.read(),
           IO.defer(SkiaProbe.run)
         )
