@@ -68,6 +68,14 @@ def _run(script: str, image: Path, **fake: str) -> subprocess.CompletedProcess[s
     )
 
 
+def _run_from_parent(script: str, image: Path) -> subprocess.CompletedProcess[str]:
+    """Runs the script the way the workflows do: from the checkout root, with the image given as a relative path."""
+    return subprocess.run(
+        ["bash", str(_SCRIPTS / script), image.name, "30"],
+        capture_output=True, text=True, check=False, cwd=image.parent,
+    )
+
+
 class TrainAotCacheTest(unittest.TestCase):
     def test_writes_the_cache_and_points_the_launcher_at_it(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -78,6 +86,13 @@ class TrainAotCacheTest(unittest.TestCase):
             cfg = (image / "lib" / "app" / "Serenity.cfg").read_text().splitlines()
             self.assertEqual(cfg.count("java-options=-XX:AOTCache=$APPDIR/serenity.aot"), 1)
             self.assertLess(cfg.index("[JavaOptions]"), cfg.index("java-options=-XX:AOTCache=$APPDIR/serenity.aot"))
+
+    def test_accepts_a_relative_image_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = _make_image(directory)
+            result = _run_from_parent("train-aot-cache.sh", image)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((image / "lib" / "app" / "serenity.aot").is_file())
 
     def test_fails_when_the_training_run_writes_no_cache(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -107,6 +122,11 @@ class CheckAotCacheTest(unittest.TestCase):
     def test_passes_an_image_whose_cache_opens_and_whose_fallbacks_start(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             result = _run("check-aot-cache.sh", _make_image(directory, with_cache=True))
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_accepts_a_relative_image_path(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run_from_parent("check-aot-cache.sh", _make_image(directory, with_cache=True))
             self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_fails_when_the_valid_cache_is_not_opened(self) -> None:

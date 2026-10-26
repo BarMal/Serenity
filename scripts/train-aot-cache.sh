@@ -7,6 +7,7 @@ set -euo pipefail
 
 image="${1:?usage: $0 path/to/app-image [timeout-seconds]}"
 limit="${2:-120}"
+image="$(cd "$image" 2>/dev/null && pwd)" || { echo "No such app image: ${1}" >&2; exit 1; }
 launcher="$image/bin/Serenity"
 appdir="$image/lib/app"
 cfg="$appdir/Serenity.cfg"
