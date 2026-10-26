@@ -27,6 +27,9 @@ jobs:
   build:
     name: Build ${{ matrix.artifact_suffix }}
     runs-on: ${{ matrix.os }}
+    # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
+    env:
+      SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
     strategy:
       fail-fast: false
       matrix:
@@ -63,11 +66,11 @@ jobs:
             exit 1
           fi
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '25'
           cache: sbt
 
       - name: Set up sbt launcher
@@ -147,6 +150,11 @@ jobs:
           set -euo pipefail
           mkdir -p package-input dist
           cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          # Skiko loads its native library from app/natives (-Dskiko.library.path below), never from the jar: a Mach-O
+          # file inside a jar cannot carry our signature, and Skiko would otherwise unpack it into ~/.skiko (#2028).
+          # The runnable jar published beside the image keeps its natives; only the copy the image ships is stripped.
+          cp package-input/Serenity.jar "dist/Serenity-${{ matrix.artifact_suffix }}.jar"
+          java scripts/SkikoNatives.java package-input/Serenity.jar package-input/natives "${{ matrix.artifact_suffix }}"
           # GPL-3.0-or-later requires the licence to travel with every copy (#2019); jpackage copies the whole input
           # directory into the app image, so these land beside the jar inside the signed bundle on macOS too.
           cp LICENSE THIRD-PARTY-NOTICES.md package-input/
@@ -175,6 +183,16 @@ jobs:
             --java-options '-XX:+UseG1GC'
             --java-options '-XX:MaxRAMPercentage=25'
             --java-options '-XX:G1PeriodicGCInterval=60000'
+            --java-options '-Dskiko.library.path=$APPDIR/natives'
+          )
+          # JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native
+          # access is granted, so the launcher grants it. The other warning is sun.misc.Unsafe: Scala's lazy vals
+          # (scala.runtime.LazyVals, still so in Scala 3.10) call Unsafe.objectFieldOffset, which JDK 24+ reports on the
+          # first call. "allow" keeps the output as quiet as on JDK 21 until Scala drops that call. The smoke test in
+          # scripts/smoke-test-app-image.sh fails when either warning comes back.
+          APP_ARGS+=(
+            --java-options '--enable-native-access=ALL-UNNAMED'
+            --java-options '--sun-misc-unsafe-memory-access=allow'
           )
           # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
           # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
@@ -186,8 +204,16 @@ jobs:
               --java-options '-XX:+AutoCreateSharedArchive'
             )
           fi
-          cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
+          if [ -z "$(find dist -type f -path "*/app/natives/*skiko-*" -print -quit)" ]; then
+            echo "App image is missing the Skiko native library under app/natives" >&2
+            exit 1
+          fi
+          IMAGE_JAR="$(find dist -type f -path "*/app/Serenity.jar" -print -quit)"
+          if jar tf "$IMAGE_JAR" | grep -E 'skiko-(linux|macos|windows)-' >/dev/null; then
+            echo "App image Serenity.jar still contains a Skiko native library" >&2
+            exit 1
+          fi
           for notice in LICENSE THIRD-PARTY-NOTICES.md; do
             if [ -z "$(find dist -type f -path "*/app/$notice" -print -quit)" ]; then
               echo "App image is missing $notice" >&2
@@ -256,7 +282,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${MACOS_CERTIFICATE_BASE64:-}" ]; then
-            codesign --force --deep --sign - dist/Serenity.app
+            scripts/sign-macos-app.sh dist/Serenity.app -
             exit 0
           fi
 
@@ -271,8 +297,7 @@ jobs:
             exit 1
           fi
 
-          codesign --force --deep --options runtime --timestamp --sign "$IDENTITY" dist/Serenity.app
-          codesign --verify --deep --strict --verbose=2 dist/Serenity.app
+          scripts/sign-macos-app.sh dist/Serenity.app "$IDENTITY"
 
       - name: Smoke-test macOS app image
         if: runner.os == 'macOS'
@@ -331,11 +356,10 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent Serenity.app Serenity-${{ matrix.artifact_suffix }}.zip
 
       - name: Upload runnable JAR artifact
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: Serenity-jar
-          path: dist/Serenity.jar
+          name: Serenity-jar-${{ matrix.artifact_suffix }}
+          path: dist/Serenity-${{ matrix.artifact_suffix }}.jar
           if-no-files-found: error
           retention-days: 1
 
@@ -397,7 +421,7 @@ jobs:
             echo "Built from branch \`${GITHUB_REF_NAME}\`."
             echo
             echo "### Assets"
-            echo "- Serenity.jar: runnable JVM fat JAR"
+            echo "- Serenity-linux-x64.jar, Serenity-windows-x64.jar, Serenity-macos-arm64.jar: runnable JVM fat JARs, each with the Skia natives of its own OS only"
             echo "- Serenity-linux-x64.zip: Linux app image"
             echo "- Serenity-windows-x64.zip: Windows app image"
             echo "- Serenity-macos-arm64.zip: macOS Apple Silicon app image"
@@ -457,7 +481,10 @@ jobs:
         run: |
           set -euo pipefail
           cd dist
-          ASSETS=(Serenity.jar Serenity-linux-x64.zip Serenity-windows-x64.zip Serenity-macos-arm64.zip)
+          ASSETS=(
+            Serenity-linux-x64.jar Serenity-windows-x64.jar Serenity-macos-arm64.jar
+            Serenity-linux-x64.zip Serenity-windows-x64.zip Serenity-macos-arm64.zip
+          )
           if [ -f Serenity.cdx.json ]; then
             ASSETS+=(Serenity.cdx.json)
           elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -486,7 +513,9 @@ jobs:
             CHANNEL_FLAGS=(--prerelease)
           fi
           gh release create "$GITHUB_REF_NAME" \
-            dist/Serenity.jar \
+            dist/Serenity-linux-x64.jar \
+            dist/Serenity-windows-x64.jar \
+            dist/Serenity-macos-arm64.jar \
             dist/Serenity-linux-x64.zip \
             dist/Serenity-windows-x64.zip \
             dist/Serenity-macos-arm64.zip \
@@ -509,7 +538,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PUBLISH_SHA="$(git rev-parse HEAD)"
-          ASSETS=(dist/Serenity.jar dist/Serenity-linux-x64.zip dist/Serenity-windows-x64.zip dist/Serenity-macos-arm64.zip)
+          ASSETS=(
+            dist/Serenity-linux-x64.jar dist/Serenity-windows-x64.jar dist/Serenity-macos-arm64.jar
+            dist/Serenity-linux-x64.zip dist/Serenity-windows-x64.zip dist/Serenity-macos-arm64.zip
+          )
           if [ -f dist/Serenity.cdx.json ]; then
             ASSETS+=(dist/Serenity.cdx.json)
           fi

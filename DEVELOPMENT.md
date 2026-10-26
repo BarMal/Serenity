@@ -196,12 +196,39 @@ modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30
 off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
 (`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
 
+### Skia natives per OS
+
+Skiko ships one native library per OS and architecture, so each build carries only its own. `build.sbt` picks the
+`skiko-awt-runtime-<os>-<arch>` artifact from the build host; set `SERENITY_SKIKO_TARGET` (or `-Dserenity.skiko.target`) to
+one of `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64` or `windows-arm64` to build another target. The
+runnable jar keeps its natives. The app image does not: `scripts/SkikoNatives.java` moves them into `app/natives` (with
+`icudtl.dat` on Windows), the image's jar is left without them, and the launcher passes
+`-Dskiko.library.path=$APPDIR/natives`, so Skiko never unpacks anything into `~/.skiko` and macOS signs the dylib as part
+of the bundle (`scripts/sign-macos-app.sh`, entitlements in `ci/macos.entitlements`). `scripts/SkikoProbe.java` loads the
+library from that layout and renders a 1x1 raster surface; the Skia Natives Probe workflow runs it on Windows and on Linux
+under Xvfb.
+
 ### Startup warm-up
 
 Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the
 JIT compiles those paths before the first real keystrokes. It never touches your buffers, session, undo history or
 language servers, and stops at the first key press or click. Turn it off with `startup.warm_up = false`; the log
 reports how it ended (`[WARMUP] Completed(...)` or `[WARMUP] Interrupted`).
+
+### Java version and launch options
+
+CI, the benchmarks and the packages use Temurin 25 (LTS); the app images bundle it through jlink. Two launch options come
+with JDK 24 and later, and both packages pass them (`desktop-publish.yml`, `desktop-release.yml`):
+
+- `--enable-native-access=ALL-UNNAMED`. Skiko, JNA and JLine load native libraries, which JDK 24 warns about on every
+  load and a later JDK will block. The assembled jar grants the same access from its manifest
+  (`Enable-Native-Access: ALL-UNNAMED`, `AssemblyManifestSpec`), so `java -jar Serenity.jar` needs no option.
+- `--sun-misc-unsafe-memory-access=allow`. Scala's lazy vals (`scala.runtime.LazyVals`, unchanged in Scala 3.10) still call
+  `sun.misc.Unsafe.objectFieldOffset`, which JDK 24 and later report on the first call. A manifest cannot carry this
+  option, so `java -jar Serenity.jar` prints that warning on stderr until Scala drops the call; it is harmless.
+
+`scripts/smoke-test-app-image.sh` fails when the packaged app prints either warning. The JetBrains Runtime 25 is not
+supported yet: it fails 194 tests and garbles some text (#2380, #2390).
 
 ### JetBrains Runtime and native Wayland
 
@@ -220,9 +247,16 @@ The startup log names the choice: `[TOOLKIT] Wayland (Wayland session on JetBrai
 
 | Value | Effect |
 | --- | --- |
-| `auto` (or unset) | Native Wayland on JBR in a Wayland session; the JVM's default otherwise |
-| `wayland` | Native Wayland whenever the runtime has it, even without `WAYLAND_DISPLAY` |
+| `auto` (or unset) | Native Wayland on JBR in a Wayland session whose socket connects; the JVM's default otherwise |
+| `wayland` | Native Wayland whenever the runtime has it and the socket connects, even without `WAYLAND_DISPLAY` |
 | `x11` | X11, through XWayland on a Wayland desktop |
+
+Before choosing native Wayland, Serenity connects to the compositor's socket once, the way libwayland does
+(`$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY`, `wayland-0` when unset, an absolute `WAYLAND_DISPLAY` as given; a set
+`WAYLAND_SOCKET` is trusted). If it does not connect, for example a `WAYLAND_DISPLAY` left over from a compositor that has
+exited, the JVM's default toolkit is used instead, even with `SERENITY_TOOLKIT=wayland`, and the startup log says why:
+`[TOOLKIT] PlatformDefault (WAYLAND_DISPLAY is set, but the socket does not connect (/run/user/1000/wayland-1: Connection refused))`.
+Without the check the JetBrains Runtime would try `WLToolkit` anyway and end up headless.
 
 Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
 which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`
@@ -230,6 +264,34 @@ uses the compositor's decorations, since Wayland does not let an application mov
 
 JBR's Vulkan renderer is opt-in and experimental; try it with `-Dsun.java2d.vulkan=true`. The AppCDS flags above work
 on JBR too, but keep a separate archive per runtime or each switch will rewrite it.
+
+### Renderer selection and Wayland
+
+Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
+an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
+default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
+`SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
+config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
+its default.
+
+| Config key | Values | Default | Environment variable | Flag |
+| --- | --- | --- | --- | --- |
+| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `java2d` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+
+`auto` uses Skia when the native library loads and the session allows it, and Java2D otherwise (terminal and safe-mode
+launches never load Skia). The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
+
+Skia's window layer needs an X11 display, so on a Wayland session where the native Wayland toolkit (`WLToolkit`) would be
+used, `ui.render.wayland` decides what happens when the backend resolves to Skia:
+
+| Value | Effect |
+| --- | --- |
+| `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
+| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+
+The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
 
 ## Codex CLI
 
@@ -257,7 +319,7 @@ To cut a release:
 2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
 
 Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
-`Serenity.jar`, the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+the three per-OS jars (`Serenity-<os>-<arch>.jar`), the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
 `X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
 nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
 exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a

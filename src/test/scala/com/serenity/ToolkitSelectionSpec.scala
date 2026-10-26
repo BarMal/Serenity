@@ -14,10 +14,10 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
   private val x11Only       = Map("DISPLAY" -> ":0")
 
   private def jbr(env: Map[String, String], properties: Map[String, String] = jbrProperties): Environment =
-    Environment("Linux", properties, env, waylandToolkitAvailable = true)
+    Environment("Linux", properties, env, waylandToolkitAvailable = true, waylandSocketProblem = None)
 
   private def stock(env: Map[String, String]): Environment =
-    Environment("Linux", temurin, env, waylandToolkitAvailable = false)
+    Environment("Linux", temurin, env, waylandToolkitAvailable = false, waylandSocketProblem = None)
 
   "ToolkitSelection.choose" should "pick the native Wayland toolkit on a JetBrains Runtime in a Wayland session" in {
     ToolkitSelection.choose(jbr(wayland)).choice shouldBe Choice.Wayland
@@ -37,7 +37,7 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave every other platform alone, even when asked for Wayland" in {
-    val mac = Environment("Mac OS X", jbrProperties, wayland + ("SERENITY_TOOLKIT" -> "wayland"), true)
+    val mac = Environment("Mac OS X", jbrProperties, wayland + ("SERENITY_TOOLKIT" -> "wayland"), true, None)
     ToolkitSelection.choose(mac).choice shouldBe Choice.PlatformDefault
     ToolkitSelection.choose(mac.copy(osName = "Windows 11")).choice shouldBe Choice.PlatformDefault
   }
@@ -46,6 +46,19 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
     val explicit = jbr(wayland, jbrProperties + ("awt.toolkit.name" -> "XToolkit"))
     ToolkitSelection.choose(explicit).choice shouldBe Choice.PlatformDefault
     ToolkitSelection.choose(explicit).reason should include("awt.toolkit.name")
+  }
+
+  private val staleSocket = Some("/run/user/1000/wayland-1: Connection refused")
+
+  it should "fall back to the platform default when the Wayland socket does not connect" in {
+    val stale = ToolkitSelection.choose(jbr(wayland).copy(waylandSocketProblem = staleSocket))
+    stale.choice shouldBe Choice.PlatformDefault
+    stale.reason should include("WAYLAND_DISPLAY")
+    stale.reason should include("/run/user/1000/wayland-1: Connection refused")
+  }
+
+  it should "still pick the native Wayland toolkit when the socket connects" in {
+    ToolkitSelection.choose(jbr(wayland).copy(waylandSocketProblem = None)).choice shouldBe Choice.Wayland
   }
 
   "SERENITY_TOOLKIT" should "force X11 through XWayland" in {
@@ -60,6 +73,19 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
     unavailable.reason should include("JetBrains Runtime")
   }
 
+  it should "not force Wayland when the socket does not connect, and say why" in {
+    val forced   = jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland")).copy(waylandSocketProblem = staleSocket)
+    val decision = ToolkitSelection.choose(forced)
+    decision.choice shouldBe Choice.PlatformDefault
+    decision.reason should include("SERENITY_TOOLKIT=wayland")
+    decision.reason should include("Connection refused")
+  }
+
+  it should "leave the X11 request alone when the socket does not connect" in {
+    val x11 = jbr(wayland + ("SERENITY_TOOLKIT" -> "x11")).copy(waylandSocketProblem = staleSocket)
+    ToolkitSelection.choose(x11).choice shouldBe Choice.X11
+  }
+
   it should "fall back to detection for auto, blank and unrecognised values" in {
     ToolkitSelection.choose(jbr(wayland + ("SERENITY_TOOLKIT" -> "auto"))).choice shouldBe Choice.Wayland
     ToolkitSelection.choose(jbr(wayland + ("SERENITY_TOOLKIT" -> ""))).choice shouldBe Choice.Wayland
@@ -72,4 +98,24 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
     Choice.Wayland.toolkitProperty shouldBe Some("WLToolkit")
     Choice.X11.toolkitProperty shouldBe Some("XToolkit")
     Choice.PlatformDefault.toolkitProperty shouldBe None
+  }
+
+  "ToolkitSelection.choose with xwaylandForSkia" should "pick X11 on a JetBrains Runtime in a Wayland session" in {
+    val decision = ToolkitSelection.choose(jbr(wayland).copy(xwaylandForSkia = true))
+    decision.choice shouldBe Choice.X11
+    decision.reason should include("xwayland")
+  }
+
+  it should "change nothing outside a Wayland session" in {
+    ToolkitSelection.choose(jbr(x11Only).copy(xwaylandForSkia = true)).choice shouldBe Choice.PlatformDefault
+  }
+
+  it should "lose to an explicit SERENITY_TOOLKIT=wayland" in {
+    val explicit = jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland")).copy(xwaylandForSkia = true)
+    ToolkitSelection.choose(explicit).choice shouldBe Choice.Wayland
+  }
+
+  it should "lose to a toolkit named on the command line" in {
+    val explicit = jbr(wayland, jbrProperties + ("awt.toolkit.name" -> "WLToolkit")).copy(xwaylandForSkia = true)
+    ToolkitSelection.choose(explicit).choice shouldBe Choice.PlatformDefault
   }

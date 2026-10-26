@@ -16,6 +16,9 @@ object ToolkitSelection:
   val OverrideVariable: String = "SERENITY_TOOLKIT"
   val ToolkitProperty: String  = "awt.toolkit.name"
 
+  /** The values `SERENITY_TOOLKIT` takes; anything else stops the launch (see [[LaunchEnvironment]]). */
+  val Accepted: List[String] = List("auto", "x11", "wayland")
+
   private val WaylandToolkitClassFile = "sun/awt/wl/WLToolkit.class"
 
   enum Choice(val toolkitProperty: Option[String]):
@@ -29,15 +32,16 @@ object ToolkitSelection:
       osName: String,
       properties: Map[String, String],
       env: Map[String, String],
-      waylandToolkitAvailable: Boolean
+      waylandToolkitAvailable: Boolean,
+      waylandSocketProblem: Option[String],
+      xwaylandForSkia: Boolean = false
   )
 
   def choose(environment: Environment): Decision =
     val requested = environment.env.get(OverrideVariable).map(_.trim.toLowerCase(Locale.ROOT)).filter(_.nonEmpty)
     if environment.properties.get(ToolkitProperty).exists(_.nonEmpty) then
       Decision(Choice.PlatformDefault, s"$ToolkitProperty was set on the command line")
-    else if !environment.osName.toLowerCase(Locale.ROOT).contains("linux") then
-      Decision(Choice.PlatformDefault, s"${environment.osName} has one toolkit")
+    else if !isLinux(environment.osName) then Decision(Choice.PlatformDefault, s"${environment.osName} has one toolkit")
     else
       requested match
         case Some("x11")         => Decision(Choice.X11, s"$OverrideVariable=x11")
@@ -46,40 +50,64 @@ object ToolkitSelection:
         case Some(other)         => detected(environment, s" ($OverrideVariable=$other is not x11, wayland or auto)")
 
   private def forcedWayland(environment: Environment): Decision =
-    if environment.waylandToolkitAvailable then Decision(Choice.Wayland, s"$OverrideVariable=wayland")
-    else
+    if !environment.waylandToolkitAvailable then
       Decision(
         Choice.PlatformDefault,
         s"$OverrideVariable=wayland needs a JetBrains Runtime, but ${vendor(environment)} has no WLToolkit"
       )
+    else
+      environment.waylandSocketProblem match
+        case Some(problem) =>
+          Decision(
+            Choice.PlatformDefault,
+            s"$OverrideVariable=wayland, but the Wayland socket does not connect ($problem)"
+          )
+        case None => Decision(Choice.Wayland, s"$OverrideVariable=wayland")
 
   private def detected(environment: Environment, note: String): Decision =
     val waylandSession = environment.env.get("WAYLAND_DISPLAY").exists(_.trim.nonEmpty)
-    if waylandSession && environment.waylandToolkitAvailable then
-      Decision(Choice.Wayland, s"Wayland session on ${vendor(environment)}$note")
+    if waylandSession && environment.waylandToolkitAvailable && environment.xwaylandForSkia then
+      Decision(Choice.X11, s"ui.render.wayland=xwayland: Skia needs X11$note")
+    else if waylandSession && environment.waylandToolkitAvailable then
+      environment.waylandSocketProblem match
+        case Some(problem) =>
+          Decision(Choice.PlatformDefault, s"WAYLAND_DISPLAY is set, but the socket does not connect ($problem)$note")
+        case None => Decision(Choice.Wayland, s"Wayland session on ${vendor(environment)}$note")
     else if waylandSession then
       Decision(Choice.PlatformDefault, s"Wayland session, but ${vendor(environment)} has no WLToolkit$note")
     else Decision(Choice.PlatformDefault, s"not a Wayland session$note")
 
+  private def isLinux(osName: String): Boolean = osName.toLowerCase(Locale.ROOT).contains("linux")
+
   private def vendor(environment: Environment): String =
     environment.properties.get("java.vm.vendor").orElse(environment.properties.get("java.vendor")).getOrElse("this JVM")
 
-  /** Reads the running JVM. The class file is looked up as a resource so that nothing in `java.awt` gets loaded. */
+  /** Reads the running JVM. The class file is looked up as a resource so that nothing in `java.awt` gets loaded. The
+    * socket is probed only where its answer can matter: a Linux runtime with `WLToolkit`, in a session that names a
+    * Wayland socket or is asked for one.
+    */
   def currentEnvironment: IO[Environment] =
     IO {
       val properties = List(ToolkitProperty, "java.vendor", "java.vm.vendor", "java.runtime.name").flatMap(key =>
         Option(System.getProperty(key)).map(key -> _)
       )
+      val osName                  = System.getProperty("os.name", "")
+      val waylandToolkitAvailable = Option(ClassLoader.getSystemResource(WaylandToolkitClassFile)).nonEmpty
+      val wantsWayland =
+        sys.env.get("WAYLAND_DISPLAY").exists(_.trim.nonEmpty) ||
+          sys.env.get(OverrideVariable).exists(_.trim.equalsIgnoreCase("wayland"))
       Environment(
-        osName = System.getProperty("os.name", ""),
+        osName = osName,
         properties = properties.toMap,
         env = sys.env,
-        waylandToolkitAvailable = Option(ClassLoader.getSystemResource(WaylandToolkitClassFile)).nonEmpty
+        waylandToolkitAvailable = waylandToolkitAvailable,
+        waylandSocketProblem =
+          if isLinux(osName) && waylandToolkitAvailable && wantsWayland then WaylandSocket.problem(sys.env) else None
       )
     }
 
   /** Must run before the first `java.awt` class is touched. */
-  def install: IO[Decision] =
-    currentEnvironment
-      .map(choose)
-      .flatTap(decision => IO(decision.choice.toolkitProperty.foreach(System.setProperty(ToolkitProperty, _))).void)
+  def install: IO[Decision] = currentEnvironment.map(choose).flatTap(apply)
+
+  def apply(decision: Decision): IO[Unit] =
+    IO(decision.choice.toolkitProperty.foreach(System.setProperty(ToolkitProperty, _))).void
