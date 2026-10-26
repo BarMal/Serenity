@@ -265,6 +265,34 @@ uses the compositor's decorations, since Wayland does not let an application mov
 JBR's Vulkan renderer is opt-in and experimental; try it with `-Dsun.java2d.vulkan=true`. The AppCDS flags above work
 on JBR too, but keep a separate archive per runtime or each switch will rewrite it.
 
+### Renderer selection and Wayland
+
+Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
+an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
+default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
+`SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
+config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
+its default.
+
+| Config key | Values | Default | Environment variable | Flag |
+| --- | --- | --- | --- | --- |
+| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `java2d` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+
+`auto` uses Skia when the native library loads and the session allows it, and Java2D otherwise (terminal and safe-mode
+launches never load Skia). The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
+
+Skia's window layer needs an X11 display, so on a Wayland session where the native Wayland toolkit (`WLToolkit`) would be
+used, `ui.render.wayland` decides what happens when the backend resolves to Skia:
+
+| Value | Effect |
+| --- | --- |
+| `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
+| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+
+The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
 ## Codex CLI
 
 Codex CLI is installed in the Codespace image. Start it from the repository root:

@@ -121,6 +121,17 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     selections("render-damage-granularity") shouldBe 1
   }
 
+  it should "select the configured renderer" in {
+    CommandRunnerOptionSelections.default(AppConfig.default)("render-backend") shouldBe 0
+    CommandRunnerOptionSelections.default(AppConfig.default.withRenderBackend(RenderBackendSetting.Java2D))(
+      "render-backend"
+    ) shouldBe 2
+    CommandRunnerOptionSelections.default(AppConfig.default)("render-wayland") shouldBe 0
+    CommandRunnerOptionSelections.default(AppConfig.default.withRenderWayland(WaylandRender.XWayland))(
+      "render-wayland"
+    ) shouldBe 2
+  }
+
   it should "reflect whether the word goal, line ending and indentation status segments are shown" in {
     val shown = AppConfig.default.withStatusLineSegments(
       List(StatusSegment.WordGoal, StatusSegment.LineEnding, StatusSegment.Indentation)
