@@ -131,6 +131,11 @@ jobs:
             )
           fi
           jpackage "${APP_ARGS[@]}"
+          # jlink dumped the base archive without --enable-native-access, which the launcher passes: the JVM would log a
+          # mismatch on every start and drop its archived module graph (#2407).
+          if [ "$(uname -s)" != "Darwin" ]; then
+            scripts/regenerate-base-cds-archive.sh dist/Serenity
+          fi
           if [ -z "$(find dist -type f -path "*/app/natives/*skiko-*" -print -quit)" ]; then
             echo "App image is missing the Skiko native library under app/natives" >&2
             exit 1
@@ -182,6 +187,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/verify-windows-launcher.ps1
+
+      # The class-data archive disagreements (and the JVM's native-access warnings) only show when the packaged image is
+      # launched; the script runs under Git Bash on the Windows runner.
+      - name: Smoke-test Windows app image
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: bash
+        run: scripts/smoke-test-app-image.sh dist/Serenity/Serenity.exe 120
 
       - name: Sign macOS app image
         if: runner.os == 'macOS'

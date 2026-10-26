@@ -179,6 +179,12 @@ the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built
 a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
 its signature.
 
+The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
+(`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
+and the JVM then logs `Mismatched values for property jdk.module.enable.native.access` (an error line from the second
+start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
+on that line.
+
 The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
 instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
