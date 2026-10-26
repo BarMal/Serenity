@@ -18,9 +18,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val selfName = "Java2DReferenceConfinementSpec.scala"
 
   /** They test `Java2DRenderSurface`, its image types, layer buffers, font render context, shaped-text cache and
-    * activity counters, `Graphics2D` state, its use as the fallback, how Java2D caches a presented image, a layer-buffer
-    * recording wrapper around it, its timing benchmarks, or a fixture only AWT can see (a font registered with
-    * `GraphicsEnvironment`); they go with the class. Skia has its own specs for the same behaviours
+    * activity counters, `Graphics2D` state, its use as the fallback, how Java2D caches a presented image, a
+    * layer-buffer recording wrapper around it, its timing benchmarks, or a fixture only AWT can see (a font registered
+    * with `GraphicsEnvironment`); they go with the class. Skia has its own specs for the same behaviours
     * (`SkiaRenderSurfaceSpec`).
     */
   private val java2dOnly: Set[String] = Set(
