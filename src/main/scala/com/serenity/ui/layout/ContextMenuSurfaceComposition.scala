@@ -10,6 +10,8 @@ import com.serenity.state.models.ContextMenu
   */
 object ContextMenuSurfaceComposition:
 
+  private val RowPaddingCells = 1
+
   /** The context menu's frame height: header, one row per item at `itemTargetRows`/`itemGapRows`, and a selection-count
     * footer whenever it has items -- the same `SurfaceFrameLayout.frameHeightForItemRows` call
     * `FloatingSurfaceLayout`'s `ContextMenu` case used to make inline, mirroring `ModalSurfaceComposition.frameHeight`.
@@ -23,6 +25,14 @@ object ContextMenuSurfaceComposition:
       itemGapRows = itemGapRows,
       itemTargetRows = itemTargetRows
     )
+
+  /** The cells of the menu's widest row (title, item label or selection-count footer) with a cell of padding each
+    * side -- the content width, before the frame's border.
+    */
+  def preferredWidth(menu: ContextMenu): Int =
+    val footer = Option.when(menu.items.nonEmpty)(s"${menu.items.length}/${menu.items.length}")
+    val rows   = (menu.title :: menu.items.map(_.label)) ++ footer
+    rows.map(CharWidth.ofText).maxOption.getOrElse(0) + (2 * RowPaddingCells)
 
   def forMenu(
     menu: ContextMenu,

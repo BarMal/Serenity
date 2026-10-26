@@ -67,9 +67,10 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("expected the context menu to be laid out below the cursor"))
 
   "an open context menu" should "be laid out at its content's width and height, not the pane's" in {
-    val state       = stateWithMenu(menu)
-    val rect        = menuRect(state)
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 30)))(paneId)
+    val state = stateWithMenu(menu)
+    val rect  = menuRect(state)
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 30)))(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.width shouldBe expectedWidthCells
@@ -78,9 +79,10 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stay inside the pane's content rect" in {
-    val state       = stateWithMenu(menu)
-    val rect        = menuRect(state)
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 30)))(paneId)
+    val state = stateWithMenu(menu)
+    val rect  = menuRect(state)
+    val paneRect =
+      LayoutEngine.calculatePaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 30)))(paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     rect.x should be >= contentRect.x

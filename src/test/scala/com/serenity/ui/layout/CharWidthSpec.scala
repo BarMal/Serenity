@@ -76,3 +76,25 @@ class CharWidthSpec extends AnyFlatSpec with Matchers:
   it should "report halfwidth forms as narrow" in {
     CharWidth.of(0xff61) shouldBe 1 // halfwidth ideographic full stop
   }
+
+  "CharWidth.ofText" should "count plain ASCII as one cell a character" in {
+    CharWidth.ofText("Save file") shouldBe 9
+    CharWidth.ofText("") shouldBe 0
+  }
+
+  it should "count each wide character as two cells" in {
+    CharWidth.ofText("保存文件") shouldBe 8
+  }
+
+  it should "count an emoji cluster as two cells whatever its parts are" in {
+    CharWidth.ofText("\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67") shouldBe 2 // family: man, woman, girl
+    CharWidth.ofText("a\uD83C\uDDEB\uD83C\uDDF7b") shouldBe 4 // a, the French flag, b
+  }
+
+  it should "give a combining mark no cell of its own" in {
+    CharWidth.ofText("e\u0301") shouldBe 1
+  }
+
+  it should "sum mixed narrow and wide text" in {
+    CharWidth.ofText("Open 文件") shouldBe 9
+  }
