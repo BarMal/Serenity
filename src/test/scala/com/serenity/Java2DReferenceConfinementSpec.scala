@@ -79,13 +79,14 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   )
 
   /** Suites that stay on Java2D because Skia still leaves their incremental frames different from the cold ones
-    * (#2380); each flips by deleting its `referenceFrames` override. The line number gutter suite is pinned on Windows
-    * only, and the focused rich-text and virtual drop cap suites on macOS only, where Skia leaves a few pixels of one
-    * row different; the raised letter and column paging suites are pinned everywhere.
+    * (#2380); each flips by deleting its `referenceFrames` override. The line number gutter and heading spacing suites
+    * are pinned on Windows only, and the focused rich-text and virtual drop cap suites on macOS only, where Skia leaves
+    * a few pixels of one row different; the raised letter and column paging suites are pinned everywhere.
     */
   private val pinnedBySkiaGap: Set[String] = Set(
     "perf/ColumnPagingFramesSpec.scala",
     "perf/FocusedRichTextFrameSpec.scala",
+    "perf/HeadingSpacingFramesSpec.scala",
     "perf/LineNumberGutterSpillSpec.scala",
     "perf/RaisedLetterIncrementalFrameSpec.scala",
     "perf/VirtualDropCapIncrementalFrameSpec.scala"
