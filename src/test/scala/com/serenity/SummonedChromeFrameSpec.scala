@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 
 import com.serenity.config.{AppConfig, ChromeElement}
 import com.serenity.rope.Balance
@@ -16,7 +15,7 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -28,12 +27,12 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
   private val metrics  = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 12)
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-  private def paint(state: AppState, caches: RenderCaches): BufferedImage =
+  private def paint(state: AppState, caches: RenderCaches): FramePixels =
     val width  = viewport.width * metrics.charWidth
     val height = viewport.height * metrics.lineHeight
-    val image  = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
+    val image  = SkiaFrames.newFrame(width, height)
     val surface =
-      new Java2DRenderSurface(image, metrics, font, _ => (), width, height, 1.0, 1.0, textCaches = caches.surfaceText)
+      SkiaFrames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, caches)
     RendererEntryPoints.render(
       state,
       cursorVisible = true,
@@ -77,6 +76,6 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
     val inked = for
       column <- gutter.x * metrics.charWidth until (gutter.x + gutter.width) * metrics.charWidth
       row    <- gutter.y * metrics.lineHeight until (gutter.y + gutter.height) * metrics.lineHeight
-    yield after.getRGB(column, row) != before.getRGB(column, row)
+    yield after.rgbAt(column, row) != before.rgbAt(column, row)
     inked.exists(identity) shouldBe true
   }

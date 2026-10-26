@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
+import com.serenity.ReferenceFrames
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
@@ -55,10 +56,10 @@ class EmojiWeightSpec extends AnyFlatSpec with Matchers:
   private def textStyle(style: Int): TextStyle = if style == Font.BOLD then TextStyle.bold else TextStyle.normal
 
   private def paint(style: Int): BufferedImage =
-    val line    = rowOf(grin, style)
-    val image   = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB)
-    val metrics = CellMetrics(charWidth = 8, lineHeight = line.heightPx, ascent = line.ascentPx)
-    val surface = new Java2DRenderSurface(image, metrics, fontOf(Font.PLAIN), _ => (), 120, 80, 1.0, 1.0)
+    val line      = rowOf(grin, style)
+    val metrics   = CellMetrics(charWidth = 8, lineHeight = line.heightPx, ascent = line.ascentPx)
+    val reference = ReferenceFrames.over(120, 80, metrics, fontOf(Font.PLAIN), 120, 80)
+    val surface   = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
@@ -72,7 +73,7 @@ class EmojiWeightSpec extends AnyFlatSpec with Matchers:
       Theme.light,
       styledSegments = Some(List(StyledText(line.text, textStyle(style), black, white)))
     )
-    image
+    reference.image
 
   private def ink(image: BufferedImage): Int =
     (for

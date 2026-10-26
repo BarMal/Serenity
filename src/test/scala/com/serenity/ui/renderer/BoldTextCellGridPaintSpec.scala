@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 
+import com.serenity.ReferenceFrames
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
@@ -31,8 +32,9 @@ class BoldTextCellGridPaintSpec extends AnyFlatSpec with Matchers:
   )
 
   private def painted(text: String, style: TextStyle): BufferedImage =
-    val image   = new BufferedImage(40 * cell, 3 * metrics.lineHeight, BufferedImage.TYPE_INT_RGB)
-    val surface = new Java2DRenderSurface(image, metrics, primary, _ => (), 40 * cell, 3 * metrics.lineHeight, 1.0, 1.0)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
@@ -46,7 +48,7 @@ class BoldTextCellGridPaintSpec extends AnyFlatSpec with Matchers:
       styledSegments = Some(List(StyledText(text, style, black, white))),
       fallback = fallback
     )
-    image
+    reference.image
 
   private def inkPixels(image: BufferedImage, fromCell: Int, untilCell: Int): Int =
     (for

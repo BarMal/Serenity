@@ -7,7 +7,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
-import org.jetbrains.skia.{Bitmap, BlendMode, ImageInfo, Paint, Rect, Surface}
+import org.jetbrains.skia.{Bitmap, BlendMode, IRect, ImageInfo, Paint, Rect, Surface}
 
 /** The pixels of one pooled frame, as the pixel specs read and stamp them whatever renders into them. */
 trait FramePixels:
@@ -22,6 +22,13 @@ trait FramePixels:
 
   /** Every pixel, row by row. */
   def rgbPixels: Array[Int]
+
+  /** Paints every pixel with `rgb`. */
+  def fill(rgb: Int): Unit
+
+  /** Copies the `width` x `height` pixels at (`x`, `y`) of `source`, a frame of the same renderer, to the same place.
+    */
+  def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** The frame as an image, for the dump a failed comparison writes. */
   final def toImage: BufferedImage =
@@ -41,7 +48,8 @@ trait FrameBackend:
     logicalHeightPx: Int,
     scale: Double,
     persists: Boolean,
-    caches: RenderCaches
+    caches: RenderCaches,
+    screen: Option[ScreenIdentity] = None
   ): RenderSurface
 
 object Java2DFrames extends FrameBackend:
@@ -55,6 +63,21 @@ object Java2DFrames extends FrameBackend:
     def rgbPixels: Array[Int] =
       image.getRGB(0, 0, widthPx, heightPx, new Array[Int](widthPx * heightPx), 0, widthPx)
 
+    def fill(rgb: Int): Unit =
+      val graphics = image.createGraphics()
+      try
+        graphics.setComposite(java.awt.AlphaComposite.Src)
+        graphics.setColor(new java.awt.Color(rgb))
+        graphics.fillRect(0, 0, widthPx, heightPx)
+      finally graphics.dispose()
+
+    def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit = source match
+      case from: Java2DFrame =>
+        val graphics = image.createGraphics()
+        try graphics.drawImage(from.image.getSubimage(x, y, width, height), x, y, null)
+        finally graphics.dispose()
+      case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
+
   def newFrame(widthPx: Int, heightPx: Int): FramePixels =
     new Java2DFrame(new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB))
 
@@ -66,7 +89,8 @@ object Java2DFrames extends FrameBackend:
     logicalHeightPx: Int,
     scale: Double,
     persists: Boolean,
-    caches: RenderCaches
+    caches: RenderCaches,
+    screen: Option[ScreenIdentity]
   ): RenderSurface =
     frame match
       case java2d: Java2DFrame =>
@@ -80,10 +104,40 @@ object Java2DFrames extends FrameBackend:
           deviceScaleX = scale,
           deviceScaleY = scale,
           contentPersists = persists,
-          layerCacheOwnerOverride = Some(ScreenIdentity(java2d.image)),
+          layerCacheOwnerOverride = screen.orElse(Some(ScreenIdentity(java2d.image))),
           textCaches = caches.surfaceText
         )
       case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
+
+/** The renderer the pixel specs paint with: a frame and a surface painting into it, read back as an image. */
+object ReferenceFrames:
+
+  final case class Painted(frame: FramePixels, surface: RenderSurface):
+    def image: BufferedImage = frame.toImage
+
+  def over(
+    widthPx: Int,
+    heightPx: Int,
+    metrics: CellMetrics,
+    font: Font,
+    logicalWidthPx: Int,
+    logicalHeightPx: Int,
+    scale: Double = 1.0
+  ): Painted =
+    val frame = SkiaFrames.newFrame(widthPx, heightPx)
+    Painted(
+      frame,
+      SkiaFrames.surfaceOver(
+        frame,
+        metrics,
+        font,
+        logicalWidthPx,
+        logicalHeightPx,
+        scale,
+        persists = false,
+        RenderCaches.create()
+      )
+    )
 
 /** Reading a raster `Surface` back: the CPU pixels, as `0xAARRGGBB` ints, row by row. */
 object SkiaPixels:
@@ -120,6 +174,17 @@ object SkiaFrames extends FrameBackend:
 
     def rgbPixels: Array[Int] = SkiaPixels.read(surface)
 
+    def fill(rgb: Int): Unit = surface.getCanvas.clear(0xff000000 | rgb)
+
+    def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit = source match
+      case from: SkiaFrame =>
+        val copy = Paint()
+        copy.setBlendMode(BlendMode.SRC)
+        val image = from.surface.makeImageSnapshot(IRect.Companion.makeXYWH(x, y, width, height))
+        try surface.getCanvas.drawImage(image, x.toFloat, y.toFloat, copy)
+        finally image.close()
+      case other => throw new IllegalArgumentException(s"not a Skia frame: $other")
+
   def newFrame(widthPx: Int, heightPx: Int): FramePixels =
     new SkiaFrame(Surface.Companion.makeRasterN32Premul(widthPx, heightPx))
 
@@ -131,7 +196,8 @@ object SkiaFrames extends FrameBackend:
     logicalHeightPx: Int,
     scale: Double,
     persists: Boolean,
-    caches: RenderCaches
+    caches: RenderCaches,
+    screen: Option[ScreenIdentity]
   ): RenderSurface =
     frame match
       case skia: SkiaFrame =>
@@ -145,7 +211,7 @@ object SkiaFrames extends FrameBackend:
             scale,
             SkiaTextCaches.of(caches.backendCaches),
             caches.styledFonts,
-            layerCacheOwner = Some(ScreenIdentity(skia))
+            layerCacheOwner = screen.orElse(Some(ScreenIdentity(skia)))
           )
         else
           SkiaRenderSurface.onCanvas(

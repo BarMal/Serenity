@@ -61,7 +61,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       }
     )
 
-  private val oracleImages = OracleImages()
+  private val oracleImages = Java2DOracleImages()
 
   private def deviceWidthPx(window: Window, scale: Double): Int  = math.ceil(window.width * scale).toInt
   private def deviceHeightPx(window: Window, scale: Double): Int = math.ceil(window.height * scale).toInt
@@ -72,7 +72,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       scale: Double,
       persists: Boolean,
       fringe: Boolean,
-      frames: FrameImages
+      frames: Java2DFrameImages
   ):
 
     def this(window: Window, pool: Int, scale: Double, persists: Boolean = true, fringe: Boolean = false) =
@@ -82,7 +82,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
         scale,
         persists,
         fringe,
-        FrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pool)
+        Java2DFrameImages(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pool)
       )
 
     /** The vertical spans, in logical pixels, of the runs the last frame drew. */

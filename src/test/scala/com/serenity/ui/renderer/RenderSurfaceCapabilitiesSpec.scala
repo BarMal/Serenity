@@ -9,8 +9,7 @@ import org.scalatest.matchers.should.Matchers
 /** Dedicated unit coverage for `RenderSurfaceCapabilities` (issue #1421). The file is mostly capability-trait
   * declarations with no logic of their own to test; its one piece of independently-checkable behavior is
   * [[PixelDrawing.compositeFullSurfaceLayer]]'s default implementation, which every surface without its own
-  * backing-resolution override (every headless test double, and every real surface but `Java2DRenderSurface`) falls
-  * back to.
+  * backing-resolution override (every headless test double, and every real surface but the Java2D one) falls back to.
   *
   * `HardwareCursorStyle.decscusrParam` -- this file's other piece of pure logic -- already has dedicated coverage in
   * [[HardwareCursorSpec]], so it is not duplicated here.
