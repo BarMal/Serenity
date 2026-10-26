@@ -17,33 +17,39 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val testRoot = Paths.get("src", "test", "scala", "com", "serenity")
   private val selfName = "Java2DReferenceConfinementSpec.scala"
 
-  /** They test `Java2DRenderSurface`, its image types and layer buffers, `Graphics2D` state, or a fixture only AWT can
-    * see (a font registered with `GraphicsEnvironment`); they go with the class.
+  /** They test `Java2DRenderSurface`, its image types, layer buffers, font render context, shaped-text cache and
+    * activity counters, `Graphics2D` state, its use as the fallback, or a fixture only AWT can see (a font registered
+    * with `GraphicsEnvironment`); they go with the class. Skia has its own specs for the same behaviours
+    * (`SkiaRenderSurfaceSpec`).
     */
   private val java2dOnly: Set[String] = Set(
     "CaretFollowsCursorAcrossFramesSpec.scala",
     "CommandRunnerEditorPaneAccumulationSpec.scala",
+    "CursorPixelAlignmentSpec.scala",
     "FrameBackend.scala",
     "Java2DFrameImageTypeSpec.scala",
     "Java2DLayerSurfaceSpec.scala",
     "Java2DRenderSurfaceSpec.scala",
+    "RenderSurfaceDrawRunPxSpec.scala",
+    "SingleUseFrameSurface.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
+    "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
     "ui/renderer/GuiCellGridFallbackPaintSpec.scala",
     "ui/renderer/Java2DClearViewportExceptSpec.scala",
     "ui/renderer/LabelSpritesSpec.scala",
+    "ui/renderer/LigatureFontShapingSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",
     "ui/renderer/RenderImageSpec.scala",
-    "ui/renderer/StyledFontCacheSpec.scala"
+    "ui/renderer/ShapedTextPaintSpec.scala",
+    "ui/renderer/StyledFontCacheSpec.scala",
+    "ui/renderer/SurfaceActivitySpec.scala",
+    "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
   )
 
   /** Still painting through `new Java2DRenderSurface`; the list only shrinks. */
   private val notYetMoved: Set[String] = Set(
-    "CursorPixelAlignmentSpec.scala",
-    "ModalLayerCompositingSpec.scala",
-    "RenderSurfaceDrawRunPxSpec.scala",
-    "SingleUseFrameSurface.scala",
     "perf/CellGridBenchmarks.scala",
     "perf/ChapterGhostRowReuseSpec.scala",
     "perf/ColumnPaneRowReuseSpec.scala",
@@ -60,13 +66,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
     "perf/RenderBenchmarks.scala",
-    "perf/TypingFramePresentSpec.scala",
-    "state/manager/RenderCachesRendererOwnershipSpec.scala",
-    "ui/layout/RaisedLetterGeometrySpec.scala",
-    "ui/renderer/LigatureFontShapingSpec.scala",
-    "ui/renderer/ShapedTextPaintSpec.scala",
-    "ui/renderer/SurfaceActivitySpec.scala",
-    "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
+    "perf/TypingFramePresentSpec.scala"
   )
 
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */

@@ -1,14 +1,13 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 
-import com.serenity.MockRenderSurface
+import com.serenity.{MockRenderSurface, ReferenceFrames}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings, RaisedRowRule}
-import com.serenity.ui.renderer.{DropCapRenderer, Java2DRenderSurface}
+import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.TextStyle
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -146,9 +145,9 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     * `untouched`; and whether the rows from there down were painted on at all.
     */
   private def paintedAbove(laid: Laid): (Int, Int) =
-    val image = BufferedImage(1600, 900, BufferedImage.TYPE_INT_RGB)
-    (0 until image.getHeight).foreach(y => (0 until image.getWidth).foreach(x => image.setRGB(x, y, untouched)))
-    val surface = Java2DRenderSurface(image, CellMetrics.fromFont(laid.font), laid.font, _ => ())
+    val reference = ReferenceFrames.over(1600, 900, CellMetrics.fromFont(laid.font), laid.font, 1600, 900)
+    reference.frame.fill(untouched)
+    val surface = reference.surface
     val theme   = AppState.empty.persisted.theme
     val topPx   = originPx + laid.textTopOf(laid.home)
     val _ = DropCapRenderer.adjustHomeLineDraw(
@@ -166,6 +165,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       memos = LayoutMemos()
     )
     surface.flush()
+    val image           = reference.image
     def changed(y: Int) = (0 until image.getWidth).count(x => (image.getRGB(x, y) & 0xffffff) != untouched)
     ((0 until topPx).map(changed).sum, (topPx until image.getHeight).map(changed).sum)
 

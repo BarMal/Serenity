@@ -273,8 +273,8 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
   }
 
   /** A [[MockRenderSurface]] that also advertises [[LayerBufferSupport]] -- exercising the same
-    * `context.surface.layerBuffers`-gated path `Java2DRenderSurface` takes in production, while keeping the char/bg
-    * grid assertions [[MockRenderSurface]] already gives tests. `newLayerSurface` hands back a fresh inner
+    * `context.surface.layerBuffers`-gated path the Java2D surface takes in production, while keeping the char/bg grid
+    * assertions [[MockRenderSurface]] already gives tests. `newLayerSurface` hands back a fresh inner
     * `MockRenderSurface` whose `flush()` -- unlike the base class's no-op -- actually invokes `onFlush`, matching what
     * a real offscreen surface does.
     */
@@ -293,7 +293,7 @@ class ModalLayerCompositingSpec extends AnyFlatSpec with Matchers:
           new FlushingLayerSurface(width, height, onFlush, recycled)
     )
 
-  /** Flushes the recycled image when there is one, as [[com.serenity.ui.renderer.Java2DRenderSurface.forLayer]] does.
+  /** Flushes the recycled image when there is one, as `forLayer` on the Java2D surface does.
     */
   private class FlushingLayerSurface(
       width: Int,
