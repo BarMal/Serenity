@@ -196,6 +196,18 @@ modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30
 off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
 (`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
 
+### Skia natives per OS
+
+Skiko ships one native library per OS and architecture, so each build carries only its own. `build.sbt` picks the
+`skiko-awt-runtime-<os>-<arch>` artifact from the build host; set `SERENITY_SKIKO_TARGET` (or `-Dserenity.skiko.target`) to
+one of `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64` or `windows-arm64` to build another target. The
+runnable jar keeps its natives. The app image does not: `scripts/SkikoNatives.java` moves them into `app/natives` (with
+`icudtl.dat` on Windows), the image's jar is left without them, and the launcher passes
+`-Dskiko.library.path=$APPDIR/natives`, so Skiko never unpacks anything into `~/.skiko` and macOS signs the dylib as part
+of the bundle (`scripts/sign-macos-app.sh`, entitlements in `ci/macos.entitlements`). `scripts/SkikoProbe.java` loads the
+library from that layout and renders a 1x1 raster surface; the Skia Natives Probe workflow runs it on Windows and on Linux
+under Xvfb.
+
 ### Startup warm-up
 
 Once the first frame is drawn, Serenity types, deletes and moves through a throwaway editor drawn off-screen, so the
@@ -279,7 +291,7 @@ To cut a release:
 2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
 
 Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
-`Serenity.jar`, the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+the three per-OS jars (`Serenity-<os>-<arch>.jar`), the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
 `X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
 nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
 exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a
