@@ -16,7 +16,6 @@ import com.serenity.keystroke.events.{
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.models.AppState
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningOverride, OpeningRules, OpeningSettings}
-import com.serenity.{FrameBackend, Java2DFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -25,10 +24,6 @@ import org.scalatest.matchers.should.Matchers
   * it, and turning the setting on and off.
   */
 class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
-
-  // Pinned to Java2D: on Skia an incrementally drawn rich-text frame is the cold frame shifted one device pixel to the
-  // left (every pixel matches once shifted), so this suite cannot yet hold Skia to its own cold frame (#2380).
-  override protected def referenceFrames: FrameBackend = Java2DFrames
 
   private val on: OpeningSettings = OpeningSettings(enabled = true)
 

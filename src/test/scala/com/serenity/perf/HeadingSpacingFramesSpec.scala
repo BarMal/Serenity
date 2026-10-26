@@ -13,7 +13,7 @@ import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, setCursorPosition}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -67,9 +67,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     )
 
   /** The renderer the frames are drawn with. */
-  // Pinned to Java2D: on Skia an incrementally drawn rich-text frame is the cold frame shifted one device pixel to the
-  // left (every pixel matches once shifted), so this suite cannot yet hold Skia to its own cold frame (#2380).
-  private def referenceFrames: FrameBackend = Java2DFrames
+  private def referenceFrames: FrameBackend = SkiaFrames
 
   private val oracleImages = OracleImages(referenceFrames)
 

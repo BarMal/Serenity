@@ -78,19 +78,11 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/SurfaceTextContractSpec.scala"
   )
 
-  /** On Skia an incrementally drawn rich-text frame is the cold frame shifted one device pixel to the left, so these
-    * suites stay on Java2D until that is fixed (#2380); each flips by deleting its `referenceFrames` override. The line
-    * number gutter suite is pinned on Windows only and the focused rich-text suite on macOS only, where Skia leaves a
-    * few pixels of one or two rows different.
+  /** Suites that stay on Java2D because Skia still leaves their incremental frames different from the cold ones
+    * (#2380); each flips by deleting its `referenceFrames` override.
     */
   private val pinnedBySkiaGap: Set[String] = Set(
-    "perf/FocusedRichTextFrameSpec.scala",
-    "perf/LineNumberGutterSpillSpec.scala",
-    "perf/ColumnPagingFramesSpec.scala",
-    "perf/DropCapIncrementalFrameSpec.scala",
-    "perf/HeadingSpacingFramesSpec.scala",
-    "perf/RaisedLetterIncrementalFrameSpec.scala",
-    "perf/VirtualDropCapIncrementalFrameSpec.scala"
+    "perf/ColumnPagingFramesSpec.scala"
   )
 
   /** Window specs that still use Java2D as the reference for what Skia paints; the list only shrinks. */

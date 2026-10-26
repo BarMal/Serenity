@@ -5,7 +5,6 @@ import java.awt.image.BufferedImage
 import com.serenity.keystroke.events.{ScrollDown, ScrollUp}
 import com.serenity.richtext.{RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.ui.color.RenderColor.argb
-import com.serenity.{FrameBackend, Java2DFrames, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,11 +14,6 @@ import org.scalatest.matchers.should.Matchers
   * ones as [[ColdFrameHarness]] describes.
   */
 class LineNumberGutterSpillSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
-
-  // Windows only: on Skia the last scroll step leaves 2 to 3 pixels of one row different from the cold frame (CI on
-  // #2402, step 24 of the 1x and 2x cases); Linux passes. It stays on Java2D there until that is fixed (#2380).
-  override protected def referenceFrames: FrameBackend =
-    if System.getProperty("os.name", "").toLowerCase.contains("windows") then Java2DFrames else SkiaFrames
 
   private val scales = List(1.0, 2.0)
 
