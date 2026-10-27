@@ -11,9 +11,9 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.IORuntime
 import com.serenity.config.AppConfig
+import com.serenity.diagnostics.FrameCounts
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.Balance
-import com.serenity.diagnostics.FrameCounts
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -138,16 +138,18 @@ private[perf] object PresentBenchmarks:
 
   /** Shows `states` in turn, forever, each frame damaged by the transition from the state before it. */
   final private[perf] class Cycling(window: Window, states: Vector[AppState]):
+
     private val transitions = states.indices.toVector.map { i =>
       val following = states((i + 1) % states.size)
       following -> DamageProducer.forTransition(states(i), following)
     }
+
     private val steps = Iterator.continually(transitions).flatten
     private val _     = window.render(states.head, Damage.Everything)
 
-    def forwardDamage: Damage      = transitions.head._2
-    def lastFrame: FrameCounts        = window.lastFrame
-    def lastFrameCounts: String       = window.lastFrameCounts
+    def forwardDamage: Damage                  = transitions.head._2
+    def lastFrame: FrameCounts                 = window.lastFrame
+    def lastFrameCounts: String                = window.lastFrameCounts
     def drainPhases(): Map[PresentPhase, Long] = window.drainPhases()
 
     def next(): BufferedImage =
@@ -160,19 +162,21 @@ private[perf] object PresentBenchmarks:
     */
   final private[perf] class ProseStates(prose: StateManager)(using IORuntime):
     val (beforeTyping, afterTyping) = TypingTransition.of(prose)
+
     private def scrolled(): AppState =
       prose.applyEvent(ScrollDown(3)).unsafeRunSync()
       prose.getCurrentState.unsafeRunSync()
-    val proseFull: AppState = scrolled()
+
+    val proseFull: AppState           = scrolled()
     val scrollCycle: Vector[AppState] = Vector(afterTyping, proseFull, scrolled())
 
   /** The `scroll_frame` row's frames on `factory`, for a spec to count what each one draws. */
   private[perf] def scrollCycle(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double)(using
-      IORuntime
+    IORuntime
   ): Cycling =
-    val grid        = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
-    val (prose, _)  = LaptopFrameBenchmarks.proseStateManager(grid = grid)
-    val states      = ProseStates(prose)
+    val grid       = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
+    val (prose, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    val states     = ProseStates(prose)
     Cycling(Window(factory, widthPx, heightPx, scale, grid), states.scrollCycle)
 
   private def codeText: String =
@@ -286,10 +290,10 @@ private[perf] object PresentBenchmarks:
     def named(name: String): String = s"render.present.$label.$name"
 
     def row(
-        name: String,
-        drain: () => Map[PresentPhase, Long],
-        verify: () => Unit,
-        run: () => Any
+      name: String,
+      drain: () => Map[PresentPhase, Long],
+      verify: () => Unit,
+      run: () => Any
     ): (BenchmarkRunner.Benchmark, (String, PhaseLog)) =
       val log = PhaseLog(drain)
       BenchmarkRunner.Benchmark(named(name), 3, 20, verify, log.timing(run), settleJit = true) -> (named(name) -> log)

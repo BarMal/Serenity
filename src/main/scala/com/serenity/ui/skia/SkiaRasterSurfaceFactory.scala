@@ -37,7 +37,8 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
     val surface =
       if request.contentPersists then frames.surfaceFor(widthPx, heightPx, scale.x)
       else Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
-    val changes = Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx, frames.phases))
+    val changes =
+      Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx, frames.phases))
     SkiaRenderSurface.retaining(
       surface,
       request.metrics,

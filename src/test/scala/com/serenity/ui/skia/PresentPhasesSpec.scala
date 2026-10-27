@@ -19,8 +19,8 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
   private val whole  = DeviceArea(0, 0, width, height)
 
   "Presenting phases" should "charge the time of a timed body to its phase and nothing else" in {
-    val phases = new PresentPhases
-    val _      = phases.timed(PresentPhase.Plan)(Thread.sleep(3))
+    val phases  = new PresentPhases
+    val _       = phases.timed(PresentPhase.Plan)(Thread.sleep(3))
     val drained = phases.drain()
     drained(PresentPhase.Plan) should be >= 3_000_000L
     PresentPhase.values.filter(_ != PresentPhase.Plan).map(drained) should contain only 0L
@@ -39,7 +39,9 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
 
   it should "still charge a body that throws" in {
     val phases = new PresentPhases
-    intercept[IllegalStateException](phases.timed(PresentPhase.Plan) { Thread.sleep(2); throw IllegalStateException("x") })
+    intercept[IllegalStateException](phases.timed(PresentPhase.Plan) {
+      Thread.sleep(2); throw IllegalStateException("x")
+    })
     phases.drain()(PresentPhase.Plan) should be >= 2_000_000L
   }
 
@@ -60,7 +62,7 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
     val shown   = image()
     val surface = frames.surfaceFor(width, height, 1.0)
     frames.present(surface, shown, Some(Nil))
-    val _       = frames.phases.drain()
+    val _        = frames.phases.drain()
     val surface2 = frames.surfaceFor(width, height, 1.0)
     frames.present(surface2, shown, Some(Nil), List(RasterCopyPlan.Move(whole, 20)), Some(Nil))
     frames.phases.drain()(PresentPhase.ImageShift) should be > 0L

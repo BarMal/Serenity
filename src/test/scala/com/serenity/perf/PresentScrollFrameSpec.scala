@@ -8,9 +8,9 @@ import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The `scroll_frame` row of [[PresentBenchmarks]] must scroll on every backend. The window's pool hands out two
-  * images in turn, and Java2D keeps what an image last showed, so a row that alternates between two states gives each
-  * image the same state every time and Java2D draws nothing: the row would time an empty frame against a real one.
+/** The `scroll_frame` row of [[PresentBenchmarks]] must scroll on every backend. The window's pool hands out two images
+  * in turn, and Java2D keeps what an image last showed, so a row that alternates between two states gives each image
+  * the same state every time and Java2D draws nothing: the row would time an empty frame against a real one.
   */
 class PresentScrollFrameSpec extends AnyFlatSpec with Matchers:
 

@@ -1,7 +1,7 @@
 package com.serenity.perf
 
-/** The present benchmark's output: the plain benchmark CSV with the time of each present phase appended, and a line
-  * per row saying where its frame went. The phases come last so a reader of the plain layout still parses every row.
+/** The present benchmark's output: the plain benchmark CSV with the time of each present phase appended, and a line per
+  * row saying where its frame went. The phases come last so a reader of the plain layout still parses every row.
   */
 private[perf] object PresentReport:
 
