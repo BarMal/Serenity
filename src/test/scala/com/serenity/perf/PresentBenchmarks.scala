@@ -24,7 +24,7 @@ import com.serenity.ui.renderer.{
   RendererFramePlanner,
   ScreenIdentity
 }
-import com.serenity.ui.skia.SkiaRasterSurfaceFactory
+import com.serenity.ui.skia.{PresentPhase, SkiaRasterSurfaceFactory}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
 
 /** Scratch benchmark for #2380: a window's frame through `FrameSurfaceFactory.Java2D` or `SkiaRasterSurfaceFactory`,
@@ -87,6 +87,10 @@ private[perf] object PresentBenchmarks:
 
     def lastFrame: FrameCounts = caches.frameCounters.lastFrame
 
+    /** What the Skia raster path spent in each present phase since this was last asked; nothing on Java2D. */
+    def drainPhases(): Map[PresentPhase, Long] =
+      SkiaRasterSurfaceFactory.drainPhases(caches.backendCaches).getOrElse(Map.empty)
+
     def lastFrameCounts: String =
       val counts =
         lastFrame.values.toList.sortBy(_._1.toString).map((k, v) => s"$k=$v").mkString(" ")
@@ -142,8 +146,9 @@ private[perf] object PresentBenchmarks:
     private val _     = window.render(states.head, Damage.Everything)
 
     def forwardDamage: Damage      = transitions.head._2
-    def lastFrame: FrameCounts     = window.lastFrame
-    def lastFrameCounts: String    = window.lastFrameCounts
+    def lastFrame: FrameCounts        = window.lastFrame
+    def lastFrameCounts: String       = window.lastFrameCounts
+    def drainPhases(): Map[PresentPhase, Long] = window.drainPhases()
 
     def next(): BufferedImage =
       val (state, damage) = steps.next()
@@ -234,7 +239,37 @@ private[perf] object PresentBenchmarks:
           println(s"DIAG full_$label: ${win.lastFrameCounts}")
       }
 
-  def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+  /** The phase times of a row's most recent frames, which are the ones its samples were taken from. */
+  final private[perf] class PhaseLog(drain: () => Map[PresentPhase, Long]):
+    private val RecentFrames = 200
+    private val recent       = new AtomicReference(Vector.empty[PresentReport.FramePhases])
+
+    def timing(run: () => Any): () => Any = () =>
+      val started    = System.nanoTime()
+      val result     = run()
+      val frameNanos = System.nanoTime() - started
+      val phases     = drain()
+      val _ = recent.updateAndGet { frames =>
+        (frames :+ PresentReport.FramePhases(
+          phases.getOrElse(PresentPhase.Plan, 0L),
+          phases.getOrElse(PresentPhase.SurfaceMove, 0L),
+          phases.getOrElse(PresentPhase.ImageShift, 0L),
+          phases.getOrElse(PresentPhase.CopyOut, 0L),
+          frameNanos
+        )).takeRight(RecentFrames)
+      }
+      result
+
+    def breakdown: PresentReport.PhaseBreakdown = PresentReport.PhaseBreakdown.median(recent.get())
+
+  /** The rows to run, and the phase breakdown of each once it has run. */
+  final private[perf] class Rows(
+      val benchmarks: List[BenchmarkRunner.Benchmark],
+      logs: Map[String, PhaseLog]
+  ):
+    def breakdownOf(name: String): Option[PresentReport.PhaseBreakdown] = logs.get(name).map(_.breakdown)
+
+  def benchmarks(using IORuntime): Rows =
     val backend  = sys.props.getOrElse("present.backend", "java2d")
     val widthPx  = sys.props.getOrElse("present.width", "1920").toInt
     val heightPx = sys.props.getOrElse("present.height", "1080").toInt
@@ -246,16 +281,40 @@ private[perf] object PresentBenchmarks:
         case "skia"   => SkiaRasterSurfaceFactory
         case other    => throw IllegalArgumentException(s"present.backend must be java2d or skia, not $other")
     val scenarios = Scenarios(factory, widthPx, heightPx, scale)
-    import scenarios.{codeFull, codeWin, longShown, proseFull, proseWin, scroll, scrollDown, typing}
+    import scenarios.{codeFull, codeWin, longShown, longWindow, proseFull, proseWin, scroll, scrollDown, typing}
 
-    def row(name: String, verify: () => Unit, run: () => Any): BenchmarkRunner.Benchmark =
-      BenchmarkRunner.Benchmark(s"render.present.$label.$name", 3, 20, verify, run, settleJit = true)
+    def named(name: String): String = s"render.present.$label.$name"
+
+    def row(
+        name: String,
+        drain: () => Map[PresentPhase, Long],
+        verify: () => Unit,
+        run: () => Any
+    ): (BenchmarkRunner.Benchmark, (String, PhaseLog)) =
+      val log = PhaseLog(drain)
+      BenchmarkRunner.Benchmark(named(name), 3, 20, verify, log.timing(run), settleJit = true) -> (named(name) -> log)
 
     if sys.props.contains("present.diag") then scenarios.printCounters()
 
-    List(
+    val scrollDownRow =
+      val log = PhaseLog(longWindow.drainPhases)
+      BenchmarkRunner.Benchmark(
+        named("scroll_down_frame"),
+        30,
+        60,
+        () =>
+          val before = longShown.get
+          assert(hasPixels(scrollDown()), "scroll down drew nothing")
+          assert(longShown.get != before, "scroll down did not scroll")
+        ,
+        log.timing(() => scrollDown()),
+        fixedSampleCount = true
+      ) -> (named("scroll_down_frame") -> log)
+
+    val rows = List(
       row(
         "typing_frame",
+        typing.drainPhases,
         () =>
           assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
           assert(hasPixels(typing.next()), "typing frame drew nothing")
@@ -264,38 +323,32 @@ private[perf] object PresentBenchmarks:
       ),
       row(
         "scroll_frame",
+        scroll.drainPhases,
         () =>
           assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
           assert(hasPixels(scroll.next()), "scroll frame drew nothing")
         ,
         () => scroll.next()
       ),
-      BenchmarkRunner.Benchmark(
-        s"render.present.$label.scroll_down_frame",
-        30,
-        60,
-        () =>
-          val before = longShown.get
-          assert(hasPixels(scrollDown()), "scroll down drew nothing")
-          assert(longShown.get != before, "scroll down did not scroll")
-        ,
-        () => scrollDown(),
-        fixedSampleCount = true
-      ),
+      scrollDownRow,
       row(
         "full_prose_frame",
+        proseWin.drainPhases,
         () => assert(hasPixels(proseWin.render(proseFull, Damage.Everything)), "prose frame drew nothing"),
         () => proseWin.render(proseFull, Damage.Everything)
       ),
       row(
         "full_code_frame",
+        codeWin.drainPhases,
         () => assert(hasPixels(codeWin.render(codeFull, Damage.Everything)), "code frame drew nothing"),
         () => codeWin.render(codeFull, Damage.Everything)
       )
     )
+    Rows(rows.map(_._1), rows.map(_._2).toMap)
 
   def main(args: Array[String]): Unit =
     import cats.effect.unsafe.implicits.global
-    val results = BenchmarkRunner.runMatching(args.toList, benchmarks)
-    BenchmarkRunner.printResults(results)
+    val rows    = benchmarks
+    val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
+    PresentReport.print(results, rows.breakdownOf)
     sys.exit(0)

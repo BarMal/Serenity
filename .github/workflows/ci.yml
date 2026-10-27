@@ -263,7 +263,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_regenerate_base_cds_archive -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_regenerate_base_cds_archive -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
