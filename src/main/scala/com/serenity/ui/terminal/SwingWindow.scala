@@ -347,8 +347,8 @@ class SwingWindow(
       val _ = canvas.requestFocusInWindow()
     }
 
-  /** Makes the window take file drops: the drop target covers the content pane and the canvas, since a drop is
-    * answered by the component under the pointer.
+  /** Makes the window take file drops: the drop target covers the content pane and the canvas, since a drop is answered
+    * by the component under the pointer.
     */
   def installFileDrop(handler: FileDropHandler): Unit =
     SwingUtilities.invokeLater { () =>
