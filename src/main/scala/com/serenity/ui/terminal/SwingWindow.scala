@@ -352,7 +352,7 @@ class SwingWindow(
     */
   def installFileDrop(handler: FileDropHandler): Unit =
     SwingUtilities.invokeLater { () =>
-      List[Component](frame.getContentPane, canvas).foreach { component =>
+      Seq[Component](frame.getContentPane, canvas).foreach { component =>
         new DropTarget(component, DnDConstants.ACTION_COPY, FileDropTarget(handler))
       }
     }
