@@ -159,7 +159,7 @@ private[perf] object PresentBenchmarks:
       prose.applyEvent(ScrollDown(3)).unsafeRunSync()
       prose.getCurrentState.unsafeRunSync()
     val proseFull: AppState = scrolled()
-    val scrollCycle: Vector[AppState] = Vector(afterTyping, proseFull)
+    val scrollCycle: Vector[AppState] = Vector(afterTyping, proseFull, scrolled())
 
   /** The `scroll_frame` row's frames on `factory`, for a spec to count what each one draws. */
   private[perf] def scrollCycle(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double)(using
