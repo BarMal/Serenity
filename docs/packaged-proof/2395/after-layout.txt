@@ -1,0 +1,9 @@
+1-short-labels scale 1: pane content 55x12 cells, menu 10x12 cells at (7,1), image 660x322px
+1-short-labels scale 2: pane content 55x12 cells, menu 10x12 cells at (7,1), image 1320x616px
+2-long-labels scale 1: pane content 55x12 cells, menu 49x10 cells at (5,3), image 660x322px
+2-long-labels scale 2: pane content 55x12 cells, menu 49x10 cells at (5,3), image 1320x616px
+3-cjk-labels scale 1: pane content 55x12 cells, menu 12x12 cells at (6,1), image 660x322px
+3-cjk-labels scale 2: pane content 55x12 cells, menu 12x12 cells at (6,1), image 1320x616px
+4-narrow-pane scale 1: pane content 23x12 cells, menu 23x10 cells at (5,3), image 308x322px
+4-narrow-pane scale 2: pane content 23x12 cells, menu 23x10 cells at (5,3), image 616x616px
+CJK families installed on this machine: 
