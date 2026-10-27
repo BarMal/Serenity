@@ -18,9 +18,15 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
   private val height = 200
   private val whole  = DeviceArea(0, 0, width, height)
 
+  @annotation.tailrec
+  private def spinUntil(deadline: Long): Unit =
+    if System.nanoTime() < deadline then spinUntil(deadline)
+
+  private def busyFor(nanos: Long): Unit = spinUntil(System.nanoTime() + nanos)
+
   "Presenting phases" should "charge the time of a timed body to its phase and nothing else" in {
     val phases  = new PresentPhases
-    val _       = phases.timed(PresentPhase.Plan)(Thread.sleep(3))
+    val _       = phases.timed(PresentPhase.Plan)(busyFor(3_000_000L))
     val drained = phases.drain()
     drained(PresentPhase.Plan) should be >= 3_000_000L
     PresentPhase.values.filter(_ != PresentPhase.Plan).map(drained) should contain only 0L
@@ -32,7 +38,7 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
 
   it should "be empty once drained" in {
     val phases = new PresentPhases
-    phases.timed(PresentPhase.ImageShift)(Thread.sleep(1))
+    phases.timed(PresentPhase.ImageShift)(busyFor(1_000_000L))
     val _ = phases.drain()
     PresentPhase.values.map(phases.drain()) should contain only 0L
   }
@@ -40,7 +46,7 @@ class PresentPhasesSpec extends AnyFlatSpec with Matchers:
   it should "still charge a body that throws" in {
     val phases = new PresentPhases
     intercept[IllegalStateException](phases.timed(PresentPhase.Plan) {
-      Thread.sleep(2); throw IllegalStateException("x")
+      busyFor(2_000_000L); throw IllegalStateException("x")
     })
     phases.drain()(PresentPhase.Plan) should be >= 2_000_000L
   }
