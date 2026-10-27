@@ -92,10 +92,13 @@ final private class LineStretch(line: TextLine, textLength: Int) extends SkiaSha
 /** Shapes stretches and remembers them, found by text and font. Two generations stand in for an eviction order, as in
   * [[ShapedTextCache]]. Shaping runs under one lock because a Skia `Shaper` holds state between calls.
   */
-final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity):
+final class SkiaShapedTextCache(
+    capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity,
+    warmup: WarmupStats = new WarmupStats()
+):
   import SkiaShapedTextCache.*
 
-  private val shaper     = Shaper.Companion.make()
+  private val shaper     = timed(warmup.shaperMade)(Shaper.Companion.make())
   private val options    = ShapingOptions.Companion.getDEFAULT()
   private val current    = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val previous   = new java.util.concurrent.atomic.AtomicReference(new Stretches())
@@ -105,6 +108,12 @@ final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache
 
   def shapings: Long = shapedN.get()
 
+  private def timed[A](record: Long => Unit)(work: => A): A =
+    val started = System.nanoTime()
+    val result  = work
+    record(System.nanoTime() - started)
+    result
+
   def stretchOf(text: String, font: Font): SkiaShapedStretch =
     val key = Key(text, font)
     Option(current.get.get(key)).getOrElse {
@@ -113,7 +122,7 @@ final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache
 
   private def shapeAndRemember(key: Key): SkiaShapedStretch =
     val _ = shapedN.incrementAndGet()
-    remember(key, shapeLock.synchronized(shape(key.text, key.font)))
+    remember(key, timed(warmup.shaped)(shapeLock.synchronized(shape(key.text, key.font))))
 
   private def remember(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
     rotateLock.synchronized {

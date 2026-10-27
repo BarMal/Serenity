@@ -22,7 +22,7 @@ final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Unde
   * typeface (table loading, the glyph cache) is where `FontFirstUse` found AWT disagreeing with itself across threads,
   * and Skia's font manager is not documented as safe for two threads' first lookups.
   */
-final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces):
+final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces, warmup: WarmupStats = new WarmupStats()):
   import SkiaFontCache.*
 
   private val faces = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
@@ -43,10 +43,13 @@ final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces):
   def size: Int = faces.size
 
   private def build(font: java.awt.Font): SkiaFace =
+    val started = System.nanoTime()
     FontFirstUse.settle(font, StrikeContext)
     val skia = SkiaTypefaces.fontFor(font)
     val _    = skia.measureTextWidth(WarmUpText)
-    SkiaFace(skia, strikethroughOf(font))
+    val face = SkiaFace(skia, strikethroughOf(font))
+    warmup.faceBuilt(System.nanoTime() - started)
+    face
 
   private def strikethroughOf(font: java.awt.Font): Option[StyledFontCache.Underline] =
     Option.when(font.getAttributes.get(TextAttribute.STRIKETHROUGH) == TextAttribute.STRIKETHROUGH_ON) {

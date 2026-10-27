@@ -74,6 +74,32 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
+  it should "say where a cold frame's time goes in the Skia caches" in {
+    val phases = ColdFramePhases(
+      frames = 20,
+      facesPerFrame = 2.0,
+      faceMsPerFrame = 19.9,
+      shapersPerFrame = 1.0,
+      shaperMsPerFrame = 2.5,
+      shapingsPerFrame = 165.0,
+      shapingMsPerFrame = 22.8
+    )
+    val detailed = BenchmarkReport(environment.copy(coldPhases = Some(phases)), results, Verdict.SkiaWins)
+    detailed.markdown should include(
+      "Cold frame, Skia caches (mean of 20): 2.0 faces 19.90 ms, 1.0 shapers 2.50 ms, 165 shapings 22.80 ms."
+    )
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldPhases")
+    json.downField("frames").as[Int] shouldBe Right(20)
+    json.downField("faceMsPerFrame").as[Double] shouldBe Right(19.9)
+    json.downField("shaperMsPerFrame").as[Double] shouldBe Right(2.5)
+    json.downField("shapingsPerFrame").as[Double] shouldBe Right(165.0)
+    json.downField("shapingMsPerFrame").as[Double] shouldBe Right(22.8)
+  }
+
+  it should "leave the cold-frame line out when no Skia cache was measured" in {
+    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Cold frame, Skia caches"
+  }
+
   it should "say how long a change of carets waited for its draw" in {
     val draws = LayerDrawStats(
       renders = 330,

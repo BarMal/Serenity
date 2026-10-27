@@ -44,6 +44,16 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "measure what the Skia caches did in each cold frame, with a face built and a shaper made" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val phases = report.environment.coldPhases.getOrElse(fail("no cold-frame phases"))
+    phases.frames shouldBe 3
+    phases.facesPerFrame should be > 0.0
+    phases.faceMsPerFrame should be > 0.0
+    phases.shapersPerFrame shouldBe 1.0
+  }
+
   it should "round every scenario's time up to the display's refresh intervals" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)

@@ -14,7 +14,7 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
-import com.serenity.ui.skia.{SkiaLayerHost, SynchronousSkiaLayerSurfaceFactory}
+import com.serenity.ui.skia.{SkiaLayerHost, SkiaTextCaches, SynchronousSkiaLayerSurfaceFactory, WarmupStats}
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 
 /** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
@@ -38,12 +38,15 @@ object RenderBenchmarkRunner:
       uiMetrics: CellMetrics
   )
 
+  final private case class Timed(stats: FrameStats, coldPhases: Option[ColdFramePhases])
+
   final private case class Measured(
       stats: Map[Scenario, FrameStats],
       deviceScale: Double,
       renderApi: Option[String],
       layers: Option[Int],
-      draws: Option[LayerDrawStats]
+      draws: Option[LayerDrawStats],
+      coldPhases: Option[ColdFramePhases]
   )
 
   def run(
@@ -91,7 +94,8 @@ object RenderBenchmarkRunner:
       skiaDraws = measuredSkia.flatMap(_.draws),
       refresh = refresh,
       rasterNote = raster.left.toOption,
-      machine = MachineState.current
+      machine = MachineState.current,
+      coldPhases = measuredSkia.flatMap(_.coldPhases)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -126,15 +130,17 @@ object RenderBenchmarkRunner:
     settle()
     try
       val viewportLines = window.viewportSize.height
-      val stats = Scenario.values.toList.map { scenario =>
+      val timed = Scenario.values.toList.map { scenario =>
         scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, refresh)
       }.toMap
+      val stats = timed.view.mapValues(_.stats).toMap
       Measured(
         stats,
         Java2DRenderSurface.deviceScaleFor(window.canvas).x,
         window.layerPresenter.map(_.renderApi),
         window.layerPresenter.map(_ => SkiaLayerHost.layersOn(window.canvas)),
-        window.layerPresenter.map(_.drawStats)
+        window.layerPresenter.map(_.drawStats),
+        timed.get(Scenario.ColdFullFrame).flatMap(_.coldPhases)
       )
     finally
       window.stop()
@@ -148,7 +154,7 @@ object RenderBenchmarkRunner:
     options: RenderBenchmarkOptions,
     viewportLines: Int,
     refresh: RefreshRate
-  )(using Balance): FrameStats =
+  )(using Balance): Timed =
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines)
     val shared = RenderCaches.create()
     def cachesFor(step: BenchmarkScript.Step) =
@@ -166,13 +172,24 @@ object RenderBenchmarkRunner:
       )
     }
     steps.take(options.warmup).foreach(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
-    val samples =
-      steps.drop(options.warmup).map(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
-    FrameStats.of(
-      samples.flatten.map(_.nanos),
-      dropped = samples.count(_.isEmpty),
-      endedBeforeReturn = samples.flatten.count(_.endedBeforeReturn),
-      refreshNanos = refresh.nanos
+    val measured = steps.drop(options.warmup).map { step =>
+      val caches = cachesFor(step)
+      val sample = timed(window)(draw(window, fonts, factory, step, caches))
+      val warmup = Option.when(step.frame == BenchmarkScript.FrameKind.ColdFull)(
+        SkiaTextCaches.warmupOf(caches.backendCaches)
+      )
+      (sample, warmup.flatten)
+    }
+    val samples = measured.map(_._1)
+    val warmups = measured.flatMap(_._2)
+    Timed(
+      FrameStats.of(
+        samples.flatten.map(_.nanos),
+        dropped = samples.count(_.isEmpty),
+        endedBeforeReturn = samples.flatten.count(_.endedBeforeReturn),
+        refreshNanos = refresh.nanos
+      ),
+      ColdFramePhases.of(warmups.size, warmups.foldLeft(WarmupStats.Snapshot.empty)(_ + _))
     )
 
   private def draw(

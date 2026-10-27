@@ -59,11 +59,14 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val carets = environment.skiaDraws.filter(_.caretWaits > 0).map { stats =>
       f"Skia layer: ${stats.caretWaits} changes of carets; change to draw mean ${stats.caretToRenderMeanMs}%.2f ms (max ${stats.caretToRenderMaxMs}%.2f)."
     }
+    val cold = environment.coldPhases.map { phases =>
+      f"Cold frame, Skia caches (mean of ${phases.frames}): ${phases.facesPerFrame}%.1f faces ${phases.faceMsPerFrame}%.2f ms, ${phases.shapersPerFrame}%.1f shapers ${phases.shaperMsPerFrame}%.2f ms, ${phases.shapingsPerFrame}%.0f shapings ${phases.shapingMsPerFrame}%.2f ms."
+    }
     val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    List(startup, layers, draws, carets, sync, pictures).flatten.map(line => s"\n$line")
+    List(startup, layers, draws, carets, cold, sync, pictures).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -164,7 +167,19 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         api
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
-        environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList*
+        environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
+        environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList*
+    )
+
+  private def coldPhasesJson(phases: ColdFramePhases): Json =
+    Json.obj(
+      "frames"            -> phases.frames.asJson,
+      "facesPerFrame"     -> phases.facesPerFrame.asJson,
+      "faceMsPerFrame"    -> phases.faceMsPerFrame.asJson,
+      "shapersPerFrame"   -> phases.shapersPerFrame.asJson,
+      "shaperMsPerFrame"  -> phases.shaperMsPerFrame.asJson,
+      "shapingsPerFrame"  -> phases.shapingsPerFrame.asJson,
+      "shapingMsPerFrame" -> phases.shapingMsPerFrame.asJson
     )
 
   private def drawsJson(stats: LayerDrawStats): Json =
