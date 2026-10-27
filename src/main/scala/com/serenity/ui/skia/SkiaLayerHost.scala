@@ -22,7 +22,8 @@ import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLa
   * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
   * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
   */
-final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean) extends LayerHost:
+final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean, redraw: LayerRedraw)
+    extends LayerHost:
 
   private val slot         = new PictureSlot[Picture](_.close())
   private val carets       = new AtomicReference(List.empty[SwingWindow.CaretPaint])
@@ -137,11 +138,11 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     slot.publish(picture)
     published.set(true)
     val _ = publishes.incrementAndGet()
-    layer.repaint()
+    redraw.afterPublish()
 
   def showCarets(shown: List[SwingWindow.CaretPaint]): Unit =
     carets.set(shown)
-    layer.repaint()
+    redraw.afterCaretsChanged()
 
   def setCursor(cursor: Cursor): Unit = SkiaLayerHost.onEventThread(layer.setCursor(cursor))
 
@@ -250,9 +251,12 @@ object SkiaLayerHost:
     * GPU to finish before it counts as drawn, which only a timing run wants.
     */
   def create(canvas: JPanel, syncGpu: Boolean = false): SkiaLayerHost =
+    createWith(canvas, syncGpu, LayerRedraw.repainting)
+
+  private[skia] def createWith(canvas: JPanel, syncGpu: Boolean, redraw: SkiaLayer => LayerRedraw): SkiaLayerHost =
     onEventThread {
       val layer = newLayer()
-      val host  = new SkiaLayerHost(canvas, layer, syncGpu)
+      val host  = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer))
       host.install()
       host
     }

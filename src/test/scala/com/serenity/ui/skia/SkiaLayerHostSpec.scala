@@ -336,6 +336,32 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       eventually("the caret frame to be drawn")(drawn.get > before)
     }
 
+  it should "ask its redraw once for each published picture and once for each change of carets" in
+    withWindow { window =>
+      val publishes = new java.util.concurrent.atomic.AtomicInteger(0)
+      val changes   = new java.util.concurrent.atomic.AtomicInteger(0)
+      val second = SkiaLayerHost.createWith(
+        window.canvas,
+        syncGpu = false,
+        layer =>
+          val real = LayerRedraw.repainting(layer)
+          new LayerRedraw:
+            def afterPublish(): Unit =
+              val _ = publishes.incrementAndGet()
+              real.afterPublish()
+            def afterCaretsChanged(): Unit =
+              val _ = changes.incrementAndGet()
+              real.afterCaretsChanged()
+      )
+      try
+        second.publish(record(scene))
+        (publishes.get, changes.get) shouldBe (1, 0)
+        second.showCarets(Nil)
+        second.showCarets(Nil)
+        (publishes.get, changes.get) shouldBe (1, 2)
+      finally second.dispose()
+    }
+
   it should "name the render API Skiko chose" in
     withWindow { window =>
       eventually("a frame")(window.host.renderCount >= 0)
