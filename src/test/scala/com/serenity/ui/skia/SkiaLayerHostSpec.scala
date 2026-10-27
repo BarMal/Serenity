@@ -344,7 +344,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         window.canvas,
         syncGpu = false,
         layer =>
-          val real = LayerRedraw.repainting(layer)
+          val real = LayerRedraw.forLayer(layer)
           new LayerRedraw:
             def afterPublish(): Unit =
               val _ = publishes.incrementAndGet()
@@ -360,6 +360,26 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         second.showCarets(Nil)
         (publishes.get, changes.get) shouldBe (1, 2)
       finally second.dispose()
+    }
+
+  it should "draw the carets set from a thread that is not the event thread, without an error" in
+    withWindow { window =>
+      val drawn  = new java.util.concurrent.atomic.AtomicInteger(0)
+      val failed = new AtomicReference(Option.empty[Throwable])
+      window.host.onRendered(() =>
+        val _ = drawn.incrementAndGet()
+      )
+      window.host.publish(record(scene))
+      eventually("the first frame")(drawn.get > 0)
+      val before = drawn.get
+      val caller = new Thread(() =>
+        try (1 to 50).foreach(_ => window.host.showCarets(Nil))
+        catch case error: Throwable => failed.set(Some(error))
+      )
+      caller.start()
+      caller.join(10_000L)
+      failed.get() shouldBe None
+      eventually("a frame for the carets")(drawn.get > before)
     }
 
   it should "name the render API Skiko chose" in

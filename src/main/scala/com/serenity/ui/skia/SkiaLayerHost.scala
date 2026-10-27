@@ -251,7 +251,7 @@ object SkiaLayerHost:
     * GPU to finish before it counts as drawn, which only a timing run wants.
     */
   def create(canvas: JPanel, syncGpu: Boolean = false): SkiaLayerHost =
-    createWith(canvas, syncGpu, LayerRedraw.repainting)
+    createWith(canvas, syncGpu, LayerRedraw.forLayer)
 
   private[skia] def createWith(canvas: JPanel, syncGpu: Boolean, redraw: SkiaLayer => LayerRedraw): SkiaLayerHost =
     onEventThread {
