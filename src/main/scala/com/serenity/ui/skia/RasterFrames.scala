@@ -53,8 +53,9 @@ final private[ui] class RasterFrames:
     val whole   = DeviceArea(0, 0, image.getWidth, image.getHeight)
     val now     = RasterCopyPlan.Filled(image, damage, moves, writes)
     val plan    = phases.timed(PresentPhase.Plan)(RasterCopyPlan.plan(image, current.last, current.beforeLast, now, whole))
-    phases.timed(PresentPhase.ImageShift)(plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx)))
-    phases.timed(PresentPhase.CopyOut)(plan.copies.foreach(copyInto(surface, image, _)))
+    if plan.shifts.nonEmpty then
+      phases.timed(PresentPhase.ImageShift)(plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx)))
+    if plan.copies.nonEmpty then phases.timed(PresentPhase.CopyOut)(plan.copies.foreach(copyInto(surface, image, _)))
     state.set(
       current.copy(
         last = Some(now),

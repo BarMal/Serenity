@@ -44,7 +44,7 @@ private[perf] object PresentReport:
     BenchmarkRunner.csvHeader + ",plan_ms,surface_move_ms,image_shift_ms,copy_out_ms,rest_ms"
 
   def csvRow(result: BenchmarkRunner.BenchmarkResult, breakdown: Option[PhaseBreakdown]): String =
-    BenchmarkRunner.csvRow(result) + breakdown.fold(",,,,")(b =>
+    BenchmarkRunner.csvRow(result) + breakdown.fold(",,,,,")(b =>
       f",${b.planMs}%.7f,${b.surfaceMoveMs}%.7f,${b.imageShiftMs}%.7f,${b.copyOutMs}%.7f,${b.restMs}%.7f"
     )
 
