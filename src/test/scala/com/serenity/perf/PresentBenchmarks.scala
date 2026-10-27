@@ -13,7 +13,8 @@ import cats.effect.unsafe.IORuntime
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.diagnostics.FrameCounts
+import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{
@@ -84,9 +85,11 @@ private[perf] object PresentBenchmarks:
 
     def backendCaches: com.serenity.ui.renderer.BackendCaches = caches.backendCaches
 
+    def lastFrame: FrameCounts = caches.frameCounters.lastFrame
+
     def lastFrameCounts: String =
       val counts =
-        caches.frameCounters.lastFrame.values.toList.sortBy(_._1.toString).map((k, v) => s"$k=$v").mkString(" ")
+        lastFrame.values.toList.sortBy(_._1.toString).map((k, v) => s"$k=$v").mkString(" ")
       val copied = SkiaRasterSurfaceFactory.lastCopiedPixels(caches.backendCaches).fold("")(px => s" copiedPx=$px")
       counts + copied
 
@@ -129,18 +132,43 @@ private[perf] object PresentBenchmarks:
     val row = image.getHeight / 2
     (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
-  final private class Alternating(window: Window, before: AppState, after: AppState):
-    private val forward  = DamageProducer.forTransition(before, after)
-    private val backward = DamageProducer.forTransition(after, before)
-    private val steps    = Iterator.continually(List(after -> forward, before -> backward)).flatten
-    private val _        = window.render(before, Damage.Everything)
+  /** Shows `states` in turn, forever, each frame damaged by the transition from the state before it. */
+  final private[perf] class Cycling(window: Window, states: Vector[AppState]):
+    private val transitions = states.indices.toVector.map { i =>
+      val following = states((i + 1) % states.size)
+      following -> DamageProducer.forTransition(states(i), following)
+    }
+    private val steps = Iterator.continually(transitions).flatten
+    private val _     = window.render(states.head, Damage.Everything)
 
-    def forwardDamage: Damage   = forward
-    def lastFrameCounts: String = window.lastFrameCounts
+    def forwardDamage: Damage      = transitions.head._2
+    def lastFrame: FrameCounts     = window.lastFrame
+    def lastFrameCounts: String    = window.lastFrameCounts
 
     def next(): BufferedImage =
       val (state, damage) = steps.next()
       window.render(state, damage)
+
+  /** The prose window's states a benchmark shows: the typing pair, and the same document scrolled three lines at a
+    * time. The scroll states are three, not two, because the window's pool hands out two images in turn: two states
+    * would give each image the same state every time, and Java2D, which keeps what an image shows, would draw nothing.
+    */
+  final private[perf] class ProseStates(prose: StateManager)(using IORuntime):
+    val (beforeTyping, afterTyping) = TypingTransition.of(prose)
+    private def scrolled(): AppState =
+      prose.applyEvent(ScrollDown(3)).unsafeRunSync()
+      prose.getCurrentState.unsafeRunSync()
+    val proseFull: AppState = scrolled()
+    val scrollCycle: Vector[AppState] = Vector(afterTyping, proseFull)
+
+  /** The `scroll_frame` row's frames on `factory`, for a spec to count what each one draws. */
+  private[perf] def scrollCycle(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double)(using
+      IORuntime
+  ): Cycling =
+    val grid        = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
+    val (prose, _)  = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    val states      = ProseStates(prose)
+    Cycling(Window(factory, widthPx, heightPx, scale, grid), states.scrollCycle)
 
   private def codeText: String =
     val root  = Path.of("src", "main", "scala", "com", "serenity", "ui", "renderer")
@@ -153,10 +181,9 @@ private[perf] object PresentBenchmarks:
   ):
     val grid = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
 
-    private val (prose, _)                  = LaptopFrameBenchmarks.proseStateManager(grid = grid)
-    private val (beforeTyping, afterTyping) = TypingTransition.of(prose)
-    prose.applyEvent(ScrollDown(3)).unsafeRunSync()
-    val proseFull: AppState = prose.getCurrentState.unsafeRunSync()
+    private val (prose, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    private val states     = ProseStates(prose)
+    import states.{afterTyping, beforeTyping, proseFull}
 
     private val (code, _) = LaptopFrameBenchmarks.stateManagerHolding(
       codeText,
@@ -169,8 +196,8 @@ private[perf] object PresentBenchmarks:
     val codeFull: AppState = code.getCurrentState.unsafeRunSync()
 
     private def window() = Window(factory, widthPx, heightPx, scale, grid)
-    val typing           = Alternating(window(), beforeTyping, afterTyping)
-    val scroll           = Alternating(window(), afterTyping, proseFull)
+    val typing           = Cycling(window(), Vector(beforeTyping, afterTyping))
+    val scroll           = Cycling(window(), states.scrollCycle)
     val proseWin         = window()
     val codeWin          = window()
     val _                = proseWin.render(proseFull, Damage.Everything)
