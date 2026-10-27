@@ -36,7 +36,8 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
     val frames        = request.backendCaches.getOrCreate(FramesKey)(new RasterFrames)
     val surface =
       if request.contentPersists then frames.surfaceFor(widthPx, heightPx, scale.x)
-      else Surface.Companion.makeRasterN32Premul(widthPx, heightPx)
+      else Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
+    val changes = Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx))
     SkiaRenderSurface.retaining(
       surface,
       request.metrics,
@@ -48,16 +49,23 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
       request.textCaches.styledFonts,
       onFlush = () =>
         if request.contentPersists then
-          val damage = request.changedRegion().map(_.map(DeviceArea.around(_, scale.x, scale.y, widthPx, heightPx)))
-          frames.present(surface, image, damage)
+          val reported = request.changedRegion().map(_.map(DeviceArea.around(_, scale.x, scale.y, widthPx, heightPx)))
+          val damage   = reported.map(areas => RasterCopyPlan.disjoint(areas ++ changes.fold(Nil)(_.paintRecords)))
+          val moves    = changes.fold(Nil)(_.moves)
+          frames.present(surface, image, damage, moves, changes.filter(_ => moves.nonEmpty).map(_.paint))
         else
           RasterFrames.copyWhole(surface, image)
           surface.close()
         request.onFlush(image)
       ,
-      layerCacheOwner = Some(ScreenIdentity(canvas))
+      layerCacheOwner = Some(ScreenIdentity(canvas)),
+      changes = changes
     )
 
   /** How many device pixels the last frame `owner` presented had to copy, if it has presented one. */
   def lastCopiedPixels(owner: BackendCaches): Option[Long] =
     Option.when(owner.holds(FramesKey))(owner.getOrCreate(FramesKey)(new RasterFrames).copiedPixels)
+
+  /** The surface `owner`'s frames are painted on, for a test to compare with what was presented. */
+  private[serenity] def retainedSurface(owner: BackendCaches): Option[org.jetbrains.skia.Surface] =
+    Option.when(owner.holds(FramesKey))(owner.getOrCreate(FramesKey)(new RasterFrames).retainedSurface).flatten
