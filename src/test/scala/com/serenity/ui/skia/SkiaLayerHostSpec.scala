@@ -171,6 +171,18 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.replayMeanMs should be >= 0.0
     }
 
+  it should "time a change of carets from being set to being drawn" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      window.host.drawStats.caretWaits shouldBe 0
+      window.host.showCarets(Nil)
+      eventually("the caret change drawn and timed")(window.host.drawStats.caretWaits >= 1)
+      val stats = window.host.drawStats
+      stats.caretToRenderMeanMs should be > 0.0
+      stats.caretToRenderMaxMs should be >= stats.caretToRenderMeanMs
+    }
+
   it should "say how many published frames its latest draw showed" in
     withWindow { window =>
       window.host.publishedFrames shouldBe 0

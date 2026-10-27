@@ -74,6 +74,27 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
+  it should "say how long a change of carets waited for its draw" in {
+    val draws = LayerDrawStats(
+      renders = 330,
+      publishes = 300,
+      publishToRenderMeanMs = 4.5,
+      publishToRenderMaxMs = 40.0,
+      replayMeanMs = 1.25,
+      caretsMeanMs = 0.05,
+      syncMeanMs = 0.5,
+      caretWaits = 120,
+      caretToRenderMeanMs = 0.45,
+      caretToRenderMaxMs = 3.2
+    )
+    val detailed = BenchmarkReport(environment.copy(skiaDraws = Some(draws)), results, Verdict.SkiaWins)
+    detailed.markdown should include("120 changes of carets; change to draw mean 0.45 ms (max 3.20)")
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("skiaDraws")
+    json.downField("caretWaits").as[Int] shouldBe Right(120)
+    json.downField("caretToRenderMeanMs").as[Double] shouldBe Right(0.45)
+    json.downField("caretToRenderMaxMs").as[Double] shouldBe Right(3.2)
+  }
+
   it should "say whether the GPU was waited on after each draw, and why not when it could not be" in {
     val base = LayerDrawStats(1460, 1156, 9.0, 54.0, 3.4, 0.05, 0.0)
     def textFor(stats: LayerDrawStats): String =

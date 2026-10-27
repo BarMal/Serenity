@@ -56,11 +56,14 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       f"Skia layer: ${stats.renders} draws for ${stats.publishes} published frames; publish to draw mean ${stats.publishToRenderMeanMs}%.2f ms (max ${stats.publishToRenderMaxMs}%.2f); " +
         f"per draw: picture ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
     }
+    val carets = environment.skiaDraws.filter(_.caretWaits > 0).map { stats =>
+      f"Skia layer: ${stats.caretWaits} changes of carets; change to draw mean ${stats.caretToRenderMeanMs}%.2f ms (max ${stats.caretToRenderMaxMs}%.2f)."
+    }
     val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    List(startup, layers, draws, sync, pictures).flatten.map(line => s"\n$line")
+    List(startup, layers, draws, carets, sync, pictures).flatten.map(line => s"\n$line")
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -176,7 +179,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "syncedDraws"           -> stats.syncedDraws.asJson,
       "gpuContext"            -> stats.gpuContext.asJson,
       "pictureOpsMean"        -> stats.pictureOpsMean.asJson,
-      "pictureBytesMean"      -> stats.pictureBytesMean.asJson
+      "pictureBytesMean"      -> stats.pictureBytesMean.asJson,
+      "caretWaits"            -> stats.caretWaits.asJson,
+      "caretToRenderMeanMs"   -> stats.caretToRenderMeanMs.asJson,
+      "caretToRenderMaxMs"    -> stats.caretToRenderMaxMs.asJson
     )
 
   private def verdictJson: Json =
