@@ -21,12 +21,20 @@ final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Unde
   * A face is built once per distinct AWT font, under one lock, and warmed before it is handed out: the first use of a
   * typeface (table loading, the glyph cache) is where `FontFirstUse` found AWT disagreeing with itself across threads,
   * and Skia's font manager is not documented as safe for two threads' first lookups.
+  *
+  * The typeface is looked up once per family and style: a family drawn at several sizes costs the font manager one
+  * lookup, not one per size.
   */
-final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces, warmup: WarmupStats = new WarmupStats()):
+final class SkiaFontCache(
+    maxFaces: Int = SkiaFontCache.DefaultMaxFaces,
+    warmup: WarmupStats = new WarmupStats(),
+    resolveTypeface: (String, Boolean, Boolean) => Typeface = SkiaTypefaces.typefaceFor
+):
   import SkiaFontCache.*
 
-  private val faces = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
-  private val lock  = new Object
+  private val faces     = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
+  private val typefaces = new ConcurrentHashMap[(String, Boolean, Boolean), Typeface]()
+  private val lock      = new Object
 
   def faceFor(font: java.awt.Font): SkiaFace =
     Option(faces.get(font)).getOrElse {
@@ -45,11 +53,20 @@ final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces, warmup:
   private def build(font: java.awt.Font): SkiaFace =
     val started = System.nanoTime()
     FontFirstUse.settle(font, StrikeContext)
-    val skia = SkiaTypefaces.fontFor(font)
+    val skia = SkiaTypefaces.fontFor(font, typefaceOf)
     val _    = skia.measureTextWidth(WarmUpText)
     val face = SkiaFace(skia, strikethroughOf(font))
     warmup.faceBuilt(System.nanoTime() - started)
     face
+
+  /** Called only from `build`, under `lock`. */
+  private def typefaceOf(family: String, bold: Boolean, italic: Boolean): Typeface =
+    val key = (family, bold, italic)
+    Option(typefaces.get(key)).getOrElse {
+      val typeface = resolveTypeface(family, bold, italic)
+      val _        = typefaces.put(key, typeface)
+      typeface
+    }
 
   private def strikethroughOf(font: java.awt.Font): Option[StyledFontCache.Underline] =
     Option.when(font.getAttributes.get(TextAttribute.STRIKETHROUGH) == TextAttribute.STRIKETHROUGH_ON) {
@@ -96,10 +113,12 @@ private[skia] object SkiaTypefaces:
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
-  def fontFor(awt: java.awt.Font): Font =
+  def fontFor(awt: java.awt.Font): Font = fontFor(awt, typefaceFor)
+
+  def fontFor(awt: java.awt.Font, typefaceOf: (String, Boolean, Boolean) => Typeface): Font =
     val bold     = awt.isBold
     val italic   = awt.isItalic
-    val resolved = typefaceFor(awt.getFamily, bold, italic)
+    val resolved = typefaceOf(awt.getFamily, bold, italic)
     val font     = new Font(resolved, awt.getSize2D.max(1.0f))
     font.setSubpixel(true)
     font.setLinearMetrics(true)
@@ -138,7 +157,7 @@ private[skia] object SkiaTypefaces:
       else Map.empty[String, String]
     table.get(logical.toLowerCase)
 
-  private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
+  private[skia] def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
     systemTypeface(family, bold, italic)
       .orElse(
         physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic))
