@@ -183,7 +183,8 @@ private[perf] object PresentBenchmarks:
 
     private val (prose, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
     private val states     = ProseStates(prose)
-    import states.{afterTyping, beforeTyping, proseFull}
+    import states.{afterTyping, beforeTyping}
+    val proseFull: AppState = states.proseFull
 
     private val (code, _) = LaptopFrameBenchmarks.stateManagerHolding(
       codeText,
