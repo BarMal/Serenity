@@ -20,13 +20,23 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
   private def typingDraws(variant: TypingPaintProfile.Variant): (Double, Long) =
     val counts = new DrawCounts
     val cycle =
-      TypingPaintProfile.typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), 900, 600, 1.0, variant.config)
+      TypingPaintProfile.typingCycle(
+        CountingFactory(SkiaRasterSurfaceFactory, counts),
+        900,
+        600,
+        1.0,
+        variant.config,
+        variant.english
+      )
     counts.reset()
     val rowsDrawn = (0 until Frames).map { _ =>
       val _ = cycle.next()
       cycle.lastFrame(FrameCounter.RowsDrawn)
     }.sum
     (counts.total.toDouble / Frames, rowsDrawn)
+
+  private def draws(label: String): Double =
+    typingDraws(TypingPaintProfile.variants.find(_.label == label).getOrElse(fail(s"no $label variant")))._1
 
   "The profile's variants" should "start from the full chrome and have distinct labels" in {
     TypingPaintProfile.variants.head.label shouldBe "full"
@@ -40,16 +50,19 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
 
   it should "paint fewer things per typing frame with no chrome than with all of it" in {
     val full    = typingDraws(TypingPaintProfile.variants.head)._1
-    val minimal = typingDraws(TypingPaintProfile.variants.last)._1
-    TypingPaintProfile.variants.last.label shouldBe "minimal"
+    val minimal = draws("minimal")
     minimal should be > 0.0
     minimal should be < full
   }
 
   it should "show that the spell-check squiggles make most of a typing frame's draw calls" in {
-    def draws(label: String): Double =
-      typingDraws(TypingPaintProfile.variants.find(_.label == label).getOrElse(fail(s"no $label variant")))._1
     draws("no_spellcheck") should be < draws("full") / 2
+  }
+
+  it should "draw far fewer squiggles in English prose than in lorem ipsum, and still some" in {
+    draws("english_no_spellcheck") should be < draws("english")
+    draws("english") should be < draws("full")
+    draws("english") - draws("english_no_spellcheck") should be < (draws("full") - draws("no_spellcheck")) / 4
   }
 
   for (name, factory) <- List("Java2D" -> FrameSurfaceFactory.Java2D, "Skia raster" -> SkiaRasterSurfaceFactory) do
