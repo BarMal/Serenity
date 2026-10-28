@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 import unittest
@@ -70,6 +71,25 @@ class AbbaStartupTest(unittest.TestCase):
             result = _run(str(a), str(b), str(root / "out"), "2")
             self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
             self.assertIn("startup.warm.first_frame", result.stdout)
+
+    def test_report_only_never_fails_even_when_the_candidate_is_much_slower(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            a, b = _image(root, "a", 0.05), _image(root, "b", 0.6)
+            env = {**os.environ, "ABBA_STARTUP_REPORT_ONLY": "1"}
+            result = _run(str(a), str(b), str(root / "out"), "2", env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("::warning::startup.warm.first_frame", result.stdout)
+            self.assertNotIn("::error::", result.stdout + result.stderr)
+
+    def test_report_only_turns_a_missing_launcher_into_a_warning(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            b = _image(root, "b", 0.01)
+            env = {**os.environ, "ABBA_STARTUP_REPORT_ONLY": "1"}
+            result = _run(str(root / "nope"), str(b), str(root / "out"), "1", env=env)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("::warning::", result.stdout + result.stderr)
 
     def test_missing_launcher_fails_before_running_anything(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

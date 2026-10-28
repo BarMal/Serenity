@@ -10,9 +10,10 @@ A benchmark blocks when B is worse than A by all of:
 * footprint: B's median `retained_bytes` is more than 10% above A's.
 
 Usage:
-    abba_compare.py --a a1.csv a2.csv a3.csv a4.csv --b b1.csv b2.csv b3.csv b4.csv [--time-delta-ms 0.03]
+    abba_compare.py --a a1.csv a2.csv a3.csv a4.csv --b b1.csv b2.csv b3.csv b4.csv [--time-delta-ms 0.03] [--report-only]
 
 Exit codes: 0 nothing blocks, 1 at least one benchmark blocks, 2 a side has no runs or the CSVs share no benchmark.
+With --report-only the same findings are warnings and the exit code is always 0.
 """
 
 from __future__ import annotations
@@ -111,20 +112,26 @@ def main_with_args(argv: list[str]) -> int:
         default=TIME_DELTA_MS,
         help=f"Smallest p50 slowdown that can block (default {TIME_DELTA_MS} ms; start-up rows use a much larger one)",
     )
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Print what would block as ::warning:: lines and always exit 0, for rows that are tracked, not gated",
+    )
     args = parser.parse_args(argv)
+    level = "warning" if args.report_only else "error"
     a_runs, b_runs = _load_runs(args.a), _load_runs(args.b)
     if not a_runs or not b_runs:
-        print("::error::A side of the comparison has no benchmark rows.")
-        return 2
+        print(f"::{level}::A side of the comparison has no benchmark rows.")
+        return 0 if args.report_only else 2
     shared = {n for run in a_runs for n in run} & {n for run in b_runs for n in run}
     if not shared:
-        print("::error::The A and B runs share no benchmark.")
-        return 2
+        print(f"::{level}::The A and B runs share no benchmark.")
+        return 0 if args.report_only else 2
     findings = compare(a_runs, b_runs, args.time_delta_ms)
     for finding in findings:
-        print(f"::error::{finding.name} {finding.metric}: {finding.detail}")
+        print(f"::{level}::{finding.name} {finding.metric}: {finding.detail}")
     print(f"{len(shared)} benchmarks compared, {len(findings)} blocking.")
-    return 1 if findings else 0
+    return 1 if findings and not args.report_only else 0
 
 
 def main() -> int:

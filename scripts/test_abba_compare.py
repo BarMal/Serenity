@@ -123,6 +123,54 @@ class TimeDeltaOptionTest(unittest.TestCase):
             self.assertEqual(abba.main_with_args([*args, "--time-delta-ms", "100"]), 0)
 
 
+class ReportOnlyTest(unittest.TestCase):
+    """Report-only runs show what would block as warnings and never fail the job (start-up is trend only)."""
+
+    def _csvs(self, directory: str, side: str, base: float) -> list[str]:
+        paths = []
+        for i in range(4):
+            path = Path(directory) / f"{side}{i}.csv"
+            path.write_text(
+                "name,warmups,iterations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+                "allocation_p95_bytes,retained_bytes\n"
+                f"x,0,0,0,0,{base + i},{base + i},0,,,\n"
+            )
+            paths.append(str(path))
+        return paths
+
+    def _run(self, *args: str):
+        import io
+        from contextlib import redirect_stdout
+
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            status = abba.main_with_args(list(args))
+        return status, buffer.getvalue()
+
+    def test_a_blocking_difference_is_a_warning_and_exit_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1000.0), self._csvs(directory, "b", 1500.0)
+            status, out = self._run("--a", *a, "--b", *b, "--time-delta-ms", "100", "--report-only")
+            self.assertEqual(status, 0)
+            self.assertIn("::warning::x p50_ms", out)
+            self.assertNotIn("::error::", out)
+
+    def test_without_the_flag_the_same_difference_still_blocks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1000.0), self._csvs(directory, "b", 1500.0)
+            status, out = self._run("--a", *a, "--b", *b, "--time-delta-ms", "100")
+            self.assertEqual(status, 1)
+            self.assertIn("::error::x p50_ms", out)
+
+    def test_no_data_is_a_warning_and_exit_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a = self._csvs(directory, "a", 1000.0)
+            status, out = self._run("--a", *a, "--b", str(Path(directory) / "missing.csv"), "--report-only")
+            self.assertEqual(status, 0)
+            self.assertIn("::warning::", out)
+            self.assertNotIn("::error::", out)
+
+
 class CommandLineTest(unittest.TestCase):
     def _csv(self, directory: str, name: str, p50: float) -> str:
         path = Path(directory) / name

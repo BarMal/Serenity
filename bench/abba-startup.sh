@@ -8,6 +8,8 @@
 # not the 0.03 ms of in-process rows) over non-overlapping ranges. Without $DISPLAY the runs go through xvfb-run.
 #
 # Results land in <out-dir>/{a,b}-{1..4}.csv; exits with abba_compare.py's status (0 clean, 1 blocking, 2 no data).
+# ABBA_STARTUP_REPORT_ONLY=1 makes it report-only (#2420: start-up is tracked, not gated on CI): findings are ::warning::
+# lines and it exits 0 whatever happens. Leave it unset on the laptop, where this is the gate.
 set -euo pipefail
 
 A="${1:?Usage: abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]}"
@@ -15,10 +17,7 @@ B="${2:?Usage: abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]}"
 OUT="${3:?Usage: abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]}"
 RUNS="${4:-5}"
 
-for launcher in "$A" "$B"; do
-  [[ -x "$launcher" ]] || { echo "ERROR: launcher not found or not executable: $launcher" >&2; exit 1; }
-done
-mkdir -p "$OUT"
+report_only="${ABBA_STARTUP_REPORT_ONLY:-}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 run_once() {
@@ -28,11 +27,21 @@ run_once() {
   echo "$csv: $(grep -c '^startup\.' "$csv") rows"
 }
 
-a=0
-b=0
-for side in A B B A A B B A; do
-  if [[ "$side" == A ]]; then a=$((a + 1)); run_once "$A" "$OUT/a-$a.csv"; else b=$((b + 1)); run_once "$B" "$OUT/b-$b.csv"; fi
-done
+measure_and_compare() {
+  for launcher in "$A" "$B"; do
+    [[ -x "$launcher" ]] || { echo "ERROR: launcher not found or not executable: $launcher" >&2; return 1; }
+  done
+  mkdir -p "$OUT"
+  local a=0 b=0 side
+  for side in A B B A A B B A; do
+    if [[ "$side" == A ]]; then a=$((a + 1)); run_once "$A" "$OUT/a-$a.csv"; else b=$((b + 1)); run_once "$B" "$OUT/b-$b.csv"; fi
+  done
+  python3 "$HERE/../scripts/abba_compare.py" --a "$OUT"/a-{1..4}.csv --b "$OUT"/b-{1..4}.csv \
+    --time-delta-ms "${ABBA_STARTUP_MIN_DELTA_MS:-100}" ${report_only:+--report-only}
+}
 
-python3 "$HERE/../scripts/abba_compare.py" --a "$OUT"/a-{1..4}.csv --b "$OUT"/b-{1..4}.csv \
-  --time-delta-ms "${ABBA_STARTUP_MIN_DELTA_MS:-100}"
+if [[ -n "$report_only" ]]; then
+  measure_and_compare || echo "::warning::abba-startup could not complete (report-only, so this does not fail the job)."
+  exit 0
+fi
+measure_and_compare

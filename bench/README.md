@@ -49,7 +49,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 ### ABBA over two images (#2420)
 
-`bench/abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]` is `abba.sh` for start-up: it runs `startup.py` against the two images' launchers in the order A B B A A B B A, writes `a-1..4.csv` and `b-1..4.csv`, and applies the protocol's blocking rule with `scripts/abba_compare.py`. The time floor is 100 ms (`ABBA_STARTUP_MIN_DELTA_MS`; `abba_compare.py --time-delta-ms`), not the 0.03 ms of the in-process rows, which would block on noise at a start-up scale. Both images need a trained AOT cache. Build the two images from the merge base and the candidate with `desktop-release.yml`.
+`bench/abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]` is `abba.sh` for start-up: it runs `startup.py` against the two images' launchers in the order A B B A A B B A, writes `a-1..4.csv` and `b-1..4.csv`, and applies the protocol's blocking rule with `scripts/abba_compare.py`. The time floor is 100 ms (`ABBA_STARTUP_MIN_DELTA_MS`; `abba_compare.py --time-delta-ms`), not the 0.03 ms of the in-process rows, which would block on noise at a start-up scale. Set `ABBA_STARTUP_REPORT_ONLY=1` for a CI job: findings become `::warning::` lines and the script exits 0 whatever happens, because start-up is tracked as a trend on CI and only the laptop run gates. Both images need a trained AOT cache. Build the two images from the merge base and the candidate with `desktop-release.yml`.
 
 ## Per-keystroke latency trace
 
