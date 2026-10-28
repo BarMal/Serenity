@@ -11,5 +11,6 @@ class SdlNativeSuite
       new SdlBindingSpec,
       new SdlGlBindingSpec,
       new SdlGlWindowSpec,
-      new com.serenity.ui.skia.SkiaGlContextNativeSpec
+      new com.serenity.ui.skia.SkiaGlContextNativeSpec,
+      new com.serenity.ui.skia.SkiaGlTargetsNativeSpec
     )
