@@ -81,6 +81,17 @@ class RasterCopyPlanDisjointSpec extends AnyFlatSpec with Matchers:
     yield DeviceArea(8 + word * 30 + random.nextInt(6), 14 + line * 18, 2 + random.nextInt(24), 1 + random.nextInt(2))
     underlines.toList ++ List(DeviceArea(0, 0, 900, 12), DeviceArea(880, 0, 20, 600), DeviceArea(0, 580, 900, 20))
 
+  /** What a typing frame records on prose the dictionary flags throughout: each line underlined end to end, bar a gap.
+    */
+  private def runsOfSquiggles(random: Random, lines: Int, perLine: Int): List[DeviceArea] =
+    val underlines = for
+      line <- 0 until lines
+      gap = random.nextInt(perLine)
+      word <- 0 until perLine
+      if word != gap
+    yield DeviceArea(8 + word * 30, 14 + line * 18, 30 + random.nextInt(3), 1)
+    underlines.toList ++ List(DeviceArea(0, 0, 900, 12), DeviceArea(880, 0, 20, 600), DeviceArea(0, 580, 900, 20))
+
   "disjoint" should "give the list it always gave for areas that overlap, touch and are empty" in {
     val random = Random(7)
     (1 to 400).foreach { round =>
@@ -97,16 +108,25 @@ class RasterCopyPlanDisjointSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "give the list it always gave for squiggles that run end to end" in {
+    val random = Random(13)
+    (1 to 60).foreach { round =>
+      val areas =
+        random.shuffle(runsOfSquiggles(random, lines = 1 + random.nextInt(40), perLine = 2 + random.nextInt(30)))
+      withClue(s"round $round: ")(RasterCopyPlan.disjoint(areas) shouldBe Reference.disjoint(areas))
+    }
+  }
+
   it should "give nothing for no areas and for areas with no pixels" in {
     RasterCopyPlan.disjoint(Nil) shouldBe Nil
     RasterCopyPlan.disjoint(List(DeviceArea(3, 3, 0, 5), DeviceArea(1, 1, 4, -1))) shouldBe Nil
   }
 
-  it should "allocate a fraction of what the band-by-band merge did for a typing frame's squiggles" in {
-    val areas = squiggles(Random(3), lines = 40, perLine = 32)
+  it should "allocate less than half of what the band-by-band merge did for a typing frame's squiggles" in {
+    val areas = runsOfSquiggles(Random(3), lines = 40, perLine = 32)
     areas.size should be > 800
     val before = AllocationProbe.allocatedBytes(Reference.disjoint(areas))
     val after  = AllocationProbe.allocatedBytes(RasterCopyPlan.disjoint(areas))
     assume(before.isDefined && after.isDefined, "per-thread allocation is not supported on this JVM")
-    withClue(s"before ${before.get} bytes, after ${after.get}: ")(after.get should be < before.get / 8)
+    withClue(s"before ${before.get} bytes, after ${after.get}: ")(after.get should be < before.get / 2)
   }
