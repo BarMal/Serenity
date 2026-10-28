@@ -49,4 +49,3 @@ class RendererSquiggleSpec extends AnyFlatSpec with Matchers:
   it should "be empty when the whole squiggle is below the pane" in {
     RendererHighlights.squiggleRects(0, 8, 50, 1, clipBottomPx = 50) shouldBe empty
   }
-

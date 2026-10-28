@@ -23,12 +23,19 @@ class SkiaFillPixelRectsSpec extends AnyFlatSpec with Matchers:
 
   /** A zig-zag like a misspelling's squiggle: two-pixel steps, one pixel high, three deep. */
   private val zigzag: IArray[Int] =
-    IArray.from((0 until 20).flatMap(step => List(10 + step * 2, 20 + (if step % 6 <= 3 then step % 6 else 6 - step % 6), 2, 1)))
-
-  private final class Canvas(scale: Double):
-    val surface: Surface = Surface.Companion.makeRaster(
-      RasterFrames.frameInfo(SkiaRenderSurface.deviceDimension(width, scale), SkiaRenderSurface.deviceDimension(height, scale))
+    IArray.from(
+      (0 until 20).flatMap(step => List(10 + step * 2, 20 + (if step % 6 <= 3 then step % 6 else 6 - step % 6), 2, 1))
     )
+
+  final private class Canvas(scale: Double):
+
+    val surface: Surface = Surface.Companion.makeRaster(
+      RasterFrames.frameInfo(
+        SkiaRenderSurface.deviceDimension(width, scale),
+        SkiaRenderSurface.deviceDimension(height, scale)
+      )
+    )
+
     val renderSurface: SkiaRenderSurface =
       SkiaRenderSurface.retaining(
         surface,
@@ -40,12 +47,15 @@ class SkiaFillPixelRectsSpec extends AnyFlatSpec with Matchers:
         SkiaTextCaches.fresh(),
         StyledFontCache()
       )
+
     renderSurface.pixels.fillPixelRect(0, 0, width, height, background)
 
     def pixels: Array[Int] = SkiaPixels.read(surface)
 
   private def oneByOne(canvas: Canvas, rects: IArray[Int], color: RenderColor): Array[Int] =
-    rects.grouped(4).foreach(quad => canvas.renderSurface.pixels.fillPixelRect(quad(0), quad(1), quad(2), quad(3), color))
+    rects
+      .grouped(4)
+      .foreach(quad => canvas.renderSurface.pixels.fillPixelRect(quad(0), quad(1), quad(2), quad(3), color))
     canvas.pixels
 
   private def asBatch(canvas: Canvas, rects: IArray[Int], color: RenderColor): Array[Int] =
@@ -53,8 +63,8 @@ class SkiaFillPixelRectsSpec extends AnyFlatSpec with Matchers:
     canvas.pixels
 
   private val colours = List(
-    "an opaque colour"      -> RenderColor.fromRgba(200, 30, 30),
-    "a translucent colour"  -> RenderColor.fromRgba(200, 30, 30, 128)
+    "an opaque colour"     -> RenderColor.fromRgba(200, 30, 30),
+    "a translucent colour" -> RenderColor.fromRgba(200, 30, 30, 128)
   )
 
   for
@@ -80,8 +90,10 @@ class SkiaFillPixelRectsSpec extends AnyFlatSpec with Matchers:
       val canvas = new Canvas(1.0)
       canvas.renderSurface.panelOutlines.foreach(_.withRectClip(0, 0, 3, 3)(draw(canvas)))
       canvas.pixels
-    val color    = RenderColor.fromRgba(10, 90, 200)
-    val expected = clipped(canvas => zigzag.grouped(4).foreach(q => canvas.renderSurface.pixels.fillPixelRect(q(0), q(1), q(2), q(3), color)))
-    val actual   = clipped(canvas => canvas.renderSurface.pixels.fillPixelRects(zigzag, color))
+    val color = RenderColor.fromRgba(10, 90, 200)
+    val expected = clipped(canvas =>
+      zigzag.grouped(4).foreach(q => canvas.renderSurface.pixels.fillPixelRect(q(0), q(1), q(2), q(3), color))
+    )
+    val actual = clipped(canvas => canvas.renderSurface.pixels.fillPixelRects(zigzag, color))
     actual shouldBe expected
   }
