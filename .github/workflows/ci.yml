@@ -258,7 +258,7 @@ jobs:
 
       # The GL specs run on SDL's offscreen driver, which makes an EGL context from Mesa's software rasteriser.
       - name: Install Mesa EGL for the GL specs
-        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1-mesa-dri libgles2 sway
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1 libgl1-mesa-dri libgles2 sway
 
       # `sbt test` excludes these specs (they load the library built above, on SDL's dummy and offscreen drivers).
       - name: Run the SDL native specs

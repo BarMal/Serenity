@@ -10,5 +10,6 @@ class SdlNativeSuite
     extends Sequential(
       new SdlBindingSpec,
       new SdlGlBindingSpec,
-      new SdlGlWindowSpec
+      new SdlGlWindowSpec,
+      new com.serenity.ui.skia.SkiaGlContextNativeSpec
     )
