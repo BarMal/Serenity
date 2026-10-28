@@ -30,14 +30,31 @@ WARNING: Please consider reporting this to the maintainers of class scala.runtim
 WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
 """
 
+_CDS_MISMATCH_INFO = """\
+[0.007s][info][cds] Mismatched values for property jdk.module.enable.native.access: ALL-UNNAMED specified during runtime but not during dump time
+[0.007s][info][cds] Disabling optimized module handling
+"""
+
+_CDS_MISMATCH_ERROR = """\
+[0.006s][error][cds] Mismatched values for property jdk.module.enable.native.access: ALL-UNNAMED specified during runtime but not during dump time
+[0.006s][error][cds] Disabling optimized module handling
+"""
+
 _APPLICATION_WARNING = "WARNING: the spell-check dictionary could not be refreshed\n"
 
 
-def _run_smoke_test(launcher_output: str) -> subprocess.CompletedProcess[str]:
-    """Runs the script against a launcher that prints `launcher_output` then the ready line, and exits cleanly."""
+def _run_smoke_test(launcher_output: str, only_when_cds_logged: bool = False) -> subprocess.CompletedProcess[str]:
+    """Runs the script against a launcher that prints `launcher_output` then the ready line, and exits cleanly.
+
+    With `only_when_cds_logged` the launcher prints the output only when JAVA_TOOL_OPTIONS asks for -Xlog:cds, as the
+    JVM does: its info-level CDS lines are invisible unless the script requests them.
+    """
+    guard = '[[ "${JAVA_TOOL_OPTIONS:-}" == *-Xlog:cds* ]] && ' if only_when_cds_logged else ""
     with tempfile.TemporaryDirectory() as directory:
         launcher = Path(directory) / "Serenity"
-        launcher.write_text(f"#!/usr/bin/env bash\ncat <<'OUTPUT'\n{launcher_output}SERENITY_SMOKE_READY\nOUTPUT\n")
+        launcher.write_text(
+            f"#!/usr/bin/env bash\n{guard}cat <<'OUTPUT'\n{launcher_output}OUTPUT\necho SERENITY_SMOKE_READY\n"
+        )
         launcher.chmod(0o755)
         return subprocess.run(
             ["bash", str(_SCRIPT), str(launcher), "30"], capture_output=True, text=True, check=False
@@ -58,6 +75,20 @@ class SmokeTestAppImageTest(unittest.TestCase):
         result = _run_smoke_test(_UNSAFE)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("JVM warning", result.stderr)
+
+    def test_fails_on_a_cds_error_line(self) -> None:
+        result = _run_smoke_test(_CDS_MISMATCH_ERROR)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("class-data archive", result.stderr)
+
+    def test_fails_on_an_info_level_cds_mismatch_by_asking_the_jvm_to_log_cds(self) -> None:
+        result = _run_smoke_test(_CDS_MISMATCH_INFO, only_when_cds_logged=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("class-data archive", result.stderr)
+
+    def test_passes_when_the_cds_log_is_clean(self) -> None:
+        result = _run_smoke_test("[0.007s][info][cds] optimized module handling: enabled\n", only_when_cds_logged=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_ignores_a_warning_line_the_application_itself_prints(self) -> None:
         result = _run_smoke_test(_APPLICATION_WARNING)

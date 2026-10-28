@@ -357,7 +357,9 @@ object RendererCursorOverlay:
         swingWin.canvas,
         swingWin.onBaseImageReady,
         swingWin.acquireBaseImage,
-        caches.surfaceText
+        caches.surfaceText,
+        caches.backendCaches,
+        () => repaintRegion.get()
       )
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry

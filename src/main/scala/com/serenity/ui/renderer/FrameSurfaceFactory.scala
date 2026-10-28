@@ -4,9 +4,14 @@ import java.awt.Font
 import java.awt.image.BufferedImage
 import javax.swing.JPanel
 
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 
-/** What the Swing frontend knows when it needs a surface for one frame of the window canvas. */
+/** What the Swing frontend knows when it needs a surface for one frame of the window canvas.
+  *
+  * `backendCaches` is the owner's slot for what a backend keeps between frames. `changedRegion` is read when the frame
+  * ends: `None` for the whole canvas, otherwise the logical-pixel rects outside which the frame matches what the
+  * previous frame left on screen.
+  */
 final case class FrameSurfaceRequest(
     metrics: CellMetrics,
     font: Font,
@@ -14,6 +19,8 @@ final case class FrameSurfaceRequest(
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
     textCaches: SurfaceTextCaches,
+    backendCaches: BackendCaches,
+    changedRegion: () => Option[List[PixelRect]],
     contentPersists: Boolean = true
 )
 
