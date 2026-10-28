@@ -436,6 +436,19 @@ final class SkiaRenderSurface(
       filled(paintColor(color))
     )
 
+  /** One path of all the rects and one draw into Skia, instead of a native call for each. The frame's record still gets
+    * each rect, so what a scrolled image has to copy back is unchanged.
+    */
+  override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
+    if rects.length >= 4 then
+      (0 until rects.length by 4).foreach { i =>
+        val widthPx  = rects(i + 2).max(1)
+        val heightPx = rects(i + 3).max(1)
+        painted.touched(rects(i), rects(i + 1), widthPx, heightPx)
+        recordPaint(rects(i).toDouble, rects(i + 1).toDouble, widthPx.toDouble, heightPx.toDouble)
+      }
+      RectPath.fill(canvas, rects, filled(paintColor(color)))
+
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px     = metrics.toPixelX(x)
     val py     = metrics.toPixelY(y)
