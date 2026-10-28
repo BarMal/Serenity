@@ -54,6 +54,26 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     phases.shapersPerFrame shouldBe 1.0
   }
 
+  it should "split each backend's cold frame into layout and drawing, whose sum is within the render call" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val splits = List(
+      "Java2D"     -> report.environment.java2dColdSplit,
+      "Skia layer" -> report.environment.skiaColdSplit
+    )
+    splits.foreach { (arm, split) =>
+      withClue(arm) {
+        val measured = split.getOrElse(fail("no cold-frame split"))
+        measured.frames shouldBe 3
+        measured.layoutMs should be > 0.0
+        measured.drawMs should be > 0.0
+        (measured.layoutMs + measured.drawMs) should be <= measured.renderMs
+        measured.otherMs should be >= 0.0
+        measured.presentMs should be >= 0.0
+      }
+    }
+  }
+
   it should "round every scenario's time up to the display's refresh intervals" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)

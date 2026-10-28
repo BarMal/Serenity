@@ -22,7 +22,9 @@ final case class BenchmarkEnvironment(
     refresh: RefreshRate = RefreshRate.Assumed60,
     rasterNote: Option[String] = Some("no raster arm was asked for"),
     machine: MachineState = MachineState.Unknown,
-    coldPhases: Option[ColdFramePhases] = None
+    coldPhases: Option[ColdFramePhases] = None,
+    java2dColdSplit: Option[ColdFrameSplit] = None,
+    skiaColdSplit: Option[ColdFrameSplit] = None
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")

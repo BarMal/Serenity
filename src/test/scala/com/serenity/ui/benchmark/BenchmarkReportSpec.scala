@@ -96,6 +96,35 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("shapingMsPerFrame").as[Double] shouldBe Right(22.8)
   }
 
+  it should "split a cold frame into layout, drawing, the rest and the wait to be presented, for each backend" in {
+    val java2d = ColdFrameSplit(20, renderMs = 70.0, layoutMs = 15.5, drawMs = 45.25, otherMs = 9.25, presentMs = 5.0)
+    val skia   = ColdFrameSplit(20, renderMs = 80.0, layoutMs = 15.0, drawMs = 55.0, otherMs = 10.0, presentMs = 6.75)
+    val detailed =
+      BenchmarkReport(
+        environment.copy(java2dColdSplit = Some(java2d), skiaColdSplit = Some(skia)),
+        results,
+        Verdict.SkiaWins
+      )
+    detailed.markdown should include(
+      "Cold frame split, Java2D (mean of 20): render call 70.00 ms (layout 15.50, drawing 45.25, rest 9.25), then 5.00 ms until presented."
+    )
+    detailed.markdown should include(
+      "Cold frame split, Skia layer (mean of 20): render call 80.00 ms (layout 15.00, drawing 55.00, rest 10.00), then 6.75 ms until presented."
+    )
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit")
+    json.downField("java2d").downField("frames").as[Int] shouldBe Right(20)
+    json.downField("java2d").downField("layoutMs").as[Double] shouldBe Right(15.5)
+    json.downField("skia").downField("drawMs").as[Double] shouldBe Right(55.0)
+    json.downField("skia").downField("presentMs").as[Double] shouldBe Right(6.75)
+  }
+
+  it should "leave the cold-frame split out when no cold frame was measured" in {
+    val text = BenchmarkReport(environment, results, Verdict.SkiaWins)
+    text.markdown should not include "Cold frame split"
+    parse(text.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit").failed shouldBe
+      true
+  }
+
   it should "leave the cold-frame line out when no Skia cache was measured" in {
     BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Cold frame, Skia caches"
   }

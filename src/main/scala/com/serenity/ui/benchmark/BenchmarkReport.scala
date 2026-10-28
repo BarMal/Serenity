@@ -62,11 +62,18 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val cold = environment.coldPhases.map { phases =>
       f"Cold frame, Skia caches (mean of ${phases.frames}): ${phases.facesPerFrame}%.1f faces ${phases.faceMsPerFrame}%.2f ms, ${phases.shapersPerFrame}%.1f shapers ${phases.shaperMsPerFrame}%.2f ms, ${phases.shapingsPerFrame}%.0f shapings ${phases.shapingMsPerFrame}%.2f ms."
     }
+    val splits = List("Java2D" -> environment.java2dColdSplit, "Skia layer" -> environment.skiaColdSplit).flatMap {
+      (arm, split) => split.map(coldSplitLine(arm, _))
+    }
     val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    List(startup, layers, draws, carets, cold, sync, pictures).flatten.map(line => s"\n$line")
+    (List(startup, layers, draws, carets, cold).flatten ++ splits ++ List(sync, pictures).flatten)
+      .map(line => s"\n$line")
+
+  private def coldSplitLine(arm: String, split: ColdFrameSplit): String =
+    f"Cold frame split, $arm (mean of ${split.frames}): render call ${split.renderMs}%.2f ms (layout ${split.layoutMs}%.2f, drawing ${split.drawMs}%.2f, rest ${split.otherMs}%.2f), then ${split.presentMs}%.2f ms until presented."
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -168,7 +175,24 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
-        environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList*
+        environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList ++
+        coldSplitJson.map("coldSplit" -> _).toList*
+    )
+
+  private def coldSplitJson: Option[Json] =
+    val arms = List("java2d" -> environment.java2dColdSplit, "skia" -> environment.skiaColdSplit).flatMap {
+      (arm, split) => split.map(measured => arm -> splitJson(measured))
+    }
+    Option.when(arms.nonEmpty)(Json.obj(arms*))
+
+  private def splitJson(split: ColdFrameSplit): Json =
+    Json.obj(
+      "frames"    -> split.frames.asJson,
+      "renderMs"  -> split.renderMs.asJson,
+      "layoutMs"  -> split.layoutMs.asJson,
+      "drawMs"    -> split.drawMs.asJson,
+      "otherMs"   -> split.otherMs.asJson,
+      "presentMs" -> split.presentMs.asJson
     )
 
   private def coldPhasesJson(phases: ColdFramePhases): Json =
