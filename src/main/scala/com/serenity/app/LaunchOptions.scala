@@ -3,7 +3,7 @@ package com.serenity.app
 import java.nio.file.Path
 
 import cats.syntax.all.*
-import com.monovore.decline.{Command, Help, Opts, Visibility}
+import com.monovore.decline.{Command, Help, Opts}
 import com.serenity.config.{RenderBackendSetting, WaylandRender}
 
 /** @param showVersion
@@ -38,16 +38,19 @@ final case class LaunchOptions(
     showVersion: Boolean = false,
     safeMode: Boolean = false,
     smokeTest: Boolean = false,
-    startupProbe: Boolean = false,
     resetConfig: Boolean = false,
     resetSession: Boolean = false,
     renderer: Option[RenderBackendSetting] = None,
-    waylandRender: Option[WaylandRender] = None
+    waylandRender: Option[WaylandRender] = None,
+    startupProbe: Boolean = false
 ):
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
 
 object LaunchOptions:
+
+  /** Taken out of the arguments before decline sees them, so it is in no help or usage text. */
+  private val StartupProbeFlag = "--startup-probe"
 
   /** `--open`/`--file` first, then any bare paths, which a file manager passes several of for a multi-file selection.
     */
@@ -92,15 +95,6 @@ object LaunchOptions:
       .flag(
         "smoke-test",
         "Open the window, print a ready line once the first frame is painted, then quit. Used to check a packaged build."
-      )
-      .orFalse
-
-  private val startupProbe: Opts[Boolean] =
-    Opts
-      .flag(
-        "startup-probe",
-        "Time start-up to the first painted keystroke (benchmark hook).",
-        visibility = Visibility.Hidden
       )
       .orFalse
 
@@ -161,13 +155,12 @@ object LaunchOptions:
         version,
         safeMode,
         smokeTest,
-        startupProbe,
         resetConfig,
         resetSession,
         renderer,
         waylandRender
       )
-        .mapN(LaunchOptions.apply)
+        .mapN(LaunchOptions(_, _, _, _, _, _, _, _, _, _, _, _))
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
@@ -179,7 +172,8 @@ object LaunchOptions:
     * from a correct one. Issue #1280.
     */
   def parse(args: List[String]): Either[Help, LaunchOptions] =
-    command.parse(args, sys.env)
+    val (probe, rest) = args.partition(_ == StartupProbeFlag)
+    command.parse(rest, sys.env).map(_.copy(startupProbe = probe.nonEmpty))
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
