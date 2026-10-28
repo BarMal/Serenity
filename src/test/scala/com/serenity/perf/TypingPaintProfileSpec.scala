@@ -44,3 +44,10 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
     minimal should be > 0.0
     minimal should be < full
   }
+
+  it should "show that the spell-check squiggles make most of a typing frame's draw calls" in {
+    def draws(label: String): Double =
+      typingDraws(TypingPaintProfile.variants.find(_.label == label).getOrElse(fail(s"no $label variant")))._1
+    draws("no_spellcheck") should be < draws("full") / 2
+  }
+
