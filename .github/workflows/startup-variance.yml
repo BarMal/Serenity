@@ -1,0 +1,68 @@
+name: Startup Variance
+
+# Measures how much time-to-first-frame varies on a GitHub runner, with and without the AOT cache, so the start-up
+# rows of #2420 can be gated or only tracked as a trend. Manual only, and it never touches the CI perf gate. It reuses
+# the Linux app image that a Desktop Package Check run (desktop-release.yml, workflow_dispatch) already built and
+# trained, rather than building one again; that image is kept for one day.
+on:
+  workflow_dispatch:
+    inputs:
+      image_run_id:
+        description: Id of a Desktop Package Check run that uploaded the Serenity-linux-x64 artifact
+        required: true
+      runs_per_round:
+        description: Timed launches per round; six rounds run, three per mode, so 5 gives 15 per mode
+        required: false
+        default: '5'
+
+run-name: Startup variance for image run ${{ inputs.image_run_id }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  variance:
+    name: Measure start-up spread
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download the Linux app image
+        uses: actions/download-artifact@v4
+        with:
+          name: Serenity-linux-x64
+          run-id: ${{ inputs.image_run_id }}
+          github-token: ${{ github.token }}
+          path: image
+
+      - name: Unpack the app image
+        run: unzip -q image/Serenity-linux-x64.zip -d image
+
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Measure warm and cold start-up
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1280x800x24" bash bench/startup-variance.sh image/Serenity "${{ inputs.runs_per_round }}" startup-variance
+          {
+            echo '### Time to first frame (ms)'
+            echo '```'
+            cat startup-variance/spread.txt
+            echo '```'
+            echo '### Conditions'
+            echo '```'
+            cat startup-variance/conditions.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the raw rounds
+        uses: actions/upload-artifact@v4
+        with:
+          name: startup-variance
+          path: startup-variance/
+          if-no-files-found: error
