@@ -72,6 +72,15 @@ class SkiaGlPresenterNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWin
 
   private def await[A](future: scala.concurrent.Future[A]): A = Await.result(future, 10.seconds)
 
+  /** The size the window reports once SDL's resize event has reached it. */
+  private def awaitResize(window: SdlGlWindow): IO[(Int, Int)] =
+    window.takeResize
+      .flatMap {
+        case Some(size) => IO.pure(size)
+        case None       => IO.sleep(20.millis) *> awaitResize(window)
+      }
+      .timeout(10.seconds)
+
   "A presenter" should "show the persistent frame on the window" taggedAs SdlNativeTest in {
     val swaps = withPresenter(List((5, 5))) { (_, presenter, shown) =>
       await(presenter.draw(settings)(fill(0, 0, red))) shouldBe Right(())
@@ -165,8 +174,7 @@ class SkiaGlPresenterNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWin
       presenter.requestPresent()
       await(presenter.drained())
       await(window.onSdlThread(owner => owner.setWindowSize(window.handle, 120, 80)).unsafeToFuture())
-      Thread.sleep(300)
-      val resized = await(window.takeResize.unsafeToFuture())
+      val resized = Some(await(awaitResize(window).unsafeToFuture()))
       await(presenter.draw(settings.copy(logicalWidthPx = 120, logicalHeightPx = 80))(fill(0, 0, green))) shouldBe
         Right(())
       presenter.requestPresent()
