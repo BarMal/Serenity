@@ -18,6 +18,8 @@ final private[ui] class RasterFrames:
 
   private val state = new AtomicReference(State.Empty)
 
+  private[serenity] val phases = new PresentPhases
+
   /** The surface for a frame of `widthPx` x `heightPx` device pixels. A frame that was opened and never presented
     * leaves the surface ahead of every image, so it is treated like a new size.
     */
@@ -50,9 +52,10 @@ final private[ui] class RasterFrames:
     val current = state.get()
     val whole   = DeviceArea(0, 0, image.getWidth, image.getHeight)
     val now     = RasterCopyPlan.Filled(image, damage, moves, writes)
-    val plan    = RasterCopyPlan.plan(image, current.last, current.beforeLast, now, whole)
-    plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx))
-    plan.copies.foreach(copyInto(surface, image, _))
+    val plan = phases.timed(PresentPhase.Plan)(RasterCopyPlan.plan(image, current.last, current.beforeLast, now, whole))
+    if plan.shifts.nonEmpty then
+      phases.timed(PresentPhase.ImageShift)(plan.shifts.foreach(move => ImageMove(image, move.area, move.dyPx)))
+    if plan.copies.nonEmpty then phases.timed(PresentPhase.CopyOut)(plan.copies.foreach(copyInto(surface, image, _)))
     state.set(
       current.copy(
         last = Some(now),
