@@ -19,7 +19,7 @@ class StartupProbeSpec extends AnyFlatSpec with Matchers:
     val out            = new PrintStream(buffer, true, StandardCharsets.UTF_8)
     def text: String   = buffer.toString(StandardCharsets.UTF_8)
 
-  "StartupProbe.run" should "inject the key once, wait for it to be painted, then print the marker and release quit" in {
+  "StartupProbe.run" should "inject once, wait for the paint, then print the marker and release quit" in {
     val console = Console()
 
     val (injections, quitReleased, printedBeforePaint) = (for
@@ -72,9 +72,11 @@ class StartupProbeSpec extends AnyFlatSpec with Matchers:
   it should "report a failed injection as a timeout line and still release quit" in {
     val console = Console()
 
+    val broken = IO.raiseError[Unit](new RuntimeException("no window"))
+
     val released = (for
       quit  <- Deferred[IO, Unit]
-      _     <- StartupProbe.run(IO.raiseError(new RuntimeException("no window")), IO.never, quit, 5.seconds, console.out)
+      _     <- StartupProbe.run(broken, IO.never, quit, 5.seconds, console.out)
       freed <- quit.tryGet
     yield freed.isDefined).unsafeRunSync()
 
@@ -83,7 +85,9 @@ class StartupProbeSpec extends AnyFlatSpec with Matchers:
   }
 
   "StartupProbe" should "use marker lines that differ from the smoke test's, so each is found on its own" in {
-    Set(StartupProbe.interactiveLine, StartupProbe.timedOutLine, StartupProbe.failedLine, SmokeTest.readyLine).size shouldBe 4
+    val lines =
+      Set(StartupProbe.interactiveLine, StartupProbe.timedOutLine, StartupProbe.failedLine, SmokeTest.readyLine)
+    lines.size shouldBe 4
   }
 
   "StartupProbe.refusal" should "let the probe run in safe mode, whatever the home is" in {
