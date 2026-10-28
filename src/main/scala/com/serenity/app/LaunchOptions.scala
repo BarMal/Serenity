@@ -19,7 +19,7 @@ import com.serenity.config.{RenderBackendSetting, WaylandRender}
   *   `--startup-probe`: a benchmark hook (#2420), left out of `--help`. Like `--smoke-test` it prints the ready line at
   *   the first painted frame, but instead of quitting it types one character and quits once that keystroke has been
   *   painted, printing [[StartupProbe.interactiveLine]]. The character lands in whatever buffer the start-up opened, so
-  *   the harness runs it in safe mode or with an isolated home.
+  *   [[StartupProbe.refusal]] stops it unless safe mode is on or the home carries [[StartupProbe.IsolatedHomeMarker]].
   * @param resetConfig
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession

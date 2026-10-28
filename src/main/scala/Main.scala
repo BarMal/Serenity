@@ -61,6 +61,8 @@ object Main extends IOApp:
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
+  private def probeHome: Path = Path.of(System.getProperty("user.home"))
+
   def run(args: List[String]): IO[ExitCode] =
     // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
     val console = System.err
@@ -71,6 +73,8 @@ object Main extends IOApp:
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
       case Right(options) if options.showVersion =>
         IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(options) if StartupProbe.refusal(options, probeHome).nonEmpty =>
+        IO(StartupProbe.refusal(options, probeHome).foreach(System.err.println)).as(ExitCode.Error)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
       case Right(options) =>
