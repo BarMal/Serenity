@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
@@ -21,10 +23,12 @@ class SquiggleDrawCallsSpec extends AnyFlatSpec with Matchers:
 
   /** Records each batch the renderer sends, and still draws it through [[MockRenderSurface]]'s one-by-one fills. */
   final private class BatchRecordingSurface extends MockRenderSurface(100, 30):
-    var batches: List[(IArray[Int], RenderColor)] = Nil
+    private val recorded = new AtomicReference(List.empty[(IArray[Int], RenderColor)])
+
+    def batches: List[(IArray[Int], RenderColor)] = recorded.get()
 
     override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
-      batches = batches :+ (rects -> color)
+      val _ = recorded.updateAndGet(_ :+ (rects -> color))
       super.fillPixelRects(rects, color)
 
   private def stateWithMisspellings(text: String, words: List[(Int, Int)]): AppState =
