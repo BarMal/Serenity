@@ -89,6 +89,40 @@ class RetainedThresholdTest(unittest.TestCase):
         self.assertEqual(found, [])
 
 
+class TimeDeltaOptionTest(unittest.TestCase):
+    """Start-up rows are seconds long, so a 0.03 ms floor means nothing; the wrapper passes a larger one."""
+
+    a = _runs("x", [1000.0, 1001.0, 1002.0, 1001.0])
+    six_percent_slower = _runs("x", [1060.0, 1061.0, 1062.0, 1063.0])
+
+    def test_default_floor_is_the_protocols_thirty_microseconds(self):
+        self.assertEqual(len(abba.compare(self.a, self.six_percent_slower)), 1)
+
+    def test_a_larger_floor_ignores_a_smaller_slowdown(self):
+        self.assertEqual(abba.compare(self.a, self.six_percent_slower, time_delta_ms=100.0), [])
+
+    def test_a_larger_floor_still_blocks_a_bigger_slowdown(self):
+        slower = _runs("x", [1150.0, 1151.0, 1152.0, 1153.0])
+        self.assertEqual(len(abba.compare(self.a, slower, time_delta_ms=100.0)), 1)
+
+    def test_command_line_option_sets_the_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = {}
+            for side, base in (("a", 1000.0), ("b", 1060.0)):
+                paths[side] = []
+                for i in range(4):
+                    path = Path(directory) / f"{side}{i}.csv"
+                    path.write_text(
+                        "name,warmups,iterations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+                        "allocation_p95_bytes,retained_bytes\n"
+                        f"x,0,0,0,0,{base + i},{base + i},0,,,\n"
+                    )
+                    paths[side].append(str(path))
+            args = ["--a", *paths["a"], "--b", *paths["b"]]
+            self.assertEqual(abba.main_with_args(args), 1)
+            self.assertEqual(abba.main_with_args([*args, "--time-delta-ms", "100"]), 0)
+
+
 class CommandLineTest(unittest.TestCase):
     def _csv(self, directory: str, name: str, p50: float) -> str:
         path = Path(directory) / name

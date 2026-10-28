@@ -47,6 +47,10 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 `bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not timed and are recorded as `context,discarded_runs,N`. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
 
+### ABBA over two images (#2420)
+
+`bench/abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]` is `abba.sh` for start-up: it runs `startup.py` against the two images' launchers in the order A B B A A B B A, writes `a-1..4.csv` and `b-1..4.csv`, and applies the protocol's blocking rule with `scripts/abba_compare.py`. The time floor is 100 ms (`ABBA_STARTUP_MIN_DELTA_MS`; `abba_compare.py --time-delta-ms`), not the 0.03 ms of the in-process rows, which would block on noise at a start-up scale. Both images need a trained AOT cache. Build the two images from the merge base and the candidate with `desktop-release.yml`.
+
 ## Per-keystroke latency trace
 
 `[FRAME]` reports each phase's percentiles over its own population (every frame, every input chain), so its p50s do not add up to `input-to-paint`. `ui.render.latency_trace = true` (default off) follows each keystroke instead and logs one line per painted keystroke, then a summary every 5 seconds:
