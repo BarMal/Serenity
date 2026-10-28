@@ -61,4 +61,3 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
       }
       drawn.filter(_ == 0L) shouldBe empty
     }
-
