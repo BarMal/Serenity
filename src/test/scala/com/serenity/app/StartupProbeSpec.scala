@@ -2,11 +2,13 @@ package com.serenity.app
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -82,4 +84,37 @@ class StartupProbeSpec extends AnyFlatSpec with Matchers:
 
   "StartupProbe" should "use marker lines that differ from the smoke test's, so each is found on its own" in {
     Set(StartupProbe.interactiveLine, StartupProbe.timedOutLine, StartupProbe.failedLine, SmokeTest.readyLine).size shouldBe 4
+  }
+
+  "StartupProbe.refusal" should "let the probe run in safe mode, whatever the home is" in {
+    val options = LaunchOptions(startupProbe = true, safeMode = true)
+
+    StartupProbe.refusal(options, TestTemp.directory("probe-real-home")) shouldBe None
+  }
+
+  it should "refuse the probe outside safe mode when the home carries no marker, as a real home does not" in {
+    val options = LaunchOptions(startupProbe = true)
+
+    val refusal = StartupProbe.refusal(options, TestTemp.directory("probe-real-home"))
+
+    refusal.exists(_.contains("--safe-mode")) shouldBe true
+    refusal.exists(_.contains(StartupProbe.IsolatedHomeMarker)) shouldBe true
+  }
+
+  it should "let the probe run outside safe mode in a home the harness marked as its own" in {
+    val home = TestTemp.directory("probe-marked-home")
+    Files.writeString(home.resolve(StartupProbe.IsolatedHomeMarker), "")
+
+    StartupProbe.refusal(LaunchOptions(startupProbe = true), home) shouldBe None
+  }
+
+  it should "not accept a directory in place of the marker file" in {
+    val home = TestTemp.directory("probe-marker-dir")
+    Files.createDirectory(home.resolve(StartupProbe.IsolatedHomeMarker))
+
+    StartupProbe.refusal(LaunchOptions(startupProbe = true), home).isDefined shouldBe true
+  }
+
+  it should "say nothing when the probe is not asked for" in {
+    StartupProbe.refusal(LaunchOptions(), Path.of("/nonexistent/home")) shouldBe None
   }
