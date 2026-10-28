@@ -1,7 +1,7 @@
 package com.serenity.perf
 
 import cats.effect.unsafe.IORuntime
-import com.serenity.config.{AppConfig, LayoutPreset, StatusLinePlacement, TabStripMode, UiLayout}
+import com.serenity.config.{AppConfig, LayoutPreset, SpellCheckConfig, StatusLinePlacement, TabStripMode, UiLayout}
 import com.serenity.rope.Balance
 import com.serenity.state.models.Damage
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -26,6 +26,7 @@ private[perf] object TypingPaintProfile:
     val conventional = AppConfig.conventional
     List(
       Variant("full", conventional),
+      Variant("no_spellcheck", conventional.withSpellCheck(SpellCheckConfig(enabled = false))),
       Variant("no_scrollbar", conventional.withScrollbar(false)),
       Variant("no_line_numbers", conventional.withLineNumbers(false)),
       Variant("no_pane_headers", conventional.withPaneHeaders(false)),
