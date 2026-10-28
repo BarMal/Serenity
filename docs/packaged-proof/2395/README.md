@@ -9,7 +9,7 @@ is still wanted.
 - `*-scale1.png`: 18 pt font. `*-scale2.png`: the same layout with a 36 pt font, so every pixel dimension doubles. It is
   not a HiDPI surface.
 - `before-layout.txt`, `after-layout.txt`: the menu's measured size in cells for each scene.
-- The CJK scene shows empty boxes instead of glyphs: the runner has no CJK font installed. The box widths are still the
-  cell widths the layout uses.
+- The CJK scene was re-rendered with Noto Sans CJK installed on the runner (a temporary CI step), so it shows real
+  glyphs; `*-layout.txt` lists the CJK families the runner had.
 
 Remove this directory before merge.

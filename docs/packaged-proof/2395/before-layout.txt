@@ -6,4 +6,4 @@
 3-cjk-labels scale 2: pane content 55x12 cells, menu 55x12 cells at (5,1), image 1320x616px
 4-narrow-pane scale 1: pane content 23x12 cells, menu 23x10 cells at (5,3), image 308x322px
 4-narrow-pane scale 2: pane content 23x12 cells, menu 23x10 cells at (5,3), image 616x616px
-CJK families installed on this machine: 
+CJK families installed on this machine: Noto Sans CJK JP, Noto Sans CJK SC
