@@ -6,8 +6,8 @@
 The rows use the PerformanceBenchmarks CSV layout, so check_perf_regression.py, compare_perf_runs.py and abba_compare.py
 read them like any other benchmark. "Warm" starts the image with its JDK 25 AOT cache, "cold" with the cache moved
 aside; the OS file cache is warm for both. Launches alternate warm, cold, warm, cold so drift falls on both rows alike.
-The first --discard launches of each mode (default 1) are not timed, and the number is written as a `context` line
-rather than hidden. Needs a display ($DISPLAY) and an image whose cache has been trained (scripts/train-aot-cache.sh).
+The first --discard launches of each mode (default 1) are not in the rows. The number is written as a `context` line,
+and so are the discarded times (`discarded_warm_ms`, `discarded_cold_ms`), so a first-launch penalty stays visible. Needs a display ($DISPLAY) and an image whose cache has been trained (scripts/train-aot-cache.sh).
 Exits non-zero, writing nothing, when a mode has no launch that reached its first frame.
 """
 import argparse
@@ -34,6 +34,7 @@ def row(name, samples, discarded):
 
 def measure(launcher, cache, hidden, runs, discard):
     samples = {"warm": [], "cold": []}
+    discarded = {"warm": [], "cold": []}
     for index in range(runs + discard):
         for mode in ("warm", "cold"):
             if mode == "cold":
@@ -43,9 +44,9 @@ def measure(launcher, cache, hidden, runs, discard):
             finally:
                 if mode == "cold":
                     os.replace(hidden, cache)
-            if result is not None and index >= discard:
-                samples[mode].append(result[0])
-    return samples
+            if result is not None:
+                (samples if index >= discard else discarded)[mode].append(result[0])
+    return samples, discarded
 
 
 def main(argv):
@@ -62,13 +63,16 @@ def main(argv):
         print("No AOT cache at %s; train the image first (scripts/train-aot-cache.sh)." % cache, file=sys.stderr)
         return 1
 
-    samples = measure(launcher, cache, cache + ".hidden", args.runs, args.discard)
+    samples, discarded = measure(launcher, cache, cache + ".hidden", args.runs, args.discard)
     empty = [mode for mode, values in samples.items() if not values]
     if empty:
         print("No %s launch reached its first frame; no rows written." % " or ".join(empty), file=sys.stderr)
         return 1
 
-    lines = ["Serenity startup benchmarks", "context,discarded_runs,%d" % args.discard, HEADER]
+    lines = ["Serenity startup benchmarks", "context,discarded_runs,%d" % args.discard]
+    lines += ["context,discarded_%s_ms,%s" % (mode, ",".join("%.1f" % v for v in discarded[mode]))
+              for mode in ("warm", "cold") if discarded[mode]]
+    lines.append(HEADER)
     lines += [row("startup.%s.first_frame" % mode, samples[mode], args.discard) for mode in ("cold", "warm")]
     text = "\n".join(lines) + "\n"
     if args.csv:

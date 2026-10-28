@@ -45,7 +45,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 ### Start-up as benchmark rows (#2420)
 
-`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not timed and are recorded as `context,discarded_runs,N`. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
+`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
 
 ## Per-keystroke latency trace
 
