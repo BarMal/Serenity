@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.LayoutRect
@@ -38,10 +36,10 @@ class UndamagedPanelSkipSpec extends AnyFlatSpec with Matchers with PersistedFra
 
   private val Sentinel = 0x123456
 
-  private def stamped(image: BufferedImage, rect: (Int, Int, Int, Int)): Seq[(Int, Int)] =
+  private def stamped(image: FramePixels, rect: (Int, Int, Int, Int)): Seq[(Int, Int)] =
     val (left, top, width, height) = rect
     val points = for dx <- List(width / 4, width / 2, 3 * width / 4); dy <- List(height / 2) yield (left + dx, top + dy)
-    points.foreach((x, y) => image.setRGB(x, y, Sentinel))
+    points.foreach((x, y) => image.stamp(x, y, Sentinel))
     points
 
   private val typed: List[AppState] =
@@ -56,7 +54,7 @@ class UndamagedPanelSkipSpec extends AnyFlatSpec with Matchers with PersistedFra
       val image      = session.pendingImage
       val points     = stamped(image, rect)
       val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
-      points.foreach((x, y) => withClue(s"pixel $x,$y: ")((drawn.getRGB(x, y) & 0xffffff) shouldBe Sentinel))
+      points.foreach((x, y) => withClue(s"pixel $x,$y: ")((drawn.rgbAt(x, y) & 0xffffff) shouldBe Sentinel))
       after
     }
   }
