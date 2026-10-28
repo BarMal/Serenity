@@ -50,4 +50,3 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
       typingDraws(TypingPaintProfile.variants.find(_.label == label).getOrElse(fail(s"no $label variant")))._1
     draws("no_spellcheck") should be < draws("full") / 2
   }
-
