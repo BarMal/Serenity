@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.SkiaPixels
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
 import org.jetbrains.skia.Surface
 import org.scalatest.flatspec.AnyFlatSpec
