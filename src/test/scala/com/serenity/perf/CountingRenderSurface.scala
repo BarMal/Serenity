@@ -27,7 +27,8 @@ import com.serenity.ui.theme.TextStyle
 
 enum DrawKind:
 
-  case PutString, FillRect, DrawRunPx, DrawShapedRunPx, DrawLabelPx, FillPixelRect, FillPixelRects, DrawImage, CompositeLayer,
+  case PutString, FillRect, DrawRunPx, DrawShapedRunPx, DrawLabelPx, FillPixelRect, FillPixelRects, DrawImage,
+    CompositeLayer,
     CompositeFullSurfaceLayer, ClipPush, ClipPop, StrokeRect, SetAlpha, CopyPixels, Lift, PutBack, SetFont,
     PixelTranslation, FallbackFamily, LogicalPixelRow, ClearViewport, ClearViewportExcept, Flush
 

@@ -95,7 +95,7 @@ class CountingRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "count a batch of rects once and hand it on as a batch" in {
     final class BatchRecordingMock extends MockRenderSurface(20, 5):
-      private val received = new java.util.concurrent.atomic.AtomicReference(List.empty[IArray[Int]])
+      private val received           = new java.util.concurrent.atomic.AtomicReference(List.empty[IArray[Int]])
       def batches: List[IArray[Int]] = received.get()
       override def fillPixelRects(rects: IArray[Int], color: com.serenity.ui.color.RenderColor): Unit =
         val _ = received.updateAndGet(_ :+ rects)
@@ -110,4 +110,3 @@ class CountingRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     counts.snapshot(DrawKind.FillPixelRect) shouldBe 0L
     mock.batches.map(_.toList) shouldBe List(rects.toList)
   }
-
