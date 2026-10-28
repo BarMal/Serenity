@@ -18,7 +18,8 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
 
   private def typingDraws(variant: TypingPaintProfile.Variant): (Double, Long) =
     val counts = new DrawCounts
-    val cycle  = TypingPaintProfile.typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), 900, 600, 1.0, variant.config)
+    val cycle =
+      TypingPaintProfile.typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), 900, 600, 1.0, variant.config)
     counts.reset()
     val rowsDrawn = (0 until Frames).map { _ =>
       val _ = cycle.next()
@@ -31,11 +32,10 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
     TypingPaintProfile.variants.map(_.label).distinct should have size TypingPaintProfile.variants.size.toLong
   }
 
-  it should "each draw rows on a typing frame" in {
+  it should "each draw rows on a typing frame" in
     TypingPaintProfile.variants.foreach { variant =>
       withClue(s"${variant.label}: ")(typingDraws(variant)._2 should be > 0L)
     }
-  }
 
   it should "paint fewer things per typing frame with no chrome than with all of it" in {
     val full    = typingDraws(TypingPaintProfile.variants.head)._1

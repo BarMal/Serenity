@@ -1,7 +1,7 @@
 package com.serenity.perf
 
-/** The typing profile's printed output: one row per chrome variant, the draw calls a frame made, and how much of a
-  * Skia typing frame the renderer would cost with nothing to paint.
+/** The typing profile's printed output: one row per chrome variant, the draw calls a frame made, and how much of a Skia
+  * typing frame the renderer would cost with nothing to paint.
   */
 private[perf] object TypingPaintReport:
 

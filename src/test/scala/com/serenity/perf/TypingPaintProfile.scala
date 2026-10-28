@@ -36,35 +36,35 @@ private[perf] object TypingPaintProfile:
 
   /** Typing frames in a window of `widthPx` x `heightPx` logical pixels, drawn with `config`'s chrome. */
   def typingCycle(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double, config: AppConfig)(using
-      IORuntime
+    IORuntime
   ): PresentBenchmarks.Cycling =
-    given Balance = Balance.default
-    val metrics   = CellMetrics.fromFont(LaptopFrameBenchmarks.codeFont)
-    val grid      = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
+    given Balance       = Balance.default
+    val metrics         = CellMetrics.fromFont(LaptopFrameBenchmarks.codeFont)
+    val grid            = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
     val (prose, _)      = LaptopFrameBenchmarks.proseStateManager(config = config, grid = grid)
     val (before, after) = TypingTransition.of(prose)
     PresentBenchmarks.Cycling(PresentBenchmarks.Window(factory, widthPx, heightPx, scale, grid), Vector(before, after))
 
-  private val WarmFrames   = 10
+  private val WarmFrames    = 10
   private val CountedFrames = 30
 
   private def drawCountsPerFrame(variant: Variant, widthPx: Int, heightPx: Int, scale: Double)(using
-      IORuntime
+    IORuntime
   ): Map[DrawKind, Double] =
     val counts = new DrawCounts
-    val cycle  = typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), widthPx, heightPx, scale, variant.config)
+    val cycle = typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), widthPx, heightPx, scale, variant.config)
     (0 until WarmFrames).foreach(_ => cycle.next())
     counts.reset()
     (0 until CountedFrames).foreach(_ => cycle.next())
     counts.snapshot.map((kind, total) => kind -> total.toDouble / CountedFrames)
 
   private def timedRow(
-      name: String,
-      factory: FrameSurfaceFactory,
-      variant: Variant,
-      widthPx: Int,
-      heightPx: Int,
-      scale: Double
+    name: String,
+    factory: FrameSurfaceFactory,
+    variant: Variant,
+    widthPx: Int,
+    heightPx: Int,
+    scale: Double
   )(using IORuntime): (BenchmarkRunner.Benchmark, PresentBenchmarks.PhaseLog) =
     val cycle = typingCycle(factory, widthPx, heightPx, scale, variant.config)
     val log   = PresentBenchmarks.PhaseLog(cycle.drainPhases)
@@ -81,15 +81,30 @@ private[perf] object TypingPaintProfile:
   private def report(widthPx: Int, heightPx: Int, scale: Double)(using IORuntime): Unit =
     val label = s"${heightPx}p_${scale.toInt}x"
     val skia = variants.map { variant =>
-      timedRow(s"render.profile.$label.typing_skia.${variant.label}", SkiaRasterSurfaceFactory, variant, widthPx, heightPx, scale)
+      timedRow(
+        s"render.profile.$label.typing_skia.${variant.label}",
+        SkiaRasterSurfaceFactory,
+        variant,
+        widthPx,
+        heightPx,
+        scale
+      )
     }
-    val floor = timedRow(s"render.profile.$label.typing_floor.full", NullSurfaceFactory(), variants.head, widthPx, heightPx, scale)
+    val floor = timedRow(
+      s"render.profile.$label.typing_floor.full",
+      NullSurfaceFactory(),
+      variants.head,
+      widthPx,
+      heightPx,
+      scale
+    )
     val rows    = skia :+ floor
     val results = BenchmarkRunner.runMatching(Nil, rows.map(_._1))
     val phases  = rows.map((benchmark, log) => benchmark.name -> log).toMap
     PresentReport.print(results, name => phases.get(name).map(_.breakdown))
-    val timings = skia.zip(results).map { case ((_, _), result) =>
-      TypingPaintReport.VariantTiming(result.name.split('.').last, result.p50Ms, result.p95Ms)
+    val timings = skia.zip(results).map {
+      case ((_, _), result) =>
+        TypingPaintReport.VariantTiming(result.name.split('.').last, result.p50Ms, result.p95Ms)
     }
     println()
     println(TypingPaintReport.timingTable(timings))
@@ -100,8 +115,15 @@ private[perf] object TypingPaintProfile:
       println(TypingPaintReport.drawCountsLine(variant.label, drawCountsPerFrame(variant, widthPx, heightPx, scale)))
     )
 
-  private def typeFor(seconds: Double, factory: FrameSurfaceFactory, variant: Variant, widthPx: Int, heightPx: Int, scale: Double)(using
-      IORuntime
+  private def typeFor(
+    seconds: Double,
+    factory: FrameSurfaceFactory,
+    variant: Variant,
+    widthPx: Int,
+    heightPx: Int,
+    scale: Double
+  )(using
+    IORuntime
   ): Unit =
     val cycle    = typingCycle(factory, widthPx, heightPx, scale, variant.config)
     val deadline = System.nanoTime() + (seconds * 1e9).toLong
@@ -123,9 +145,13 @@ private[perf] object TypingPaintProfile:
     sys.props.get("profile.seconds").map(_.toDouble) match
       case Some(seconds) =>
         val chrome = sys.props.getOrElse("profile.chrome", "full")
-        val variant = variants.find(_.label == chrome).getOrElse(
-          throw IllegalArgumentException(s"profile.chrome must be one of ${variants.map(_.label).mkString(", ")}, not $chrome")
-        )
+        val variant = variants
+          .find(_.label == chrome)
+          .getOrElse(
+            throw IllegalArgumentException(
+              s"profile.chrome must be one of ${variants.map(_.label).mkString(", ")}, not $chrome"
+            )
+          )
         val factory = sys.props.getOrElse("profile.variant", "skia") match
           case "skia"  => SkiaRasterSurfaceFactory
           case "floor" => NullSurfaceFactory()
