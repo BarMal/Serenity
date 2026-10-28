@@ -8,6 +8,7 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.SdlNativeTest
 import com.serenity.ui.color.RenderColor
@@ -153,5 +154,75 @@ class SkiaGlPresenterNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWin
       await(presenter.drained())
       presenter.presentedFrames
     }
+    presented shouldBe 0
+  }
+
+  // SDL's offscreen driver does not resize the framebuffer behind the window, so what the window shows after a resize
+  // is left to a compositor; what the presenter owns, the persistent surface, is checked here.
+  it should "draw the next frame in full, at the new size, after the window is resized" taggedAs SdlNativeTest in {
+    val (resized, presented, pixels, sizes) = withPresenter(Nil) { (window, presenter, _) =>
+      await(presenter.draw(settings)(fill(40, 0, red))) shouldBe Right(())
+      presenter.requestPresent()
+      await(presenter.drained())
+      await(window.onSdlThread(owner => owner.setWindowSize(window.handle, 120, 80)).unsafeToFuture())
+      Thread.sleep(300)
+      val resized = await(window.takeResize.unsafeToFuture())
+      await(presenter.draw(settings.copy(logicalWidthPx = 120, logicalHeightPx = 80))(fill(0, 0, green))) shouldBe
+        Right(())
+      presenter.requestPresent()
+      await(presenter.drained())
+      val (pixels, sizes) = await(
+        presenter.withTargets(
+          _.map(made =>
+            (
+              (pixelAt(made.offscreen, 5, 5), pixelAt(made.offscreen, 45, 5)),
+              (made.offscreen.getWidth, made.offscreen.getHeight, made.window.getWidth, made.window.getHeight)
+            )
+          ).get
+        )
+      )
+      (resized, presenter.presentedFrames, pixels, sizes)
+    }
+    resized shouldBe Some((120, 80))
+    presented shouldBe 2
+    pixels shouldBe (0xff00ff00.toInt, 0)
+    sizes shouldBe (120, 80, 120, 80)
+  }
+
+  it should "draw the next frame in full after a scale change at the same pixel size" taggedAs SdlNativeTest in {
+    val swaps = withPresenter(List((5, 5), (45, 5))) { (_, presenter, shown) =>
+      await(presenter.draw(settings)(fill(40, 0, red))) shouldBe Right(())
+      presenter.requestPresent()
+      await(presenter.drained())
+      val doubled = settings.copy(logicalWidthPx = Width / 2, logicalHeightPx = Height / 2, deviceScale = 2.0)
+      await(presenter.draw(doubled)(fill(0, 0, green))) shouldBe Right(())
+      presenter.requestPresent()
+      await(presenter.drained())
+      shown.swaps
+    }
+    swaps(1).head shouldBe Green
+    swaps(1)(1) should not be Red
+  }
+
+  "A released presenter" should "have closed its surfaces, and refuse a frame without touching GL" taggedAs SdlNativeTest in {
+    val (made, refused, presented) = onWindow { window =>
+      for
+        kept <- SkiaGlPresenter.open(window).use {
+          case Right(presenter) =>
+            IO {
+              await(presenter.draw(settings)(fill(0, 0, red))) shouldBe Right(())
+              (presenter, await(presenter.withTargets(identity)))
+            }
+          case Left(error) => IO.raiseError(new AssertionError(s"no presenter: ${error.describe}"))
+        }
+        (presenter, made) = kept
+        refused <- IO.fromFuture(IO(presenter.draw(settings)(fill(0, 0, blue))))
+        _       <- IO(presenter.requestPresent())
+        _       <- IO(presenter.showCarets(List(GlCaret(0, 0, 4, 4, blue))))
+        _       <- window.onSdlThread(_ => ())
+      yield (made, refused, presenter.presentedFrames)
+    }
+    made.map(m => (m.offscreen.isClosed, m.window.isClosed)) shouldBe Some((true, true))
+    refused.left.map(_.nonEmpty) shouldBe Left(true)
     presented shouldBe 0
   }

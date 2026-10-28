@@ -1,6 +1,6 @@
 package com.serenity.ui.skia
 
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import scala.concurrent.{Future, Promise}
 import scala.util.Try
@@ -36,23 +36,29 @@ final class SkiaGlPresenter private (
   private val drawn          = new AtomicReference(Option.empty[(GlFrameSettings, SkiaGlTargets.Made)])
   private val queuedPresents = new AtomicInteger(0)
   private val presented      = new AtomicInteger(0)
+  private val closed         = new AtomicBoolean(false)
 
   /** Queues `render` to draw a frame onto the persistent surface. Completes when it has run, with why it could not. */
   def draw(settings: GlFrameSettings)(render: RenderSurface => Unit): Future[Either[String, Unit]] =
-    onSdlThread { _ =>
-      val result = frames.draw(settings)(render)
-      result.foreach { _ =>
-        val widthPx  = SkiaRenderSurface.deviceDimension(settings.logicalWidthPx, settings.deviceScale)
-        val heightPx = SkiaRenderSurface.deviceDimension(settings.logicalHeightPx, settings.deviceScale)
-        targets.ensure(widthPx, heightPx, settings.deviceScale).foreach(made => drawn.set(Some((settings, made))))
+    if closed.get then Future.successful(Left(SkiaGlPresenter.Closed))
+    else
+      onSdlThread { _ =>
+        if closed.get then Left(SkiaGlPresenter.Closed)
+        else
+          val result = frames.draw(settings)(render)
+          result.foreach { _ =>
+            val widthPx  = SkiaRenderSurface.deviceDimension(settings.logicalWidthPx, settings.deviceScale)
+            val heightPx = SkiaRenderSurface.deviceDimension(settings.logicalHeightPx, settings.deviceScale)
+            targets.ensure(widthPx, heightPx, settings.deviceScale).foreach(made => drawn.set(Some((settings, made))))
+          }
+          result
       }
-      result
-    }
 
   /** Asks for the latest drawn frame to be put on the window; nothing is drawn before the first frame. */
   def requestPresent(): Unit =
-    val _ = queuedPresents.incrementAndGet()
-    window.post(sdl => if queuedPresents.decrementAndGet() == 0 then present(sdl))
+    if !closed.get then
+      val _ = queuedPresents.incrementAndGet()
+      window.post(sdl => if queuedPresents.decrementAndGet() == 0 && !closed.get then present(sdl))
 
   /** Sets the carets to fill over the frame and presents it again. */
   def showCarets(next: List[GlCaret]): Unit =
@@ -105,11 +111,15 @@ final class SkiaGlPresenter private (
       listener.get.foreach(_())
     }
 
+  /** Closes the surfaces, then the context; later frames and presents are refused. Harmless a second time. */
   private def shutDown(): Unit =
-    targets.close()
-    context.close()
+    if closed.compareAndSet(false, true) then
+      targets.close()
+      context.close()
 
 object SkiaGlPresenter:
+
+  private val Closed = "the presenter is closed"
 
   /** A presenter for `window`, or why Skia would not make a GL context for it (the cue for the raster fallback).
     * Releasing it closes its surfaces and context on the SDL thread. `beforeSwap` runs on the SDL thread just before
