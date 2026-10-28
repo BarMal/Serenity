@@ -27,7 +27,7 @@ import com.serenity.ui.theme.TextStyle
 
 enum DrawKind:
 
-  case PutString, FillRect, DrawRunPx, DrawShapedRunPx, DrawLabelPx, FillPixelRect, DrawImage, CompositeLayer,
+  case PutString, FillRect, DrawRunPx, DrawShapedRunPx, DrawLabelPx, FillPixelRect, FillPixelRects, DrawImage, CompositeLayer,
     CompositeFullSurfaceLayer, ClipPush, ClipPop, StrokeRect, SetAlpha, CopyPixels, Lift, PutBack, SetFont,
     PixelTranslation, FallbackFamily, LogicalPixelRow, ClearViewport, ClearViewportExcept, Flush
 
@@ -147,6 +147,10 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
     counts.increment(DrawKind.FillPixelRect)
     inner.pixels.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
+
+  override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
+    counts.increment(DrawKind.FillPixelRects)
+    inner.pixels.fillPixelRects(rects, color)
 
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     counts.increment(DrawKind.DrawImage)
