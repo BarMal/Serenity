@@ -268,15 +268,27 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
 - `sbt test` leaves out the specs that load the real library. To run them: build it with
   `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
   `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` and `offscreen` video drivers, so no
-  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1-mesa-dri libgles2`), and run on its
+  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1 libgl1-mesa-dri libgles2`; Skiko's natives link `libGL.so.1`), and run on its
   software rasteriser when there is no GPU.
 - `SdlGlWindow` is the window host with a GL context (phase 3): window, EGL context, event pump, resize and scale,
   clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
   EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
   `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
-- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 draws with
-  `makeGLWithInterface` instead, handing Skia an upcall to `SDL_GL_GetProcAddress`, so no native library of ours is
-  involved. Skiko's natives still need `libGL.so.1` and `libX11` installed.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 builds
+  the context with `makeGLWithInterface` instead (`SkiaGlContext`), handing Skia an upcall (`SkiaGlProcs`) that
+  answers each GL function from `SDL_GL_GetProcAddress`, so no native library of ours is involved. Skiko's natives
+  still need `libGL.so.1` and `libX11` installed.
+- `SkiaGlPresenter` (phase 4, in `ui/skia`) draws a GL window's frames straight onto the surface, with nothing selecting
+  it yet. The renderer draws onto a persistent offscreen GPU `Surface` (`SkiaGlTargets`, `SkiaGlFrames`), so it can
+  draw only what changed; a present draws that whole surface onto the window's framebuffer (a swap leaves the back
+  buffer undefined), fills the carets over it, and swaps. Everything runs on the window's SDL thread in the order the
+  calls were made (`SdlGlWindow.post`); drawing is never skipped, and a run of present requests that has not started
+  is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
+  scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
+- `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
 
 ### JetBrains Runtime and native Wayland
 

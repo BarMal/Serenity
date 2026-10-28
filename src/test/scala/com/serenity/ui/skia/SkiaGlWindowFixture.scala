@@ -33,3 +33,12 @@ trait SkiaGlWindowFixture extends Assertions:
     require(bitmap.allocPixels(info) && surface.readPixels(bitmap, 0, 0), "cannot read the surface")
     val bytes = bitmap.readPixels(info, surface.getWidth * 4, 0, 0)
     ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getInt((y * surface.getWidth + x) * 4)
+
+  /** Every pixel of `surface`, row by row, as `0xAARRGGBB`. */
+  protected def allPixels(surface: Surface): Vector[Int] =
+    val info   = ImageInfo.Companion.makeN32Premul(surface.getWidth, surface.getHeight)
+    val bitmap = Bitmap()
+    require(bitmap.allocPixels(info) && surface.readPixels(bitmap, 0, 0), "cannot read the surface")
+    val bytes = bitmap.readPixels(info, surface.getWidth * 4, 0, 0)
+    val ints  = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer()
+    Vector.tabulate(surface.getWidth * surface.getHeight)(ints.get)
