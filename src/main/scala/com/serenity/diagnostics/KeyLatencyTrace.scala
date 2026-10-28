@@ -261,6 +261,7 @@ final class KeyLatencyTrace(
   def framePublished(): Unit         = if enabled.get() then update(_.framePublished(_))
   def frameEnded(): Unit             = if enabled.get() then update((current, _) => current.frameEnded)
   def paintStarted(): Unit           = if enabled.get() then update(_.paintStarted(_))
+
   def paintFinished(): Unit =
     if enabled.get() then
       val now = clock()

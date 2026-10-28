@@ -50,7 +50,7 @@ given Balance = Balance.default
 
 object Main extends IOApp:
 
-  private val StartupProbeChar: Char                 = 'a'
+  private val StartupProbeChar: Char              = 'a'
   private val StartupProbeTimeout: FiniteDuration = 30.seconds
 
   // Hibernate/restore causes a wall-clock jump that makes every fiber appear stalled, flooding stderr

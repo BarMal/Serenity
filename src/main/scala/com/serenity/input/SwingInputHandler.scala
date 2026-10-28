@@ -96,8 +96,8 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   def submitInputMethodEvent(event: java.awt.event.InputMethodEvent): Unit =
     ImeEventTranslation.fromInputMethodEvent(event).foreach(submit)
 
-  /** Queues one typed character exactly as `keyTyped` does, for the start-up probe (#2420), which has no window focus to
-    * type into. It runs on the caller's thread, so the trace sees no event-thread hop.
+  /** Queues one typed character exactly as `keyTyped` does, for the start-up probe (#2420), which has no window focus
+    * to type into. It runs on the caller's thread, so the trace sees no event-thread hop.
     */
   def submitTypedChar(char: Char): Unit =
     enqueueKey(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty), System.currentTimeMillis())

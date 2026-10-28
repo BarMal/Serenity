@@ -179,12 +179,11 @@ object LaunchOptions:
     *
     * `--smoke-test` and `--startup-probe` always use the window, as `--gui` does. `--gui` always wins when both flags
     * are given -- it exists specifically to force the Swing path even when auto-detection would otherwise pick the
-    * terminal (see issue #1112).
-    * Absent an explicit flag, the terminal is used only when there is no display to put a window on (`$DISPLAY` and
-    * `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can interact with -- a
-    * display-less, non-interactive invocation (e.g. a script piping stdout, or a CI job with neither a display nor a
-    * pty) falls through to the GUI path rather than silently entering raw terminal mode against a stream that can never
-    * supply keystrokes.
+    * terminal (see issue #1112). Absent an explicit flag, the terminal is used only when there is no display to put a
+    * window on (`$DISPLAY` and `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can
+    * interact with -- a display-less, non-interactive invocation (e.g. a script piping stdout, or a CI job with neither
+    * a display nor a pty) falls through to the GUI path rather than silently entering raw terminal mode against a
+    * stream that can never supply keystrokes.
     */
   def resolveTuiMode(
     options: LaunchOptions,

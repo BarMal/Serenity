@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 
 class StartupProbeSpec extends AnyFlatSpec with Matchers:
 
-  private final class Console:
+  final private class Console:
     private val buffer = new ByteArrayOutputStream()
     val out            = new PrintStream(buffer, true, StandardCharsets.UTF_8)
     def text: String   = buffer.toString(StandardCharsets.UTF_8)

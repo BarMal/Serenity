@@ -8,8 +8,8 @@ import scala.concurrent.duration.FiniteDuration
 import cats.effect.{Deferred, IO}
 
 /** What `--startup-probe` reports (#2420): the editor is interactive once a keystroke typed after the first frame has
-  * been applied and painted. The harness times the marker line from process start, as it times
-  * [[SmokeTest.readyLine]]. Every outcome releases `quit`, so a probe that cannot finish cannot hang the launch.
+  * been applied and painted. The harness times the marker line from process start, as it times [[SmokeTest.readyLine]].
+  * Every outcome releases `quit`, so a probe that cannot finish cannot hang the launch.
   */
 object StartupProbe:
 

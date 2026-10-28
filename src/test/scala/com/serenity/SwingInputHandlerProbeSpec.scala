@@ -18,7 +18,7 @@ import org.scalatest.matchers.should.Matchers
 class SwingInputHandlerProbeSpec extends AnyFlatSpec with Matchers:
 
   private def handlerOn(component: JPanel, timings: FrameTimings): SwingInputHandler[IO, Event] =
-    val router = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+    val router  = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
     val metrics = () => CellMetrics(8, 16, 13)
     new SwingInputHandler[IO, Event](component, router, metrics, metrics, frameTimings = timings)
 
