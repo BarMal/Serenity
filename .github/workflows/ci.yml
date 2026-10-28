@@ -166,7 +166,7 @@ jobs:
       # job's virtual display, at a size that fits its largest window, lets them run; the one spec that needs AWT to be
       # headless is cancelled in its place.
       - name: Install Xvfb
-        run: sudo apt-get update && sudo apt-get install -y xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb fonts-noto-cjk
 
       - name: Run tests
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
