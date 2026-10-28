@@ -10,8 +10,8 @@ import org.jetbrains.skia.GLAssembledInterface
 import org.jetbrains.skiko.Library
 
 /** How Skia finds GL functions on a context it did not make (#2380). Skiko's own lookup goes through GLX and gives up
-  * on an EGL context; instead Skia is handed this stub, which has the signature of `GrGLGetProc`
-  * (`void* (*)(void* ctx, const char* name)`) and answers every name from `lookup`, the window's `SDL_GL_GetProcAddress`.
+  * on an EGL context; instead Skia is handed this stub, which has the signature of `GrGLGetProc` (`void* (*)(void* ctx,
+  * const char* name)`) and answers every name from `lookup`, the window's `SDL_GL_GetProcAddress`.
   *
   * A name `lookup` has no address for, or a `lookup` that fails, is answered with no address, which Skia reads as "this
   * function is missing"; an exception must not cross back into native code. Skia may ask from any thread, so `lookup`
