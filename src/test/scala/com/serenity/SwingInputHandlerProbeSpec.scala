@@ -19,7 +19,8 @@ class SwingInputHandlerProbeSpec extends AnyFlatSpec with Matchers:
 
   private def handlerOn(component: JPanel, timings: FrameTimings): SwingInputHandler[IO, Event] =
     val router = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
-    new SwingInputHandler[IO, Event](component, router, () => CellMetrics(8, 16, 13), frameTimings = timings)
+    val metrics = () => CellMetrics(8, 16, 13)
+    new SwingInputHandler[IO, Event](component, router, metrics, metrics, frameTimings = timings)
 
   "SwingInputHandler.submitTypedChar" should "queue the character as the key listener would" in {
     val handler = handlerOn(new JPanel(), FrameTimings())
