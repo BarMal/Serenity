@@ -3,6 +3,7 @@ package com.serenity.perf
 import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.rope.Balance
+import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -50,3 +51,14 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
       typingDraws(TypingPaintProfile.variants.find(_.label == label).getOrElse(fail(s"no $label variant")))._1
     draws("no_spellcheck") should be < draws("full") / 2
   }
+
+  for (name, factory) <- List("Java2D" -> FrameSurfaceFactory.Java2D, "Skia raster" -> SkiaRasterSurfaceFactory) do
+    it should s"draw rows in every typing frame it measures on $name" in {
+      val cycle = TypingPaintProfile.typingCycle(factory, 900, 600, 1.0, TypingPaintProfile.variants.head.config)
+      val drawn = (0 until 12).map { _ =>
+        val _ = cycle.next()
+        cycle.lastFrame(FrameCounter.RowsDrawn)
+      }
+      drawn.filter(_ == 0L) shouldBe empty
+    }
+
