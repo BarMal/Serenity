@@ -36,7 +36,8 @@ import org.jetbrains.skia.{
   PaintMode,
   PaintStrokeCap,
   PaintStrokeJoin,
-  Path,
+  PathBuilder,
+  PathDirection,
   Rect,
   Surface
 }
@@ -450,17 +451,24 @@ final class SkiaRenderSurface(
     */
   override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
     if rects.length >= 4 then
-      val path = Path()
+      val builder = PathBuilder()
       try
         (0 until rects.length by 4).foreach { i =>
           val widthPx  = rects(i + 2).max(1)
           val heightPx = rects(i + 3).max(1)
           painted.touched(rects(i), rects(i + 1), widthPx, heightPx)
           recordPaint(rects(i).toDouble, rects(i + 1).toDouble, widthPx.toDouble, heightPx.toDouble)
-          val _ = path.addRect(rect(rects(i).toFloat, rects(i + 1).toFloat, widthPx.toFloat, heightPx.toFloat))
+          val _ = builder.addRect(
+            rect(rects(i).toFloat, rects(i + 1).toFloat, widthPx.toFloat, heightPx.toFloat),
+            PathDirection.CLOCKWISE,
+            0
+          )
         }
-        val _ = canvas.drawPath(path, filled(paintColor(color)))
-      finally path.close()
+        val path = builder.detach()
+        try
+          val _ = canvas.drawPath(path, filled(paintColor(color)))
+        finally path.close()
+      finally builder.close()
 
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px     = metrics.toPixelX(x)
