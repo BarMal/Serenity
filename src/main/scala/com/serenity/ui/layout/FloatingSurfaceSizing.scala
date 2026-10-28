@@ -35,6 +35,8 @@ private[layout] object FloatingSurfaceSizing:
         math.min(contentRect.width, text.length + 2)
       case SurfaceContent.Notice(notice, _) =>
         NoticeContent.frameWidth(notice, contentRect.width)
+      case SurfaceContent.ContextMenu(menu) =>
+        math.min(contentRect.width, ContextMenuSurfaceComposition.preferredWidth(menu) + (borderCells * 2))
       case _ =>
         contentRect.width
 

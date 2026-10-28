@@ -130,15 +130,17 @@ object FontLoader:
     if family == BundledCodeFontFamily then true
     else isMonospaced(Font(family, Font.PLAIN, 12))
 
-  def loadCodeFont(config: FontConfig)(using logger: Logger[IO]): IO[Font] =
+  def loadCodeFont(config: FontConfig, resolve: String => String = LogicalFontFamilies.system.resolve)(using
+    logger: Logger[IO]
+  ): IO[Font] =
     val size = config.scaledCodeFontSize
     val baseFontIO =
       if config.codeFontFamily == BundledCodeFontFamily then
-        loadBundledMonospace(size).handleErrorWith { error =>
+        loadBundledMonospace(size, resolve).handleErrorWith { error =>
           logger.warn(s"Failed to load bundled code font, falling back to system fonts: ${error.getMessage}") *>
-            IO.pure(defaultSystemMonospace(size))
+            IO.pure(defaultSystemMonospace(size, resolve))
         }
-      else IO.pure(Font(config.codeFontFamily, Font.PLAIN, size.toInt).deriveFont(size))
+      else IO.pure(Font(resolve(config.codeFontFamily), Font.PLAIN, size.toInt).deriveFont(size))
 
     baseFontIO.map(applyFontFeatures(_, config.enableLigatures))
 
@@ -148,25 +150,28 @@ object FontLoader:
   def loadUiFont(config: FontConfig): IO[Font] =
     IO.pure(previewUiFont(config))
 
-  def previewCodeFont(config: FontConfig): Font =
+  /** The role fonts name one physical face for each of AWT's logical families (`resolve`), the face layout measures
+    * with and a surface draws with; a bundled or user-named family passes through.
+    */
+  def previewCodeFont(config: FontConfig, resolve: String => String = LogicalFontFamilies.system.resolve): Font =
     val size = config.scaledCodeFontSize
     val base =
       if config.codeFontFamily == BundledCodeFontFamily then
-        bundledMonospace(size).getOrElse(defaultSystemMonospace(size))
-      else Font(config.codeFontFamily, Font.PLAIN, size.toInt).deriveFont(size)
+        bundledMonospace(size).getOrElse(defaultSystemMonospace(size, resolve))
+      else Font(resolve(config.codeFontFamily), Font.PLAIN, size.toInt).deriveFont(size)
     applyFontFeatures(base, config.enableLigatures)
 
-  def previewTextFont(config: FontConfig): Font =
+  def previewTextFont(config: FontConfig, resolve: String => String = LogicalFontFamilies.system.resolve): Font =
     val size = config.scaledTextFontSize
     applyFontFeatures(
-      Font(config.textFontFamily, Font.PLAIN, size.toInt).deriveFont(size),
+      Font(resolve(config.textFontFamily), Font.PLAIN, size.toInt).deriveFont(size),
       config.textLigatures
     )
 
-  def previewUiFont(config: FontConfig): Font =
+  def previewUiFont(config: FontConfig, resolve: String => String = LogicalFontFamilies.system.resolve): Font =
     val size = config.scaledUiFontSize
     applyFontFeatures(
-      Font(config.uiFontFamily, Font.PLAIN, size.toInt).deriveFont(size),
+      Font(resolve(config.uiFontFamily), Font.PLAIN, size.toInt).deriveFont(size),
       config.uiLigatures
     )
 
@@ -201,8 +206,8 @@ object FontLoader:
   private lazy val availableSystemFontFamilies: List[String] =
     GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.toList.sorted
 
-  private def loadBundledMonospace(size: Float): IO[Font] =
-    IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size)))
+  private def loadBundledMonospace(size: Float, resolve: String => String): IO[Font] =
+    IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size, resolve)))
 
   private def bundledMonospace(size: Float): Option[Font] =
     bundledFontBase.map(_.deriveFont(size))
@@ -238,11 +243,11 @@ object FontLoader:
       finally stream.close()
     }
 
-  private def defaultSystemMonospace(size: Float): Font =
+  private def defaultSystemMonospace(size: Float, resolve: String => String): Font =
     availableMonospaceFamilies
       .find(_ != BundledCodeFontFamily)
       .map(family => Font(family, Font.PLAIN, size.toInt).deriveFont(size))
-      .getOrElse(Font(Font.MONOSPACED, Font.PLAIN, size.toInt).deriveFont(size))
+      .getOrElse(Font(resolve(Font.MONOSPACED), Font.PLAIN, size.toInt).deriveFont(size))
 
   private def canRenderBasicText(family: String): Boolean =
     try
