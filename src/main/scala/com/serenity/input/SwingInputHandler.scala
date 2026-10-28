@@ -96,8 +96,14 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   def submitInputMethodEvent(event: java.awt.event.InputMethodEvent): Unit =
     ImeEventTranslation.fromInputMethodEvent(event).foreach(submit)
 
-  private def enqueueKey(info: KeyStrokeInfo, e: KeyEvent): Unit =
-    frameTimings.keyLatency.keyReceived(e.getWhen)
+  /** Queues one typed character exactly as `keyTyped` does, for the start-up probe (#2420), which has no window focus to
+    * type into. It runs on the caller's thread, so the trace sees no event-thread hop.
+    */
+  def submitTypedChar(char: Char): Unit =
+    enqueueKey(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty), System.currentTimeMillis())
+
+  private def enqueueKey(info: KeyStrokeInfo, whenMillis: Long): Unit =
+    frameTimings.keyLatency.keyReceived(whenMillis)
     enqueue(QueuedKey(info))
     frameTimings.keyLatency.keyEnqueued()
 
@@ -158,7 +164,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
   component.addKeyListener(new KeyAdapter:
     override def keyTyped(e: KeyEvent): Unit =
       imeDiagnostics.foreach(_(ImeDiagnostics.describe(e, System.currentTimeMillis())))
-      if !swallowedForSummon() then translateTyped(e).foreach(enqueueKey(_, e))
+      if !swallowedForSummon() then translateTyped(e).foreach(enqueueKey(_, e.getWhen))
     override def keyPressed(e: KeyEvent): Unit =
       lastKeyPress.set(Some((KeyStroke.getKeyStrokeForEvent(e), System.currentTimeMillis)))
       val consumed = trackSummon(
@@ -171,7 +177,7 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
         )
       )
       if !consumed then
-        translatePressed(e).foreach(enqueueKey(_, e))
+        translatePressed(e).foreach(enqueueKey(_, e.getWhen))
         modifierOf(e).foreach((_, modifier) => enqueueCursorPeek(CursorPeekModifierPressed(modifier, e.getWhen)))
     override def keyReleased(e: KeyEvent): Unit =
       applySummon(SummonChordTracker.released(_, inputRouter.summonConfig, SummonKeys.rawKey(e), e.getWhen))

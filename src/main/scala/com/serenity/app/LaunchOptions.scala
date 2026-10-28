@@ -3,7 +3,7 @@ package com.serenity.app
 import java.nio.file.Path
 
 import cats.syntax.all.*
-import com.monovore.decline.{Command, Help, Opts}
+import com.monovore.decline.{Command, Help, Opts, Visibility}
 import com.serenity.config.{RenderBackendSetting, WaylandRender}
 
 /** @param showVersion
@@ -15,6 +15,11 @@ import com.serenity.config.{RenderBackendSetting, WaylandRender}
   * @param smokeTest
   *   `--smoke-test`: open the window, print [[SmokeTest.readyLine]] once the first frame is painted, then quit as if
   *   the window had been closed. Used by CI to prove a packaged app image starts. Always the windowed interface.
+  * @param startupProbe
+  *   `--startup-probe`: a benchmark hook (#2420), left out of `--help`. Like `--smoke-test` it prints the ready line at
+  *   the first painted frame, but instead of quitting it types one character and quits once that keystroke has been
+  *   painted, printing [[StartupProbe.interactiveLine]]. The character lands in whatever buffer the start-up opened, so
+  *   the harness runs it in safe mode or with an isolated home.
   * @param resetConfig
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession
@@ -33,6 +38,7 @@ final case class LaunchOptions(
     showVersion: Boolean = false,
     safeMode: Boolean = false,
     smokeTest: Boolean = false,
+    startupProbe: Boolean = false,
     resetConfig: Boolean = false,
     resetSession: Boolean = false,
     renderer: Option[RenderBackendSetting] = None,
@@ -89,6 +95,15 @@ object LaunchOptions:
       )
       .orFalse
 
+  private val startupProbe: Opts[Boolean] =
+    Opts
+      .flag(
+        "startup-probe",
+        "Time start-up to the first painted keystroke (benchmark hook).",
+        visibility = Visibility.Hidden
+      )
+      .orFalse
+
   private val resetConfig: Opts[Boolean] =
     Opts
       .flag(
@@ -137,7 +152,21 @@ object LaunchOptions:
 
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
-      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession, renderer, waylandRender)
+      (
+        open,
+        eco,
+        tui,
+        gui,
+        alpha,
+        version,
+        safeMode,
+        smokeTest,
+        startupProbe,
+        resetConfig,
+        resetSession,
+        renderer,
+        waylandRender
+      )
         .mapN(LaunchOptions.apply)
     )
 
@@ -154,7 +183,7 @@ object LaunchOptions:
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
-    * `--smoke-test` always uses the window, as `--gui` does. `--gui` always wins when both flags are given -- it exists
+    * `--smoke-test` and `--startup-probe` always use the window, as `--gui` does. `--gui` always wins when both flags are given -- it exists
     * specifically to force the Swing path even when auto-detection would otherwise pick the terminal (see issue #1112).
     * Absent an explicit flag, the terminal is used only when there is no display to put a window on (`$DISPLAY` and
     * `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can interact with -- a
@@ -168,7 +197,7 @@ object LaunchOptions:
     stdoutIsTty: Boolean = System.console() != null,
     osName: String = osNameProperty
   ): Boolean =
-    if options.gui || options.smokeTest then false
+    if options.gui || options.smokeTest || options.startupProbe then false
     else if options.tui then true
     else detectTuiByDefault(env, stdoutIsTty, osName)
 

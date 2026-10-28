@@ -2,7 +2,7 @@ import java.io.PrintStream
 import java.nio.file.Path
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
@@ -49,6 +49,9 @@ import org.typelevel.log4cats.{Logger, LoggerFactory, LoggerName}
 given Balance = Balance.default
 
 object Main extends IOApp:
+
+  private val StartupProbeChar: Char                 = 'a'
+  private val StartupProbeTimeout: FiniteDuration = 30.seconds
 
   // Hibernate/restore causes a wall-clock jump that makes every fiber appear stalled, flooding stderr
   // with starvation warnings and corrupting the TUI display. An interactive editor has no latency SLA
@@ -404,6 +407,18 @@ object Main extends IOApp:
                     .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
                 }
 
+              val startupProbe: IO[Unit] =
+                StartupProbe.run(
+                  inject = IO(frameTimings.keyLatency.setEnabled(true)) >>
+                    menuInput.get.flatMap(handler => IO(handler.submitTypedChar(StartupProbeChar))),
+                  keyPainted = IO.fromCompletableFuture(IO(frameTimings.keyLatency.firstKeyPainted)),
+                  quit = smokeReady,
+                  timeout = StartupProbeTimeout
+                )
+              val announceFirstFrame: IO[Unit] =
+                if launchOptions.startupProbe then SmokeTest.printReady() >> startupProbe.start.void
+                else IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady))
+
               val frontendRuntime = FrontendRuntime(
                 inputHandler = router =>
                   IO.pure(
@@ -471,8 +486,7 @@ object Main extends IOApp:
                 appConfig = actualAppConfig,
                 configNotice = configNotice,
                 recovery = startup.plan,
-                onFirstFrame =
-                  startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+                onFirstFrame = startup.markStarted >> announceFirstFrame,
                 makeStateManager = Some(logger =>
                   com.serenity.state.manager.StateManager.apply(
                     logger,
@@ -496,7 +510,8 @@ object Main extends IOApp:
                   )
                 ),
                 awaitExternalQuit =
-                  if launchOptions.smokeTest then IO.race(swingWin.awaitClose, smokeReady.get).void
+                  if launchOptions.smokeTest || launchOptions.startupProbe then
+                    IO.race(swingWin.awaitClose, smokeReady.get).void
                   else swingWin.awaitClose,
                 registerResizeCallback = cb => swingWin.setOnResize(cb),
                 registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
