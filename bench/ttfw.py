@@ -16,18 +16,30 @@ import tempfile
 import time
 
 
-def run_once(launcher):
+READY = "SERENITY_SMOKE_READY"
+INTERACTIVE = "SERENITY_PROBE_INTERACTIVE"
+SMOKE_ARGS = ("--smoke-test", "--safe-mode")
+PROBE_ARGS = ("--startup-probe", "--safe-mode")
+
+
+def launch(launcher, args, markers):
+    """Runs the launcher and returns ({marker: ms to its first stdout line}, ms to exit, exit status)."""
     with tempfile.TemporaryDirectory() as work:
         started = time.perf_counter()
-        proc = subprocess.Popen([launcher, "--smoke-test", "--safe-mode"], cwd=work, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True)
-        seen = None
+        proc = subprocess.Popen([launcher, *args], cwd=work, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        seen = {}
         for line in proc.stdout:
-            if line.strip() == "SERENITY_SMOKE_READY" and seen is None:
-                seen = time.perf_counter() - started
+            marker = line.strip()
+            if marker in markers and marker not in seen:
+                seen[marker] = (time.perf_counter() - started) * 1000
         proc.wait()
-        done = time.perf_counter() - started
-    return (seen * 1000, done * 1000) if seen is not None and proc.returncode == 0 else None
+        done = (time.perf_counter() - started) * 1000
+    return seen, done, proc.returncode
+
+
+def run_once(launcher):
+    seen, done, status = launch(launcher, SMOKE_ARGS, (READY,))
+    return (seen[READY], done) if READY in seen and status == 0 else None
 
 
 def describe(values):
