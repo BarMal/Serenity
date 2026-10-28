@@ -174,9 +174,30 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The desktop packages pass the same flags through jpackage's `--java-options`, with the archive next to the jar in the
-app image (`$APPDIR/serenity.jsa`), and build their runtime with `--generate-cds-archive` because a dynamic archive
-needs the runtime's own base archive. macOS is left out: writing into a signed `.app` would break its signature.
+The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
+the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
+a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
+its signature.
+
+The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
+(`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
+and the JVM then logs `Mismatched values for property jdk.module.enable.native.access` (an error line from the second
+start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
+on that line.
+
+The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
+instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+#2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
+(`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
+before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
+one or the other. The cache records the jar's size and modification time. If the jar no longer matches (a hand-patched
+image), the JVM rejects the cache for good, prints `[error][aot]` lines and starts about 1.5 s slower than AppCDS would;
+it does not regenerate. `scripts/check-aot-cache.sh` runs in the package workflows and proves that a valid cache is
+opened, and that a missing or stale one still leaves an app that starts. To time start-up on a machine with a display:
+
+```bash
+python3 bench/ttfw.py dist/Serenity/bin/Serenity 10 aot
+```
 
 ### Heap flags in the desktop packages
 
@@ -195,6 +216,18 @@ At startup, unless `performance.memory.compact = false`, Serenity sets `MinHeapF
 modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30 s once the app is up. With the setting
 off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
 (`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
+
+### Skia natives per OS
+
+Skiko ships one native library per OS and architecture, so each build carries only its own. `build.sbt` picks the
+`skiko-awt-runtime-<os>-<arch>` artifact from the build host; set `SERENITY_SKIKO_TARGET` (or `-Dserenity.skiko.target`) to
+one of `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64` or `windows-arm64` to build another target. The
+runnable jar keeps its natives. The app image does not: `scripts/SkikoNatives.java` moves them into `app/natives` (with
+`icudtl.dat` on Windows), the image's jar is left without them, and the launcher passes
+`-Dskiko.library.path=$APPDIR/natives`, so Skiko never unpacks anything into `~/.skiko` and macOS signs the dylib as part
+of the bundle (`scripts/sign-macos-app.sh`, entitlements in `ci/macos.entitlements`). `scripts/SkikoProbe.java` loads the
+library from that layout and renders a 1x1 raster surface; the Skia Natives Probe workflow runs it on Windows and on Linux
+under Xvfb.
 
 ### Startup warm-up
 
@@ -235,15 +268,27 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
 - `sbt test` leaves out the specs that load the real library. To run them: build it with
   `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
   `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` and `offscreen` video drivers, so no
-  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1-mesa-dri libgles2`), and run on its
+  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1 libgl1-mesa-dri libgles2`; Skiko's natives link `libGL.so.1`), and run on its
   software rasteriser when there is no GPU.
 - `SdlGlWindow` is the window host with a GL context (phase 3): window, EGL context, event pump, resize and scale,
   clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
   EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
   `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
-- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 draws with
-  `makeGLWithInterface` instead, handing Skia an upcall to `SDL_GL_GetProcAddress`, so no native library of ours is
-  involved. Skiko's natives still need `libGL.so.1` and `libX11` installed.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 builds
+  the context with `makeGLWithInterface` instead (`SkiaGlContext`), handing Skia an upcall (`SkiaGlProcs`) that
+  answers each GL function from `SDL_GL_GetProcAddress`, so no native library of ours is involved. Skiko's natives
+  still need `libGL.so.1` and `libX11` installed.
+- `SkiaGlPresenter` (phase 4, in `ui/skia`) draws a GL window's frames straight onto the surface, with nothing selecting
+  it yet. The renderer draws onto a persistent offscreen GPU `Surface` (`SkiaGlTargets`, `SkiaGlFrames`), so it can
+  draw only what changed; a present draws that whole surface onto the window's framebuffer (a swap leaves the back
+  buffer undefined), fills the carets over it, and swaps. Everything runs on the window's SDL thread in the order the
+  calls were made (`SdlGlWindow.post`); drawing is never skipped, and a run of present requests that has not started
+  is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
+  scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
+- `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
 
 ### JetBrains Runtime and native Wayland
 
@@ -280,6 +325,34 @@ uses the compositor's decorations, since Wayland does not let an application mov
 JBR's Vulkan renderer is opt-in and experimental; try it with `-Dsun.java2d.vulkan=true`. The AppCDS flags above work
 on JBR too, but keep a separate archive per runtime or each switch will rewrite it.
 
+### Renderer selection and Wayland
+
+Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
+an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
+default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
+`SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
+config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
+its default.
+
+| Config key | Values | Default | Environment variable | Flag |
+| --- | --- | --- | --- | --- |
+| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `java2d` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+
+`auto` uses Skia when the native library loads and the session allows it, and Java2D otherwise (terminal and safe-mode
+launches never load Skia). The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
+
+Skia's window layer needs an X11 display, so on a Wayland session where the native Wayland toolkit (`WLToolkit`) would be
+used, `ui.render.wayland` decides what happens when the backend resolves to Skia:
+
+| Value | Effect |
+| --- | --- |
+| `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
+| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+
+The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
 ## Codex CLI
 
 Codex CLI is installed in the Codespace image. Start it from the repository root:
@@ -306,7 +379,7 @@ To cut a release:
 2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
 
 Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
-`Serenity.jar`, the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+the three per-OS jars (`Serenity-<os>-<arch>.jar`), the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
 `X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
 nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
 exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a

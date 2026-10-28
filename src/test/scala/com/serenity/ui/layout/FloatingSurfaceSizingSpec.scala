@@ -45,6 +45,48 @@ class FloatingSurfaceSizingSpec extends AnyFlatSpec with Matchers:
     width shouldBe 40
   }
 
+  private def contextMenu(title: String, labels: String*): SurfaceContent.ContextMenu =
+    SurfaceContent.ContextMenu(
+      ContextMenu(
+        title = title,
+        targetFocus = Focus.EditorPane(PaneId(0)),
+        items = labels.toList.map { label =>
+          val command = Command.typed(label, label, CommandIntent.Edit(EditIntent.Copy), label = label)
+          ContextMenuItem(command.name, label, command)
+        }
+      )
+    )
+
+  // A menu is as wide as its widest row (title, item label or "n/n" footer), one cell of padding each side, plus the
+  // one-cell border each side -- never the whole pane.
+  it should "size a context menu to its widest row plus padding and border, not the whole pane" in {
+    val width = FloatingSurfaceSizing.width(contextMenu("editor", "Save", "Cut"), state, LayoutRect(0, 0, 80, 10))
+
+    width shouldBe "editor".length + 2 + 2
+  }
+
+  it should "size a context menu wider for a longer label" in {
+    val short = FloatingSurfaceSizing.width(contextMenu("editor", "Cut"), state, LayoutRect(0, 0, 80, 10))
+    val long  = FloatingSurfaceSizing.width(contextMenu("editor", "Save file as..."), state, LayoutRect(0, 0, 80, 10))
+
+    long shouldBe "Save file as...".length + 2 + 2
+    long should be > short
+  }
+
+  it should "measure a context menu's wide-glyph label in display cells, not UTF-16 units" in {
+    val label = "保存文件"
+    val width = FloatingSurfaceSizing.width(contextMenu("editor", label), state, LayoutRect(0, 0, 80, 10))
+
+    label.length shouldBe 4
+    width shouldBe 8 + 2 + 2
+  }
+
+  it should "clamp a context menu to a pane narrower than its content" in {
+    val width = FloatingSurfaceSizing.width(contextMenu("editor", "Save file as..."), state, LayoutRect(0, 0, 6, 10))
+
+    width shouldBe 6
+  }
+
   "height" should "size to a quick-info popup's actual line count plus its border" in {
     val height = FloatingSurfaceSizing.height(SurfaceContent.QuickInfo("one\ntwo\nthree"), 40, 20, state)
 
