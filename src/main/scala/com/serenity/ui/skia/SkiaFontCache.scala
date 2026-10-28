@@ -4,6 +4,7 @@ import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.ConcurrentHashMap
 
+import com.serenity.ui.fonts.LogicalFontFamilies
 import com.serenity.ui.renderer.{FontFirstUse, StyledFontCache}
 import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontStyleSet, FontVariation, Typeface}
 
@@ -94,10 +95,11 @@ private[skia] object SkiaTypefaces:
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
   def fontFor(awt: java.awt.Font): Font =
-    val bold     = awt.isBold
-    val italic   = awt.isItalic
-    val resolved = typefaceFor(awt.getFamily, bold, italic)
-    val font     = new Font(resolved, awt.getSize2D.max(1.0f))
+    val bold      = awt.isBold
+    val italic    = awt.isItalic
+    val reference = Reference(awt.getSize2D.max(1.0f), awt.getStringBounds(MeasureProbe, MeasureContext).getWidth)
+    val resolved  = typefaceFor(awt.getFamily, bold, italic, reference)
+    val font      = new Font(resolved, awt.getSize2D.max(1.0f))
     font.setSubpixel(true)
     font.setLinearMetrics(true)
     font.setHinting(FontHinting.NONE)
@@ -109,59 +111,55 @@ private[skia] object SkiaTypefaces:
   /** Skia's own oblique slant, applied when the typeface has no italic of its own. */
   private val ObliqueSkew = -0.25f
 
-  /** The family AWT draws a logical font in on `osName`, which layout measures with (JDK "Physical and Logical Fonts").
-    * A system font manager does not know the logical names, and falling through to its first family draws Arial where
-    * layout measured Times.
+  /** The family AWT draws a logical font in on `osName` where the JDK documents one; layout measures with it, and a
+    * system font manager does not know the logical names.
     */
   def physicalFamilyFor(logical: String, osName: String): Option[String] =
-    val os = osName.toLowerCase
-    val table =
-      if os.contains("windows") then
-        Map(
-          "serif"       -> "Times New Roman",
-          "sansserif"   -> "Arial",
-          "dialog"      -> "Arial",
-          "monospaced"  -> "Courier New",
-          "dialoginput" -> "Courier New"
-        )
-      else if os.contains("mac") then
-        Map(
-          "serif"       -> "Times",
-          "sansserif"   -> "Helvetica",
-          "dialog"      -> "Helvetica",
-          "monospaced"  -> "Courier",
-          "dialoginput" -> "Courier"
-        )
-      else Map.empty[String, String]
-    table.get(logical.toLowerCase)
+    LogicalFontFamilies.documentedFamily(logical, osName)
 
-  private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
-    systemTypeface(family, bold, italic)
+  /** What AWT measured a probe string at, for choosing among the weights of a family the one that advances the same. */
+  final private case class Reference(size: Float, advance: Double)
+
+  private val MeasureProbe   = "Buffer 1 - unsaved Hamburgefonstiv"
+  private val MeasureContext = FontRenderContext(AffineTransform(), true, true)
+
+  private def typefaceFor(family: String, bold: Boolean, italic: Boolean, reference: Reference): Typeface =
+    systemTypeface(family, bold, italic, reference)
       .orElse(
-        physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic))
+        physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic, reference))
       )
       .orElse(bundledTypeface(family, bold, italic))
-      .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic))
-      .orElse(systemTypeface("sans-serif", bold, italic))
-      .orElse(anySystemTypeface(bold, italic))
+      .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic, reference))
+      .orElse(systemTypeface("sans-serif", bold, italic, reference))
+      .orElse(anySystemTypeface(bold, italic, reference))
       .getOrElse(Typeface.Companion.makeEmpty())
 
   /** The installed face of `family` closest to the requested style. `FontStyle` is a Kotlin value class as of Skiko
     * 0.153, so its factory methods carry compiler-mangled names that Scala cannot call stably; the style set's faces
     * report `isBold` and `isItalic` plainly.
     */
-  private def systemTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
-    Option(FontMgr.Companion.getDefault().matchFamily(family)).flatMap(closest(_, bold, italic))
+  private def systemTypeface(family: String, bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
+    Option(FontMgr.Companion.getDefault().matchFamily(family)).flatMap(closest(_, bold, italic, reference))
 
-  private def anySystemTypeface(bold: Boolean, italic: Boolean): Option[Typeface] =
+  private def anySystemTypeface(bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
     val manager = FontMgr.Companion.getDefault()
     (0 until manager.getFamiliesCount).iterator
-      .flatMap(index => Option(manager.makeStyleSet(index)).flatMap(closest(_, bold, italic)))
+      .flatMap(index => Option(manager.makeStyleSet(index)).flatMap(closest(_, bold, italic, reference)))
       .nextOption()
 
-  private def closest(set: FontStyleSet, bold: Boolean, italic: Boolean): Option[Typeface] =
-    val faces = (0 until set.count()).flatMap(index => Option(set.getTypeface(index)))
-    faces.sortBy(face => (if face.isBold == bold then 0 else 1) + (if face.isItalic == italic then 0 else 1)).headOption
+  private def closest(set: FontStyleSet, bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
+    val candidates = (0 until set.count()).iterator
+      .flatMap(index => Option(set.getTypeface(index)))
+      .map(face => FaceChoice.Candidate(face, face.isBold, face.isItalic, () => advanceOf(face, reference)))
+      .toVector
+    FaceChoice.choose(candidates, bold, italic, Some(reference.advance))
+
+  private def advanceOf(face: Typeface, reference: Reference): Double =
+    val font = new Font(face, reference.size)
+    font.setSubpixel(true)
+    font.setLinearMetrics(true)
+    font.setHinting(FontHinting.NONE)
+    font.measureTextWidth(MeasureProbe).toDouble
 
   private def bundledTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
     val sameFamily = Bundled.faces.filter(_.getFamilyName.equalsIgnoreCase(family))
