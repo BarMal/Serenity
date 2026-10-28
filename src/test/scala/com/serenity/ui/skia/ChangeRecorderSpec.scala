@@ -6,7 +6,7 @@ import org.scalatest.matchers.should.Matchers
 
 class ChangeRecorderSpec extends AnyFlatSpec with Matchers:
 
-  private def recorder = new ChangeRecorder(1.0, 1.0, 4000, 4000)
+  private def recorder = new ChangeRecorder(1.0, 1.0, 4000, 4000, new PresentPhases)
 
   private def pixelsOf(areas: List[DeviceArea]): Set[(Int, Int)] =
     areas

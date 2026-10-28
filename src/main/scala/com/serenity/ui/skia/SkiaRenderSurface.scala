@@ -94,6 +94,8 @@ final class SkiaRenderSurface(
 
   override def pixelLifting: Option[PixelLifting] = lifting
 
+  private val phases = changes.fold(new PresentPhases)(_.phases)
+
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
   override def persistentContentKey: Option[SurfaceContentIdentity] =
@@ -478,7 +480,10 @@ final class SkiaRenderSurface(
       val height = math.round(from.heightPx * deviceScaleY).toInt
       val moved  = math.round(dyPx * deviceScaleY).toInt
       changes.foreach(_.moved(DeviceArea(left, top, width, height), moved))
-      if userClipDepth.get() == 0 then PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
+      if userClipDepth.get() == 0 then
+        phases.timed(PresentPhase.SurfaceMove)(
+          PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
+        )
       else
         val snap  = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
         val saved = canvas.save()

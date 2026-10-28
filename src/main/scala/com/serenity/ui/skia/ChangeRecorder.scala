@@ -13,7 +13,8 @@ final private[skia] class ChangeRecorder(
     deviceScaleX: Double,
     deviceScaleY: Double,
     surfaceWidthPx: Int,
-    surfaceHeightPx: Int
+    surfaceHeightPx: Int,
+    val phases: PresentPhases
 ):
   import ChangeRecorder.*
 
