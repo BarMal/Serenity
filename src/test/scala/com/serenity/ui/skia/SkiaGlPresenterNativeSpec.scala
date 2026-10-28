@@ -1,7 +1,7 @@
 package com.serenity.ui.skia
 
-import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{ConcurrentLinkedQueue, CountDownLatch, TimeUnit}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.*
