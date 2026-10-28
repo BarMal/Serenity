@@ -12,7 +12,6 @@ import org.jetbrains.skia.{
   Region,
   Surface
 }
-import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 
 /** What drawing a typing frame's squiggles costs in Skia by call shape: the same 62 words of 21 two-pixel segments
   * drawn as a `drawRect` each, as one path, as one region, and as one batch of lines.
