@@ -10,9 +10,10 @@ A benchmark blocks when B is worse than A by all of:
 * footprint: B's median `retained_bytes` is more than 10% above A's.
 
 Usage:
-    abba_compare.py --a a1.csv a2.csv a3.csv a4.csv --b b1.csv b2.csv b3.csv b4.csv
+    abba_compare.py --a a1.csv a2.csv a3.csv a4.csv --b b1.csv b2.csv b3.csv b4.csv [--time-delta-ms 0.03] [--report-only]
 
 Exit codes: 0 nothing blocks, 1 at least one benchmark blocks, 2 a side has no runs or the CSVs share no benchmark.
+With --report-only the same findings are warnings and the exit code is always 0.
 """
 
 from __future__ import annotations
@@ -43,12 +44,14 @@ def _values(runs: list[dict[str, Row]], name: str, field: str) -> list[float]:
     return [float(v) for v in found if v is not None]
 
 
-def time_finding(name: str, a: list[dict[str, Row]], b: list[dict[str, Row]]) -> Finding | None:
+def time_finding(
+    name: str, a: list[dict[str, Row]], b: list[dict[str, Row]], time_delta_ms: float = TIME_DELTA_MS
+) -> Finding | None:
     a_p50, b_p50 = _values(a, name, "p50_ms"), _values(b, name, "p50_ms")
     if not a_p50 or not b_p50 or max(a_p50) <= 0.0:
         return None
     a_median, b_median = statistics.median(a_p50), statistics.median(b_p50)
-    if min(b_p50) > max(a_p50) and b_median >= a_median * TIME_RATIO and b_median - a_median >= TIME_DELTA_MS:
+    if min(b_p50) > max(a_p50) and b_median >= a_median * TIME_RATIO and b_median - a_median >= time_delta_ms:
         return Finding(
             name,
             "p50_ms",
@@ -78,9 +81,11 @@ def retained_finding(name: str, a: list[dict[str, Row]], b: list[dict[str, Row]]
     return None
 
 
-def compare(a: list[dict[str, Row]], b: list[dict[str, Row]]) -> list[Finding]:
+def compare(
+    a: list[dict[str, Row]], b: list[dict[str, Row]], time_delta_ms: float = TIME_DELTA_MS
+) -> list[Finding]:
     names = sorted({name for run in a for name in run} & {name for run in b for name in run})
-    checks = (time_finding, allocation_finding, retained_finding)
+    checks = (lambda n, x, y: time_finding(n, x, y, time_delta_ms), allocation_finding, retained_finding)
     return [finding for name in names for check in checks if (finding := check(name, a, b)) is not None]
 
 
@@ -101,20 +106,32 @@ def main_with_args(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--a", nargs="+", required=True, help="CSVs of the baseline build, in run order")
     parser.add_argument("--b", nargs="+", required=True, help="CSVs of the candidate build, in run order")
+    parser.add_argument(
+        "--time-delta-ms",
+        type=float,
+        default=TIME_DELTA_MS,
+        help=f"Smallest p50 slowdown that can block (default {TIME_DELTA_MS} ms; start-up rows use a much larger one)",
+    )
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help="Print what would block as ::warning:: lines and always exit 0, for rows that are tracked, not gated",
+    )
     args = parser.parse_args(argv)
+    level = "warning" if args.report_only else "error"
     a_runs, b_runs = _load_runs(args.a), _load_runs(args.b)
     if not a_runs or not b_runs:
-        print("::error::A side of the comparison has no benchmark rows.")
-        return 2
+        print(f"::{level}::A side of the comparison has no benchmark rows.")
+        return 0 if args.report_only else 2
     shared = {n for run in a_runs for n in run} & {n for run in b_runs for n in run}
     if not shared:
-        print("::error::The A and B runs share no benchmark.")
-        return 2
-    findings = compare(a_runs, b_runs)
+        print(f"::{level}::The A and B runs share no benchmark.")
+        return 0 if args.report_only else 2
+    findings = compare(a_runs, b_runs, args.time_delta_ms)
     for finding in findings:
-        print(f"::error::{finding.name} {finding.metric}: {finding.detail}")
+        print(f"::{level}::{finding.name} {finding.metric}: {finding.detail}")
     print(f"{len(shared)} benchmarks compared, {len(findings)} blocking.")
-    return 1 if findings else 0
+    return 1 if findings and not args.report_only else 0
 
 
 def main() -> int:
