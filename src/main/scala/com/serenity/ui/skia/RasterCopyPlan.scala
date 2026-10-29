@@ -51,38 +51,44 @@ private[ui] object RasterCopyPlan:
 
   /** The same pixels as `areas`, as areas that share none and join where they touch: a scroll damages the same large
     * area in both frames, and copying it twice doubled the cost of the frame.
+    *
+    * The rows are swept once, top to bottom, keeping only the areas that cover the band being built: a typing frame
+    * hands it a record per spell-check squiggle, and a pass over all of them for every band cost more than the frame
+    * could spare.
     */
   def disjoint(areas: List[DeviceArea]): List[DeviceArea] =
-    val present = areas.filterNot(_.isEmpty)
-    val edges   = present.flatMap(area => List(area.top, area.top + area.height)).distinct.sorted
-    val bands = edges.zip(edges.drop(1)).flatMap { (top, bottom) =>
-      val spans = joined(
-        present
-          .filter(area => area.top < bottom && area.top + area.height > top)
-          .map(area => (area.left, area.left + area.width))
-          .sorted
-      )
-      Option.when(spans.nonEmpty)(Band(top, bottom, spans))
-    }
+    val present = areas.iterator.filterNot(_.isEmpty).toArray
+    java.util.Arrays.sort(present, java.util.Comparator.comparingInt[DeviceArea](_.top))
+    val edges = java.util.Arrays
+      .stream(Array.tabulate(present.length * 2)(i => present(i / 2).top + (i % 2) * present(i / 2).height))
+      .distinct()
+      .sorted()
+      .toArray
+    val swept = Iterator
+      .range(0, edges.length - 1)
+      .foldLeft(Sweep(next = 0, covering = Vector.empty, bands = Nil)) { (sweep, row) =>
+        val top = edges(row)
+        val started = present.indexWhere(_.top > top, sweep.next) match
+          case -1  => present.length
+          case end => end
+        val covering = sweep.covering.filter(area => area.top + area.height > top) ++ present.slice(sweep.next, started)
+        val band     = Band(top, edges(row + 1), spansOf(covering))
+        Sweep(started, covering, sweep.bands.joinedWith(band))
+      }
     stacked(
-      bands
-        .foldLeft(List.empty[Band]) {
-          case (latest :: earlier, band) if latest.bottom == band.top && latest.spans == band.spans =>
-            latest.copy(bottom = band.bottom) :: earlier
-          case (done, band) => band :: done
-        }
-        .reverse
-        .flatMap(band =>
-          band.spans.map((left, right) => DeviceArea(left, band.top, right - left, band.bottom - band.top))
-        )
+      swept.bands.reverse.flatMap(band =>
+        band.spans.grouped(2).map(span => DeviceArea(span(0), band.top, span(1) - span(0), band.bottom - band.top))
+      )
     )
+
+  final private case class Sweep(next: Int, covering: Vector[DeviceArea], bands: List[Band])
 
   /** A band boundary cuts a column through whenever another area starts or ends beside it; each piece would be a copy
     * of its own, so pieces of one column that touch are joined again.
     */
   private def stacked(areas: List[DeviceArea]): List[DeviceArea] =
     areas
-      .sortBy(area => (area.left, area.width, area.top))
+      .sortWith(columnThenTop)
       .foldLeft(List.empty[DeviceArea]) {
         case (latest :: earlier, area)
             if latest.left == area.left && latest.width == area.width && latest.top + latest.height == area.top =>
@@ -91,16 +97,49 @@ private[ui] object RasterCopyPlan:
       }
       .reverse
 
-  final private case class Band(top: Int, bottom: Int, spans: List[(Int, Int)])
+  /** By column, then from the top, without the key a `sortBy` would build for every comparison. */
+  private def columnThenTop(a: DeviceArea, b: DeviceArea): Boolean =
+    if a.left != b.left then a.left < b.left
+    else if a.width != b.width then a.width < b.width
+    else a.top < b.top
 
-  private def joined(sorted: List[(Int, Int)]): List[(Int, Int)] =
-    sorted
-      .foldLeft(List.empty[(Int, Int)]) {
-        case ((left, right) :: earlier, (nextLeft, nextRight)) if nextLeft <= right =>
-          (left, right.max(nextRight)) :: earlier
-        case (done, span) => span :: done
-      }
-      .reverse
+  /** The rows from `top` to `bottom`, covered across `spans`: left and right edges, alternating, left to right. */
+  final private case class Band(top: Int, bottom: Int, spans: Array[Int]):
+    def hasSameSpansAs(other: Band): Boolean = java.util.Arrays.equals(spans, other.spans)
+
+  extension (bands: List[Band])
+
+    private def joinedWith(band: Band): List[Band] =
+      if band.spans.isEmpty then bands
+      else
+        bands match
+          case latest :: earlier if latest.bottom == band.top && latest.hasSameSpansAs(band) =>
+            latest.copy(bottom = band.bottom) :: earlier
+          case _ => band :: bands
+
+  /** What `covering` covers across, as spans that share no column and join where they touch. */
+  private def spansOf(covering: Vector[DeviceArea]): Array[Int] =
+    val keys = Array.tabulate(covering.length)(i => spanKey(covering(i).left, covering(i).left + covering(i).width))
+    java.util.Arrays.sort(keys)
+    val merged = scala.collection.mutable.ArrayBuilder.ofInt()
+    @annotation.tailrec
+    def join(index: Int, left: Int, right: Int): Unit =
+      if index == keys.length then
+        merged += left
+        merged += right
+      else
+        val nextLeft  = (keys(index) >> 32).toInt
+        val nextRight = ((keys(index) & 0xffffffffL) + Int.MinValue).toInt
+        if nextLeft <= right then join(index + 1, left, right.max(nextRight))
+        else
+          merged += left
+          merged += right
+          join(index + 1, nextLeft, nextRight)
+    if keys.nonEmpty then join(1, (keys(0) >> 32).toInt, ((keys(0) & 0xffffffffL) + Int.MinValue).toInt)
+    merged.result()
+
+  /** Orders by left, then right, as a pair of Ints would, without boxing one. */
+  private def spanKey(left: Int, right: Int): Long = (left.toLong << 32) | (right.toLong - Int.MinValue)
 
   /** Like [[areas]], but a frame that scrolled is not copied whole: the image moves the rows itself, as the surface
     * did, and only what the frames painted over them, or changed outside them, comes from the surface. The frames the
