@@ -50,7 +50,12 @@ given Balance = Balance.default
 
 object Main extends IOApp:
 
-  private val StartupProbeChar: Char              = 'a'
+  private val StartupProbeChar: Char = 'a'
+
+  /** A guard against a hang, not a target. First frame measured 1.5 to 3 s on CI runners (#2420) and about 9 s by hand
+    * on the laptop (#1812, as cited there), so 30 s is a ceiling above the slowest of those; it makes no performance
+    * claim.
+    */
   private val StartupProbeTimeout: FiniteDuration = 30.seconds
 
   // Hibernate/restore causes a wall-clock jump that makes every fiber appear stalled, flooding stderr
