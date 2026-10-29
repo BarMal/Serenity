@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.config.{AppConfig, HeadingsConfig, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
@@ -60,8 +58,8 @@ class HeadingStylePaintSpec extends AnyFlatSpec with Matchers with PersistedFram
 
   private def configWith(headings: HeadingsConfig): AppConfig = AppConfig.conventional.withHeadingsConfig(headings)
 
-  private def identical(a: BufferedImage, b: BufferedImage): Unit =
-    (a.getWidth, a.getHeight) shouldBe (b.getWidth, b.getHeight)
+  private def identical(a: FramePixels, b: FramePixels): Unit =
+    (a.widthPx, a.heightPx) shouldBe (b.widthPx, b.heightPx)
     differingPixels(a, b) shouldBe empty
 
   "A graphical session's headings" should "resolve to the settings they always have while nothing is set" in {

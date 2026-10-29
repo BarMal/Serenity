@@ -38,9 +38,8 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
 import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.renderer.{FontSpec, PaintExecutionContext, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingPaintProbe, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
@@ -62,24 +61,30 @@ object Main extends IOApp:
   def run(args: List[String]): IO[ExitCode] =
     // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
     val console = System.err
-    // Before anything else: the toolkit is fixed the moment the first java.awt class initialises.
-    ToolkitSelection.install
-      .flatTap(toolkit =>
-        IO(System.setProperty(RuntimeIdentity.ToolkitProperty, s"${toolkit.choice} (${toolkit.reason})")).void
-      )
-      .flatMap { toolkit =>
-        // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
-        // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
-        LaunchOptions.parse(args) match
-          case Left(help) =>
-            IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-          case Right(options) if options.showVersion =>
-            IO(println(VersionBanner.current)).as(ExitCode.Success)
-          case Right(options) =>
-            launchUntilSettled(options, toolkit, MacDesktopIntegration()).handleErrorWith(
-              reportStartupFailure(options, console)
-            )
-      }
+    // An unparseable command line is reported and nothing is started. `Help.errors` is empty for a `--help` request
+    // and non-empty for a rejected argument, which is the difference between exiting zero and exiting non-zero.
+    LaunchOptions.parse(args) match
+      case Left(help) =>
+        IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
+      case Right(options) if options.showVersion =>
+        IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
+        IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
+      case Right(options) =>
+        // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
+        // depends on the renderer, so both are settled together here.
+        GraphicsStartup
+          .current(GraphicsStartup.launchOf(options))
+          .flatTap(graphics =>
+            IO(
+              System.setProperty(
+                RuntimeIdentity.ToolkitProperty,
+                s"${graphics.toolkit.choice} (${graphics.toolkit.reason})"
+              )
+            ).void
+          )
+          .flatMap(launchUntilSettled(options, _, MacDesktopIntegration()))
+          .handleErrorWith(reportStartupFailure(options, console))
 
   /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
     * launch, a native dialog, since a packaged app has no terminal to print to.
@@ -106,15 +111,15 @@ object Main extends IOApp:
     */
   private def launchUntilSettled(
     options: LaunchOptions,
-    toolkit: ToolkitSelection.Decision,
+    graphics: GraphicsStartup.Resolved,
     desktop: DesktopEvents
   ): IO[ExitCode] =
     Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
-      launch(options, toolkit, desktop, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
+      launch(options, graphics, desktop, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
         case Some(mode) =>
           launchUntilSettled(
             options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
-            toolkit,
+            graphics,
             desktop
           )
         case None => IO.pure(ExitCode.Success)
@@ -123,7 +128,7 @@ object Main extends IOApp:
 
   private def launch(
     launchOptionsForLogging: LaunchOptions,
-    toolkit: ToolkitSelection.Decision,
+    graphics: GraphicsStartup.Resolved,
     desktop: DesktopEvents,
     requestRestart: RestartMode => IO[Unit]
   ): IO[ExitCode] =
@@ -141,7 +146,8 @@ object Main extends IOApp:
     val build = RuntimeIdentity.current
     for
       _         <- BuildLogLines.announce
-      _         <- logger.info(s"[TOOLKIT] ${toolkit.choice} (${toolkit.reason})")
+      _         <- logger.info(s"[TOOLKIT] ${graphics.toolkit.choice} (${graphics.toolkit.reason})")
+      _         <- logger.info(s"[RENDER] ${graphics.backend.logLine}")
       _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
       _         <- migrateEarlierLogs
       _         <- Java2DPipeline.installSafeDefaults()
@@ -158,7 +164,7 @@ object Main extends IOApp:
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
-        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks)
+        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks, graphics.surfaces)
       }
     yield ExitCode.Success
 
@@ -181,7 +187,8 @@ object Main extends IOApp:
     role: LaunchRole,
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
-    hooks: DesktopHooks
+    hooks: DesktopHooks,
+    surfaces: FrameSurfaceFactory
   )(using
     logger: Logger[IO]
   ): IO[Unit] =
@@ -190,9 +197,9 @@ object Main extends IOApp:
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, hooks, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -207,6 +214,7 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
+    surfaces: FrameSurfaceFactory,
     store: CrashRecord,
     previousRun: PreviousRun
   )(using logger: Logger[IO]): IO[Unit] =
@@ -254,7 +262,12 @@ object Main extends IOApp:
       appConfig = resolveAppConfig(loaded.config, launchOptions)
       _                         <- MemoryCompaction.apply(appConfig.surfaceConfig.memoryCompactionEnabled)
       (askedPlan, reviewNotice) <- LayoutOverrideReview.planned(plan, configLoaded = configResult.isRight, appConfig)
-      startup = Startup(askedPlan, requestRestart, StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker))
+      startup = Startup(
+        askedPlan,
+        requestRestart,
+        StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker),
+        surfaces
+      )
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
       notice = plan.noticeWith(
@@ -280,7 +293,8 @@ object Main extends IOApp:
   final private case class Startup(
       plan: StartupRecovery.Plan,
       requestRestart: RestartMode => IO[Unit],
-      markStarted: IO[Unit]
+      markStarted: IO[Unit],
+      surfaces: FrameSurfaceFactory
   )
 
   /** Which session this process may write, and the files later launches hand it. */
@@ -407,14 +421,15 @@ object Main extends IOApp:
                   timedFrame(frameTimings, FrameKind.Full, paintEc)(
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
-                      paintFullFrame(
+                      GuiFramePainting.paintFullFrame(
                         CompositionPreview.displayed(state, caches.compositionRevisions),
                         vis,
                         cc,
                         swingWin,
                         displayState.snapshot,
                         damage,
-                        caches
+                        caches,
+                        startup.surfaces
                       )
                     )
                   ),
@@ -422,14 +437,15 @@ object Main extends IOApp:
                   timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
                     syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                     IO(
-                      paintCursorFrame(
+                      GuiFramePainting.paintCursorFrame(
                         CompositionPreview.displayed(state, caches.compositionRevisions),
                         vis,
                         cc,
                         swingWin,
                         displayState.snapshot,
                         damage,
-                        caches
+                        caches,
+                        startup.surfaces
                       )
                     )
                   ),
@@ -516,82 +532,3 @@ object Main extends IOApp:
       AlphaMode.applyIfRequested(EcoMode.applyIfRequested(loadedConfig, launchOptions), launchOptions),
       DisplayScale.defaultDeviceScale.textScale
     )
-
-  /** Paint a whole frame.
-    *
-    * `display` is taken once by the caller and threaded through: reading each font and metric from the runtime
-    * separately would let a concurrent font-config change land mid-frame and paint glyphs at one generation's advance
-    * with another's metrics.
-    */
-  private def paintFullFrame(
-    state: com.serenity.state.models.AppState,
-    cursorVisible: Boolean,
-    cursorColor: Option[RenderColor],
-    window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot,
-    damage: com.serenity.state.models.Damage,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Unit =
-    if cursorVisible then
-      val _ = RendererCursorOverlay.renderWithCursorOverlay(
-        state,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        cursorColor,
-        damage,
-        caches
-      )
-      ()
-    else
-      RendererEntryPoints.render(
-        state,
-        cursorVisible = false,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        None,
-        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
-        damage = damage,
-        caches = caches
-      )
-
-  /** Repaint only the cursor overlay, falling back to a full frame when the overlay path declines. */
-  private def paintCursorFrame(
-    state: com.serenity.state.models.AppState,
-    cursorVisible: Boolean,
-    cursorColor: Option[RenderColor],
-    window: SwingWindow,
-    display: RuntimeDisplayState.Snapshot,
-    damage: com.serenity.state.models.Damage,
-    caches: com.serenity.state.manager.RenderCaches
-  ): Unit =
-    val rendered = RendererCursorOverlay.renderCursorOnly(
-      state,
-      cursorVisible,
-      window,
-      FontSpec.fromAwt(display.codeFont),
-      FontSpec.fromAwt(display.textFont),
-      FontSpec.fromAwt(display.uiFont),
-      display.uiMetrics,
-      cursorColor,
-      caches
-    )
-    if !rendered then
-      RendererEntryPoints.render(
-        state,
-        cursorVisible,
-        window,
-        FontSpec.fromAwt(display.codeFont),
-        FontSpec.fromAwt(display.textFont),
-        FontSpec.fromAwt(display.uiFont),
-        display.uiMetrics,
-        cursorColor,
-        repaintOnFlush = true,
-        damage = damage,
-        caches = caches
-      )
