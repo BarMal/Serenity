@@ -65,7 +65,7 @@ class SwingWindowFirstFrameScreenSpec extends AnyFlatSpec with Matchers:
               (width * height, () => tally(screenCapture()))
             }.flatMap { (canvasPixels, capture) =>
               AwaitCondition
-                .awaitValue(IO.blocking(capture()), 10.seconds)((frame, _) => frame * 2 >= canvasPixels)
+                .awaitValue(IO.blocking(capture()), 10.seconds)((frame, _) => frame > 0)
                 .handleErrorWith(_ => IO.blocking(capture()))
                 .map((frame, grey) =>
                   (
@@ -79,10 +79,12 @@ class SwingWindowFirstFrameScreenSpec extends AnyFlatSpec with Matchers:
           .unsafeRunSync()
       )
 
-      // The share is reported on every run so the bound below can be set from what Linux, Windows and macOS CI
-      // measure. Until then half the canvas is a guess, not a measured bound (the owner's rule on numeric targets).
+      // No share of the canvas is required. The report was a canvas showing none of the frame, and "half of it" was a
+      // guess, which the owner's rule on numeric targets (#2028) does not allow as a bound. The frame's colour is
+      // unique, so any pixel of it on the screen shows the frame reached the canvas. The share is reported for the
+      // record; CI prints it only when a spec fails.
       info(
         f"$mode: the frame colour covered ${frameShare * 100}%.2f%% of the canvas area, Swing grey ${greyShare * 100}%.2f%%"
       )
-      withClue(s"$seen; the screen showed ${(greyShare * 100).toInt}% Swing grey; ")(frameShare should be >= 0.5)
+      withClue(s"$seen; the screen showed ${(greyShare * 100).toInt}% Swing grey; ")(frameShare should be > 0.0)
     }
