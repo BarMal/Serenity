@@ -5,7 +5,10 @@
 # Linux app images (bin/Serenity, with lib/app/serenity.aot beside it), A the baseline and B the candidate. Runs
 # bench/startup.py eight times in the order A B B A A B B A, <runs-per-side-run> timed launches per mode each (default 5),
 # then applies the blocking thresholds with scripts/abba_compare.py: 5% and ABBA_STARTUP_MIN_DELTA_MS (default 100 ms,
-# not the 0.03 ms of in-process rows) over non-overlapping ranges. Without $DISPLAY the runs go through xvfb-run.
+# not the 0.03 ms of in-process rows) over non-overlapping ranges. Basis: the 5% is the ABBA protocol's own (docs/
+# performance-benchmarks.md). The 100 ms is a GUESS, a starting point that nothing here has measured on the laptop; on a
+# GitHub runner two runs of one commit differed by 77 ms (warm) and 114 ms (cold) (#2420, comment 6480029115), so it is
+# at the level of runner noise there. Replace it with a laptop A/A measurement before relying on it as a gate. Without $DISPLAY the runs go through xvfb-run.
 #
 # Results land in <out-dir>/{a,b}-{1..4}.csv; exits with abba_compare.py's status (0 clean, 1 blocking, 2 no data).
 # ABBA_STARTUP_REPORT_ONLY=1 makes it report-only (#2420: start-up is tracked, not gated on CI): findings are ::warning::
