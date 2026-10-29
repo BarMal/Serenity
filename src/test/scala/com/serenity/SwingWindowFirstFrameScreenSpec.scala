@@ -79,5 +79,10 @@ class SwingWindowFirstFrameScreenSpec extends AnyFlatSpec with Matchers:
           .unsafeRunSync()
       )
 
+      // The share is reported on every run so the bound below can be set from what Linux, Windows and macOS CI
+      // measure. Until then half the canvas is a guess, not a measured bound (the owner's rule on numeric targets).
+      info(
+        f"$mode: the frame colour covered ${frameShare * 100}%.2f%% of the canvas area, Swing grey ${greyShare * 100}%.2f%%"
+      )
       withClue(s"$seen; the screen showed ${(greyShare * 100).toInt}% Swing grey; ")(frameShare should be >= 0.5)
     }
