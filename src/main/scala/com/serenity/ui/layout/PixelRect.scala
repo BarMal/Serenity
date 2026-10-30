@@ -70,20 +70,52 @@ object PixelRect:
 
   /** The pixels of `bounds` no rectangle in `holes` covers, as disjoint rectangles: horizontal bands split at every
     * hole edge, with vertically adjacent bands of the same shape merged into one.
+    *
+    * The rows are swept once, top to bottom, keeping only the holes that cross the band being built: a frame that keeps
+    * rows hands in a hole per kept row, and a pass over all of them for every band was bands times holes.
     */
   def uncoveredWithin(bounds: PixelRect, holes: List[PixelRect]): List[PixelRect] =
-    val clipped = holes.flatMap(clippedTo(bounds))
-    val edges =
-      (bounds.yPx :: bounds.bottomPx :: clipped.flatMap(hole => List(hole.yPx, hole.bottomPx))).distinct.sorted
-    val bands = edges.zip(edges.drop(1)).map { (top, bottom) =>
-      val covered = clipped.filter(hole => hole.yPx < bottom && top < hole.bottomPx).map(h => (h.xPx, h.rightPx))
-      Band(top, bottom, spansBetween(bounds.xPx, bounds.rightPx, covered.sortBy(_._1)))
-    }
-    mergeStackedBands(bands).flatMap { band =>
-      band.spans.map((left, right) => PixelRect(left, band.top, right - left, band.bottom - band.top))
+    val clipped = holes.iterator.flatMap(clippedTo(bounds)).toArray
+    java.util.Arrays.sort(clipped, java.util.Comparator.comparingInt[PixelRect](_.yPx))
+    val edges = java.util.Arrays
+      .stream(Array.tabulate(clipped.length * 2 + 2) {
+        case 0 => bounds.yPx
+        case 1 => bounds.bottomPx
+        case i => if i % 2 == 0 then clipped(i / 2 - 1).yPx else clipped(i / 2 - 1).bottomPx
+      })
+      .distinct()
+      .sorted()
+      .toArray
+    val swept = Iterator
+      .range(0, edges.length - 1)
+      .foldLeft(Sweep(next = 0, crossing = Vector.empty, bands = Nil)) { (sweep, row) =>
+        val top = edges(row)
+        val started = clipped.indexWhere(_.yPx > top, sweep.next) match
+          case -1  => clipped.length
+          case end => end
+        val crossing = sweep.crossing.filter(_.bottomPx > top) ++ clipped.slice(sweep.next, started)
+        val band     = Band(top, edges(row + 1), spansBetween(bounds.xPx, bounds.rightPx, crossing))
+        Sweep(started, crossing, sweep.bands.joinedWith(band))
+      }
+    swept.bands.reverse.flatMap { band =>
+      band.spans.grouped(2).map(span => PixelRect(span(0), band.top, span(1) - span(0), band.bottom - band.top))
     }
 
-  final private case class Band(top: Int, bottom: Int, spans: List[(Int, Int)])
+  final private case class Sweep(next: Int, crossing: Vector[PixelRect], bands: List[Band])
+
+  /** The rows from `top` to `bottom`, with the stretches across them no hole covers: left and right edges, alternating,
+    * left to right.
+    */
+  final private case class Band(top: Int, bottom: Int, spans: Array[Int]):
+    def hasSameSpansAs(other: Band): Boolean = java.util.Arrays.equals(spans, other.spans)
+
+  extension (bands: List[Band])
+
+    private def joinedWith(band: Band): List[Band] =
+      bands match
+        case latest :: earlier if latest.bottom == band.top && latest.hasSameSpansAs(band) =>
+          latest.copy(bottom = band.bottom) :: earlier
+        case _ => band :: bands
 
   private def clippedTo(bounds: PixelRect)(rect: PixelRect): Option[PixelRect] =
     val left   = rect.xPx.max(bounds.xPx)
@@ -92,19 +124,25 @@ object PixelRect:
     val bottom = rect.bottomPx.min(bounds.bottomPx)
     Option.when(left < right && top < bottom)(PixelRect(left, top, right - left, bottom - top))
 
-  private def spansBetween(left: Int, right: Int, coveredByStart: List[(Int, Int)]): List[(Int, Int)] =
-    val (cursor, spans) = coveredByStart.foldLeft((left, List.empty[(Int, Int)])) {
-      case ((cursor, spans), (coveredLeft, coveredRight)) =>
-        val withGap = if coveredLeft > cursor then (cursor, coveredLeft) :: spans else spans
-        (cursor.max(coveredRight), withGap)
-    }
-    (if cursor < right then (cursor, right) :: spans else spans).reverse
+  /** The stretches of `left` to `right` that `covering` leaves bare, as left and right edges, alternating. */
+  private def spansBetween(left: Int, right: Int, covering: Vector[PixelRect]): Array[Int] =
+    val keys = Array.tabulate(covering.length)(i => spanKey(covering(i).xPx, covering(i).rightPx))
+    java.util.Arrays.sort(keys)
+    val spans = scala.collection.mutable.ArrayBuilder.ofInt()
+    @annotation.tailrec
+    def bare(index: Int, cursor: Int): Int =
+      if index == keys.length then cursor
+      else
+        val coveredLeft = (keys(index) >> 32).toInt
+        if coveredLeft > cursor then
+          spans += cursor
+          spans += coveredLeft
+        bare(index + 1, cursor.max(((keys(index) & 0xffffffffL) + Int.MinValue).toInt))
+    val cursor = bare(0, left)
+    if cursor < right then
+      spans += cursor
+      spans += right
+    spans.result()
 
-  private def mergeStackedBands(bands: List[Band]): List[Band] =
-    bands
-      .foldLeft(List.empty[Band]) {
-        case (previous :: rest, band) if previous.bottom == band.top && previous.spans == band.spans =>
-          previous.copy(bottom = band.bottom) :: rest
-        case (merged, band) => band :: merged
-      }
-      .reverse
+  /** Orders by left, then right, as a pair of Ints would, without boxing one. */
+  private def spanKey(left: Int, right: Int): Long = (left.toLong << 32) | (right.toLong - Int.MinValue)
