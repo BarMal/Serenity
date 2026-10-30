@@ -20,13 +20,19 @@ import com.serenity.ui.skia.SkiaRasterSurfaceFactory
   */
 private[perf] object TypingPaintProfile:
 
-  final case class Variant(label: String, config: AppConfig)
+  final case class Variant(label: String, config: AppConfig, english: Boolean = false)
 
   val variants: List[Variant] =
     val conventional = AppConfig.conventional
     List(
       Variant("full", conventional),
       Variant("no_spellcheck", conventional.withSpellCheck(SpellCheckConfig(enabled = false))),
+      Variant("english", conventional, english = true),
+      Variant(
+        "english_no_spellcheck",
+        conventional.withSpellCheck(SpellCheckConfig(enabled = false)),
+        english = true
+      ),
       Variant("no_scrollbar", conventional.withScrollbar(false)),
       Variant("no_line_numbers", conventional.withLineNumbers(false)),
       Variant("no_pane_headers", conventional.withPaneHeaders(false)),
@@ -36,24 +42,46 @@ private[perf] object TypingPaintProfile:
     )
 
   /** Typing frames in a window of `widthPx` x `heightPx` logical pixels, drawn with `config`'s chrome. */
-  def typingCycle(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double, config: AppConfig)(using
-    IORuntime
-  ): PresentBenchmarks.Cycling =
-    given Balance       = Balance.default
-    val metrics         = CellMetrics.fromFont(LaptopFrameBenchmarks.codeFont)
-    val grid            = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
-    val (prose, _)      = LaptopFrameBenchmarks.proseStateManager(config = config, grid = grid)
+  def typingCycle(
+    factory: FrameSurfaceFactory,
+    widthPx: Int,
+    heightPx: Int,
+    scale: Double,
+    config: AppConfig,
+    english: Boolean = false
+  )(using IORuntime): PresentBenchmarks.Cycling =
+    given Balance = Balance.default
+    val metrics   = CellMetrics.fromFont(LaptopFrameBenchmarks.codeFont)
+    val grid      = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
+    val (prose, _) =
+      if english then
+        LaptopFrameBenchmarks.stateManagerHolding(
+          EnglishProse.document(paragraphs = 300, misspellingEvery = EnglishMisspellingEvery).text,
+          config,
+          cursorLine = 150,
+          cursorColumn = 40,
+          grid = grid
+        )
+      else LaptopFrameBenchmarks.proseStateManager(config = config, grid = grid)
     val (before, after) = TypingTransition.of(prose)
     PresentBenchmarks.Cycling(PresentBenchmarks.Window(factory, widthPx, heightPx, scale, grid), Vector(before, after))
 
-  private val WarmFrames    = 10
-  private val CountedFrames = 30
+  private val EnglishMisspellingEvery = 100
+  private val WarmFrames              = 10
+  private val CountedFrames           = 30
 
   private def drawCountsPerFrame(variant: Variant, widthPx: Int, heightPx: Int, scale: Double)(using
     IORuntime
   ): Map[DrawKind, Double] =
     val counts = new DrawCounts
-    val cycle = typingCycle(CountingFactory(SkiaRasterSurfaceFactory, counts), widthPx, heightPx, scale, variant.config)
+    val cycle = typingCycle(
+      CountingFactory(SkiaRasterSurfaceFactory, counts),
+      widthPx,
+      heightPx,
+      scale,
+      variant.config,
+      variant.english
+    )
     (0 until WarmFrames).foreach(_ => cycle.next())
     counts.reset()
     (0 until CountedFrames).foreach(_ => cycle.next())
@@ -67,7 +95,7 @@ private[perf] object TypingPaintProfile:
     heightPx: Int,
     scale: Double
   )(using IORuntime): (BenchmarkRunner.Benchmark, PresentBenchmarks.PhaseLog) =
-    val cycle = typingCycle(factory, widthPx, heightPx, scale, variant.config)
+    val cycle = typingCycle(factory, widthPx, heightPx, scale, variant.config, variant.english)
     val log   = PresentBenchmarks.PhaseLog(cycle.drainPhases)
     val row = BenchmarkRunner.Benchmark(
       name,
@@ -140,7 +168,7 @@ private[perf] object TypingPaintProfile:
   )(using
     IORuntime
   ): Unit =
-    val cycle    = typingCycle(factory, widthPx, heightPx, scale, variant.config)
+    val cycle    = typingCycle(factory, widthPx, heightPx, scale, variant.config, variant.english)
     val deadline = System.nanoTime() + (seconds * 1e9).toLong
 
     @annotation.tailrec
