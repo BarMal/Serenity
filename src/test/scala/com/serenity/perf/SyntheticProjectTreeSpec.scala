@@ -99,3 +99,4 @@ class SyntheticProjectTreeSpec extends AnyFlatSpec with Matchers:
     val modified    = directories.map(directory => Files.getLastModifiedTime(directory).toMillis)
 
     modified.distinct shouldBe Vector(old.toEpochMilli)
+  }
