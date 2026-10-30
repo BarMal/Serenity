@@ -13,10 +13,10 @@ import org.scalatest.matchers.should.Matchers
 
 /** The tree the project-indexing benchmarks walk (#2420). The sizes come from that issue (100,000 files in 10,000
   * directories). Its shape is checked against four real trees measured on 2026-10-30, which are the basis of every
-  * range below, not a performance target: this repository's `src` (2,716 files in 141 directories), `/usr/lib`
-  * (16,064 in 1,506), `/usr/share` (26,637 in 2,912) and `/usr/include` (4,318 in 214). Across them the mean file depth
-  * was 2.1 to 5.9, the deepest file 6 to 9 levels down, the median files per directory 1 to 5 against means of 9 to 20,
-  * and the fullest directory held 549 to 1,341 files.
+  * range below, not a performance target: this repository's `src` (2,716 files in 141 directories), `/usr/lib` (16,064
+  * in 1,506), `/usr/share` (26,637 in 2,912) and `/usr/include` (4,318 in 214). Across them the mean file depth was 2.1
+  * to 5.9, the deepest file 6 to 9 levels down, the median files per directory 1 to 5 against means of 9 to 20, and the
+  * fullest directory held 549 to 1,341 files.
   */
 class SyntheticProjectTreeSpec extends AnyFlatSpec with Matchers:
 
