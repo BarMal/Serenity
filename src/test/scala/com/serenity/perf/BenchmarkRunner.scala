@@ -18,7 +18,8 @@ object BenchmarkRunner:
       "layout.anchor_wrap.",
       "layout.cold_font.",
       "text.boundary.",
-      "text.counts."
+      "text.counts.",
+      "index.walk."
     )
 
   private[perf] def tracksAllocation(name: String): Boolean =
