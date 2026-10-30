@@ -96,5 +96,6 @@ class SyntheticProjectTreeSpec extends AnyFlatSpec with Matchers:
     SyntheticProjectTree.materialize(small, root, old)
 
     val directories = (small.directories ++ small.ignoredDirectories).map(relative => root.resolve(relative))
-    directories.map(directory => Files.getLastModifiedTime(directory).toMillis).distinct shouldBe Vector(old.toEpochMilli)
-  }
+    val modified    = directories.map(directory => Files.getLastModifiedTime(directory).toMillis)
+
+    modified.distinct shouldBe Vector(old.toEpochMilli)
