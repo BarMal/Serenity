@@ -2,7 +2,7 @@ import java.io.PrintStream
 import java.nio.file.Path
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt, FiniteDuration}
 
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
@@ -50,6 +50,14 @@ given Balance = Balance.default
 
 object Main extends IOApp:
 
+  private val StartupProbeChar: Char = 'a'
+
+  /** A guard against a hang, not a target. First frame measured 1.5 to 3 s on CI runners (#2420) and about 9 s by hand
+    * on the laptop (#1812, as cited there), so 30 s is a ceiling above the slowest of those; it makes no performance
+    * claim.
+    */
+  private val StartupProbeTimeout: FiniteDuration = 30.seconds
+
   // Hibernate/restore causes a wall-clock jump that makes every fiber appear stalled, flooding stderr
   // with starvation warnings and corrupting the TUI display. An interactive editor has no latency SLA
   // that the checker could meaningfully enforce, so disable it.
@@ -57,6 +65,8 @@ object Main extends IOApp:
     super.runtimeConfig.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
+
+  private def probeHome: Path = Path.of(System.getProperty("user.home"))
 
   def run(args: List[String]): IO[ExitCode] =
     // The terminal stream as it is now: a TUI launch silences System.err, and a failure must still reach a person.
@@ -68,6 +78,8 @@ object Main extends IOApp:
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
       case Right(options) if options.showVersion =>
         IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(options) if StartupProbe.refusal(options, probeHome).nonEmpty =>
+        IO(StartupProbe.refusal(options, probeHome).foreach(System.err.println)).as(ExitCode.Error)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
       case Right(options) =>
@@ -404,6 +416,18 @@ object Main extends IOApp:
                     .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
                 }
 
+              val startupProbe: IO[Unit] =
+                StartupProbe.run(
+                  inject = IO(frameTimings.keyLatency.setEnabled(true)) >>
+                    menuInput.get.flatMap(handler => IO(handler.submitTypedChar(StartupProbeChar))),
+                  keyPainted = IO.fromCompletableFuture(IO(frameTimings.keyLatency.firstKeyPainted)),
+                  quit = smokeReady,
+                  timeout = StartupProbeTimeout
+                )
+              val announceFirstFrame: IO[Unit] =
+                if launchOptions.startupProbe then SmokeTest.printReady() >> startupProbe.start.void
+                else IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady))
+
               val frontendRuntime = FrontendRuntime(
                 inputHandler = router =>
                   IO.pure(
@@ -471,8 +495,7 @@ object Main extends IOApp:
                 appConfig = actualAppConfig,
                 configNotice = configNotice,
                 recovery = startup.plan,
-                onFirstFrame =
-                  startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+                onFirstFrame = startup.markStarted >> announceFirstFrame,
                 makeStateManager = Some(logger =>
                   com.serenity.state.manager.StateManager.apply(
                     logger,
@@ -496,7 +519,8 @@ object Main extends IOApp:
                   )
                 ),
                 awaitExternalQuit =
-                  if launchOptions.smokeTest then IO.race(swingWin.awaitClose, smokeReady.get).void
+                  if launchOptions.smokeTest || launchOptions.startupProbe then
+                    IO.race(swingWin.awaitClose, smokeReady.get).void
                   else swingWin.awaitClose,
                 registerResizeCallback = cb => swingWin.setOnResize(cb),
                 registerFocusCallback = cb => swingWin.setOnFocusChange(cb),

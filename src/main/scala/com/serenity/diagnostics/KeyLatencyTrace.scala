@@ -1,6 +1,7 @@
 package com.serenity.diagnostics
 
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 /** One keystroke's journey to the screen, in pipeline order. Each stage ends at the point its label names the start of
@@ -229,6 +230,11 @@ final class KeyLatencyTrace(
 
   def isEnabled: Boolean = enabled.get()
 
+  /** Completes when a paint that shows a traced keystroke has finished, and stays complete (the start-up probe, #2420,
+    * waits on it). It is decided from the state that paint produced, so draining the window cannot lose it.
+    */
+  val firstKeyPainted: CompletableFuture[Unit] = new CompletableFuture[Unit]()
+
   /** Starts from an empty trace either way, so nothing half-recorded before a toggle is reported after it. */
   def setEnabled(on: Boolean): Unit =
     state.set(KeyLatencyState.start(clock()))
@@ -255,7 +261,11 @@ final class KeyLatencyTrace(
   def framePublished(): Unit         = if enabled.get() then update(_.framePublished(_))
   def frameEnded(): Unit             = if enabled.get() then update((current, _) => current.frameEnded)
   def paintStarted(): Unit           = if enabled.get() then update(_.paintStarted(_))
-  def paintFinished(): Unit          = if enabled.get() then update(_.paintFinished(_))
+
+  def paintFinished(): Unit =
+    if enabled.get() then
+      val now = clock()
+      if state.updateAndGet(_.paintFinished(now)).completed.nonEmpty then firstKeyPainted.complete(()): Unit
 
   private[serenity] def pendingKeys: Vector[KeyStamps] = state.get().keys
 

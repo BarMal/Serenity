@@ -15,6 +15,11 @@ import com.serenity.config.{RenderBackendSetting, WaylandRender}
   * @param smokeTest
   *   `--smoke-test`: open the window, print [[SmokeTest.readyLine]] once the first frame is painted, then quit as if
   *   the window had been closed. Used by CI to prove a packaged app image starts. Always the windowed interface.
+  * @param startupProbe
+  *   `--startup-probe`: a benchmark hook (#2420), left out of `--help`. Like `--smoke-test` it prints the ready line at
+  *   the first painted frame, but instead of quitting it types one character and quits once that keystroke has been
+  *   painted, printing [[StartupProbe.interactiveLine]]. The character lands in whatever buffer the start-up opened, so
+  *   [[StartupProbe.refusal]] stops it unless safe mode is on or the home carries [[StartupProbe.IsolatedHomeMarker]].
   * @param resetConfig
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession
@@ -36,12 +41,16 @@ final case class LaunchOptions(
     resetConfig: Boolean = false,
     resetSession: Boolean = false,
     renderer: Option[RenderBackendSetting] = None,
-    waylandRender: Option[WaylandRender] = None
+    waylandRender: Option[WaylandRender] = None,
+    startupProbe: Boolean = false
 ):
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
 
 object LaunchOptions:
+
+  /** Taken out of the arguments before decline sees them, so it is in no help or usage text. */
+  private val StartupProbeFlag = "--startup-probe"
 
   /** `--open`/`--file` first, then any bare paths, which a file manager passes several of for a multi-file selection.
     */
@@ -137,8 +146,21 @@ object LaunchOptions:
 
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
-      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession, renderer, waylandRender)
-        .mapN(LaunchOptions.apply)
+      (
+        open,
+        eco,
+        tui,
+        gui,
+        alpha,
+        version,
+        safeMode,
+        smokeTest,
+        resetConfig,
+        resetSession,
+        renderer,
+        waylandRender
+      )
+        .mapN(LaunchOptions(_, _, _, _, _, _, _, _, _, _, _, _))
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
@@ -150,17 +172,18 @@ object LaunchOptions:
     * from a correct one. Issue #1280.
     */
   def parse(args: List[String]): Either[Help, LaunchOptions] =
-    command.parse(args, sys.env)
+    val (probe, rest) = args.partition(_ == StartupProbeFlag)
+    command.parse(rest, sys.env).map(_.copy(startupProbe = probe.nonEmpty))
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
-    * `--smoke-test` always uses the window, as `--gui` does. `--gui` always wins when both flags are given -- it exists
-    * specifically to force the Swing path even when auto-detection would otherwise pick the terminal (see issue #1112).
-    * Absent an explicit flag, the terminal is used only when there is no display to put a window on (`$DISPLAY` and
-    * `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can interact with -- a
-    * display-less, non-interactive invocation (e.g. a script piping stdout, or a CI job with neither a display nor a
-    * pty) falls through to the GUI path rather than silently entering raw terminal mode against a stream that can never
-    * supply keystrokes.
+    * `--smoke-test` and `--startup-probe` always use the window, as `--gui` does. `--gui` always wins when both flags
+    * are given -- it exists specifically to force the Swing path even when auto-detection would otherwise pick the
+    * terminal (see issue #1112). Absent an explicit flag, the terminal is used only when there is no display to put a
+    * window on (`$DISPLAY` and `$WAYLAND_DISPLAY` both unset/empty) *and* stdout is actually a terminal a person can
+    * interact with -- a display-less, non-interactive invocation (e.g. a script piping stdout, or a CI job with neither
+    * a display nor a pty) falls through to the GUI path rather than silently entering raw terminal mode against a
+    * stream that can never supply keystrokes.
     */
   def resolveTuiMode(
     options: LaunchOptions,
@@ -168,7 +191,7 @@ object LaunchOptions:
     stdoutIsTty: Boolean = System.console() != null,
     osName: String = osNameProperty
   ): Boolean =
-    if options.gui || options.smokeTest then false
+    if options.gui || options.smokeTest || options.startupProbe then false
     else if options.tui then true
     else detectTuiByDefault(env, stdoutIsTty, osName)
 
