@@ -77,6 +77,46 @@ class BenchmarkScriptSpec extends AnyFlatSpec with Matchers:
     steps.map(top).toSet should have size 1
   }
 
+  it should "redraw the same state whole with warm caches for the warm full frame" in {
+    val steps = script(Scenario.WarmFullFrame)
+    steps.map(_.frame).toSet shouldBe Set(BenchmarkScript.FrameKind.Full)
+    steps.map(_.damage).toSet shouldBe Set(Damage.Everything)
+    steps.map(text).toSet should have size 1
+    steps.map(top).toSet should have size 1
+  }
+
+  private val windowPx = WindowPx(800, 600)
+
+  private def resizedTo(step: BenchmarkScript.Step): WindowPx =
+    step.frame match
+      case BenchmarkScript.FrameKind.Resized(size) => size
+      case other                                   => fail(s"expected a resized frame, got $other")
+
+  it should "alternate the window between its own size and a smaller one for the resize scenario" in {
+    val steps = BenchmarkScript.steps(Scenario.ResizeWindow, 6, viewportLines, windowPx)
+    val sizes = steps.map(resizedTo)
+    sizes.distinct should have size 2
+    sizes.zip(sizes.tail).foreach((before, after) => after should not be before)
+    sizes.distinct should contain(windowPx)
+    val smaller = sizes.distinct.filterNot(_ == windowPx).head
+    smaller.width should be < windowPx.width
+    smaller.height should be < windowPx.height
+  }
+
+  it should "draw the same state whole at each size for the resize scenario" in {
+    val steps = BenchmarkScript.steps(Scenario.ResizeWindow, 6, viewportLines, windowPx)
+    steps.map(_.damage).toSet shouldBe Set(Damage.Everything)
+    steps.map(text).toSet should have size 1
+    steps.map(top).toSet should have size 1
+  }
+
+  it should "never ask for a resize in any other scenario" in
+    Scenario.values.filterNot(_ == Scenario.ResizeWindow).foreach { scenario =>
+      withClue(scenario.label) {
+        script(scenario).collect { case BenchmarkScript.Step(_, _, BenchmarkScript.FrameKind.Resized(_)) => 1 } shouldBe empty
+      }
+    }
+
   it should "give both backends exactly the same script" in
     Scenario.values.foreach { scenario =>
       val (one, two) = (script(scenario), script(scenario))
