@@ -4,7 +4,7 @@ import java.awt.Color
 import java.nio.file.Files
 
 import com.serenity.config.*
-import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -53,6 +53,42 @@ class ConfigManagerFontCursorConfigSpec extends AnyFlatSpec with Matchers with O
     ConfigManager.configToString(config) should include("typography.scale.factor = 1.5")
     ConfigManager.configToString(config) should include("typography.ui.ligatures = true")
     ConfigManager.configToString(config) should include(s"config.version = ${ConfigVersion.Current.value}")
+  }
+
+  it should "load the previous font sizes as prose, code and UI, clamped to the range sizes accept (#2405)" in {
+    def previousOf(line: String): Option[FontSizes] =
+      val configFile = TestTemp.file("serenity-previous-sizes", ".conf")
+      Files.writeString(configFile, line)
+      ConfigManagerTestSupport.loadConfig(Some(configFile.toString)).editorConfig.fontConfig.previousSizes
+
+    previousOf("typography.previous_sizes = \"36.0, 12.0, 11.0\"") shouldBe Some(FontSizes(36.0f, 12.0f, 11.0f))
+    previousOf("typography.previous_sizes = [36.0, 12.0, 11.0]") shouldBe Some(FontSizes(36.0f, 12.0f, 11.0f))
+    previousOf("typography.previous_sizes = \"60.0, 2.0, 11.0\"") shouldBe Some(FontSizes(48.0f, 8.0f, 11.0f))
+    previousOf("typography.previous_sizes = off") shouldBe None
+    previousOf("typography.previous_sizes = \"36.0, 12.0\"") shouldBe None
+    previousOf("typography.prose.size = 20.0") shouldBe None
+  }
+
+  it should "write the previous font sizes and read them back after a reload (#2405)" in {
+    val fonts  = FontLoader.FontConfig(previousSizes = Some(FontSizes(36.0f, 12.0f, 11.0f)))
+    val config = AppConfig.default.withFontConfig(fonts)
+
+    val written = ConfigManager.configToString(config)
+    val file    = TestTemp.file("serenity-previous-sizes-reload", ".conf")
+    Files.writeString(file, written)
+
+    written should include("typography.previous_sizes")
+    ConfigManagerTestSupport.loadConfig(Some(file.toString)).editorConfig.fontConfig.previousSizes shouldBe
+      Some(FontSizes(36.0f, 12.0f, 11.0f))
+  }
+
+  it should "write no previous sizes as off, and read that back as none (#2405)" in {
+    val written = ConfigManager.configToString(AppConfig.default)
+    val file    = TestTemp.file("serenity-no-previous-sizes", ".conf")
+    Files.writeString(file, written)
+
+    written should include("typography.previous_sizes = off")
+    ConfigManagerTestSupport.loadConfig(Some(file.toString)).editorConfig.fontConfig.previousSizes shouldBe None
   }
 
   it should "load the font fallback families in order and write them back (#1866)" in {

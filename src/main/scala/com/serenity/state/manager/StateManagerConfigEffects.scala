@@ -135,7 +135,7 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
-    updateFontConfig(FontConfigEdit(intent))
+    updateFontConfig(FontConfigEdit.recording(intent))
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match

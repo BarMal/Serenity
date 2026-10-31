@@ -9,6 +9,7 @@ import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfaceP
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.FontSizes
 import com.serenity.ui.openings.{
   EpigraphRule,
   HandDropCapRule,
@@ -80,6 +81,13 @@ object ConfigGenerators:
       textLigs         <- Gen.oneOf(true, false)
       uiLigs           <- Gen.oneOf(true, false)
       fallbackFamilies <- Gen.listOfN(2, genFontFamily).map(_.distinct)
+      previousSizes <- Gen.option(
+        for
+          prose <- double(8.0, 48.0).map(_.toFloat)
+          code  <- double(8.0, 48.0).map(_.toFloat)
+          ui    <- double(8.0, 48.0).map(_.toFloat)
+        yield FontSizes(prose, code, ui)
+      )
     yield FontConfig(
       codeFontFamily = codeFamily,
       textFontFamily = textFamily,
@@ -92,7 +100,8 @@ object ConfigGenerators:
       enableLigatures = codeLigs,
       textLigatures = textLigs,
       uiLigatures = uiLigs,
-      fallbackFamilies = fallbackFamilies
+      fallbackFamilies = fallbackFamilies,
+      previousSizes = previousSizes
     )
 
   val genEditorConfig: Gen[EditorConfig] =

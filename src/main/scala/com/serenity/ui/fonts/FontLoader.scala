@@ -31,8 +31,14 @@ object FontLoader:
       enableLigatures: Boolean = true,
       textLigatures: Boolean = true,
       uiLigatures: Boolean = false,
-      fallbackFamilies: List[String] = Nil
+      fallbackFamilies: List[String] = Nil,
+      previousSizes: Option[FontSizes] = None
   ):
+    def sizes: FontSizes = FontSizes(prose = textFontSize, code = fontSize, ui = uiFontSize)
+
+    def withSizes(sizes: FontSizes): FontConfig =
+      copy(textFontSize = sizes.prose, fontSize = sizes.code, uiFontSize = sizes.ui)
+
     /** The fonts that draw what the code, prose or UI font has no glyph for: these families in order, the bundled emoji
       * face, then the system's own resolver.
       */

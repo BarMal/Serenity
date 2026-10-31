@@ -235,6 +235,8 @@ enum FontIntent:
   case SetCodeFontSize(size: Float)
   case SetTextFontSize(size: Float)
   case SetUiFontSize(size: Float)
+  case SetAllFontSizes(size: Float)
+  case UndoFontSizeChange
   case SetTextScaleMode(mode: TextScaleMode)
   case SetTextScaleMultiplier(scale: Double)
   case SetCodeFontFamily(family: String)
