@@ -140,6 +140,10 @@ given Encoder[TabStripMode]   = configKeyEncoder(_.configKey)
 given Decoder[TabStripMode]   = configKeyDecoder("TabStripMode", TabStripMode.values, _.configKey)
 given Encoder[FileDialogMode] = configKeyEncoder(_.configKey)
 given Decoder[FileDialogMode] = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
+given Encoder[DockedCornerStyle] = configKeyEncoder(_.configKey)
+given Decoder[DockedCornerStyle] = configKeyDecoder("DockedCornerStyle", DockedCornerStyle.values, _.configKey)
+given Encoder[PaneHeaderCorners] = configKeyEncoder(_.configKey)
+given Decoder[PaneHeaderCorners] = configKeyDecoder("PaneHeaderCorners", PaneHeaderCorners.values, _.configKey)
 
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder
