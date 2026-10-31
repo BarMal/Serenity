@@ -1,6 +1,8 @@
 package com.serenity.state.manager
 
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
+import java.util.concurrent.{Executors, Semaphore, TimeUnit}
+
+import scala.annotation.tailrec
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -55,16 +57,19 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
       thread.setDaemon(true)
       thread
     }
-    val counted = new CountDownLatch(1)
-    val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counted.countDown()))
-    val first   = stateOf(text(0))
-    val states  = (1 to 25).scanLeft(first)((before, round) => replaced(before, text(round)))
+    val counts = new Semaphore(0)
+    val scene  = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
+    val first  = stateOf(text(0))
+    val states = (1 to 25).scanLeft(first)((before, round) => replaced(before, text(round)))
 
     states.foreach(state => scene.forState(state, viewportSize))
 
-    counted.await(60, TimeUnit.SECONDS) shouldBe true
-    executor.shutdown()
     val last = states.last
+    @tailrec def barLands(waits: Int): Boolean =
+      scene.forState(last, viewportSize).paneScrolls.contains(paneId) ||
+        (waits > 0 && counts.tryAcquire(10, TimeUnit.SECONDS) && barLands(waits - 1))
+    barLands(waits = 12) shouldBe true
+    executor.shutdown()
     scene.forState(last, viewportSize).paneScrolls(paneId).extent shouldBe
       AuthoritativeUiScene().forState(last, viewportSize).paneScrolls(paneId).extent
   }
