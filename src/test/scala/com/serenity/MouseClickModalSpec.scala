@@ -435,7 +435,10 @@ class MouseClickModalSpec extends AnyFlatSpec with Matchers:
       .collectFirst { case SurfaceContentRowSlot(SurfaceContentRowKind.Item(0), y) => y }
       .getOrElse(fail("Expected first context menu item row"))
 
-    sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + 2)).unsafeRunSync()
+    // The row just past the first item's own rows is the configured gap, whatever the density's item height is.
+    val itemRows =
+      SurfaceFrameLayout.itemTargetRowsFor(surface.content, openedState.persisted.config.interfaceDensity)
+    sm.applyEvent(MouseClick(contentRect.x + 1, firstItemRow + itemRows)).unsafeRunSync()
 
     val after = sm.getCurrentState.unsafeRunSync()
     after.contextMenuSurface shouldBe Some(surface)
