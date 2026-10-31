@@ -41,14 +41,17 @@ final private[renderer] class Java2DRoundedOutlines(
     val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
     if radius == 0 || !corners.any then strokeRect(x, y, width, height, color, strokeWidth)
     else
-      val px          = metrics.toPixelX(x)
-      val py          = metrics.toPixelY(y)
-      val inset       = math.ceil(strokeWidth / 2).toInt
-      val savedStroke = g.getStroke
-      val savedAlias  = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
+      val px           = metrics.toPixelX(x)
+      val py           = metrics.toPixelY(y)
+      val inset        = math.ceil(strokeWidth / 2).toInt
+      val savedStroke  = g.getStroke
+      val savedAlias   = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
+      val savedControl = g.getRenderingHint(RenderingHints.KEY_STROKE_CONTROL)
       touched(px, py, pw, ph)
       g.setColor(paintColor(color))
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+      // Normalised strokes are shifted by up to half a pixel, which would leave the straight edges half covered.
+      g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
       g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
       g.draw(
         RoundedPath.of(
@@ -62,6 +65,7 @@ final private[renderer] class Java2DRoundedOutlines(
       )
       g.setStroke(savedStroke)
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, savedAlias)
+      g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, savedControl)
 
   override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
     render: => Unit

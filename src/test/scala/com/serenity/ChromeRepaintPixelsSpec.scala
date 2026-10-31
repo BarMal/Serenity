@@ -20,8 +20,8 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
   private val sentinel = 0xff00ff
 
   /** A device pixel just inside the top-left corner of the cell `rowOffset` rows down `cells`, away from glyph ink. */
-  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0): (Int, Int) =
-    val x = math.round(cellMetrics.toPixelX(cells.x) * scale).toInt + 1
+  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0, columnOffset: Int = 0): (Int, Int) =
+    val x = math.round(cellMetrics.toPixelX(cells.x + columnOffset) * scale).toInt + 1
     val y = math.round(cellMetrics.toPixelY(cells.y + rowOffset) * scale).toInt + 1
     image.stamp(x, y, sentinel)
     (x, y)
@@ -66,7 +66,8 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     val plan    = session.settle(before)
 
     val header     = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
-    val headerMark = stamp(session.pendingImage, header)
+    // Two cells in, clear of the header's rounded top corners, which the header's fill no longer reaches.
+    val headerMark = stamp(session.pendingImage, header, columnOffset = 2)
 
     val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
 
