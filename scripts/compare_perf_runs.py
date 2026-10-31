@@ -2,28 +2,31 @@
 """Decides whether a pull request slowed a benchmark, from `PerformanceBenchmarks` CSV runs of its base and head commits
 taken in alternation on one runner (issue #1731).
 
-The base and head runs are paired by position: `base-1` and `head-1` ran back to back, so a slow spell on the runner
-tends to hit both of a pair. For each benchmark the verdict is the median of the pairs' head/base ratios, compared with
-the threshold. A benchmark fails only when
+The base and head runs are paired by position: `base-1` and `head-1` ran back to back, so a pair counts only if both
+sides measured the benchmark. For each benchmark the verdict compares each side's fastest p50 over its usable runs. A
+benchmark fails only when
 
-  * that median ratio exceeds `--threshold`,
-  * the median head p50 exceeds the median base p50 by more than `--min-regression-delta-ms`, and
+  * the fastest head p50 exceeds the fastest base p50 by more than `--threshold` times,
+  * by more than `--min-regression-delta-ms`, and
   * the head and base runs were each measured at least `--min-pairs` times.
 
-Why the median of paired ratios, and not the earlier "head's fastest p50 against base's slowest":
+Why the fastest run of each side (issue #2443), after the median of paired ratios (issue #1731) and, before it, "head's
+fastest against base's slowest":
 
-  * It tests the quantity a regression changes, the ratio, and a run that was slow for a reason of its own (a GC pause,
-    a JIT plateau, a noisy neighbour) moves one pair, not the verdict. Using the extremes asks the fastest head run to
-    beat the slowest base run, so a base that swings 5 to 30 ms hides a 2x slowdown that lands inside the swing.
-  * A threshold below 2x still catches a 2x regression, because the verdict no longer has to clear a swing the size of
-    the regression. `scripts/study_perf_gate.py` reports the false-positive and false-negative rates of both rules on
-    recorded runs.
+  * A benchmark's p50 is bimodal from one JVM to the next: depending on how far the JIT had got when it was measured, the
+    same code reads about 1.4 ms or 3 to 7 ms. The slow mode is a state a run lands in, so it only ever makes a run
+    slower; the fastest run is the one least affected by it. The median of three paired ratios turns two runs in
+    different modes into a verdict. On 12 runs of one commit it flagged 78% of master-against-master builds on the
+    first pass; the fastest-run ratio at 1.5x flags the same share but catches an injected 2x on a single benchmark in
+    94% of builds instead of 78% (`docs/performance-benchmarks.md`, "Paired-ratio gate").
+  * The cost is a regression hidden by one lucky-fast head run; `test_the_fastest_head_run_decides_...` states it.
+  * `scripts/study_perf_gate.py` reports the false-positive and false-negative rates of the rules on recorded runs.
 
 A benchmark whose base runs themselves disagree by more than `--unstable-spread` is reported as unstable rather than
 silently trusted either way.
 
 Usage:
-    compare_perf_runs.py --base b1.csv b2.csv b3.csv --head h1.csv h2.csv h3.csv [--threshold 1.75]
+    compare_perf_runs.py --base b1.csv b2.csv b3.csv --head h1.csv h2.csv h3.csv [--threshold 1.5]
 
 Confirming before failing (issue #1731): a benchmark that clears the threshold on three pairs may have met a slow spell
 on the runner, as `render.markdown.live_preview` did on CI (1.93x, then 1.35x on a re-run of the same commit). So the
@@ -46,7 +49,7 @@ from dataclasses import dataclass
 
 from check_perf_regression import Row, build_parser, check_memory, parse_csv
 
-DEFAULT_THRESHOLD = 1.75
+DEFAULT_THRESHOLD = 1.5
 DEFAULT_MIN_DELTA_MS = 0.05
 DEFAULT_MIN_PAIRS = 2
 DEFAULT_UNSTABLE_SPREAD = 2.0
@@ -100,10 +103,10 @@ def judge(
             continue
         bases = [b for b, _ in pairs]
         heads = [h for _, h in pairs]
-        base_ms, head_ms = statistics.median(bases), statistics.median(heads)
+        base_ms, head_ms = min(bases), min(heads)
         if base_ms < MIN_BASELINE_MS:
             continue
-        ratio = statistics.median(h / b for b, h in pairs if b > 0)
+        ratio = head_ms / base_ms
         spread = _spread(bases)
         verdicts.append(
             Verdict(
@@ -183,7 +186,7 @@ def main_with_args(argv: list[str]) -> int:
     level = "warning" if args.write_flagged else "error"
     for v in regressions:
         print(
-            f"::{level}::{v.name}: median head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
+            f"::{level}::{v.name}: fastest-run head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
             f"({v.base_ms:.5f}ms -> {v.head_ms:.5f}ms), past {args.threshold}x."
         )
     unstable = [v for v in verdicts if v.unstable and not v.regressed]

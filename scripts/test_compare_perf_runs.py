@@ -190,7 +190,7 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
 
     def test_a_one_off_spike_is_flagged_and_then_forgiven(self) -> None:
         base = self._series([5.0, 5.0, 5.0])
-        head = self._series([10.0, 10.0, 5.0])  # two spiked head runs: past 1.75x on the median
+        head = self._series([10.0, 10.0, 10.0])  # a slow spell over every head run: past 1.5x on the fastest
         self.assertEqual(self._first_pass(base, head), 2)
         self.assertEqual(self._confirm(self._series([5.0, 5.1, 5.0]), self._series([5.1, 5.0, 5.2])), 0)
 
