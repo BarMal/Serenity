@@ -62,7 +62,5 @@ class ContextMenuItemTargetRowsSpec extends AnyFlatSpec with Matchers:
     val items = resolved.paintBoxes.filter(_.kind == SurfacePaintKind.ActionItem)
 
     items.map(_.rect.y).sliding(2).collect { case Seq(a, b) => b - a }.toList shouldBe List(1.0, 1.0)
-    items.foreach { item =>
-      resolved.hitAt(item.rect.x, item.rect.y).flatMap(_.actionId) shouldBe item.actionId
-    }
+    items.foreach(item => resolved.hitAt(item.rect.x, item.rect.y).flatMap(_.actionId) shouldBe item.actionId)
   }

@@ -352,7 +352,7 @@ object SurfaceFrameLayout:
       case SurfaceContent.ContextMenu(_) =>
         density match
           case InterfaceDensity.Compact | InterfaceDensity.Comfortable => 1
-          case InterfaceDensity.Spacious                                => minimumTargetRows(density)
+          case InterfaceDensity.Spacious                               => minimumTargetRows(density)
       case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
           SurfaceContent.ContextualToolbar(_) =>
         minimumTargetRows(density)
