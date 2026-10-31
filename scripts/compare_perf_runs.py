@@ -16,9 +16,9 @@ fastest against base's slowest":
   * A benchmark's p50 is bimodal from one JVM to the next: depending on how far the JIT had got when it was measured, the
     same code reads about 1.4 ms or 3 to 7 ms. The slow mode is a state a run lands in, so it only ever makes a run
     slower; the fastest run is the one least affected by it. The median of three paired ratios turns two runs in
-    different modes into a verdict. On 12 runs of one commit it flagged 78% of master-against-master builds on the
-    first pass; the fastest-run ratio at 1.5x flags the same share but catches an injected 2x on a single benchmark in
-    94% of builds instead of 78% (`docs/performance-benchmarks.md`, "Paired-ratio gate").
+    different modes into a verdict. On 12 runs of one commit in a container, the fastest-run ratio at 1.5x failed 11%
+    of master-against-master builds after the confirmation (the median at 1.75x: 18%) and caught an injected 2x on a
+    given benchmark 89% of the time (61%); see `docs/performance-benchmarks.md`, "Paired-ratio gate".
   * The cost is a regression hidden by one lucky-fast head run; `test_the_fastest_head_run_decides_...` states it.
   * `scripts/study_perf_gate.py` reports the false-positive and false-negative rates of the rules on recorded runs.
 
