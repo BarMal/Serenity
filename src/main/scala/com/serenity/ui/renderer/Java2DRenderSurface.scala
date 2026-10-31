@@ -7,7 +7,7 @@ import java.awt.image.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, CornerRounding, PixelRect, RoundedCorners}
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
 
@@ -45,7 +45,7 @@ class Java2DRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
   override def addressesPixels: Boolean = true
@@ -120,6 +120,9 @@ class Java2DRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+
+  private val roundedOutlines =
+    Java2DRoundedOutlines(this, g, metrics, paintColor, painted.touched(_, _, _, _), userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -375,69 +378,6 @@ class Java2DRenderSurface(
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
     g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
     g.setStroke(savedStroke)
-
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    corners: RoundedCorners,
-    radiusPx: Int,
-    color: RenderColor,
-    strokeWidth: Float
-  ): Unit =
-    val pw     = width * metrics.charWidth
-    val ph     = height * metrics.lineHeight
-    val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
-    if radius == 0 || !corners.any then strokeRect(x, y, width, height, color, strokeWidth)
-    else
-      val px          = metrics.toPixelX(x)
-      val py          = metrics.toPixelY(y)
-      val inset       = math.ceil(strokeWidth / 2).toInt
-      val savedStroke = g.getStroke
-      val savedAlias  = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
-      painted.touched(px, py, pw, ph)
-      g.setColor(paintColor(color))
-      g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-      g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
-      g.draw(
-        RoundedPath.of(
-          (px + inset).toDouble,
-          (py + inset).toDouble,
-          (pw - 2 * inset).toDouble,
-          (ph - 2 * inset).toDouble,
-          (radius - inset).max(0).toDouble,
-          corners
-        )
-      )
-      g.setStroke(savedStroke)
-      g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, savedAlias)
-
-  override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
-    render: => Unit
-  ): Unit =
-    val pw     = width * metrics.charWidth
-    val ph     = height * metrics.lineHeight
-    val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
-    if radius == 0 || !corners.any then withRectClip(x, y, width, height)(render)
-    else
-      val savedClip = g.getClip
-      userClipDepth.incrementAndGet()
-      try
-        g.clip(
-          RoundedPath.of(
-            metrics.toPixelX(x).toDouble,
-            metrics.toPixelY(y).toDouble,
-            pw.toDouble,
-            ph.toDouble,
-            radius.toDouble,
-            corners
-          )
-        )
-        render
-      finally
-        userClipDepth.decrementAndGet()
-        g.setClip(savedClip)
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     val px        = metrics.toPixelX(x)

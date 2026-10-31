@@ -6,7 +6,7 @@ import java.awt.geom.AffineTransform
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, CornerRounding, PixelRect, RoundedCorners}
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.renderer.{
   CellRuns,
@@ -28,19 +28,7 @@ import com.serenity.ui.renderer.{
   TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
-import org.jetbrains.skia.{
-  BlendMode,
-  Canvas,
-  ClipMode,
-  IRect,
-  Paint,
-  PaintMode,
-  PaintStrokeCap,
-  PaintStrokeJoin,
-  RRect,
-  Rect,
-  Surface
-}
+import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
 
 /** A [[RenderSurface]] that draws with Skia onto a `Canvas`.
   *
@@ -85,7 +73,7 @@ final class SkiaRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
 
   override def addressesPixels: Boolean = true
 
@@ -133,13 +121,6 @@ final class SkiaRenderSurface(
   stroke.setMode(PaintMode.STROKE)
   stroke.setStrokeCap(PaintStrokeCap.SQUARE)
   stroke.setStrokeJoin(PaintStrokeJoin.MITER)
-
-  // Rounded outlines are anti-aliased; every other shape in this surface is not, so they get a paint of their own.
-  private val roundedStroke = Paint()
-  roundedStroke.setAntiAlias(true)
-  roundedStroke.setMode(PaintMode.STROKE)
-  roundedStroke.setStrokeCap(PaintStrokeCap.SQUARE)
-  roundedStroke.setStrokeJoin(PaintStrokeJoin.MITER)
 
   private val fgRef                   = AtomicReference(Color.WHITE)
   private val bgRef                   = AtomicReference(Color.BLACK)
@@ -197,6 +178,15 @@ final class SkiaRenderSurface(
     */
   private def recordText(xPx: Double, yPx: Double, widthPx: Double, lineHeightPx: Int): Unit =
     recordPaint(xPx - lineHeightPx, yPx - lineHeightPx / 4.0, widthPx + 2.0 * lineHeightPx, lineHeightPx * 1.5)
+
+  private lazy val roundedOutlines = SkiaRoundedOutlines(
+    this,
+    canvas,
+    metrics,
+    color => blended(paintColor(color).getRGB),
+    recordPaint(_, _, _, _, _),
+    userClipDepth
+  )
 
   private def restoreTo(saveCount: Int): Unit =
     val _ = canvas.restoreToCount(saveCount)
@@ -434,81 +424,6 @@ final class SkiaRenderSurface(
       rect((px + inset).toFloat, (py + inset).toFloat, (pw - 2 * inset).toFloat, (ph - 2 * inset).toFloat),
       stroke
     )
-
-  /** A rectangle with the `corners` rounded to `radius` and the others square: Skia's per-corner radii are top-left,
-    * top-right, bottom-right, bottom-left.
-    */
-  private def roundedRect(x: Float, y: Float, width: Float, height: Float, radius: Float, corners: RoundedCorners): RRect =
-    def r(rounded: Boolean): Float = if rounded then radius else 0f
-    RRect.Companion.makeComplexXYWH(
-      x,
-      y,
-      width,
-      height,
-      Array(r(corners.topLeft), r(corners.topRight), r(corners.bottomRight), r(corners.bottomLeft))
-    )
-
-  override def strokeRoundRect(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
-    corners: RoundedCorners,
-    radiusPx: Int,
-    color: RenderColor,
-    strokeWidth: Float
-  ): Unit =
-    val pw     = width * metrics.charWidth
-    val ph     = height * metrics.lineHeight
-    val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
-    if radius == 0 || !corners.any then strokeRect(x, y, width, height, color, strokeWidth)
-    else
-      val px    = metrics.toPixelX(x)
-      val py    = metrics.toPixelY(y)
-      val inset = math.ceil(strokeWidth / 2).toInt
-      recordPaint(px.toDouble, py.toDouble, pw.toDouble, ph.toDouble, 2.0 * strokeWidth + 1.0)
-      roundedStroke.setBlendMode(BlendMode.SRC_OVER)
-      roundedStroke.setColor(blended(paintColor(color).getRGB))
-      roundedStroke.setStrokeWidth(strokeWidth)
-      val _ = canvas.drawRRect(
-        roundedRect(
-          (px + inset).toFloat,
-          (py + inset).toFloat,
-          (pw - 2 * inset).toFloat,
-          (ph - 2 * inset).toFloat,
-          (radius - inset).max(0).toFloat,
-          corners
-        ),
-        roundedStroke
-      )
-
-  override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
-    render: => Unit
-  ): Unit =
-    val pw     = width * metrics.charWidth
-    val ph     = height * metrics.lineHeight
-    val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
-    if radius == 0 || !corners.any then withRectClip(x, y, width, height)(render)
-    else
-      val saved = canvas.save()
-      userClipDepth.incrementAndGet()
-      try
-        val _ = canvas.clipRRect(
-          roundedRect(
-            metrics.toPixelX(x).toFloat,
-            metrics.toPixelY(y).toFloat,
-            pw.toFloat,
-            ph.toFloat,
-            radius.toFloat,
-            corners
-          ),
-          ClipMode.INTERSECT,
-          true
-        )
-        render
-      finally
-        userClipDepth.decrementAndGet()
-        restoreTo(saved)
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     val saved = canvas.save()

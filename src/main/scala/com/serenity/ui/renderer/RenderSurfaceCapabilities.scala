@@ -253,8 +253,8 @@ trait PanelOutlineDrawing:
     y: Int,
     width: Int,
     height: Int,
-    corners: RoundedCorners,
-    radiusPx: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int,
     color: RenderColor,
     strokeWidth: Float
   ): Unit =
@@ -263,7 +263,12 @@ trait PanelOutlineDrawing:
   /** [[withRectClip]] with the `corners` rounded to `radiusPx` device pixels, so a panel's fill takes the same shape as
     * its outline.
     */
-  def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
-    render: => Unit
-  ): Unit =
+  def withRoundRectClip(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int
+  )(render: => Unit): Unit =
     withRectClip(x, y, width, height)(render)
