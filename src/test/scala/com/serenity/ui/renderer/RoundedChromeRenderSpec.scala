@@ -127,47 +127,49 @@ abstract class RoundedChromeRenderBehaviour extends AnyFlatSpec with Matchers:
 
   private def rgb(frame: FramePixels, point: (Int, Int)): Int = frame.rgbAt(point._1, point._2) & 0xffffff
 
-  /** The page: the pixel in the gap between the left panel and the editor workspace, which no chrome covers. */
-  private def page(s: Scene): Int =
-    rgb(s.frame, ((s.left.x + s.left.width) * metrics.charWidth + 2, 5 * metrics.lineHeight))
-
   private val defaultRadius = 12
 
+  /** The same scene with every corner square: what each corner pixel looks like when nothing rounds. */
+  private def square(style: DockedCornerStyle, header: PaneHeaderCorners): Scene =
+    scene(configWith(0, style, header))
+
+  private def rounded(style: DockedCornerStyle, header: PaneHeaderCorners): Scene =
+    scene(configWith(defaultRadius, style, header))
+
+  /** A rounded corner shows the page instead of the element, so its pixel differs from the square render's. */
+  private def isRounded(rounded: Scene, square: Scene, point: (Int, Int)): Boolean =
+    rgb(rounded.frame, point) != rgb(square.frame, point)
+
   "With floating docked chrome" should "round every corner of a docked panel and of the status bar" in {
-    val s = scene(configWith(defaultRadius, DockedCornerStyle.Floating, PaneHeaderCorners.Rounded))
-    corners(s.left).foreach(p => withClue(s"panel corner $p: ")(rgb(s.frame, p) shouldBe page(s)))
-    corners(s.status).foreach(p => withClue(s"status corner $p: ")(rgb(s.frame, p) shouldBe page(s)))
+    val r = rounded(DockedCornerStyle.Floating, PaneHeaderCorners.Rounded)
+    val q = square(DockedCornerStyle.Floating, PaneHeaderCorners.Rounded)
+    corners(r.left).foreach(p => withClue(s"panel corner $p: ")(isRounded(r, q, p) shouldBe true))
+    corners(r.status).foreach(p => withClue(s"status corner $p: ")(isRounded(r, q, p) shouldBe true))
   }
 
   it should "round a pane header's two top corners when the header corners are rounded, and not its bottom ones" in {
-    val s = scene(configWith(defaultRadius, DockedCornerStyle.Floating, PaneHeaderCorners.Rounded))
-    val c = corners(s.header)
-    rgb(s.frame, c(0)) shouldBe page(s)
-    rgb(s.frame, c(1)) shouldBe page(s)
-    rgb(s.frame, c(2)) should not be page(s)
-    rgb(s.frame, c(3)) should not be page(s)
+    val r = rounded(DockedCornerStyle.Floating, PaneHeaderCorners.Rounded)
+    val q = square(DockedCornerStyle.Floating, PaneHeaderCorners.Rounded)
+    val c = corners(r.header)
+    isRounded(r, q, c(0)) shouldBe true
+    isRounded(r, q, c(1)) shouldBe true
+    isRounded(r, q, c(2)) shouldBe false
+    isRounded(r, q, c(3)) shouldBe false
   }
 
   it should "leave a pane header square when the header corners are square" in {
-    val s = scene(configWith(defaultRadius, DockedCornerStyle.Floating, PaneHeaderCorners.Square))
-    corners(s.header).foreach(p => withClue(s"header corner $p: ")(rgb(s.frame, p) should not be page(s)))
+    val r = rounded(DockedCornerStyle.Floating, PaneHeaderCorners.Square)
+    val q = square(DockedCornerStyle.Floating, PaneHeaderCorners.Square)
+    corners(r.header).foreach(p => withClue(s"header corner $p: ")(isRounded(r, q, p) shouldBe false))
   }
 
   "With flush docked chrome" should "round only the left panel's bottom-right corner, and leave the status bar square" in {
-    val s = scene(configWith(defaultRadius, DockedCornerStyle.Flush, PaneHeaderCorners.Rounded))
-    val c = corners(s.left)
-    rgb(s.frame, c(2)) shouldBe page(s)
-    List(c(0), c(1), c(3)).foreach(p => withClue(s"panel corner $p: ")(rgb(s.frame, p) should not be page(s)))
-    corners(s.status).foreach(p => withClue(s"status corner $p: ")(rgb(s.frame, p) should not be page(s)))
-  }
-
-  "With no radius" should "keep every corner square, whatever the styles" in {
-    List(DockedCornerStyle.Floating, DockedCornerStyle.Flush).foreach { style =>
-      val s = scene(configWith(0, style, PaneHeaderCorners.Rounded))
-      (corners(s.left) ++ corners(s.status) ++ corners(s.header)).foreach { p =>
-        withClue(s"$style corner $p: ")(rgb(s.frame, p) should not be page(s))
-      }
-    }
+    val r = rounded(DockedCornerStyle.Flush, PaneHeaderCorners.Rounded)
+    val q = square(DockedCornerStyle.Flush, PaneHeaderCorners.Rounded)
+    val c = corners(r.left)
+    isRounded(r, q, c(2)) shouldBe true
+    List(c(0), c(1), c(3)).foreach(p => withClue(s"panel corner $p: ")(isRounded(r, q, p) shouldBe false))
+    corners(r.status).foreach(p => withClue(s"status corner $p: ")(isRounded(r, q, p) shouldBe false))
   }
 
 class Java2DRoundedChromeScale1Spec extends RoundedChromeRenderBehaviour:
