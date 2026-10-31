@@ -127,6 +127,7 @@ class FontSizesSettingsGroupSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("missing the undo row"))
 
     undo.disabledReason shouldBe None
+    undo.command.keepMenuOpenOnSubmit shouldBe true
     undo.command.intent shouldBe CommandIntent.Settings(SettingsIntent.Font(FontIntent.UndoFontSizeChange))
     undo.command.label shouldBe "Undo Last Size Change"
   }
@@ -135,7 +136,7 @@ class FontSizesSettingsGroupSpec extends AnyFlatSpec with Matchers:
     def marked(role: Option[TypographyRole]): List[String] =
       val group = sizes(treeOn(FrontendCapabilities.gui, context = CommandRunnerContext(activeTypographyRole = role)))
       List("font-sizes-prose", "font-sizes-code", "font-sizes-ui").filter(
-        input(group, _).hint.contains("used by this document")
+        input(group, _).label.endsWith("(in use)")
       )
 
     marked(Some(TypographyRole.Prose)) shouldBe List("font-sizes-prose")
@@ -151,14 +152,15 @@ class FontSizesSettingsGroupSpec extends AnyFlatSpec with Matchers:
     given CommandRegistry = registry
     val context           = CommandRunnerContext(activeTypographyRole = Some(TypographyRole.Prose))
 
-    val hints = CommandRunner.empty
+    val labels = CommandRunner.empty
       .activate(registry, AppConfig.default, context = context)
       .updateSearchTerm("Prose Font Size")
       .visibleItems
-      .collect { case item: CommandSurfaceItem.SettingSearchItem if item.label == "Prose Font Size" => item.hint }
+      .collect {
+        case item: CommandSurfaceItem.SettingSearchItem if item.label.startsWith("Prose Font Size") => item.label
+      }
 
-    hints should not be empty
-    hints.foreach(_.getOrElse("") should include("used by this document"))
+    labels should contain("Prose Font Size (in use)")
   }
 
   "An activated command runner" should "offer the undo once the config holds sizes to go back to, and not before" in {

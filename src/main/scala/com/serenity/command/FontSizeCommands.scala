@@ -20,7 +20,8 @@ object FontSizeCommands:
       "Restore the prose, code and UI font sizes from before the last size change.",
       intent(FontIntent.UndoFontSizeChange),
       CommandCategory.Settings,
-      label = "Undo Last Size Change"
+      label = "Undo Last Size Change",
+      keepMenuOpenOnSubmit = true
     )
 
   private def intent(font: FontIntent): CommandIntent = CommandIntent.Settings(SettingsIntent.Font(font))

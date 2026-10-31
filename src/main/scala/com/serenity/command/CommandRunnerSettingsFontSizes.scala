@@ -19,7 +19,7 @@ private[command] object CommandRunnerSettingsFontSizes:
 
   private val SetAllId    = "set-all-font-sizes"
   private val GroupRowIds = List("font-sizes-prose", "font-sizes-code", "font-sizes-ui", SetAllId)
-  private val UsedBy      = "used by this document"
+  private val InUse       = " (in use)"
 
   /** The size row a document with `role` is drawn with: the prose size for anything that uses the text font. */
   private def rowOf(role: TypographyRole): String =
@@ -30,13 +30,15 @@ private[command] object CommandRunnerSettingsFontSizes:
           TypographyRole.Mixed =>
         "text-font-size"
 
-  /** `inputItems` with the row the active document uses marked in its hint, wherever that row is listed. */
+  /** `inputItems` with the row the active document uses marked "(in use)" in its label, wherever that row is listed:
+    * the label has room for it on the settings page and in a search result, where the hint column does not.
+    */
   def marked(
     inputItems: List[CommandSurfaceItem.InputItem],
     role: Option[TypographyRole]
   ): List[CommandSurfaceItem.InputItem] =
     val used = role.map(rowOf).toList.flatMap(id => List(id) ++ AliasOf.get(id))
-    inputItems.map(item => if used.contains(item.id) then item.copy(hint = s"${item.hint}, $UsedBy") else item)
+    inputItems.map(item => if used.contains(item.id) then item.copy(label = s"${item.label}$InUse") else item)
 
   /** `sizeItems` with the rows this group adds: the per-role size rows again under the ids the group lists them with
     * (they edit the same sizes), and Set All Sizes.
@@ -48,7 +50,7 @@ private[command] object CommandRunnerSettingsFontSizes:
     inputItems: List[CommandSurfaceItem.InputItem],
     context: CommandRunnerContext
   ): CommandSurfaceItem.GroupItem =
-    val rows = GroupRowIds.flatMap(id => inputItems.find(_.id == id))
+    val rows = GroupRowIds.flatMap(id => inputItems.find(_.id == id)).map(shortened)
     val undo = CommandSurfaceItem.CommandItem(
       FontSizeCommands.undo,
       Option.when(context.previousFontSizes.isEmpty)("No size change to undo")
@@ -61,11 +63,18 @@ private[command] object CommandRunnerSettingsFontSizes:
       hint = Some("Prose, code and UI sizes together")
     )
 
+  /** The hint column of a size row is a few characters wide beside the value and its default, so the group's rows say
+    * only what matters there: that the document uses this one, or the unit.
+    */
+  private def shortened(item: CommandSurfaceItem.InputItem): CommandSurfaceItem.InputItem =
+    if AliasOf.values.exists(_ == item.id) then item.copy(hint = "Points")
+    else item
+
   def setAllItem: CommandSurfaceItem.InputItem =
     CommandSurfaceItem.InputItem(
       id = SetAllId,
       label = "Set All Sizes...",
-      hint = "Points (8.0-48.0) for prose, code and UI; asks first",
+      hint = "8.0-48.0; asks first",
       currentValue = "",
       kind = CommandSurfaceItem.InputKind.Numeric(decimal = true),
       parse = text =>
