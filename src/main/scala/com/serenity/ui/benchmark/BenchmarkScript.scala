@@ -13,14 +13,25 @@ object BenchmarkScript:
     case Full
     case ColdFull
     case CaretOnly(visible: Boolean)
+    case Resized(size: WindowPx)
 
   final case class Step(state: AppState, damage: Damage, frame: FrameKind)
 
-  def steps(scenario: Scenario, frames: Int, viewportLines: Int)(using Balance): Vector[Step] =
+  /** `window` is the size the window has when the run starts; the resize scenario alternates it with a smaller one. */
+  def steps(scenario: Scenario, frames: Int, viewportLines: Int, window: WindowPx = WindowPx(1600, 1000))(using
+    Balance
+  ): Vector[Step] =
     val start = BenchmarkDocument.initial
     scenario match
       case Scenario.ColdFullFrame =>
         Vector.fill(frames)(Step(start, Damage.Everything, FrameKind.ColdFull))
+      case Scenario.WarmFullFrame =>
+        Vector.fill(frames)(Step(start, Damage.Everything, FrameKind.Full))
+      case Scenario.ResizeWindow =>
+        Vector.tabulate(frames) { index =>
+          val size = if index % 2 == 0 then window.smaller else window
+          Step(start, Damage.Everything, FrameKind.Resized(size))
+        }
       case Scenario.TypeCharacter   => typing(start, frames)
       case Scenario.ScrollOneLine   => scrolling(start, frames, viewportLines, lines = 1)
       case Scenario.ScrollFiveLines => scrolling(start, frames, viewportLines, lines = 5)

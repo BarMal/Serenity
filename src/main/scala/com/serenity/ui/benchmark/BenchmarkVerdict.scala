@@ -24,7 +24,8 @@ final case class BenchmarkEnvironment(
     machine: MachineState = MachineState.Unknown,
     coldPhases: Option[ColdFramePhases] = None,
     java2dColdSplit: Option[ColdFrameSplit] = None,
-    skiaColdSplit: Option[ColdFrameSplit] = None
+    skiaColdSplit: Option[ColdFrameSplit] = None,
+    skiaDeviceScale: Option[Double] = None
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")
@@ -45,7 +46,8 @@ enum Verdict:
   case NotMeasured(reason: String)
 
 /** The owner's rule for whether `auto` may pick Skia: on a GPU, Skia's p50 and p95 are no worse than Java2D's in every
-  * scenario but the cold full frame, and its p95 is better at scrolling and page down.
+  * judged scenario but the cold full frame, and its p95 is better at scrolling and page down. Scenarios added since the
+  * rule was made (`Scenario.judged` is false) are reported but neither judged nor able to withhold a verdict.
   */
 object BenchmarkVerdict:
 
@@ -65,14 +67,16 @@ object BenchmarkVerdict:
       case Right(_) => judge(results)
 
   private def judge(results: Vector[ScenarioResult]): Verdict =
-    val unmeasured = results.filter(_.skia.isEmpty).map(_.scenario.label)
-    val missing    = Scenario.values.toList.filterNot(s => results.exists(_.scenario == s)).map(_.label)
-    val dropped    = results.filter(r => r.java2d.dropped > 0 || r.skia.exists(_.dropped > 0)).map(_.scenario.label)
+    val ruled      = results.filter(_.scenario.judged)
+    val unmeasured = ruled.filter(_.skia.isEmpty).map(_.scenario.label)
+    val missing =
+      Scenario.values.toList.filter(_.judged).filterNot(s => results.exists(_.scenario == s)).map(_.label)
+    val dropped = ruled.filter(r => r.java2d.dropped > 0 || r.skia.exists(_.dropped > 0)).map(_.scenario.label)
     if missing.nonEmpty || unmeasured.nonEmpty then
       Verdict.NotMeasured(s"no figures for ${(missing ++ unmeasured).mkString(", ")}")
     else if dropped.nonEmpty then Verdict.NotMeasured(s"frames were dropped in ${dropped.mkString(", ")}; run it again")
     else
-      val reasons = results.filter(_.scenario != Scenario.ColdFullFrame).flatMap(result => complaints(result))
+      val reasons = ruled.filter(_.scenario != Scenario.ColdFullFrame).flatMap(result => complaints(result))
       if reasons.isEmpty then Verdict.SkiaWins else Verdict.Java2DStays(reasons.toList)
 
   private def complaints(result: ScenarioResult): List[String] =
