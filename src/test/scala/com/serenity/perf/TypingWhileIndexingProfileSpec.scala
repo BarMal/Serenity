@@ -36,7 +36,7 @@ class TypingWhileIndexingProfileSpec extends AnyFlatSpec with Matchers:
   }
 
   "the report" should "state every figure and the load that was present, as RESULT lines" in {
-    val result  = Result(Summary(10, 2.0, 4.0, 9.0), Summary(10, 3.0, 12.0, 30.0), walksCompleted = 7)
+    val result  = Outcome(Summary(10, 2.0, 4.0, 9.0), Summary(10, 3.0, 12.0, 30.0), walksCompleted = 7)
     val options = Options(keys = 300, paceMs = 100, warmupKeys = 200, shape = TreeShape.Small)
 
     val text = report(result, options).mkString("\n")
