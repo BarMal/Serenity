@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -61,4 +62,41 @@ class PresentReportSpec extends AnyFlatSpec with Matchers:
     PresentReport.summaryLine(result.name, breakdown) shouldBe
       "phases render.present.1080p_2x.typing_frame: plan 0.06 ms, surface move 0.50 ms, image shift 2.25 ms, " +
       "copy-out 1.20 ms, rest 3.99 ms, frame 8.00 ms"
+  }
+
+  "A row's shape traffic" should "give the mean and the largest frame of shapings and promotions" in {
+    val stats = PresentReport.ShapeTrafficStats.of(
+      Vector(
+        PresentReport.ShapeFigures(shapings = 0, promotions = 0),
+        PresentReport.ShapeFigures(shapings = 3, promotions = 1),
+        PresentReport.ShapeFigures(shapings = 1, promotions = 2)
+      )
+    )
+
+    stats shouldBe PresentReport.ShapeTrafficStats(frames = 3, shapings = (4L, 3L), promotions = (3L, 2L))
+  }
+
+  it should "be empty for no frames" in {
+    PresentReport.ShapeTrafficStats.of(Vector.empty) shouldBe
+      PresentReport.ShapeTrafficStats(frames = 0, shapings = (0L, 0L), promotions = (0L, 0L))
+  }
+
+  "The shape traffic summary" should "name each figure's mean and largest frame over the frames it covers" in {
+    val stats = PresentReport.ShapeTrafficStats(frames = 4, shapings = (6L, 3L), promotions = (0L, 0L))
+
+    PresentReport.trafficLine(result.name, stats) shouldBe
+      "shapes render.present.1080p_2x.typing_frame: shapings avg=1.5 max=3, promotions avg=0.0 max=0 over 4 frames"
+  }
+
+  "A phase log" should "keep the shapings and promotions of the frames it timed" in {
+    val counts = scala.collection.mutable.Queue(
+      FrameCounts(Map(FrameCounter.ShapingCalls -> 2L, FrameCounter.ShapePromotions -> 1L)),
+      FrameCounts(Map(FrameCounter.ShapingCalls -> 0L))
+    )
+    val log = PresentBenchmarks.PhaseLog(() => Map.empty, () => counts.dequeue())
+
+    val _ = log.timing(() => ())()
+    val _ = log.timing(() => ())()
+
+    log.traffic shouldBe PresentReport.ShapeTrafficStats(frames = 2, shapings = (2L, 2L), promotions = (1L, 1L))
   }
