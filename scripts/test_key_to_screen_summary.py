@@ -4,7 +4,7 @@ import sys
 import tempfile
 import unittest
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bench")
 sys.path.insert(0, HERE)
 
 import key_to_screen_summary as summary  # noqa: E402

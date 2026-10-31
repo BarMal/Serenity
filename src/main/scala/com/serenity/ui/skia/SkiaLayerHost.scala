@@ -31,6 +31,8 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private val renders      = new AtomicInteger(0)
   private val publishes    = new AtomicInteger(0)
   private val listener     = new AtomicReference[Option[() => Unit]](None)
+  private val onPublish    = new AtomicReference[Option[() => Unit]](None)
+  private val onDrawStart  = new AtomicReference[Option[() => Unit]](None)
   private val draws        = new AtomicReference(SkiaLayerHost.Draws.Empty)
   private val shown        = new AtomicInteger(0)
   private val pictureOps   = new AtomicLong(0L)
@@ -69,6 +71,7 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
+    onDrawStart.get().foreach(_.apply())
     val _           = renders.incrementAndGet()
     val started     = System.nanoTime()
     val pending     = awaiting.get()
@@ -124,6 +127,10 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
 
   def onRendered(callback: () => Unit): Unit = listener.set(Some(callback))
 
+  override def onPublished(callback: () => Unit): Unit = onPublish.set(Some(callback))
+
+  override def onDrawStarted(callback: () => Unit): Unit = onDrawStart.set(Some(callback))
+
   def renderApi: String = layer.getRenderApi.toString
 
   override def drawStats: LayerDrawStats =
@@ -141,6 +148,7 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     slot.publish(picture)
     published.set(true)
     val _ = publishes.incrementAndGet()
+    onPublish.get().foreach(_.apply())
     redraw.afterPublish()
 
   def showCarets(shown: List[SwingWindow.CaretPaint]): Unit =
