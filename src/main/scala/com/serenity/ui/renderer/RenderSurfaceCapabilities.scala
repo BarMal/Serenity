@@ -260,9 +260,9 @@ trait PanelOutlineDrawing:
   ): Unit =
     strokeRect(x, y, width, height, color, strokeWidth)
 
-  /** Restricts `render` to the rectangle with the `corners` rounded to `radiusPx` device pixels, so a panel's fill takes
-    * the same shape as its outline. With nothing to round (a zero radius, no rounded corner, or a surface that cannot
-    * round) it just renders: clipping a fill to its own rectangle changes nothing.
+  /** Restricts `render` to the rectangle with the `corners` rounded to `radiusPx` device pixels, so a panel's fill
+    * takes the same shape as its outline. With nothing to round (a zero radius, no rounded corner, or a surface that
+    * cannot round) it just renders: clipping a fill to its own rectangle changes nothing.
     */
   def withRoundRectClip(
     x: Int,
