@@ -263,7 +263,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
@@ -297,7 +297,7 @@ jobs:
             done
           done
 
-      # A benchmark whose median pair ratio is past 1.75x (and more than 50 us above the base's) is only flagged here:
+      # A benchmark whose fastest head p50 is past 1.5x the fastest base p50 (and more than 50 us above it) is only flagged here:
       # the same runner re-measures just those benchmarks in three fresh pairs (confirm-*), and the build fails only if
       # they are still past the threshold on those. A retained-heap regression fails at once. See
       # scripts/compare_perf_runs.py, and docs/performance-benchmarks.md ("Paired-ratio gate", #1731).
