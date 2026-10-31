@@ -24,7 +24,7 @@ import org.scalatest.matchers.should.Matchers
 /** Issue #2389, throwaway: what a floating surface looks like with its corners rounded to a few candidate radii, for the
   * owner to pick a default from. NOT the feature. Each surface is drawn twice by the real renderer, with and without
   * it; the rounded variant takes the surface's pixels inside an anti-aliased rounded rectangle and the page's pixels
-  * outside it, and strokes the arc in the theme's border colour. The real renderer's anti-aliasing will differ a little.
+  * outside it, and strokes the arc in the theme's border colour at the thickness the surface's own border has in the render. The real renderer's anti-aliasing will differ a little.
   * Radii are logical pixels at scale 1; scale 2 is the same layout drawn with a font twice the size and the radius
   * doubled, as the pre-#1811 `ui.corner_radius` was scaled by the UI chrome scale.
   */
@@ -147,6 +147,14 @@ class RoundedCornerCandidatesSpec extends AnyFlatSpec with Matchers:
         points.map(_._2).max - points.map(_._2).min + 1)
     )
 
+  /** How many pixels thick the surface's own border is, read from the render: the border-coloured run along the middle
+    * of the surface's left edge.
+    */
+  private def borderThickness(with_ : BufferedImage, box: Box): Int =
+    val border = Theme.light.border.toAwt.getRGB & 0xffffff
+    val y      = box.y + box.height / 2
+    (box.x until box.x + box.width).takeWhile(x => (with_.getRGB(x, y) & 0xffffff) == border).size.max(1)
+
   private def rounded(with_ : BufferedImage, without: BufferedImage, box: Box, radius: Int, scale: Int): BufferedImage =
     if radius == 0 then with_
     else
@@ -171,7 +179,7 @@ class RoundedCornerCandidatesSpec extends AnyFlatSpec with Matchers:
       val g = out.createGraphics()
       g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
       g.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE)
-      val thickness = scale.toFloat
+      val thickness = borderThickness(with_, box).toFloat
       g.setStroke(new BasicStroke(thickness))
       g.setColor(Theme.light.border.toAwt)
       val inset = thickness / 2.0
