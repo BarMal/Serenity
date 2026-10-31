@@ -341,11 +341,17 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       window.host.onPublished(() => events.add("published"): Unit)
       window.host.onDrawStarted(() => events.add("started"): Unit)
       window.host.onRendered(() => events.add("rendered"): Unit)
+      def seen: List[String] = events.toArray.toList.map(_.toString)
+      // The layer may draw on its own before the picture is published (it repaints when installed), so only what
+      // follows the publish is judged.
+      def afterPublish: List[String] = seen.dropWhile(_ != "published")
       window.host.publish(record(scene))
-      eventually("the first draw")(window.host.renderCount > 0)
-      val seen = events.toArray.toList.map(_.toString)
-      seen.headOption shouldBe Some("published")
-      seen.dropWhile(_ != "started").take(2) shouldBe List("started", "rendered")
+      eventually("a draw that starts and ends after the publish") {
+        afterPublish.dropWhile(_ != "started").contains("rendered")
+      }
+      seen.count(_ == "published") shouldBe 1
+      afterPublish.take(1) shouldBe List("published")
+      afterPublish.dropWhile(_ != "started").take(1) shouldBe List("started")
     }
 
   it should "tell its listener after each frame it draws" in
