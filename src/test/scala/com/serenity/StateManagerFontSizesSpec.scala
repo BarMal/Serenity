@@ -3,7 +3,16 @@ package com.serenity
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Command, CommandCategory, CommandIntent, FontIntent, SettingsIntent}
+import com.serenity.command.{
+  Command,
+  CommandCategory,
+  CommandIntent,
+  CommandRegistry,
+  CommandRunner,
+  CommandSurfaceItem,
+  FontIntent,
+  SettingsIntent
+}
 import com.serenity.config.{ConfigManager, ConfigVersion}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -67,6 +76,26 @@ class StateManagerFontSizesSpec extends AnyFlatSpec with Matchers with StateMana
         stateManager.executeCommand(command).unsafeRunSync()
         stateManager.runtimeLifecycle.awaitEffects.unsafeRunSync()
       case other => fail(s"expected a runnable choice named $label, got $other")
+
+  "The Font Sizes group" should "mark no size as the one in use, whatever the active document is" in {
+    val stateManager      = editorOn(configFile(startingFile))
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val state             = stateManager.getCurrentState.unsafeRunSync()
+
+    val runner = CommandRunner.empty
+      .activate(registry, state.persisted.config, context = state.commandRunnerContext)
+      .openSettings
+
+    val labels = runner.settingsGroups
+      .find(_.id == "settings-typography")
+      .flatMap(_.children.collectFirst {
+        case group: CommandSurfaceItem.GroupItem if group.id == "settings-font-sizes" => group
+      })
+      .map(_.children.collect { case item: CommandSurfaceItem.InputItem => item.label })
+      .getOrElse(fail("missing the Font Sizes group"))
+    labels.take(3) shouldBe List("Prose Font Size", "Code Font Size", "UI Font Size")
+  }
 
   "Asking to set all sizes" should "open a prompt showing each size before and after, and change nothing yet" in {
     val stateManager = editorOn(configFile(startingFile))

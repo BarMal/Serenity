@@ -44,20 +44,19 @@ object CommandRunnerSettingsGroups:
     val showAllSettingsRegardlessOfMode = optionSelections.getOrElse("settings-show-all", 1) == 0
     val showProseSettings               = showAllSettingsRegardlessOfMode || appMode == AppMode.Prose
     val showCodeSettings                = showAllSettingsRegardlessOfMode || appMode == AppMode.Code
-    val onFrontend      = SettingsFrontendFilter(Shell.of(capabilities), showAllSettingsRegardlessOfMode)
-    val sizedInputItems = CommandRunnerSettingsFontSizes.marked(inputItems, context.activeTypographyRole)
-    val guiOnly         = FrontendSupport.GuiOnly
+    val onFrontend = SettingsFrontendFilter(Shell.of(capabilities), showAllSettingsRegardlessOfMode)
+    val guiOnly    = FrontendSupport.GuiOnly
     def input(ids: String*): List[CommandSurfaceItem.InputItem] =
-      ids.toList.flatMap(id => sizedInputItems.find(_.id == id))
+      ids.toList.flatMap(id => inputItems.find(_.id == id))
     def group(id: String, label: String, hint: String, children: List[CommandSurfaceItem]) =
       CommandSurfaceItem.GroupItem(id, label, children, CommandCategory.Settings, Some(hint))
 
     // Preset pages are built from the same definitions, over the edited preset's own values (see `PresetGroups`).
-    val editable       = CommandRunnerSettingsEditableGroups.build(optionSelections, sizedInputItems, fontFamilies)
-    val cursorGroup    = editable.cursor
-    val proseFontGroup = editable.proseFont
-    val codeFontGroup  = editable.codeFont
-    val uiFontGroup    = editable.uiFont
+    val editable              = CommandRunnerSettingsEditableGroups.build(optionSelections, inputItems, fontFamilies)
+    val cursorGroup           = editable.cursor
+    val proseFontGroup        = editable.proseFont
+    val codeFontGroup         = editable.codeFont
+    val uiFontGroup           = editable.uiFont
     val documentDefaultsGroup = editable.documentDefaults
     val spellCheckGroup       = editable.spellCheck
 
@@ -202,13 +201,13 @@ object CommandRunnerSettingsGroups:
       "settings-keymap",
       "Keys",
       "Inspect and edit bindings",
-      CommandRunnerSettingsKeymapItems.keymapGroups(sizedInputItems.filter(_.id.startsWith("keymap-")))
+      CommandRunnerSettingsKeymapItems.keymapGroups(inputItems.filter(_.id.startsWith("keymap-")))
     )
 
     val presetsGroup =
       CommandRunnerSettingsPresetGroups.build(
         optionSelections,
-        sizedInputItems,
+        inputItems,
         uiPresetPreviews,
         editingPresetName,
         capabilities,
@@ -247,7 +246,7 @@ object CommandRunnerSettingsGroups:
       onFrontend.rows(
         guiOnly,
         List(
-          Some(CommandRunnerSettingsFontSizes.group(sizedInputItems, context)),
+          Some(CommandRunnerSettingsFontSizes.group(inputItems, context)),
           Option.when(showProseSettings)(proseFontGroup),
           Option.when(showCodeSettings)(codeFontGroup),
           Some(uiFontGroup),
@@ -256,7 +255,7 @@ object CommandRunnerSettingsGroups:
       ) ++ Option.when(showProseSettings && richTextGroup.children.nonEmpty)(richTextGroup)
     )
     val headingsGroup =
-      CommandRunnerSettingsHeadingItems.group(optionSelections, sizedInputItems, fontFamilies, onFrontend)
+      CommandRunnerSettingsHeadingItems.group(optionSelections, inputItems, fontFamilies, onFrontend)
     val lookGroup = group(
       "settings-look",
       "Look",

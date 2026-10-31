@@ -1,9 +1,7 @@
 package com.serenity.command
 
-import com.serenity.state.models.TypographyRole
-
 /** The "Font Sizes" group at the top of Settings > Typography (#2405): the prose, code and UI sizes together, in every
-  * app mode, with the size the active document is drawn with marked.
+  * app mode.
   */
 private[command] object CommandRunnerSettingsFontSizes:
 
@@ -19,26 +17,9 @@ private[command] object CommandRunnerSettingsFontSizes:
 
   private val SetAllId    = "set-all-font-sizes"
   private val GroupRowIds = List("font-sizes-prose", "font-sizes-code", "font-sizes-ui", SetAllId)
-  private val InUse       = " (in use)"
 
-  /** The size row a document with `role` is drawn with: the prose size for anything that uses the text font. */
-  private def rowOf(role: TypographyRole): String =
-    role match
-      case TypographyRole.Code => "code-font-size"
-      case TypographyRole.Ui   => "ui-font-size"
-      case TypographyRole.Prose | TypographyRole.MarkdownSource | TypographyRole.MarkdownPreview |
-          TypographyRole.Mixed =>
-        "text-font-size"
-
-  /** `inputItems` with the row the active document uses marked "(in use)" in its label, wherever that row is listed:
-    * the label has room for it on the settings page and in a search result, where the hint column does not.
-    */
-  def marked(
-    inputItems: List[CommandSurfaceItem.InputItem],
-    role: Option[TypographyRole]
-  ): List[CommandSurfaceItem.InputItem] =
-    val used = role.map(rowOf).toList.flatMap(id => List(id) ++ AliasOf.get(id))
-    inputItems.map(item => if used.contains(item.id) then item.copy(label = s"${item.label}$InUse") else item)
+  /** The per-role size rows, which settings search leaves out because this group's rows stand for them. */
+  def isListedInGroup(id: String): Boolean = AliasOf.contains(id)
 
   /** `sizeItems` with the rows this group adds: the per-role size rows again under the ids the group lists them with
     * (they edit the same sizes), and Set All Sizes.

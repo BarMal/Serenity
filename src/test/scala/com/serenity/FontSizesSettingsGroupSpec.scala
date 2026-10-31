@@ -4,7 +4,6 @@ import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
-import com.serenity.state.models.TypographyRole
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -132,35 +131,39 @@ class FontSizesSettingsGroupSpec extends AnyFlatSpec with Matchers:
     undo.command.label shouldBe "Undo Last Size Change"
   }
 
-  "The size the active document is drawn with" should "be marked, by the document's typography role" in {
-    def marked(role: Option[TypographyRole]): List[String] =
-      val group = sizes(treeOn(FrontendCapabilities.gui, context = CommandRunnerContext(activeTypographyRole = role)))
-      List("font-sizes-prose", "font-sizes-code", "font-sizes-ui").filter(
-        input(group, _).label.endsWith("(in use)")
-      )
-
-    marked(Some(TypographyRole.Prose)) shouldBe List("font-sizes-prose")
-    marked(Some(TypographyRole.MarkdownSource)) shouldBe List("font-sizes-prose")
-    marked(Some(TypographyRole.MarkdownPreview)) shouldBe List("font-sizes-prose")
-    marked(Some(TypographyRole.Mixed)) shouldBe List("font-sizes-prose")
-    marked(Some(TypographyRole.Code)) shouldBe List("font-sizes-code")
-    marked(None) shouldBe Nil
-  }
-
-  it should "be marked on the per-role rows too, so the palette's settings entries carry it" in {
+  "Settings search" should "offer one row for each size, the Font Sizes group's, not also the per-role row" in {
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
-    val context           = CommandRunnerContext(activeTypographyRole = Some(TypographyRole.Prose))
+    val config            = AppConfig.default.withShowAllSettingsRegardlessOfMode(true)
 
-    val labels = CommandRunner.empty
-      .activate(registry, AppConfig.default, context = context)
-      .updateSearchTerm("Prose Font Size")
-      .visibleItems
-      .collect {
-        case item: CommandSurfaceItem.SettingSearchItem if item.label.startsWith("Prose Font Size") => item.label
-      }
+    val found = List("Prose Font Size", "Code Font Size", "UI Font Size").map { name =>
+      name -> CommandRunner.empty
+        .activate(registry, config)
+        .updateSearchTerm(name)
+        .visibleItems
+        .collect { case item: CommandSurfaceItem.SettingSearchItem if item.label == name => item.targetGroupId }
+    }
 
-    labels should contain("Prose Font Size (in use)")
+    found shouldBe List(
+      "Prose Font Size" -> List(GroupId),
+      "Code Font Size"  -> List(GroupId),
+      "UI Font Size"    -> List(GroupId)
+    )
+  }
+
+  it should "still find the per-role rows in their own groups when browsing, not searching" in {
+    val registry          = CommandRegistry.default
+    given CommandRegistry = registry
+    val runner = CommandRunner.empty
+      .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
+      .openSettings
+
+    val perRole = runner.settingsGroups
+      .flatMap(group => group :: descendants(group))
+      .collect { case item: CommandSurfaceItem.InputItem => item.id }
+      .filter(Set("text-font-size", "code-font-size", "ui-font-size"))
+
+    perRole.sorted shouldBe List("code-font-size", "text-font-size", "ui-font-size")
   }
 
   "An activated command runner" should "offer the undo once the config holds sizes to go back to, and not before" in {
