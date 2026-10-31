@@ -357,9 +357,23 @@ final private[serenity] class AuthoritativeUiScene(
         }
     }
     val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
-    publishedScene(key).getOrElse(
-      buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics))
-    )
+    publishedScene(key)
+      .map(countedSince(key, _))
+      .getOrElse(buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics)))
+
+  /** A scene published while a pane's lines were still being measured gains that pane's bar once they all are. */
+  private def countedSince(key: SceneKey, scene: UiSceneSnapshot): UiSceneSnapshot =
+    if scene.pendingScrolls.isEmpty then scene
+    else
+      val counted = scene.pendingScrolls.flatMap((paneId, pending) => pending.counted.map(paneId -> _))
+      if counted.isEmpty then scene
+      else
+        publish(
+          key,
+          scene
+            .withPaneScrolls(scene.paneScrolls ++ counted)
+            .withPendingScrolls(scene.pendingScrolls -- counted.keys)
+        )
 
   private def publishedScene(key: SceneKey): Option[UiSceneSnapshot] =
     prepared.synchronized(Option(prepared.get(key)))
@@ -413,9 +427,10 @@ private[serenity] object AuthoritativeUiScene:
 
   def apply(
     wrappedLines: WrappedLineCache = WrappedLineCache.bounded(),
-    decorateBuild: UiSceneBuilder.Build => UiSceneBuilder.Build = identity
+    decorateBuild: UiSceneBuilder.Build => UiSceneBuilder.Build = identity,
+    scrollCounting: ScrollCounting = ScrollCounting.Inline
   ): AuthoritativeUiScene =
-    new AuthoritativeUiScene(wrappedLines, decorateBuild(UiSceneBuilder(wrappedLines)))
+    new AuthoritativeUiScene(wrappedLines, decorateBuild(UiSceneBuilder(wrappedLines, scrollCounting)))
 
 final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,

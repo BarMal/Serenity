@@ -24,3 +24,17 @@ object PaneScroll:
       ScrollExtent(firstRow = rowsAbove + topVisualLine.max(0), visibleRows = visibleRows, totalRows = totalRows),
       rows
     )
+
+  /** The scroll of a document the screen alone does not cover, once every one of its lines is measured: measuring the
+    * rest is left to whoever holds the [[PendingScroll]]. A document over [[ExactLineLimit]] has its estimate at once.
+    */
+  def whenCounted(rows: VisualRowCounts, topLine: Int, topVisualLine: Int, visibleRows: Int): Option[PaneScroll] =
+    if rows.lineCount > ExactLineLimit then Some(of(rows, topLine, topVisualLine, visibleRows))
+    else
+      val _ = rows.rowsAboveAndTotal(topLine, (topLine + visibleRows).max(0), exact = false)
+      Option.when(rows.allMeasured)(of(rows, topLine, topVisualLine, visibleRows))
+
+/** A pane's scroll that waits for its lines to be measured: it becomes a [[PaneScroll]] once they are. */
+final case class PendingScroll(rows: VisualRowCounts, topLine: Int, topVisualLine: Int, visibleRows: Int):
+
+  def counted: Option[PaneScroll] = PaneScroll.whenCounted(rows, topLine, topVisualLine, visibleRows)
