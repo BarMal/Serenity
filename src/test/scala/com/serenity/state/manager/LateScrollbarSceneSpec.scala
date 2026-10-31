@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import java.util.concurrent.Executor
 
+import scala.annotation.tailrec
 import scala.collection.mutable
 
 import com.serenity.config.AppConfig
@@ -27,7 +28,11 @@ class LateScrollbarSceneSpec extends AnyFlatSpec with Matchers:
     private val queued                         = mutable.Queue.empty[Runnable]
     def pending: Int                           = queued.size
     override def execute(task: Runnable): Unit = queued.enqueue(task)
-    def runAll(): Unit                         = while queued.nonEmpty do queued.dequeue().run()
+
+    @tailrec def runAll(): Unit =
+      if queued.nonEmpty then
+        queued.dequeue().run()
+        runAll()
 
   final private class Counted:
     val executor = new ByHand

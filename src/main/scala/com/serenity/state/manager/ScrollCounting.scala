@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ConcurrentHashMap, Executor}
 
+import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.PaneId
 import com.serenity.ui.layout.VisualRowCounts
 
@@ -31,6 +32,12 @@ object ScrollCounting:
     * scene for the same pane replaced stops before its next line and tells nobody.
     */
   def deferred(executor: Executor, onCounted: PaneId => Unit): ScrollCounting = new Deferred(executor, onCounted)
+
+  /** A graphical frontend counts late and tells `notice`; a terminal draws its bar from the same scene but has no
+    * repaint of a bar alone, so it keeps counting inside the frame.
+    */
+  def forFrontend(capabilities: FrontendCapabilities, executor: Executor, notice: ScrollCountNotice): ScrollCounting =
+    if capabilities.isCellGrid then Inline else deferred(executor, notice.deliver)
 
   final private class Deferred(executor: Executor, onCounted: PaneId => Unit) extends ScrollCounting:
 
