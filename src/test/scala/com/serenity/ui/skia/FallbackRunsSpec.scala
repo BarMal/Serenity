@@ -132,8 +132,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
         perFont.flatMap(_.get())
       finally pool.shutdown()
 
-    if failures.nonEmpty then println(summary(failures))
-    withClue(s"${failures.size} differences, first: ${failures.take(15).mkString("; ")}\n") {
+    withClue(s"${failures.size} differences:\n${summary(failures)}\nfirst: ${failures.take(15).mkString("; ")}\n") {
       failures shouldBe empty
     }
   }
