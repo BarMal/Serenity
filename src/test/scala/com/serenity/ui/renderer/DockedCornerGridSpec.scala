@@ -111,23 +111,16 @@ class DockedCornerGridSpec extends AnyFlatSpec with Matchers:
 
   final private case class Layouts(left: Box, right: Box, status: Box, band: Box)
 
-  private def layouts(state: AppState, cols: Int, rowCount: Int, metrics: CellMetrics, image: BufferedImage): Layouts =
+  private def layouts(state: AppState, cols: Int, rowCount: Int, metrics: CellMetrics): Layouts =
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(cols, rowCount))
     def px(rect: LayoutRect) =
       Box(rect.x * metrics.charWidth, rect.y * metrics.lineHeight, rect.width * metrics.charWidth, rect.height * metrics.lineHeight)
     val left   = px(layout.pinnedPanelRects.getOrElse(PanelPosition.Left, fail("no left panel")))
     val right  = px(layout.pinnedPanelRects.getOrElse(PanelPosition.Right, fail("no right panel")))
     val status = px(layout.gutterRect.getOrElse(fail("no status bar")))
-    // The header band is the run of one colour along the first pixel row of the workspace, right of the left panel.
-    val startX = left.x + left.width + metrics.charWidth + 3
-    val colour = image.getRGB(startX, 1)
-    val bandLeft =
-      (startX to 0 by -1).takeWhile(x => image.getRGB(x, 1) == colour).lastOption.getOrElse(startX)
-    val bandRight =
-      (startX until image.getWidth).takeWhile(x => image.getRGB(x, 1) == colour).lastOption.getOrElse(startX)
-    val bandBottom =
-      (1 until image.getHeight).takeWhile(y => image.getRGB(startX, y) == colour).lastOption.getOrElse(1)
-    val band = Box(bandLeft, 0, bandRight - bandLeft + 1, bandBottom + 1)
+    // The pane header band is the first row of the workspace, between the panels and their gap (one cell each side).
+    val bandX = left.x + left.width + metrics.charWidth
+    val band  = Box(bandX, 0, right.x - metrics.charWidth - bandX, metrics.lineHeight)
     Layouts(left, right, status, band)
 
   private def roundedPath(box: Box, r: Double, cut: Cut): Path2D.Double =
@@ -272,11 +265,11 @@ class DockedCornerGridSpec extends AnyFlatSpec with Matchers:
     val metrics  = CellMetrics.fromFont(codeFont)
 
     val (flushState, flush) = render(columns, rows, metrics, codeFont)
-    val flushLayouts        = layouts(flushState, columns, rows, metrics, flush)
+    val flushLayouts        = layouts(flushState, columns, rows, metrics)
     val reducedColumns      = columns - 2 * gapCells
     val reducedRows         = rows - 3 * gapCells
     val (reducedState, reduced) = render(reducedColumns, reducedRows, metrics, codeFont)
-    val reducedLayouts          = layouts(reducedState, reducedColumns, reducedRows, metrics, reduced)
+    val reducedLayouts          = layouts(reducedState, reducedColumns, reducedRows, metrics)
 
     val tiles = List(
       "B. header square" -> variantB(flush, flushLayouts, headerRounded = false),
