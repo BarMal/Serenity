@@ -2,7 +2,14 @@ package com.serenity.ui.renderer
 
 import com.serenity.config.AppConfig
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, ResolvedSurfaceComposition}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  ChromeElement,
+  CornerRounding,
+  ResolvedSurfaceComposition,
+  RoundedCorners,
+  ViewportSize
+}
 import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
@@ -12,17 +19,23 @@ object PinnedPanelRenderer:
     panel: TextPanelView,
     theme: Theme,
     config: AppConfig,
-    cellMetrics: CellMetrics
+    cellMetrics: CellMetrics,
+    window: ViewportSize = CornerRounding.UnboundedWindow
   ): Unit =
     val rect            = panel.rect
     val panelBackground = theme.panel.background
+    val corners =
+      CornerRounding.corners(ChromeElement.DockedPanel, rect, window, config.dockedCornerStyle, config.paneHeaderCorners)
 
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(panelBackground)
-    for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
+    val fill = () => for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
+    surface.panelOutlines.fold(fill()) { outlines =>
+      outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, config.scaledUiCornerRadiusPx)(fill())
+    }
 
     val textInsetPx = SurfaceTextInset.px(config)
-    drawBorder(surface, panel, theme, config)
+    drawBorder(surface, panel, theme, config, corners)
     drawTitle(surface, panel, theme, textInsetPx)
     drawComposition(surface, panel.composition, theme, panelBackground, cellMetrics, textInsetPx)
 
@@ -33,16 +46,19 @@ object PinnedPanelRenderer:
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
-    config: AppConfig
+    config: AppConfig,
+    corners: RoundedCorners
   ): Unit =
     val rect = panel.rect
     if rect.width >= 2 && rect.height >= 2 then
       surface.panelOutlines.foreach(
-        _.strokeRect(
+        _.strokeRoundRect(
           rect.x,
           rect.y,
           rect.width,
           rect.height,
+          corners,
+          config.scaledUiCornerRadiusPx,
           theme.border,
           config.scaledUiOutlineThicknessPx
         )

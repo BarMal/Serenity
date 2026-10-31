@@ -22,6 +22,9 @@ enum ChromeElement:
 /** Which corners of each piece of chrome round, as a pure function of where it sits in the window. */
 object CornerRounding:
 
+  /** For a caller that does not know the window's size: no right or bottom edge is ever reached. */
+  val UnboundedWindow: ViewportSize = ViewportSize(Int.MaxValue, Int.MaxValue)
+
   def corners(
     element: ChromeElement,
     rect: LayoutRect,

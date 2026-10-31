@@ -20,11 +20,12 @@ object TextOverlayRenderer:
     cursorVisible: Boolean,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
-    advances: MeasuredTextAdvances
+    advances: MeasuredTextAdvances,
+    window: ViewportSize = CornerRounding.UnboundedWindow
   ): Unit =
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(overlay.verticalOffsetRows, cellMetrics)
     surface.pixels.withPixelTranslation(0.0, offsetPx) {
-      renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics, advances)
+      renderAtLogicalPixelOrigin(surface, overlay, theme, config, cursorVisible, font, cellMetrics, advances, window)
     }
 
   private def renderAtLogicalPixelOrigin(
@@ -35,12 +36,19 @@ object TextOverlayRenderer:
     cursorVisible: Boolean,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
-    advances: MeasuredTextAdvances
+    advances: MeasuredTextAdvances,
+    window: ViewportSize
   ): Unit =
     val rect = overlay.rect
 
     val isStatusLine = overlay.surfaceId.contains(UiSurface.StatusLineSurfaceId)
-    val isQuietLine  = isStatusLine || overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
+    val isTabStrip   = overlay.surfaceId.contains(UiSurface.TabBarSurfaceId)
+    val isQuietLine  = isStatusLine || isTabStrip
+    val element =
+      if isStatusLine then ChromeElement.StatusBar
+      else if isTabStrip then ChromeElement.TabStrip
+      else ChromeElement.FloatingSurface
+    val corners = CornerRounding.corners(element, rect, window, config.dockedCornerStyle, config.paneHeaderCorners)
 
     // Scoped to the one surface the status line's colour overrides name -- every other floating panel keeps painting
     // with the theme's panel colours and alpha exactly as before, unmodified (#1295).
@@ -62,7 +70,7 @@ object TextOverlayRenderer:
 
     surface.effects.foreach(_.setAlpha(overlay.alphaMultiplier))
 
-    withOptionalRectClip(surface, rect.x, rect.y, rect.width, rect.height) {
+    withOptionalRoundRectClip(surface, rect, corners, config.scaledUiCornerRadiusPx) {
       for y <- rect.y until rect.bottom do
         surface.setForegroundColor(fg)
         surface.setBackgroundColor(bg)
@@ -77,7 +85,7 @@ object TextOverlayRenderer:
       )
     }
     // The status row and the tab strip are both quiet single lines, not floating panels: no border.
-    if !isQuietLine then drawBorder(surface, overlay, theme, config)
+    if !isQuietLine then drawBorder(surface, overlay, theme, config, corners)
 
     surface.effects.foreach(_.setAlpha(1.0f))
     surface.setForegroundColor(theme.foreground)
@@ -87,7 +95,8 @@ object TextOverlayRenderer:
     surface: RenderSurface,
     overlay: TextOverlayView,
     theme: Theme,
-    config: AppConfig
+    config: AppConfig,
+    corners: RoundedCorners
   ): Unit =
     val rect = overlay.rect
     // A surface with no reserved border cell has content running to its edge, which a frame would draw over. The tab
@@ -95,23 +104,31 @@ object TextOverlayRenderer:
     // the default border.
     if overlay.borderCells > 0 && rect.width >= 2 && rect.height >= 2 then
       surface.panelOutlines.foreach(
-        _.strokeRect(
+        _.strokeRoundRect(
           rect.x,
           rect.y,
           rect.width,
           rect.height,
+          corners,
+          config.scaledUiCornerRadiusPx,
           theme.border,
           config.scaledUiOutlineThicknessPx
         )
       )
 
-  /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. */
-  private def withOptionalRectClip(surface: RenderSurface, x: Int, y: Int, width: Int, height: Int)(
-    render: => Unit
-  ): Unit =
+  /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. A rounded clip shapes
+    * the fill like the outline, so no square corner shows outside an arc.
+    */
+  private def withOptionalRoundRectClip(
+    surface: RenderSurface,
+    rect: LayoutRect,
+    corners: RoundedCorners,
+    radiusPx: Int
+  )(render: => Unit): Unit =
     surface.panelOutlines match
-      case Some(outlines) => outlines.withRectClip(x, y, width, height)(render)
-      case None           => render
+      case Some(outlines) =>
+        outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, radiusPx)(render)
+      case None => render
 
   private def drawComposition(
     surface: RenderSurface,

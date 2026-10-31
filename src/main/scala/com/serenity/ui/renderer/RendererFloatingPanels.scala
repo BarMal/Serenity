@@ -16,6 +16,10 @@ import com.serenity.ui.layout.*
   */
 object RendererFloatingPanels:
 
+  /** The window's size in cells, which decides which corners of a flush docked panel touch its edge. */
+  private def windowOf(state: AppState, context: RenderContext): ViewportSize =
+    state.runtime.viewportSize.getOrElse(ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight))
+
   def renderFloatingPanels(
     state: AppState,
     context: RenderContext,
@@ -44,7 +48,8 @@ object RendererFloatingPanels:
           layerContext.cursorVisible,
           layerContext.uiFont,
           layerContext.cellMetrics,
-          layerContext.caches.measuredAdvances
+          layerContext.caches.measuredAdvances,
+          windowOf(state, layerContext)
         )
       overlay.surfaceId.flatMap(panels.sites.get) match
         case Some(site) =>
@@ -109,7 +114,8 @@ object RendererFloatingPanels:
         context.cursorVisible,
         context.uiFont,
         context.cellMetrics,
-        context.caches.measuredAdvances
+        context.caches.measuredAdvances,
+        windowOf(state, context)
       )
     }
 
@@ -147,7 +153,8 @@ object RendererFloatingPanels:
                   .copy(contentRect = Some(node.contentRect)),
                 state.persisted.theme,
                 state.persisted.config,
-                layerContext.cellMetrics
+                layerContext.cellMetrics,
+                windowOf(state, layerContext)
               )
 
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
@@ -188,7 +195,8 @@ object RendererFloatingPanels:
       shell,
       state.persisted.theme,
       state.persisted.config,
-      context.cellMetrics
+      context.cellMetrics,
+      windowOf(state, context)
     )
 
     state.persisted.buffers.get(bufferId).foreach { buffer =>
