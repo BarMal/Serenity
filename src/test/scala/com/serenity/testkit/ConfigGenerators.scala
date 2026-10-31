@@ -248,10 +248,13 @@ object ConfigGenerators:
       density    <- oneOfEnum(InterfaceDensity.values)
       gap        <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
       thickness  <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
+      radius     <- Gen.choose(AppConfig.MinUiCornerRadiusPx, AppConfig.MaxUiCornerRadiusPx)
+      docked     <- oneOfEnum(DockedCornerStyle.values)
+      header     <- oneOfEnum(PaneHeaderCorners.values)
       menuBar    <- oneOfEnum(MenuBarMode.values)
       fileDialog <- oneOfEnum(FileDialogMode.values)
       layout     <- oneOfEnum(UiLayout.values)
-    yield InterfaceConfig(density, gap, thickness, menuBar, fileDialog, layout)
+    yield InterfaceConfig(density, gap, thickness, radius, docked, header, menuBar, fileDialog, layout)
 
   val genThemeFollowConfig: Gen[ThemeFollowConfig] =
     val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")

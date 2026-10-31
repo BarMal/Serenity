@@ -110,7 +110,7 @@ abstract class RoundedChromeRenderBehaviour extends AnyFlatSpec with Matchers:
     )
     surface.flush()
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(columns, rowCount))
-    val pane   = LayoutEngine.calculatePaneLayouts(state, layout)(paneId)
+    val pane   = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).paneLayouts(paneId)
     Scene(
       frame,
       layout.pinnedPanelRects.getOrElse(PanelPosition.Left, fail("no left panel")),
