@@ -171,6 +171,29 @@ object TabStripMode:
   def fromConfigKey(value: String): Option[TabStripMode] =
     TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
 
+/** How docked panels, the status bar and the tab strip meet the window: `Floating` insets them from the window edges and
+  * from each other by the UI element gap, so every corner rounds; `Flush` keeps today's layout and rounds only the
+  * corners that face the workspace (#2389).
+  */
+enum DockedCornerStyle(val configKey: String):
+  case Floating extends DockedCornerStyle("floating")
+  case Flush    extends DockedCornerStyle("flush")
+
+object DockedCornerStyle:
+
+  def fromConfigKey(value: String): Option[DockedCornerStyle] =
+    DockedCornerStyle.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Whether the top corners of an editor pane's header band are rounded or square (#2389). */
+enum PaneHeaderCorners(val configKey: String):
+  case Rounded extends PaneHeaderCorners("rounded")
+  case Square  extends PaneHeaderCorners("square")
+
+object PaneHeaderCorners:
+
+  def fromConfigKey(value: String): Option[PaneHeaderCorners] =
+    PaneHeaderCorners.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
 enum FileDialogMode(val configKey: String):
   case Auto   extends FileDialogMode("auto")
   case Native extends FileDialogMode("native")

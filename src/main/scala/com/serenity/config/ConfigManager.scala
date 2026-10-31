@@ -491,6 +491,14 @@ object ConfigManager:
           Option.when(field.codec.parse(value).isEmpty)(
             s"not a whole number of pixels, so the window $word falls back to $default and the other size is kept"
           )
+        case Some(field) if field.key == "ui.corner_radius" =>
+          value.trim.toIntOption match
+            case Some(radius) if radius > AppConfig.MaxUiCornerRadiusPx =>
+              Some(s"above the maximum ${AppConfig.MaxUiCornerRadiusPx}, using ${AppConfig.MaxUiCornerRadiusPx}")
+            case Some(radius) if radius < AppConfig.MinUiCornerRadiusPx =>
+              Some(s"below the minimum ${AppConfig.MinUiCornerRadiusPx}, using ${AppConfig.MinUiCornerRadiusPx}")
+            case Some(_) => None
+            case None    => Some(SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered))
         case Some(field) =>
           Option.when(field.codec.parse(value).isEmpty)(
             SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered)
