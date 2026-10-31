@@ -74,6 +74,14 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "check the fallback runs against TextLine on the fonts it draws with, and find them identical" in {
+    withDisplay()
+    val report    = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val agreement = report.environment.fallbackAgreement.getOrElse(fail("no fallback agreement"))
+    agreement.checked should be > 0
+    agreement.identical shouldBe agreement.checked
+  }
+
   it should "round every scenario's time up to the display's refresh intervals" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)

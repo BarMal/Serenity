@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.skia.FallbackAgreement
 import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
@@ -116,6 +117,35 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("java2d").downField("layoutMs").as[Double] shouldBe Right(15.5)
     json.downField("skia").downField("drawMs").as[Double] shouldBe Right(55.0)
     json.downField("skia").downField("presentMs").as[Double] shouldBe Right(6.75)
+  }
+
+  it should "say how many strings the fallback runs shape exactly as TextLine does on this machine" in {
+    val agreement = FallbackAgreement(
+      checked = 1008,
+      identical = 1006,
+      differing = Vector("text (Inter) U+2502", "code (Mono) U+2192")
+    )
+    val detailed = BenchmarkReport(environment.copy(fallbackAgreement = Some(agreement)), results, Verdict.SkiaWins)
+
+    detailed.markdown should include(
+      "Fallback runs against TextLine on this machine: 1006 of 1008 strings identical. Differing: text (Inter) U+2502, code (Mono) U+2192."
+    )
+    val json =
+      parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("fallbackAgreement")
+    json.downField("checked").as[Int] shouldBe Right(1008)
+    json.downField("identical").as[Int] shouldBe Right(1006)
+    json.downField("differing").as[List[String]] shouldBe Right(List("text (Inter) U+2502", "code (Mono) U+2192"))
+  }
+
+  it should "leave out the differing list when every string is identical, and the line when nothing was checked" in {
+    val clean = BenchmarkReport(
+      environment.copy(fallbackAgreement = Some(FallbackAgreement(1008, 1008, Vector.empty))),
+      results,
+      Verdict.SkiaWins
+    )
+    clean.markdown should include("Fallback runs against TextLine on this machine: 1008 of 1008 strings identical.")
+    clean.markdown should not include "Differing"
+    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Fallback runs against TextLine"
   }
 
   it should "leave the cold-frame split out when no cold frame was measured" in {

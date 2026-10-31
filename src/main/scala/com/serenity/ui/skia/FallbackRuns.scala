@@ -22,6 +22,9 @@ private[skia] object FallbackRuns:
   def isAllowlisted(codePoint: Int): Boolean =
     Ranges.exists(_.contains(codePoint)) && !BidiAndJoinerControls(codePoint) && Character.isDefined(codePoint)
 
+  /** Every allowlisted code point, in order. */
+  def codePoints: Vector[Int] = Ranges.flatten.filter(isAllowlisted)
+
   /** Whether every character is either plain (below the combining marks) or allowlisted, and at least one is the
     * latter.
     */
