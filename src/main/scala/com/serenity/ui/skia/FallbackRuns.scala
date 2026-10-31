@@ -15,12 +15,14 @@ private[skia] object FallbackRuns:
 
   private val Ranges: Vector[Range] = Vector(0x2500 to 0x257f, 0x2190 to 0x21ff, 0x2000 to 0x206f)
 
-  /** Marks and embeddings that reorder or join text, which runs of one direction and one script do not model. */
-  private val BidiAndJoinerControls: Set[Int] =
-    Set(0x200c, 0x200d, 0x200e, 0x200f) ++ (0x202a to 0x202e) ++ (0x2066 to 0x2069)
+  /** Controls that reorder, join or break text, which runs of one direction and one script do not model: bidi marks and
+    * embeddings, joiners, and the line and paragraph separators (the last two differed from `TextLine` on macOS).
+    */
+  private val Controls: Set[Int] =
+    Set(0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029) ++ (0x202a to 0x202e) ++ (0x2066 to 0x2069)
 
   def isAllowlisted(codePoint: Int): Boolean =
-    Ranges.exists(_.contains(codePoint)) && !BidiAndJoinerControls(codePoint) && Character.isDefined(codePoint)
+    Ranges.exists(_.contains(codePoint)) && !Controls(codePoint) && Character.isDefined(codePoint)
 
   /** Every allowlisted code point, in order. */
   def codePoints: Vector[Int] = Ranges.flatten.filter(isAllowlisted)

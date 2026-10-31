@@ -17,8 +17,9 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   /** The ranges the owner approved, before the controls are taken out. */
   private val ApprovedRanges = Vector(0x2500 to 0x257f, 0x2190 to 0x21ff, 0x2000 to 0x206f)
 
-  /** Bidi and joiner controls: they reorder or join, which explicit runs do not model. */
-  private val Controls: Set[Int] = Set(0x200c, 0x200d, 0x200e, 0x200f) ++ (0x202a to 0x202e) ++ (0x2066 to 0x2069)
+  /** Bidi and joiner controls, and the line and paragraph separators, which differed from `TextLine` on macOS. */
+  private val Controls: Set[Int] =
+    Set(0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029) ++ (0x202a to 0x202e) ++ (0x2066 to 0x2069)
 
   private val Contexts: Vector[(String, String => String)] = Vector(
     "alone"             -> (c => c),
@@ -28,6 +29,15 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   )
 
   private val Witnesses = Vector(0x2502, 0x2192, 0x2014)
+
+  /** A base font without a box-drawing glyph on every machine: the bundled Monaspace Neon, whose file is the same
+    * everywhere, unlike the system fonts, one of which may well have the glyph.
+    */
+  private def lacking: Font =
+    SkiaTypefaces.bundledTypefaces
+      .find(t => t.getFamilyName == "Monaspace Neon" && !t.isBold)
+      .map(new Font(_, 12f))
+      .getOrElse(fail("the bundled Monaspace Neon is missing"))
 
   private def text(cp: Int, wrap: String => String): String = wrap(new String(Character.toChars(cp)))
 
@@ -81,7 +91,24 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
         differences(routed, reference, string.length).map(what => f"$fontName / U+$cp%04X / $context: $what")
     yield found
 
-  "The allowlist" should "be the approved ranges without the bidi and joiner controls and without undefined code points" in {
+  /** The differences grouped by font and context, with the code points, so a CI log shows the pattern at a glance. */
+  private def summary(failures: Vector[String]): String =
+    val grouped = failures
+      .flatMap { line =>
+        val parts = line.split(" / ", 3)
+        if parts.length == 3 then Some((parts(0), parts(1), parts(2).takeWhile(_ != ':'))) else None
+      }
+      .groupBy((font, _, context) => (font, context))
+    grouped.toVector
+      .sortBy(_._1)
+      .map {
+        case ((font, context), items) =>
+          val codePoints = items.map(_._2).distinct.sorted
+          s"FALLBACK-RUNS DIFFERENCES [$font / $context]: ${codePoints.size} code points: ${codePoints.take(40).mkString(" ")}"
+      }
+      .mkString("\n")
+
+  "The allowlist" should "be the approved ranges without the bidi and joiner controls, the separators and undefined code points" in {
     val approved = ApprovedRanges.flatten.filterNot(Controls).filter(Character.isDefined)
     val listed   = ApprovedRanges.flatten.filter(FallbackRuns.isAllowlisted)
 
@@ -105,24 +132,39 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
         perFont.flatMap(_.get())
       finally pool.shutdown()
 
+    if failures.nonEmpty then println(summary(failures))
     withClue(s"${failures.size} differences, first: ${failures.take(15).mkString("; ")}\n") {
       failures shouldBe empty
     }
   }
 
-  it should "not use TextLine for the cold frame's box bar, or any witness, on any base font" in {
+  it should "not use TextLine for the cold frame's box bar, or any witness, wherever a font has the characters" in {
     val used = for
-      (fontName, font) <- baseFonts
+      (fontName, font) <- baseFonts :+ ("bundled Monaspace Neon" -> lacking)
       cp               <- Witnesses
       (context, wrap)  <- Contexts
+      string = text(cp, wrap)
+      if FallbackRuns.runsFor(string, font, FallbackFonts.system).isDefined
       cache = new SkiaShapedTextCache()
-      _     = cache.stretchOf(text(cp, wrap), font)
+      _     = cache.stretchOf(string, font)
       if cache.lineShapings != 0L
     yield f"$fontName / U+$cp%04X / $context"
 
     withClue(s"TextLine still used for: ${used.take(10).mkString("; ")}\n") {
       used shouldBe empty
     }
+  }
+
+  it should "not use TextLine for the box bar on a base font that lacks it, when any installed font has it" in {
+    val font = lacking
+    font.getTypeface.getUTF32Glyph(0x2502) shouldBe 0
+    val installed = FallbackFonts.system.typefaceFor(font.getTypeface, 0x2502).exists(_.getUTF32Glyph(0x2502) != 0)
+    assume(installed, "no installed font has U+2502 on this machine")
+
+    val cache = new SkiaShapedTextCache()
+    cache.stretchOf("  \u2502  ", font)
+
+    cache.lineShapings shouldBe 0L
   }
 
   it should "keep text outside the allowlist on TextLine" in {
@@ -134,7 +176,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       "CJK"                -> "中文 x",
       "emoji with variant" -> "❤️ x"
     )
-    val (_, font) = baseFonts.head
+    val font = lacking
     outside.foreach { (label, string) =>
       withClue(label) {
         val cache = new SkiaShapedTextCache()
@@ -145,9 +187,9 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to TextLine, with the same result, when the character-match call is unavailable" in {
-    val (_, font) = baseFonts.head
-    val string    = "  │  "
-    val cache     = new SkiaShapedTextCache(fallbacks = FallbackFonts.unavailable)
+    val font   = lacking
+    val string = "  │  "
+    val cache  = new SkiaShapedTextCache(fallbacks = FallbackFonts.unavailable)
 
     val routed = cache.stretchOf(string, font)
 
@@ -156,9 +198,9 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back to TextLine when no installed font has the character" in {
-    val (_, font) = baseFonts.head
-    val string    = "  │  "
-    val cache     = new SkiaShapedTextCache(fallbacks = FallbackFonts.matching((_, _) => None))
+    val font   = lacking
+    val string = "  │  "
+    val cache  = new SkiaShapedTextCache(fallbacks = FallbackFonts.matching((_, _) => None))
 
     cache.stretchOf(string, font)
 
@@ -166,8 +208,8 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "ask the font manager once for a character and base font, however often the character is shaped" in {
-    val (_, font) = baseFonts.head
-    val asked     = new AtomicInteger(0)
+    val font  = lacking
+    val asked = new AtomicInteger(0)
     val cache = new SkiaShapedTextCache(fallbacks = FallbackFonts.matching { (base, cp) =>
       val _ = asked.incrementAndGet()
       FallbackFonts.system.typefaceFor(base, cp)
@@ -180,7 +222,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give a typeface for a character the base font lacks, from the system's font manager" in {
-    val (_, font)               = baseFonts.head
+    val font                    = lacking
     val found: Option[Typeface] = FallbackFonts.system.typefaceFor(font.getTypeface, 0x2502)
 
     found.map(_.getUTF32Glyph(0x2502)).exists(_ != 0) shouldBe true
