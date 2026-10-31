@@ -7,6 +7,8 @@ import java.nio.file.{Files, Path, Paths}
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
+import scala.jdk.CollectionConverters.*
+
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -244,6 +246,6 @@ class RoundedCornerCandidatesSpec extends AnyFlatSpec with Matchers:
         directory.resolve(s"sheet-${scene.name}-scale$scale.png").toFile
       ) shouldBe true
       s"${scene.name} scale $scale: surface ${box.width}x${box.height}px at (${box.x},${box.y})"
-    Files.write(directory.resolve("boxes.txt"), java.util.List.of(drawn*))
+    Files.write(directory.resolve("boxes.txt"), drawn.asJava)
     drawn should have size (scenes.size * 2)
   }
