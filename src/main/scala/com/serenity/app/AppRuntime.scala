@@ -157,10 +157,17 @@ object AppRuntime:
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
-        themeManager    = com.serenity.ui.theme.config.AppThemeManager.create
-        dictionaryCache = DictionaryCache()
+        themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
+        dictionaryCache   = DictionaryCache()
+        scrollCountNotice = new ScrollCountNotice
         stateManager <- makeStateManager.getOrElse(logger =>
-          StateManager.apply(logger, initialConfig = appConfig, dictionaryCache = dictionaryCache)
+          StateManager.apply(
+            logger,
+            initialConfig = appConfig,
+            dictionaryCache = dictionaryCache,
+            scrollCounting =
+              ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
+          )
         )(logger)
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         _ <- AppStartup.initializeState(
@@ -194,6 +201,11 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
+        _ <- IO(
+          scrollCountNotice.listen(paneId =>
+            resizeCallbackDispatcher.unsafeRunAndForget(emitDamage(Damage.Scrollbar(paneId)))
+          )
+        )
         typingQuietTimer    <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
         frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
         latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
