@@ -1,0 +1,3 @@
+panel 117x289px at (0,0)
+panel 180x289px at (630,0)
+bar 810x17px at (0,289)
