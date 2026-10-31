@@ -82,12 +82,17 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
     at(image, midX(), midY()) shouldBe rgb(panel)
   }
 
-  it should "stroke the arc: a point on the diagonal a little inside the corner is the border colour" in {
+  it should "stroke the arc: a point on the diagonal a little inside the corner is the border colour, give or take edge blending" in {
     val image = drawPanel(RoundedCorners.All, radius)
     // The arc's centre is (radius, radius) in from the corner; the arc passes radius * (1 - cos 45) in along each axis
     // from the corner, about 0.29 of the radius, and the stroke is centred on a path half its width inside that.
     val along = (radius * 0.29).toInt + strokeSize.toInt / 2
-    at(image, left + along, top + along) shouldBe rgb(border)
+    // At scale 1 the two-pixel stroke is narrower than a diagonal pixel is wide, so this pixel is nearly, not exactly,
+    // the border; the page and the panel are far further away than the tolerance.
+    val found = at(image, left + along, top + along)
+    List(16, 8, 0).map(shift => ((found >> shift) & 0xff) - ((rgb(border) >> shift) & 0xff)).foreach { channel =>
+      math.abs(channel) should be <= 12
+    }
   }
 
   "A panel with no radius" should "keep square corners: the corner pixel is the border" in {

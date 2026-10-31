@@ -73,7 +73,7 @@ final private[renderer] class Java2DRoundedOutlines(
     val pw     = width * metrics.charWidth
     val ph     = height * metrics.lineHeight
     val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
-    if radius == 0 || !corners.any then withRectClip(x, y, width, height)(render)
+    if radius == 0 || !corners.any then render
     else
       val savedClip = g.getClip
       userClipDepth.incrementAndGet()
