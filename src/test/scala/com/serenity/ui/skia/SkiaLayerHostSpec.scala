@@ -335,6 +335,19 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       window.host.layerCursorType shouldBe java.awt.Cursor.HAND_CURSOR
     }
 
+  it should "tell its listeners when a frame is published, then when a draw starts, then when it ends" in
+    withWindow { window =>
+      val events = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+      window.host.onPublished(() => events.add("published"): Unit)
+      window.host.onDrawStarted(() => events.add("started"): Unit)
+      window.host.onRendered(() => events.add("rendered"): Unit)
+      window.host.publish(record(scene))
+      eventually("the first draw")(window.host.renderCount > 0)
+      val seen = events.toArray.toList.map(_.toString)
+      seen.headOption shouldBe Some("published")
+      seen.dropWhile(_ != "started").take(2) shouldBe List("started", "rendered")
+    }
+
   it should "tell its listener after each frame it draws" in
     withWindow { window =>
       val drawn = new java.util.concurrent.atomic.AtomicInteger(0)
