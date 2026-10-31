@@ -4,8 +4,8 @@ import java.awt.Color
 import java.nio.file.Files
 
 import com.serenity.config.*
-import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

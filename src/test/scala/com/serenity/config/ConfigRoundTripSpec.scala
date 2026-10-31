@@ -11,9 +11,8 @@ import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.fonts.FontSizes
+import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import com.serenity.ui.openings.{
   EpigraphRule,
   HandDropCapRule,

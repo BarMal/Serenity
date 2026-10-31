@@ -23,10 +23,11 @@ object FontConfigEdit:
           )
       case FontIntent.SetFontSize(size) =>
         _.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
-      case FontIntent.SetCodeFontSize(size) => _.copy(fontSize = clampFontSize(size))
-      case FontIntent.SetTextFontSize(size) => _.copy(textFontSize = clampFontSize(size))
-      case FontIntent.SetUiFontSize(size)   => _.copy(uiFontSize = clampFontSize(size))
-      case FontIntent.SetAllFontSizes(size) => _.withSizes(FontSizes.all(size))
+      case FontIntent.SetCodeFontSize(size)     => _.copy(fontSize = clampFontSize(size))
+      case FontIntent.SetTextFontSize(size)     => _.copy(textFontSize = clampFontSize(size))
+      case FontIntent.SetUiFontSize(size)       => _.copy(uiFontSize = clampFontSize(size))
+      case FontIntent.SetAllFontSizes(size)     => _.withSizes(FontSizes.all(size))
+      case FontIntent.ConfirmSetAllFontSizes(_) => identity
       case FontIntent.UndoFontSizeChange =>
         config => config.previousSizes.fold(config)(previous => config.withSizes(previous).copy(previousSizes = None))
       case FontIntent.SetTextScaleMode(mode) => _.copy(textScaleMode = mode)

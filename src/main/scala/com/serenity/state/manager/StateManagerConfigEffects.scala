@@ -135,7 +135,19 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
-    updateFontConfig(FontConfigEdit.recording(intent))
+    intent match
+      case FontIntent.ConfirmSetAllFontSizes(size) => confirmSetAllFontSizes(size)
+      case _                                       => updateFontConfig(FontConfigEdit.recording(intent))
+
+  private def confirmSetAllFontSizes(size: Float): IO[Unit] =
+    editor.updateModelValidated(model =>
+      val before = model.app.persisted.config.editorConfig.fontConfig.sizes
+      Some(
+        model.copy(app =
+          ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.setAllFontSizes(before, size)), model.app).state
+        )
+      )
+    )
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match

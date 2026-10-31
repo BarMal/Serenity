@@ -193,7 +193,8 @@ final case class AppState(
       currentThemeName = Some(persisted.theme.name),
       editingContext = Some(editingContext),
       projectPresence = runtime.projectPresence,
-      opensFileOrFolder = runtime.capabilities.opensFileOrFolder
+      opensFileOrFolder = runtime.capabilities.opensFileOrFolder,
+      activeTypographyRole = activeBuffer.map(_.typographyRole)
     )
 
   /** The active editor pane's buffer, if any. */
