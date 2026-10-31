@@ -48,7 +48,27 @@ private[renderer] object RendererPaneChrome:
         if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
         else bufferTitle
 
-      surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
+      val window =
+        state.runtime.viewportSize.getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
+      val corners =
+        CornerRounding.corners(
+          ChromeElement.PaneHeader,
+          headerRect,
+          window,
+          state.persisted.config.dockedCornerStyle,
+          state.persisted.config.paneHeaderCorners
+        )
+      val fillHeader = () => surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
+      surface.panelOutlines.fold(fillHeader()) { outlines =>
+        outlines.withRoundRectClip(
+          headerRect.x,
+          headerRect.y,
+          headerRect.width,
+          headerRect.height,
+          corners,
+          state.persisted.config.scaledUiCornerRadiusPx
+        )(fillHeader())
+      }
 
       surface.text.fontRenderContext match
         case Some(frc) =>

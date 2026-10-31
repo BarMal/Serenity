@@ -471,7 +471,27 @@ object RendererGutter:
 
       surface.setBackgroundColor(colors.background.fold(gutterBackground(state))(RenderColor.fromAwt))
       surface.setForegroundColor(colors.foreground.fold(state.persisted.theme.panel.foreground)(RenderColor.fromAwt))
-      surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
+      val window =
+        state.runtime.viewportSize.getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
+      val corners =
+        CornerRounding.corners(
+          ChromeElement.StatusBar,
+          gutterRect,
+          window,
+          state.persisted.config.dockedCornerStyle,
+          state.persisted.config.paneHeaderCorners
+        )
+      val fillGutter = () => surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
+      surface.panelOutlines.fold(fillGutter()) { outlines =>
+        outlines.withRoundRectClip(
+          gutterRect.x,
+          gutterRect.y,
+          gutterRect.width,
+          gutterRect.height,
+          corners,
+          state.persisted.config.scaledUiCornerRadiusPx
+        )(fillGutter())
+      }
 
       val content = s" ${state.statusLineText.getOrElse(emptyWorkspaceStatus(state))} "
       val displayContent =
