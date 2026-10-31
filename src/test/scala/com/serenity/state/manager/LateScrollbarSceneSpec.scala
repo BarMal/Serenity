@@ -178,3 +178,15 @@ class LateScrollbarSceneSpec extends AnyFlatSpec with Matchers:
     counted.scene.forState(replaced, viewportSize).paneScrolls(paneId).extent shouldBe exactExtent(replaced)
     counted.notified.toList shouldBe List(paneId)
   }
+
+  "A pane that loses its bar while its rows are being counted" should "stop counting and tell nobody" in {
+    val state   = wholeDocument(300)
+    val counted = new Counted
+    counted.scene.forState(state, viewportSize)
+
+    val barless = state.copy(persisted = state.persisted.copy(config = state.persisted.config.withScrollbar(false)))
+    counted.scene.forState(barless, viewportSize).paneScrolls shouldBe empty
+    counted.executor.runAll()
+
+    counted.notified shouldBe empty
+  }
