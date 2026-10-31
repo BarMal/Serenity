@@ -23,17 +23,24 @@ final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Unde
   * typeface (table loading, the glyph cache) is where `FontFirstUse` found AWT disagreeing with itself across threads,
   * and Skia's font manager is not documented as safe for two threads' first lookups.
   */
-final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces):
+final class SkiaFontCache(
+    maxFaces: Int = SkiaFontCache.DefaultMaxFaces,
+    warmup: WarmupStats = new WarmupStats(),
+    resolveTypeface: SkiaTypefaces.TypefaceKey => Typeface = SkiaTypefaces.typefaceFor
+):
   import SkiaFontCache.*
 
-  private val faces = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
-  private val lock  = new Object
+  private val faces     = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
+  private val typefaces = new ConcurrentHashMap[SkiaTypefaces.TypefaceKey, Typeface]()
+  private val lock      = new Object
 
   def faceFor(font: java.awt.Font): SkiaFace =
     Option(faces.get(font)).getOrElse {
       lock.synchronized {
         Option(faces.get(font)).getOrElse {
-          if faces.size >= maxFaces then faces.clear()
+          if faces.size >= maxFaces then
+            faces.clear()
+            typefaces.clear()
           val face = build(font)
           val _    = faces.put(font, face)
           face
@@ -44,10 +51,21 @@ final class SkiaFontCache(maxFaces: Int = SkiaFontCache.DefaultMaxFaces):
   def size: Int = faces.size
 
   private def build(font: java.awt.Font): SkiaFace =
+    val started = System.nanoTime()
     FontFirstUse.settle(font, StrikeContext)
-    val skia = SkiaTypefaces.fontFor(font)
+    val skia = SkiaTypefaces.fontFor(font, typefaceOf)
     val _    = skia.measureTextWidth(WarmUpText)
-    SkiaFace(skia, strikethroughOf(font))
+    val face = SkiaFace(skia, strikethroughOf(font))
+    warmup.faceBuilt(System.nanoTime() - started)
+    face
+
+  /** Fonts that choose a face from the same inputs share one lookup; called only from `build`, under `lock`. */
+  private def typefaceOf(key: SkiaTypefaces.TypefaceKey): Typeface =
+    Option(typefaces.get(key)).getOrElse {
+      val typeface = resolveTypeface(key)
+      val _        = typefaces.put(key, typeface)
+      typeface
+    }
 
   private def strikethroughOf(font: java.awt.Font): Option[StyledFontCache.Underline] =
     Option.when(font.getAttributes.get(TextAttribute.STRIKETHROUGH) == TextAttribute.STRIKETHROUGH_ON) {
@@ -91,15 +109,31 @@ private[skia] object SkiaTypefaces:
     "/fonts/NotoEmoji-Bold.ttf"
   )
 
+  private[skia] def bundledTypefaces: List[Typeface] = Bundled.faces
+
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
-  def fontFor(awt: java.awt.Font): Font =
-    val bold      = awt.isBold
-    val italic    = awt.isItalic
-    val reference = Reference(awt.getSize2D.max(1.0f), awt.getStringBounds(MeasureProbe, MeasureContext).getWidth)
-    val resolved  = typefaceFor(awt.getFamily, bold, italic, reference)
-    val font      = new Font(resolved, awt.getSize2D.max(1.0f))
+  /** Everything the choice of a face reads from an AWT font: two fonts with the same key get the same typeface. */
+  final case class TypefaceKey(family: String, bold: Boolean, italic: Boolean, size: Float, advance: Double)
+
+  def keyOf(awt: java.awt.Font): TypefaceKey =
+    TypefaceKey(
+      awt.getFamily,
+      awt.isBold,
+      awt.isItalic,
+      awt.getSize2D.max(1.0f),
+      awt.getStringBounds(MeasureProbe, MeasureContext).getWidth
+    )
+
+  def fontFor(awt: java.awt.Font): Font = fontFor(awt, typefaceFor)
+
+  def fontFor(awt: java.awt.Font, typefaceOf: TypefaceKey => Typeface): Font =
+    val key      = keyOf(awt)
+    val bold     = key.bold
+    val italic   = key.italic
+    val resolved = typefaceOf(key)
+    val font     = new Font(resolved, key.size)
     font.setSubpixel(true)
     font.setLinearMetrics(true)
     font.setHinting(FontHinting.NONE)
@@ -122,6 +156,9 @@ private[skia] object SkiaTypefaces:
 
   private val MeasureProbe   = "Buffer 1 - unsaved Hamburgefonstiv"
   private val MeasureContext = FontRenderContext(AffineTransform(), true, true)
+
+  def typefaceFor(key: TypefaceKey): Typeface =
+    typefaceFor(key.family, key.bold, key.italic, Reference(key.size, key.advance))
 
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean, reference: Reference): Typeface =
     systemTypeface(family, bold, italic, reference)

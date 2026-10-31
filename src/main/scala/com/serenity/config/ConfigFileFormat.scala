@@ -377,15 +377,23 @@ object ConfigFileFormat:
     ),
     comment("monospaced buffers only, falling back to rows for proportional or ligature-shaped text"),
     field("ui.render.damage_granularity"),
-    comment("Renderer for the window: auto uses Skia where it loads and Java2D otherwise; skia or java2d forces one."),
+    comment("Renderer for the window: auto uses Skia's GPU layer where it loads, falling back to Skia on the CPU and"),
+    comment("then to Java2D; skia or java2d forces one."),
     comment("SERENITY_RENDER_BACKEND overrides this. Needs a restart."),
     field("ui.render.backend"),
-    comment(
-      "On a Wayland session that would use Skia: java2d keeps native Wayland and Java2D; skia-raster paints Skia"
-    ),
-    comment("on the CPU under native Wayland; xwayland switches to the X11 toolkit so Skia can use the GPU."),
+    comment("On a Wayland session on native Wayland: skia-raster, the default, paints Skia on the CPU; java2d keeps"),
+    comment("Java2D; xwayland switches to the X11 toolkit so Skia's GPU layer can run."),
     comment("SERENITY_WAYLAND_RENDER overrides this. Needs a restart."),
     field("ui.render.wayland"),
+    comment(
+      "Make Skia's GPU layer wait for the display's vertical blank before it presents a frame. Off by default: it"
+    ),
+    comment(
+      "adds a few milliseconds of latency, and compositors (Hyprland, GNOME, Windows, macOS) do not tear without it."
+    ),
+    comment("Turn it on if you see tearing, for example on X11 without a compositor. SKIKO_VSYNC_ENABLED or"),
+    comment("-Dskiko.vsync.enabled beat this. Needs a restart."),
+    field("ui.render.skia_vsync"),
     comment("Per-cache capacity for the renderer's bounded frame-state caches (issue #1433). Default 64 suits a"),
     comment("single window; raise it for a session with many concurrently open surfaces."),
     field("ui.render.cache_capacity"),

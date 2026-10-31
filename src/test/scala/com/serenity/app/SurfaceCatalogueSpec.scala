@@ -50,9 +50,9 @@ class SurfaceCatalogueSpec extends AnyFlatSpec with Matchers:
       theSameInstanceAs(FrameSurfaceFactory.Java2D)
   }
 
-  it should "offer the raster factory in the catalogue a release uses, and only that one" in {
-    SurfaceCatalogue.Available.skia shouldBe None
+  it should "offer both Skia factories in the catalogue a release uses" in {
+    SurfaceCatalogue.Available.factoryFor(RenderBackend.Skia) shouldBe
+      theSameInstanceAs(com.serenity.ui.skia.SkiaLayerSurfaceFactory)
     SurfaceCatalogue.Available.factoryFor(RenderBackend.SkiaRaster) shouldBe
       theSameInstanceAs(com.serenity.ui.skia.SkiaRasterSurfaceFactory)
-    SurfaceCatalogue.Available.factoryFor(RenderBackend.Skia) shouldBe theSameInstanceAs(FrameSurfaceFactory.Java2D)
   }

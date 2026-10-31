@@ -43,6 +43,36 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
     one.images should not be theSameInstanceAs(two.images)
   }
 
+  "The warm-up stats of an owner" should "be absent until its Skia text caches exist" in {
+    val owner = RenderCaches.create()
+
+    SkiaTextCaches.warmupOf(owner.backendCaches) shouldBe None
+
+    val _ = SkiaTextCaches.of(owner.backendCaches)
+
+    SkiaTextCaches.warmupOf(owner.backendCaches) should not be None
+  }
+
+  it should "count the shaper, each face built once and each text shaped once" in {
+    val owner  = RenderCaches.create()
+    val caches = SkiaTextCaches.of(owner.backendCaches)
+    caches.warmup.snapshot.shapers shouldBe 1
+    caches.warmup.snapshot.shaperNanos should be > 0L
+    caches.warmup.snapshot.faces shouldBe 0
+
+    val awt  = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14)
+    val face = caches.fonts.faceFor(awt)
+    caches.fonts.faceFor(awt)
+    caches.warmup.snapshot.faces shouldBe 1
+    caches.warmup.snapshot.faceNanos should be > 0L
+    caches.warmup.snapshot.shapings shouldBe 0
+
+    val _ = caches.shapedText.stretchOf("Hello", face.font)
+    val _ = caches.shapedText.stretchOf("Hello", face.font)
+    caches.warmup.snapshot.shapings shouldBe 1
+    caches.warmup.snapshot.shapingNanos should be > 0L
+  }
+
   "The Skia sources" should "keep no process-wide cache: every cache belongs to an owner" in {
     val root: Path = Paths.get("src", "main", "scala", "com", "serenity", "ui", "skia")
     val offenders = Using.resource(Files.walk(root)) { stream =>

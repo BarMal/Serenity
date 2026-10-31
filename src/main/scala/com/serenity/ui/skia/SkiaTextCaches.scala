@@ -9,7 +9,8 @@ final case class SkiaTextCaches(
     fonts: SkiaFontCache,
     shapedText: SkiaShapedTextCache,
     images: SkiaImageCache,
-    inks: SkiaInkCache = new SkiaInkCache()
+    inks: SkiaInkCache = new SkiaInkCache(),
+    warmup: WarmupStats = new WarmupStats()
 )
 
 object SkiaTextCaches:
@@ -17,9 +18,19 @@ object SkiaTextCaches:
   private val Key = BackendCacheKey(classOf[SkiaTextCaches])
 
   def fresh(): SkiaTextCaches =
-    SkiaTextCaches(new SkiaFontCache(), new SkiaShapedTextCache(), new SkiaImageCache())
+    val warmup = new WarmupStats()
+    SkiaTextCaches(
+      new SkiaFontCache(warmup = warmup),
+      new SkiaShapedTextCache(warmup = warmup),
+      new SkiaImageCache(),
+      warmup = warmup
+    )
 
   /** The set `owner` draws with, made the first time it is asked for. */
   def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh())
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
+
+  /** What first use has cost `owner`'s Skia text caches so far, if it has any. */
+  def warmupOf(owner: BackendCaches): Option[WarmupStats.Snapshot] =
+    Option.when(heldBy(owner))(of(owner).warmup.snapshot)

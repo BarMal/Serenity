@@ -1,7 +1,7 @@
 package com.serenity.app
 
 import com.serenity.ui.renderer.FrameSurfaceFactory
-import com.serenity.ui.skia.SkiaRasterSurfaceFactory
+import com.serenity.ui.skia.{SkiaLayerSurfaceFactory, SkiaRasterSurfaceFactory}
 
 /** The surface factories this build can offer. Each Skia slot is a thunk so that building the factory, and with it
   * loading Skiko and Kotlin classes, happens only when that backend was chosen. `skia` paints through a Skiko layer;
@@ -21,5 +21,6 @@ final case class SurfaceCatalogue(
 object SurfaceCatalogue:
   val Java2DOnly: SurfaceCatalogue = SurfaceCatalogue(None)
 
-  /** What a release offers: the CPU rasteriser. The layer surface joins it once it has been judged on a real GPU. */
-  val Available: SurfaceCatalogue = SurfaceCatalogue(None, Some(() => SkiaRasterSurfaceFactory))
+  /** What a release offers: the GPU layer, and the CPU rasteriser a Wayland launch can ask for. */
+  val Available: SurfaceCatalogue =
+    SurfaceCatalogue(Some(() => SkiaLayerSurfaceFactory), Some(() => SkiaRasterSurfaceFactory))

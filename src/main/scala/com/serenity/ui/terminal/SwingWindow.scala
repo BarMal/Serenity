@@ -5,7 +5,7 @@ import java.awt.event.*
 import java.awt.im.InputMethodRequests
 import java.awt.image.BufferedImage
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import javax.imageio.ImageIO
 import javax.swing.*
 
@@ -70,6 +70,10 @@ class SwingWindow(
   private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
   private val pendingRepaintRef      = new AtomicReference[Option[SwingWindow.CanvasRepaint]](None)
   private val baseImagePool          = new SwingWindow.ReusableImagePool
+  private val layerPresenterRef      = new AtomicReference[Option[LayerPresenter]](None)
+  private val framePresentedRef      = new AtomicReference[Option[() => Unit]](None)
+  private val baseImagesPublished    = new AtomicInteger(0)
+  private val baseImagesShown        = new AtomicInteger(0)
   private val savedBoundsRef         = new AtomicReference[Option[Rectangle]](None)
   private val maximizedRef           = new AtomicBoolean(false)
   private val maxBtnRef              = new AtomicReference[Option[ChromeControlButton]](None)
@@ -110,7 +114,9 @@ class SwingWindow(
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       val paintStart = frameTimings.paintStarted()
-      val g2         = g.create().asInstanceOf[Graphics2D]
+      // Read before the lease: an image published in between is then counted as not yet shown, never as shown early.
+      val shownAtPaint = baseImagesPublished.get()
+      val g2           = g.create().asInstanceOf[Graphics2D]
       try
         val base = baseImagePool.leasePublished()
         SwingWindow.paintPresentedFrame(g2, base, publishedCaretsRef.get(), getWidth, getHeight)
@@ -118,6 +124,8 @@ class SwingWindow(
         baseImagePool.releaseLease()
         g2.dispose()
         frameTimings.paintFinished(paintStart)
+        baseImagesShown.set(shownAtPaint)
+        framePresentedRef.get().foreach(_.apply())
 
   private val accessibilityBridge      = new SwingAccessibilityBridge(canvas)
   private val accessibilityPublishGate = new AccessibilityPublishGate
@@ -131,7 +139,10 @@ class SwingWindow(
       else SwingUtilities.invokeLater(publish)
 
   private val pointerCursorSync = new PointerCursorSync(shape =>
-    val apply: Runnable = () => canvas.setCursor(Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape)))
+    val apply: Runnable = () =>
+      val cursor = Cursor.getPredefinedCursor(PointerCursorSync.awtCursorType(shape))
+      canvas.setCursor(cursor)
+      layerPresenterRef.get().foreach(_.setCursor(cursor))
     if SwingUtilities.isEventDispatchThread then apply.run()
     else SwingUtilities.invokeLater(apply)
   )
@@ -148,6 +159,7 @@ class SwingWindow(
     val displayedCarets = publishedCaretsRef.getAndSet(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
+    val _ = baseImagesPublished.incrementAndGet()
     requestRepaint(SwingWindow.cursorRepaint(dirtyRects, displayedCarets.map(_.rect), Nil))
 
   private def requestRepaint(repaint: SwingWindow.CanvasRepaint): Unit =
@@ -171,6 +183,7 @@ class SwingWindow(
     publishedCaretsRef.set(Nil)
     baseImagePool.publish(image)
     baseImageRef.set(Some(image))
+    val _ = baseImagesPublished.incrementAndGet()
 
   /** Publish the carets to fill over the current base frame and repaint just the pixels they changed.
     *
@@ -182,17 +195,39 @@ class SwingWindow(
   def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
     paintCarets: => scala.List[SwingWindow.CaretPaint]
   ): Boolean =
-    baseImageRef.get() match
-      case Some(_) =>
-        val carets = paintCarets
-        publishedCaretsRef.set(carets)
-        carets.headOption.foreach(caret => lastCaretRef.set(Some(caret.rect)))
-        val currentCursorRects  = carets.map(_.rect)
-        val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
+    val presenter = layerPresenterRef.get()
+    if baseImageRef.get().isDefined || presenter.exists(_.baseAvailable) then
+      val carets = paintCarets
+      publishedCaretsRef.set(carets)
+      carets.headOption.foreach(caret => lastCaretRef.set(Some(caret.rect)))
+      val currentCursorRects  = carets.map(_.rect)
+      val previousCursorRects = previousCursorRectsRef.getAndSet(currentCursorRects)
+      presenter.fold(
         requestRepaint(SwingWindow.cursorRepaint(baseDirtyRects, previousCursorRects, currentCursorRects))
-        true
-      case None =>
-        false
+      )(_.showCarets(carets))
+      true
+    else false
+
+  /** From now on a GPU layer shows the base frame: it is handed the carets and the pointer cursor, and disposed when
+    * the window stops.
+    */
+  private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
+    layerPresenterRef.getAndSet(Some(presenter)).filterNot(_ eq presenter).foreach(_.dispose())
+    presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+
+  private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
+
+  /** The frames published to this window, and how many of them the latest paint or layer draw showed: what the render
+    * benchmark waits on, so a paint of an older frame is not taken for the frame it is timing.
+    */
+  private[serenity] def publishedFrames: Int = layerPresenter.fold(baseImagesPublished.get)(_.publishedFrames)
+
+  private[serenity] def shownFrames: Int = layerPresenter.fold(baseImagesShown.get)(_.shownFrames)
+
+  /** `callback` is called on the event thread each time the canvas paints, or the GPU layer draws a frame. The render
+    * benchmark times a frame to the last of these.
+    */
+  private[serenity] def setOnFramePresented(callback: () => Unit): Unit = framePresentedRef.set(Some(callback))
 
   private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
@@ -357,6 +392,7 @@ class SwingWindow(
 
   def stop(): Unit =
     val dispose: Runnable = () =>
+      layerPresenterRef.getAndSet(None).foreach(_.dispose())
       frame.setVisible(false)
       frame.dispose()
     if SwingUtilities.isEventDispatchThread then dispose.run()
