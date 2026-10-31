@@ -27,6 +27,7 @@ class LateScrollbarHitTestSpec extends AnyFlatSpec with Matchers:
   final private class ByHand extends Executor:
     private val queued                         = mutable.Queue.empty[Runnable]
     override def execute(task: Runnable): Unit = queued.enqueue(task)
+
     @tailrec def runAll(): Unit =
       if queued.nonEmpty then
         queued.dequeue().run()

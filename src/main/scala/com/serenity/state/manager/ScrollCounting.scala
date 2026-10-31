@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import java.util.concurrent.{ConcurrentHashMap, Executor}
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.state.models.PaneId
@@ -26,6 +27,10 @@ sealed trait ScrollCounting:
     */
   private[manager] def shownWhile(paneId: PaneId, key: ScrollKey): Option[PaneScroll]
 
+  /** The scene just handed out has a bar for exactly `paneIds`: a pane that lost its bar or was closed needs no count.
+    */
+  private[manager] def keepOnly(paneIds: Set[PaneId]): Unit
+
   private[manager] def isDeferred: Boolean
 
 object ScrollCounting:
@@ -39,6 +44,7 @@ object ScrollCounting:
     private[manager] def count(paneId: PaneId, rows: VisualRowCounts, key: ScrollKey): Unit = ()
     private[manager] def counted(paneId: PaneId, scroll: PaneScroll, key: ScrollKey): Unit  = ()
     private[manager] def shownWhile(paneId: PaneId, key: ScrollKey): Option[PaneScroll]     = None
+    private[manager] def keepOnly(paneIds: Set[PaneId]): Unit                               = ()
     private[manager] def isDeferred: Boolean                                                = false
 
   /** `onCounted` is told, from the executor's thread, which pane's lines are now all measured. A count that a newer
@@ -69,6 +75,11 @@ object ScrollCounting:
     private val widths    = new ConcurrentHashMap[PaneId, Integer]()
 
     private[manager] def isDeferred: Boolean = true
+
+    private[manager] def keepOnly(paneIds: Set[PaneId]): Unit =
+      wanted.keySet.asScala.filterNot(paneIds).foreach(paneId => Option(wanted.remove(paneId)).foreach(_.cancel()))
+      lastExact.keySet.removeIf(paneId => !paneIds(paneId)): Unit
+      widths.keySet.removeIf(paneId => !paneIds(paneId)): Unit
 
     private[manager] def shownWhile(paneId: PaneId, key: ScrollKey): Option[PaneScroll] =
       Option(lastExact.get(paneId))

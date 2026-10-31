@@ -373,6 +373,7 @@ final private[serenity] class AuthoritativeUiScene(
         case Some(pending) => counting.count(paneId, pending.rows, key)
         case None          => scene.paneScrolls.get(paneId).foreach(counting.counted(paneId, _, key))
     }
+    counting.keepOnly(scene.scrollKeys.keySet)
     scene
 
   /** A scene published while a pane's lines were still being measured gains that pane's bar once they all are. */
