@@ -93,6 +93,8 @@ class SwingWindow(
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
 
+  private val paintProbe = new PaintProbe()
+
   val canvas: JPanel = new JPanel with ImeRequestsHost:
     private val inputMethodRequestsRef = new AtomicReference[Option[InputMethodRequests]](None)
     override def installInputMethodRequests(requests: InputMethodRequests): Unit =
@@ -110,7 +112,8 @@ class SwingWindow(
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
       val paintStart = frameTimings.paintStarted()
-      val g2         = g.create().asInstanceOf[Graphics2D]
+      paintProbe.painted()
+      val g2 = g.create().asInstanceOf[Graphics2D]
       try
         val base = baseImagePool.leasePublished()
         SwingWindow.paintPresentedFrame(g2, base, publishedCaretsRef.get(), getWidth, getHeight)
@@ -431,6 +434,9 @@ class SwingWindow(
         val _ = WindowsNativeChrome.apply(frame, palette)
       if SwingUtilities.isEventDispatchThread then applyPalette.run()
       else SwingUtilities.invokeLater(applyPalette)
+
+  def paintDiagnostics: PaintDiagnostics =
+    paintProbe.diagnostics(canvas.isShowing, canvas.getWidth, canvas.getHeight)
 
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale

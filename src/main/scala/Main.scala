@@ -40,7 +40,7 @@ import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
-import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
+import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingPaintProbe, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -471,8 +471,8 @@ object Main extends IOApp:
                 appConfig = actualAppConfig,
                 configNotice = configNotice,
                 recovery = startup.plan,
-                onFirstFrame =
-                  startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+                onFirstFrame = startup.markStarted >> SwingPaintProbe.report(swingWin, logger) >>
+                  IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
                 makeStateManager = Some(logger =>
                   com.serenity.state.manager.StateManager.apply(
                     logger,

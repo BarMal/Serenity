@@ -106,6 +106,33 @@ class PairedGateTests(unittest.TestCase):
         head = [self._write(f"mh{i}.csv", 1.0, retained=20 * mib) for i in range(3)]
         self.assertEqual(compare_perf_runs.main_with_args(["--base", *base, "--head", *head]), 1)
 
+    # The verdict compares each side's fastest p50 (issue #2443): a benchmark's slow runs are a JIT or runner state that
+    # one side can land in and the other not, and the fastest run is the one least affected by it.
+
+    def test_the_default_threshold_is_one_and_a_half(self) -> None:
+        self.assertEqual(compare_perf_runs.DEFAULT_THRESHOLD, 1.5)
+
+    def test_a_slowdown_past_one_and_a_half_on_every_run_is_caught(self) -> None:
+        self.assertEqual(self._new_gate([10.0, 10.0, 10.0], [16.0, 16.0, 16.0]), 1)
+
+    def test_a_slowdown_that_a_slow_head_run_would_have_hidden_from_a_median_is_caught(self) -> None:
+        self.assertEqual(self._new_gate([5.0, 5.0, 5.0], [8.0, 8.0, 30.0]), 1)
+
+    def test_the_fastest_head_run_decides_so_one_lucky_run_clears_the_head(self) -> None:
+        self.assertEqual(self._new_gate([10.0, 10.0, 10.0], [20.0, 20.0, 9.0]), 0)
+
+    def test_the_delta_floor_is_taken_between_the_fastest_runs(self) -> None:
+        self.assertEqual(self._new_gate([0.10, 0.10, 0.10], [0.16, 0.16, 0.16]), 1)
+        self.assertEqual(self._new_gate([0.10, 0.10, 0.10], [0.14, 0.14, 0.14]), 0)
+
+    def test_the_verdict_reports_the_fastest_runs_and_their_ratio(self) -> None:
+        verdicts = compare_perf_runs.judge(
+            [{"op": check_perf_regression.Row("op", p, p)} for p in (6.0, 5.0, 30.0)],
+            [{"op": check_perf_regression.Row("op", p, p)} for p in (12.0, 11.0, 40.0)],
+        )
+        self.assertEqual((verdicts[0].base_ms, verdicts[0].head_ms), (5.0, 11.0))
+        self.assertAlmostEqual(verdicts[0].ratio, 2.2)
+
 
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
@@ -163,7 +190,7 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
 
     def test_a_one_off_spike_is_flagged_and_then_forgiven(self) -> None:
         base = self._series([5.0, 5.0, 5.0])
-        head = self._series([10.0, 10.0, 5.0])  # two spiked head runs: past 1.75x on the median
+        head = self._series([10.0, 10.0, 10.0])  # a slow spell over every head run: past 1.5x on the fastest
         self.assertEqual(self._first_pass(base, head), 2)
         self.assertEqual(self._confirm(self._series([5.0, 5.1, 5.0]), self._series([5.1, 5.0, 5.2])), 0)
 

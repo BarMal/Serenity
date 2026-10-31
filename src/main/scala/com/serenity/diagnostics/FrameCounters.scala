@@ -8,10 +8,15 @@ import java.util.function.LongBinaryOperator
   * merely slow.
   */
 enum FrameCounter(val label: String):
-  case RowsDrawn       extends FrameCounter("rows-drawn")
-  case RowsPreserved   extends FrameCounter("rows-preserved")
-  case RunsDrawn       extends FrameCounter("runs")
-  case ShapingCalls    extends FrameCounter("shapings")
+  case RowsDrawn     extends FrameCounter("rows-drawn")
+  case RowsPreserved extends FrameCounter("rows-preserved")
+  case RunsDrawn     extends FrameCounter("runs")
+  case ShapingCalls  extends FrameCounter("shapings")
+
+  /** Lookups the older generation of a shaped-text cache answered: a stretch shaped before, kept through one rotation.
+    */
+  case ShapePromotions extends FrameCounter("promotions")
+
   case LayerComposites extends FrameCounter("layer-composites")
 
   /** Device pixels of layer image the frame had to allocate; a layer buffer recycled from an earlier frame adds none.

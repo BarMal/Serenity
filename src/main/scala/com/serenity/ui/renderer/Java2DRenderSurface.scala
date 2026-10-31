@@ -152,9 +152,7 @@ class Java2DRenderSurface(
     clipGlyphToRun: Boolean
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
-      val shapedBefore = shapedText.shapings
-      val shaped       = shapedText.stretchOf(stretch, g.getFont, renderContext)
-      activity.shaped(shapedText.shapings - shapedBefore)
+      val shaped = activity.counting(shapedText)(shapedText.stretchOf(stretch, g.getFont, renderContext))
       shaped.glyphsOf(from, until).foreach(g.drawGlyphVector(_, xPx, (yPx + ascentPx).toFloat))
     }
 
