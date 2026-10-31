@@ -272,8 +272,8 @@ object RenderBenchmarkRunner:
         )
         if !painted then full()
 
-  /** The window is brought to the size before the frame is timed, so the figure is the first frame at the new size, from
-    * the render call to its presentation; the toolkit's own resize and the compositor are not in it.
+  /** The window is brought to the size before the frame is timed, so the figure is the first frame at the new size,
+    * from the render call to its presentation; the toolkit's own resize and the compositor are not in it.
     */
   private def resizeIfAsked(window: SwingWindow, step: BenchmarkScript.Step): Unit =
     step.frame match

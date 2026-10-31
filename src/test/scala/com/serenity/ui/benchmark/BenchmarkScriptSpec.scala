@@ -113,7 +113,9 @@ class BenchmarkScriptSpec extends AnyFlatSpec with Matchers:
   it should "never ask for a resize in any other scenario" in
     Scenario.values.filterNot(_ == Scenario.ResizeWindow).foreach { scenario =>
       withClue(scenario.label) {
-        script(scenario).collect { case BenchmarkScript.Step(_, _, BenchmarkScript.FrameKind.Resized(_)) => 1 } shouldBe empty
+        script(scenario).collect {
+          case BenchmarkScript.Step(_, _, BenchmarkScript.FrameKind.Resized(_)) => 1
+        } shouldBe empty
       }
     }
 
