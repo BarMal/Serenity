@@ -97,6 +97,12 @@ class ContextMenuLayoutSpec extends AnyFlatSpec with Matchers:
     rect.right should be <= contentRect.right
   }
 
+  it should "spend one row on each item at the default density: header, three items, footer and two border rows" in {
+    val state = stateWithMenu(menu)
+    // `SurfaceFrameLayout.frameHeightForItemRows`: header + items x pitch + footer + the border's two rows, at pitch 1.
+    menuRect(state).height shouldBe 1 + menu.items.length + 1 + 2
+  }
+
   for scale <- List(1.0, 2.0) do
     it should s"cover exactly its content's device pixels at scale $scale" in {
       val state = stateWithMenu(menu)
