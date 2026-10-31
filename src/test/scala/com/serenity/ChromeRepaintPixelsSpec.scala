@@ -65,7 +65,7 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     val session = Session()
     val plan    = session.settle(before)
 
-    val header     = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
+    val header = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
     // Two cells in, clear of the header's rounded top corners, which the header's fill no longer reaches.
     val headerMark = stamp(session.pendingImage, header, columnOffset = 2)
 
