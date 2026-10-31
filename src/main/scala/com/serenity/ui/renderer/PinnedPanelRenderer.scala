@@ -25,13 +25,21 @@ object PinnedPanelRenderer:
     val rect            = panel.rect
     val panelBackground = theme.panel.background
     val corners =
-      CornerRounding.corners(ChromeElement.DockedPanel, rect, window, config.dockedCornerStyle, config.paneHeaderCorners)
+      CornerRounding.corners(
+        ChromeElement.DockedPanel,
+        rect,
+        window,
+        config.dockedCornerStyle,
+        config.paneHeaderCorners
+      )
 
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(panelBackground)
     val fill = () => for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
     surface.panelOutlines.fold(fill()) { outlines =>
-      outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, config.scaledUiCornerRadiusPx)(fill())
+      outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, config.scaledUiCornerRadiusPx)(
+        fill()
+      )
     }
 
     val textInsetPx = SurfaceTextInset.px(config)

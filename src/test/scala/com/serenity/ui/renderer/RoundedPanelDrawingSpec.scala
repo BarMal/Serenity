@@ -42,8 +42,8 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   private def rgb(color: Color): Int = color.getRGB & 0xffffff
 
   private def drawPanel(corners: RoundedCorners, radiusPx: Int): FramePixels =
-    val image   = frames.newFrame(width, height)
-    val surface = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image    = frames.newFrame(width, height)
+    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     surface.setForegroundColor(RenderColor.fromAwt(border))
@@ -121,8 +121,8 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   }
 
   "The rounded clip" should "leave drawing after its block unclipped" in {
-    val image   = frames.newFrame(width, height)
-    val surface = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image    = frames.newFrame(width, height)
+    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     surface.setBackgroundColor(RenderColor.fromAwt(panel))

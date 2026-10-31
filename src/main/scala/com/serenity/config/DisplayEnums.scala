@@ -171,8 +171,8 @@ object TabStripMode:
   def fromConfigKey(value: String): Option[TabStripMode] =
     TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
 
-/** How docked panels, the status bar and the tab strip meet the window: `Floating` insets them from the window edges and
-  * from each other by the UI element gap, so every corner rounds; `Flush` keeps today's layout and rounds only the
+/** How docked panels, the status bar and the tab strip meet the window: `Floating` insets them from the window edges
+  * and from each other by the UI element gap, so every corner rounds; `Flush` keeps today's layout and rounds only the
   * corners that face the workspace (#2389).
   */
 enum DockedCornerStyle(val configKey: String):

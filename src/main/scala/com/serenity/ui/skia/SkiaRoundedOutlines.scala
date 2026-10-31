@@ -10,13 +10,13 @@ import org.jetbrains.skia.{BlendMode, Canvas, ClipMode, Paint, PaintMode, PaintS
 /** [[PanelOutlineDrawing]] for [[SkiaRenderSurface]]: the square outline and clip come from the surface itself, the
   * rounded ones are drawn here on its canvas.
   */
-private[skia] final class SkiaRoundedOutlines(
-  flat: PanelOutlineDrawing,
-  canvas: Canvas,
-  metrics: CellMetrics,
-  argbOf: RenderColor => Int,
-  recordPaint: (Double, Double, Double, Double, Double) => Unit,
-  userClipDepth: AtomicInteger
+final private[skia] class SkiaRoundedOutlines(
+    flat: PanelOutlineDrawing,
+    canvas: Canvas,
+    metrics: CellMetrics,
+    argbOf: RenderColor => Int,
+    recordPaint: (Double, Double, Double, Double, Double) => Unit,
+    userClipDepth: AtomicInteger
 ) extends PanelOutlineDrawing:
 
   // The surface's other shapes are not anti-aliased; rounded outlines are, so they get a paint of their own.

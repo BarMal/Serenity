@@ -245,8 +245,8 @@ trait PanelOutlineDrawing:
   /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit
 
-  /** [[strokeRect]] with the `corners` rounded to `radiusPx` device pixels. A surface that cannot round draws the square
-    * frame, and so does a zero radius or no rounded corner.
+  /** [[strokeRect]] with the `corners` rounded to `radiusPx` device pixels. A surface that cannot round draws the
+    * square frame, and so does a zero radius or no rounded corner.
     */
   def strokeRoundRect(
     x: Int,

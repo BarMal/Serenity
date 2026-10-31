@@ -11,13 +11,13 @@ import com.serenity.ui.layout.{CellMetrics, CornerRounding, RoundedCorners}
   *
   * Java2D clips are not anti-aliased, so the rounded stroke (which is) is what hides the clip's jagged corner.
   */
-private[renderer] final class Java2DRoundedOutlines(
-  flat: PanelOutlineDrawing,
-  g: Graphics2D,
-  metrics: CellMetrics,
-  paintColor: RenderColor => Color,
-  touched: (Int, Int, Int, Int) => Unit,
-  userClipDepth: AtomicInteger
+final private[renderer] class Java2DRoundedOutlines(
+    flat: PanelOutlineDrawing,
+    g: Graphics2D,
+    metrics: CellMetrics,
+    paintColor: RenderColor => Color,
+    touched: (Int, Int, Int, Int) => Unit,
+    userClipDepth: AtomicInteger
 ) extends PanelOutlineDrawing:
 
   def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =

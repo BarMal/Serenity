@@ -35,7 +35,7 @@ class UiCornerConfigSpec extends AnyFlatSpec with Matchers:
     result.report.unknownKeys shouldBe Nil
   }
 
-  it should "no longer report the corner radius, under any of its spellings, as removed" in {
+  it should "no longer report the corner radius, under any of its spellings, as removed" in
     List("ui.corner_radius", "ui.corner.radius", "ui_corner_radius").foreach { key =>
       withClue(key) {
         val result = load(s"$key = 5")
@@ -44,15 +44,13 @@ class UiCornerConfigSpec extends AnyFlatSpec with Matchers:
         result.report.unknownKeys shouldBe Nil
       }
     }
-  }
 
-  it should "accept a radius of 0 and of 32 without a notice" in {
+  it should "accept a radius of 0 and of 32 without a notice" in
     List(0, 32).foreach { radius =>
       val result = load(s"ui.corner_radius = $radius")
       result.config.interfaceConfig.cornerRadiusPx shouldBe radius
       result.report.invalidEntries shouldBe Nil
     }
-  }
 
   it should "clamp a radius above the range to 32 and say so" in {
     val result = load("ui.corner_radius = 40")

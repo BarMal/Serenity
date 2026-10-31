@@ -29,7 +29,7 @@ class CornerRoundingSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "round every corner of a docked panel, the status bar and the tab strip when docked chrome floats" in {
+  it should "round every corner of a docked panel, the status bar and the tab strip when docked chrome floats" in
     List(
       ChromeElement.DockedPanel -> leftPanel,
       ChromeElement.DockedPanel -> rightPanel,
@@ -39,7 +39,6 @@ class CornerRoundingSpec extends AnyFlatSpec with Matchers:
       case (element, rect) =>
         withClue(s"$element $rect: ")(corners(element, rect) shouldBe RoundedCorners.All)
     }
-  }
 
   it should "round only the corners off the window's edge when docked chrome is flush" in {
     val flush = DockedCornerStyle.Flush
