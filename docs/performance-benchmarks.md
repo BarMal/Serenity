@@ -41,6 +41,20 @@ Scenarios cover:
   X pixmap, so that benchmark skipped the upload a real frame pays and timed only how far the client ran ahead of
   Xvfb -- bimodal within one run (0.02 vs 0.4 ms on CI), and a 7x p50 spread across five local runs.
 
+- `index.walk.{cold,warm}.100k`: `ProjectFileIndex.listing` over a synthetic 100,000-file, 10,000-directory tree
+  (`SyntheticProjectTree`), from a fresh index (full walk) and from a walked one (revalidation). Allocation is tracked
+  for the `index.walk.` prefix. The tree's depth and spread are fitted to four measured real trees; its ignored-file
+  counts are assumptions. Details in `bench/README.md`.
+- `startup.{cold,warm}.first_frame` and `startup.*.interactive` come from `bench/startup.py`, not
+  `PerformanceBenchmarks`: they launch a packaged image, so they run from the Desktop Package Check image, track a trend
+  on CI (within-run CV 2 to 3.5%, between-run about 4 to 5% on the runner, so no hard gate) and are judged on the laptop
+  with `bench/abba-startup.sh`. Its 100 ms floor is a guess pending an A/A run on the laptop. The interactive rows use
+  the hidden `--startup-probe` flag, which injects one key after the first frame and is refused unless `--safe-mode` or
+  an isolated home (`.serenity-startup-probe-home`) is set, so it cannot type into a real profile. Its 30 s ceiling is
+  a hang guard, not a target.
+- Typing while a project is indexed is a measurement (`TypingWhileIndexingProfile`), not a row: no threshold has a
+  basis yet.
+
 - `laptop.input.state_manager.typing_random_letters`: seeded-random letters (about one in six a space) typed at the
   prose cursor, so nearly every keystroke misses the wrap cache that `continuous_typing`'s cyclic a..z and
   `type_and_delete`'s re-typed text hit.
