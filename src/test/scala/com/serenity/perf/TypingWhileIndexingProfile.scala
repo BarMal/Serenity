@@ -140,8 +140,8 @@ object TypingWhileIndexingProfile:
     "RESULT %s count=%d p50_ms=%.3f p95_ms=%.3f max_ms=%.3f"
       .formatLocal(Locale.ROOT, name, summary.count, summary.p50Ms, summary.p95Ms, summary.maxMs)
 
-  /** Cold walks, one after another, until `work` is done. The first has finished before `work` starts, so the
-    * measured keys are typed with a walk already going and the walker's own warm-up behind it.
+  /** Cold walks, one after another, until `work` is done. The first has finished before `work` starts, so the measured
+    * keys are typed with a walk already going and the walker's own warm-up behind it.
     */
   private def underWalks(root: Path, walks: AtomicInteger, work: () => Vector[Double])(using
     IORuntime
