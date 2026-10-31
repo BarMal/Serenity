@@ -34,6 +34,9 @@ object PaneScroll:
       val _ = rows.rowsAboveAndTotal(topLine, (topLine + visibleRows).max(0), exact = false)
       Option.when(rows.allMeasured)(of(rows, topLine, topVisualLine, visibleRows))
 
+/** What a pane's bar was laid out against: the width its text wrapped at and the version of its text. */
+final case class ScrollKey(widthPx: Int, version: Long)
+
 /** A pane's scroll that waits for its lines to be measured: it becomes a [[PaneScroll]] once they are. */
 final case class PendingScroll(rows: VisualRowCounts, topLine: Int, topVisualLine: Int, visibleRows: Int):
 

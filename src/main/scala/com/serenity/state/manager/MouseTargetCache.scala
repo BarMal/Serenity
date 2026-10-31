@@ -299,7 +299,8 @@ final private[manager] class MouseTargetLayoutKeyCache:
   */
 final private[serenity] class AuthoritativeUiScene(
     val wrappedLines: WrappedLineCache,
-    buildScene: UiSceneBuilder.Build
+    buildScene: UiSceneBuilder.Build,
+    counting: ScrollCounting = ScrollCounting.Inline
 ):
   import AuthoritativeUiScene.{SceneFontKey, SceneKey}
 
@@ -357,9 +358,22 @@ final private[serenity] class AuthoritativeUiScene(
         }
     }
     val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
-    publishedScene(key)
-      .map(countedSince(key, _))
-      .getOrElse(buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics)))
+    settled(
+      publishedScene(key)
+        .map(countedSince(key, _))
+        .getOrElse(buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics)))
+    )
+
+  /** Tells the counting what the scene just handed out shows, a cached scene as much as a new one: a bar still waiting
+    * has its count, a counted one ends any count that was waiting on another size.
+    */
+  private def settled(scene: UiSceneSnapshot): UiSceneSnapshot =
+    scene.scrollKeys.foreach { (paneId, key) =>
+      scene.pendingScrolls.get(paneId) match
+        case Some(pending) => counting.count(paneId, pending.rows, key)
+        case None          => scene.paneScrolls.get(paneId).foreach(counting.counted(paneId, _, key))
+    }
+    scene
 
   /** A scene published while a pane's lines were still being measured gains that pane's bar once they all are. */
   private def countedSince(key: SceneKey, scene: UiSceneSnapshot): UiSceneSnapshot =
@@ -430,7 +444,7 @@ private[serenity] object AuthoritativeUiScene:
     decorateBuild: UiSceneBuilder.Build => UiSceneBuilder.Build = identity,
     scrollCounting: ScrollCounting = ScrollCounting.Inline
   ): AuthoritativeUiScene =
-    new AuthoritativeUiScene(wrappedLines, decorateBuild(UiSceneBuilder(wrappedLines, scrollCounting)))
+    new AuthoritativeUiScene(wrappedLines, decorateBuild(UiSceneBuilder(wrappedLines, scrollCounting)), scrollCounting)
 
 final private[manager] case class MouseTargetCache(
     layoutKey: MouseTargetLayoutKey,

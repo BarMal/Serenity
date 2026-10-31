@@ -49,7 +49,7 @@ private[serenity] object UiSceneBuilder:
           )
           val scroll =
             Option.when(!columnModeActive && ScrollbarLayout.hasBar(state, paneLayout))(
-              paneScroll(
+              ScrollKey(laidOut.widthPx, buffer.document.contentVersion) -> paneScroll(
                 state,
                 buffer,
                 laidOut.viewport,
@@ -66,17 +66,18 @@ private[serenity] object UiSceneBuilder:
     }
     val textSnapshots   = perPane.view.mapValues(_._1).toMap
     val columnSnapshots = perPane.view.mapValues(_._2).filter(_._2.nonEmpty).toMap
-    val paneScrolls     = perPane.flatMap((paneId, parts) => parts._3.flatMap(_.toOption).map(paneId -> _))
-    val pendingScrolls  = perPane.flatMap((paneId, parts) => parts._3.flatMap(_.left.toOption).map(paneId -> _))
-    perPane.foreach((paneId, parts) => parts._3.foreach(settle(counting, paneId, _)))
+    val scrolls         = perPane.flatMap((paneId, parts) => parts._3.map(paneId -> _))
+    val paneScrolls = scrolls.flatMap {
+      case (paneId, (_, Right(scroll))) => Some(paneId -> scroll)
+      case (paneId, (key, Left(_)))     => counting.shownWhile(paneId, key).map(paneId -> _)
+    }
+    val pendingScrolls = scrolls.flatMap((paneId, scroll) => scroll._2.left.toOption.map(paneId -> _))
     base
       .withTextSnapshots(textSnapshots)
       .withColumnSnapshots(columnSnapshots)
       .withPaneScrolls(paneScrolls)
       .withPendingScrolls(pendingScrolls)
-
-  private def settle(counting: ScrollCounting, paneId: PaneId, scroll: Either[PendingScroll, PaneScroll]): Unit =
-    scroll.fold(pending => counting.count(paneId, pending.rows), _ => counting.counted(paneId))
+      .withScrollKeys(scrolls.map((paneId, scroll) => paneId -> scroll._1))
 
   /** Counted as the wrap that laid the pane's rows out, so the bar's rows and the viewport's agree. The lines the
     * snapshot has just drawn whole are counted from it rather than wrapped a second time, which keeps an edit's cost to

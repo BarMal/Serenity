@@ -29,9 +29,11 @@ class LateScrollbarResizeSpec extends AnyFlatSpec with Matchers:
     private val queued = mutable.Queue.empty[Runnable]
     private val total  = new AtomicInteger(0)
     def started: Int   = total.get
+
     override def execute(task: Runnable): Unit =
       val _ = total.incrementAndGet()
       queued.enqueue(task)
+
     @tailrec def runAll(): Unit =
       if queued.nonEmpty then
         queued.dequeue().run()
