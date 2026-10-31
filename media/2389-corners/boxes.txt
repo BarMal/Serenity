@@ -1,0 +1,4 @@
+context-menu scale 1: surface 110x276px at (77,23)
+context-menu scale 2: surface 220x528px at (154,44)
+quick-info scale 1: surface 605x92px at (55,69)
+quick-info scale 2: surface 1210x176px at (110,132)
