@@ -265,10 +265,10 @@ trait PanelOutlineDrawing:
     * cannot round) it just renders: clipping a fill to its own rectangle changes nothing.
     */
   def withRoundRectClip(
-    x: Int,
-    y: Int,
-    width: Int,
-    height: Int,
+    @unused x: Int,
+    @unused y: Int,
+    @unused width: Int,
+    @unused height: Int,
     @unused corners: RoundedCorners,
     @unused radiusPx: Int
   )(render: => Unit): Unit =
