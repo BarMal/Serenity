@@ -148,7 +148,7 @@ object TypingWhileIndexingProfile:
   ): Vector[Double] =
     (for
       started <- Deferred[IO, Unit]
-      walker  <- (walkOnce(root) >> IO(walks.incrementAndGet()) >> started.complete(())).foreverM[Unit].start
+      walker  <- (walkOnce(root) >> IO(walks.incrementAndGet()) >> started.complete(())).foreverM.start
       _       <- started.get
       samples <- IO.blocking(work())
       _       <- walker.cancel

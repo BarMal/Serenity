@@ -39,7 +39,7 @@ class TypingWhileIndexingProfileSpec extends AnyFlatSpec with Matchers:
     val result  = Outcome(Summary(10, 2.0, 4.0, 9.0), Summary(10, 3.0, 12.0, 30.0), walksCompleted = 7)
     val options = Options(keys = 300, paceMs = 100, warmupKeys = 200, shape = TreeShape.Small)
 
-    val text = report(result, options).mkString("\n")
+    val text = TypingWhileIndexingProfile.report(result, options).mkString("\n")
 
     text should include("RESULT typing.idle count=10 p50_ms=2.000 p95_ms=4.000 max_ms=9.000")
     text should include("RESULT typing.loaded count=10 p50_ms=3.000 p95_ms=12.000 max_ms=30.000")
@@ -50,7 +50,7 @@ class TypingWhileIndexingProfileSpec extends AnyFlatSpec with Matchers:
   }
 
   "a short run" should "type as many keys idle as loaded, and complete at least one walk while typing" in {
-    val result = run(Options(keys = 20, paceMs = 2, warmupKeys = 5, shape = TreeShape.Small))
+    val result = TypingWhileIndexingProfile.run(Options(keys = 20, paceMs = 2, warmupKeys = 5, shape = TreeShape.Small))
 
     result.idle.count shouldBe 40
     result.loaded.count shouldBe 40
