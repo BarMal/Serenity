@@ -344,10 +344,16 @@ object SurfaceFrameLayout:
       hasKeyHint
     )
 
-  /** Minimum physical height for pointer-operable surface controls at the selected density. */
+  /** Minimum physical height for pointer-operable surface controls at the selected density. A context menu item is its
+    * own one-row target below Spacious (#2389), so its pitch equals its hit region and no dead row sits between items.
+    */
   def itemTargetRowsFor(content: SurfaceContent, density: InterfaceDensity): Int =
     content match
-      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) | SurfaceContent.ContextMenu(_) |
+      case SurfaceContent.ContextMenu(_) =>
+        density match
+          case InterfaceDensity.Compact | InterfaceDensity.Comfortable => 1
+          case InterfaceDensity.Spacious                                => minimumTargetRows(density)
+      case SurfaceContent.CommandPalette(_) | SurfaceContent.CommandRunnerPeek(_) |
           SurfaceContent.ContextualToolbar(_) =>
         minimumTargetRows(density)
       case _ => 1
