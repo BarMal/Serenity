@@ -96,7 +96,7 @@ private[perf] object TypingPaintProfile:
     scale: Double
   )(using IORuntime): (BenchmarkRunner.Benchmark, PresentBenchmarks.PhaseLog) =
     val cycle = typingCycle(factory, widthPx, heightPx, scale, variant.config, variant.english)
-    val log   = PresentBenchmarks.PhaseLog(cycle.drainPhases)
+    val log   = PresentBenchmarks.PhaseLog(PresentBenchmarks.PhaseSource.of(cycle))
     val row = BenchmarkRunner.Benchmark(
       name,
       3,
@@ -140,7 +140,7 @@ private[perf] object TypingPaintProfile:
     val rows    = skia ++ java2d :+ floor
     val results = BenchmarkRunner.runMatching(Nil, rows.map(_._1))
     val phases  = rows.map((benchmark, log) => benchmark.name -> log).toMap
-    PresentReport.print(results, name => phases.get(name).map(_.breakdown))
+    PresentReport.print(results, name => phases.get(name).map(_.breakdown), name => phases.get(name).map(_.traffic))
     def timingOf(result: BenchmarkRunner.BenchmarkResult) =
       TypingPaintReport.VariantTiming(result.name.split('.').last, result.p50Ms, result.p95Ms)
     val (skiaResults, rest)           = results.splitAt(skia.length)
