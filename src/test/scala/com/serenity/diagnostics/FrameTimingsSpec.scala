@@ -232,4 +232,3 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     PresentPoint.of("skia-raster") shouldBe "paint-end"
     PresentPoint.of("java2d") shouldBe "paint-end"
   }
-

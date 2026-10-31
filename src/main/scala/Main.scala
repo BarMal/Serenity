@@ -181,7 +181,15 @@ object Main extends IOApp:
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
-        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks, graphics.surfaces, graphics.backend.backend.configKey)
+        case (hooks, role) =>
+          runAs(
+            role,
+            launchOptionsForLogging,
+            requestRestart,
+            hooks,
+            graphics.surfaces,
+            graphics.backend.backend.configKey
+          )
       }
     yield ExitCode.Success
 

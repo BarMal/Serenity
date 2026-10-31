@@ -348,4 +348,3 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     trace.drain().backend shouldBe "skia"
     trace.drain().summaryLine should include("backend=skia presented=render-callback-end")
   }
-
