@@ -11,8 +11,8 @@ import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import com.serenity.ui.openings.{
   EpigraphRule,
   HandDropCapRule,
@@ -167,7 +167,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         uiLigatures = true,
         textScaleMode = FontLoader.TextScaleMode.Manual,
         textScaleMultiplier = 1.25,
-        fallbackFamilies = List("Noto Sans CJK JP", "Symbola")
+        fallbackFamilies = List("Noto Sans CJK JP", "Symbola"),
+        previousSizes = Some(FontSizes(30.0f, 15.0f, 13.0f))
       )
     )
     .withCursorColors(

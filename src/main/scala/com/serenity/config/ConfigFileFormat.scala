@@ -195,6 +195,8 @@ object ConfigFileFormat:
     field("typography.prose.size"),
     field("typography.code.size"),
     field("typography.ui.size"),
+    comment("The prose, code and UI sizes from before the last size change, for Undo Last Size Change, or off"),
+    field("typography.previous_sizes"),
     field("typography.prose.ligatures"),
     field("typography.code.ligatures"),
     field("typography.ui.ligatures"),
