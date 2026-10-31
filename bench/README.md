@@ -47,6 +47,22 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 `bench/startup-variance.sh <app-image> <runs-per-round> <out-dir>` runs `ttfw.py` in six rounds ordered warm, cold, cold, warm, warm, cold, so drift falls on both modes alike. "Cold" means the image's AOT cache is moved aside (the OS file cache stays warm). `bench/startup-spread.py` pools the rounds into n, median, coefficient of variation and max/min per mode. The manual `startup-variance.yml` workflow runs it on a GitHub runner against the Linux image of a Desktop Package Check run (`image_run_id`), to decide whether start-up rows can gate in CI or only track a trend.
 
+## Opening a large project (#2420)
+
+`index.walk.cold.100k` and `index.walk.warm.100k` time `ProjectFileIndex.listing` (what "Go to File" does) over a synthetic tree: from a fresh index (a full walk, the first open) and from one that already walked it (a revalidation, every later open). They are `PerformanceBenchmarks` rows, so the paired-ratio gate judges them like the others; run just these with `java -cp serenity-perf.jar com.serenity.perf.PerformanceBenchmarks index.walk.`. The tree is written the first time a row needs it. Warm-up (1) and iteration counts (5 cold, 20 warm) are the runner's mechanics, not targets.
+
+`SyntheticProjectTree` (test scope) writes the tree deterministically from a seed: 100,000 visible files in 10,000 directories is the size in #2420. Depth 8 and the log-normal spread of files per directory (sigma 1.6) were fitted to four real trees measured on 2026-10-30: deepest file 6 to 9 levels, median files per directory 0.11 to 0.28 of the mean (sigma 1.6 gives 0.28). The counts of ignored directories (20 roots, 50 files each) and rule-ignored files (500) are assumptions, not measurements: the real trees had none, and the walker never reads them, so they only change how long the tree takes to write.
+
+## Typing while a project is indexed (#2420)
+
+`com.serenity.perf.TypingWhileIndexingProfile` types the same keystrokes idle and while cold walks of the 100,000-file tree run back to back on other threads, in idle, loaded, loaded, idle blocks so drift falls on both alike. It reports `count`, `p50_ms`, `p95_ms` and `max_ms` per mode, the loaded/idle ratios and how many walks finished while typing. A keystroke here is the edit plus the damaged frame drawn for it: the in-process part of input-to-paint, so a lower bound on what a user sees. It needs a display.
+
+```bash
+java -cp serenity-perf.jar com.serenity.perf.TypingWhileIndexingProfile            # --keys=300 --pace-ms=100 --warmup-keys=200 --small
+```
+
+On a runner use the manual `typing-while-indexing.yml` workflow (it must be on master to dispatch). Defaults: 100 ms between keys is the 10 keys per second `bench-laptop.sh` types at; 300 keys per block and 200 warm-up keys are how long to measure for, not targets. **There is no threshold on purpose.** The proposal's "p95 at most 1.5x idle" was a guess, and the standing rule (#2028) is that a guess is not a bound. Once there are numbers from the laptop and a runner, with their spread, the owner can decide whether and where it gates. No numbers have been taken yet.
+
 ## Per-keystroke latency trace
 
 `[FRAME]` reports each phase's percentiles over its own population (every frame, every input chain), so its p50s do not add up to `input-to-paint`. `ui.render.latency_trace = true` (default off) follows each keystroke instead and logs one line per painted keystroke, then a summary every 5 seconds:
