@@ -332,8 +332,11 @@ The renderer and the toolkit are settled together before any AWT class loads, so
 raster, which paints with Skia and presents through Java2D), draws the same built-in document through the same scripted
 actions on each, prints the tables and saves them as
 `render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
-scenarios are a cold full frame, typing one character, scrolling one line, scrolling five lines, a page down and a
-caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
+scenarios are a cold full frame, a warm full frame (the same state redrawn whole with warm caches), typing one
+character, scrolling one line, scrolling five lines, a page down, a caret blink and the first frame after a window resize
+(the window alternates between its size and three quarters of it; the toolkit's own resize is outside the timing). The
+warm frame and the resize are reported but take no part in the verdict. The report also gives the scale the Skia layer
+drew at beside Java2D's. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
 or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
 its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
 Skiko's frame pacing (with vsync on, which is now opt-in, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default

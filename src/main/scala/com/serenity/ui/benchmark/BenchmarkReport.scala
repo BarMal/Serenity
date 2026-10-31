@@ -59,6 +59,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val carets = environment.skiaDraws.filter(_.caretWaits > 0).map { stats =>
       f"Skia layer: ${stats.caretWaits} changes of carets; change to draw mean ${stats.caretToRenderMeanMs}%.2f ms (max ${stats.caretToRenderMaxMs}%.2f)."
     }
+    val skiaScale = environment.skiaDeviceScale.map { scale =>
+      val note = if scale == environment.deviceScale then "" else s", not Java2D's ${environment.deviceScale}"
+      s"Skia layer scale $scale$note."
+    }
     val cold = environment.coldPhases.map { phases =>
       f"Cold frame, Skia caches (mean of ${phases.frames}): ${phases.facesPerFrame}%.1f faces ${phases.faceMsPerFrame}%.2f ms, ${phases.shapersPerFrame}%.1f shapers ${phases.shaperMsPerFrame}%.2f ms, ${phases.shapingsPerFrame}%.0f shapings ${phases.shapingMsPerFrame}%.2f ms."
     }
@@ -69,7 +73,7 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    (List(startup, layers, draws, carets, cold).flatten ++ splits ++ List(sync, pictures).flatten)
+    (List(startup, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ List(sync, pictures).flatten)
       .map(line => s"\n$line")
 
   private def coldSplitLine(arm: String, split: ColdFrameSplit): String =
@@ -173,6 +177,7 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         "power"          -> environment.machine.power.asJson,
         api
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
+        environment.skiaDeviceScale.map(scale => "skiaDeviceScale" -> scale.asJson).toList ++
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
         environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList ++
