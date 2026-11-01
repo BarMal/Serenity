@@ -81,7 +81,19 @@ object TextOverlayRenderer:
       // paint (no bespoke composition and no rows/header/footer/key-hint given at construction) simply has none, and
       // there is no separate plain-rows path left to fall back to.
       overlay.composition.foreach(
-        drawComposition(surface, _, theme, cursorVisible, fg, bg, font, cellMetrics, advances, textInsetPx)
+        drawComposition(
+          surface,
+          _,
+          theme,
+          cursorVisible,
+          fg,
+          bg,
+          font,
+          cellMetrics,
+          advances,
+          textInsetPx,
+          highlightRadiusPx = if isTabStrip then config.scaledUiCornerRadiusPx else 0
+        )
       )
     }
     // The status row and the tab strip are both quiet single lines, not floating panels: no border.
@@ -142,7 +154,8 @@ object TextOverlayRenderer:
     font: Font,
     cellMetrics: CellMetrics,
     advances: MeasuredTextAdvances,
-    textInsetPx: Double
+    textInsetPx: Double,
+    highlightRadiusPx: Int
   ): Unit =
     composition.paintBoxes.foreach { box =>
       box.text.foreach { text =>
@@ -150,7 +163,7 @@ object TextOverlayRenderer:
         val x     = math.round(rect.x).toInt
         val y     = math.round(rect.y).toInt
         val width = math.round(rect.width).toInt
-        val row   = overlayRowFor(box, text)
+        val row   = overlayRowFor(box, text, highlightRadiusPx)
         OverlayRowPainter.renderRow(
           surface,
           x,
@@ -164,7 +177,10 @@ object TextOverlayRenderer:
           font = font,
           cellMetrics = cellMetrics,
           advances = advances,
-          textInsetPx = textInsetPx,
+          // The new-tab glyph is the strip's last cell: shifted right it would run off the strip, so it moves in by the
+          // same margin the first tab keeps from the left edge.
+          textInsetPx =
+            if box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId) then -textInsetPx else textInsetPx,
           // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
           // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a
           // fractional gap renders as no gap at all.
@@ -177,10 +193,11 @@ object TextOverlayRenderer:
   /** A box with a tone but no segments of its own paints as one implicit segment carrying that tone, so the tone goes
     * through the same selected-wins colour rules as any segment's. Explicit segments keep their own tones.
     */
-  private def overlayRowFor(box: SurfacePaintBox, text: String): OverlayRow =
+  private def overlayRowFor(box: SurfacePaintBox, text: String, highlightRadiusPx: Int): OverlayRow =
     val tonedWhole = box.segments.isEmpty && box.tone != OverlayTone.Normal
     OverlayRow(
       plainText = text,
+      segmentHighlightRadiusPx = highlightRadiusPx,
       selected = box.selected,
       cursorColumn = box.cursorOffset,
       segments =

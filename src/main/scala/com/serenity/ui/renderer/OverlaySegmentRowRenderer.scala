@@ -82,17 +82,26 @@ object OverlaySegmentRowRenderer:
         case (cursorX, (segment, index)) =>
           val remainingWidth = (x + width - cursorX).max(0)
           val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
-          renderSegmentCell(
-            surface,
-            cursorX,
-            y,
-            cellWidth,
-            segment,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
+          val paintCell = () =>
+            renderSegmentCell(
+              surface,
+              cursorX,
+              y,
+              cellWidth,
+              segment,
+              theme,
+              defaultForeground,
+              defaultBackground,
+              font
+            )
+          if segment.selected && row.segmentHighlightRadiusPx > 0 then
+            surface.panelOutlines match
+              case Some(outlines) =>
+                outlines.withRoundRectClip(cursorX, y, cellWidth, 1, RoundedCorners.All, row.segmentHighlightRadiusPx)(
+                  paintCell()
+                )
+              case None => paintCell()
+          else paintCell()
           val afterCell = cursorX + cellWidth
           val afterSeparator =
             if segment.trailingSeparator && afterCell < x + width then
