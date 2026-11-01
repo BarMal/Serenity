@@ -49,14 +49,13 @@ trait ColdFrameHarness:
   private def deviceWidthPx(scale: Double): Int  = math.ceil(windowWidth * scale).toInt
   private def deviceHeightPx(scale: Double): Int = math.ceil(windowHeight * scale).toInt
 
-  final protected class Pooled(scale: Double, persists: Boolean, frames: FrameImages):
+  final protected class Pooled(scale: Double, persists: Boolean, frames: FrameImages, caches: RenderCaches):
 
-    def this(scale: Double, persists: Boolean = true) =
-      this(scale, persists, FrameImages(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists)))
+    def this(scale: Double, persists: Boolean = true, caches: RenderCaches = RenderCaches.create()) =
+      this(scale, persists, FrameImages(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists)), caches)
 
     private val images      = frames.drawn
     private val screenImage = frames.screen
-    private val caches      = RenderCaches.create()
     caches.frameCounters.setEnabled(true)
     private val screen = ScreenIdentity(this)
     private val drawn  = AtomicInteger(0)
@@ -127,7 +126,7 @@ trait ColdFrameHarness:
     */
   protected def coldFrameWith[A](state: AppState, scale: Double)(use: BufferedImage => A): A =
     oracleImages.lend(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists = false)) { frames =>
-      use(Pooled(scale, persists = false, frames).render(state, Damage.Everything))
+      use(Pooled(scale, persists = false, frames, RenderCaches.create()).render(state, Damage.Everything))
     }
 
   protected def differing(drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
