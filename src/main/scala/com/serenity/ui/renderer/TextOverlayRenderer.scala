@@ -177,10 +177,12 @@ object TextOverlayRenderer:
           font = font,
           cellMetrics = cellMetrics,
           advances = advances,
-          // The new-tab glyph is the strip's last cell: shifted right it would run off the strip, so it moves in by the
-          // same margin the first tab keeps from the left edge.
+          // The new-tab glyph is the strip's last cell: shifted right it would run off the strip, so it moves in
+          // instead, by the text inset but never so far that it reaches the previous tab's close glyph.
           textInsetPx =
-            if box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId) then -textInsetPx else textInsetPx,
+            if box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId) then
+              -math.min(textInsetPx, cellMetrics.charWidth / 4.0)
+            else textInsetPx,
           // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
           // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a
           // fractional gap renders as no gap at all.
