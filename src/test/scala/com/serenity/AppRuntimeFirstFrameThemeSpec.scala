@@ -12,7 +12,7 @@ import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{ScrollCounting, RenderCaches, StateManager}
+import com.serenity.state.manager.{RenderCaches, ScrollCounting, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
