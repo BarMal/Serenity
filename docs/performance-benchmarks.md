@@ -80,22 +80,22 @@ These rows exist so a change that moves a process-wide cache into state a runtim
 
 Every `layout.anchor_wrap.*`, `layout.cold_font.*` and `laptop.*` row has allocation columns.
 
-One run of these rows on the cloud container that wrote them (shared CPU, Xvfb, so compare ratios, not absolute times):
+Median of 12 full runs of `PerformanceBenchmarks` with the warm-up extension (issue #2443, below), on the 4-core container the benchmark study ran on (Xvfb, 1x; shared CPU, so compare ratios, not absolute times). Before the extension the same rows read 20 to 50% higher (the old column, from 12 runs without it).
 
-| Row | p50 ms | allocation p50 |
-| --- | ---: | ---: |
-| `layout.anchor_wrap.warm_caret_lookup` | 1.19 | 131 KiB |
-| `layout.anchor_wrap.after_edit.caret_lookup` / `.reduce_only` | 1.30 / 0.019 | 579 KiB / 9 KiB |
-| `layout.cold_font.glyph_advances` | 1.16 | 47 KiB |
-| `layout.cold_font.shaping_barriers` | 1.33 | 31 KiB |
-| `layout.cold_font.font_line_extents` | 0.40 | 14 KiB |
-| `layout.cold_font.measured_layout_memo.proportional` / `.monospaced` | 0.21 / 1.54 | 5 KiB / 53 KiB |
-| `layout.cold_font.prose_column` | 8.19 | 5.2 MiB |
-| `layout.cold_font.text_layout_snapshot` | 1.86 | 330 KiB |
-| `laptop.input.state_manager.two_runtimes.same_text` | 4.17 | 2.3 KiB |
-| `laptop.input.state_manager.two_runtimes.different_text` | 7.08 | 2.3 KiB |
+| Row | p50 ms (before) | p50 ms | allocation p50 |
+| --- | ---: | ---: | ---: |
+| `layout.anchor_wrap.warm_caret_lookup` | 0.079 | 0.051 | 133 KiB |
+| `layout.anchor_wrap.after_edit.caret_lookup` / `.reduce_only` | 1.44 / 0.011 | 1.11 / 0.008 | 797 KiB / 9 KiB |
+| `layout.cold_font.glyph_advances` | 0.82 | 0.59 | 56 KiB |
+| `layout.cold_font.shaping_barriers` | 0.99 | 0.47 | 35 KiB |
+| `layout.cold_font.font_line_extents` | 0.34 | 0.21 | 16 KiB |
+| `layout.cold_font.measured_layout_memo.proportional` / `.monospaced` | 0.34 / 1.54 | 0.28 / 1.11 | 16 KiB / 60 KiB |
+| `layout.cold_font.prose_column` | 6.18 | 4.23 | 5.3 MiB |
+| `layout.cold_font.text_layout_snapshot` | 1.69 | 1.27 | 400 KiB |
+| `laptop.input.state_manager.two_runtimes.same_text` | 2.24 | 1.53 | 2.1 KiB |
+| `laptop.input.state_manager.two_runtimes.different_text` | 4.43 | 3.08 | 2.1 KiB |
 
-The last two rows show the sharing directly: when the second runtime types what the first just typed, the pair of keystrokes costs 2.9 ms less than when it types something of its own. The 2.3 KiB allocation is probably only the calling thread's share (the `StateManager`s do their work on other threads); that is inferred, not checked, so do not read it as the rows' total allocation.
+The last two rows show the sharing directly: when the second runtime types what the first just typed, the pair of keystrokes costs 1.5 ms less than when it types something of its own (2.9 ms less before the extension). The 2.3 KiB allocation is probably only the calling thread's share (the `StateManager`s do their work on other threads); that is inferred, not checked, so do not read it as the rows' total allocation.
 
 ### Footprint rows and static caches
 
@@ -124,18 +124,50 @@ The prose has a multi-char cluster (e with a combining acute, a thumbs-up with a
 | `text.counts.rope_build` | `Rope(text).wordCount` for a fresh rope, so every leaf's `TextSummary` is computed | the word and character iterators in `TextCounts.of` |
 | `text.counts.rope_edit` | one insert into a counted rope, then its word count: only the leaf and the joins on its path recompute | the same iterators on the incremental path |
 
-Every `text.boundary.*` and `text.counts.*` row has allocation columns. Three runs of `BoundaryCacheBenchmarks` on the cloud container that wrote them (shared CPU, so compare ratios, not absolute times), p50 ms and allocation p50:
+Every `text.boundary.*` and `text.counts.*` row has allocation columns. Three consecutive runs of the full suite with the warm-up extension (issue #2443) on the 4-core container (shared CPU, so compare ratios, not absolute times); the same rows read 20 to 50% higher before the extension.
 
 | Row | p50 ms (three runs) | allocation p50 |
-| --- | ---: | ---: |
-| `text.boundary.word_motion` | 0.125 / 0.145 / 0.120 | 7.6 KiB |
-| `text.boundary.grapheme_motion` | 0.047 / 0.053 / 0.042 | 7.9 KiB |
-| `text.boundary.keystroke_after_edit` | 0.0076 / 0.0077 / 0.0067 | 7.3 KiB |
-| `text.boundary.find_whole_word` | 5.57 / 5.73 / 5.17 | 474 KiB |
-| `text.counts.rope_build` | 18.2 / 18.2 / 18.6 | 820 KiB |
-| `text.counts.rope_edit` | 0.169 / 0.162 / 0.168 | 8.7 KiB |
+| --- | --- | ---: |
+| `text.boundary.word_motion` | 0.187 / 0.187 / 0.193 | 7.5 KiB |
+| `text.boundary.grapheme_motion` | 0.077 / 0.075 / 0.073 | 8.4 KiB |
+| `text.boundary.keystroke_after_edit` | 0.0103 / 0.0106 / 0.0104 | 7.2 KiB |
+| `text.boundary.find_whole_word` | 6.43 / 5.89 / 6.04 | 474 KiB |
+| `text.counts.rope_build` | 16.4 / 17.9 / 16.9 | 846 KiB |
+| `text.counts.rope_edit` | 0.161 / 0.162 / 0.162 | 9.4 KiB |
 
 The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, so a change on them needs the ABBA protocol below, not a single before/after pair.
+
+## Warm-up extension -- issue #2443
+
+**Problem.** A benchmark's p50 depends on how far the JIT had got when it was timed. `render.cell_grid.frame_emoji_clusters` took about 1.4 ms in one JVM and 3 to 7 ms in the next, because the 500 ms warm-up covers only the first 50 to 90 calls of a frame that takes about 3000 calls to settle. 55 of 140 rows differed by more than 1.5x between three full runs of one commit.
+
+**What runs now.** After the ordinary warm-up, `WarmupExtension` runs timed rounds of 100 ms until `decide` says stop:
+
+| setting | value | basis |
+| --- | --- | --- |
+| round | 100 ms | the length of the existing `settle` round |
+| flat start | 5 rounds within 10% and at least 10,000 warm-up invocations: stop | 10,000 is the C2 figure in `BenchmarkRunner`'s own warm-up comment; the 10% is a choice |
+| steadiness window | the last 40 rounds (4 s), first-half median against second-half median within 20% | replay of 24 cold JVMs: 19 of 24 landed within 1.25x of their final plateau (the 2 s / 5% window of `settle`: 9 of 24) |
+| per-row cap | 3 s | a choice; the measured ramp to plateau averaged 5.9 s, so the cap, not the window, ends most ramping rows (27 or 28 per run) |
+| per-run cap | 90 s, spent in suite order | a choice; spent in every one of nine instrumented runs after the first 36 to 44 rows |
+
+`-Dserenity.bench.warmup.rowCapSeconds=` and `runCapSeconds=` change the caps for a study, and `-Dserenity.bench.warmup=off` turns the extension off. Rows with `fixedSampleCount` (those that grow the state they time, such as `prose.markdown_enter.renumber`, which adds a line per call) are not extended: extra calls would change their p50 instead of settling it. That is why `prose.markdown_enter.renumber` read 3.97x slower in the first experiment.
+
+**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only.
+
+**Measured** (12 full runs with the extension against 12 without, 4-core container; container figures):
+
+| | without | with |
+| --- | ---: | ---: |
+| suite run time | 6.7 to 6.9 min | mean 7.1 min (+14 s) |
+| rows whose p50 differs by more than 1.5x between 3 runs | 62.7 of 132 | 18 |
+| median row p50, with / without | | 0.64 |
+| A/A builds failing the gate, first pass / after the confirmation | 78.5% / 11.3% | 41.5% / 2.4% |
+| injected 2x caught per benchmark, after the confirmation | 89.2% | 95.9% |
+
+Still wide with the extension: `layout.aligned_prose.moved_lines` (about 15x slower in 2 of 12 runs, issue #2461) and, once, `rope.large_json.cursor_offset` (1 of 12). The rates on a real CI runner and their sensitivity to the caps and the window are not measured (issue #2462).
+
+**Absolute numbers moved.** The median row reads 36% lower than before, since the old figures were taken on code the JIT had not finished with; 124 of 132 rows are more than 20% lower. The gate compares base and head built and run by the same runner, so it needs no restating (the one PR that changes the runner is compared across two runner versions: its base runs the old runner, whole, so its ratios are biased low and it cannot show a regression; the first PR after it is compared like for like); the tables in this document were re-stated from the 12 runs, and the incident figures further down are marked as measured before.
 
 ## ABBA protocol
 
@@ -420,6 +452,8 @@ container shared with other jobs (hence `nice -n -20` on the benchmark JVM; an u
 CPU contention, with load averages up to 15). Per benchmark: max/min across the ten per-run p50s, and the number of
 modes (p50s more than 15% apart start a new mode). The "before" set is master at d1542169; "after" is this change.
 
+*The figures in this audit and the incident numbers below were measured before the warm-up extension (issue #2443) and are kept as the record of what was found then.*
+
 **What the audit found.**
 
 | Class | Benchmarks | Evidence |
@@ -469,54 +503,74 @@ introduces it, whose base still runs the old one). The job's timeout is 30 minut
 **Problem.** The gate failed a benchmark only when the head's *fastest* p50 exceeded 2.0x the base's *slowest* p50 over
 two runs a side. A benchmark whose p50 swings between runs of one commit (the issue saw 5 to 30 ms) therefore hid any
 slowdown that landed inside the swing, and the 2.0x bar was also the size of the regression to be caught. On ten
-recorded runs of this commit (below) the old rule flagged 45% of the benchmarks that a real, injected 2x slowdown
-slowed.
+recorded runs of the commit measured then, the old rule flagged 45% of the benchmarks that a real, injected 2x
+slowdown slowed.
 
 **Gate now.** The base and head commits run in three back-to-back pairs that alternate which side goes first (B H, H B,
-B H). For each benchmark the verdict is the **median of the three head/base p50 ratios**; it fails when that exceeds
-**1.75x** and the median head p50 is more than 50 us above the base's (the existing delta floor). Retained-heap and
-allocation checks run on the per-benchmark medians as before. `scripts/compare_perf_runs.py` is the gate;
+B H). For each benchmark the verdict compares each side's **fastest p50** over its runs: it fails when the fastest head
+p50 exceeds the fastest base p50 by more than **1.5x** and by more than 50 us (the existing delta floor). Retained-heap
+and allocation checks run on the per-benchmark medians as before. `scripts/compare_perf_runs.py` is the gate;
 `scripts/study_perf_gate.py` scores it against recorded runs.
+
+**Why the fastest run (issue #2443).** A benchmark's p50 is bimodal from one JVM to the next: depending on how far the
+JIT had got when it was measured, the same code reads about 1.4 ms or 3 to 7 ms (`render.cell_grid.frame_emoji_clusters`
+is the example the investigation started from). The slow mode is a state a run lands in; it only ever makes a run slower,
+so the fastest run is the one least affected by it. The median of three paired ratios, which this section described
+before, turns two runs in different modes into a verdict. The cost is that one lucky-fast head run clears a real
+slowdown (a head of 20, 20 and 9 ms against a base of 10, 10, 10 passes); `test_the_fastest_head_run_decides_...` states
+it.
 
 **Confirming before failing.** The first live runs of this gate on `ubuntu-latest` produced a false positive:
 `render.markdown.live_preview` read 1.93x (0.593 to 1.024 ms) in one run of a commit and 1.35x (0.365 to 0.442 ms) when
-the same commit's job was re-run, with `layer_cache_on.idle_frame_2x` at 1.69x beside it. So a benchmark past 1.75x is
+the same commit's job was re-run, with `layer_cache_on.idle_frame_2x` at 1.69x beside it. So a benchmark past the threshold is
 only *flagged* on the first three pairs. The job then re-measures just the flagged benchmarks (`PerformanceBenchmarks`
 takes benchmark names as arguments) in three fresh pairs on the same runner, `confirm-*` in the uploaded artifact, and
-fails only if those pairs are past 1.75x too. The confirmation is judged on its own pairs, not pooled with the first
+fails only if those pairs are past the threshold too. The confirmation is judged on its own pairs, not pooled with the first
 three: the flagged benchmark was picked for being the worst of about ninety, and pooling would count that luck twice. A
 retained-heap regression is not noisy this way and fails on the first pass. Cost: nothing when no benchmark is
 flagged, and about 5 minutes a run for six runs of a handful of benchmarks when one is. `scripts/test_compare_perf_runs.py`
 (`ConfirmBeforeFailingTests`) shows an injected 2x flagged and then confirmed, and a one-off spike flagged and then
-forgiven. By construction the confirmation can only turn failures into passes, so the A/A rate in the table below is an
-upper bound; a persistent 2x slowdown must clear the threshold twice, which at the measured 95% per pass is about 90%
-(an estimate assuming the two passes are independent, not a measurement).
+forgiven. By construction the confirmation can only turn failures into passes; the table below measures both passes
+(first pass, and after the confirmation on fresh pairs) rather than assuming them independent.
 
 **Injecting a slowdown.** `-Dserenity.bench.slowdown=2` makes every timed call take twice as long (it spins for the
 extra time), so a gate can be shown a regression it must catch. `scripts/test_compare_perf_runs.py` carries the same
 case as a red test: the old rule passes base `[5, 30, 6]` ms against head `[10, 60, 12]`, the new one fails it.
 
-**Measurement.** Ten full `PerformanceBenchmarks` runs of one commit and four with `-Dserenity.bench.slowdown=2`, on a
-4-core Linux container under Xvfb at 1x (the CI perf job's configuration), one JVM per run, run back to back. Trials
-draw 3 runs as the base side and 3 others as the head side, 2,000 times (seeded); 56 benchmarks are slow enough for a 2x
-slowdown to clear the 50 us delta floor.
+**Measurement (container figures).** Twelve full `PerformanceBenchmarks` runs of one commit (master `3a7a88b7`), one JVM
+per run, back to back, on a 4-core Linux container under Xvfb at 1x (the CI perf job's configuration), 6.7 to 6.9 minutes
+each; 121 benchmarks are judged and 83 are slow enough for a 2x slowdown to clear the 50 us floor. Trials draw 3 runs as
+the base side and 3 others as the head side, 2,000 times (seeded) with `study_perf_gate.py`; "A/A" is base and head being
+the same code, so any build that fails is a false positive. With `--confirm`, a trial's flags are re-judged on 3 fresh
+pairs drawn from the other 6 runs, as the CI job does. An injected slowdown multiplies the head runs' p50s, which is what
+`-Dserenity.bench.slowdown=2` does to a real run. The figures below are from that container, not from a CI runner, and
+the runs are resampled, so the trials are not independent.
 
-| rule | A/A: builds failing (false positive) | injected real 2x: benchmarks caught | synthetic 1.5x: benchmarks caught |
-| --- | ---: | ---: | ---: |
-| old (fastest head vs slowest base, 2.0x, 2 runs) | 0.0% | 45% | 0.3% |
-| paired median, 1.3x | 40.5% | 97% | 85% |
-| paired median, 1.5x | 6.7% | 96% | 45% |
-| **paired median, 1.75x** | **0.0%** | **95%** | 3.7% |
-| paired median, 2.0x | 0.0% | 76% | 1.1% |
+| rule | A/A builds failing, first pass | A/A builds failing after confirm | injected 2x: benchmarks caught, first pass | after confirm | injected 1.5x after confirm |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| old (fastest head vs slowest base, 2.0x, 2 runs; it had no confirmation) | 32.7% | n/a | 17.7% | n/a | n/a |
+| median of paired ratios, 1.75x (the gate before #2443) | 76.6% | 17.6% | 80.2% | 61.2% | 4.1% |
+| median of paired ratios, 1.5x | 90.3% | 29.6% | 91.7% | 80.3% | 23.7% |
+| **fastest vs fastest, 1.5x (now)** | 78.5% | **11.3%** | 94.7% | **89.2%** | 23.9% |
+| fastest vs fastest, 1.75x | 69.8% | 9.0% | 85.3% | 72.4% | 2.1% |
+| fastest vs fastest, 2.0x | 65.0% | 8.8% | 50.6% | 24.8% | 0.4% |
 
-With 2 pairs the 1.5x rule fails 11.7% of A/A builds and 1.75x fails 0.7%; with 4 pairs neither fails any.
+The benchmark columns are the share of the 83 eligible benchmarks a build with every head run slowed fails on, which is
+the chance of catching a slowdown confined to one benchmark.
+
+The earlier version of this section reported 0.0% A/A and 95% at 2x for the median at 1.75x, from ten runs of an older,
+smaller suite (56 eligible benchmarks). The twelve runs above give 17.6% and 61% for the same rule after the confirmation.
+I do not know why they differ: the suite has grown, and these runs are all from one container.
 
 **What this does and does not show.**
 
-- The 2,000 trials resample 10 runs, so they are far from independent: "0.0%" means none in this sample, not none. A
-  CI runner is noisier than this container (the issue's 5 to 30 ms swing was not seen here: the worst max/min over three
-  runs of a benchmark was 1.8x), and the false-positive rate there is unmeasured until the job has run on it.
-- The injected slowdown is uniform. A regression confined to one benchmark is caught with that benchmark's own rate in
-  the last column of `study_perf_gate.py`'s output (95% at 2x for 1.75x).
-- A 1.5x regression is mostly missed by any rule that keeps false positives near zero; the gate is for the 2x class.
-- Cost: six benchmark runs instead of four, about 50% more perf-job time.
+- The false-positive rate is that of one container. A CI runner is a different machine; the rate there is unmeasured
+  until the job has run enough times on it. The one CI job inspected for #2443 flagged one benchmark on the first pass.
+- The injected slowdown is uniform. A regression confined to one benchmark is caught at that benchmark's own rate, the
+  per-benchmark share in the table.
+- A 1.5x regression is mostly missed by any rule that keeps false positives low (24% at best here); the gate is for the
+  2x class.
+- A first pass that fails four builds in five on unchanged code is only usable because of the confirmation; the fraction
+  that survives it (11% here) is the number to watch. The remaining false positives come from benchmarks whose run-to-run
+  state differs, which a better warm-up in the runner (investigated in #2443, not changed) would address at the source.
+- Cost: six benchmark runs instead of four, about 50% more perf-job time; unchanged by #2443.

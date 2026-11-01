@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.skia.FallbackAgreement
 import com.serenity.ui.terminal.LayerDrawStats
 
 /** The machine and window a run was made on, and the render API Skia actually used: `Left` with the cause when the
@@ -25,6 +26,7 @@ final case class BenchmarkEnvironment(
     coldPhases: Option[ColdFramePhases] = None,
     java2dColdSplit: Option[ColdFrameSplit] = None,
     skiaColdSplit: Option[ColdFrameSplit] = None,
+    fallbackAgreement: Option[FallbackAgreement] = None,
     skiaDeviceScale: Option[Double] = None
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */

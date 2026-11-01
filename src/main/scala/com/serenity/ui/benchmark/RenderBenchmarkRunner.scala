@@ -15,7 +15,13 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
-import com.serenity.ui.skia.{SkiaLayerHost, SkiaTextCaches, SynchronousSkiaLayerSurfaceFactory, WarmupStats}
+import com.serenity.ui.skia.{
+  FallbackAgreement,
+  SkiaLayerHost,
+  SkiaTextCaches,
+  SynchronousSkiaLayerSurfaceFactory,
+  WarmupStats
+}
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 
 /** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
@@ -110,9 +116,14 @@ object RenderBenchmarkRunner:
       coldPhases = measuredSkia.flatMap(_.coldPhases),
       java2dColdSplit = java2d.coldSplit,
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
+      fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
       skiaDeviceScale = measuredSkia.map(_.deviceScale)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
+
+  /** The fonts the window draws its text with, under the names the report gives them. */
+  private def drawnFonts(fonts: Fonts): Vector[(String, java.awt.Font)] =
+    Vector("code" -> fonts.code, "text" -> fonts.text, "ui" -> fonts.ui).map((name, spec) => name -> spec.toAwt)
 
   private def loadFonts(): Fonts =
     val config = FontLoader.FontConfig()

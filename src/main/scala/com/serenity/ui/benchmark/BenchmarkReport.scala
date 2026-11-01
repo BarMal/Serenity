@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.skia.FallbackAgreement
 import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.Json
 import io.circe.syntax.*
@@ -69,12 +70,18 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val splits = List("Java2D" -> environment.java2dColdSplit, "Skia layer" -> environment.skiaColdSplit).flatMap {
       (arm, split) => split.map(coldSplitLine(arm, _))
     }
-    val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
+    val agreement = environment.fallbackAgreement.map(agreementLine)
+    val sync      = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    (List(startup, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ List(sync, pictures).flatten)
+    (List(startup, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ List(agreement, sync, pictures).flatten)
       .map(line => s"\n$line")
+
+  private def agreementLine(agreement: FallbackAgreement): String =
+    val base =
+      s"Fallback runs against TextLine on this machine: ${agreement.identical} of ${agreement.checked} strings identical."
+    if agreement.differing.isEmpty then base else s"$base Differing: ${agreement.differing.take(5).mkString(", ")}."
 
   private def coldSplitLine(arm: String, split: ColdFrameSplit): String =
     f"Cold frame split, $arm (mean of ${split.frames}): render call ${split.renderMs}%.2f ms (layout ${split.layoutMs}%.2f, drawing ${split.drawMs}%.2f, rest ${split.otherMs}%.2f), then ${split.presentMs}%.2f ms until presented."
@@ -181,7 +188,15 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
         environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList ++
-        coldSplitJson.map("coldSplit" -> _).toList*
+        coldSplitJson.map("coldSplit" -> _).toList ++
+        environment.fallbackAgreement.map(agreement => "fallbackAgreement" -> agreementJson(agreement)).toList*
+    )
+
+  private def agreementJson(agreement: FallbackAgreement): Json =
+    Json.obj(
+      "checked"   -> agreement.checked.asJson,
+      "identical" -> agreement.identical.asJson,
+      "differing" -> agreement.differing.asJson
     )
 
   private def coldSplitJson: Option[Json] =

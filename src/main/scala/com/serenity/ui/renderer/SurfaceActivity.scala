@@ -14,6 +14,7 @@ import com.serenity.diagnostics.{FrameCounter, FrameCounters}
 final class SurfaceActivity:
   private val runs        = new AtomicInteger(0)
   private val shapings    = new AtomicLong(0)
+  private val promotions  = new AtomicLong(0)
   private val composites  = new AtomicInteger(0)
   private val flushBytes  = new AtomicLong(0)
   private val layerPixels = new AtomicLong(0)
@@ -23,6 +24,18 @@ final class SurfaceActivity:
 
   def shaped(count: Long): Unit =
     val _ = shapings.addAndGet(count)
+
+  def promoted(count: Long): Unit =
+    val _ = promotions.addAndGet(count)
+
+  /** Runs `body`, which looks text up in `traffic`'s cache, and records the shapings and promotions it caused. */
+  def counting[A](traffic: ShapeTraffic)(body: => A): A =
+    val shapedBefore   = traffic.shapings
+    val promotedBefore = traffic.promotions
+    val answer         = body
+    shaped(traffic.shapings - shapedBefore)
+    promoted(traffic.promotions - promotedBefore)
+    answer
 
   def layerComposited(): Unit =
     val _ = composites.incrementAndGet()
@@ -40,6 +53,7 @@ final class SurfaceActivity:
   def drainInto(counters: FrameCounters): Unit =
     counters.add(FrameCounter.RunsDrawn, runs.getAndSet(0).toLong)
     counters.add(FrameCounter.ShapingCalls, shapings.getAndSet(0))
+    counters.add(FrameCounter.ShapePromotions, promotions.getAndSet(0))
     counters.add(FrameCounter.LayerComposites, composites.getAndSet(0).toLong)
     counters.add(FrameCounter.LayerBufferPx, layerPixels.getAndSet(0))
     counters.add(FrameCounter.TuiBytes, flushBytes.getAndSet(0))

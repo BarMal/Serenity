@@ -214,7 +214,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             ) => IO.unit
           ),
           appConfig = AppConfig.conventional,
-          makeStateManager = Some(_ => IO.pure(stateManager)),
+          makeStateManager = Some((_, _) => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
           registerResizeCallback = _ => ()
         )
@@ -269,7 +269,7 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
             ) => IO.unit
           ),
           appConfig = AppConfig.conventional,
-          makeStateManager = Some(_ => IO.pure(stateManager)),
+          makeStateManager = Some((_, _) => IO.pure(stateManager)),
           registerResizeCallback = _ => ()
         )
         .attempt

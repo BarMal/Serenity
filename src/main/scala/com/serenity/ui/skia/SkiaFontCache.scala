@@ -109,6 +109,8 @@ private[skia] object SkiaTypefaces:
     "/fonts/NotoEmoji-Bold.ttf"
   )
 
+  private[skia] def bundledTypefaces: List[Typeface] = Bundled.faces
+
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 

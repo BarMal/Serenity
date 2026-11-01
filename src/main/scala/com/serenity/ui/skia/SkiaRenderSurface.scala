@@ -240,9 +240,8 @@ final class SkiaRenderSurface(
     clipGlyphToRun: Boolean = false
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
-      val shapedBefore = shapedText.shapings
-      val shaped       = shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font)
-      activity.shaped(shapedText.shapings - shapedBefore)
+      val shaped =
+        activity.counting(shapedText)(shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font))
       shaped.draw(canvas, from, until, xPx, (yPx + ascentPx).toFloat, glyphPaint())
     }
 
@@ -260,9 +259,7 @@ final class SkiaRenderSurface(
     val face = fonts.faceFor(currentFontRef.get())
     val ink  = glyphPaint()
     if SkiaShapedTextCache.worthShaping(currentFontRef.get(), s) then
-      val before = shapedText.shapings
-      shapedText.stretchOf(s, face.font).draw(canvas, from, until, x, baseline, ink)
-      activity.shaped(shapedText.shapings - before)
+      activity.counting(shapedText)(shapedText.stretchOf(s, face.font)).draw(canvas, from, until, x, baseline, ink)
     else
       val _ = canvas.drawString(s.substring(from, until), x, baseline, face.font, ink)
 
