@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.DockedPanelFixtures
+import com.serenity.config.{AppConfig, DockedCornerStyle, StatusLinePlacement}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.StateManagerTestFacade.updateState
@@ -140,6 +141,27 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x"
       } ++ around)
 
+  /** For a failing frame: how many pixels still differ when one part of the scene is left out, to say which part. */
+  private def withoutOneThing(frame: AppState): Vector[String] =
+    def config(change: AppConfig => AppConfig)(state: AppState): AppState =
+      state.copy(persisted = state.persisted.copy(config = change(state.persisted.config)))
+    val variants: Vector[(String, AppState => AppState)] = Vector(
+      "no hover"             -> identity,
+      "no pane headers"      -> config(_.withPaneHeaders(false)),
+      "no scrollbar"         -> config(_.withScrollbar(false)),
+      "no status line"       -> config(_.withStatusLinePlacement(StatusLinePlacement.Off)),
+      "no line numbers"      -> config(_.withLineNumbers(false)),
+      "square corners"       -> config(_.withUiCornerRadiusPx(0)),
+      "floating docked"      -> config(_.withDockedCornerStyle(DockedCornerStyle.Floating))
+    )
+    variants.map { (label, tweak) =>
+      val on  = Frames(withCaching(true).andThen(tweak))
+      val off = Frames(withCaching(false).andThen(tweak))
+      val _   = on.render(frame, Damage.Everything)
+      val _   = off.render(frame, Damage.Everything)
+      s"without [$label]: ${differences(on, off).headOption.getOrElse("identical")}"
+    }
+
   private def withCaching(enabled: Boolean)(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(config = state.persisted.config.withLayerCaching(enabled)))
 
@@ -243,7 +265,8 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
       val (frame, damage) = step
       val _               = on.render(frame, damage)
       val _               = off.render(frame, damage)
-      withClue(s"frame $index: ")(differences(on, off) shouldBe empty)
+      val found = differences(on, off)
+      withClue(s"frame $index: ")((if found.isEmpty then found else found ++ withoutOneThing(frame)) shouldBe empty)
     }
   }
 
