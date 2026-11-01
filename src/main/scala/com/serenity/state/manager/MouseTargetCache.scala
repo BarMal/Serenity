@@ -82,6 +82,8 @@ final private[manager] case class MouseTargetLayoutKey(
     proseColumnCells: Option[Int],
     interfaceDensity: InterfaceDensity,
     uiElementGap: Double,
+    // The docked corner style reaches layout only as this margin, which also depends on the surface and the gap.
+    chromeInset: Int,
     showPaneHeaders: Boolean,
     statusLine: StatusLineConfig,
     scrollbarShown: Boolean,
@@ -195,6 +197,7 @@ private[manager] object MouseTargetLayoutKey:
       proseColumnCells = ProseColumn.widthCells(state),
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.effectiveUiElementGap,
+      chromeInset = ChromeFrame.inset(state),
       showPaneHeaders = state.chrome.paneHeaders,
       statusLine = state.chrome.statusLine,
       scrollbarShown = state.chrome.scrollbar,

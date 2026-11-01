@@ -51,7 +51,10 @@ object ChromeFrame:
     val tabBarHeight = if LayoutEngine.showsTabBar(state) then LayoutEngine.TabBarHeight else 0
     ChromeFrame(inset(state), tabBarHeight, gutterHeight, viewport)
 
-  private def inset(state: AppState): Int =
+  /** The margin the chrome keeps round itself, in cells: 0 unless the docked corner style is floating on a pixel
+    * surface.
+    */
+  def inset(state: AppState): Int =
     val floating = state.persisted.config.dockedCornerStyle == DockedCornerStyle.Floating
     if floating && !state.runtime.capabilities.isCellGrid then
       math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt

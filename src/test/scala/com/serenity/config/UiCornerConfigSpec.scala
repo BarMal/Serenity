@@ -17,11 +17,21 @@ class UiCornerConfigSpec extends AnyFlatSpec with Matchers:
     Files.writeString(file, lines.mkString("", "\n", "\n"))
     ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
-  "The corner settings" should "default to a 12 px radius, floating docked panels and a rounded pane header" in {
-    val config = AppConfig.default.interfaceConfig
-    config.cornerRadiusPx shouldBe 12
-    config.dockedCornerStyle shouldBe DockedCornerStyle.Floating
-    config.paneHeaderCorners shouldBe PaneHeaderCorners.Rounded
+  "The corner settings" should "default to a 12 px radius and a rounded pane header, whatever the layout" in {
+    List(AppConfig.default, AppConfig.conventional).foreach { config =>
+      config.interfaceConfig.cornerRadiusPx shouldBe 12
+      config.interfaceConfig.paneHeaderCorners shouldBe PaneHeaderCorners.Rounded
+    }
+  }
+
+  it should "start docked chrome flush in the minimal layout and floating in the conventional one" in {
+    AppConfig.default.dockedCornerStyle shouldBe DockedCornerStyle.Flush
+    AppConfig.conventional.dockedCornerStyle shouldBe DockedCornerStyle.Floating
+  }
+
+  it should "leave a docked corner style the file sets alone when the layout is conventional" in {
+    val result = load("ui.layout = conventional", "ui.docked_corner_style = flush")
+    result.config.dockedCornerStyle shouldBe DockedCornerStyle.Flush
   }
 
   it should "read all three from a config file, reporting nothing" in {
@@ -76,7 +86,7 @@ class UiCornerConfigSpec extends AnyFlatSpec with Matchers:
 
   it should "keep the default and say so for an unknown docked corner style or header corner value" in {
     val result = load("ui.docked_corner_style = hovering", "ui.pane_header_corners = pointy")
-    result.config.interfaceConfig.dockedCornerStyle shouldBe DockedCornerStyle.Floating
+    result.config.interfaceConfig.dockedCornerStyle shouldBe DockedCornerStyle.Flush
     result.config.interfaceConfig.paneHeaderCorners shouldBe PaneHeaderCorners.Rounded
     result.report.invalidEntries.map(_.key) should contain allOf ("ui.docked_corner_style", "ui.pane_header_corners")
   }

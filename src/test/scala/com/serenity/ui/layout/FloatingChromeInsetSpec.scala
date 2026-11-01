@@ -86,11 +86,16 @@ class FloatingChromeInsetSpec extends AnyFlatSpec with Matchers:
     panel.bottom shouldBe status.y - 1
   }
 
-  it should "cost exactly two columns and three rows against flush, with a status bar and no tab strip" in {
+  it should "take exactly two columns and three rows from flush, with a status bar and no tab strip" in {
     val flushLayout    = layoutOf(stateWith(flush))
     val floatingLayout = layoutOf(stateWith(floating))
 
-    floatingLayout.editorPanelRect.width shouldBe flushLayout.editorPanelRect.width - 2
+    // A panel's width is its share of the window, so it can differ by a cell between the two; what the editor and the
+    // panels together are given is what the margin takes away.
+    def widthGiven(layout: CalculatedLayout): Int =
+      layout.editorPanelRect.width + layout.pinnedPanelRects.values.map(_.width).sum
+
+    widthGiven(floatingLayout) shouldBe widthGiven(flushLayout) - 2
     floatingLayout.editorPanelRect.height shouldBe flushLayout.editorPanelRect.height - 3
   }
 
