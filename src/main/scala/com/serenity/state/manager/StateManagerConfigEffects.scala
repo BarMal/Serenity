@@ -242,6 +242,7 @@ final private[manager] class StateManagerConfigEffects(
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void
 
   private def interpretInterfaceChromeIntent(intent: InterfaceChromeIntent): IO[Unit] =
+    import InterfaceChromeIntent.{SetDockedCornerStyle, SetPaneHeaderCorners, SetUiCornerRadiusPx}
     intent match
       case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
@@ -249,6 +250,9 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
       case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
+      case SetUiCornerRadiusPx(radius)   => updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case SetDockedCornerStyle(style)   => updateAppearanceConfig(_.withDockedCornerStyle(style)).void
+      case SetPaneHeaderCorners(corners) => updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
       case InterfaceChromeIntent.SetInterfaceDensity(density) =>
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case InterfaceChromeIntent.SetWindowChromeMode(mode) =>

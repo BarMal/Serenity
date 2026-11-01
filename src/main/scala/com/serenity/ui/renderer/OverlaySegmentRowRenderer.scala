@@ -82,17 +82,27 @@ object OverlaySegmentRowRenderer:
         case (cursorX, (segment, index)) =>
           val remainingWidth = (x + width - cursorX).max(0)
           val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
-          renderSegmentCell(
-            surface,
-            cursorX,
-            y,
-            cellWidth,
-            segment,
-            theme,
-            defaultForeground,
-            defaultBackground,
-            font
-          )
+          val paintCell = () =>
+            renderSegmentCell(
+              surface,
+              cursorX,
+              y,
+              cellWidth,
+              segment,
+              theme,
+              defaultForeground,
+              defaultBackground,
+              font
+            )
+          // The fill runs as far as the title does, not to the end of the cell, so that is the shape to round.
+          val highlightWidth = segment.text.length.min(cellWidth)
+          if segment.selected && row.segmentHighlightRadiusPx > 0 then
+            surface.panelOutlines match
+              case Some(outlines) =>
+                val radius = row.segmentHighlightRadiusPx
+                outlines.withRoundRectClip(cursorX, y, highlightWidth, 1, RoundedCorners.All, radius)(paintCell())
+              case None => paintCell()
+          else paintCell()
           val afterCell = cursorX + cellWidth
           val afterSeparator =
             if segment.trailingSeparator && afterCell < x + width then
