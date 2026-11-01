@@ -169,6 +169,22 @@ Still wide with the extension: `layout.aligned_prose.moved_lines` (about 15x slo
 
 **Absolute numbers moved.** The median row reads 36% lower than before, since the old figures were taken on code the JIT had not finished with; 124 of 132 rows are more than 20% lower. The gate compares base and head built and run by the same runner, so it needs no restating (the one PR that changes the runner is compared across two runner versions: its base runs the old runner, whole, so its ratios are biased low and it cannot show a regression; the first PR after it is compared like for like); the tables in this document were re-stated from the 12 runs, and the incident figures further down are marked as measured before.
 
+## CI perf job shape -- issue #2464
+
+The `perf` job runs the suite as four matrix entries: shard 1/2 and 2/2 at 1x, and shard 1/2 and 2/2 at 2x (each entry
+benchmarks the base commit and the head in three pairs, then runs the confirmation for what it flagged, on its own
+rows). `timeout-minutes` is 75.
+
+| | before the warm-up extension | after it, unsharded (runs 41350271015, 41350357868) |
+| --- | ---: | ---: |
+| 1x job | 35.8 to 38.1 min | 57.3 and 58.3 min (about 53 without the 4.3 to 4.5 min confirmation) |
+| 2x job | 45.4 min | sharded: 33.0 to 40.3 min per shard |
+
+The 1x job was within 2 minutes of the old limit of 60. Check names are `Performance benchmarks (shard i/2)` and
+`Performance benchmarks (2x HiDPI, shard i/2)`; the artifacts are `perf-benchmark-results-shard-i` and
+`perf-benchmark-results-2x-shard-i`. `scripts/test_perf_matrix.py` pins that every scale runs as complete shards with
+distinct names, and that the timeout is set. The retained-heap rows run in shard 1 only.
+
 ## ABBA protocol
 
 Use it for any change that moves a cache, a lock or an allocation off the hot path, where the CI gate (a 2x ratio) is too coarse to see the effect. A is the baseline build and B the candidate; build both with `bench-artifacts.yml` (`serenity-perf.jar`) from the merge base and the candidate head.
