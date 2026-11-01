@@ -151,10 +151,10 @@ private[renderer] object RendererChromePlan:
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
     else band
 
-  /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the row
-    * holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the window's
-    * bottom edge there is nothing below to take. The window's rows are the layout's own, which a surface cut larger than
-    * the layout does not change.
+  /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the
+    * row holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the
+    * window's bottom edge there is nothing below to take. The window's rows are the layout's own, which a surface cut
+    * larger than the layout does not change.
     */
   def withDescenderBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if !context.surface.addressesPixels then band
