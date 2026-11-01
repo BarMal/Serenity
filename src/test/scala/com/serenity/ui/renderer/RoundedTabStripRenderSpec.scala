@@ -107,8 +107,8 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val colours = for y <- bandOf(s); x <- stripLeft(s) until stripRight(s) yield rgb(s.frame, x, y)
     colours.groupBy(identity).maxBy(_._2.size)._1
 
-  /** The active tab's fill: the commonest colour across the tab's span that is not the strip's own. Text ink is a
-    * few pixels of many colours, so a missing fill leaves nothing here to reach the size the fill must have.
+  /** The active tab's fill: the commonest colour across the tab's span that is not the strip's own. Text ink is a few
+    * pixels of many colours, so a missing fill leaves nothing here to reach the size the fill must have.
     */
   private def highlight(s: Strip): Int =
     val background = stripBackground(s)
@@ -118,7 +118,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val fill       = others.filter(_ != background).groupBy(identity).maxByOption(_._2.size)
     withClue("no fill other than the strip's own in the active tab: ")(fill should not be empty)
     val (colour, pixels) = fill.map((c, ps) => (c, ps.size)).getOrElse((background, 0))
-    val needed = 3 * metrics.charWidth * metrics.lineHeight
+    val needed           = 3 * metrics.charWidth * metrics.lineHeight
     withClue(s"the active tab's fill is only $pixels pixels, under $needed: ")(pixels should be >= needed)
     colour
 
