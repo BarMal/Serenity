@@ -82,27 +82,18 @@ object OverlaySegmentRowRenderer:
         case (cursorX, (segment, index)) =>
           val remainingWidth = (x + width - cursorX).max(0)
           val cellWidth      = segment.allocatedWidth.getOrElse(0).min(remainingWidth)
-          val paintCell = () =>
-            renderSegmentCell(
-              surface,
-              cursorX,
-              y,
-              cellWidth,
-              segment,
-              theme,
-              defaultForeground,
-              defaultBackground,
-              font
-            )
-          // The fill runs as far as the title does, not to the end of the cell, so that is the shape to round.
-          val highlightWidth = segment.text.length.min(cellWidth)
-          if segment.selected && row.segmentHighlightRadiusPx > 0 then
-            surface.panelOutlines match
-              case Some(outlines) =>
-                val radius = row.segmentHighlightRadiusPx
-                outlines.withRoundRectClip(cursorX, y, highlightWidth, 1, RoundedCorners.All, radius)(paintCell())
-              case None => paintCell()
-          else paintCell()
+          renderSegmentCell(
+            surface,
+            cursorX,
+            y,
+            cellWidth,
+            segment,
+            theme,
+            defaultForeground,
+            defaultBackground,
+            font,
+            highlightRadiusPx = if segment.selected then row.segmentHighlightRadiusPx else 0
+          )
           val afterCell = cursorX + cellWidth
           val afterSeparator =
             if segment.trailingSeparator && afterCell < x + width then
@@ -267,7 +258,8 @@ object OverlaySegmentRowRenderer:
     theme: Theme,
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
-    font: Font
+    font: Font,
+    highlightRadiusPx: Int = 0
   ): Unit =
     val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
     val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
@@ -275,18 +267,24 @@ object OverlaySegmentRowRenderer:
     val renderWidth = iconWidth + iconGap + text.length
     val leftPad     = math.max(0, (width - renderWidth) / 2)
     val renderX     = x + leftPad
-    renderSegmentText(
-      surface,
-      renderX,
-      y,
-      renderWidth,
-      text,
-      segment,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font
-    )
+    val paintText = () =>
+      renderSegmentText(
+        surface,
+        renderX,
+        y,
+        renderWidth,
+        text,
+        segment,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font
+      )
+    // The fill is the centred title, so that run is the shape to round.
+    surface.panelOutlines match
+      case Some(outlines) if highlightRadiusPx > 0 =>
+        outlines.withRoundRectClip(renderX, y, renderWidth, 1, RoundedCorners.All, highlightRadiusPx)(paintText())
+      case _ => paintText()
 
   def renderSegmentText(
     surface: RenderSurface,
