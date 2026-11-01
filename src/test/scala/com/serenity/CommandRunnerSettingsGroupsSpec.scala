@@ -91,6 +91,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     nestedGroup("settings-navigation").label shouldBe "Comments"
     group("settings-typography").children.map(_.id) shouldBe List(
+      "settings-font-sizes",
       "settings-prose-font",
       "settings-code-font",
       "settings-ui-font",

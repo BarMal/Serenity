@@ -9,16 +9,20 @@ import scala.util.control.NonFatal
 import cats.effect.IO
 
 /** The render settings that decide the toolkit and the renderer before any window exists. */
-final case class RenderStartupSettings(backend: RenderBackendSetting, wayland: WaylandRender)
+final case class RenderStartupSettings(
+    backend: RenderBackendSetting,
+    wayland: WaylandRender,
+    skiaVsync: Boolean = false
+)
 
 /** Reads the render startup settings alone, because they are needed before the full config is loaded: they can decide
   * the toolkit, which is fixed before AWT starts. It logs nothing, so it can run ahead of log routing.
   */
 object RenderBackendPeek:
 
-  private val SettingKeys = Set("ui.render.backend", "ui.render.wayland")
+  private val SettingKeys = Set("ui.render.backend", "ui.render.wayland", "ui.render.skia_vsync")
 
-  private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.Java2D)
+  private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
 
   def read(path: Path = ConfigManager.defaultConfigPath): IO[RenderStartupSettings] =
     IO.blocking {
@@ -41,4 +45,8 @@ object RenderBackendPeek:
           .flatMap(_.readValue(config, entry.getValue))
           .getOrElse(config)
       }
-    RenderStartupSettings(applied.surfaceConfig.renderBackend, applied.surfaceConfig.renderWayland)
+    RenderStartupSettings(
+      applied.surfaceConfig.renderBackend,
+      applied.surfaceConfig.renderWayland,
+      applied.surfaceConfig.renderSkiaVsync
+    )

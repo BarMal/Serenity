@@ -16,6 +16,18 @@ object PerformanceBenchmarks:
   given Balance = Balance.default
 
   def main(args: Array[String]): Unit =
+    val (shard, names) = BenchmarkShard.fromArgs(args.toList).fold(error => sys.error(error), identity)
+    val session        = WarmupExtension.Session.standard()
+    val results = withSuite { all =>
+      val selected = shard.fold(all)(_.select(all))
+      val timed    = BenchmarkRunner.runMatching(names, selected, session)
+      // The retained-heap rows belong to the first shard only, so they are measured once.
+      if shard.forall(_.index == 1) then timed ++ FootprintBenchmarks.runMatching(names) else timed
+    }
+    BenchmarkRunner.printResults(results)
+
+  /** Builds the whole suite, in the order it runs, inside the windows it needs, and hands it to `use`. */
+  private[perf] def withSuite[A](use: List[BenchmarkRunner.Benchmark] => A): A =
     import cats.effect.unsafe.implicits.global
 
     SwingWindow
@@ -33,8 +45,7 @@ object PerformanceBenchmarks:
               CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks
             val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
             require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
-            val results = BenchmarkRunner.runMatching(args.toList, all) ++ FootprintBenchmarks.runMatching(args.toList)
-            BenchmarkRunner.printResults(results)
+            use(all)
           }
       }
       .unsafeRunSync()

@@ -56,6 +56,10 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.layerCachingEnabled,
       (config, value) => config.withLayerCaching(value)
     ),
+    field("ui.render.skia_vsync", "render.skia_vsync", "render_skia_vsync")(boolean)(
+      _.surfaceConfig.renderSkiaVsync,
+      (config, value) => config.withRenderSkiaVsync(value)
+    ),
     field("ui.render.frame_timing", "render.frame_timing", "render_frame_timing")(boolean)(
       _.surfaceConfig.frameTimingEnabled,
       (config, value) => config.withFrameTiming(value)
