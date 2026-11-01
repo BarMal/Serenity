@@ -8,8 +8,8 @@ import com.serenity.app.AppRuntime
 import com.serenity.config.*
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
-import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.keystroke.events.*
+import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{RenderCaches, StateManager}
 import com.serenity.state.models.*
