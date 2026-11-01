@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{InterfaceDensityMetrics, SurfaceConfig, TextAreaInsets}
+import com.serenity.config.{SurfaceConfig, TextAreaInsets}
 import com.serenity.state.models.*
 
 final case class ViewportSize(width: Int, height: Int)
@@ -135,11 +135,10 @@ object LayoutEngine:
     viewportSize: ViewportSize,
     spacerPercentage: Double
   ): CalculatedLayout =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
-    val gutterHeight   = if usesBottomGutter(state) then densityMetrics.gutterHeight else 0
-    val tabBarHeight   = if showsTabBar(state) then TabBarHeight else 0
-    val contentHeight  = math.max(1, viewportSize.height - gutterHeight - tabBarHeight)
-    val uiElementGap   = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
+    val frame         = ChromeFrame.of(state, viewportSize)
+    val bounds        = frame.panelBounds
+    val contentHeight = bounds.height
+    val uiElementGap  = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
@@ -190,7 +189,7 @@ object LayoutEngine:
             // Bounds start below the reserved tab bar strip (issue #1074/#1075/#1076/#1077), not at the frame's own
             // top -- unlike the bottom gutter (which only shrinks a total nothing sits below), a top strip must shift
             // everything beneath it down by its own height.
-            LayoutRect(0, tabBarHeight, viewportSize.width, contentHeight),
+            bounds,
             minimumEditorWorkspaceWidth,
             MinimumVerticalPaneHeight,
             uiElementGap
@@ -213,10 +212,10 @@ object LayoutEngine:
     val topGap    = if topPinnedHeight > 0 then uiElementGap else 0
     val bottomGap = if bottomPinnedHeight > 0 then uiElementGap else 0
 
-    val workspaceX = leftPinnedWidth + leftGap
-    val workspaceY = tabBarHeight + topPinnedHeight + topGap
+    val workspaceX = bounds.x + leftPinnedWidth + leftGap
+    val workspaceY = bounds.y + topPinnedHeight + topGap
     val workspaceWidth =
-      math.max(1, viewportSize.width - leftPinnedWidth - rightPinnedWidth - leftGap - rightGap)
+      math.max(1, bounds.width - leftPinnedWidth - rightPinnedWidth - leftGap - rightGap)
     val workspaceHeight =
       math.max(1, contentHeight - topPinnedHeight - bottomPinnedHeight - topGap - bottomGap)
 
@@ -293,13 +292,8 @@ object LayoutEngine:
         availableHeight
       )
 
-    val gutterRect =
-      if usesBottomGutter(state) then
-        Some(LayoutRect(0, viewportSize.height - gutterHeight, viewportSize.width, gutterHeight))
-      else None
-
-    val tabBarRect =
-      if tabBarHeight > 0 then Some(LayoutRect(0, 0, viewportSize.width, tabBarHeight)) else None
+    val gutterRect = frame.gutterRect
+    val tabBarRect = frame.tabBarRect
 
     val baseLayout = CalculatedLayout(
       editorPanelRect = editorPanelRect,

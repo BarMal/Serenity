@@ -234,7 +234,7 @@ private[manager] object MouseTargetLayoutKey:
         tree.dockedSurfaceIds.flatMap { id =>
           for
             position <- tree.positionForSurface(id)
-            size     <- tree.currentSize(id, state.runtime.viewportSize)
+            size     <- tree.currentSize(id, state.panelViewportSize)
           yield (id, position, size)
         }
       },
