@@ -2,11 +2,13 @@ package com.serenity.ui.tui
 
 import com.serenity.state.models.{AppState, BufferId, CloseWorkflowState, SurfaceContent}
 import com.serenity.ui.layout.{LayoutEngine, TabBarSurfaceComposition}
+import com.serenity.ui.renderer.TabBarLayoutSettings
 
 import TuiScenarios.*
 
 /** #1673 in a terminal: the tab strip's close (x) glyph is clicked where it is painted on the cell grid, and runs the
-  * same close workflow a GUI click does.
+  * same close workflow a GUI click does. Only the active tab shows an x in a terminal, which has no pointer hover to
+  * reveal another's.
   */
 class TuiTabCloseClickSpec extends TuiSpec:
 
@@ -23,7 +25,7 @@ class TuiTabCloseClickSpec extends TuiSpec:
       val rect =
         LayoutEngine.calculateLayoutWithUI(current, size).tabBarRect.getOrElse(fail("Expected a tab bar rect"))
       val region = TabBarSurfaceComposition
-        .closeAffordances(entries, activeBufferId, rect)
+        .closeAffordances(entries, activeBufferId, rect, TabBarLayoutSettings.of(current))
         .find(region => TabBarSurfaceComposition.closeBufferIdOf(region.focusId).contains(bufferId))
         .getOrElse(fail(s"Expected a close affordance for $bufferId"))
       val col = region.rect.x.toInt + region.rect.width.toInt - 1
@@ -51,28 +53,49 @@ class TuiTabCloseClickSpec extends TuiSpec:
       _ <- verifyState("file tab active again")(current => activeBufferId(current) shouldBe Some(first))
     yield (first, second)
 
-  "clicking a clean background tab's close glyph" should "close it and leave the active tab active" in
+  "a terminal's inactive tab" should "paint no close glyph and offer no close region" in
+    runTui(TuiEnvironment.withFile("keep me")) {
+      for
+        tabs    <- fileTabActiveWithNewTabBehind
+        current <- state
+        size    <- TuiScript(_.viewportSize)
+        shown   <- screen
+      yield
+        val (_, second) = tabs
+        val (entries, activeBufferId) = current.tabBarSurface.map(_.content) match
+          case Some(SurfaceContent.TabBar(entries, activeBufferId)) => (entries, activeBufferId)
+          case other                                                => fail(s"Expected a tab bar, got $other")
+        val rect =
+          LayoutEngine.calculateLayoutWithUI(current, size).tabBarRect.getOrElse(fail("Expected a tab bar rect"))
+        val regions =
+          TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect, TabBarLayoutSettings.of(current))
+        regions.flatMap(region => TabBarSurfaceComposition.closeBufferIdOf(region.focusId)) shouldBe
+          activeBufferId.toList
+        shown.rowText(rect.y.toInt).count(_ == 'x') shouldBe 1
+        second should not be activeBufferId.getOrElse(second)
+    }
+
+  "clicking a clean tab's close glyph once it is active" should "close it" in
     runTui(TuiEnvironment.withFile("keep me")) {
       for
         tabs <- fileTabActiveWithNewTabBehind
-        (first, second) = tabs
+        (_, second) = tabs
+        _ <- nextTab
         _ <- clickClose(second)
-        _ <- verifyState("background tab closed") { current =>
+        _ <- verifyState("tab closed") { current =>
           current.topModal shouldBe None
           current.persisted.buffers should not contain key(second)
-          activeBufferId(current) shouldBe Some(first)
         }
       yield ()
     }
 
-  "clicking a dirty background tab's close glyph" should "raise the save prompt, and keep the tab when cancelled" in
+  "clicking a dirty tab's close glyph once it is active" should "raise the save prompt, and keep the tab when cancelled" in
     runTui(TuiEnvironment.withFile("keep me")) {
       for
         tabs <- fileTabActiveWithNewTabBehind
-        (first, second) = tabs
+        (_, second) = tabs
         _ <- nextTab
         _ <- typeText("throwaway")
-        _ <- previousTab
         _ <- clickClose(second)
         _ <- verifyState("save prompt")(current => closeWorkflow(current).map(_.currentBufferId) shouldBe Some(second))
         prompt <- screen
@@ -83,7 +106,6 @@ class TuiTabCloseClickSpec extends TuiSpec:
           current.topModal shouldBe None
           current.persisted.buffers should contain key second
           current.persisted.buffers(second).document.isDirty shouldBe true
-          activeBufferId(current) shouldBe Some(first)
         }
       yield ()
     }

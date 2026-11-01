@@ -104,13 +104,13 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .getOrElse(fail("no tab strip"))
     val entries = tabs.map(id => TabListEntry(id, s"Buffer ${id.value}", isDirty = false))
     val active = TabBarSurfaceComposition
-      .forTabBar(entries, Some(tabs(1)), rect)
+      .forTabBar(entries, Some(tabs(1)), rect, TabBarLayoutSettings.of(state))
       .hitRegions
       .lift(1)
       .getOrElse(fail("no active tab region"))
       .rect
     val newTab = TabBarSurfaceComposition
-      .newTabAffordance(entries, rect, Some(tabs(1)))
+      .newTabAffordance(entries, rect, Some(tabs(1)), TabBarLayoutSettings.of(state))
       .getOrElse(fail("no new-tab region"))
       .rect
     save(frame, rect, radius)

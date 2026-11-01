@@ -511,9 +511,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
     )
-    // A tab is as wide as its label plus a padding cell, a close box and a padding cell: "one" -> 7, "two ●" -> 9.
-    // They fit the 18 columns left of the new-tab affordance (issue #1080), so tab 0 is [0,7) and, after the 2-column
-    // gap, tab 1 is [9,18).
+    // A tab is its label plus a padding cell either side, and the active tab a two-cell close box besides: "one" -> 5,
+    // "two ●" active -> 9. Tab 0 is [0,5) and, after the 2-column gap, tab 1 is [7,16).
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
@@ -523,15 +522,13 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
     renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
-    // Each tab's text is its label followed by two spaces that stand for the close box and its padding, centred in the
-    // tab: "one  " in 7 columns has 1 column of left padding, so "one" lands at [1,4). The separator glyph sits at
-    // column 7 (the end of that tab), then tab 1 starts at column 9 and "two ●  " in 9 columns has 1 column of left
-    // padding, landing at [10,15).
+    // A title starts one padding cell into its tab: "one" lands at [1,4) and the separator at column 5, the end of
+    // that tab; "two ●" in tab 1 starts at column 8, its ● at column 12.
     val row = surface.getRow(0)
     row.slice(1, 4) shouldBe "one"
-    row.charAt(7) shouldBe '│'
-    row.slice(10, 13) shouldBe "two"
-    row.charAt(14) shouldBe '●'
+    row.charAt(5) shouldBe '│'
+    row.slice(8, 11) shouldBe "two"
+    row.charAt(12) shouldBe '●'
     surface.getBg(1, 0) shouldBe Theme.light.panel.background
-    surface.getBg(10, 0) shouldBe Theme.light.highlighted.background
+    surface.getBg(8, 0) shouldBe Theme.light.highlighted.background
   }
