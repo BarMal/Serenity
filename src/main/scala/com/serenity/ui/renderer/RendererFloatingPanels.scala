@@ -153,7 +153,8 @@ object RendererFloatingPanels:
                 state.persisted.theme,
                 state.persisted.config,
                 layerContext.cellMetrics,
-                windowOf(state, layerContext)
+                windowOf(state, layerContext),
+                Some(PinnedPanelRenderer.PanelTextMeasure(layerContext.uiFont, layerContext.caches.measuredAdvances))
               )
 
         val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
@@ -195,7 +196,8 @@ object RendererFloatingPanels:
       state.persisted.theme,
       state.persisted.config,
       context.cellMetrics,
-      windowOf(state, context)
+      windowOf(state, context),
+      Some(PinnedPanelRenderer.PanelTextMeasure(context.uiFont, context.caches.measuredAdvances))
     )
 
     state.persisted.buffers.get(bufferId).foreach { buffer =>
