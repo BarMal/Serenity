@@ -369,6 +369,7 @@ object ConfigGenerators:
       damage           <- oneOfEnum(RenderDamageGranularity.values)
       backend          <- oneOfEnum(RenderBackendSetting.values)
       waylandRender    <- oneOfEnum(WaylandRender.values)
+      skiaVsync        <- Gen.oneOf(true, false)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
       width            <- genViewportAxisSizing
@@ -415,6 +416,7 @@ object ConfigGenerators:
       renderDamageGranularity = damage,
       renderBackend = backend,
       renderWayland = waylandRender,
+      renderSkiaVsync = skiaVsync,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       viewportSizing = ViewportSizing(width, height),

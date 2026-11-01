@@ -119,7 +119,7 @@ private[command] object CommandRunnerSettingsRenderItems:
         option("Skia (CPU)", WaylandRender.SkiaRaster),
         option("Skia via XWayland", WaylandRender.XWayland)
       ),
-      selectedIndex = optionSelections.getOrElse("render-wayland", 0),
+      selectedIndex = optionSelections.getOrElse("render-wayland", 1),
       category = CommandCategory.Settings,
       hint = Some("Only when Skia would run on a Wayland session; takes effect after restarting")
     )
