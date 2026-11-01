@@ -151,6 +151,17 @@ private[renderer] object RendererChromePlan:
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
     else band
 
+  /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the row
+    * holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the window's
+    * bottom edge there is nothing below to take.
+    */
+  def withDescenderBleed(context: RenderContext)(band: PixelRect): PixelRect =
+    if !context.surface.addressesPixels then band
+    else
+      val gridBottom = context.surface.viewportHeight * context.cellMetrics.lineHeight
+      val room       = (context.cellMetrics.lineHeight / 4).min((gridBottom - band.yPx - band.heightPx).max(0))
+      band.copy(heightPx = band.heightPx + room)
+
   /** Every place chrome is painted. */
   private[renderer] def regions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
     chromeRegions(context, renderPlan)
@@ -166,9 +177,10 @@ private[renderer] object RendererChromePlan:
         .filter(_.gutterWidthCells > 0)
         .map(ColumnRails.railRect(layout.contentRect, _))
     }
-    (List(contract.leftSpacerRect, contract.rightSpacerRect) ++ contract.gutterRect.toList ++
+    val toPixels = pixelRectOf(context.cellMetrics)
+    (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
-      .map(pixelRectOf(context.cellMetrics))
+      .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context))
 
   /** The active pane's last row when the pane showed another number of rows in the frame this surface last drew: the
     * counter below the last row belongs to it, and what lay there then is no longer what lies there now.
@@ -246,7 +258,7 @@ private[renderer] object RendererChromePlan:
       case (paneId, layout) if !repaint.headers.includes(paneId) =>
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
-    spacers ++ (statusRow ++ headers).map(toPixels) ++
+    spacers ++ headers.map(toPixels) ++ statusRow.map(toPixels).map(withDescenderBleed(context)) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 
