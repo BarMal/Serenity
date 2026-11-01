@@ -182,6 +182,19 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
     try inner.panelOutlines.fold(render)(_.withRectClip(x, y, width, height)(render))
     finally counts.increment(DrawKind.ClipPop)
 
+  override def fillRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    corners: RoundedCorners,
+    radiusPx: Int,
+    color: RenderColor
+  ): Boolean =
+    val drew = inner.panelOutlines.exists(_.fillRoundRect(x, y, width, height, corners, radiusPx, color))
+    if drew then counts.increment(DrawKind.FillRect)
+    drew
+
   override def strokeRoundRect(
     x: Int,
     y: Int,

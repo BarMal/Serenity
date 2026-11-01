@@ -36,11 +36,10 @@ object PinnedPanelRenderer:
     surface.setForegroundColor(theme.panel.foreground)
     surface.setBackgroundColor(panelBackground)
     val fill = () => for y <- rect.y until rect.bottom do surface.putString(rect.x, y, " " * rect.width)
-    surface.panelOutlines.fold(fill()) { outlines =>
-      outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, config.scaledUiCornerRadiusPx)(
-        fill()
-      )
-    }
+    val roundedFill = surface.panelOutlines.exists(
+      _.fillRoundRect(rect.x, rect.y, rect.width, rect.height, corners, config.scaledUiCornerRadiusPx, panelBackground)
+    )
+    if !roundedFill then fill()
 
     val textInsetPx = SurfaceTextInset.px(config)
     drawBorder(surface, panel, theme, config, corners)

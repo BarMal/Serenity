@@ -35,3 +35,60 @@ object RoundedPath:
     if corners.topLeft then path.curveTo(x, y + radius - k, x + radius - k, y, x + radius, y)
     path.closePath()
     path
+
+  enum Corner:
+    case TopLeft, TopRight, BottomRight, BottomLeft
+
+  /** The part of the `radius`-sized square at (`x`, `y`) that lies inside the rounded rectangle whose corner it is. */
+  def cornerFill(corner: Corner, x: Int, y: Int, radius: Int): Path2D.Double =
+    val r    = radius.toDouble
+    val k    = Kappa * r
+    val left = x.toDouble
+    val top  = y.toDouble
+    val path = new Path2D.Double()
+    corner match
+      case Corner.TopLeft =>
+        path.moveTo(left, top + r)
+        path.curveTo(left, top + r - k, left + r - k, top, left + r, top)
+        path.lineTo(left + r, top + r)
+      case Corner.TopRight =>
+        path.moveTo(left, top)
+        path.curveTo(left + k, top, left + r, top + r - k, left + r, top + r)
+        path.lineTo(left, top + r)
+      case Corner.BottomRight =>
+        path.moveTo(left, top)
+        path.lineTo(left + r, top)
+        path.curveTo(left + r, top + k, left + k, top + r, left, top + r)
+      case Corner.BottomLeft =>
+        path.moveTo(left, top)
+        path.lineTo(left + r, top)
+        path.lineTo(left + r, top + r)
+        path.curveTo(left + r - k, top + r, left, top + k, left, top)
+    path.closePath()
+    path
+
+  /** The centre line of a border `thickness` wide round the same corner: a quarter arc from one straight edge to the
+    * other, ending exactly where the edges' rectangles begin.
+    */
+  def cornerArc(corner: Corner, x: Int, y: Int, radius: Int, thickness: Int): Path2D.Double =
+    val half = thickness / 2.0
+    val r    = radius - half
+    val k    = Kappa * r
+    val left = x.toDouble
+    val top  = y.toDouble
+    val full = radius.toDouble
+    val path = new Path2D.Double()
+    corner match
+      case Corner.TopLeft =>
+        path.moveTo(left + half, top + full)
+        path.curveTo(left + half, top + full - k, left + full - k, top + half, left + full, top + half)
+      case Corner.TopRight =>
+        path.moveTo(left, top + half)
+        path.curveTo(left + k, top + half, left + full - half, top + full - k, left + full - half, top + full)
+      case Corner.BottomRight =>
+        path.moveTo(left + full - half, top)
+        path.curveTo(left + full - half, top + k, left + k, top + full - half, left, top + full - half)
+      case Corner.BottomLeft =>
+        path.moveTo(left + full, top + full - half)
+        path.curveTo(left + full - k, top + full - half, left + half, top + k, left + half, top)
+    path

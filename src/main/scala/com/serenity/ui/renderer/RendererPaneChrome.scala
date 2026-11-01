@@ -59,16 +59,20 @@ private[renderer] object RendererPaneChrome:
           state.persisted.config.paneHeaderCorners
         )
       val fillHeader = () => surface.putString(headerRect.x, headerRect.y, " " * headerRect.width)
-      surface.panelOutlines.fold(fillHeader()) { outlines =>
-        outlines.withRoundRectClip(
+      val headerFill =
+        if isActive then state.persisted.theme.highlighted.background else state.persisted.theme.panel.background
+      val roundedFill = surface.panelOutlines.exists(
+        _.fillRoundRect(
           headerRect.x,
           headerRect.y,
           headerRect.width,
           headerRect.height,
           corners,
-          state.persisted.config.scaledUiCornerRadiusPx
-        )(fillHeader())
-      }
+          state.persisted.config.scaledUiCornerRadiusPx,
+          headerFill
+        )
+      )
+      if !roundedFill then fillHeader()
 
       surface.text.fontRenderContext match
         case Some(frc) =>

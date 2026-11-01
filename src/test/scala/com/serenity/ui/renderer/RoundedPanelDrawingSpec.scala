@@ -125,6 +125,70 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
     at(image, right, bottom) shouldBe rgb(border)
   }
 
+  private def fillPanel(corners: RoundedCorners, radiusPx: Int): (FramePixels, Boolean) =
+    val image    = frames.newFrame(width, height)
+    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
+    surface.clearViewport(RenderColor.fromAwt(page))
+    val drew =
+      outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, corners, radiusPx, RenderColor.fromAwt(panel))
+    (image, drew)
+
+  "A rounded fill" should "paint the interior and leave the four corner pixels as the page" in {
+    val (image, drew) = fillPanel(RoundedCorners.All, radius)
+
+    drew shouldBe true
+    List((left, top), (right, top), (right, bottom), (left, bottom)).foreach {
+      case (x, y) => withClue(s"corner ($x,$y): ")(at(image, x, y) shouldBe rgb(page))
+    }
+    at(image, midX(), midY()) shouldBe rgb(panel)
+    at(image, midX(), top) shouldBe rgb(panel)
+    at(image, left, midY()) shouldBe rgb(panel)
+    at(image, right, bottom - radius) shouldBe rgb(panel)
+    at(image, left + radius, bottom) shouldBe rgb(panel)
+  }
+
+  it should "round only the corners asked for" in {
+    val (image, _) = fillPanel(RoundedCorners.Top, radius)
+
+    at(image, left, top) shouldBe rgb(page)
+    at(image, right, top) shouldBe rgb(page)
+    at(image, left, bottom) shouldBe rgb(panel)
+    at(image, right, bottom) shouldBe rgb(panel)
+  }
+
+  it should "draw nothing and say so when no corner is rounded or the radius is zero" in {
+    val (squareImage, squareDrew) = fillPanel(RoundedCorners.None, radius)
+    val (zeroImage, zeroDrew)     = fillPanel(RoundedCorners.All, 0)
+
+    squareDrew shouldBe false
+    zeroDrew shouldBe false
+    at(squareImage, midX(), midY()) shouldBe rgb(page)
+    at(zeroImage, midX(), midY()) shouldBe rgb(page)
+  }
+
+  it should "meet a stroke drawn over it with no gap: the pixel just inside the border is the panel" in {
+    val image    = frames.newFrame(width, height)
+    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
+    surface.clearViewport(RenderColor.fromAwt(page))
+    outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, RoundedCorners.All, radius, RenderColor.fromAwt(panel))
+    outlines.strokeRoundRect(
+      cellX,
+      cellY,
+      cellsWide,
+      cellsHigh,
+      RoundedCorners.All,
+      radius,
+      RenderColor.fromAwt(border),
+      strokeSize
+    )
+    val half = strokeSize.toInt / 2
+
+    at(image, midX(), top + half) shouldBe rgb(border)
+    at(image, midX(), top + strokeSize.toInt) shouldBe rgb(panel)
+  }
+
   "The rounded clip" should "leave drawing after its block unclipped" in {
     val image    = frames.newFrame(width, height)
     val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())

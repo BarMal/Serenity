@@ -260,6 +260,21 @@ trait PanelOutlineDrawing:
   ): Unit =
     strokeRect(x, y, width, height, color, strokeWidth)
 
+  /** Fills the rectangle with `color`, the `corners` rounded to `radiusPx` device pixels, and says whether it did. It
+    * does not when nothing rounds (a zero radius, no rounded corner, or a surface that cannot round): the caller fills
+    * the cells as it always has. Unlike [[withRoundRectClip]] it keeps no clip alive, which is what makes it cheap
+    * enough for the chrome drawn every frame.
+    */
+  def fillRoundRect(
+    @unused x: Int,
+    @unused y: Int,
+    @unused width: Int,
+    @unused height: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int,
+    @unused color: RenderColor
+  ): Boolean = false
+
   /** Restricts `render` to the rectangle with the `corners` rounded to `radiusPx` device pixels, so a panel's fill
     * takes the same shape as its outline. With nothing to round (a zero radius, no rounded corner, or a surface that
     * cannot round) it just renders: clipping a fill to its own rectangle changes nothing.

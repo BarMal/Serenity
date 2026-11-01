@@ -26,6 +26,9 @@ final private[skia] class SkiaRoundedOutlines(
   roundedStroke.setStrokeCap(PaintStrokeCap.SQUARE)
   roundedStroke.setStrokeJoin(PaintStrokeJoin.MITER)
 
+  private val roundedFill = Paint()
+  roundedFill.setAntiAlias(true)
+
   def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     flat.strokeRect(x, y, width, height, color, strokeWidth)
 
@@ -49,6 +52,31 @@ final private[skia] class SkiaRoundedOutlines(
       height,
       Array(r(corners.topLeft), r(corners.topRight), r(corners.bottomRight), r(corners.bottomLeft))
     )
+
+  override def fillRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    corners: RoundedCorners,
+    radiusPx: Int,
+    color: RenderColor
+  ): Boolean =
+    val pw     = width * metrics.charWidth
+    val ph     = height * metrics.lineHeight
+    val radius = CornerRounding.effectiveRadiusPx(radiusPx, pw, ph)
+    val rounds = radius > 0 && corners.any
+    if rounds then
+      val px = metrics.toPixelX(x)
+      val py = metrics.toPixelY(y)
+      recordPaint(px.toDouble, py.toDouble, pw.toDouble, ph.toDouble, 1.0)
+      roundedFill.setBlendMode(BlendMode.SRC_OVER)
+      roundedFill.setColor(argbOf(color))
+      val _ = canvas.drawRRect(
+        roundedRect(px.toFloat, py.toFloat, pw.toFloat, ph.toFloat, radius.toFloat, corners),
+        roundedFill
+      )
+    rounds
 
   override def strokeRoundRect(
     x: Int,

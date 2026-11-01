@@ -469,7 +469,8 @@ object RendererGutter:
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 
-      surface.setBackgroundColor(colors.background.fold(gutterBackground(state))(RenderColor.fromAwt))
+      val background = colors.background.fold(gutterBackground(state))(RenderColor.fromAwt)
+      surface.setBackgroundColor(background)
       surface.setForegroundColor(colors.foreground.fold(state.persisted.theme.panel.foreground)(RenderColor.fromAwt))
       val window =
         state.runtime.viewportSize.getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
@@ -482,16 +483,18 @@ object RendererGutter:
           state.persisted.config.paneHeaderCorners
         )
       val fillGutter = () => surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
-      surface.panelOutlines.fold(fillGutter()) { outlines =>
-        outlines.withRoundRectClip(
+      val roundedFill = surface.panelOutlines.exists(
+        _.fillRoundRect(
           gutterRect.x,
           gutterRect.y,
           gutterRect.width,
           gutterRect.height,
           corners,
-          state.persisted.config.scaledUiCornerRadiusPx
-        )(fillGutter())
-      }
+          state.persisted.config.scaledUiCornerRadiusPx,
+          background
+        )
+      )
+      if !roundedFill then fillGutter()
 
       val content = s" ${state.statusLineText.getOrElse(emptyWorkspaceStatus(state))} "
       val displayContent =
