@@ -5,13 +5,11 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.DockedPanelFixtures
-import com.serenity.config.{AppConfig, DockedCornerStyle, StatusLinePlacement}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   FrameOutput,
@@ -54,18 +52,9 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
     private val caches        = RenderCaches.create()
     private val screen        = ScreenIdentity(this)
     private val flushedLayers = new AtomicReference(Vector.empty[RenderImage])
-    private val strayDraws    = new AtomicReference(Vector.empty[String])
     caches.frameCounters.setEnabled(true)
 
     def layerImages: Vector[RenderImage] = flushedLayers.get()
-
-    def strays: Vector[String] = strayDraws.get()
-
-    /** Notes a draw on the first row that reaches past the last whole cell, with the code that asked for it. */
-    private def noteStray(what: String, xPx: Int, yPx: Int, widthPx: Int): Unit =
-      if xPx + widthPx >= viewport.width * cellMetrics.charWidth && yPx < cellMetrics.lineHeight then
-        val callers = Thread.currentThread.getStackTrace.map(_.toString).filter(_.startsWith("com.serenity.ui.renderer"))
-        val _       = strayDraws.updateAndGet(_ :+ s"$what at x=$xPx w=$widthPx <- ${callers.slice(1, 5).mkString(" <- ")}")
 
     def render(frame: AppState, damage: Damage): FrameCounts =
       val state = shown(frame)
@@ -109,22 +98,6 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         layerCacheOwnerOverride = Some(screen),
         textCaches = caches.surfaceText
       ):
-        override def putString(x: Int, y: Int, text: String): Unit =
-          noteStray(s"putString('${text.take(12)}')", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), text.length * cellMetrics.charWidth)
-          super.putString(x, y, text)
-
-        override def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
-          noteStray("fillRect", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), width * cellMetrics.charWidth)
-          super.fillRect(x, y, width, height, char)
-
-        override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
-          noteStray("strokeRect", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), width * cellMetrics.charWidth)
-          super.strokeRect(x, y, width, height, color, strokeWidth)
-
-        override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
-          noteStray("fillPixelRect", xPx, yPx, widthPx)
-          super.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
-
         override def layerBuffers: Option[LayerBufferSupport] = super.layerBuffers.map { real =>
           new LayerBufferSupport:
             def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
@@ -148,45 +121,8 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
     if pairs.isEmpty then Vector.empty
     else
       val box = s"x ${pairs.map(_._1).min}-${pairs.map(_._1).max}, y ${pairs.map(_._2).min}-${pairs.map(_._2).max}"
-      val around =
-        for (x, y) <- Vector(
-              (2994, 0),
-              (2995, 0),
-              (2996, 0),
-              (2996, 29),
-              (2996, 30),
-              (2996, 31),
-              (2996, 500),
-              (2999, 999)
-            )
-        yield
-          val withLayers = on.image.getRGB(x, y) & 0xffffff
-          val without    = off.image.getRGB(x, y) & 0xffffff
-          f"($x,$y) with layers $withLayers%06x without $without%06x"
-      s"${pairs.size} px differ in $box" +: (pairs.take(2).map { (x, y, a, b) =>
-        f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x"
-      } ++ around)
-
-  /** For a failing frame: how many pixels still differ when one part of the scene is left out, to say which part. */
-  private def withoutOneThing(frame: AppState): Vector[String] =
-    def config(change: AppConfig => AppConfig)(state: AppState): AppState =
-      state.copy(persisted = state.persisted.copy(config = change(state.persisted.config)))
-    val variants: Vector[(String, AppState => AppState)] = Vector(
-      "no hover"             -> identity,
-      "no pane headers"      -> config(_.withPaneHeaders(false)),
-      "no scrollbar"         -> config(_.withScrollbar(false)),
-      "no status line"       -> config(_.withStatusLinePlacement(StatusLinePlacement.Off)),
-      "no line numbers"      -> config(_.withLineNumbers(false)),
-      "square corners"       -> config(_.withUiCornerRadiusPx(0)),
-      "floating docked"      -> config(_.withDockedCornerStyle(DockedCornerStyle.Floating))
-    )
-    variants.map { (label, tweak) =>
-      val on  = Frames(withCaching(true).andThen(tweak))
-      val off = Frames(withCaching(false).andThen(tweak))
-      val _   = on.render(frame, Damage.Everything)
-      val _   = off.render(frame, Damage.Everything)
-      s"without [$label]: ${differences(on, off).headOption.getOrElse("identical")}"
-    }
+      s"${pairs.size} px differ in $box" +:
+        pairs.take(4).map((x, y, a, b) => f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x")
 
   private def withCaching(enabled: Boolean)(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(config = state.persisted.config.withLayerCaching(enabled)))
@@ -291,10 +227,7 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
       val (frame, damage) = step
       val _               = on.render(frame, damage)
       val _               = off.render(frame, damage)
-      val found = differences(on, off)
-      withClue(s"frame $index: ")(
-        (if found.isEmpty then found else found ++ off.strays.take(6) ++ withoutOneThing(frame)) shouldBe empty
-      )
+      withClue(s"frame $index: ")(differences(on, off) shouldBe empty)
     }
   }
 
