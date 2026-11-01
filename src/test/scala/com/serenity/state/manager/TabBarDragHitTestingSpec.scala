@@ -21,11 +21,10 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 46-column viewport, with `BufferId(9)` focused --
-    * `TabBarSurfaceComposition`'s overflow window (`maxVisibleCount`/`visibleWindow`) fits only 4 tabs at
-    * `MinTabWidth` (8 cells each, 2-cell gaps), so this overflows and, centred on the active tab (index 9), windows to
-    * entries [6,7,8,9]
-    * (`BufferId(6)`..`BufferId(9)`) -- what's actually painted. An `activeBufferId = None` window instead centres on
-    * index 0, windowing to entries [0,1,2,3] (`BufferId(0)`..`BufferId(3)`).
+    * `TabBarSurfaceComposition`'s overflow window (`maxVisibleCount`/`visibleWindow`) fits only 4 tabs at `MinTabWidth`
+    * (8 cells each, 2-cell gaps), so this overflows and, centred on the active tab (index 9), windows to entries
+    * [6,7,8,9] (`BufferId(6)`..`BufferId(9)`) -- what's actually painted. An `activeBufferId = None` window instead
+    * centres on index 0, windowing to entries [0,1,2,3] (`BufferId(0)`..`BufferId(3)`).
     */
   private def overflowingState: AppState =
     val base         = AppState.initial(com.serenity.ChromeOn.config)

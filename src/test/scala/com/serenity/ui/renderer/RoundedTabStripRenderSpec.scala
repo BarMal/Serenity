@@ -56,10 +56,10 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     )
 
   final private case class Strip(
-    frame: FramePixels,
-    rect: LayoutRect,
-    activeTab: LogicalPixelRect,
-    newTab: LogicalPixelRect
+      frame: FramePixels,
+      rect: LayoutRect,
+      activeTab: LogicalPixelRect,
+      newTab: LogicalPixelRect
   )
 
   private def strip(radius: Int): Strip =
@@ -160,10 +160,10 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   }
 
   it should "size a tab to its title and cover all of it, close box included, with the active tab's fill" in {
-    val s = strip(radius = 0)
-    val h = highlight(s)
+    val s                   = strip(radius = 0)
+    val h                   = highlight(s)
     val (left, _, right, _) = boundsOf(s, h)
-    val title = "Buffer 1"
+    val title               = "Buffer 1"
     s.activeTab.width shouldBe (title.length + 4).toDouble
     val tabLeft  = (s.activeTab.x * metrics.charWidth).toInt
     val tabRight = ((s.activeTab.x + s.activeTab.width) * metrics.charWidth).toInt
@@ -181,9 +181,10 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val until      = ((s.newTab.x + s.newTab.width) * metrics.charWidth).toInt.min(stripRight(s))
     val ink        = for y <- bandOf(s); x <- from until until if rgb(s.frame, x, y) != background yield (x, y)
     withClue("no ink in the + cells: ")(ink should not be empty)
-    val width   = ink.map(_._1).max - ink.map(_._1).min + 1
-    val height  = ink.map(_._2).max - ink.map(_._2).min + 1
-    val raster  = bandOf(s).map(y => (from until until).map(x => if rgb(s.frame, x, y) != background then '#' else '.').mkString)
+    val width  = ink.map(_._1).max - ink.map(_._1).min + 1
+    val height = ink.map(_._2).max - ink.map(_._2).min + 1
+    val raster =
+      bandOf(s).map(y => (from until until).map(x => if rgb(s.frame, x, y) != background then '#' else '.').mkString)
     val picture = s"cell ${metrics.charWidth}px, the + cells:\n${raster.mkString("\n")}\n"
     withClue(s"the + is $width wide and $height tall. $picture")(width * 10 should be >= height * 7)
     withClue(s"the + starts at its cell. $picture")(ink.map(_._1).min should be > from)

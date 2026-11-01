@@ -31,13 +31,12 @@ class UiTabMaxWidthConfigSpec extends AnyFlatSpec with Matchers:
     result.report.unknownKeys shouldBe Nil
   }
 
-  it should "accept a width of 8 and of 60 without a notice" in {
+  it should "accept a width of 8 and of 60 without a notice" in
     List(8, 60).foreach { width =>
       val result = load(s"editor.tab_max_width = $width")
       result.config.surfaceConfig.tabMaxWidth shouldBe width
       result.report.invalidEntries shouldBe Nil
     }
-  }
 
   it should "clamp a width above the range to 60 and say so" in {
     val result = load("editor.tab_max_width = 100")

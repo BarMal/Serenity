@@ -53,8 +53,8 @@ object TabBarSurfaceComposition:
 
   /** Columns reserved at the strip's trailing edge for the new-tab (+) affordance (issue #1080) -- carved out of the
     * row's total width before `allocate` sizes the tabs, so tabs never paint underneath it. Painted as `" +"`: the
-    * blank column is the gap after the last tab, so the `+` sits one column past it, either straight after the last
-    * tab or, once the tabs fill the strip, against its right edge.
+    * blank column is the gap after the last tab, so the `+` sits one column past it, either straight after the last tab
+    * or, once the tabs fill the strip, against its right edge.
     */
   private val NewTabAffordanceWidth = 2
 
@@ -67,10 +67,10 @@ object TabBarSurfaceComposition:
   private def tabsAvailableWidth(rect: LayoutRect): Int = math.max(0, rect.width - NewTabAffordanceWidth)
 
   /** The trailing new-tab (+) affordance's hit region (issue #1080): a single, buffer-independent target straight after
-    * the last tab, or against the strip's right edge once the tabs fill the strip or overflow it (where the "+N"
-    * marker has the room after the tabs). Kept apart from `forTabBar`'s per-tab hit regions and `closeAffordances`'
-    * per-tab close regions -- a switch click, a close click, and a new-tab click always resolve from three disjoint
-    * region sets. `None` when there is no tab strip to append it to (an empty tab list, mirroring `closeAffordances`).
+    * the last tab, or against the strip's right edge once the tabs fill the strip or overflow it (where the "+N" marker
+    * has the room after the tabs). Kept apart from `forTabBar`'s per-tab hit regions and `closeAffordances`' per-tab
+    * close regions -- a switch click, a close click, and a new-tab click always resolve from three disjoint region
+    * sets. `None` when there is no tab strip to append it to (an empty tab list, mirroring `closeAffordances`).
     * `activeBufferId` must be the value passed to `forTabBar`, so both resolve the same visible window.
     */
   def newTabAffordance(
@@ -128,9 +128,9 @@ object TabBarSurfaceComposition:
     */
   private val MinTitleCells = 4
 
-  /** Narrowest a tab is ever squeezed to, before tabs are dropped from view rather than squeezed further (issue
-    * #1081) -- the title cells below which `truncate`'s own ellipsis convention no longer leaves a legible fragment,
-    * plus [[ChromeCells]]. A tab whose own title is shorter than that keeps its natural width.
+  /** Narrowest a tab is ever squeezed to, before tabs are dropped from view rather than squeezed further (issue #1081)
+    * -- the title cells below which `truncate`'s own ellipsis convention no longer leaves a legible fragment, plus
+    * [[ChromeCells]]. A tab whose own title is shorter than that keeps its natural width.
     */
   private val MinTabWidth = MinTitleCells + ChromeCells
 
@@ -216,19 +216,18 @@ object TabBarSurfaceComposition:
     maxTabWidth: Int = DefaultMaxTabWidth
   ): VisibleTabWindow =
     if entries.isEmpty then VisibleTabWindow(Nil, 0)
+    else if allFit(entries, availableWidth, maxTabWidth) then VisibleTabWindow(entries, 0)
     else
-      if allFit(entries, availableWidth, maxTabWidth) then VisibleTabWindow(entries, 0)
-      else
-        val contentWidthForTabs = math.max(0, availableWidth - OverflowIndicatorWidth - GapColumns)
-        val visibleCount        = math.min(entries.size, maxVisibleCount(contentWidthForTabs))
-        val activeIndex = activeBufferId
-          .map(id => entries.indexWhere(_.bufferId == id))
-          .filter(_ >= 0)
-          .getOrElse(0)
-        val maxStart = entries.size - visibleCount
-        val ideal    = activeIndex - (visibleCount - 1) / 2
-        val start    = math.max(0, math.min(ideal, maxStart))
-        VisibleTabWindow(entries.slice(start, start + visibleCount), entries.size - visibleCount)
+      val contentWidthForTabs = math.max(0, availableWidth - OverflowIndicatorWidth - GapColumns)
+      val visibleCount        = math.min(entries.size, maxVisibleCount(contentWidthForTabs))
+      val activeIndex = activeBufferId
+        .map(id => entries.indexWhere(_.bufferId == id))
+        .filter(_ >= 0)
+        .getOrElse(0)
+      val maxStart = entries.size - visibleCount
+      val ideal    = activeIndex - (visibleCount - 1) / 2
+      val start    = math.max(0, math.min(ideal, maxStart))
+      VisibleTabWindow(entries.slice(start, start + visibleCount), entries.size - visibleCount)
 
   /** One resolved layout pass shared by `forTabBar` and `closeAffordances` (issue #1081): the visible tabs' own
     * allocations and positions, plus how many tabs the window left hidden. Reserves [[OverflowIndicatorWidth]] +
