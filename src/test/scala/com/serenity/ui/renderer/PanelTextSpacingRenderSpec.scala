@@ -20,8 +20,8 @@ import org.scalatest.matchers.should.Matchers
 /** A docked panel draws its text in the proportional UI font, so a word must come out as one run of letters, not as
   * letters set on the monospace cell grid one by one, which leaves gaps inside words ("outl i ne") and lets a wide
   * letter's cell wipe the one before it ("problens"). The panel is wide enough to show the empty Diagnostics summary "0
-  * error | 0 warning | 0 info" whole, so its first content row has exactly eight words, which show up as eight clusters
-  * of ink.
+  * error | 0 warning | 0 info" whole, so its first content row is that text's ink, which as one run is as wide as the
+  * font says and, on the cell grid, is a good deal wider.
   */
 abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
 
@@ -116,16 +116,12 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
     val fill  = all.groupBy(identity).maxBy(_._2.size)._1
     (left until right).filter(x => rows.exists(y => rgb(s.frame, x, y) != fill)).toVector
 
-  /** Runs of ink columns, a new run starting where the blank gap before a column is wider than `gap`. */
-  private def clusters(columns: Vector[Int], gap: Int): List[(Int, Int)] =
-    columns
-      .foldLeft(List.empty[(Int, Int)]) {
-        case ((start, end) :: rest, x) if x - end - 1 <= gap => (start, x) :: rest
-        case (acc, x)                                        => (x, x) :: acc
-      }
-      .reverse
+  /** The width the entry point's default UI font gives `text` set as one run. */
+  private def naturalAdvance(text: String): Double =
+    val uiFont = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
+    uiFont.getStringBounds(text, java.awt.font.FontRenderContext(null, true, true)).getWidth
 
-  "A docked panel's text" should "draw each word as one run of letters, with no gaps inside it" in {
+  "A docked panel's text" should "be as wide as the same words set as one run, not spread over the cell grid" in {
     val s = scene
     save(s)
     // The title sits on the frame's top edge, so the message is on the first row below it that has any ink.
@@ -133,14 +129,15 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
       val rows = row * metrics.lineHeight until (row + 1) * metrics.lineHeight
       inkColumns(s, rows).nonEmpty
     }
-    val row      = firstInked.getOrElse(fail("no text in the panel"))
-    val rows     = row * metrics.lineHeight until (row + 1) * metrics.lineHeight
-    val columns  = inkColumns(s, rows)
-    val maxGap   = math.round(0.22 * codeFont.getSize2D).toInt
-    val words    = clusters(columns, maxGap)
-    val expected = message.split(" ").length
-    withClue(s"$expected words in '$message', ink clusters ${words.map((a, b) => s"$a-$b").mkString(",")}: ") {
-      words should have size expected
+    val row       = firstInked.getOrElse(fail("no text in the panel"))
+    val rows      = row * metrics.lineHeight until (row + 1) * metrics.lineHeight
+    val columns   = inkColumns(s, rows)
+    val inkWidth  = columns.max - columns.min + 1
+    val natural   = naturalAdvance(message)
+    val gridWidth = message.length * metrics.charWidth
+    // Letters set one to a cell are as wide as the cells, a wider row than the run by well over this much.
+    withClue(s"'$message' is $inkWidth px of ink; as one run it is $natural px, on the cell grid $gridWidth px: ") {
+      math.abs(inkWidth - natural) should be <= (0.06 * natural + 2)
     }
   }
 
