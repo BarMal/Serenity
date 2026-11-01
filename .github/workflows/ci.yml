@@ -228,21 +228,36 @@ jobs:
 
   perf:
     # The 2x entry runs the suite on a HiDPI virtual display with Java2D at 2x, matching the target laptop, so Swing's
-    # present path paints at the scale users actually see.
-    name: ${{ matrix.scale == 1 && 'Performance benchmarks' || 'Performance benchmarks (2x HiDPI)' }}
+    # present path paints at the scale users actually see. The 2x suite runs as two shards (contiguous halves of the
+    # suite, each judged on its own rows, see BenchmarkShard) so that it fits the time the 1x suite takes.
+    #
+    # The timeout is a bound on a stuck job, not a budget: measured on run 41220412357 the 1x job took 38 minutes and the
+    # unsharded 2x job 48, and the benchmark warm-up adds about 1.4 minutes (#2443); 60 is 20% over the longest of those.
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - scale: 1
+          - label: Performance benchmarks
+            scale: 1
             screen: 1920x1200x24
             dpi: 96
+            shard: 1/1
             results: perf-benchmark-results
-          - scale: 2
+          - label: Performance benchmarks (2x HiDPI, shard 1/2)
+            scale: 2
             screen: 3840x2400x24
             dpi: 192
-            results: perf-benchmark-results-2x
+            shard: 1/2
+            results: perf-benchmark-results-2x-shard-1
+          - label: Performance benchmarks (2x HiDPI, shard 2/2)
+            scale: 2
+            screen: 3840x2400x24
+            dpi: 192
+            shard: 2/2
+            results: perf-benchmark-results-2x-shard-2
 
     steps:
       # Depth 2 so the base commit -- the PR merge commit's first parent, or master's previous commit -- is present.
@@ -263,7 +278,7 @@ jobs:
 
       # Stdlib `unittest`, no Python dependency to install.
       - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary -v
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_run_perf_benchmark scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary -v
 
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
@@ -286,6 +301,7 @@ jobs:
           SCREEN: ${{ matrix.screen }}
           DPI: ${{ matrix.dpi }}
           SCALE: ${{ matrix.scale }}
+          SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
           mkdir -p perf-runs
@@ -297,7 +313,7 @@ jobs:
             done
           done
 
-      # A benchmark whose median pair ratio is past 1.75x (and more than 50 us above the base's) is only flagged here:
+      # A benchmark whose fastest head p50 is past 1.5x the fastest base p50 (and more than 50 us above it) is only flagged here:
       # the same runner re-measures just those benchmarks in three fresh pairs (confirm-*), and the build fails only if
       # they are still past the threshold on those. A retained-heap regression fails at once. See
       # scripts/compare_perf_runs.py, and docs/performance-benchmarks.md ("Paired-ratio gate", #1731).
@@ -307,6 +323,7 @@ jobs:
           SCREEN: ${{ matrix.screen }}
           DPI: ${{ matrix.dpi }}
           SCALE: ${{ matrix.scale }}
+          SHARD: ${{ matrix.shard }}
         run: |
           set -euo pipefail
           for run in perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv; do

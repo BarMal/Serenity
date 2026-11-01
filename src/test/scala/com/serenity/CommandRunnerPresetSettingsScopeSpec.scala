@@ -179,5 +179,6 @@ class CommandRunnerPresetSettingsScopeSpec extends AnyFlatSpec with Matchers:
       case result: CommandSurfaceItem.SettingSearchItem => result.targetItemId
     }
 
-    targets.filter(_.endsWith("code-font-size")) shouldBe List("code-font-size")
+    // One result for the setting, never the preset page's copy: the Font Sizes group's row stands for it (#2405).
+    targets.filter(id => id.endsWith("code-font-size") || id == "font-sizes-code") shouldBe List("font-sizes-code")
   }

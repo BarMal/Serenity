@@ -32,7 +32,7 @@ private[command] trait CommandRunnerLifecycle:
       commandBindings = CommandRunner.commandBindings(config),
       capabilities = capabilities,
       statusSegments = config.statusLine.segments,
-      context = context
+      context = context.copy(previousFontSizes = config.editorConfig.fontConfig.previousSizes)
     ).withSearchCacheRefreshed.syncEditMode
 
   /** Rebuild input items from a new config (called after a setting is applied) */
@@ -41,7 +41,8 @@ private[command] trait CommandRunnerLifecycle:
       inputItems = CommandRunnerSettingsInputItems.build(config, capabilities),
       optionSelections = CommandRunnerOptionSelections.default(config),
       commandBindings = CommandRunner.commandBindings(config),
-      statusSegments = config.statusLine.segments
+      statusSegments = config.statusLine.segments,
+      context = context.copy(previousFontSizes = config.editorConfig.fontConfig.previousSizes)
     ).withSearchCacheRefreshed.syncEditMode.normalizeSubmenuEditMode
 
   def withUiPresetNames(names: List[String]): CommandRunner =

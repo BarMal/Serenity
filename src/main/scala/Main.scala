@@ -502,7 +502,7 @@ object Main extends IOApp:
                 recovery = startup.plan,
                 onFirstFrame = startup.markStarted >> SwingPaintProbe.report(swingWin, logger) >>
                   IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
-                makeStateManager = Some(logger =>
+                makeStateManager = Some((logger, scrollCounting) =>
                   com.serenity.state.manager.StateManager.apply(
                     logger,
                     policy = SessionManager.SessionPolicy.interactive,
@@ -521,7 +521,8 @@ object Main extends IOApp:
                     uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
                     windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                     onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                    fileDialog = Some(fileDialog)
+                    fileDialog = Some(fileDialog),
+                    scrollCounting = scrollCounting
                   )
                 ),
                 awaitExternalQuit =

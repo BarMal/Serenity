@@ -63,14 +63,17 @@ object RenderCaches:
     * (`AppConfig.surfaceConfig.rendererFrameStateCacheCapacity`) -- callers that build a `RenderCaches` before a config
     * is loaded (or that don't care) get the same 64-entry default that module has always used.
     */
-  def create(rendererFrameStateCacheCapacity: Int = 64): RenderCaches =
+  def create(
+    rendererFrameStateCacheCapacity: Int = 64,
+    scrollCounting: ScrollCounting = ScrollCounting.Inline
+  ): RenderCaches =
     val shapedText   = ShapedTextCache()
     val wrappedLines = WrappedLineCache.sharing(shapedText)
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
       GraphemeSegmentationCache(),
-      AuthoritativeUiScene(wrappedLines),
+      AuthoritativeUiScene(wrappedLines, scrollCounting = scrollCounting),
       MarkdownPreviewCache(),
       ChapterGhostCache(),
       wrappedLines,
