@@ -2,13 +2,10 @@ package com.serenity.ui.renderer
 
 import java.awt.font.TextLayout
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.config.InterfaceDensity
 import com.serenity.config.AppConfig
 import com.serenity.state.models.AppState
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, CloseReveal, TabBarSettings, TabTitleMeasure, TextLayoutSnapshot}
 
 /** The tab strip's layout settings for a state, built the same way for the renderer, accessibility, and click and drag
@@ -32,27 +29,13 @@ object TabBarLayoutSettings:
     if state.runtime.capabilities.isCellGrid then CloseReveal.ActiveOnly
     else state.runtime.pointerGesture.hoveredTab.fold(CloseReveal.ActiveOnly)(CloseReveal.Hovered(_))
 
-  final private case class Key(fontConfig: FontConfig, density: InterfaceDensity)
-
-  private val remembered = new AtomicReference[Option[(Key, TabTitleMeasure)]](None)
-
   private def measureFor(state: AppState): TabTitleMeasure =
     if state.runtime.capabilities.isCellGrid then TabTitleMeasure.CellGrid
-    else
-      val config = state.persisted.config
-      val key    = Key(config.editorConfig.fontConfig, config.interfaceDensity)
-      remembered.get() match
-        case Some((rememberedKey, measure)) if rememberedKey == key => measure
-        case _ =>
-          val measure = proportional(config)
-          remembered.set(Some((key, measure)))
-          measure
+    else proportional(state.persisted.config)
 
-  /** How many advances are kept before the table starts over: titles are typed and renamed, so it must not grow
-    * without bound.
+  /** Each call measures afresh and remembers a title's advance only for the layout passes that use this measure, so the
+    * object holds no state between calls and a font change needs no invalidation.
     */
-  private val AdvanceCapacity = 512
-
   private def proportional(config: AppConfig): TabTitleMeasure =
     val fontConfig = config.editorConfig.fontConfig
     val font       = FontLoader.previewUiFont(fontConfig)
@@ -62,6 +45,5 @@ object TabBarLayoutSettings:
     def advanceOf(label: String): Double =
       if label.isEmpty then 0.0
       else
-        if advances.size() >= AdvanceCapacity then advances.clear()
         advances.computeIfAbsent(label, text => java.lang.Double.valueOf(TextLayout(text, font, context).getAdvance.toDouble))
     TabTitleMeasure.proportional(advanceOf, SurfaceTextInset.px(config), cellWidth)

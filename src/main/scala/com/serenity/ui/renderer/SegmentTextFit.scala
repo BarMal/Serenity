@@ -2,7 +2,6 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 import java.awt.font.{FontRenderContext, TextLayout}
-import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.ui.layout.SegmentTitleFit
 
@@ -12,20 +11,8 @@ import com.serenity.ui.layout.SegmentTitleFit
   */
 private[renderer] object SegmentTextFit:
 
-  final private case class Key(text: String, font: Font, context: FontRenderContext)
-
-  private val Capacity = 512
-
-  private val advances = new ConcurrentHashMap[Key, java.lang.Double]()
-
   private def advanceOf(text: String, font: Font, context: FontRenderContext): Double =
-    if text.isEmpty then 0.0
-    else
-      if advances.size() >= Capacity then advances.clear()
-      advances.computeIfAbsent(
-        Key(text, font, context),
-        key => java.lang.Double.valueOf(TextLayout(key.text, key.font, key.context).getAdvance.toDouble)
-      )
+    if text.isEmpty then 0.0 else TextLayout(text, font, context).getAdvance.toDouble
 
   def fit(
     text: String,
