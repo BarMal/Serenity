@@ -137,7 +137,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
     .withUiCornerRadiusPx(20)
-    .withDockedCornerStyle(DockedCornerStyle.Flush)
+    .withDockedCornerStyle(DockedCornerStyle.Floating)
     .withPaneHeaderCorners(PaneHeaderCorners.Square)
     .withFileDialogMode(FileDialogMode.Swing)
     .withThemeFollowConfig(

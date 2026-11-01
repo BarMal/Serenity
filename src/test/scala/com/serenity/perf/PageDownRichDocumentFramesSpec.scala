@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.ChromeOn
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
@@ -282,7 +283,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   )
 
   for
-    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
+    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> ChromeOn.config)
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- documents
     if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")

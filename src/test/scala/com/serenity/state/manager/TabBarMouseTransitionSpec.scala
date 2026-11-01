@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.ChromeOn
 import com.serenity.keystroke.events.{MouseClick, MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
@@ -18,7 +19,7 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
   // [11,19) with its close affordance at [17,19), and the new-tab affordance at [19,21).
   private def twoBufferState: AppState =
     val second = Buffer.fromString(BufferId(1), "second")
-    val base   = AppState.initial(com.serenity.config.AppConfig.conventional)
+    val base   = AppState.initial(com.serenity.config.ChromeOn.config)
     base.copy(
       runtime = base.runtime.copy(viewportSize = Some(ViewportSize(21, 5))),
       persisted = base.persisted.copy(

@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.ChromeOn
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.{MouseDrag, MousePress}
@@ -27,7 +28,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
     * index 0, windowing to entries [0,1,2,3] (`BufferId(0)`..`BufferId(3)`).
     */
   private def overflowingState: AppState =
-    val base         = AppState.initial(com.serenity.config.AppConfig.conventional)
+    val base         = AppState.initial(com.serenity.config.ChromeOn.config)
     val extraBuffers = (1 to 9).map(i => BufferId(i) -> Buffer.fromString(BufferId(i), s"buffer$i"))
     val withBuffers = base.copy(
       runtime = base.runtime.copy(viewportSize = Some(ViewportSize(30, 10))),

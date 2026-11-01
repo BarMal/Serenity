@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.ChromeOn
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, Rectangle, Toolkit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -170,7 +171,7 @@ private[perf] object LaptopFrameBenchmarks:
     */
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 150,
     dictionaryCache: Option[DictionaryCache] = None,
     grid: ViewportSize = viewport
@@ -187,7 +188,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 0,
     cursorColumn: Int = 0,
     dictionaryCache: Option[DictionaryCache] = None,
@@ -341,8 +342,8 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      AppConfig.conventional.copy(surfaceConfig =
-        AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
+      ChromeOn.config.copy(surfaceConfig =
+        ChromeOn.config.surfaceConfig.copy(typewriterScrollingEnabled = true)
       )
     val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =

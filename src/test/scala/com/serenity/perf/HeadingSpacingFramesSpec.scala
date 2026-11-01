@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.ChromeOn
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -42,7 +43,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     .withLevel(2)(_.copy(spaceBefore = Some(1.0f), spaceAfter = Some(0.5f)))
 
   private val spacedConfig   = AppConfig.default.withHeadingsConfig(spacing)
-  private val spacedChrome   = AppConfig.conventional.withHeadingsConfig(spacing)
+  private val spacedChrome   = ChromeOn.config.withHeadingsConfig(spacing)
   private val numberedConfig = spacedConfig.withLineNumbers(true)
 
   private def paragraph(text: String, role: ParagraphRole = ParagraphRole.Body): RichTextParagraph =

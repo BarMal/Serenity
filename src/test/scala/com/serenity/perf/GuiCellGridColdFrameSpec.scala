@@ -1,5 +1,6 @@
 package com.serenity.perf
 
+import com.serenity.ChromeOn
 import java.awt.image.BufferedImage
 import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
@@ -47,7 +48,7 @@ class GuiCellGridColdFrameSpec extends AnyFlatSpec with Matchers:
     Vector.tabulate(40)(line => s"line $line 中文 mixed ★ text 中 and more 文文 → 안녕 end").mkString("\n")
 
   private def configWith(families: List[String]): AppConfig =
-    val base = AppConfig.conventional.withAppMode(AppMode.Code)
+    val base = ChromeOn.config.withAppMode(AppMode.Code)
     base.withFontConfig(base.editorConfig.fontConfig.copy(fallbackFamilies = families))
 
   final private class PersistingImage:

@@ -1,5 +1,6 @@
 package com.serenity.ui.tui
 
+import com.serenity.ChromeOn
 import java.awt.{Color, Font}
 import java.io.StringWriter
 
@@ -63,11 +64,11 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
 
   private def editorState(
     theme: Theme,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     text: String = "alpha\nbeta\ngamma",
     configureBuffer: Buffer => Buffer = identity
   ): AppState =
-    val initial = AppState.initial(AppConfig.conventional)
+    val initial = AppState.initial(ChromeOn.config)
     initial.copy(
       persisted = initial.persisted.copy(
         buffers = Map(bufferId -> configureBuffer(Buffer.fromString(bufferId, text))),
@@ -112,7 +113,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
   }
 
   "the pinned status gutter in the TUI under a transparent theme" should "paint the opaque panel colour" in {
-    val config = AppConfig.conventional.withStatusLinePlacement(StatusLinePlacement.Pinned)
+    val config = ChromeOn.config.withStatusLinePlacement(StatusLinePlacement.Pinned)
     val screen = render(editorState(transparent, config))
 
     val lastRow = viewport.height - 1
@@ -123,7 +124,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep a background it was explicitly configured with" in {
-    val config = AppConfig.conventional
+    val config = ChromeOn.config
       .withStatusLinePlacement(StatusLinePlacement.Pinned)
       .withStatusLineColors(StatusLineColors(background = Some(Color.BLUE)))
     val screen = render(editorState(transparent, config))

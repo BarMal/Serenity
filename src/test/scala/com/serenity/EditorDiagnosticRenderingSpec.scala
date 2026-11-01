@@ -29,10 +29,10 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       code = Some("unknown-word")
     )
     AppState
-      .initial(com.serenity.config.AppConfig.conventional)
+      .initial(com.serenity.config.ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(com.serenity.config.AppConfig.conventional)
+          .initial(com.serenity.config.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -43,10 +43,10 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.AppConfig.conventional.withSyntaxHighlighting(false)
+            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
           ),
         runtime = AppState
-          .initial(com.serenity.config.AppConfig.conventional)
+          .initial(com.serenity.config.ChromeOn.config)
           .runtime
           .copy(
             languageService = LanguageServiceState(

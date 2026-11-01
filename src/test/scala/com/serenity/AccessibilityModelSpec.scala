@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.{CommandRunner, FileIntent, SessionCommands}
-import com.serenity.config.{AppConfig, AppMode, InterfaceDensity}
+import com.serenity.config.{AppMode, InterfaceDensity}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionId
 import com.serenity.state.core.EditorState
@@ -34,7 +34,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -58,11 +58,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "announce a focus change once while ignoring unchanged editor state" in {
-    val before    = AccessibilitySnapshot.from(AppState.initial(AppConfig.conventional), viewport)
+    val before    = AccessibilitySnapshot.from(AppState.initial(ChromeOn.config), viewport)
     val surfaceId = SurfaceId("outline")
     val docked =
       DockedPanelFixtures.dock(
-        AppState.initial(AppConfig.conventional),
+        AppState.initial(ChromeOn.config),
         surfaceId,
         SurfaceContent.Outline(Nil),
         PanelPosition.Left,
@@ -99,7 +99,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       ),
       selectedIndex = 1
     )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -124,7 +124,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "expose find and replace workflow fields and actions" in {
     val surfaceId    = SurfaceId("replace")
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Surface(surfaceId)),
       runtime = initialState.runtime.copy(
@@ -198,7 +198,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
     cases.foreach {
       case (surfaceId, modal) =>
-        val initialState = AppState.initial(AppConfig.conventional)
+        val initialState = AppState.initial(ChromeOn.config)
         val state =
           if isBlockingModal(modal) then
             initialState.copy(
@@ -258,7 +258,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
       path = "/tmp/project",
       activeField = FileWorkflowField.Path
     )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -277,7 +277,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
   it should "expose only the top modal and its controls while a modal is active" in {
     val floatingId   = SurfaceId("runner")
     val modalId      = SurfaceId("replace")
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -302,7 +302,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   it should "expose the close prompt's actions with rendered bounds and selection" in {
     val surfaceId    = SurfaceId("close")
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -338,7 +338,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val surfaceId           = SurfaceId("close-constrained")
     val workflow            = CloseWorkflowState(CloseScope.Current, BufferId(0), "notes.scala")
     val constrainedViewport = ViewportSize(40, 4)
-    val initialState        = AppState.initial(AppConfig.conventional)
+    val initialState        = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(focus = Focus.Modal),
       runtime = initialState.runtime.copy(
@@ -362,10 +362,10 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val buffer =
       Buffer.fromString(bufferId, "toolbar").copy(editing = EditingState(List(CursorPosition(0, 0))))
     val toolbarState = ContextualToolbarState()
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
-        config = AppConfig.conventional.withUiElementGap(Some(1)).withAppMode(AppMode.Prose),
+        config = ChromeOn.config.withUiElementGap(Some(1)).withAppMode(AppMode.Prose),
         buffers = Map(bufferId -> buffer),
         bufferOrder = List(bufferId),
         layout = Layout(
@@ -406,10 +406,10 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val runnerId = SurfaceId("runner")
     val modalId  = SurfaceId("replace-status")
     val baseline = AppState
-      .initial(AppConfig.conventional)
+      .initial(ChromeOn.config)
       .copy(
         runtime = AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .runtime
           .copy(
             uiSurfaces = List(
@@ -467,7 +467,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     * discover the open tabs, which one was active, or how many there were.
     */
   private def bufferState(bufferIds: List[Int]): AppState =
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val buffers      = bufferIds.map(id => BufferId(id) -> Buffer.fromString(BufferId(id), s"content-$id")).toMap
     initialState.copy(
       persisted = initialState.persisted.copy(
@@ -482,7 +482,7 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
 
   "AccessibilitySnapshot" should "expose no tab-bar nodes when at most one buffer is open" in {
     AccessibilitySnapshot
-      .from(AppState.initial(AppConfig.conventional), viewport)
+      .from(AppState.initial(ChromeOn.config), viewport)
       .nodes
       .map(_.id) should not contain "surface:tab-bar"
   }

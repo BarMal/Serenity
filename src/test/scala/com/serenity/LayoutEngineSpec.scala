@@ -56,7 +56,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
     val state = ChromeOn.initial.copy(persisted =
-      ChromeOn.initial.persisted.copy(config = AppConfig.conventional.withPaneHeaders(false))
+      ChromeOn.initial.persisted.copy(config = ChromeOn.config.withPaneHeaders(false))
     )
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val pane   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(PaneId(0))
@@ -82,7 +82,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
   it should "expose a single editor workspace contract for panes, line numbers, and gutter" in {
     val state = ChromeOn.initial.copy(persisted =
       ChromeOn.initial.persisted.copy(
-        config = AppConfig.conventional
+        config = ChromeOn.config
           .withLineNumbers(true)
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
           .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
@@ -124,7 +124,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
           editorPanes = Map(PaneId(0) -> EditorPane.withBuffer(PaneId(0), buffer.id)),
           activeEditorPaneId = Some(PaneId(0))
         ),
-        config = AppConfig.conventional.withLineNumbers(true)
+        config = ChromeOn.config.withLineNumbers(true)
       )
     )
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
@@ -172,7 +172,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val baseState = ChromeOn.initial.copy(
       persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
-        config = AppConfig.conventional.withTextAreaInsets(
+        config = ChromeOn.config.withTextAreaInsets(
           TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
         )
       ),
@@ -211,7 +211,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val renderViewport = ViewportSize(100, 30)
     val baseState = ChromeOn.initial.copy(
       persisted = ChromeOn.initial.persisted.copy(
-        config = AppConfig.conventional
+        config = ChromeOn.config
           .withLineNumbers(false)
           .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
           .withUiElementGap(Some(2))
