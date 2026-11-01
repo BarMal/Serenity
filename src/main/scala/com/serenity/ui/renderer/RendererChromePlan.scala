@@ -153,12 +153,14 @@ private[renderer] object RendererChromePlan:
 
   /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the row
     * holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the window's
-    * bottom edge there is nothing below to take.
+    * bottom edge there is nothing below to take. The window's rows are the layout's own, which a surface cut larger than
+    * the layout does not change.
     */
   def withDescenderBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if !context.surface.addressesPixels then band
     else
-      val gridBottom = context.surface.viewportHeight * context.cellMetrics.lineHeight
+      val rows       = context.window.fold(context.surface.viewportHeight)(_.height)
+      val gridBottom = rows * context.cellMetrics.lineHeight
       val room       = (context.cellMetrics.lineHeight / 4).min((gridBottom - band.yPx - band.heightPx).max(0))
       band.copy(heightPx = band.heightPx + room)
 
