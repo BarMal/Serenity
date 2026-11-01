@@ -171,7 +171,8 @@ object TabBarSurfaceComposition:
       val extra = budget % wanted.size
       List.tabulate(wanted.size)(index => math.max(1, share + (if index < extra then 1 else 0)))
     else
-      val cap       = (MinTabWidth to wanted.max).reverseIterator.find(cutTo(_).sum <= budget).getOrElse(MinTabWidth)
+      val widest    = wanted.foldLeft(MinTabWidth)(math.max)
+      val cap       = (MinTabWidth to widest).reverseIterator.find(cutTo(_).sum <= budget).getOrElse(MinTabWidth)
       val spare     = budget - cutTo(cap).sum
       val getsSpare = wanted.indices.filter(wanted(_) > cap).take(spare).toSet
       cutTo(cap).zipWithIndex.map((width, index) => if getsSpare(index) then width + 1 else width)
