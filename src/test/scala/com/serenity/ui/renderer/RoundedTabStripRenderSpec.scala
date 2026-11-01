@@ -172,7 +172,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   }
 
   it should "size a tab to its title and cover all of it, close box included, with the active tab's fill" in {
-    val s                   = strip(radius = 0)
+    val s                   = strip(radius = 12)
     val h                   = highlight(s)
     val (left, _, right, _) = boundsOf(s, h)
     val title               = "Buffer 1"
