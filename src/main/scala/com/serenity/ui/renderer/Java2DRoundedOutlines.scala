@@ -62,8 +62,7 @@ final private[renderer] class Java2DRoundedOutlines(
       // Hard-edged, like the clip it replaces: a pixel is wholly the fill or left as it was, so drawing the same shape
       // again, or into a cached layer and compositing that, gives the same pixels. The border is anti-aliased over it.
       if corners.topLeft then g.fill(RoundedPath.cornerFill(RoundedPath.Corner.TopLeft, px, py, radius))
-      if corners.topRight then
-        g.fill(RoundedPath.cornerFill(RoundedPath.Corner.TopRight, px + pw - radius, py, radius))
+      if corners.topRight then g.fill(RoundedPath.cornerFill(RoundedPath.Corner.TopRight, px + pw - radius, py, radius))
       if corners.bottomRight then
         g.fill(RoundedPath.cornerFill(RoundedPath.Corner.BottomRight, px + pw - radius, py + ph - radius, radius))
       if corners.bottomLeft then
