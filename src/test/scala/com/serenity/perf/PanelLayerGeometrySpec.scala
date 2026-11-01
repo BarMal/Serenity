@@ -63,7 +63,7 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
 
     /** Notes a draw on the first row that reaches past the last whole cell, with the code that asked for it. */
     private def noteStray(what: String, xPx: Int, yPx: Int, widthPx: Int): Unit =
-      if xPx + widthPx > viewport.width * cellMetrics.charWidth && yPx < cellMetrics.lineHeight then
+      if xPx + widthPx >= viewport.width * cellMetrics.charWidth && yPx < cellMetrics.lineHeight then
         val callers = Thread.currentThread.getStackTrace.map(_.toString).filter(_.startsWith("com.serenity.ui.renderer"))
         val _       = strayDraws.updateAndGet(_ :+ s"$what at x=$xPx w=$widthPx <- ${callers.slice(1, 5).mkString(" <- ")}")
 
@@ -110,7 +110,7 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         textCaches = caches.surfaceText
       ):
         override def putString(x: Int, y: Int, text: String): Unit =
-          noteStray(s"putString(${text.length})", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), text.length * cellMetrics.charWidth)
+          noteStray(s"putString('${text.take(12)}')", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), text.length * cellMetrics.charWidth)
           super.putString(x, y, text)
 
         override def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
