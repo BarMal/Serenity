@@ -5,9 +5,10 @@ import java.awt.font.{FontRenderContext, TextLayout}
 
 import com.serenity.ui.layout.SegmentTitleFit
 
-/** Cuts a segment's text by pixels to the room its cells have, so a title the layout counted in cells can never run into
-  * the cells beside it. The room is the cells' width less the shift the glyph pass is drawn with. A surface with no font
-  * render context (a cell grid) or no known cell width leaves the text as it is: there the layout's count is exact.
+/** Cuts a segment's text by pixels to the room its cells have, so a title the layout counted in cells can never run
+  * into the cells beside it. The room is the cells' width less the shift the glyph pass is drawn with. A surface with
+  * no font render context (a cell grid) or no known cell width leaves the text as it is: there the layout's count is
+  * exact.
   */
 private[renderer] object SegmentTextFit:
 

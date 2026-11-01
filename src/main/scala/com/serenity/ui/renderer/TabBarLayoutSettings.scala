@@ -45,5 +45,8 @@ object TabBarLayoutSettings:
     def advanceOf(label: String): Double =
       if label.isEmpty then 0.0
       else
-        advances.computeIfAbsent(label, text => java.lang.Double.valueOf(TextLayout(text, font, context).getAdvance.toDouble))
+        advances.computeIfAbsent(
+          label,
+          text => java.lang.Double.valueOf(TextLayout(text, font, context).getAdvance.toDouble)
+        )
     TabTitleMeasure.proportional(advanceOf, SurfaceTextInset.px(config), cellWidth)

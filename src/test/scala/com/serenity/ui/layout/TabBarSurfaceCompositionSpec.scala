@@ -9,9 +9,9 @@ import org.scalatest.matchers.should.Matchers
   * `TextOverlayRendererLayoutSpec` (issue #1076: Render), and per-tab hit-testing in `TabBarMouseHitTestingSpec`.
   *
   * A tab is `pad + title + pad` (2 cells of chrome) and its close box shows only on the active tab, which adds a blank
-  * and the `x` (4 cells of chrome, 3 once it is squeezed); an inactive tab's `x` is drawn in its right padding cell when
-  * asked for. The default measure is a cell grid's: a title is as many cells as it has characters, and a cut ends in
-  * "...", with 8 title cells as the floor.
+  * and the `x` (4 cells of chrome, 3 once it is squeezed); an inactive tab's `x` is drawn in its right padding cell
+  * when asked for. The default measure is a cell grid's: a title is as many cells as it has characters, and a cut ends
+  * in "...", with 8 title cells as the floor.
   */
 class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
@@ -312,8 +312,9 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     val active  = Some(BufferId(1))
 
     val plain = TabBarSurfaceComposition.forTabBar(entries, active, rect, settings())
-    val hover = TabBarSurfaceComposition.forTabBar(entries, active, rect, settings(reveal = CloseReveal.Hovered(BufferId(2))))
-    val all   = TabBarSurfaceComposition.forTabBar(entries, active, rect, settings(reveal = CloseReveal.All))
+    val hover =
+      TabBarSurfaceComposition.forTabBar(entries, active, rect, settings(reveal = CloseReveal.Hovered(BufferId(2))))
+    val all = TabBarSurfaceComposition.forTabBar(entries, active, rect, settings(reveal = CloseReveal.All))
 
     hover.hitRegions shouldBe plain.hitRegions
     all.hitRegions shouldBe plain.hitRegions

@@ -37,8 +37,8 @@ import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStro
   * run, from the advances layout measured with AWT, so Skia only has to draw the glyphs of the same font at the x it is
   * handed; [[SkiaFontCache]] makes the Skia font match the AWT one.
   *
-  * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers (a layer
-  * is a `BufferedImage`, and routing every modal and panel through a CPU image would cost the GPU path its point), so
+  * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers (a layer is
+  * a `BufferedImage`, and routing every modal and panel through a CPU image would cost the GPU path its point), so
   * those are painted straight into the canvas. Content persistence and [[PixelCopying]] need pixels that outlive a
   * frame, which a window's GPU canvas lacks, so they exist only over a retained raster [[Surface]]
   * ([[SkiaRenderSurface.retaining]]).

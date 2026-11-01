@@ -148,7 +148,10 @@ object TabBarSurfaceComposition:
     * shorter keeps its natural width.
     */
   private def floorWidth(tab: Tab, settings: TabBarSettings): Int =
-    math.min(naturalWidth(tab, snug = true, settings), Chrome(tab.active, snug = true).cells + settings.measure.minTitleCells)
+    math.min(
+      naturalWidth(tab, snug = true, settings),
+      Chrome(tab.active, snug = true).cells + settings.measure.minTitleCells
+    )
 
   /** Size each tab to its content, up to the maximum width, reserving [[GapColumns]] per inter-tab gap out of
     * `availableWidth`. When the tabs want more than fits: first the active tab's close box is squeezed, then only the
@@ -191,7 +194,8 @@ object TabBarSurfaceComposition:
       val cap    = Iterator.range(widest, -1, -1).find(at(_).sum <= budget).getOrElse(0)
       val fitted = at(cap)
       val spare  = budget - fitted.sum
-      val cut    = wanted.zip(fitted).zipWithIndex.collect { case ((want, got), index) if want > got => index }.take(spare).toSet
+      val cut =
+        wanted.zip(fitted).zipWithIndex.collect { case ((want, got), index) if want > got => index }.take(spare).toSet
       fitted.zipWithIndex.map((width, index) => if cut(index) then width + 1 else width)
 
   private def labelFor(entry: TabListEntry): String =
@@ -202,11 +206,11 @@ object TabBarSurfaceComposition:
     */
   private val OverflowIndicatorWidth = 4
 
-  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window of the
-    * tabs that fit at their floors, grown from the active tab outwards so it is never scrolled out of view. Reachable
-    * hidden tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList` overlay
-    * (`TabListContent.build`, `AppEventReducer.toggleTabList`) already lists every open buffer regardless of strip
-    * width, so overflow here does not need its own dropdown/menu affordance to keep hidden tabs reachable.
+  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window of
+    * the tabs that fit at their floors, grown from the active tab outwards so it is never scrolled out of view.
+    * Reachable hidden tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList`
+    * overlay (`TabListContent.build`, `AppEventReducer.toggleTabList`) already lists every open buffer regardless of
+    * strip width, so overflow here does not need its own dropdown/menu affordance to keep hidden tabs reachable.
     */
   final case class VisibleTabWindow(visible: List[TabListEntry], hiddenCount: Int)
 
@@ -231,9 +235,9 @@ object TabBarSurfaceComposition:
         // and to the other side where that one has no tab left or no room.
         @tailrec def grow(low: Int, high: Int, used: Int): (Int, Int) =
           def fits(index: Int): Boolean = used + GapColumns + floors(index) <= content
-          val canLeft                    = low > 0 && fits(low - 1)
-          val canRight                   = high < floors.size - 1 && fits(high + 1)
-          val preferLeft                 = activeIndex - low <= high - activeIndex
+          val canLeft                   = low > 0 && fits(low - 1)
+          val canRight                  = high < floors.size - 1 && fits(high + 1)
+          val preferLeft                = activeIndex - low <= high - activeIndex
           if canLeft && (preferLeft || !canRight) then grow(low - 1, high, used + GapColumns + floors(low - 1))
           else if canRight then grow(low, high + 1, used + GapColumns + floors(high + 1))
           else (low, high)
@@ -330,7 +334,7 @@ object TabBarSurfaceComposition:
       // The new-tab (+) affordance paints as its own plain-text box at its own reserved rect (issue #1080), rather
       // than as another `Distributed` segment of `rowBox` -- it addresses no `BufferId`, so it has no place in a row
       // whose segments are otherwise one-to-one with `entries`.
-      val newTabBox = {
+      val newTabBox =
         val region = newTabRegion(layout, rect)
         SurfacePaintBox(
           kind = SurfacePaintKind.Text,
@@ -340,7 +344,6 @@ object TabBarSurfaceComposition:
           actionId = region.actionId,
           semanticLabel = Some(region.semanticLabel)
         )
-      }
 
       // Each revealed close (x) affordance paints as its own plain-text box at its own reserved rect, the same way
       // `newTabBox` does above, rather than as another `Distributed` segment of `rowBox` -- and is derived from

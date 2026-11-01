@@ -20,7 +20,8 @@ import org.scalatest.matchers.should.Matchers
 /** Coverage for `TabBarMouseHitTesting` -- resolving a click's cell coordinate to the `BufferId` of the tab it landed
   * on (issue #1075: Foundation), resolving a click against live `AppState` into a buffer switch (issue #1077: "Click a
   * tab to switch buffer"), the trailing new-tab (+) affordance into opening a new tab (issue #1080: "New-tab
-  * affordance"), and the close box a tab shows: the active tab's always, an inactive tab's while the pointer is over it.
+  * affordance"), and the close box a tab shows: the active tab's always, an inactive tab's while the pointer is over
+  * it.
   *
   * The `AppState` cases take their geometry from the very settings the code under test uses, so they hold whatever
   * fonts the machine has.
@@ -120,7 +121,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
     val state = twoBufferState
     val strip = stripOf(state)
 
-    TabBarMouseHitTesting.clickTarget(state, colOf(strip.tabs.head) + strip.tabs.head.rect.width.toInt, row = 0) shouldBe
+    TabBarMouseHitTesting.clickTarget(
+      state,
+      colOf(strip.tabs.head) + strip.tabs.head.rect.width.toInt,
+      row = 0
+    ) shouldBe
       Some(None)
   }
 
