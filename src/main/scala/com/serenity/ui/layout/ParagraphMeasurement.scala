@@ -79,7 +79,7 @@ final private[layout] class ParagraphMeasurement private (
 private[layout] object ParagraphMeasurement:
 
   /** Comfortably above the largest gap seen between summed glyph advances and shaped glyph positions (under 0.01px). */
-  private val DecisionGuardPx = 0.05f
+  private[layout] val DecisionGuardPx = 0.05f
 
   private[layout] val MaxWindowChars = 16384
 
