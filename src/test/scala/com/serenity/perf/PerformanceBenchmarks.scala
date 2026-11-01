@@ -54,7 +54,6 @@ object PerformanceBenchmarks:
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
       LayoutSnapshotBenchmarks.benchmarks() ++
-      RowCountBenchmarks.benchmarks() ++
       CellGridBenchmarks.benchmarks() ++
       ReducerBenchmarks.benchmarks() ++
       ProseTypingBenchmarks.benchmarks() ++
@@ -66,6 +65,7 @@ object PerformanceBenchmarks:
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       BoundaryCacheBenchmarks.benchmarks() ++
+      RowCountBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 
