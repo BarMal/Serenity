@@ -75,5 +75,12 @@ private[manager] object TabBarDragHitTesting:
       (entries, activeBufferId) <- surface.content match
         case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
         case _                                              => None
-      hit <- TabBarMouseHitTesting.hitAt(entries, activeBufferId, rect, col, row)
+      hit <- TabBarMouseHitTesting.hitAt(
+        entries,
+        activeBufferId,
+        rect,
+        col,
+        row,
+        state.persisted.config.surfaceConfig.tabMaxWidth
+      )
     yield hit

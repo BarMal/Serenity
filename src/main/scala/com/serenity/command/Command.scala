@@ -304,6 +304,7 @@ enum InterfaceChromeIntent:
   case SetUiElementGap(gap: Double)
   case SetUiOutlineThicknessPx(thickness: Int)
   case SetUiCornerRadiusPx(radius: Int)
+  case SetTabMaxWidth(width: Int)
   case SetDockedCornerStyle(style: DockedCornerStyle)
   case SetPaneHeaderCorners(corners: PaneHeaderCorners)
   case SetInterfaceDensity(density: InterfaceDensity)

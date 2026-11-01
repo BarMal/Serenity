@@ -200,7 +200,7 @@ object CommandRunnerSettingsGroups:
             CommandRunnerSettingsAppearanceItems.dockedCornerStyleOptionItem(optionSelections),
             CommandRunnerSettingsAppearanceItems.paneHeaderCornersOptionItem(optionSelections)
           )
-        )
+        ) ++ onFrontend.rows(guiOnly, input("tab-max-width"))
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
     val keysGroup = group(

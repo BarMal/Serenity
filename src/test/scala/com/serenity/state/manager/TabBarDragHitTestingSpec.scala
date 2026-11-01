@@ -20,9 +20,10 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 30-column viewport, with `BufferId(9)` focused --
+  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 46-column viewport, with `BufferId(9)` focused --
     * `TabBarSurfaceComposition`'s overflow window (`maxVisibleCount`/`visibleWindow`) fits only 4 tabs at
-    * `MinTabWidth`, so this overflows and, centred on the active tab (index 9), windows to entries [6,7,8,9]
+    * `MinTabWidth` (8 cells each, 2-cell gaps), so this overflows and, centred on the active tab (index 9), windows to
+    * entries [6,7,8,9]
     * (`BufferId(6)`..`BufferId(9)`) -- what's actually painted. An `activeBufferId = None` window instead centres on
     * index 0, windowing to entries [0,1,2,3] (`BufferId(0)`..`BufferId(3)`).
     */
@@ -30,7 +31,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
     val base         = AppState.initial(com.serenity.ChromeOn.config)
     val extraBuffers = (1 to 9).map(i => BufferId(i) -> Buffer.fromString(BufferId(i), s"buffer$i"))
     val withBuffers = base.copy(
-      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(30, 10))),
+      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(46, 10))),
       persisted = base.persisted.copy(
         buffers = base.persisted.buffers ++ extraBuffers,
         bufferOrder = base.persisted.bufferOrder ++ (1 to 9).map(BufferId.apply)
@@ -51,10 +52,10 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
       val state                      = overflowingState
       val (dragHitTesting, stateRef) = fixture(state)
 
-      // Column 14 lands on the third visible tab slot ([12,16)): BufferId(8) in the active-tab-centred window
+      // Column 24 lands on the third visible tab slot ([20,28)): BufferId(8) in the active-tab-centred window
       // ([6,7,8,9]) that is actually painted; BufferId(2) in the index-0-centred window ([0,1,2,3]) that
       // `activeBufferId = None` would wrongly produce.
-      val started = dragHitTesting.handleTabBarPress(MousePress(col = 14, row = 0), state).unsafeRunSync()
+      val started = dragHitTesting.handleTabBarPress(MousePress(col = 24, row = 0), state).unsafeRunSync()
 
       started shouldBe true
       stateRef.get.unsafeRunSync().runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(8)))
@@ -69,7 +70,7 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
       val afterPress = stateRef.get.unsafeRunSync()
       afterPress.runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(6)))
 
-      dragHitTesting.handleTabBarDrag(MouseDrag(col = 14, row = 0), afterPress).unsafeRunSync()
+      dragHitTesting.handleTabBarDrag(MouseDrag(col = 24, row = 0), afterPress).unsafeRunSync()
 
       stateRef.get.unsafeRunSync().persisted.bufferOrder shouldBe
         EditorState.reorderBuffer(afterPress, BufferId(6), BufferId(8)).persisted.bufferOrder

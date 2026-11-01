@@ -113,6 +113,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withStartupWarmUp(false)
     .withScrollbar(true)
     .withTabStrip(TabStripMode.Auto)
+    .withTabMaxWidth(40)
     .withUiLayout(UiLayout.Conventional)
     .withDiagnosticHighlightBlendWeight(0.2)
     .withCursorMode(CursorMode.Steady)

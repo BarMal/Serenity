@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-11-01
+
+- Added `editor.tab_max_width` (cells, 8 to 60, default 28): the widest a tab in the tab strip may be. A width outside the range is clamped to the nearest bound and reported. It is also in the palette's Look settings, under Advanced.
+
 ### 2026-10-31
 
 - Brought back `ui.corner_radius` (pixels, 0 to 32, default 12; removed in #1811) and added `ui.docked_corner_style` (`floating` or `flush`, default `floating`) and `ui.pane_header_corners` (`rounded` or `square`, default `rounded`) (#2389). A radius outside the range is clamped to the nearest bound and reported.

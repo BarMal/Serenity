@@ -37,7 +37,8 @@ private[accessibility] object AccessibilityTabBar:
     rect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val composition = TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect)
+    val maxTabWidth = state.persisted.config.surfaceConfig.tabMaxWidth
+    val composition = TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect, maxTabWidth)
     val tabNodes = composition.hitRegions.flatMap { hit =>
       TabBarSurfaceComposition.bufferIdOf(hit.focusId).map { bufferId =>
         val selected = activeBufferId.contains(bufferId)
@@ -52,7 +53,8 @@ private[accessibility] object AccessibilityTabBar:
         )
       }
     }
-    val closeNodes = TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect).flatMap { hit =>
+    val closeRegions = TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect, maxTabWidth)
+    val closeNodes = closeRegions.flatMap { hit =>
       TabBarSurfaceComposition.closeBufferIdOf(hit.focusId).map { bufferId =>
         AccessibleNode(
           s"surface:${surfaceId.value}/close:${bufferId.value}",
@@ -65,7 +67,8 @@ private[accessibility] object AccessibilityTabBar:
         )
       }
     }
-    val newTabNode = TabBarSurfaceComposition.newTabAffordance(entries, rect).toList.map { hit =>
+    val newTabRegions = TabBarSurfaceComposition.newTabAffordance(entries, rect, activeBufferId, maxTabWidth)
+    val newTabNode = newTabRegions.toList.map { hit =>
       AccessibleNode(
         s"surface:${surfaceId.value}/new-tab",
         AccessibilityRole.Button,

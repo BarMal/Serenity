@@ -85,7 +85,8 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "render-wayland",
       "ui-corner-radius",
       "docked-corner-style",
-      "pane-header-corners"
+      "pane-header-corners",
+      "tab-max-width"
     )
   }
 

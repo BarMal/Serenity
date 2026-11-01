@@ -499,6 +499,14 @@ object ConfigManager:
               Some(s"below the minimum ${AppConfig.MinUiCornerRadiusPx}, using ${AppConfig.MinUiCornerRadiusPx}")
             case Some(_) => None
             case None    => Some(SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered))
+        case Some(field) if field.key == "editor.tab_max_width" =>
+          value.trim.toIntOption match
+            case Some(width) if width > TabMaxWidth.Max =>
+              Some(s"above the maximum ${TabMaxWidth.Max}, using ${TabMaxWidth.Max}")
+            case Some(width) if width < TabMaxWidth.Min =>
+              Some(s"below the minimum ${TabMaxWidth.Min}, using ${TabMaxWidth.Min}")
+            case Some(_) => None
+            case None    => Some(SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered))
         case Some(field) =>
           Option.when(field.codec.parse(value).isEmpty)(
             SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered)
