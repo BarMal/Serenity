@@ -82,7 +82,10 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "render-fps",
       "render-damage-granularity",
       "render-backend",
-      "render-wayland"
+      "render-wayland",
+      "ui-corner-radius",
+      "docked-corner-style",
+      "pane-header-corners"
     )
   }
 
