@@ -117,7 +117,8 @@ object TextOverlayRenderer:
       )
 
   /** Falls back to running `render` unclipped when the surface can't clip -- content still draws. A rounded clip shapes
-    * the fill like the outline, so no square corner shows outside an arc.
+    * the fill like the outline, so no square corner shows outside an arc; with nothing to round it is the plain
+    * rectangle clip the overlay has always had, which keeps text shifted by the inset from spilling past its edge.
     */
   private def withOptionalRoundRectClip(
     surface: RenderSurface,
@@ -126,9 +127,10 @@ object TextOverlayRenderer:
     radiusPx: Int
   )(render: => Unit): Unit =
     surface.panelOutlines match
-      case Some(outlines) =>
+      case Some(outlines) if corners.any && radiusPx > 0 =>
         outlines.withRoundRectClip(rect.x, rect.y, rect.width, rect.height, corners, radiusPx)(render)
-      case None => render
+      case Some(outlines) => outlines.withRectClip(rect.x, rect.y, rect.width, rect.height)(render)
+      case None           => render
 
   private def drawComposition(
     surface: RenderSurface,
