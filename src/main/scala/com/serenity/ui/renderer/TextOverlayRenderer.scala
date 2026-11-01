@@ -157,7 +157,10 @@ object TextOverlayRenderer:
     textInsetPx: Double,
     highlightRadiusPx: Int
   ): Unit =
-    composition.paintBoxes.foreach { box =>
+    // The new-tab box paints last: a tab's close box is shifted right by the text inset, and its background reaches
+    // over the cells beside it, which would wipe out half of the glyph.
+    val (newTabBoxes, otherBoxes) = composition.paintBoxes.partition(isNewTab)
+    (otherBoxes ++ newTabBoxes).foreach { box =>
       box.text.foreach { text =>
         val rect  = box.rect
         val x     = math.round(rect.x).toInt
@@ -177,12 +180,8 @@ object TextOverlayRenderer:
           font = font,
           cellMetrics = cellMetrics,
           advances = advances,
-          // The new-tab glyph is the strip's last cell: shifted right it would run off the strip, so it moves in
-          // instead, by the text inset but never so far that it reaches the previous tab's close glyph.
-          textInsetPx =
-            if box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId) then
-              -math.min(textInsetPx, cellMetrics.charWidth / 4.0)
-            else textInsetPx,
+          // Shifted right by the inset, the new-tab glyph at the strip's last cell would run off the strip.
+          textInsetPx = if isNewTab(box) then 0.0 else textInsetPx,
           // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
           // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a
           // fractional gap renders as no gap at all.
@@ -191,6 +190,9 @@ object TextOverlayRenderer:
         )
       }
     }
+
+  private def isNewTab(box: SurfacePaintBox): Boolean =
+    box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId)
 
   /** A box with a tone but no segments of its own paints as one implicit segment carrying that tone, so the tone goes
     * through the same selected-wins colour rules as any segment's. Explicit segments keep their own tones.
