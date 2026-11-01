@@ -7,7 +7,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
-import org.jetbrains.skia.{Bitmap, BlendMode, IRect, ImageInfo, Paint, Rect, Surface}
+import org.jetbrains.skia.{Bitmap, BlendMode, ColorAlphaType, ColorSpace, ColorType, IRect, ImageInfo, Paint, Rect, Surface}
 
 /** The pixels of one pooled frame, as the pixel specs read and stamp them whatever renders into them. */
 trait FramePixels:
@@ -143,7 +143,14 @@ object ReferenceFrames:
 object SkiaPixels:
 
   def read(surface: Surface): Array[Int] =
-    val info  = ImageInfo.Companion.makeN32Premul(surface.getWidth, surface.getHeight)
+    val info =
+      ImageInfo(
+        surface.getWidth,
+        surface.getHeight,
+        ColorType.BGRA_8888,
+        ColorAlphaType.PREMUL,
+        ColorSpace.Companion.getSRGB()
+      )
     val whole = Bitmap()
     require(whole.allocPixels(info) && surface.readPixels(whole, 0, 0), "cannot read the surface")
     val bytes  = whole.readPixels(info, surface.getWidth * 4, 0, 0)

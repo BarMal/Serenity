@@ -22,7 +22,8 @@ import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLa
   * The canvas keeps the keyboard focus (and with it the input method), so the layer is not focusable. A heavyweight
   * layer takes the mouse events for itself, so they are passed on to the canvas, where the input handler listens.
   */
-final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean) extends LayerHost:
+final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Boolean, redraw: LayerRedraw)
+    extends LayerHost:
 
   private val slot         = new PictureSlot[Picture](_.close())
   private val carets       = new AtomicReference(List.empty[SwingWindow.CaretPaint])
@@ -35,6 +36,7 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
   private val pictureOps   = new AtomicLong(0L)
   private val pictureBytes = new AtomicLong(0L)
   private val awaiting     = new AtomicLong(0L)
+  private val caretSetAt   = new AtomicLong(0L)
 
   private val followCanvas = new ComponentAdapter:
     override def componentResized(e: ComponentEvent): Unit = fitLayer()
@@ -67,9 +69,10 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
-    val _       = renders.incrementAndGet()
-    val started = System.nanoTime()
-    val pending = awaiting.get()
+    val _           = renders.incrementAndGet()
+    val started     = System.nanoTime()
+    val pending     = awaiting.get()
+    val caretWaited = Some(caretSetAt.getAndSet(0L)).filter(_ != 0L).map(started - _)
     surface.clear(0xff000000)
     val version    = publishes.get()
     val hasContext = Option(surface.getRecordingContext).isDefined
@@ -103,6 +106,7 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
         waitedNanos = Option.when(drawn && pending != 0L && started >= pending && awaiting.compareAndSet(pending, 0L))(
           started - pending
         ),
+        caretWaitedNanos = caretWaited,
         replayNanos = replayedAt - started,
         caretNanos = inked - replayedAt,
         syncNanos = syncedAt - inked,
@@ -137,11 +141,12 @@ final class SkiaLayerHost private (canvas: JPanel, layer: SkiaLayer, syncGpu: Bo
     slot.publish(picture)
     published.set(true)
     val _ = publishes.incrementAndGet()
-    layer.repaint()
+    redraw.afterPublish()
 
   def showCarets(shown: List[SwingWindow.CaretPaint]): Unit =
     carets.set(shown)
-    layer.repaint()
+    val _ = caretSetAt.compareAndSet(0L, System.nanoTime())
+    redraw.afterCaretsChanged()
 
   def setCursor(cursor: Cursor): Unit = SkiaLayerHost.onEventThread(layer.setCursor(cursor))
 
@@ -173,11 +178,15 @@ object SkiaLayerHost:
       caretNanos: Long,
       syncNanos: Long,
       syncedDraws: Int,
-      gpuContext: Boolean
+      gpuContext: Boolean,
+      caretWaits: Int,
+      caretWaitNanos: Long,
+      longestCaretWaitNanos: Long
   ):
 
     def drawn(
       waitedNanos: Option[Long],
+      caretWaitedNanos: Option[Long],
       replayNanos: Long,
       caretNanos: Long,
       syncNanos: Long,
@@ -193,7 +202,10 @@ object SkiaLayerHost:
         caretNanos = this.caretNanos + caretNanos,
         syncNanos = this.syncNanos + syncNanos,
         syncedDraws = syncedDraws + (if synced then 1 else 0),
-        gpuContext = gpuContext
+        gpuContext = gpuContext,
+        caretWaits = caretWaits + caretWaitedNanos.size,
+        caretWaitNanos = caretWaitNanos + caretWaitedNanos.getOrElse(0L),
+        longestCaretWaitNanos = longestCaretWaitNanos.max(caretWaitedNanos.getOrElse(0L))
       )
 
     def stats(publishes: Int): LayerDrawStats =
@@ -207,11 +219,14 @@ object SkiaLayerHost:
         caretsMeanMs = mean(caretNanos, renders),
         syncMeanMs = mean(syncNanos, renders),
         syncedDraws = syncedDraws,
-        gpuContext = gpuContext
+        gpuContext = gpuContext,
+        caretWaits = caretWaits,
+        caretToRenderMeanMs = mean(caretWaitNanos, caretWaits),
+        caretToRenderMaxMs = longestCaretWaitNanos / 1e6
       )
 
   private object Draws:
-    val Empty: Draws = Draws(0, 0, 0L, 0L, 0L, 0L, 0L, 0, false)
+    val Empty: Draws = Draws(0, 0, 0L, 0L, 0L, 0L, 0L, 0, false, 0, 0L, 0L)
 
   /** Skiko's `Canvas.drawPicture` has a hyphen in its JVM name, because its matrix parameter is an inline class, and
     * Scala cannot call a name like that, so it is looked up by name. If a Skiko release renames it, pictures are played
@@ -250,9 +265,12 @@ object SkiaLayerHost:
     * GPU to finish before it counts as drawn, which only a timing run wants.
     */
   def create(canvas: JPanel, syncGpu: Boolean = false): SkiaLayerHost =
+    createWith(canvas, syncGpu, LayerRedraw.forLayer)
+
+  private[skia] def createWith(canvas: JPanel, syncGpu: Boolean, redraw: SkiaLayer => LayerRedraw): SkiaLayerHost =
     onEventThread {
       val layer = newLayer()
-      val host  = new SkiaLayerHost(canvas, layer, syncGpu)
+      val host  = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer))
       host.install()
       host
     }

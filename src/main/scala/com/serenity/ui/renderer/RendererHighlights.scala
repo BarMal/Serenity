@@ -284,9 +284,8 @@ object RendererHighlights:
         val amplitude = math.min(MaxSquiggleAmplitudePx, math.max(1, rowBottom - baselinePx - 1))
         val gap       = if rowBottom - baselinePx - 1 - amplitude >= 1 then 1 else 0
         val topPx     = math.max(lineTopPx, math.min(baselinePx + gap, rowBottom - 1 - amplitude))
-        forEachSquiggleSegment(startXPx.round, widthPx.round, topPx, amplitude) { (xPx, yPx, segmentWidthPx) =>
-          if yPx < clipBottomPx then surface.pixels.fillPixelRect(xPx, yPx, segmentWidthPx, 1, colour)
-        }
+        val rects     = squiggleRects(startXPx.round, widthPx.round, topPx, amplitude, clipBottomPx)
+        if rects.nonEmpty then surface.pixels.fillPixelRects(rects, colour)
       }
     else
       val underline = TextStyle(isUnderlined = true)
@@ -326,6 +325,26 @@ object RendererHighlights:
         visit(startXPx + offset, topPx + depth, math.min(SquiggleStepPx, widthPx - offset).max(1))
         walk(offset + SquiggleStepPx)
     walk(0)
+
+  /** The squiggle's one-pixel-high segments above `clipBottomPx` as flat (x, y, width, height) quads, ready for one
+    * [[PixelDrawing.fillPixelRects]] call.
+    */
+  private[renderer] def squiggleRects(
+    startXPx: Int,
+    widthPx: Int,
+    topPx: Int,
+    amplitude: Int,
+    clipBottomPx: Int
+  ): IArray[Int] =
+    val rects = scala.collection.mutable.ArrayBuilder.ofInt()
+    forEachSquiggleSegment(startXPx, widthPx, topPx, amplitude) { (xPx, yPx, segmentWidthPx) =>
+      if yPx < clipBottomPx then
+        rects += xPx
+        rects += yPx
+        rects += segmentWidthPx
+        rects += 1
+    }
+    IArray.unsafeFromArray(rects.result())
 
   /** The default blend weight (#1529): kept here, rather than only as `SurfaceConfig`'s default, so a caller testing
     * these functions directly (or a legacy 2-arg call) gets the same result the app always used to render.

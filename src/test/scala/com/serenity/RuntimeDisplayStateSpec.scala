@@ -155,7 +155,7 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
       .update(
         FontConfig(
           codeFontFamily = Font.DIALOG_INPUT,
-          textFontFamily = Font.DIALOG,
+          textFontFamily = Font.SERIF,
           uiFontFamily = Font.SANS_SERIF,
           fontSize = 18.0f,
           uiFontSize = 12.0f

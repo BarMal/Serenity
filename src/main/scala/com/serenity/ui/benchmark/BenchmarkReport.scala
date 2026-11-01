@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.skia.FallbackAgreement
 import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.Json
 import io.circe.syntax.*
@@ -56,11 +57,30 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       f"Skia layer: ${stats.renders} draws for ${stats.publishes} published frames; publish to draw mean ${stats.publishToRenderMeanMs}%.2f ms (max ${stats.publishToRenderMaxMs}%.2f); " +
         f"per draw: picture ${stats.replayMeanMs}%.2f ms, carets ${stats.caretsMeanMs}%.2f ms, GPU sync ${stats.syncMeanMs}%.2f ms."
     }
-    val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
+    val carets = environment.skiaDraws.filter(_.caretWaits > 0).map { stats =>
+      f"Skia layer: ${stats.caretWaits} changes of carets; change to draw mean ${stats.caretToRenderMeanMs}%.2f ms (max ${stats.caretToRenderMaxMs}%.2f)."
+    }
+    val cold = environment.coldPhases.map { phases =>
+      f"Cold frame, Skia caches (mean of ${phases.frames}): ${phases.facesPerFrame}%.1f faces ${phases.faceMsPerFrame}%.2f ms, ${phases.shapersPerFrame}%.1f shapers ${phases.shaperMsPerFrame}%.2f ms, ${phases.shapingsPerFrame}%.0f shapings ${phases.shapingMsPerFrame}%.2f ms."
+    }
+    val splits = List("Java2D" -> environment.java2dColdSplit, "Skia layer" -> environment.skiaColdSplit).flatMap {
+      (arm, split) => split.map(coldSplitLine(arm, _))
+    }
+    val agreement = environment.fallbackAgreement.map(agreementLine)
+    val sync      = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    List(startup, layers, draws, sync, pictures).flatten.map(line => s"\n$line")
+    (List(startup, layers, draws, carets, cold).flatten ++ splits ++ List(agreement, sync, pictures).flatten)
+      .map(line => s"\n$line")
+
+  private def agreementLine(agreement: FallbackAgreement): String =
+    val base =
+      s"Fallback runs against TextLine on this machine: ${agreement.identical} of ${agreement.checked} strings identical."
+    if agreement.differing.isEmpty then base else s"$base Differing: ${agreement.differing.take(5).mkString(", ")}."
+
+  private def coldSplitLine(arm: String, split: ColdFrameSplit): String =
+    f"Cold frame split, $arm (mean of ${split.frames}): render call ${split.renderMs}%.2f ms (layout ${split.layoutMs}%.2f, drawing ${split.drawMs}%.2f, rest ${split.otherMs}%.2f), then ${split.presentMs}%.2f ms until presented."
 
   private def row(result: ScenarioResult): String =
     val java2d = result.java2d
@@ -161,7 +181,44 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         api
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
         environment.skiaLayers.map(count => "skiaLayers" -> count.asJson).toList ++
-        environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList*
+        environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
+        environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList ++
+        coldSplitJson.map("coldSplit" -> _).toList ++
+        environment.fallbackAgreement.map(agreement => "fallbackAgreement" -> agreementJson(agreement)).toList*
+    )
+
+  private def agreementJson(agreement: FallbackAgreement): Json =
+    Json.obj(
+      "checked"   -> agreement.checked.asJson,
+      "identical" -> agreement.identical.asJson,
+      "differing" -> agreement.differing.asJson
+    )
+
+  private def coldSplitJson: Option[Json] =
+    val arms = List("java2d" -> environment.java2dColdSplit, "skia" -> environment.skiaColdSplit).flatMap {
+      (arm, split) => split.map(measured => arm -> splitJson(measured))
+    }
+    Option.when(arms.nonEmpty)(Json.obj(arms*))
+
+  private def splitJson(split: ColdFrameSplit): Json =
+    Json.obj(
+      "frames"    -> split.frames.asJson,
+      "renderMs"  -> split.renderMs.asJson,
+      "layoutMs"  -> split.layoutMs.asJson,
+      "drawMs"    -> split.drawMs.asJson,
+      "otherMs"   -> split.otherMs.asJson,
+      "presentMs" -> split.presentMs.asJson
+    )
+
+  private def coldPhasesJson(phases: ColdFramePhases): Json =
+    Json.obj(
+      "frames"            -> phases.frames.asJson,
+      "facesPerFrame"     -> phases.facesPerFrame.asJson,
+      "faceMsPerFrame"    -> phases.faceMsPerFrame.asJson,
+      "shapersPerFrame"   -> phases.shapersPerFrame.asJson,
+      "shaperMsPerFrame"  -> phases.shaperMsPerFrame.asJson,
+      "shapingsPerFrame"  -> phases.shapingsPerFrame.asJson,
+      "shapingMsPerFrame" -> phases.shapingMsPerFrame.asJson
     )
 
   private def drawsJson(stats: LayerDrawStats): Json =
@@ -176,7 +233,10 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       "syncedDraws"           -> stats.syncedDraws.asJson,
       "gpuContext"            -> stats.gpuContext.asJson,
       "pictureOpsMean"        -> stats.pictureOpsMean.asJson,
-      "pictureBytesMean"      -> stats.pictureBytesMean.asJson
+      "pictureBytesMean"      -> stats.pictureBytesMean.asJson,
+      "caretWaits"            -> stats.caretWaits.asJson,
+      "caretToRenderMeanMs"   -> stats.caretToRenderMeanMs.asJson,
+      "caretToRenderMaxMs"    -> stats.caretToRenderMaxMs.asJson
     )
 
   private def verdictJson: Json =

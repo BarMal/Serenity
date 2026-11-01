@@ -44,7 +44,10 @@ final case class LayerDrawStats(
     syncedDraws: Int = 0,
     gpuContext: Boolean = false,
     pictureOpsMean: Double = 0.0,
-    pictureBytesMean: Double = 0.0
+    pictureBytesMean: Double = 0.0,
+    caretWaits: Int = 0,
+    caretToRenderMeanMs: Double = 0.0,
+    caretToRenderMaxMs: Double = 0.0
 ):
 
   def gpuSyncNote: String =

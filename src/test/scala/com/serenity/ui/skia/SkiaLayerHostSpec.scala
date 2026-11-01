@@ -171,6 +171,18 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       stats.replayMeanMs should be >= 0.0
     }
 
+  it should "time a change of carets from being set to being drawn" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      window.host.drawStats.caretWaits shouldBe 0
+      window.host.showCarets(Nil)
+      eventually("the caret change drawn and timed")(window.host.drawStats.caretWaits >= 1)
+      val stats = window.host.drawStats
+      stats.caretToRenderMeanMs should be > 0.0
+      stats.caretToRenderMaxMs should be >= stats.caretToRenderMeanMs
+    }
+
   it should "say how many published frames its latest draw showed" in
     withWindow { window =>
       window.host.publishedFrames shouldBe 0
@@ -334,6 +346,52 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val before = drawn.get
       window.host.showCarets(Nil)
       eventually("the caret frame to be drawn")(drawn.get > before)
+    }
+
+  it should "ask its redraw once for each published picture and once for each change of carets" in
+    withWindow { window =>
+      val publishes = new java.util.concurrent.atomic.AtomicInteger(0)
+      val changes   = new java.util.concurrent.atomic.AtomicInteger(0)
+      val second = SkiaLayerHost.createWith(
+        window.canvas,
+        syncGpu = false,
+        layer =>
+          val real = LayerRedraw.forLayer(layer)
+          new LayerRedraw:
+            def afterPublish(): Unit =
+              val _ = publishes.incrementAndGet()
+              real.afterPublish()
+            def afterCaretsChanged(): Unit =
+              val _ = changes.incrementAndGet()
+              real.afterCaretsChanged()
+      )
+      try
+        second.publish(record(scene))
+        (publishes.get, changes.get) shouldBe (1, 0)
+        second.showCarets(Nil)
+        second.showCarets(Nil)
+        (publishes.get, changes.get) shouldBe (1, 2)
+      finally second.dispose()
+    }
+
+  it should "draw the carets set from a thread that is not the event thread, without an error" in
+    withWindow { window =>
+      val drawn  = new java.util.concurrent.atomic.AtomicInteger(0)
+      val failed = new AtomicReference(Option.empty[Throwable])
+      window.host.onRendered(() =>
+        val _ = drawn.incrementAndGet()
+      )
+      window.host.publish(record(scene))
+      eventually("the first frame")(drawn.get > 0)
+      val before = drawn.get
+      val caller = new Thread(() =>
+        try (1 to 50).foreach(_ => window.host.showCarets(Nil))
+        catch case error: Throwable => failed.set(Some(error))
+      )
+      caller.start()
+      caller.join(10_000L)
+      failed.get() shouldBe None
+      eventually("a frame for the carets")(drawn.get > before)
     }
 
   it should "name the render API Skiko chose" in

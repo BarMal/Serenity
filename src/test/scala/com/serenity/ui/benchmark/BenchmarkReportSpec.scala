@@ -1,5 +1,6 @@
 package com.serenity.ui.benchmark
 
+import com.serenity.ui.skia.FallbackAgreement
 import com.serenity.ui.terminal.LayerDrawStats
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
@@ -72,6 +73,111 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("toolkit").as[String] shouldBe Right("sun.awt.X11.XToolkit")
     cursor.downField("skiaLayers").as[Int] shouldBe Right(1)
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
+  }
+
+  it should "say where a cold frame's time goes in the Skia caches" in {
+    val phases = ColdFramePhases(
+      frames = 20,
+      facesPerFrame = 2.0,
+      faceMsPerFrame = 19.9,
+      shapersPerFrame = 1.0,
+      shaperMsPerFrame = 2.5,
+      shapingsPerFrame = 165.0,
+      shapingMsPerFrame = 22.8
+    )
+    val detailed = BenchmarkReport(environment.copy(coldPhases = Some(phases)), results, Verdict.SkiaWins)
+    detailed.markdown should include(
+      "Cold frame, Skia caches (mean of 20): 2.0 faces 19.90 ms, 1.0 shapers 2.50 ms, 165 shapings 22.80 ms."
+    )
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldPhases")
+    json.downField("frames").as[Int] shouldBe Right(20)
+    json.downField("faceMsPerFrame").as[Double] shouldBe Right(19.9)
+    json.downField("shaperMsPerFrame").as[Double] shouldBe Right(2.5)
+    json.downField("shapingsPerFrame").as[Double] shouldBe Right(165.0)
+    json.downField("shapingMsPerFrame").as[Double] shouldBe Right(22.8)
+  }
+
+  it should "split a cold frame into layout, drawing, the rest and the wait to be presented, for each backend" in {
+    val java2d = ColdFrameSplit(20, renderMs = 70.0, layoutMs = 15.5, drawMs = 45.25, otherMs = 9.25, presentMs = 5.0)
+    val skia   = ColdFrameSplit(20, renderMs = 80.0, layoutMs = 15.0, drawMs = 55.0, otherMs = 10.0, presentMs = 6.75)
+    val detailed =
+      BenchmarkReport(
+        environment.copy(java2dColdSplit = Some(java2d), skiaColdSplit = Some(skia)),
+        results,
+        Verdict.SkiaWins
+      )
+    detailed.markdown should include(
+      "Cold frame split, Java2D (mean of 20): render call 70.00 ms (layout 15.50, drawing 45.25, rest 9.25), then 5.00 ms until presented."
+    )
+    detailed.markdown should include(
+      "Cold frame split, Skia layer (mean of 20): render call 80.00 ms (layout 15.00, drawing 55.00, rest 10.00), then 6.75 ms until presented."
+    )
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit")
+    json.downField("java2d").downField("frames").as[Int] shouldBe Right(20)
+    json.downField("java2d").downField("layoutMs").as[Double] shouldBe Right(15.5)
+    json.downField("skia").downField("drawMs").as[Double] shouldBe Right(55.0)
+    json.downField("skia").downField("presentMs").as[Double] shouldBe Right(6.75)
+  }
+
+  it should "say how many strings the fallback runs shape exactly as TextLine does on this machine" in {
+    val agreement = FallbackAgreement(
+      checked = 1008,
+      identical = 1006,
+      differing = Vector("text (Inter) U+2502", "code (Mono) U+2192")
+    )
+    val detailed = BenchmarkReport(environment.copy(fallbackAgreement = Some(agreement)), results, Verdict.SkiaWins)
+
+    detailed.markdown should include(
+      "Fallback runs against TextLine on this machine: 1006 of 1008 strings identical. Differing: text (Inter) U+2502, code (Mono) U+2192."
+    )
+    val json =
+      parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("fallbackAgreement")
+    json.downField("checked").as[Int] shouldBe Right(1008)
+    json.downField("identical").as[Int] shouldBe Right(1006)
+    json.downField("differing").as[List[String]] shouldBe Right(List("text (Inter) U+2502", "code (Mono) U+2192"))
+  }
+
+  it should "leave out the differing list when every string is identical, and the line when nothing was checked" in {
+    val clean = BenchmarkReport(
+      environment.copy(fallbackAgreement = Some(FallbackAgreement(1008, 1008, Vector.empty))),
+      results,
+      Verdict.SkiaWins
+    )
+    clean.markdown should include("Fallback runs against TextLine on this machine: 1008 of 1008 strings identical.")
+    clean.markdown should not include "Differing"
+    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Fallback runs against TextLine"
+  }
+
+  it should "leave the cold-frame split out when no cold frame was measured" in {
+    val text = BenchmarkReport(environment, results, Verdict.SkiaWins)
+    text.markdown should not include "Cold frame split"
+    parse(text.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit").failed shouldBe
+      true
+  }
+
+  it should "leave the cold-frame line out when no Skia cache was measured" in {
+    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Cold frame, Skia caches"
+  }
+
+  it should "say how long a change of carets waited for its draw" in {
+    val draws = LayerDrawStats(
+      renders = 330,
+      publishes = 300,
+      publishToRenderMeanMs = 4.5,
+      publishToRenderMaxMs = 40.0,
+      replayMeanMs = 1.25,
+      caretsMeanMs = 0.05,
+      syncMeanMs = 0.5,
+      caretWaits = 120,
+      caretToRenderMeanMs = 0.45,
+      caretToRenderMaxMs = 3.2
+    )
+    val detailed = BenchmarkReport(environment.copy(skiaDraws = Some(draws)), results, Verdict.SkiaWins)
+    detailed.markdown should include("120 changes of carets; change to draw mean 0.45 ms (max 3.20)")
+    val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("skiaDraws")
+    json.downField("caretWaits").as[Int] shouldBe Right(120)
+    json.downField("caretToRenderMeanMs").as[Double] shouldBe Right(0.45)
+    json.downField("caretToRenderMaxMs").as[Double] shouldBe Right(3.2)
   }
 
   it should "say whether the GPU was waited on after each draw, and why not when it could not be" in {

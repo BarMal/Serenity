@@ -44,6 +44,44 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "measure what the Skia caches did in each cold frame, with a face built and a shaper made" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val phases = report.environment.coldPhases.getOrElse(fail("no cold-frame phases"))
+    phases.frames shouldBe 3
+    phases.facesPerFrame should be > 0.0
+    phases.faceMsPerFrame should be > 0.0
+    phases.shapersPerFrame shouldBe 1.0
+  }
+
+  it should "split each backend's cold frame into layout and drawing, whose sum is within the render call" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val splits = List(
+      "Java2D"     -> report.environment.java2dColdSplit,
+      "Skia layer" -> report.environment.skiaColdSplit
+    )
+    splits.foreach { (arm, split) =>
+      withClue(arm) {
+        val measured = split.getOrElse(fail("no cold-frame split"))
+        measured.frames shouldBe 3
+        measured.layoutMs should be > 0.0
+        measured.drawMs should be > 0.0
+        (measured.layoutMs + measured.drawMs) should be <= measured.renderMs
+        measured.otherMs should be >= 0.0
+        measured.presentMs should be >= 0.0
+      }
+    }
+  }
+
+  it should "check the fallback runs against TextLine on the fonts it draws with, and find them identical" in {
+    withDisplay()
+    val report    = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    val agreement = report.environment.fallbackAgreement.getOrElse(fail("no fallback agreement"))
+    agreement.checked should be > 0
+    agreement.identical shouldBe agreement.checked
+  }
+
   it should "round every scenario's time up to the display's refresh intervals" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)

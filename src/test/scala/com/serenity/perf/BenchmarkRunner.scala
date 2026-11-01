@@ -294,12 +294,15 @@ object BenchmarkRunner:
     "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms," +
       "allocation_p50_bytes,allocation_p95_bytes,retained_bytes"
 
-  private[perf] def printResults(results: List[BenchmarkResult]): Unit =
+  private[perf] def printContext(): Unit =
     println("Serenity performance benchmarks")
     println(s"context,java_runtime,${System.getProperty("java.runtime.version", "unknown")}")
     println(s"context,java_vendor,${System.getProperty("java.vendor", "unknown")}")
     println(s"context,os,${System.getProperty("os.name", "unknown")} ${System.getProperty("os.version", "unknown")}")
     println(s"context,available_processors,${Runtime.getRuntime.availableProcessors()}")
+
+  private[perf] def printResults(results: List[BenchmarkResult]): Unit =
+    printContext()
     println(csvHeader)
     results.foreach(result => println(csvRow(result)))
 
