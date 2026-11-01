@@ -108,10 +108,12 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
 
   /** Runs of ink columns, a new run starting where the blank gap before a column is wider than `gap`. */
   private def clusters(columns: Vector[Int], gap: Int): List[(Int, Int)] =
-    columns.foldLeft(List.empty[(Int, Int)]) {
-      case ((start, end) :: rest, x) if x - end - 1 <= gap => (start, x) :: rest
-      case (acc, x)                                          => (x, x) :: acc
-    }.reverse
+    columns
+      .foldLeft(List.empty[(Int, Int)]) {
+        case ((start, end) :: rest, x) if x - end - 1 <= gap => (start, x) :: rest
+        case (acc, x)                                        => (x, x) :: acc
+      }
+      .reverse
 
   "A docked panel's text" should "draw each word as one run of letters, with no gaps inside it" in {
     val s = scene
