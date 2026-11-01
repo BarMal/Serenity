@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.ui.renderer.ShapeTraffic
 import org.jetbrains.skia.shaper.{BidiRun, FontRun, LanguageRun, RunHandler, RunInfo, ScriptRun, Shaper, ShapingOptions}
 import org.jetbrains.skia.{Canvas, Font, Paint, Point, TextBlob, TextLine}
 
@@ -92,7 +93,7 @@ final private class LineStretch(line: TextLine, textLength: Int) extends SkiaSha
 /** Shapes stretches and remembers them, found by text and font. Two generations stand in for an eviction order, as in
   * [[ShapedTextCache]]. Shaping runs under one lock because a Skia `Shaper` holds state between calls.
   */
-final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity):
+final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity) extends ShapeTraffic:
   import SkiaShapedTextCache.*
 
   private val shaper     = Shaper.Companion.make()
@@ -100,20 +101,27 @@ final class SkiaShapedTextCache(capacityPerGeneration: Int = SkiaShapedTextCache
   private val current    = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val previous   = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val shapedN    = new java.util.concurrent.atomic.AtomicLong(0)
+  private val promotedN  = new java.util.concurrent.atomic.LongAdder()
   private val shapeLock  = new Object
   private val rotateLock = new Object
 
   def shapings: Long = shapedN.get()
 
+  def promotions: Long = promotedN.sum()
+
   def stretchOf(text: String, font: Font): SkiaShapedStretch =
     val key = Key(text, font)
     Option(current.get.get(key)).getOrElse {
-      Option(previous.get.get(key)).fold(shapeAndRemember(key))(remember(key, _))
+      Option(previous.get.get(key)).fold(shapeAndRemember(key))(promote(key, _))
     }
 
   private def shapeAndRemember(key: Key): SkiaShapedStretch =
     val _ = shapedN.incrementAndGet()
     remember(key, shapeLock.synchronized(shape(key.text, key.font)))
+
+  private def promote(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
+    promotedN.increment()
+    remember(key, stretch)
 
   private def remember(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
     rotateLock.synchronized {

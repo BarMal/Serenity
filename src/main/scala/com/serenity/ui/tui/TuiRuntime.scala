@@ -142,7 +142,8 @@ object TuiRuntime:
             runtime = frontendRuntime,
             appConfig = terminalConfig,
             registerFocusCallback = cb => inputHandlerHolder.get().foreach(_.registerFocusCallback(cb)),
-            makeStateManager = Some(
+            // A terminal keeps counting a pane's rows inside the frame, so the counting the runtime offers is not taken.
+            makeStateManager = Some((logger, _) =>
               makeStateManager(
                 terminalConfig,
                 sessionRootOverride,
@@ -151,7 +152,7 @@ object TuiRuntime:
                 projectTasksEnabled = !recovery.safeMode,
                 restarter = restarter,
                 uiPresetStore = recovery.uiPresetStore(sessionRootOverride)
-              )
+              )(logger)
             ),
             awaitExternalQuit = terminalShell.awaitExternalQuit,
             registerResizeCallback = cb => terminalShell.registerResizeCallback(cb),
