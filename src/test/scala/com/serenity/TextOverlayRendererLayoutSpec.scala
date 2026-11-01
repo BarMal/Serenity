@@ -511,8 +511,9 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
     )
-    // 20 columns available, minus 2 reserved for the trailing new-tab affordance (issue #1080) -> 18 columns for
-    // tabs, minus 1 gap reserving 2 columns -> 16 content columns split 8/8.
+    // A tab is as wide as its label plus a padding cell, a close box and a padding cell: "one" -> 7, "two●" -> 8.
+    // They fit the 18 columns left of the new-tab affordance (issue #1080), so tab 0 is [0,7) and, after the 2-column
+    // gap, tab 1 is [9,17).
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
@@ -522,15 +523,15 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
     renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
-    // Tab 0 ("one") is centered in its 8-column cell at [0,8): (8-3)/2 = 2 columns of left padding, so "one" lands
-    // at [2,5). The separator glyph sits at column 8 (the end of that cell), then tab 1's cell starts at column 10
-    // (one column for the glyph, one blank column after it) and is itself centered: (8-5)/2 = 1 column of left
-    // padding for "two ●", landing at [11,16).
+    // Each tab's text is its label followed by two spaces that stand for the close box and its padding, centred in the
+    // tab: "one  " in 7 columns has 1 column of left padding, so "one" lands at [1,4). The separator glyph sits at
+    // column 7 (the end of that tab), then tab 1 starts at column 9 and "two●  " in 8 columns has 1 column of left
+    // padding, landing at [10,14).
     val row = surface.getRow(0)
-    row.slice(2, 5) shouldBe "one"
-    row.charAt(8) shouldBe '│'
-    row.slice(11, 14) shouldBe "two"
-    row.charAt(15) shouldBe '●'
-    surface.getBg(2, 0) shouldBe Theme.light.panel.background
-    surface.getBg(11, 0) shouldBe Theme.light.highlighted.background
+    row.slice(1, 4) shouldBe "one"
+    row.charAt(7) shouldBe '│'
+    row.slice(10, 13) shouldBe "two"
+    row.charAt(13) shouldBe '●'
+    surface.getBg(1, 0) shouldBe Theme.light.panel.background
+    surface.getBg(10, 0) shouldBe Theme.light.highlighted.background
   }
