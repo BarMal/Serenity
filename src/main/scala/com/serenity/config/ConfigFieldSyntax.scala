@@ -4,6 +4,7 @@ import java.awt.Color
 import java.util.Locale
 
 import com.serenity.ui.fonts.FontLoader.TextScaleMode
+import com.serenity.ui.fonts.FontSizes
 import com.serenity.ui.theme.ColorFormat
 
 /** The codecs and constructors the per-domain `ConfigFields*` objects declare their settings with, so every field is
@@ -54,6 +55,21 @@ private[config] object ConfigFieldSyntax:
 
   private[config] val fontSize: FieldCodec[Float] =
     FieldCodec.of(text => text.trim.toFloatOption.map(size => size.max(8.0f).min(48.0f)), HoconValue.number)
+
+  /** The sizes the last size change replaced, as `prose, code, ui`; `off` when there is nothing to undo. */
+  private[config] val previousFontSizes: FieldCodec[Option[FontSizes]] =
+    given io.circe.Encoder[Option[FontSizes]] =
+      io.circe.Encoder.encodeOption(using io.circe.Encoder.encodeString.contramap(FontSizes.render))
+    given io.circe.Decoder[Option[FontSizes]] =
+      io.circe.Decoder.decodeOption(using
+        io.circe.Decoder.decodeString.emap(text => FontSizes.parse(text).toRight(s"Not three font sizes: $text"))
+      )
+    FieldCodec
+      .of(
+        text => if parseBoolean(text).contains(false) then Some(None) else FontSizes.parse(text).map(Some.apply),
+        sizes => HoconValue.string(sizes.fold("off")(FontSizes.render))
+      )
+      .copy(readList = Some(items => FontSizes.parse(items.mkString(",")).map(Some.apply)))
 
   private[config] val textScaleMode: FieldCodec[TextScaleMode] =
     enumerated(

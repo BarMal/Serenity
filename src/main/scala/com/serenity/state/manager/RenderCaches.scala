@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.diagnostics.FrameCounters
+import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
 import com.serenity.ui.layout.WrappedLineCache
@@ -50,7 +50,8 @@ final class RenderCaches private (
     val labelSprites: LabelSprites,
     val measuredAdvances: MeasuredTextAdvances,
     val compositionRevisions: CompositionRevisions,
-    val backendCaches: BackendCaches
+    val backendCaches: BackendCaches,
+    val framePhases: FramePhaseClock
 ):
 
   /** What a Java2D surface drawing for this owner paints text through. */
@@ -62,14 +63,17 @@ object RenderCaches:
     * (`AppConfig.surfaceConfig.rendererFrameStateCacheCapacity`) -- callers that build a `RenderCaches` before a config
     * is loaded (or that don't care) get the same 64-entry default that module has always used.
     */
-  def create(rendererFrameStateCacheCapacity: Int = 64): RenderCaches =
+  def create(
+    rendererFrameStateCacheCapacity: Int = 64,
+    scrollCounting: ScrollCounting = ScrollCounting.Inline
+  ): RenderCaches =
     val shapedText   = ShapedTextCache()
     val wrappedLines = WrappedLineCache.sharing(shapedText)
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
       GraphemeSegmentationCache(),
-      AuthoritativeUiScene(wrappedLines),
+      AuthoritativeUiScene(wrappedLines, scrollCounting = scrollCounting),
       MarkdownPreviewCache(),
       ChapterGhostCache(),
       wrappedLines,
@@ -79,5 +83,6 @@ object RenderCaches:
       LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
       new CompositionRevisions,
-      new BackendCaches
+      new BackendCaches,
+      new FramePhaseClock()
     )

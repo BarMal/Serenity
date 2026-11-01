@@ -33,7 +33,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters: Counters,
     launch: GraphicsStartup.Launch = GraphicsStartup.Launch(windowed = true, safeMode = false),
     environment: ToolkitSelection.Environment = x11Env,
-    configured: RenderStartupSettings = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.Java2D),
+    configured: RenderStartupSettings = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D),
     probe: Probe = Probe.Loaded,
     hasSkiaSurface: Boolean = true,
     hasRasterSurface: Boolean = true
@@ -60,6 +60,49 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     resolved.backend.backend shouldBe RenderBackend.Skia
     counters.probes.get shouldBe 1
     counters.built.get shouldBe 1
+  }
+
+  it should "choose Skia under auto, probing once and building the factory once" in {
+    val counters = new Counters
+    val resolved =
+      resolve(counters, configured = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster))
+    resolved.backend shouldBe RenderBackendSelection.Decision(RenderBackend.Skia, "native probe passed")
+    counters.probes.get shouldBe 1
+    counters.built.get shouldBe 1
+  }
+
+  it should "fall back to Java2D under auto when the probe fails, naming the cause and building nothing" in {
+    val counters = new Counters
+    val resolved = resolve(
+      counters,
+      configured = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster),
+      probe = Probe.Failed("no libGL")
+    )
+    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.reason should include("no libGL")
+    counters.built.get shouldBe 0
+  }
+
+  it should "carry the configured Skia vsync, off by default, for a windowed launch" in {
+    resolve(new Counters).skiaVsync shouldBe false
+    resolve(
+      new Counters,
+      configured = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
+    ).skiaVsync shouldBe true
+  }
+
+  it should "leave Skia vsync off for a terminal or safe-mode launch whatever the config says" in {
+    val on = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = false, safeMode = false),
+      configured = on
+    ).skiaVsync shouldBe false
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = true, safeMode = true),
+      configured = on
+    ).skiaVsync shouldBe false
   }
 
   it should "not probe, read the config or build Skia for a terminal launch" in {
@@ -93,9 +136,17 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.built.get shouldBe 0
   }
 
-  it should "not probe when there is no X11 display" in {
+  it should "use the raster surface, probing once, when there is no X11 display" in {
     val counters = new Counters
-    resolve(counters, environment = x11Env.copy(env = Map.empty)).backend.backend shouldBe RenderBackend.Java2D
+    val resolved = resolve(counters, environment = x11Env.copy(env = Map.empty))
+    resolved.backend.backend shouldBe RenderBackend.SkiaRaster
+    counters.probes.get shouldBe 1
+  }
+
+  it should "stay on Java2D without probing when there is no X11 display and no raster surface" in {
+    val counters = new Counters
+    resolve(counters, environment = x11Env.copy(env = Map.empty), hasRasterSurface = false).backend.backend shouldBe
+      RenderBackend.Java2D
     counters.probes.get shouldBe 0
   }
 
@@ -124,7 +175,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     resolve(new Counters, launch = launch, environment = env).backend.backend shouldBe RenderBackend.Skia
   }
 
-  "GraphicsStartup.resolve on a Wayland session" should "keep WLToolkit and Java2D by default, without probing" in {
+  "GraphicsStartup.resolve on a Wayland session" should "keep WLToolkit and Java2D for ui.render.wayland=java2d, without probing" in {
     val counters = new Counters
     val resolved = resolve(counters, environment = waylandEnv)
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
@@ -132,15 +183,15 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.probes.get shouldBe 0
   }
 
-  it should "name the Wayland reason for an explicit skia setting under WLToolkit" in {
+  it should "name ui.render.wayland as the reason for Java2D under WLToolkit, whatever the backend setting" in {
     val explicit = settings(RenderBackendSetting.Skia, WaylandRender.Java2D)
     resolve(new Counters, environment = waylandEnv, configured = explicit).backend.reason shouldBe
-      "skia needs X11; running on Wayland"
+      "ui.render.wayland=java2d"
   }
 
   it should "force XToolkit before AWT and choose Skia for ui.render.wayland=xwayland" in {
     val counters = new Counters
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val resolved = resolve(counters, environment = waylandEnv, configured = xwayland)
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.X11
     resolved.backend.backend shouldBe RenderBackend.Skia
@@ -156,14 +207,14 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
 
   it should "let --wayland-render=java2d beat an xwayland setting and keep WLToolkit" in {
     val flag     = GraphicsStartup.Launch(windowed = true, safeMode = false, waylandRender = Some(WaylandRender.Java2D))
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val resolved = resolve(new Counters, launch = flag, environment = waylandEnv, configured = xwayland)
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
     resolved.backend.backend shouldBe RenderBackend.Java2D
   }
 
   it should "leave the toolkit on Wayland when the xwayland probe fails" in {
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val resolved = resolve(new Counters, environment = waylandEnv, configured = xwayland, probe = Probe.Failed("x"))
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
     resolved.backend.backend shouldBe RenderBackend.Java2D
@@ -173,7 +224,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     val xwaylandJava2d = settings(RenderBackendSetting.Java2D, WaylandRender.XWayland)
     resolve(new Counters, environment = waylandEnv, configured = xwaylandJava2d).toolkit.choice shouldBe
       ToolkitSelection.Choice.Wayland
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     resolve(
       new Counters,
       environment = waylandEnv,
@@ -184,26 +235,26 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not force XToolkit without an X11 display" in {
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val noX11    = waylandEnv.copy(env = Map("WAYLAND_DISPLAY" -> "wayland-1"))
     resolve(new Counters, environment = noX11, configured = xwayland).toolkit.choice shouldBe
       ToolkitSelection.Choice.Wayland
   }
 
-  it should "let SERENITY_TOOLKIT=wayland win over xwayland, falling back to Java2D" in {
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+  it should "let SERENITY_TOOLKIT=wayland win over xwayland, falling back to the Skia raster" in {
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val env      = waylandEnv.copy(env = waylandEnv.env + ("SERENITY_TOOLKIT" -> "wayland"))
     val resolved = resolve(new Counters, environment = env, configured = xwayland)
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
-    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.backend shouldBe RenderBackend.SkiaRaster
   }
 
   it should "let a toolkit named on the command line win over xwayland" in {
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.XWayland)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val env      = waylandEnv.copy(properties = jbr + (ToolkitSelection.ToolkitProperty -> "WLToolkit"))
     val resolved = resolve(new Counters, environment = env, configured = xwayland)
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.PlatformDefault
-    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.backend shouldBe RenderBackend.SkiaRaster
   }
 
   it should "keep WLToolkit and choose the raster backend for skia-raster when a raster factory exists" in {
@@ -226,7 +277,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore the wayland render on a session that is not on WLToolkit" in {
     val stockJdk = waylandEnv.copy(properties = Map.empty, waylandToolkitAvailable = false)
-    val xwayland = settings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
+    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.SkiaRaster)
     val resolved = resolve(new Counters, environment = stockJdk, configured = xwayland)
     resolved.backend.backend shouldBe RenderBackend.Skia
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.PlatformDefault

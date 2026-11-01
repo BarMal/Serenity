@@ -298,21 +298,67 @@ its default.
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
 | `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
-| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `java2d` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
-`auto` uses Skia when the native library loads and the session allows it, and Java2D otherwise (terminal and safe-mode
-launches never load Skia). The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`.
+`ui.render.skia_vsync` makes Skia's GPU layer wait for the display's vertical blank before presenting. It is off by default: on
+Hyprland the owner saw no tearing with it off and a frame is 4-8 ms quicker, and compositors on Windows, macOS and most
+Linux desktops do not tear either. Turn it on if you see tearing, for example on X11 without a compositor. Serenity sets
+Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a restart, and `SKIKO_VSYNC_ENABLED` or
+`-Dskiko.vsync.enabled`, when given, win. The Skia CPU raster and Java2D ignore it.
 
-Skia's window layer needs an X11 display, so on a Wayland session where the native Wayland toolkit (`WLToolkit`) would be
-used, `ui.render.wayland` decides what happens when the backend resolves to Skia:
+`auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
+an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
+itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
+Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
+windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
+used, or where there is no X11 display, `ui.render.wayland` decides what happens:
 
 | Value | Effect |
 | --- | --- |
-| `java2d` | Keep `WLToolkit` and use Java2D (today's behaviour) |
-| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and Java2D is used instead |
-| `skia-raster` | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+| `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+| `java2d` | Keep `WLToolkit` and use Java2D |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+#### Comparing the renderers
+
+`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
+raster, which paints with Skia and presents through Java2D), draws the same built-in document through the same scripted
+actions on each, prints the tables and saves them as
+`render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
+scenarios are a cold full frame, typing one character, scrolling one line, scrolling five lines, a page down and a
+caret blink. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
+or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
+its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
+Skiko's frame pacing (with vsync on, which is now opt-in, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
+`1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
+(untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
+
+The benchmark settles the toolkit and renderer like an editor launch does, so `SERENITY_TOOLKIT` and `-Dawt.toolkit.name`
+apply to it too (on a runtime without `WLToolkit`, `SERENITY_TOOLKIT=wayland` falls back to the default toolkit). The report
+records the toolkit class that drew and the launch's choice, how many Skia layers the window ended with, and what the
+layer's draws cost: draws against published frames, the mean wait from publishing a frame to its first draw, the mean
+time per draw adding the picture and filling the carets, whether a GPU wait was possible, and the size of the published
+pictures. Besides the p50, p95 and max of each scenario the report has a tail table (p75, p90, p99, the frames over 33 ms
+and the samples that ended before the render call returned) and a frames-to-present table: each time rounded up to whole
+display refreshes, using the rate Java reports for the screen or an assumed 60 Hz that the report says it assumed, with
+the samples that took more than one refresh. A window that ends with more than one layer gets no verdict, since each
+frame would have waited behind the others' draws. The raster arm does not take part in the verdict.
+
+The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
+not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a
+GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario
+except the cold full frame and its p95 is better when scrolling and on a page down. The verdict is information about this machine: `auto` no longer depends on it.
+
+The header also records the CPU model, the CPU frequency governor and whether the machine was on AC or battery (`unknown`
+where the platform does not say: Linux reads `/proc/cpuinfo`, cpufreq and `/sys/class/power_supply`; Windows gives only the CPU
+model, macOS the CPU model), so a shift between days can be told from a code change.
 
 ## Codex CLI
 

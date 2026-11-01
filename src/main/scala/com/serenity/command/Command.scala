@@ -235,6 +235,11 @@ enum FontIntent:
   case SetCodeFontSize(size: Float)
   case SetTextFontSize(size: Float)
   case SetUiFontSize(size: Float)
+  case SetAllFontSizes(size: Float)
+
+  /** Asks, with each size before and after, whether to set them all; [[SetAllFontSizes]] is what answering yes runs. */
+  case ConfirmSetAllFontSizes(size: Float)
+  case UndoFontSizeChange
   case SetTextScaleMode(mode: TextScaleMode)
   case SetTextScaleMultiplier(scale: Double)
   case SetCodeFontFamily(family: String)

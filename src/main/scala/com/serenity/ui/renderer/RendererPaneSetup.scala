@@ -266,7 +266,7 @@ object RendererPaneSetup:
           panelWidthPx,
           baseViewport.visibleColumns
         )
-    val visibleLines = math.max(1, panelHeightPx / math.max(1, bufferMetrics.lineHeight))
+    val visibleLines = ScrollLimits.rowsThatFit(panelHeightPx, bufferMetrics.lineHeight)
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
       visibleLines = visibleLines

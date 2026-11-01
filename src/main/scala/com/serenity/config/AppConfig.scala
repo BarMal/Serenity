@@ -290,6 +290,9 @@ final case class AppConfig(
   def withLayerCaching(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(layerCachingEnabled = enabled))
 
+  def withRenderSkiaVsync(enabled: Boolean): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(renderSkiaVsync = enabled))
+
   def withFrameTiming(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(frameTimingEnabled = enabled))
 

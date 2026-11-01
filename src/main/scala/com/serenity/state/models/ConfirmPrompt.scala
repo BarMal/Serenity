@@ -10,6 +10,7 @@ import com.serenity.command.{
   DiagnosticsCommands,
   ExternalChangeCommands,
   FileIntent,
+  FontSizeCommands,
   LayoutOverrideCommands,
   LineEndingCommands,
   ReopenWithEncodingCommands,
@@ -20,6 +21,7 @@ import com.serenity.command.{
 import com.serenity.config.{AppMode, LayoutPin, UiLayout}
 import com.serenity.diagnostics.RuntimeIdentity
 import com.serenity.text.{LineEnding, LineEndingCounts, TextEncoding}
+import com.serenity.ui.fonts.FontSizes
 import com.serenity.ui.widget.{ButtonEmphasis, EndBehaviour, SelectableList}
 
 /** What choosing an option in a [[ConfirmPrompt]] does once the prompt closes. */
@@ -247,6 +249,26 @@ object ConfirmPrompt:
         ),
         ConfirmChoice("Choose one by one", ConfirmAction.Run(LayoutOverrideCommands.chooseEach(layout))),
         ConfirmChoice("Keep my settings", ConfirmAction.Dismiss)
+      ),
+      blocking = true
+    )
+
+  /** Setting every font size to `size` replaces sizes someone may have set apart on purpose, so it is asked about, with
+    * each size before and after. Cancelling changes nothing, so it is what Escape does.
+    */
+  def setAllFontSizes(before: FontSizes, size: Float): ConfirmPrompt =
+    of(
+      title = "Set All Font Sizes",
+      message = List(
+        s"Prose: ${before.prose} -> $size",
+        s"Code: ${before.code} -> $size",
+        s"UI: ${before.ui} -> $size",
+        "Sizes you set apart on purpose are replaced. Undo Last Size Change, under Settings > Typography > Font " +
+          "Sizes, brings these back."
+      ),
+      choices = List(
+        ConfirmChoice("Apply", ConfirmAction.Run(FontSizeCommands.setAll(size)), ButtonEmphasis.Primary),
+        ConfirmChoice("Cancel", ConfirmAction.Dismiss)
       ),
       blocking = true
     )
