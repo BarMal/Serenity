@@ -112,16 +112,16 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         }
 
   /** Where the two frames differ, as a short report: how many pixels, the box round them, and a few of the pairs. */
-  private def differences(on: Frames, off: Frames): List[String] =
+  private def differences(on: Frames, off: Frames): Vector[String] =
     val width = on.image.getWidth
     val pairs =
       on.pixels.zip(off.pixels).zipWithIndex.collect {
         case ((withLayers, without), i) if withLayers != without => (i % width, i / width, withLayers, without)
       }
-    if pairs.isEmpty then Nil
+    if pairs.isEmpty then Vector.empty
     else
       val box = s"x ${pairs.map(_._1).min}-${pairs.map(_._1).max}, y ${pairs.map(_._2).min}-${pairs.map(_._2).max}"
-      s"${pairs.size} px differ in $box" ::
+      s"${pairs.size} px differ in $box" +:
         pairs.take(4).map((x, y, a, b) => f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x")
 
   private def withCaching(enabled: Boolean)(state: AppState): AppState =
