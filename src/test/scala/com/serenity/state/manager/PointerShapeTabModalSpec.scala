@@ -16,7 +16,7 @@ class PointerShapeTabModalSpec extends AnyFlatSpec with Matchers:
 
   private def twoBufferState: AppState =
     val second = Buffer.fromString(BufferId(1), "second")
-    val base   = AppState.initial(com.serenity.config.ChromeOn.config)
+    val base   = AppState.initial(com.serenity.ChromeOn.config)
     base.copy(
       runtime = base.runtime.copy(viewportSize = Some(viewport)),
       persisted = base.persisted.copy(

@@ -20,10 +20,10 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     val pane   = EditorPane.withBuffer(paneId, bufferId)
 
     AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),

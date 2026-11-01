@@ -29,10 +29,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -43,7 +43,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 
@@ -72,10 +72,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -86,7 +86,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withLineNumbers(false)
+            config = com.serenity.ChromeOn.config.withLineNumbers(false)
           )
       )
     val viewport = ViewportSize(80, 24)
@@ -132,10 +132,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromFile(bufferId, Path.of("notes.md"), "alpha\nbeta\ngamma")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -146,7 +146,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withLineNumbers(true)
+            config = com.serenity.ChromeOn.config.withLineNumbers(true)
           )
       )
     val viewport = ViewportSize(80, 24)
@@ -209,10 +209,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -223,7 +223,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 
@@ -251,10 +251,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     val buffer   = Buffer.fromString(bufferId, "alpha\nbeta")
     val pane     = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -265,17 +265,17 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config
+            config = com.serenity.ChromeOn.config
               .withSyntaxHighlighting(false)
               .withLineNumbers(false)
               .withoutStatusLine
           ),
         runtime = AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .runtime
           .copy(
             pointerGesture = AppState
-              .initial(com.serenity.config.ChromeOn.config)
+              .initial(com.serenity.ChromeOn.config)
               .runtime
               .pointerGesture
               .copy(
@@ -313,10 +313,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -327,7 +327,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 
@@ -366,10 +366,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -380,7 +380,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 
@@ -419,10 +419,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -433,7 +433,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 
@@ -468,10 +468,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     val state = AppState
-      .initial(com.serenity.config.ChromeOn.config)
+      .initial(com.serenity.ChromeOn.config)
       .copy(persisted =
         AppState
-          .initial(com.serenity.config.ChromeOn.config)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
@@ -482,7 +482,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
               workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
             ),
             theme = Theme.light,
-            config = com.serenity.config.ChromeOn.config.withSyntaxHighlighting(false)
+            config = com.serenity.ChromeOn.config.withSyntaxHighlighting(false)
           )
       )
 

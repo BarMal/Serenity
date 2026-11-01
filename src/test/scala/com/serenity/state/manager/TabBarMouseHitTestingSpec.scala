@@ -57,7 +57,7 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   private def twoBufferState: AppState =
     val second = Buffer.fromString(BufferId(1), "second")
-    val base   = AppState.initial(com.serenity.config.ChromeOn.config)
+    val base   = AppState.initial(com.serenity.ChromeOn.config)
     base.copy(
       runtime = base.runtime.copy(viewportSize = Some(twoTabViewport)),
       persisted = base.persisted.copy(
@@ -84,7 +84,7 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   it should "miss when there is no tab bar this frame (a single open buffer)" in {
     TabBarMouseHitTesting.clickTarget(
-      AppState.initial(com.serenity.config.ChromeOn.config),
+      AppState.initial(com.serenity.ChromeOn.config),
       col = 3,
       row = 0
     ) shouldBe None
@@ -158,7 +158,7 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
 
   it should "resolve false when there is no tab bar this frame (a single open buffer)" in {
     TabBarMouseHitTesting.newTabClickTarget(
-      AppState.initial(com.serenity.config.ChromeOn.config),
+      AppState.initial(com.serenity.ChromeOn.config),
       col = 20,
       row = 0
     ) shouldBe false
