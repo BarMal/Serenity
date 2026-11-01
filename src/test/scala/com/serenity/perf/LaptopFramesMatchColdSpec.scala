@@ -142,3 +142,23 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     withClue(s"the frame scrolled to, ${summary(there)}: ")(there shouldBe empty)
     withClue(s"the frame scrolled back from, ${summary(back)}: ")(back shouldBe empty)
   }
+
+  private def withTabStrip(state: AppState): AppState =
+    val second = Buffer.fromString(BufferId(9000), "a second buffer, so the tab strip shows")
+    state.copy(persisted =
+      state.persisted.copy(
+        buffers = state.persisted.buffers + (second.id -> second),
+        bufferOrder = state.persisted.bufferOrder :+ second.id
+      )
+    )
+
+  "A typing frame under floating chrome with the tab strip showing" should
+    "equal a frame drawn from scratch, there and back" in {
+      val (typedBefore, typedAfter) = transition(InsertChar('x'), floating)
+      val (before, after)           = (withTabStrip(typedBefore), withTabStrip(typedAfter))
+
+      val (there, back) = differencesThrough(before, after)
+
+      withClue(s"the frame typed into, ${summary(there)}: ")(there shouldBe empty)
+      withClue(s"the frame typed back out of, ${summary(back)}: ")(back shouldBe empty)
+    }
