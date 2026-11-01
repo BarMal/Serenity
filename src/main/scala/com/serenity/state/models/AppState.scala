@@ -90,8 +90,8 @@ final case class AppState(
       if runtime.capabilities.isCellGrid then 0.0 else effectiveUiElementGapDefaultCells
     )
 
-  /** The window extent a docked panel's size is converted to and from a split ratio against: the viewport less what
-    * the floating chrome's inset takes ([[com.serenity.ui.layout.ChromeFrame]]), so a size asked for lands as that many
+  /** The window extent a docked panel's size is converted to and from a split ratio against: the viewport less what the
+    * floating chrome's inset takes ([[com.serenity.ui.layout.ChromeFrame]]), so a size asked for lands as that many
     * cells. The viewport itself when the chrome is flush.
     */
   def panelViewportSize: Option[ViewportSize] =

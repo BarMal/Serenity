@@ -1,11 +1,11 @@
 package com.serenity.ui.layout
 
+import com.serenity.TestWorkspaceTrees
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
-import com.serenity.TestWorkspaceTrees
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -26,8 +26,8 @@ class FloatingChromeInsetSpec extends AnyFlatSpec with Matchers:
     AppConfig.conventional.withDockedCornerStyle(style).withUiElementGap(gap)
 
   private def stateWith(config: AppConfig, buffers: Int = 1, panels: Boolean = true): AppState =
-    val ids = (1 to buffers).map(BufferId(_)).toList
-    val all = ids.map(id => Buffer.fromString(id, "line\n" * 5))
+    val ids  = (1 to buffers).map(BufferId(_)).toList
+    val all  = ids.map(id => Buffer.fromString(id, "line\n" * 5))
     val base = AppState.initial(config)
     val state = base.copy(
       persisted = base.persisted.copy(
@@ -142,7 +142,7 @@ class FloatingChromeInsetSpec extends AnyFlatSpec with Matchers:
     status.bottom shouldBe rows
   }
 
-  "A panel resize drag" should "land on the edge it was dragged to, flush or floating" in {
+  "A panel resize drag" should "land on the edge it was dragged to, flush or floating" in
     List(flush, floating).foreach { config =>
       val state = stateWith(config)
       val rect  = layoutOf(state).pinnedPanelRects(PanelPosition.Left)
@@ -150,4 +150,3 @@ class FloatingChromeInsetSpec extends AnyFlatSpec with Matchers:
 
       withClue(s"${config.dockedCornerStyle}: ")(drag.map(_.size) shouldBe Some(rect.width))
     }
-  }
