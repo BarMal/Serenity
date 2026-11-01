@@ -7,7 +7,18 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
-import org.jetbrains.skia.{Bitmap, BlendMode, ColorAlphaType, ColorSpace, ColorType, IRect, ImageInfo, Paint, Rect, Surface}
+import org.jetbrains.skia.{
+  Bitmap,
+  BlendMode,
+  ColorAlphaType,
+  ColorSpace,
+  ColorType,
+  IRect,
+  ImageInfo,
+  Paint,
+  Rect,
+  Surface
+}
 
 /** The pixels of one pooled frame, as the pixel specs read and stamp them whatever renders into them. */
 trait FramePixels:
