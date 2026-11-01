@@ -24,10 +24,10 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   protected def frames: FrameBackend
   protected def scale: Int
 
-  private val columns = 90
+  private val columns  = 90
   private val rowCount = 18
-  private val paneId  = PaneId(0)
-  private val tabs    = List(BufferId(1), BufferId(2))
+  private val paneId   = PaneId(0)
+  private val tabs     = List(BufferId(1), BufferId(2))
 
   private val baseFont =
     Font.createFont(
