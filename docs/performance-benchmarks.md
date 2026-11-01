@@ -167,7 +167,7 @@ The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, s
 
 Still wide with the extension: `layout.aligned_prose.moved_lines` (about 15x slower in 2 of 12 runs, issue #2461) and, once, `rope.large_json.cursor_offset` (1 of 12). The rates on a real CI runner and their sensitivity to the caps and the window are not measured (issue #2462).
 
-**Absolute numbers moved.** The median row reads 36% lower than before, since the old figures were taken on code the JIT had not finished with; 124 of 132 rows are more than 20% lower. The gate compares base and head built and run by the same runner, so it needs no restating; the tables in this document were re-stated from the 12 runs, and the incident figures further down are marked as measured before.
+**Absolute numbers moved.** The median row reads 36% lower than before, since the old figures were taken on code the JIT had not finished with; 124 of 132 rows are more than 20% lower. The gate compares base and head built and run by the same runner, so it needs no restating (the one PR that changes the runner is compared across two runner versions: its base runs the old runner, whole, so its ratios are biased low and it cannot show a regression; the first PR after it is compared like for like); the tables in this document were re-stated from the 12 runs, and the incident figures further down are marked as measured before.
 
 ## ABBA protocol
 

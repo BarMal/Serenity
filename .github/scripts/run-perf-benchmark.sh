@@ -6,12 +6,26 @@
 # runs only that contiguous slice of the suite.
 set -uo pipefail
 
+# The option to run only this job's slice of the suite in <dir>: none for the whole suite, and none for a checkout from
+# before the option existed (the base commit of the PR that introduced it), which would read "--shard=..." as the name of
+# a benchmark, run nothing, and leave the comparison with no pairs. That checkout runs the whole suite instead and the
+# comparison only looks at the benchmarks both sides measured.
+shard_option_for() {
+  local checkout="$1" shard="${SHARD:-1/1}"
+  if [ "$shard" != "1/1" ] && [ -f "$checkout/src/test/scala/com/serenity/perf/BenchmarkShard.scala" ]; then
+    echo "--shard=${shard}"
+  fi
+}
+
+if [ "${1:-}" = "--shard-option" ]; then
+  shard_option_for "$2"
+  exit 0
+fi
+
 dir="$1" out="$2"
 shift 2
 names="$*"
-shard="${SHARD:-1/1}"
-shard_option=""
-if [ "$shard" != "1/1" ]; then shard_option="--shard=${shard}"; fi
+shard_option="$(shard_option_for "$dir")"
 
 # sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes; strip both,
 # keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that crashes leaves an

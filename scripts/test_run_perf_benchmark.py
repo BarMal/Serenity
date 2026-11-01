@@ -26,7 +26,7 @@ class ShardOptionTests(unittest.TestCase):
 
     def _checkout(self, with_shards: bool) -> str:
         root = Path(self._tmp.name) / ("new" if with_shards else "old")
-        (root / _SHARD_CLASS.parent).mkdir(parents=True)
+        (root / _SHARD_CLASS.parent).mkdir(parents=True, exist_ok=True)
         if with_shards:
             (root / _SHARD_CLASS).write_text("// the class\n")
         return str(root)
