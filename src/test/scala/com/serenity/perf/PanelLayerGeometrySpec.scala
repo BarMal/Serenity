@@ -111,6 +111,19 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
               real.newBoundedLayerSurface(bounds, recording(onFlush), recycled)
         }
 
+  /** Where the two frames differ, as a short report: how many pixels, the box round them, and a few of the pairs. */
+  private def differences(on: Frames, off: Frames): List[String] =
+    val width = on.image.getWidth
+    val pairs =
+      on.pixels.zip(off.pixels).zipWithIndex.collect {
+        case ((withLayers, without), i) if withLayers != without => (i % width, i / width, withLayers, without)
+      }
+    if pairs.isEmpty then Nil
+    else
+      val box = s"x ${pairs.map(_._1).min}-${pairs.map(_._1).max}, y ${pairs.map(_._2).min}-${pairs.map(_._2).max}"
+      s"${pairs.size} px differ in $box" ::
+        pairs.take(4).map((x, y, a, b) => f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x")
+
   private def withCaching(enabled: Boolean)(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(config = state.persisted.config.withLayerCaching(enabled)))
 
@@ -214,7 +227,7 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
       val (frame, damage) = step
       val _               = on.render(frame, damage)
       val _               = off.render(frame, damage)
-      withClue(s"frame $index: ")(on.pixels shouldBe off.pixels)
+      withClue(s"frame $index: ")(differences(on, off) shouldBe empty)
     }
   }
 
