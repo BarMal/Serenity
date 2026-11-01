@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   FrameOutput,
@@ -53,9 +54,18 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
     private val caches        = RenderCaches.create()
     private val screen        = ScreenIdentity(this)
     private val flushedLayers = new AtomicReference(Vector.empty[RenderImage])
+    private val strayDraws    = new AtomicReference(Vector.empty[String])
     caches.frameCounters.setEnabled(true)
 
     def layerImages: Vector[RenderImage] = flushedLayers.get()
+
+    def strays: Vector[String] = strayDraws.get()
+
+    /** Notes a draw on the first row that reaches past the last whole cell, with the code that asked for it. */
+    private def noteStray(what: String, xPx: Int, yPx: Int, widthPx: Int): Unit =
+      if xPx + widthPx > viewport.width * cellMetrics.charWidth && yPx < cellMetrics.lineHeight then
+        val callers = Thread.currentThread.getStackTrace.map(_.toString).filter(_.startsWith("com.serenity.ui.renderer"))
+        val _       = strayDraws.updateAndGet(_ :+ s"$what at x=$xPx w=$widthPx <- ${callers.slice(1, 5).mkString(" <- ")}")
 
     def render(frame: AppState, damage: Damage): FrameCounts =
       val state = shown(frame)
@@ -99,6 +109,22 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
         layerCacheOwnerOverride = Some(screen),
         textCaches = caches.surfaceText
       ):
+        override def putString(x: Int, y: Int, text: String): Unit =
+          noteStray(s"putString(${text.length})", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), text.length * cellMetrics.charWidth)
+          super.putString(x, y, text)
+
+        override def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
+          noteStray("fillRect", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), width * cellMetrics.charWidth)
+          super.fillRect(x, y, width, height, char)
+
+        override def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
+          noteStray("strokeRect", cellMetrics.toPixelX(x), cellMetrics.toPixelY(y), width * cellMetrics.charWidth)
+          super.strokeRect(x, y, width, height, color, strokeWidth)
+
+        override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
+          noteStray("fillPixelRect", xPx, yPx, widthPx)
+          super.fillPixelRect(xPx, yPx, widthPx, heightPx, color)
+
         override def layerBuffers: Option[LayerBufferSupport] = super.layerBuffers.map { real =>
           new LayerBufferSupport:
             def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage]): RenderSurface =
@@ -266,7 +292,9 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
       val _               = on.render(frame, damage)
       val _               = off.render(frame, damage)
       val found = differences(on, off)
-      withClue(s"frame $index: ")((if found.isEmpty then found else found ++ withoutOneThing(frame)) shouldBe empty)
+      withClue(s"frame $index: ")(
+        (if found.isEmpty then found else found ++ off.strays.take(6) ++ withoutOneThing(frame)) shouldBe empty
+      )
     }
   }
 
