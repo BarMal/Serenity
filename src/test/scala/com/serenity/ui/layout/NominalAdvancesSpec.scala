@@ -14,8 +14,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
-  private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
-  private val config   = FontLoader.FontConfig()
+  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val config    = FontLoader.FontConfig()
   private val printable = (0x20 to 0x7e).map(_.toChar)
 
   private def codeFont(sizePt: Float, ligatures: Boolean): Font =
@@ -23,11 +23,10 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   private val sizes = List(11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 18.0f)
 
-  "A code font set without ligatures" should "have a table, at every size, including those the cell grid drifts from" in {
+  "A code font set without ligatures" should "have a table, at every size, including those the cell grid drifts from" in
     sizes.foreach { size =>
       withClue(s"$size pt: ")(NominalAdvances.of(codeFont(size, ligatures = false), frc) shouldBe defined)
     }
-  }
 
   it should "list, for each printable character, the advance the measured path gives it" in {
     val shapedText = ShapedTextCache()
@@ -42,11 +41,10 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
     }
   }
 
-  "A code font set with ligatures" should "have no table, since shaping may change what a character advances" in {
+  "A code font set with ligatures" should "have no table, since shaping may change what a character advances" in
     sizes.foreach { size =>
       withClue(s"$size pt: ")(NominalAdvances.of(codeFont(size, ligatures = true), frc) shouldBe None)
     }
-  }
 
   "The proportional text font" should "have no table" in {
     NominalAdvances.of(FontLoader.previewTextFont(config), frc) shouldBe None

@@ -63,6 +63,7 @@ object PerformanceBenchmarks:
       ModalWrapBenchmarks.benchmarks() ++
       EditorConfigBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
+      SourceRowCountBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       BoundaryCacheBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++

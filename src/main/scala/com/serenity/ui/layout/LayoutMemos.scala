@@ -12,6 +12,11 @@ final private[serenity] class LayoutMemos:
 
   val dropCapWidths: DropCapWidths = DropCapWidths()
 
+  private[layout] val nominalAdvances: MeasurementMemo[NominalAdvances.Key, Option[NominalAdvances]] =
+    MeasurementMemo[NominalAdvances.Key, Option[NominalAdvances]](maxEntries = 64)(key =>
+      NominalAdvances.of(key.font, key.frc)
+    )
+
   private[layout] val dropCapFits: MeasurementMemo[DropCapGlyph.FitKey, DropCapGlyph] =
     MeasurementMemo[DropCapGlyph.FitKey, DropCapGlyph](maxEntries = 256)(
       DropCapGlyph.measure(_, lineExtents, dropCapWidths)

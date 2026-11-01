@@ -111,23 +111,34 @@ object VisualRowCounts:
         dropCapGapEm,
         fallback
       )
+    // A plain line set on its own fractional advances is one row when those advances say so; the wrap decides the rest.
+    lazy val nominalAdvances: Option[NominalAdvances] =
+      Option
+        .when(
+          richText.document.isEmpty && !richText.markdown.isActive && richText.virtualDropCaps.isEmpty &&
+            LineLayout.measuredLayoutFor(font, frc, forceCellLayout, richText, wrapCache.shapedText.probes)
+        )(wrapCache.layoutMemos.nominalAdvances(NominalAdvances.Key(font, frc)))
+        .flatten
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))
     def wrap(line: Int): Int =
-      TextLayoutSnapshot
-        .boundedVisualLinesForText(
-          content.getLine(line).getOrElse(""),
-          line,
-          panelWidthPx,
-          font,
-          frc,
-          cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = forceCellLayout,
-          wrapCache = wrapCache,
-          richText = richText
-        )
-        .length
-        .max(1)
+      val text = content.getLine(line).getOrElse("")
+      if nominalAdvances.exists(_.fitsOneRow(text, math.max(1, panelWidthPx))) then 1
+      else
+        TextLayoutSnapshot
+          .boundedVisualLinesForText(
+            text,
+            line,
+            panelWidthPx,
+            font,
+            frc,
+            cellMetricsOverride = cellMetricsOverride,
+            forceCellLayout = forceCellLayout,
+            wrapCache = wrapCache,
+            richText = richText
+          )
+          .length
+          .max(1)
     val key =
       VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
     val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)

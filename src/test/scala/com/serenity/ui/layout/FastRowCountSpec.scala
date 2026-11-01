@@ -38,7 +38,8 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         val length = List(5, 20, 40, 80, 120, 160, 200, 260)(random.nextInt(8))
         String(
           Array.fill(length)(
-            if random.nextInt(10) < 4 then symbols(random.nextInt(symbols.length)) else plain(random.nextInt(plain.size))
+            if random.nextInt(10) < 4 then symbols(random.nextInt(symbols.length))
+            else plain(random.nextInt(plain.size))
           )
         )
       }
@@ -73,7 +74,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   private def wraps(cache: WrappedLineCache.Bounded): Long =
     cache.wrapStats.coldWraps + cache.wrapStats.incrementalWraps
 
-  "A code font without ligatures" should "count every line as the wrap does, at widths either side of the line's own" in {
+  "A code font without ligatures" should "count every line as the wrap does, at widths either side of the line's own" in
     sizes.foreach { size =>
       val font = codeFont(size, ligatures = false)
       asciiLines.foreach { text =>
@@ -85,10 +86,16 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         }
       }
     }
-  }
 
   it should "count lines that are not printable ASCII as the wrap does" in {
-    val lines = Vector("\tindented\tcode", "naïve café", "日本語のテキスト" * 12, "👩‍👩‍👧‍👦 family " * 8, "á combining " * 10, "x" * 600)
+    val lines = Vector(
+      "\tindented\tcode",
+      "naïve café",
+      "日本語のテキスト" * 12,
+      "👩‍👩‍👧‍👦 family " * 8,
+      "á combining " * 10,
+      "x" * 600
+    )
     sizes.foreach { size =>
       val font = codeFont(size, ligatures = false)
       lines.foreach { text =>
@@ -126,9 +133,10 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "wrap the lines that are not printable ASCII, and only those" in {
-    val font   = codeFont(12.0f, ligatures = false)
-    val buffer = Buffer.fromString(bufferId, Vector("val a = 1", "\tval b = 2", "val c = \"é\"", "val d = 4").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val font = codeFont(12.0f, ligatures = false)
+    val buffer =
+      Buffer.fromString(bufferId, Vector("val a = 1", "\tval b = 2", "val c = \"é\"", "val d = 4").mkString("\n"))
+    val cache = WrappedLineCache.bounded()
 
     counted(buffer, 1472, font, cache)
 
@@ -138,7 +146,15 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   it should "leave a count already known to the caller as it was told" in {
     val font   = codeFont(12.0f, ligatures = false)
     val buffer = Buffer.fromString(bufferId, "x" * 600)
-    val rows   = VisualRowCounts.forBuffer(buffer, 1472, font, Some(metricsOf(font)), false, WrappedLineCache.bounded(), known = _ => Some(7))
+    val rows = VisualRowCounts.forBuffer(
+      buffer,
+      1472,
+      font,
+      Some(metricsOf(font)),
+      false,
+      WrappedLineCache.bounded(),
+      known = _ => Some(7)
+    )
 
     rows.rowsIn(0) shouldBe 7
   }
