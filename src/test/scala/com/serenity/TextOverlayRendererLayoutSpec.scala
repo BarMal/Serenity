@@ -516,19 +516,33 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
-      rect = LayoutRect(0, 0, 20, 1)
+      rect = LayoutRect(0, 0, 20, 1),
+      settings = com.serenity.ui.layout.TabBarSettings(measure =
+        com.serenity.ui.layout.TabTitleMeasure.proportional(
+          label =>
+            if label.isEmpty then 0.0
+            else
+              java.awt.font
+                .TextLayout(label, font, com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext())
+                .getAdvance
+                .toDouble,
+          com.serenity.ui.renderer.SurfaceTextInset.px(AppConfig.default),
+          metrics.charWidth.toDouble
+        )
+      )
     )
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 3), composition = Some(composition))
 
     renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
-    // A title starts one padding cell into its tab: "one" lands at [1,4) and the separator at column 5, the end of
-    // that tab; "two ●" in tab 1 starts at column 8, its ● at column 12.
-    val row = surface.getRow(0)
-    row.slice(1, 4) shouldBe "one"
-    row.charAt(5) shouldBe '│'
-    row.slice(8, 11) shouldBe "two"
-    row.charAt(12) shouldBe '●'
-    surface.getBg(1, 0) shouldBe Theme.light.panel.background
-    surface.getBg(8, 0) shouldBe Theme.light.highlighted.background
+    // A title starts one padding cell into its tab, wherever the layout put the tab, and the separator is the cell
+    // after the first tab.
+    val tabs = composition.hitRegions.map(_.rect.x.toInt)
+    val row  = surface.getRow(0)
+    row.slice(tabs(0) + 1, tabs(0) + 4) shouldBe "one"
+    row.charAt(tabs(1) - 2) shouldBe '│'
+    row.slice(tabs(1) + 1, tabs(1) + 4) shouldBe "two"
+    row.charAt(tabs(1) + 5) shouldBe '●'
+    surface.getBg(tabs(0) + 1, 0) shouldBe Theme.light.panel.background
+    surface.getBg(tabs(1) + 1, 0) shouldBe Theme.light.highlighted.background
   }

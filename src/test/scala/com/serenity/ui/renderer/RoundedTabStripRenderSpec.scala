@@ -61,7 +61,8 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       frame: FramePixels,
       rect: LayoutRect,
       activeTab: LogicalPixelRect,
-      newTab: LogicalPixelRect
+      newTab: LogicalPixelRect,
+      titleCells: Int
   )
 
   private def save(frame: FramePixels, rect: LayoutRect, radius: Int): Unit =
@@ -114,7 +115,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .getOrElse(fail("no new-tab region"))
       .rect
     save(frame, rect, radius)
-    Strip(frame, rect, active, newTab)
+    Strip(frame, rect, active, newTab, TabBarLayoutSettings.of(state).measure.cells(s"Buffer ${tabs(1).value}"))
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
 
@@ -175,8 +176,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val s                   = strip(radius = 12)
     val h                   = highlight(s)
     val (left, _, right, _) = boundsOf(s, h)
-    val title               = "Buffer 1"
-    s.activeTab.width shouldBe (title.length + 4).toDouble
+    s.activeTab.width shouldBe (s.titleCells + 4).toDouble
     val tabLeft  = (s.activeTab.x * metrics.charWidth).toInt
     val tabRight = ((s.activeTab.x + s.activeTab.width) * metrics.charWidth).toInt
     withClue(s"fill spans $left..$right, tab $tabLeft..$tabRight: ") {
