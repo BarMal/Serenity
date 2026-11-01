@@ -249,6 +249,12 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
       case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
+      case InterfaceChromeIntent.SetUiCornerRadiusPx(radius) =>
+        updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case InterfaceChromeIntent.SetDockedCornerStyle(style) =>
+        updateAppearanceConfig(_.withDockedCornerStyle(style)).void
+      case InterfaceChromeIntent.SetPaneHeaderCorners(corners) =>
+        updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
       case InterfaceChromeIntent.SetInterfaceDensity(density) =>
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case InterfaceChromeIntent.SetWindowChromeMode(mode) =>

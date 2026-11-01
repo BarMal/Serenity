@@ -194,6 +194,12 @@ object CommandRunnerSettingsGroups:
             CommandRunnerSettingsRenderItems.renderBackendOptionItem(optionSelections),
             CommandRunnerSettingsRenderItems.renderWaylandOptionItem(optionSelections)
           )
+        ) ++ onFrontend.rows(guiOnly, input("ui-corner-radius")) ++ onFrontend.rows(
+          guiOnly,
+          List(
+            CommandRunnerSettingsAppearanceItems.dockedCornerStyleOptionItem(optionSelections),
+            CommandRunnerSettingsAppearanceItems.paneHeaderCornersOptionItem(optionSelections)
+          )
         )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)

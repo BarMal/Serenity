@@ -10,7 +10,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
 
   private[command] def uiSpacingItems(
     elementGapValue: String,
-    outlineThicknessValue: String
+    outlineThicknessValue: String,
+    cornerRadiusValue: String
   ): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
       id = "ui-element-gap",
@@ -47,6 +48,22 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.interfaceConfig.outlineThicknessPx.toString)
+    ),
+    CommandSurfaceItem.InputItem(
+      id = "ui-corner-radius",
+      label = "UI Corner Radius",
+      hint = s"Pixels, 0 is square (${AppConfig.MinUiCornerRadiusPx}-${AppConfig.MaxUiCornerRadiusPx})",
+      currentValue = cornerRadiusValue,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+      parse = text =>
+        text.toIntOption
+          .filter(value => value >= AppConfig.MinUiCornerRadiusPx && value <= AppConfig.MaxUiCornerRadiusPx)
+          .map(commandIntentArg =>
+            CommandIntent
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetUiCornerRadiusPx(commandIntentArg)))
+          ),
+      category = CommandCategory.Settings,
+      defaultValue = Some(AppConfig.default.interfaceConfig.cornerRadiusPx.toString)
     )
   )
 
