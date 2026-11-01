@@ -15,11 +15,10 @@ class BenchmarkShardSpec extends AnyFlatSpec with Matchers:
     BenchmarkShard.parse("1/1") shouldBe Right(BenchmarkShard(1, 1))
   }
 
-  it should "reject an index outside 1..count and anything that is not index/count" in {
+  it should "reject an index outside 1..count and anything that is not index/count" in
     List("0/2", "3/2", "2/0", "x", "1/", "/2", "1/2/3", "-1/2").foreach(text =>
       withClue(text)(BenchmarkShard.parse(text).isLeft shouldBe true)
     )
-  }
 
   it should "take a contiguous slice and, together, the shards take every row once in order" in {
     val shards = List(BenchmarkShard(1, 3), BenchmarkShard(2, 3), BenchmarkShard(3, 3))
@@ -36,7 +35,9 @@ class BenchmarkShardSpec extends AnyFlatSpec with Matchers:
   }
 
   "The arguments" should "separate a --shard option from the benchmark names" in {
-    BenchmarkShard.fromArgs(List("--shard=2/2", "layout.", "render.")) shouldBe Right((Some(BenchmarkShard(2, 2)), List("layout.", "render.")))
+    BenchmarkShard.fromArgs(List("--shard=2/2", "layout.", "render.")) shouldBe Right(
+      (Some(BenchmarkShard(2, 2)), List("layout.", "render."))
+    )
     BenchmarkShard.fromArgs(List("layout.")) shouldBe Right((None, List("layout.")))
     BenchmarkShard.fromArgs(Nil) shouldBe Right((None, Nil))
   }

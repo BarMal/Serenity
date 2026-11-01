@@ -28,7 +28,7 @@ class WarmupExtensionSpec extends AnyFlatSpec with Matchers:
   }
 
   they should "be overridable from system properties, one value at a time" in {
-    val props = Map("serenity.bench.warmup.rowCapSeconds" -> "1.5", "serenity.bench.warmup.runCapSeconds" -> "20")
+    val props   = Map("serenity.bench.warmup.rowCapSeconds" -> "1.5", "serenity.bench.warmup.runCapSeconds" -> "20")
     val changed = Settings.fromProperties(props.get)
     changed.rowCapNanos shouldBe 1_500_000_000L
     changed.runCapNanos shouldBe 20_000_000_000L
@@ -82,41 +82,56 @@ class WarmupExtensionSpec extends AnyFlatSpec with Matchers:
     budget.exhausted shouldBe true
   }
 
+  /** A clock that only moves when a call takes time, so the specs depend on no real timing. */
+  final private class Timeline(cost: Int => Long):
+    private val now       = new java.util.concurrent.atomic.AtomicLong(0L)
+    private val calls     = new java.util.concurrent.atomic.AtomicInteger(0)
+    def clock: () => Long = () => now.get()
+
+    def run: () => Any = () =>
+      val call = calls.incrementAndGet()
+      now.addAndGet(cost(call))
+      call
+
+    def callCount: Int    = calls.get()
+    def currentCost: Long = cost(calls.get() + 1)
+
   "extend" should "not run a row at all once the budget is spent" in {
     val budget = Budget(1_000L)
     budget.charge(1_000L)
-    val calls = new java.util.concurrent.atomic.AtomicInteger
-    val _     = extend(settings, budget, () => calls.incrementAndGet(), invocations = 0)
-    calls.get shouldBe 0
+    val timeline = Timeline(_ => PlateauNanos)
+    val _        = extend(settings, budget, timeline.run, invocations = 0, timeline.clock)
+    timeline.callCount shouldBe 0
   }
 
   it should "keep a ramping row running until its per-call cost has settled" in {
-    val quick  = settings.copy(roundNanos = 2_000_000L, runCapNanos = 10_000_000_000L, rowCapNanos = 5_000_000_000L)
-    val calls  = new java.util.concurrent.atomic.AtomicInteger
-    val budget = Budget(quick.runCapNanos)
-    val _      = extend(quick, budget, () => spin(costNanos(calls.incrementAndGet())), invocations = 0)
-    val settled = (1 to 20).map(_ => timeOf(() => spin(costNanos(calls.incrementAndGet())))).sorted.apply(10)
-    settled should be <= (PlateauNanos * 1.25).toLong
-    budget.spentNanos should be > 0L
+    val quick    = settings.copy(roundNanos = 2_000_000L, runCapNanos = 10_000_000_000L, rowCapNanos = 5_000_000_000L)
+    val timeline = Timeline(costNanos)
+    val budget   = Budget(quick.runCapNanos)
+    val _        = extend(quick, budget, timeline.run, invocations = 0, timeline.clock)
+    timeline.currentCost should be <= (PlateauNanos * 1.25).toLong
+    budget.spentNanos should be >= 40 * quick.roundNanos
   }
 
-  it should "leave a row that is already flat after five rounds when it has done 10,000 invocations" in {
-    val quick  = settings.copy(roundNanos = 2_000_000L)
-    val budget = Budget(quick.runCapNanos)
-    val _      = extend(quick, budget, () => spin(PlateauNanos), invocations = 10_000)
-    budget.spentNanos should be < (7 * quick.roundNanos)
+  it should "stop a row that is already flat after five rounds, not forty" in {
+    val quick    = settings.copy(roundNanos = 5_000_000L)
+    val timeline = Timeline(_ => PlateauNanos)
+    val budget   = Budget(quick.runCapNanos)
+    val _        = extend(quick, budget, timeline.run, invocations = 10_000, timeline.clock)
+    budget.spentNanos shouldBe 5 * quick.roundNanos
+  }
+
+  it should "stop a row that never settles at the row cap" in {
+    val quick    = settings.copy(roundNanos = 2_000_000L, rowCapNanos = 100_000_000L)
+    val timeline = Timeline(call => PlateauNanos + call * 10L) // gets slower for ever
+    val budget   = Budget(quick.runCapNanos)
+    val _        = extend(quick, budget, timeline.run, invocations = 0, timeline.clock)
+    budget.spentNanos should (be >= quick.rowCapNanos and be < quick.rowCapNanos + 2 * quick.roundNanos)
   }
 
   private val PlateauNanos = 20_000L
 
-  /** A call that starts ten times as slow as it ends and takes 400 calls to get there, like code the JIT has not got to. */
+  /** A call that starts ten times as slow as it ends and takes 400 calls to get there, like code the JIT has not got
+    * to.
+    */
   private def costNanos(call: Int): Long = PlateauNanos + math.max(0L, (9L * PlateauNanos) - call * 450L)
-
-  private def spin(nanos: Long): Unit =
-    val deadline = System.nanoTime() + nanos
-    while System.nanoTime() < deadline do Thread.onSpinWait()
-
-  private def timeOf(run: () => Unit): Long =
-    val started = System.nanoTime()
-    run()
-    System.nanoTime() - started
