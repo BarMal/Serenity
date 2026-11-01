@@ -3,7 +3,7 @@
 #
 # Key to screen on the Java2D path and on the Skia layer, from the same jar: bench-laptop.sh runs java2d, skia, skia,
 # java2d (A B B A, so drift falls on both alike), each its usual 3 runs, then the tagged [LATENCY] summaries are
-# reduced per backend by scripts/key_to_screen_summary.py. "Presented" is the end of the canvas paint for Java2D and
+# reduced per backend by bench/key_to_screen_summary.py. "Presented" is the end of the canvas paint for Java2D and
 # the end of Skiko's render callback for the Skia layer, not GPU completion or display scan-out.
 #
 # Run from inside the unpacked bench-<sha> directory, in the nix-shell bench/README.md names, with the display on AC
