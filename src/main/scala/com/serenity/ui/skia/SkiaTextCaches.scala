@@ -31,6 +31,10 @@ object SkiaTextCaches:
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 
+  /** PROBE (#2465, throwaway): lets `into` draw with the set `from` holds. */
+  def adopt(from: BackendCaches, into: BackendCaches): Unit =
+    if heldBy(from) then { val _ = into.getOrCreate(Key)(of(from)) }
+
   /** What first use has cost `owner`'s Skia text caches so far, if it has any. */
   def warmupOf(owner: BackendCaches): Option[WarmupStats.Snapshot] =
     Option.when(heldBy(owner))(of(owner).warmup.snapshot)

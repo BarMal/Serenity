@@ -144,6 +144,7 @@ object RenderBenchmarkRunner:
     fonts: Fonts,
     refresh: RefreshRate
   )(using Balance): Measured =
+    FirstFrameProbe.begin(name)
     val window = new SwingWindow(
       new Dimension(options.widthPx, options.heightPx),
       fonts.codeMetrics,
@@ -184,7 +185,13 @@ object RenderBenchmarkRunner:
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines)
     val shared = RenderCaches.create()
     def cachesFor(step: BenchmarkScript.Step) =
-      if step.frame == BenchmarkScript.FrameKind.ColdFull then RenderCaches.create() else shared
+      if step.frame == BenchmarkScript.FrameKind.ColdFull then
+        val fresh = RenderCaches.create()
+        // PROBE (#2465, throwaway): a cold frame whose Skia fonts and shapings are already warm.
+        if sys.props.get("serenity.probe.warmText").contains("true") then
+          com.serenity.ui.skia.SkiaTextCaches.adopt(shared.backendCaches, fresh.backendCaches)
+        fresh
+      else shared
     // A frame for the caret to blink over, and a starting point that is the same on both backends.
     steps.headOption.foreach { first =>
       timed(window)(
@@ -273,8 +280,22 @@ object RenderBenchmarkRunner:
     window.setOnFramePresented(() => timer.presented(window.shownFrames))
     val start = System.nanoTime()
     render
-    timer.await(start, window.publishedFrames)
+    val sample = timer.await(start, window.publishedFrames)
+    FirstFrameProbe.frame(start)
+    sample
 
   private def settle(): Unit =
     SwingUtilities.invokeAndWait(() => ())
     SwingUtilities.invokeAndWait(() => ())
+
+/** PROBE (#2465, throwaway): the cost of the first frames of each renderer's window, from the window being made. */
+private object FirstFrameProbe:
+  @volatile var arm: String   = ""
+  @volatile var origin: Long  = 0L
+  @volatile var count: Int    = 0
+  def begin(name: String): Unit = { arm = name; origin = System.nanoTime(); count = 0 }
+  def frame(started: Long): Unit =
+    if sys.props.contains("serenity.probe.firstFrames") && count < 14 then
+      val now = System.nanoTime()
+      count += 1
+      println(f"PROBE first-frames $arm%s frame=$count%d took=${(now - started) / 1e6}%.2f ms since-window-made=${(now - origin) / 1e6}%.2f ms")
