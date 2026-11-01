@@ -17,12 +17,11 @@ class UiCornerConfigSpec extends AnyFlatSpec with Matchers:
     Files.writeString(file, lines.mkString("", "\n", "\n"))
     ConfigManagerTestSupport.loadConfigResult(Some(file.toString))
 
-  "The corner settings" should "default to a 12 px radius and a rounded pane header, whatever the layout" in {
+  "The corner settings" should "default to a 12 px radius and a rounded pane header, whatever the layout" in
     List(AppConfig.default, AppConfig.conventional).foreach { config =>
       config.interfaceConfig.cornerRadiusPx shouldBe 12
       config.interfaceConfig.paneHeaderCorners shouldBe PaneHeaderCorners.Rounded
     }
-  }
 
   it should "start docked chrome flush in the minimal layout and floating in the conventional one" in {
     AppConfig.default.dockedCornerStyle shouldBe DockedCornerStyle.Flush
