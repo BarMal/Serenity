@@ -4,8 +4,8 @@ import java.awt.Font
 
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.renderer.ShapedTextCache
-import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.OptionValues
+import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The per-font table of printable ASCII advances a row count may read in place of wrapping a line (#2447 B2). A font
