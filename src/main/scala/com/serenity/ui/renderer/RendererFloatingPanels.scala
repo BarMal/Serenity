@@ -17,8 +17,7 @@ import com.serenity.ui.layout.*
 object RendererFloatingPanels:
 
   /** The window's size in cells, which decides which corners of a flush docked panel touch its edge. */
-  private def windowOf(state: AppState, context: RenderContext): ViewportSize =
-    state.runtime.viewportSize.getOrElse(ViewportSize(context.surface.viewportWidth, context.surface.viewportHeight))
+  private def windowOf(state: AppState, context: RenderContext): ViewportSize = context.windowSize(state)
 
   def renderFloatingPanels(
     state: AppState,

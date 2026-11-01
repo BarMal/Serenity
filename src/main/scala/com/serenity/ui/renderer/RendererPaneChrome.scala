@@ -48,8 +48,7 @@ private[renderer] object RendererPaneChrome:
         if bufferTitle.length > maxTitleWidth then bufferTitle.take(maxTitleWidth - 3) + "..."
         else bufferTitle
 
-      val window =
-        state.runtime.viewportSize.getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
+      val window = context.windowSize(state)
       val corners =
         CornerRounding.corners(
           ChromeElement.PaneHeader,

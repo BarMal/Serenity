@@ -472,8 +472,7 @@ object RendererGutter:
       val background = colors.background.fold(gutterBackground(state))(RenderColor.fromAwt)
       surface.setBackgroundColor(background)
       surface.setForegroundColor(colors.foreground.fold(state.persisted.theme.panel.foreground)(RenderColor.fromAwt))
-      val window =
-        state.runtime.viewportSize.getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
+      val window = context.windowSize(state)
       val corners =
         CornerRounding.corners(
           ChromeElement.StatusBar,
