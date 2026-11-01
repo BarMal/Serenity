@@ -267,24 +267,37 @@ object OverlaySegmentRowRenderer:
     val renderWidth = iconWidth + iconGap + text.length
     val leftPad     = math.max(0, (width - renderWidth) / 2)
     val renderX     = x + leftPad
-    val paintText = () =>
-      renderSegmentText(
-        surface,
-        renderX,
-        y,
-        renderWidth,
-        text,
-        segment,
-        theme,
-        defaultForeground,
-        defaultBackground,
-        font
+    // A selected tab in a rounded strip is a pill: the fill is a rounded rectangle a cell wider than the title each
+    // side, drawn first, so the title's own square fill sits inside it and no glyph is cut by a corner.
+    if highlightRadiusPx > 0 then
+      val padLeft  = leftPad.min(1)
+      val padRight = (width - leftPad - renderWidth).max(0).min(1)
+      val pill = segment.backgroundColor
+        .getOrElse(theme.highlighted.background)
+        .withAlpha(defaultBackground.alpha)
+      val _ = surface.panelOutlines.exists(
+        _.fillRoundRect(
+          renderX - padLeft,
+          y,
+          renderWidth + padLeft + padRight,
+          1,
+          RoundedCorners.All,
+          highlightRadiusPx,
+          pill
+        )
       )
-    // The fill is the centred title, so that run is the shape to round.
-    surface.panelOutlines match
-      case Some(outlines) if highlightRadiusPx > 0 =>
-        outlines.withRoundRectClip(renderX, y, renderWidth, 1, RoundedCorners.All, highlightRadiusPx)(paintText())
-      case _ => paintText()
+    renderSegmentText(
+      surface,
+      renderX,
+      y,
+      renderWidth,
+      text,
+      segment,
+      theme,
+      defaultForeground,
+      defaultBackground,
+      font
+    )
 
   def renderSegmentText(
     surface: RenderSurface,
