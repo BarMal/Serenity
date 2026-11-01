@@ -147,7 +147,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val width  = ink.map(_._1).max - ink.map(_._1).min + 1
     val height = ink.map(_._2).max - ink.map(_._2).min + 1
     withClue("the + reaches the strip's edge: ")(ink.map(_._1).max should be <= stripRight(s) - 3)
-    withClue(s"the + is $width wide and $height tall: ")(width should be >= height - 2)
+    withClue(s"the + is $width wide and $height tall: ")(width * 10 should be >= height * 7)
   }
 
 class Java2DRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:
