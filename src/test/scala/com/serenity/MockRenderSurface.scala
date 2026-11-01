@@ -152,11 +152,11 @@ class MockRenderSurface(
 
   private val drawRunPxCallsBuffer = scala.collection.mutable.ListBuffer.empty[DrawRunPxCall]
 
-  /** The `TextStyle` a real `Java2DRenderSurface` would currently be painting with: whatever `enableStyle` last set, or
-    * `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring
-    * `Java2DRenderSurface.disableStyle`'s unconditional `g.setFont(baseFontRef.get())`, which drops back to no style
-    * override regardless of which style was passed in. Recorded onto every [[DrawRunPxCall]] so a test can assert two
-    * draws of the same range resolved the same style, the way #1482 did not.
+  /** The `TextStyle` a real Java2D surface would currently be painting with: whatever `enableStyle` last set, or
+    * `TextStyle.normal` once `disableStyle` has reverted to the base (unstyled) font -- mirroring the Java2D surface's
+    * `disableStyle`, whose unconditional `g.setFont(baseFontRef.get())`, which drops back to no style override
+    * regardless of which style was passed in. Recorded onto every [[DrawRunPxCall]] so a test can assert two draws of
+    * the same range resolved the same style, the way #1482 did not.
     */
   private val currentStyle = AtomicReference[TextStyle](TextStyle.normal)
 

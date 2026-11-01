@@ -4,10 +4,11 @@ import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.SkiaFrames
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -27,25 +28,23 @@ class TypingFramePresentSpec extends AnyFlatSpec with Matchers:
   private val windowArea  = viewport.width.toLong * cellMetrics.charWidth * viewport.height * cellMetrics.lineHeight
 
   final private class ScreenFrames:
-    private val image  = LaptopFrameBenchmarks.frameImage()
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
     /** The rects the frame asks the window to present, `None` for the whole window. */
     def present(state: AppState, damage: Damage): Option[List[PixelRect]] =
       val region = new AtomicReference[Option[List[PixelRect]]](None)
-      val surface = new Java2DRenderSurface(
-        image,
+      val surface = SkiaFrames.surfaceOver(
+        frame,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
-        logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
-        deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-        deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
-        contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        LaptopFrameBenchmarks.LogicalWidthPx,
+        LaptopFrameBenchmarks.LogicalHeightPx,
+        LaptopFrameBenchmarks.DeviceScale,
+        persists = true,
+        caches,
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,

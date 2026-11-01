@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
@@ -9,7 +7,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, TextRowMetrics, ViewportSize}
-import com.serenity.ui.renderer.{EditorPaneRenderPlan, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{EditorPaneRenderPlan, RendererFramePlanner}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -83,20 +81,10 @@ class GuiPopupAnchorSpec extends AnyFlatSpec with Matchers:
     )
 
   private def planOf(state: AppState): EditorPaneRenderPlan =
-    val image = new BufferedImage(logicalW, logicalH, BufferedImage.TYPE_INT_RGB)
-    val surface = new Java2DRenderSurface(
-      image,
-      metrics,
-      codeFont,
-      _ => (),
-      logicalWidthPx = logicalW,
-      logicalHeightPx = logicalH,
-      deviceScaleX = 1.0,
-      deviceScaleY = 1.0,
-      contentPersists = false,
-      layerCacheOwnerOverride = Some(ScreenIdentity(image))
-    )
     val caches = RenderCaches.create()
+    val image  = SkiaFrames.newFrame(logicalW, logicalH)
+    val surface =
+      SkiaFrames.surfaceOver(image, metrics, codeFont, logicalW, logicalH, 1.0, persists = false, caches)
     RendererFramePlanner
       .renderFrame(
         state,

@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import com.serenity.config.StatusLinePlacement
@@ -16,13 +15,7 @@ import com.serenity.ui.layout.{
   WorkspaceNodeId,
   WorkspaceTree
 }
-import com.serenity.ui.renderer.{
-  EditorPaneRenderPlan,
-  FrameOutput,
-  Java2DRenderSurface,
-  RendererFramePlanner,
-  ScreenIdentity
-}
+import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -115,25 +108,27 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
   private def headerOf(plan: EditorPaneRenderPlan): PixelRect =
     plan.layoutContract.paneHeaderRect(paneId).map(pixelRectOf).getOrElse(fail("expected a pane header"))
 
+  private val referenceFrames: FrameBackend = SkiaFrames
+
   private def render(
     state: AppState,
-    image: BufferedImage,
+    image: FramePixels,
     persists: Boolean,
     output: Option[FrameOutput],
     damage: Damage,
     caches: RenderCaches,
     screen: ScreenIdentity
   ): EditorPaneRenderPlan =
-    val surface = new Java2DRenderSurface(
+    val surface = referenceFrames.surfaceOver(
       image,
       metrics,
       font,
-      _ => (),
-      logicalWidthPx = widthPx,
-      logicalHeightPx = heightPx,
-      contentPersists = persists,
-      layerCacheOwnerOverride = Some(screen),
-      textCaches = caches.surfaceText
+      widthPx,
+      heightPx,
+      1.0,
+      persists,
+      caches,
+      Some(screen)
     )
     RendererFramePlanner
       .renderFrame(
@@ -158,35 +153,25 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
     * rects of each copied onto what the screen shows.
     */
   final private class PresentedScreen:
-    private val canvas       = new javax.swing.JPanel
-    private val token        = ScreenIdentity(canvas)
-    private val caches       = RenderCaches.create()
-    private val pool         = Vector.fill(2)(new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB))
-    private val frames       = new AtomicInteger(0)
-    val shown: BufferedImage = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
+    private val canvas     = new javax.swing.JPanel
+    private val token      = ScreenIdentity(canvas)
+    private val caches     = RenderCaches.create()
+    private val pool       = Vector.fill(2)(referenceFrames.newFrame(widthPx, heightPx))
+    private val frames     = new AtomicInteger(0)
+    val shown: FramePixels = referenceFrames.newFrame(widthPx, heightPx)
 
     def present(state: AppState, damage: Damage): (Option[List[PixelRect]], EditorPaneRenderPlan) =
       val image   = pool(frames.getAndIncrement() % pool.size)
       val region  = new AtomicReference[Option[List[PixelRect]]](None)
       val plan    = render(state, image, persists = true, Some(FrameOutput(token, region)), damage, caches, token)
       val painted = region.get().getOrElse(List(PixelRect(0, 0, widthPx, heightPx)))
-      val g       = shown.createGraphics()
-      try
-        painted.foreach { rect =>
-          val _ = g.drawImage(
-            image,
-            rect.xPx,
-            rect.yPx,
-            rect.rightPx,
-            rect.bottomPx,
-            rect.xPx,
-            rect.yPx,
-            rect.rightPx,
-            rect.bottomPx,
-            null
-          )
-        }
-      finally g.dispose()
+      painted.foreach { rect =>
+        val x = rect.xPx.max(0)
+        val y = rect.yPx.max(0)
+        val w = rect.rightPx.min(widthPx) - x
+        val h = rect.bottomPx.min(heightPx) - y
+        if w > 0 && h > 0 then shown.blit(image, x, y, w, h)
+      }
       (region.get(), plan)
 
     /** Shows `state` from scratch, then once more so both pooled images have drawn it: a steady state, not the window's
@@ -196,18 +181,14 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
       val _ = present(state, Damage.Everything)
       val _ = present(state, Damage.Nothing)
 
-  private def cold(state: AppState): BufferedImage =
-    val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
+  private def cold(state: AppState): FramePixels =
+    val image = referenceFrames.newFrame(widthPx, heightPx)
     val _ =
       render(state, image, persists = false, None, Damage.Everything, RenderCaches.create(), ScreenIdentity(image))
     image
 
-  private def stalePixels(shown: BufferedImage, expected: BufferedImage): Int =
-    (for
-      x <- 0 until widthPx
-      y <- 0 until heightPx
-      if shown.getRGB(x, y) != expected.getRGB(x, y)
-    yield 1).size
+  private def stalePixels(shown: FramePixels, expected: FramePixels): Int =
+    shown.rgbPixels.zip(expected.rgbPixels).count((onScreen, drawn) => onScreen != drawn)
 
   private def pixelRectOf(rect: LayoutRect): PixelRect =
     PixelRect(
