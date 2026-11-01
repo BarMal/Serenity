@@ -121,8 +121,15 @@ class PanelLayerGeometrySpec extends AnyFlatSpec with Matchers:
     if pairs.isEmpty then Vector.empty
     else
       val box = s"x ${pairs.map(_._1).min}-${pairs.map(_._1).max}, y ${pairs.map(_._2).min}-${pairs.map(_._2).max}"
-      s"${pairs.size} px differ in $box" +:
-        pairs.take(4).map((x, y, a, b) => f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x")
+      val around = for
+        (x, y) <- Vector((2994, 0), (2995, 0), (2996, 0), (2996, 29), (2996, 30), (2996, 31), (2996, 500), (2999, 999))
+      yield
+        val withLayers = on.image.getRGB(x, y) & 0xffffff
+        val without    = off.image.getRGB(x, y) & 0xffffff
+        f"($x,$y) with layers $withLayers%06x without $without%06x"
+      s"${pairs.size} px differ in $box" +: (pairs.take(2).map { (x, y, a, b) =>
+        f"($x,$y) with layers ${a & 0xffffff}%06x without ${b & 0xffffff}%06x"
+      } ++ around)
 
   private def withCaching(enabled: Boolean)(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(config = state.persisted.config.withLayerCaching(enabled)))
