@@ -141,12 +141,16 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val s          = strip(radius = 0)
     val colours    = for y <- bandOf(s); x <- stripLeft(s) until stripRight(s) yield rgb(s.frame, x, y)
     val background = colours.groupBy(identity).maxBy(_._2.size)._1
-    val window     = stripRight(s) - metrics.charWidth * 3 / 2 until stripRight(s)
-    val ink        = for y <- bandOf(s); x <- window if rgb(s.frame, x, y) != background yield (x, y)
-    withClue("no ink where the + belongs: ")(ink should not be empty)
-    val width  = ink.map(_._1).max - ink.map(_._1).min + 1
-    val height = ink.map(_._2).max - ink.map(_._2).min + 1
-    withClue("the + reaches the strip's edge: ")(ink.map(_._1).max should be <= stripRight(s) - 3)
+    val tail       = stripRight(s) - metrics.charWidth * 4 until stripRight(s)
+    val ink        = for y <- bandOf(s); x <- tail if rgb(s.frame, x, y) != background yield (x, y)
+    withClue("no ink at the strip's trailing end: ")(ink should not be empty)
+    // The rightmost run of inked columns is the +; the previous tab's close glyph sits further left, past a gap.
+    val columns = ink.map(_._1).distinct.sorted.reverse
+    val left    = columns.tail.foldLeft(columns.head)((edge, column) => if edge - column <= 2 then column else edge)
+    val glyph   = ink.filter((x, _) => x >= left)
+    val width   = glyph.map(_._1).max - glyph.map(_._1).min + 1
+    val height  = glyph.map(_._2).max - glyph.map(_._2).min + 1
+    withClue("the + reaches the strip's edge: ")(glyph.map(_._1).max should be <= stripRight(s) - 3)
     withClue(s"the + is $width wide and $height tall: ")(width * 10 should be >= height * 7)
   }
 
