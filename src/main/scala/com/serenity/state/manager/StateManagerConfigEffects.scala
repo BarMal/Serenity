@@ -242,7 +242,7 @@ final private[manager] class StateManagerConfigEffects(
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void
 
   private def interpretInterfaceChromeIntent(intent: InterfaceChromeIntent): IO[Unit] =
-    import InterfaceChromeIntent.{SetDockedCornerStyle, SetPaneHeaderCorners, SetUiCornerRadiusPx}
+    import InterfaceChromeIntent.{SetDockedCornerStyle, SetPaneHeaderCorners, SetTabMaxWidth, SetUiCornerRadiusPx}
     intent match
       case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
@@ -253,14 +253,14 @@ final private[manager] class StateManagerConfigEffects(
       case SetUiCornerRadiusPx(radius)   => updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
       case SetDockedCornerStyle(style)   => updateAppearanceConfig(_.withDockedCornerStyle(style)).void
       case SetPaneHeaderCorners(corners) => updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
+      case SetTabMaxWidth(width)         => updateAppearanceConfig(_.withTabMaxWidth(width)).void
       case InterfaceChromeIntent.SetInterfaceDensity(density) =>
         updateAppearanceConfig(_.withInterfaceDensity(density)).void
       case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
       case InterfaceChromeIntent.SetMenuBarMode(mode) =>
         updateAppearanceConfig(_.withMenuBarMode(mode)).void
-      case InterfaceChromeIntent.SetUiLayout(layout) =>
-        switchLayout(layout)
+      case InterfaceChromeIntent.SetUiLayout(layout) => switchLayout(layout)
       case InterfaceChromeIntent.ToggleUiLayout =>
         currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
       case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>

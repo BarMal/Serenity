@@ -22,10 +22,11 @@ private[manager] object TabBarMouseHitTesting:
     activeBufferId: Option[BufferId],
     rect: LayoutRect,
     col: Double,
-    row: Double
+    row: Double,
+    maxTabWidth: Int = TabBarSurfaceComposition.DefaultMaxTabWidth
   ): Option[BufferId] =
     TabBarSurfaceComposition
-      .forTabBar(entries, activeBufferId, rect)
+      .forTabBar(entries, activeBufferId, rect, maxTabWidth)
       .hitAt(col, row)
       .flatMap(hit => TabBarSurfaceComposition.bufferIdOf(hit.focusId))
 
@@ -50,7 +51,8 @@ private[manager] object TabBarMouseHitTesting:
         case SurfaceContent.TabBar(entries, activeBufferId) => (entries, activeBufferId)
         // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
         case _ => (Nil, None)
-      hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble).filterNot(activeBufferId.contains)
+      hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble, state.persisted.config.surfaceConfig.tabMaxWidth)
+        .filterNot(activeBufferId.contains)
 
   /** The pointer target over the tab strip: the default over tabs and gaps, as mainstream editors show, and the hand
     * only on a close button or the new-tab button. `None` outside the strip.
@@ -82,10 +84,11 @@ private[manager] object TabBarMouseHitTesting:
     activeBufferId: Option[BufferId],
     rect: LayoutRect,
     col: Double,
-    row: Double
+    row: Double,
+    maxTabWidth: Int = TabBarSurfaceComposition.DefaultMaxTabWidth
   ): Option[BufferId] =
     TabBarSurfaceComposition
-      .closeAffordances(entries, activeBufferId, rect)
+      .closeAffordances(entries, activeBufferId, rect, maxTabWidth)
       .reverse
       .find(_.rect.contains(col, row))
       .flatMap(hit => TabBarSurfaceComposition.closeBufferIdOf(hit.focusId))
@@ -104,11 +107,13 @@ private[manager] object TabBarMouseHitTesting:
       rect         <- LayoutEngine.calculateLayoutWithUI(state, viewportSize).tabBarRect
       _            <- Option.when(rect.contains(col, row))(())
     yield
-      val entries = surface.content match
-        case SurfaceContent.TabBar(entries, _) => entries
+      val (entries, activeBufferId) = surface.content match
+        case SurfaceContent.TabBar(entries, activeBufferId) => (entries, activeBufferId)
         // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
-        case _ => Nil
-      TabBarSurfaceComposition.newTabAffordance(entries, rect).exists(_.rect.contains(col.toDouble, row.toDouble))
+        case _ => (Nil, None)
+      TabBarSurfaceComposition
+        .newTabAffordance(entries, rect, activeBufferId, state.persisted.config.surfaceConfig.tabMaxWidth)
+        .exists(_.rect.contains(col.toDouble, row.toDouble))
     ).getOrElse(false)
 
   /** Applies [[newTabClickTarget]]'s resolution to `state`, opening a new tab via `EditorState.openNewTab` -- the same
@@ -145,7 +150,14 @@ private[manager] object TabBarMouseHitTesting:
       (entries, activeBufferId) <- surface.content match
         case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
         case _                                              => None
-      bufferId <- closeHitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble)
+      bufferId <- closeHitAt(
+        entries,
+        activeBufferId,
+        rect,
+        col.toDouble,
+        row.toDouble,
+        state.persisted.config.surfaceConfig.tabMaxWidth
+      )
     yield bufferId
 
   /** #1673: a close click goes through the close workflow, which prompts for unsaved changes, rather than dropping the

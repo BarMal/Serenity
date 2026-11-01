@@ -348,7 +348,8 @@ object OverlayViewModel:
           )
         )
       case SurfaceContent.TabBar(entries, activeBufferId) =>
-        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
+        val maxTabWidth = state.persisted.config.surfaceConfig.tabMaxWidth
+        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect, maxTabWidth))
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>

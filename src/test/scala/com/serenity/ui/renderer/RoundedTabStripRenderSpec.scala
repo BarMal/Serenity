@@ -1,7 +1,9 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.nio.file.Paths
+import java.awt.image.BufferedImage
+import java.nio.file.{Files, Paths}
+import javax.imageio.ImageIO
 
 import com.serenity.config.{AppConfig, DockedCornerStyle, PaneHeaderCorners}
 import com.serenity.rope.Balance
@@ -55,7 +57,21 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       )
     )
 
-  final private case class Strip(frame: FramePixels, rect: LayoutRect, activeTab: LogicalPixelRect)
+  final private case class Strip(
+      frame: FramePixels,
+      rect: LayoutRect,
+      activeTab: LogicalPixelRect,
+      newTab: LogicalPixelRect
+  )
+
+  private def save(frame: FramePixels, rect: LayoutRect, radius: Int): Unit =
+    val top    = rect.y * metrics.lineHeight
+    val height = rect.height * metrics.lineHeight
+    val image  = BufferedImage(frame.widthPx, height, BufferedImage.TYPE_INT_RGB)
+    for y <- 0 until height; x <- 0 until frame.widthPx do image.setRGB(x, y, frame.rgbAt(x, top + y) & 0xffffff)
+    val directory = Paths.get("target", "test-reports", "tab-strip")
+    Files.createDirectories(directory)
+    val _ = ImageIO.write(image, "png", directory.resolve(s"${getClass.getSimpleName}-r$radius.png").toFile)
 
   private def strip(radius: Int): Strip =
     val base = AppConfig.conventional
@@ -93,7 +109,12 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .lift(1)
       .getOrElse(fail("no active tab region"))
       .rect
-    Strip(frame, rect, active)
+    val newTab = TabBarSurfaceComposition
+      .newTabAffordance(entries, rect, Some(tabs(1)))
+      .getOrElse(fail("no new-tab region"))
+      .rect
+    save(frame, rect, radius)
+    Strip(frame, rect, active, newTab)
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
 
@@ -150,23 +171,36 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "draw the whole of the trailing + inside the strip" in {
-    // At a zero radius the strip's own corners are plain background, so any ink is the glyph.
+  it should "size a tab to its title and cover all of it, close box included, with the active tab's fill" in {
+    val s                   = strip(radius = 12)
+    val h                   = highlight(s)
+    val (left, _, right, _) = boundsOf(s, h)
+    val title               = "Buffer 1"
+    s.activeTab.width shouldBe (title.length + 4).toDouble
+    val tabLeft  = (s.activeTab.x * metrics.charWidth).toInt
+    val tabRight = ((s.activeTab.x + s.activeTab.width) * metrics.charWidth).toInt
+    withClue(s"fill spans $left..$right, tab $tabLeft..$tabRight: ") {
+      left should be <= tabLeft + metrics.charWidth
+      right should be >= tabRight - metrics.charWidth
+    }
+  }
+
+  it should "draw the whole of the + in its own cells, right after the last tab" in {
+    // At a zero radius the strip's own corners are plain background, so any ink in the + cells is the glyph.
     val s          = strip(radius = 0)
     val background = stripBackground(s)
-    val tail       = stripRight(s) - metrics.charWidth * 4 until stripRight(s)
-    val ink        = for y <- bandOf(s); x <- tail if rgb(s.frame, x, y) != background yield (x, y)
-    withClue("no ink at the strip's trailing end: ")(ink should not be empty)
-    // The rightmost run of inked columns is the +; the previous tab's close glyph sits further left, past a gap.
-    val columns = ink.map(_._1).distinct.sorted.reverse
-    val left    = columns.tail.foldLeft(columns.head)((edge, column) => if edge - column <= 2 then column else edge)
-    val glyph   = ink.filter((x, _) => x >= left)
-    val width   = glyph.map(_._1).max - glyph.map(_._1).min + 1
-    val height  = glyph.map(_._2).max - glyph.map(_._2).min + 1
-    val raster  = bandOf(s).map(y => tail.map(x => if rgb(s.frame, x, y) != background then '#' else '.').mkString)
-    val picture = s"cell ${metrics.charWidth}px, the strip's last four cells:\n${raster.mkString("\n")}\n"
-    withClue(s"the + reaches the strip's edge. $picture")(glyph.map(_._1).max should be <= stripRight(s) - 3)
+    val from       = (s.newTab.x * metrics.charWidth).toInt
+    val until      = ((s.newTab.x + s.newTab.width) * metrics.charWidth).toInt.min(stripRight(s))
+    val ink        = for y <- bandOf(s); x <- from until until if rgb(s.frame, x, y) != background yield (x, y)
+    withClue("no ink in the + cells: ")(ink should not be empty)
+    val width  = ink.map(_._1).max - ink.map(_._1).min + 1
+    val height = ink.map(_._2).max - ink.map(_._2).min + 1
+    val raster =
+      bandOf(s).map(y => (from until until).map(x => if rgb(s.frame, x, y) != background then '#' else '.').mkString)
+    val picture = s"cell ${metrics.charWidth}px, the + cells:\n${raster.mkString("\n")}\n"
     withClue(s"the + is $width wide and $height tall. $picture")(width * 10 should be >= height * 7)
+    withClue(s"the + starts at its cell. $picture")(ink.map(_._1).min should be > from)
+    withClue(s"the + ends inside the strip. $picture")(ink.map(_._1).max should be < stripRight(s))
   }
 
 class Java2DRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:

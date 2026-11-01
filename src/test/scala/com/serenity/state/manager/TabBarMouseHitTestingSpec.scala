@@ -19,10 +19,9 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   private def entry(id: Int, title: String): TabListEntry = TabListEntry(BufferId(id), title, isDirty = false)
 
   private val entries = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
-  // Widths 5/5/5 (see TabBarSurfaceCompositionSpec -- 21 columns available, minus 2 reserved for the trailing
-  // new-tab affordance, issue #1080): tab 0 at [0,5), gap [5,7), tab 1 at [7,12), gap [12,14), tab 2 at [14,19),
-  // then the new-tab affordance at [19,21).
-  private val rect = LayoutRect(0, 0, 21, 1)
+  // Each tab is as wide as its title plus 4 (see TabBarSurfaceCompositionSpec): tab 0 at [0,7), gap [7,9), tab 1 at
+  // [9,16), gap [16,18), tab 2 at [18,27), then the new-tab affordance (issue #1080) at [27,29).
+  private val rect = LayoutRect(0, 0, 40, 1)
 
   "hitAt" should "resolve a click inside the first tab to its BufferId" in {
     TabBarMouseHitTesting.hitAt(entries, None, rect, col = 3, row = 0) shouldBe Some(BufferId(0))
@@ -33,11 +32,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resolve a click inside the third tab to its BufferId" in {
-    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 18, row = 0) shouldBe Some(BufferId(2))
+    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 20, row = 0) shouldBe Some(BufferId(2))
   }
 
   it should "resolve no tab for a click on the separator glyph between tabs" in {
-    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 6, row = 0) shouldBe None
+    TabBarMouseHitTesting.hitAt(entries, None, rect, col = 8, row = 0) shouldBe None
   }
 
   it should "resolve no tab for a click outside the strip's row" in {
@@ -117,11 +116,11 @@ class TabBarMouseHitTestingSpec extends AnyFlatSpec with Matchers:
   }
 
   "closeHitAt" should "resolve a click on a tab's close affordance to its BufferId (issue #1078)" in {
-    // Close regions sit at the rightmost 2 columns of each tab's own cell: [3,5), [10,12), [17,19) (see
-    // TabBarSurfaceCompositionSpec's `closeAffordances` coverage).
+    // Close regions are the 2 columns before the last (padding) column of each tab's own cell: [4,6), [13,15),
+    // [24,26) (see TabBarSurfaceCompositionSpec's `closeAffordances` coverage).
     TabBarMouseHitTesting.closeHitAt(entries, None, rect, col = 4, row = 0) shouldBe Some(BufferId(0))
-    TabBarMouseHitTesting.closeHitAt(entries, None, rect, col = 11, row = 0) shouldBe Some(BufferId(1))
-    TabBarMouseHitTesting.closeHitAt(entries, None, rect, col = 18, row = 0) shouldBe Some(BufferId(2))
+    TabBarMouseHitTesting.closeHitAt(entries, None, rect, col = 14, row = 0) shouldBe Some(BufferId(1))
+    TabBarMouseHitTesting.closeHitAt(entries, None, rect, col = 25, row = 0) shouldBe Some(BufferId(2))
   }
 
   it should "resolve no close hit for a click inside a tab but outside its close affordance" in {

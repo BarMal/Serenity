@@ -378,6 +378,7 @@ object ConfigGenerators:
       warmUp       <- Gen.oneOf(true, false)
       scrollbar    <- Gen.oneOf(true, false)
       tabStrip     <- oneOfEnum(TabStripMode.values)
+      tabMaxWidth  <- Gen.choose(TabMaxWidth.Min, TabMaxWidth.Max)
       compaction   <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
@@ -420,6 +421,7 @@ object ConfigGenerators:
       startupWarmUpEnabled = warmUp,
       scrollbarEnabled = scrollbar,
       tabStrip = tabStrip,
+      tabMaxWidth = tabMaxWidth,
       memoryCompactionEnabled = compaction,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,

@@ -37,6 +37,7 @@ object CommandRunnerSettingsInputItems:
       elementGapValue: String,
       outlineThicknessValue: String,
       cornerRadiusValue: String,
+      tabMaxWidthValue: String,
       lineNumberMarginLeftValue: String,
       lineNumberMarginRightValue: String,
       lineNumberPaddingValue: String,
@@ -67,6 +68,7 @@ object CommandRunnerSettingsInputItems:
         interfaceConfig.elementGap.fold(formatDecimal(if capabilities.isCellGrid then 0.0 else 1.0))(formatDecimal),
       outlineThicknessValue = interfaceConfig.outlineThicknessPx.toString,
       cornerRadiusValue = interfaceConfig.cornerRadiusPx.toString,
+      tabMaxWidthValue = surfaceConfig.tabMaxWidth.toString,
       lineNumberMarginLeftValue =
         surfaceConfig.lineNumberLayout.marginLeft.fold(if capabilities.isCellGrid then "0" else "1")(_.toString),
       lineNumberMarginRightValue = surfaceConfig.lineNumberLayout.marginRight.toString,
@@ -155,7 +157,8 @@ object CommandRunnerSettingsInputItems:
       CommandRunnerSettingsInputItemsUiLayout.uiSpacingItems(
         v.elementGapValue,
         v.outlineThicknessValue,
-        v.cornerRadiusValue
+        v.cornerRadiusValue,
+        v.tabMaxWidthValue
       ) ++
       CommandRunnerSettingsInputItemsSummon.items(config.summon) ++
       CommandRunnerSettingsInputItemsUiLayout.indentationItems(config.indentation.tabSize) ++

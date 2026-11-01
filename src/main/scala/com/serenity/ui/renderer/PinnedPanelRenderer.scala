@@ -14,13 +14,19 @@ import com.serenity.ui.theme.Theme
 
 object PinnedPanelRenderer:
 
+  /** What a surface that draws proportional text needs to set a panel's rows as runs of letters rather than one letter
+    * to a cell: the font they are drawn in and the cache of its measured advances.
+    */
+  final case class PanelTextMeasure(font: java.awt.Font, advances: MeasuredTextAdvances)
+
   def render(
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
     config: AppConfig,
     cellMetrics: CellMetrics,
-    window: ViewportSize = CornerRounding.UnboundedWindow
+    window: ViewportSize = CornerRounding.UnboundedWindow,
+    measure: Option[PanelTextMeasure] = None
   ): Unit =
     val rect            = panel.rect
     val panelBackground = theme.panel.background
@@ -43,8 +49,8 @@ object PinnedPanelRenderer:
 
     val textInsetPx = SurfaceTextInset.px(config)
     drawBorder(surface, panel, theme, config, corners)
-    drawTitle(surface, panel, theme, textInsetPx)
-    drawComposition(surface, panel.composition, theme, panelBackground, cellMetrics, textInsetPx)
+    drawTitle(surface, panel, theme, cellMetrics, textInsetPx, measure)
+    drawComposition(surface, panel.composition, theme, panelBackground, cellMetrics, textInsetPx, measure)
 
     surface.setForegroundColor(theme.foreground)
     surface.setBackgroundColor(theme.background)
@@ -75,14 +81,26 @@ object PinnedPanelRenderer:
     surface: RenderSurface,
     panel: TextPanelView,
     theme: Theme,
-    textInsetPx: Double
+    cellMetrics: CellMetrics,
+    textInsetPx: Double,
+    measure: Option[PanelTextMeasure]
   ): Unit =
     val titleRect = panel.titleRect
     // The title sits on the frame's top edge, so it is not padded out: padding would blank the rest of that edge.
     val title = panel.title.take(titleRect.width)
     if titleRect.width > 0 then
       surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
-        renderText(surface, titleRect.x, titleRect.y, title, theme.panel.foreground)
+        renderText(
+          surface,
+          titleRect.x,
+          titleRect.y,
+          titleRect.width,
+          title,
+          theme.panel.foreground,
+          cellMetrics,
+          textInsetPx,
+          measure
+        )
       }
 
   /** Paints a panel's composed plan -- box rects are already whole-cell granular (built from the same integer
@@ -95,7 +113,8 @@ object PinnedPanelRenderer:
     theme: Theme,
     panelBackground: RenderColor,
     cellMetrics: CellMetrics,
-    textInsetPx: Double
+    textInsetPx: Double,
+    measure: Option[PanelTextMeasure]
   ): Unit =
     composition.paintBoxes.foreach { box =>
       box.text.foreach { text =>
@@ -112,11 +131,11 @@ object PinnedPanelRenderer:
             )
         surface.setForegroundColor(foreground)
         surface.setBackgroundColor(background)
-        if box.selected then
-          surface.enableStyle(theme.focusStyle)
+        if box.selected then surface.enableStyle(theme.focusStyle)
+        if box.selected || (measure.nonEmpty && background != panelBackground) then
           fillRowBackground(surface, cellMetrics, x, y, width, background)
         surface.pixels.withPixelTranslation(textInsetPx, 0.0) {
-          renderText(surface, x, y, padded, foreground)
+          renderText(surface, x, y, width, padded, foreground, cellMetrics, textInsetPx, measure)
         }
         if box.selected then surface.disableStyle(theme.focusStyle)
       }
@@ -145,6 +164,56 @@ object PinnedPanelRenderer:
       color
     )
 
-  private def renderText(surface: RenderSurface, x: Int, y: Int, text: String, foreground: RenderColor): Unit =
+  /** On a surface that can measure text the row is one run of letters at its natural widths, cut at the last letter
+    * that fits the row; a letter to a cell would leave gaps inside words and let a wide letter's cell wipe the one
+    * before it. A cell-grid surface, which has no proportional text, still sets a letter to a cell.
+    */
+  private def renderText(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    widthCells: Int,
+    text: String,
+    foreground: RenderColor,
+    cellMetrics: CellMetrics,
+    textInsetPx: Double,
+    measure: Option[PanelTextMeasure]
+  ): Unit =
     surface.setForegroundColor(foreground)
-    text.zipWithIndex.foreach((char, index) => CharacterRenderer.renderChar(surface, x + index, y, char))
+    val measured = for
+      m   <- measure
+      frc <- surface.text.fontRenderContext
+    yield (m, frc)
+    measured match
+      case Some((m, frc)) =>
+        val availablePx = (widthCells * cellMetrics.charWidth - math.round(textInsetPx).toInt).max(1)
+        val fitted      = fitting(text.stripTrailing(), availablePx, m, frc)
+        if fitted.nonEmpty then
+          surface.text.drawRunPx(
+            cellMetrics.toPixelX(x).toFloat,
+            cellMetrics.toPixelY(y),
+            m.advances.advanceOf(fitted, m.font, frc).max(1.0f),
+            cellMetrics.lineHeight,
+            cellMetrics.ascent,
+            fitted
+          )
+      case None =>
+        text.zipWithIndex.foreach((char, index) => CharacterRenderer.renderChar(surface, x + index, y, char))
+
+  /** The longest start of `text` whose width is at most `availablePx`. */
+  private def fitting(
+    text: String,
+    availablePx: Int,
+    measure: PanelTextMeasure,
+    frc: java.awt.font.FontRenderContext
+  ): String =
+    def width(length: Int): Float = measure.advances.advanceOf(text.take(length), measure.font, frc)
+    if width(text.length) <= availablePx then text
+    else
+      @annotation.tailrec
+      def search(low: Int, high: Int): Int =
+        if low >= high then low
+        else
+          val middle = (low + high + 1) / 2
+          if width(middle) <= availablePx then search(middle, high) else search(low, middle - 1)
+      text.take(search(0, text.length))

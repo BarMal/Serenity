@@ -11,7 +11,8 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
   private[command] def uiSpacingItems(
     elementGapValue: String,
     outlineThicknessValue: String,
-    cornerRadiusValue: String
+    cornerRadiusValue: String,
+    tabMaxWidthValue: String
   ): List[CommandSurfaceItem.InputItem] = List(
     CommandSurfaceItem.InputItem(
       id = "ui-element-gap",
@@ -64,6 +65,22 @@ private[command] object CommandRunnerSettingsInputItemsUiLayout:
           ),
       category = CommandCategory.Settings,
       defaultValue = Some(AppConfig.default.interfaceConfig.cornerRadiusPx.toString)
+    ),
+    CommandSurfaceItem.InputItem(
+      id = "tab-max-width",
+      label = "Tab Max Width",
+      hint = s"Cells, the widest a tab may be (${TabMaxWidth.Min}-${TabMaxWidth.Max})",
+      currentValue = tabMaxWidthValue,
+      kind = CommandSurfaceItem.InputKind.Numeric(decimal = false),
+      parse = text =>
+        text.toIntOption
+          .filter(value => value >= TabMaxWidth.Min && value <= TabMaxWidth.Max)
+          .map(commandIntentArg =>
+            CommandIntent
+              .Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetTabMaxWidth(commandIntentArg)))
+          ),
+      category = CommandCategory.Settings,
+      defaultValue = Some(TabMaxWidth.Default.toString)
     )
   )
 

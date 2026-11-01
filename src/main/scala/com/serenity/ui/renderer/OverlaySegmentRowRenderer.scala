@@ -92,7 +92,8 @@ object OverlaySegmentRowRenderer:
             defaultForeground,
             defaultBackground,
             font,
-            highlightRadiusPx = if segment.selected then row.segmentHighlightRadiusPx else 0
+            highlightRadiusPx = if segment.selected then row.segmentHighlightRadiusPx else 0,
+            glyphInsetPx = row.segmentInsetPx
           )
           val afterCell = cursorX + cellWidth
           val afterSeparator =
@@ -259,45 +260,42 @@ object OverlaySegmentRowRenderer:
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
     font: Font,
-    highlightRadiusPx: Int = 0
+    highlightRadiusPx: Int = 0,
+    glyphInsetPx: Double = 0.0
   ): Unit =
     val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
     val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
     val text        = segment.text.take(math.max(0, width - iconWidth - iconGap))
     val renderWidth = iconWidth + iconGap + text.length
-    val leftPad     = math.max(0, (width - renderWidth) / 2)
-    val renderX     = x + leftPad
-    // A selected tab in a rounded strip is a pill: the fill is a rounded rectangle a cell wider than the title each
-    // side, drawn first, so the title's own square fill sits inside it and no glyph is cut by a corner.
-    if highlightRadiusPx > 0 then
-      val padLeft  = leftPad.min(1)
-      val padRight = (width - leftPad - renderWidth).max(0).min(1)
-      val pill = segment.backgroundColor
-        .getOrElse(theme.highlighted.background)
-        .withAlpha(defaultBackground.alpha)
-      val _ = surface.panelOutlines.exists(
-        _.fillRoundRect(
-          renderX - padLeft,
-          y,
-          renderWidth + padLeft + padRight,
-          1,
-          RoundedCorners.All,
-          highlightRadiusPx,
-          pill
-        )
+    val renderX     = x + math.max(0, (width - renderWidth) / 2)
+    def paintText(): Unit =
+      renderSegmentText(
+        surface,
+        renderX,
+        y,
+        renderWidth,
+        text,
+        segment,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font
       )
-    renderSegmentText(
-      surface,
-      renderX,
-      y,
-      renderWidth,
-      text,
-      segment,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font
-    )
+    // A selected tab in a rounded strip is a pill over its whole cell, so its fill and its title's own square fill
+    // are cut to the same arcs. The glyph pass is shifted right by the text inset, and the cell is not: the pill is
+    // drawn back at the cell's true edges and only the text is moved in.
+    surface.panelOutlines.filter(_ => highlightRadiusPx > 0) match
+      case Some(outlines) =>
+        val pill = segment.backgroundColor
+          .getOrElse(theme.highlighted.background)
+          .withAlpha(defaultBackground.alpha)
+        surface.pixels.withPixelTranslation(-glyphInsetPx, 0.0) {
+          outlines.withRoundRectClip(x, y, width, 1, RoundedCorners.All, highlightRadiusPx) {
+            val _ = outlines.fillRoundRect(x, y, width, 1, RoundedCorners.All, highlightRadiusPx, pill)
+            surface.pixels.withPixelTranslation(glyphInsetPx, 0.0)(paintText())
+          }
+        }
+      case None => paintText()
 
   def renderSegmentText(
     surface: RenderSurface,

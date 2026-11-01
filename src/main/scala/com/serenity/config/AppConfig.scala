@@ -226,6 +226,9 @@ final case class AppConfig(
   def withTabStrip(mode: TabStripMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(tabStrip = mode))
 
+  def withTabMaxWidth(value: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(tabMaxWidth = value))
+
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(wordWrapEnabled = enabled))
