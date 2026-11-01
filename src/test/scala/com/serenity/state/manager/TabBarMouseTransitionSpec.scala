@@ -70,7 +70,8 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
   it should "open a new tab from the trailing affordance" in {
     val state = twoBufferState
 
-    val (result, claimed) = run(state)(TabBarMouseHitTesting.click(MouseClick(stripParts(state)._3.rect.x.toInt + 1, 0), state))
+    val (result, claimed) =
+      run(state)(TabBarMouseHitTesting.click(MouseClick(stripParts(state)._3.rect.x.toInt + 1, 0), state))
 
     claimed shouldBe true
     result.state.persisted.bufferOrder should have size 3
@@ -79,7 +80,10 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
   it should "claim a click on the active tab without changing anything" in {
     val state = twoBufferState
 
-    run(state)(TabBarMouseHitTesting.click(MouseClick(tabCol(state, 0), 0), state)) shouldBe ((ReducerResult(state, Nil), true))
+    run(state)(TabBarMouseHitTesting.click(MouseClick(tabCol(state, 0), 0), state)) shouldBe ((
+      ReducerResult(state, Nil),
+      true
+    ))
   }
 
   it should "decline a click below the strip" in {
@@ -161,6 +165,9 @@ class TabBarMouseTransitionSpec extends AnyFlatSpec with Matchers:
   it should "decline a drag with no session" in {
     val state = twoBufferState
 
-    run(state)(TabBarDragHitTesting.drag(MouseDrag(tabCol(state, 1), 0), state)) shouldBe ((ReducerResult(state, Nil), false))
+    run(state)(TabBarDragHitTesting.drag(MouseDrag(tabCol(state, 1), 0), state)) shouldBe ((
+      ReducerResult(state, Nil),
+      false
+    ))
   }
 end TabBarMouseTransitionSpec

@@ -525,7 +525,8 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
               java.awt.font
                 .TextLayout(label, font, com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext())
                 .getAdvance
-                .toDouble,
+                .toDouble
+          ,
           com.serenity.ui.renderer.SurfaceTextInset.px(AppConfig.default),
           metrics.charWidth.toDouble
         )

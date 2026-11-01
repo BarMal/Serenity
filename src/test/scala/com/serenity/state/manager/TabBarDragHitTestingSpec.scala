@@ -21,8 +21,8 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 46-column viewport, with `BufferId(9)` focused. Ten tabs
-    * do not fit 46 columns, so the strip overflows and its window is centred on the active tab (index 9), which scrolls
+  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 46-column viewport, with `BufferId(9)` focused. Ten tabs do
+    * not fit 46 columns, so the strip overflows and its window is centred on the active tab (index 9), which scrolls
     * the first tabs out: what is painted is the tabs `paintedTabs` lists. An `activeBufferId = None` window would
     * centre on index 0 instead and show the first tabs.
     */
