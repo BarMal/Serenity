@@ -1,7 +1,9 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.nio.file.Paths
+import java.awt.image.BufferedImage
+import java.nio.file.{Files, Paths}
+import javax.imageio.ImageIO
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -98,6 +100,13 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
 
+  private def save(s: Scene): Unit =
+    val image = BufferedImage(s.frame.widthPx, s.frame.heightPx, BufferedImage.TYPE_INT_RGB)
+    for y <- 0 until s.frame.heightPx; x <- 0 until s.frame.widthPx do image.setRGB(x, y, rgb(s.frame, x, y))
+    val directory = Paths.get("target", "test-reports", "panel-text-spacing")
+    Files.createDirectories(directory)
+    val _ = ImageIO.write(image, "png", directory.resolve(s"${getClass.getSimpleName}.png").toFile)
+
   /** The columns, left to right, where the row's pixels differ from the panel's own fill. */
   private def inkColumns(s: Scene, rows: Range): Vector[Int] =
     val left  = (s.panel.x + 1) * metrics.charWidth
@@ -117,6 +126,7 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
 
   "A docked panel's text" should "draw each word as one run of letters, with no gaps inside it" in {
     val s = scene
+    save(s)
     // The title sits on the frame's top edge, so the message is on the first row below it that has any ink.
     val firstInked = (s.panel.y + 1 until s.panel.y + 5).find { row =>
       val rows = row * metrics.lineHeight until (row + 1) * metrics.lineHeight

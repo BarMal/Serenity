@@ -1,7 +1,9 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.nio.file.Paths
+import java.awt.image.BufferedImage
+import java.nio.file.{Files, Paths}
+import javax.imageio.ImageIO
 
 import com.serenity.config.{AppConfig, DockedCornerStyle, PaneHeaderCorners}
 import com.serenity.rope.Balance
@@ -62,6 +64,15 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       newTab: LogicalPixelRect
   )
 
+  private def save(frame: FramePixels, rect: LayoutRect, radius: Int): Unit =
+    val top    = rect.y * metrics.lineHeight
+    val height = rect.height * metrics.lineHeight
+    val image  = BufferedImage(frame.widthPx, height, BufferedImage.TYPE_INT_RGB)
+    for y <- 0 until height; x <- 0 until frame.widthPx do image.setRGB(x, y, frame.rgbAt(x, top + y) & 0xffffff)
+    val directory = Paths.get("target", "test-reports", "tab-strip")
+    Files.createDirectories(directory)
+    val _ = ImageIO.write(image, "png", directory.resolve(s"${getClass.getSimpleName}-r$radius.png").toFile)
+
   private def strip(radius: Int): Strip =
     val base = AppConfig.conventional
     val config = base
@@ -102,6 +113,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .newTabAffordance(entries, rect, Some(tabs(1)))
       .getOrElse(fail("no new-tab region"))
       .rect
+    save(frame, rect, radius)
     Strip(frame, rect, active, newTab)
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
