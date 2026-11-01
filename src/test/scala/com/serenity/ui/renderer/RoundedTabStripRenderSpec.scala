@@ -102,10 +102,25 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   private def stripLeft(s: Strip): Int  = s.rect.x * metrics.charWidth
   private def stripRight(s: Strip): Int = (s.rect.x + s.rect.width) * metrics.charWidth
 
-  /** The active tab's fill colour, read from the open stretch between its title and its close glyph. */
+  /** The strip's own fill: the colour most of its pixels have. */
+  private def stripBackground(s: Strip): Int =
+    val colours = for y <- bandOf(s); x <- stripLeft(s) until stripRight(s) yield rgb(s.frame, x, y)
+    colours.groupBy(identity).maxBy(_._2.size)._1
+
+  /** The active tab's fill: the commonest colour across the tab's span that is not the strip's own. Text ink is a
+    * few pixels of many colours, so a missing fill leaves nothing here to reach the size the fill must have.
+    */
   private def highlight(s: Strip): Int =
-    val x = ((s.activeTab.x + s.activeTab.width * 0.6) * metrics.charWidth).toInt
-    rgb(s.frame, x, bandOf(s).start + bandOf(s).size / 2)
+    val background = stripBackground(s)
+    val from       = (s.activeTab.x * metrics.charWidth).toInt
+    val until      = ((s.activeTab.x + s.activeTab.width) * metrics.charWidth).toInt.min(stripRight(s))
+    val others     = for y <- bandOf(s); x <- from until until yield rgb(s.frame, x, y)
+    val fill       = others.filter(_ != background).groupBy(identity).maxByOption(_._2.size)
+    withClue("no fill other than the strip's own in the active tab: ")(fill should not be empty)
+    val (colour, pixels) = fill.map((c, ps) => (c, ps.size)).getOrElse((background, 0))
+    val needed = 3 * metrics.charWidth * metrics.lineHeight
+    withClue(s"the active tab's fill is only $pixels pixels, under $needed: ")(pixels should be >= needed)
+    colour
 
   /** The smallest box holding every pixel of `color` in the strip, as (left, top, right, bottom). */
   private def boundsOf(s: Strip, color: Int): (Int, Int, Int, Int) =
@@ -114,7 +129,6 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       x <- stripLeft(s) until stripRight(s)
       if rgb(s.frame, x, y) == color
     yield (x, y)
-    withClue("no pixel of the active tab's colour: ")(hits should not be empty)
     (hits.map(_._1).min, hits.map(_._2).min, hits.map(_._1).max, hits.map(_._2).max)
 
   private def cornersOf(b: (Int, Int, Int, Int)): List[(Int, Int)] =
@@ -139,8 +153,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   it should "draw the whole of the trailing + inside the strip" in {
     // At a zero radius the strip's own corners are plain background, so any ink is the glyph.
     val s          = strip(radius = 0)
-    val colours    = for y <- bandOf(s); x <- stripLeft(s) until stripRight(s) yield rgb(s.frame, x, y)
-    val background = colours.groupBy(identity).maxBy(_._2.size)._1
+    val background = stripBackground(s)
     val tail       = stripRight(s) - metrics.charWidth * 4 until stripRight(s)
     val ink        = for y <- bandOf(s); x <- tail if rgb(s.frame, x, y) != background yield (x, y)
     withClue("no ink at the strip's trailing end: ")(ink should not be empty)
