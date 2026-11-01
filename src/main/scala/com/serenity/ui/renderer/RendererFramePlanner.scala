@@ -79,8 +79,7 @@ object RendererFramePlanner:
             uiFont,
             cellMetrics,
             uiMetrics,
-            caches = caches,
-            window = Some(viewportSize)
+            caches = caches
           )
         val panels = FramePanels.of(state, floatContext, scene)
         RendererFloatingPanels.renderFloatingPanels(state, floatContext, Damage.Everything, panels)
