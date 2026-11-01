@@ -25,6 +25,12 @@ enum OverlayRowLayout:
   case Columns
   case PriorityColumns
 
+/** A segment whose text starts `insetCells` in from its cell's left edge, rather than centred, and has `cells` cells of
+  * room. A painter that can measure text cuts a longer one by pixels, ending it in `ellipsis`, so it never reaches the
+  * cells that follow.
+  */
+final case class SegmentTitleFit(insetCells: Int, cells: Int, ellipsis: String)
+
 final case class OverlaySegment(
     text: String,
     selected: Boolean = false,
@@ -35,7 +41,8 @@ final case class OverlaySegment(
     inlineIcon: Option[String] = None,
     inlineIconFontFamily: Option[String] = None,
     trailingSeparator: Boolean = false,
-    allocatedWidth: Option[Int] = None
+    allocatedWidth: Option[Int] = None,
+    titleFit: Option[SegmentTitleFit] = None
 )
 
 final case class OverlayRow(

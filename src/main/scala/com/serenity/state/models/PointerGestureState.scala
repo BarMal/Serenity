@@ -5,8 +5,9 @@ import com.serenity.ui.layout.ScreenPosition
 
 /** Transient mouse/pointer interaction state one grab-bag category of `Runtime` used to hold directly (issue #1693):
   * the editor position currently under the pointer (`hoveredEditorTarget`, written by `EditorMouseTargeting.hover`),
-  * the in-progress tab-bar drag-to-reorder gesture (`tabDragSession`, see `TabDragSession`'s own doc comment), the
-  * scrollbar thumb being held (`scrollbarGrab`, see `ScrollbarGrab`), and the experimental cursor-peek prototype's
+  * the tab under the pointer (`hoveredTab`, written by `MouseHitTesting.recordHoveredTab`, where a frontend that has a
+  * hover shows that tab's close box), the in-progress tab-bar drag-to-reorder gesture (`tabDragSession`, see
+  * `TabDragSession`'s own doc comment), the scrollbar thumb being held (`scrollbarGrab`, see `ScrollbarGrab`), and the experimental cursor-peek prototype's
   * three fields -- `cursorPeekSession` (`CursorPeekDetector`'s hold-vs-double-tap timing state), `cursorPeekAnchor`
   * (the cursor position frozen at the moment a peek begins), and `cursorPeekResolvedAnchor` (that position resolved to
   * an actual on-screen position exactly once, by `CursorPeekAnchorResolution`). `TabDragSession`'s doc comment already
@@ -19,6 +20,7 @@ import com.serenity.ui.layout.ScreenPosition
   */
 final case class PointerGestureState(
     hoveredEditorTarget: Option[HoveredEditorTarget] = None,
+    hoveredTab: Option[BufferId] = None,
     cursorPeekSession: CursorPeekState = CursorPeekState.empty,
     cursorPeekAnchor: Option[CursorPosition] = None,
     cursorPeekResolvedAnchor: Option[ScreenPosition] = None,

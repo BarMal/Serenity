@@ -180,8 +180,9 @@ object TextOverlayRenderer:
           font = font,
           cellMetrics = cellMetrics,
           advances = advances,
-          // Shifted right by the inset, the new-tab glyph at the strip's last cell would run off the strip.
-          textInsetPx = if isNewTab(box) then 0.0 else textInsetPx,
+          // Shifted right by the inset, the new-tab glyph at the strip's last cell would run off the strip, and an
+          // inactive tab's `x`, which takes that tab's last padding cell, would run past the tab into the gap.
+          textInsetPx = if isNewTab(box) || isPaddingCellClose(box) then 0.0 else textInsetPx,
           // `rect.y` may carry a fractional row offset (a sub-row `itemGapRows` gap) that `y` above already rounded
           // away -- pixel positioning must come from the box's own exact offset, not from that rounded cell row, or a
           // fractional gap renders as no gap at all.
@@ -203,6 +204,11 @@ object TextOverlayRenderer:
   private def isCloseBox(box: SurfacePaintBox): Boolean =
     box.focusId.exists(id => TabBarSurfaceComposition.closeBufferIdOf(id).nonEmpty)
 
+  /** A close box that is not the active tab's: it is drawn in its tab's padding cell, with nothing after it to spill
+    * into.
+    */
+  private def isPaddingCellClose(box: SurfacePaintBox): Boolean = isCloseBox(box) && !box.selected
+
   private def isNewTab(box: SurfacePaintBox): Boolean =
     box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId)
 
@@ -219,7 +225,7 @@ object TextOverlayRenderer:
     OverlayRow(
       plainText = text,
       segmentHighlightRadiusPx = highlightRadiusPx,
-      segmentInsetPx = if highlightRadiusPx > 0 then textInsetPx else 0.0,
+      segmentInsetPx = textInsetPx,
       selected = box.selected,
       cursorColumn = box.cursorOffset,
       segments =

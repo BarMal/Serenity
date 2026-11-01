@@ -177,8 +177,8 @@ final private[manager] class MouseHitTesting(
     )
 
   private def hoverTarget(move: MouseMove, state: AppState): IO[PointerHitTarget] =
-    def clearHover(target: PointerHitTarget): IO[PointerHitTarget] =
-      commit(EditorMouseTargeting.hover(None)).as(target)
+    def clearHover(target: PointerHitTarget, tab: Option[BufferId] = None): IO[PointerHitTarget] =
+      commit(EditorMouseTargeting.hover(None)).flatMap(_ => commit(MouseHitTesting.recordHoveredTab(tab))).as(target)
     contextMenu.handleContextMenuMouseHover(move, state).flatMap {
       case true => clearHover(PointerHitTarget.Control)
       case false =>
@@ -196,7 +196,8 @@ final private[manager] class MouseHitTesting(
                     .orElse(
                       pinnedPanel.resizeHandleAt(move, state)
                     ) match
-                    case Some(target) => clearHover(target)
+                    case Some(target) =>
+                      clearHover(target, TabBarMouseHitTesting.hoveredTabAt(state, move.col, move.row))
                     case None =>
                       pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
                         case true => clearHover(PointerHitTarget.Control)
@@ -224,6 +225,16 @@ private[manager] object MouseHitTesting:
         state.copy(runtime =
           state.runtime.copy(pointerGesture = pointer.copy(activeGesture = Some(gesture), scrollbarGrab = grab))
         )
+    )
+
+  /** The tab under the pointer, which a frontend with a hover shows the close box of. Leaves `state` untouched when it
+    * is already the hovered one, so only a pointer that crosses from one tab to another changes anything.
+    */
+  def recordHoveredTab(tab: Option[BufferId]): Transition[Unit] =
+    Transition.modify(state =>
+      val gesture = state.runtime.pointerGesture
+      if gesture.hoveredTab == tab then state
+      else state.copy(runtime = state.runtime.copy(pointerGesture = gesture.copy(hoveredTab = tab)))
     )
 
   def recordPointerShape(shape: PointerShape, underModal: Boolean = false): Transition[Unit] =

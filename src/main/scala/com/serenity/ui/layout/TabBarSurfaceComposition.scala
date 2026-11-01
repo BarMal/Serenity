@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.TabMaxWidth
+import scala.annotation.tailrec
+
 import com.serenity.state.models.{BufferId, TabListEntry}
 
 /** Declarative composition plan for the always-visible tab strip (issue #1074 epic, #1075: Foundation / #1076: Render)
@@ -29,16 +30,18 @@ object TabBarSurfaceComposition:
 
   private val CloseFocusIdPrefix = "tab-bar-close-"
 
-  /** Columns reserved at a tab's right edge for its close (x) affordance's click target (issue #1078) -- kept apart
-    * from `forTabBar`'s own per-tab hit region (used to switch, #1077) rather than folded into the same list, so a
-    * close click and a switch click always resolve from two disjoint region sets instead of one overloaded one.
+  /** Columns of the active tab's close (x) affordance (issue #1078): a blank and the `x`, kept apart from `forTabBar`'s
+    * own per-tab hit region (used to switch, #1077) so a close click and a switch click always resolve from two
+    * disjoint region sets. Squeezed, the blank goes and the region is the `x` alone.
     */
-  private val CloseHitWidth = 2
+  private val ActiveCloseCells = 2
 
-  /** Close (x) affordance glyph, following the same "leading space, glyph flush against the region's trailing edge"
-    * convention [[NewTabGlyph]] uses for its own 2-column affordance.
+  private val SnugCloseCells = 1
+
+  /** The close glyph for a region of that width, following the same "leading space, glyph flush against the region's
+    * trailing edge" convention [[NewTabGlyph]] uses for its own 2-column affordance.
     */
-  private val CloseGlyph = " x"
+  private def closeGlyph(cells: Int): String = if cells >= ActiveCloseCells then " x" else "x"
 
   def closeFocusId(bufferId: BufferId): SurfaceFocusId = SurfaceFocusId(s"$CloseFocusIdPrefix${bufferId.value}")
 
@@ -61,8 +64,8 @@ object TabBarSurfaceComposition:
   private val NewTabGlyph = " +"
 
   /** The width `allocate` should split across `entries`, with [[NewTabAffordanceWidth]] already carved off the strip's
-    * trailing edge for the new-tab affordance -- shared by `forTabBar` and `closeAffordances` so both keep deriving tab
-    * cells from the exact same reduced width.
+    * trailing edge for the new-tab affordance -- shared by every entry point so all keep deriving tab cells from the
+    * exact same reduced width.
     */
   private def tabsAvailableWidth(rect: LayoutRect): Int = math.max(0, rect.width - NewTabAffordanceWidth)
 
@@ -77,32 +80,38 @@ object TabBarSurfaceComposition:
     entries: List[TabListEntry],
     rect: LayoutRect,
     activeBufferId: Option[BufferId] = None,
-    maxTabWidth: Int = DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): Option[SurfaceHitRegion] =
-    if entries.isEmpty then None
-    else
-      val layout    = layOut(entries, activeBufferId, rect, maxTabWidth)
-      val rightEdge = rect.x + rect.width - NewTabAffordanceWidth
-      val afterTabs = layout.positions.lastOption.map((start, width) => start + width)
-      val x =
-        if layout.hiddenCount > 0 then rightEdge
-        else afterTabs.fold(rightEdge)(end => math.min(end, rightEdge))
-      Some(
-        SurfaceHitRegion(
-          rect = LogicalPixelRect(
-            x.toDouble,
-            rect.y.toDouble,
-            NewTabAffordanceWidth.toDouble,
-            math.min(1.0, rect.height.toDouble)
-          ),
-          focusId = NewTabFocusId,
-          actionId = Some(SurfaceActionId(NewTabFocusId.value)),
-          semanticLabel = "New tab"
-        )
-      )
+    if entries.isEmpty then None else Some(newTabRegion(layOut(entries, activeBufferId, rect, settings), rect))
 
-  /** One tab's resolved geometry: the width allocated to it and its (possibly truncated) display title. */
-  final case class TabAllocation(entry: TabListEntry, allocatedWidth: Int, displayTitle: String)
+  private def newTabRegion(layout: TabBarLayout, rect: LayoutRect): SurfaceHitRegion =
+    val rightEdge = rect.x + rect.width - NewTabAffordanceWidth
+    val afterTabs = layout.positions.lastOption.map((start, width) => start + width)
+    val x =
+      if layout.hiddenCount > 0 then rightEdge
+      else afterTabs.fold(rightEdge)(end => math.min(end, rightEdge))
+    SurfaceHitRegion(
+      rect = LogicalPixelRect(
+        x.toDouble,
+        rect.y.toDouble,
+        NewTabAffordanceWidth.toDouble,
+        math.min(1.0, rect.height.toDouble)
+      ),
+      focusId = NewTabFocusId,
+      actionId = Some(SurfaceActionId(NewTabFocusId.value)),
+      semanticLabel = "New tab"
+    )
+
+  /** One tab's resolved geometry: the width allocated to it, its (possibly truncated) display title, whether it is the
+    * active tab (which carries a close box), and whether that close box was squeezed.
+    */
+  final case class TabAllocation(
+      entry: TabListEntry,
+      allocatedWidth: Int,
+      displayTitle: String,
+      active: Boolean = false,
+      snug: Boolean = false
+  )
 
   /** Columns each inter-tab gap consumes beyond the tabs' own allocated widths: one for the separator glyph
     * `OverlaySegmentRowRenderer.renderCompactDistributedRow` draws, and one more for the blank column its cursor walk
@@ -113,126 +122,129 @@ object TabBarSurfaceComposition:
 
   val PaddingCells = 1
 
-  /** Cells a tab spends on its own chrome around the title: a cell of padding either side, and the close box between
-    * the title and the right padding (the close box's blank column and its `x`).
+  /** A tab's chrome around its title. An inactive tab is a cell of padding either side. The active tab adds its close
+    * box between the title and the right padding: a blank and the `x`, or the `x` alone once squeezed. An inactive
+    * tab's `x`, when shown, takes the right padding cell it already has.
     */
-  private val ChromeCells = PaddingCells + CloseHitWidth + PaddingCells
+  final private case class Chrome(active: Boolean, snug: Boolean):
+    def closeCells: Int = if !active then 0 else if snug then SnugCloseCells else ActiveCloseCells
+    def cells: Int      = 2 * PaddingCells + closeCells
 
-  /** The widest a tab is unless the setting says otherwise: a title longer than what is left after [[ChromeCells]] is
-    * cut with an ellipsis. Matches the `editor.tab_max_width` default.
+  final private case class Tab(entry: TabListEntry, label: String, active: Boolean)
+
+  private def tabsOf(entries: List[TabListEntry], activeBufferId: Option[BufferId]): List[Tab] =
+    entries.map(entry => Tab(entry, labelFor(entry), activeBufferId.contains(entry.bufferId)))
+
+  /** What a tab wants: its title and its chrome, never more than the maximum (or its own floor, if that is wider). */
+  private def naturalWidth(tab: Tab, snug: Boolean, settings: TabBarSettings): Int =
+    val chrome = Chrome(tab.active, snug).cells
+    math.min(
+      chrome + settings.measure.cells(tab.label),
+      math.max(settings.maxTabWidth, chrome + settings.measure.minTitleCells)
+    )
+
+  /** The narrowest a tab is squeezed to, before tabs are dropped from view: its chrome (close box squeezed) and the
+    * title cells below which a cut title no longer leaves a legible fragment (issue #1081). A tab whose own title is
+    * shorter keeps its natural width.
     */
-  val DefaultMaxTabWidth: Int = TabMaxWidth.Default
+  private def floorWidth(tab: Tab, settings: TabBarSettings): Int =
+    math.min(naturalWidth(tab, snug = true, settings), Chrome(tab.active, snug = true).cells + settings.measure.minTitleCells)
 
-  /** Cells of title kept when a tab is squeezed as far as it goes: one letter and "...", the shortest cut that still
-    * names a tab.
-    */
-  private val MinTitleCells = 4
-
-  /** Narrowest a tab is ever squeezed to, before tabs are dropped from view rather than squeezed further (issue #1081)
-    * -- the title cells below which `truncate`'s own ellipsis convention no longer leaves a legible fragment, plus
-    * [[ChromeCells]]. A tab whose own title is shorter than that keeps its natural width.
-    */
-  private val MinTabWidth = MinTitleCells + ChromeCells
-
-  /** What a tab wants: its label and [[ChromeCells]], never more than `maxTabWidth`. */
-  private def naturalWidth(entry: TabListEntry, maxTabWidth: Int): Int =
-    math.min(labelFor(entry).length + ChromeCells, math.max(maxTabWidth, MinTabWidth))
-
-  /** Size each tab to its content (a cell of padding, the title, the close box, a cell of padding), up to
-    * `maxTabWidth`, reserving [[GapColumns]] per inter-tab gap out of `availableWidth`. When the tabs want more than
-    * fits, only the widest are cut, to the widest common width that fits, so short tabs keep their own width (see
-    * [[fitWidths]]); each cut label (dirty glyph included) is truncated to the title room its tab has left, following
-    * the same `text.take(width - 3) + "..."` ellipsis convention `RendererPaneChrome.renderHeader` already uses for a
-    * pane's own buffer title.
+  /** Size each tab to its content, up to the maximum width, reserving [[GapColumns]] per inter-tab gap out of
+    * `availableWidth`. When the tabs want more than fits: first the active tab's close box is squeezed, then only the
+    * widest tabs are cut, to the widest common width that fits (see [[fitWidths]]), never below a floor. Each cut label
+    * (dirty glyph included) is cut to the title room its tab has left, ending in the measure's ellipsis.
     */
   def allocate(
     entries: List[TabListEntry],
     availableWidth: Int,
-    maxTabWidth: Int = DefaultMaxTabWidth
+    activeBufferId: Option[BufferId] = None,
+    settings: TabBarSettings = TabBarSettings.Default
   ): List[TabAllocation] =
     if entries.isEmpty then Nil
     else
+      val tabs   = tabsOf(entries, activeBufferId)
       val budget = math.max(0, availableWidth - (entries.size - 1) * GapColumns)
-      val widths = fitWidths(entries.map(naturalWidth(_, maxTabWidth)), budget)
-      entries.zip(widths).map { (entry, width) =>
-        TabAllocation(entry, width, truncate(labelFor(entry), width - ChromeCells))
+      val roomy  = tabs.map(naturalWidth(_, snug = false, settings))
+      val tight  = tabs.map(naturalWidth(_, snug = true, settings))
+      val (widths, snug) =
+        if roomy.sum <= budget then (roomy, false)
+        else if tight.sum <= budget then (tight, true)
+        else (fitWidths(tight, tabs.map(floorWidth(_, settings)), budget), true)
+      tabs.zip(widths).map { (tab, width) =>
+        val room = math.max(1, width - Chrome(tab.active, snug).cells)
+        TabAllocation(tab.entry, width, settings.measure.fit(tab.label, room), tab.active, snug)
       }
 
-  /** `wanted` widths made to fit `budget`. Fitting already, they are left alone. Otherwise every tab wider than a
-    * common cap is cut to it, the cap being the widest (never under [[MinTabWidth]]) at which the tabs fit; the cells
-    * left over go to the leftmost tabs that were cut. If not even the floor fits, the budget is shared out evenly and
-    * no tab gets less than one column.
+  /** `wanted` widths made to fit `budget`. Every tab wider than a common cap is cut to it, never below its own floor,
+    * the cap being the widest at which the tabs fit; the cells left over go to the leftmost tabs that were cut. If not
+    * even the floors fit, the budget is shared out evenly and no tab gets less than one column.
     */
-  private def fitWidths(wanted: List[Int], budget: Int): List[Int] =
-    def cutTo(cap: Int): List[Int] = wanted.map(math.min(_, cap))
-    if wanted.sum <= budget then wanted
-    else if cutTo(MinTabWidth).sum > budget then
+  private def fitWidths(wanted: List[Int], floors: List[Int], budget: Int): List[Int] =
+    def at(cap: Int): List[Int] = wanted.zip(floors).map((width, floor) => math.max(floor, math.min(width, cap)))
+    if floors.sum > budget then
       val share = budget / wanted.size
       val extra = budget % wanted.size
       List.tabulate(wanted.size)(index => math.max(1, share + (if index < extra then 1 else 0)))
     else
-      val widest    = wanted.foldLeft(MinTabWidth)(math.max)
-      val cap       = (MinTabWidth to widest).reverseIterator.find(cutTo(_).sum <= budget).getOrElse(MinTabWidth)
-      val spare     = budget - cutTo(cap).sum
-      val getsSpare = wanted.indices.filter(wanted(_) > cap).take(spare).toSet
-      cutTo(cap).zipWithIndex.map((width, index) => if getsSpare(index) then width + 1 else width)
+      val widest = wanted.foldLeft(0)(math.max)
+      val cap    = Iterator.range(widest, -1, -1).find(at(_).sum <= budget).getOrElse(0)
+      val fitted = at(cap)
+      val spare  = budget - fitted.sum
+      val cut    = wanted.zip(fitted).zipWithIndex.collect { case ((want, got), index) if want > got => index }.take(spare).toSet
+      fitted.zipWithIndex.map((width, index) => if cut(index) then width + 1 else width)
 
   private def labelFor(entry: TabListEntry): String =
     if entry.isDirty then s"${entry.title}$DirtyGlyph" else entry.title
-
-  private def truncate(text: String, width: Int): String =
-    val maxWidth = math.max(1, width)
-    if text.length <= maxWidth then text
-    else if maxWidth <= 3 then text.take(maxWidth)
-    else text.take(maxWidth - 3) + "..."
 
   /** Columns reserved for the trailing "+N" overflow marker (issue #1081), painted as one extra, non-interactive
     * `OverlaySegment` appended after the visible tabs -- large enough for a two- or three-digit hidden count.
     */
   private val OverflowIndicatorWidth = 4
 
-  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window sized
-    * to what fits at [[MinTabWidth]], centred on the active tab so it is never scrolled out of view. Reachable hidden
-    * tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList` overlay
+  /** The visible subset of `entries` and how many are hidden (issue #1081). A contiguous, order-preserving window of the
+    * tabs that fit at their floors, grown from the active tab outwards so it is never scrolled out of view. Reachable
+    * hidden tabs are not this composition's concern: the existing keyboard-toggled `SurfaceContent.TabList` overlay
     * (`TabListContent.build`, `AppEventReducer.toggleTabList`) already lists every open buffer regardless of strip
     * width, so overflow here does not need its own dropdown/menu affordance to keep hidden tabs reachable.
     */
   final case class VisibleTabWindow(visible: List[TabListEntry], hiddenCount: Int)
 
-  /** Largest number of tabs that fit at [[MinTabWidth]] each, [[GapColumns]] apart, never less than one -- mirrors
-    * `allocate`'s own "never allocate less than one column" floor.
-    */
-  private def maxVisibleCount(availableWidth: Int): Int =
-    math.max(1, (availableWidth + GapColumns) / (MinTabWidth + GapColumns))
-
-  /** Whether every tab fits at its narrowest: a tab wanting less than [[MinTabWidth]] needs no more than it wants. */
-  private def allFit(entries: List[TabListEntry], availableWidth: Int, maxTabWidth: Int): Boolean =
-    entries.map(naturalWidth(_, maxTabWidth).min(MinTabWidth)).sum + (entries.size - 1) * GapColumns <= availableWidth
-
   def visibleWindow(
     entries: List[TabListEntry],
     activeBufferId: Option[BufferId],
     availableWidth: Int,
-    maxTabWidth: Int = DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): VisibleTabWindow =
     if entries.isEmpty then VisibleTabWindow(Nil, 0)
-    else if allFit(entries, availableWidth, maxTabWidth) then VisibleTabWindow(entries, 0)
     else
-      val contentWidthForTabs = math.max(0, availableWidth - OverflowIndicatorWidth - GapColumns)
-      val visibleCount        = math.min(entries.size, maxVisibleCount(contentWidthForTabs))
-      val activeIndex = activeBufferId
-        .map(id => entries.indexWhere(_.bufferId == id))
-        .filter(_ >= 0)
-        .getOrElse(0)
-      val maxStart = entries.size - visibleCount
-      val ideal    = activeIndex - (visibleCount - 1) / 2
-      val start    = math.max(0, math.min(ideal, maxStart))
-      VisibleTabWindow(entries.slice(start, start + visibleCount), entries.size - visibleCount)
+      val floors = tabsOf(entries, activeBufferId).map(floorWidth(_, settings)).toVector
+      if floors.sum + (entries.size - 1) * GapColumns <= availableWidth then VisibleTabWindow(entries, 0)
+      else
+        val content = math.max(0, availableWidth - OverflowIndicatorWidth - GapColumns)
+        val activeIndex = activeBufferId
+          .map(id => entries.indexWhere(_.bufferId == id))
+          .filter(_ >= 0)
+          .getOrElse(0)
 
-  /** One resolved layout pass shared by `forTabBar` and `closeAffordances` (issue #1081): the visible tabs' own
-    * allocations and positions, plus how many tabs the window left hidden. Reserves [[OverflowIndicatorWidth]] +
-    * [[GapColumns]] from `rect.width` before allocating the visible tabs whenever any are hidden, so the "+N" marker
-    * `forTabBar` paints always has room within `rect` alongside them.
+        // Grows the window one tab at a time, towards the side that is shorter so it stays centred on the active tab,
+        // and to the other side where that one has no tab left or no room.
+        @tailrec def grow(low: Int, high: Int, used: Int): (Int, Int) =
+          def fits(index: Int): Boolean = used + GapColumns + floors(index) <= content
+          val canLeft                    = low > 0 && fits(low - 1)
+          val canRight                   = high < floors.size - 1 && fits(high + 1)
+          val preferLeft                 = activeIndex - low <= high - activeIndex
+          if canLeft && (preferLeft || !canRight) then grow(low - 1, high, used + GapColumns + floors(low - 1))
+          else if canRight then grow(low, high + 1, used + GapColumns + floors(high + 1))
+          else (low, high)
+
+        val (low, high) = grow(activeIndex, activeIndex, floors(activeIndex))
+        VisibleTabWindow(entries.slice(low, high + 1), entries.size - (high - low + 1))
+
+  /** One resolved layout pass shared by `forTabBar`, `closeAffordances` and `newTabAffordance` (issue #1081): the
+    * visible tabs' own allocations and positions, plus how many tabs the window left hidden. Reserves
+    * [[OverflowIndicatorWidth]] + [[GapColumns]] from `rect.width` before allocating the visible tabs whenever any are
+    * hidden, so the "+N" marker `forTabBar` paints always has room within `rect` alongside them.
     */
   final private case class TabBarLayout(
       allocations: List[TabAllocation],
@@ -244,14 +256,14 @@ object TabBarSurfaceComposition:
     entries: List[TabListEntry],
     activeBufferId: Option[BufferId],
     rect: LayoutRect,
-    maxTabWidth: Int
+    settings: TabBarSettings
   ): TabBarLayout =
     val availableWidth = tabsAvailableWidth(rect)
-    val window         = visibleWindow(entries, activeBufferId, availableWidth, maxTabWidth)
+    val window         = visibleWindow(entries, activeBufferId, availableWidth, settings)
     val tabsWidth =
       if window.hiddenCount > 0 then math.max(0, availableWidth - OverflowIndicatorWidth - GapColumns)
       else availableWidth
-    val allocations = allocate(window.visible, tabsWidth, maxTabWidth)
+    val allocations = allocate(window.visible, tabsWidth, activeBufferId, settings)
     TabBarLayout(allocations, tabPositions(rect.x, allocations), window.hiddenCount)
 
   /** Resolve the tab strip's paint/hit-test plan for one absolute on-screen `rect`. The row paints as a single
@@ -259,7 +271,7 @@ object TabBarSurfaceComposition:
     * with its own rect, computed by the same left-to-right walk `OverlaySegmentRowRenderer.renderCompactDistributedRow`
     * uses to place segments, so a click resolves to the tab it visually lands on.
     *
-    * Once more tabs are open than fit at `MinTabWidth` (issue #1081), only a contiguous, active-tab-centred window of
+    * Once more tabs are open than fit at their floors (issue #1081), only a contiguous, active-tab-centred window of
     * them is allocated at all -- the rest get neither a paint segment nor a hit region, so a scrolled-out tab is never
     * clickable. A trailing, non-interactive "+N" segment is appended to the paint box (but not to `hitRegions`) so the
     * row still reflects how many tabs are hidden; those tabs stay reachable through the existing
@@ -269,7 +281,7 @@ object TabBarSurfaceComposition:
     entries: List[TabListEntry],
     activeBufferId: Option[BufferId],
     rect: LayoutRect,
-    maxTabWidth: Int = DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): ResolvedSurfaceComposition =
     val bounds = LogicalPixelRect(rect.x.toDouble, rect.y.toDouble, rect.width.toDouble, rect.height.toDouble)
     if entries.isEmpty then
@@ -281,26 +293,26 @@ object TabBarSurfaceComposition:
         focusOrder = Nil
       )
     else
-      val layout      = layOut(entries, activeBufferId, rect, maxTabWidth)
+      val layout      = layOut(entries, activeBufferId, rect, settings)
       val allocations = layout.allocations
       val overflowing = layout.hiddenCount > 0
 
       val tabSegments = allocations.zipWithIndex.map {
         case (allocation, index) =>
-          // The row centres a segment's text in its cell. The two trailing spaces make the title sit a cell in from the
-          // left edge, with the close box's blank, its `x` and a cell of padding after it.
+          val room = allocation.allocatedWidth - Chrome(allocation.active, allocation.snug).cells
           OverlaySegment(
-            text = allocation.displayTitle + " " * (ChromeCells - 2 * PaddingCells),
-            selected = activeBufferId.contains(allocation.entry.bufferId),
+            text = allocation.displayTitle,
+            selected = allocation.active,
             trailingSeparator = index < allocations.size - 1 || overflowing,
-            allocatedWidth = Some(allocation.allocatedWidth)
+            allocatedWidth = Some(allocation.allocatedWidth),
+            titleFit = Some(SegmentTitleFit(PaddingCells, room, settings.measure.ellipsis))
           )
       }
       val overflowSegment =
         if overflowing then
           List(
             OverlaySegment(
-              text = truncate(s"+${layout.hiddenCount}", OverflowIndicatorWidth),
+              text = s"+${layout.hiddenCount}".take(OverflowIndicatorWidth),
               allocatedWidth = Some(OverflowIndicatorWidth)
             )
           )
@@ -318,7 +330,8 @@ object TabBarSurfaceComposition:
       // The new-tab (+) affordance paints as its own plain-text box at its own reserved rect (issue #1080), rather
       // than as another `Distributed` segment of `rowBox` -- it addresses no `BufferId`, so it has no place in a row
       // whose segments are otherwise one-to-one with `entries`.
-      val newTabBox = newTabAffordance(entries, rect, activeBufferId, maxTabWidth).map { region =>
+      val newTabBox = {
+        val region = newTabRegion(layout, rect)
         SurfacePaintBox(
           kind = SurfacePaintKind.Text,
           rect = region.rect,
@@ -329,15 +342,15 @@ object TabBarSurfaceComposition:
         )
       }
 
-      // Each tab's close (x) affordance paints as its own plain-text box at its own reserved rect, the same way
+      // Each revealed close (x) affordance paints as its own plain-text box at its own reserved rect, the same way
       // `newTabBox` does above, rather than as another `Distributed` segment of `rowBox` -- and is derived from
-      // `closeAffordances` itself (not re-walked here) so the painted glyph and its click target can never drift
-      // apart (issue #1078).
-      val closeBoxes = closeAffordances(entries, activeBufferId, rect, maxTabWidth).map { region =>
+      // `closeRegions` itself (not re-walked here) so the painted glyph and its click target can never drift apart
+      // (issue #1078).
+      val closeBoxes = closeRegions(layout, rect, settings.reveal).map { region =>
         SurfacePaintBox(
           kind = SurfacePaintKind.Text,
           rect = region.rect,
-          text = Some(CloseGlyph),
+          text = Some(closeGlyph(region.rect.width.toInt)),
           selected = closeBufferIdOf(region.focusId).exists(activeBufferId.contains),
           focusId = Some(region.focusId),
           actionId = region.actionId,
@@ -359,7 +372,7 @@ object TabBarSurfaceComposition:
       ResolvedSurfaceComposition(
         bounds = bounds,
         intrinsicSize = SurfaceIntrinsicSize(bounds.width, bounds.height),
-        paintBoxes = List(rowBox) ++ newTabBox ++ closeBoxes,
+        paintBoxes = List(rowBox, newTabBox) ++ closeBoxes,
         hitRegions = hitRegions,
         focusOrder = hitRegions.map(_.focusId)
       )
@@ -380,14 +393,52 @@ object TabBarSurfaceComposition:
       }
       ._2
 
-  /** Per-tab close (x) affordance hit regions (issue #1078), one per tab wide enough to leave room for one -- the
-    * rightmost [[CloseHitWidth]] columns of that tab's own cell, from the exact same `layOut` (`allocate` +
-    * `tabPositions`) `forTabBar` uses for its own hit regions -- including its overflow window (issue #1081), so a
-    * scrolled-out tab has no close region either. Deliberately not part of `forTabBar`'s own
-    * `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a switch click (`forTabBar`'s
-    * existing hit regions, issue #1077) always come from two disjoint region sets rather than one overloaded one.
-    * `forTabBar` paints each of these regions' glyph by calling this same method rather than folding it into the shared
-    * `Distributed`-row renderer, so the painted glyph and its click target can never drift apart.
+  /** Where a tab's close box sits, as its first column and width, if it has one to show. The active tab's is the
+    * columns before its right padding. An inactive tab's, when `reveal` asks for it, is that right padding cell itself,
+    * so no tab's width ever depends on it.
+    */
+  private def closeBoxOf(
+    allocation: TabAllocation,
+    startX: Int,
+    width: Int,
+    reveal: CloseReveal
+  ): Option[(Int, Int)] =
+    if allocation.active then
+      val cells = Chrome(allocation.active, allocation.snug).closeCells
+      Option.when(width > cells + PaddingCells)((startX + width - PaddingCells - cells, cells))
+    else
+      val revealed = reveal match
+        case CloseReveal.All               => true
+        case CloseReveal.Hovered(bufferId) => bufferId == allocation.entry.bufferId
+        case CloseReveal.ActiveOnly        => false
+      Option.when(revealed && width >= 3)((startX + width - PaddingCells, PaddingCells))
+
+  private def closeRegions(layout: TabBarLayout, rect: LayoutRect, reveal: CloseReveal): List[SurfaceHitRegion] =
+    layout.allocations.zip(layout.positions).flatMap {
+      case (allocation, (startX, width)) =>
+        closeBoxOf(allocation, startX, width, reveal).map { (closeX, cells) =>
+          val id = closeFocusId(allocation.entry.bufferId)
+          SurfaceHitRegion(
+            rect = LogicalPixelRect(
+              closeX.toDouble,
+              rect.y.toDouble,
+              cells.toDouble,
+              math.min(1.0, rect.height.toDouble)
+            ),
+            focusId = id,
+            actionId = Some(SurfaceActionId(id.value)),
+            semanticLabel = s"Close ${allocation.entry.title}"
+          )
+        }
+    }
+
+  /** Per-tab close (x) affordance hit regions (issue #1078): the active tab's, and those of the tabs `settings.reveal`
+    * asks for, from the exact same `layOut` (`allocate` + `tabPositions`) `forTabBar` uses for its own hit regions --
+    * including its overflow window (issue #1081), so a scrolled-out tab has no close region either. Deliberately not
+    * part of `forTabBar`'s own `ResolvedSurfaceComposition` -- resolved as its own list so a close click (here) and a
+    * switch click (`forTabBar`'s existing hit regions, issue #1077) always come from two disjoint region sets rather
+    * than one overloaded one. `forTabBar` paints each of these regions' glyph by calling the same code, so the painted
+    * glyph and its click target can never drift apart.
     *
     * `activeBufferId` must be the same value passed to `forTabBar` for this same `rect`/`entries`, so both resolve the
     * same visible window under overflow.
@@ -396,24 +447,7 @@ object TabBarSurfaceComposition:
     entries: List[TabListEntry],
     activeBufferId: Option[BufferId],
     rect: LayoutRect,
-    maxTabWidth: Int = DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): List[SurfaceHitRegion] =
     if entries.isEmpty then Nil
-    else
-      val layout = layOut(entries, activeBufferId, rect, maxTabWidth)
-      layout.allocations.zip(layout.positions).collect {
-        case (allocation, (startX, width)) if width > CloseHitWidth + PaddingCells =>
-          val closeX = startX + width - CloseHitWidth - PaddingCells
-          val id     = closeFocusId(allocation.entry.bufferId)
-          SurfaceHitRegion(
-            rect = LogicalPixelRect(
-              closeX.toDouble,
-              rect.y.toDouble,
-              CloseHitWidth.toDouble,
-              math.min(1.0, rect.height.toDouble)
-            ),
-            focusId = id,
-            actionId = Some(SurfaceActionId(id.value)),
-            semanticLabel = s"Close ${allocation.entry.title}"
-          )
-      }
+    else closeRegions(layOut(entries, activeBufferId, rect, settings), rect, settings.reveal)

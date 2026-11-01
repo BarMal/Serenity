@@ -5,7 +5,8 @@ import com.serenity.keystroke.events.MouseClick
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, BufferId, CloseScope, PointerHitTarget, SurfaceContent, TabListEntry}
 import com.serenity.state.reducers.{AppEffect, Transition, WorkflowEffect}
-import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSurfaceComposition}
+import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSettings, TabBarSurfaceComposition}
+import com.serenity.ui.renderer.TabBarLayoutSettings
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
   * resolving a primary click against them into a buffer switch (issue #1077) or, via the trailing new-tab (+)
@@ -23,10 +24,10 @@ private[manager] object TabBarMouseHitTesting:
     rect: LayoutRect,
     col: Double,
     row: Double,
-    maxTabWidth: Int = TabBarSurfaceComposition.DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): Option[BufferId] =
     TabBarSurfaceComposition
-      .forTabBar(entries, activeBufferId, rect, maxTabWidth)
+      .forTabBar(entries, activeBufferId, rect, settings)
       .hitAt(col, row)
       .flatMap(hit => TabBarSurfaceComposition.bufferIdOf(hit.focusId))
 
@@ -51,8 +52,25 @@ private[manager] object TabBarMouseHitTesting:
         case SurfaceContent.TabBar(entries, activeBufferId) => (entries, activeBufferId)
         // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
         case _ => (Nil, None)
-      hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble, state.persisted.config.surfaceConfig.tabMaxWidth)
+      hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble, TabBarLayoutSettings.of(state))
         .filterNot(activeBufferId.contains)
+
+  /** The tab the pointer is over, for a frontend that has a hover to show; `None` in a cell grid, outside the strip and
+    * off every tab. An inactive tab's close box shows while this is that tab.
+    */
+  def hoveredTabAt(state: AppState, col: Int, row: Int): Option[BufferId] =
+    if state.runtime.capabilities.isCellGrid then None
+    else
+      for
+        surface      <- state.tabBarSurface
+        viewportSize <- state.runtime.viewportSize
+        rect         <- LayoutEngine.calculateLayoutWithUI(state, viewportSize).tabBarRect
+        _            <- Option.when(rect.contains(col, row))(())
+        (entries, activeBufferId) <- surface.content match
+          case SurfaceContent.TabBar(entries, activeBufferId) => Some((entries, activeBufferId))
+          case _                                              => None
+        hovered <- hitAt(entries, activeBufferId, rect, col.toDouble, row.toDouble, TabBarLayoutSettings.of(state))
+      yield hovered
 
   /** The pointer target over the tab strip: the default over tabs and gaps, as mainstream editors show, and the hand
     * only on a close button or the new-tab button. `None` outside the strip.
@@ -85,10 +103,10 @@ private[manager] object TabBarMouseHitTesting:
     rect: LayoutRect,
     col: Double,
     row: Double,
-    maxTabWidth: Int = TabBarSurfaceComposition.DefaultMaxTabWidth
+    settings: TabBarSettings = TabBarSettings.Default
   ): Option[BufferId] =
     TabBarSurfaceComposition
-      .closeAffordances(entries, activeBufferId, rect, maxTabWidth)
+      .closeAffordances(entries, activeBufferId, rect, settings)
       .reverse
       .find(_.rect.contains(col, row))
       .flatMap(hit => TabBarSurfaceComposition.closeBufferIdOf(hit.focusId))
@@ -112,7 +130,7 @@ private[manager] object TabBarMouseHitTesting:
         // Unreachable: AppState.tabBarSurface only ever builds SurfaceContent.TabBar.
         case _ => (Nil, None)
       TabBarSurfaceComposition
-        .newTabAffordance(entries, rect, activeBufferId, state.persisted.config.surfaceConfig.tabMaxWidth)
+        .newTabAffordance(entries, rect, activeBufferId, TabBarLayoutSettings.of(state))
         .exists(_.rect.contains(col.toDouble, row.toDouble))
     ).getOrElse(false)
 
@@ -156,7 +174,7 @@ private[manager] object TabBarMouseHitTesting:
         rect,
         col.toDouble,
         row.toDouble,
-        state.persisted.config.surfaceConfig.tabMaxWidth
+        TabBarLayoutSettings.of(state)
       )
     yield bufferId
 

@@ -2,6 +2,7 @@ package com.serenity.ui.accessibility
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.TabBarLayoutSettings
 
 private[accessibility] object AccessibilityTabBar:
 
@@ -37,8 +38,9 @@ private[accessibility] object AccessibilityTabBar:
     rect: LayoutRect,
     state: AppState
   ): List[AccessibleNode] =
-    val maxTabWidth = state.persisted.config.surfaceConfig.tabMaxWidth
-    val composition = TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect, maxTabWidth)
+    // Every tab keeps a close button in the tree, shown or not, so no one is left without a way to close a tab.
+    val settings    = TabBarLayoutSettings.of(state, revealAll = true)
+    val composition = TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect, settings)
     val tabNodes = composition.hitRegions.flatMap { hit =>
       TabBarSurfaceComposition.bufferIdOf(hit.focusId).map { bufferId =>
         val selected = activeBufferId.contains(bufferId)
@@ -53,7 +55,7 @@ private[accessibility] object AccessibilityTabBar:
         )
       }
     }
-    val closeRegions = TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect, maxTabWidth)
+    val closeRegions = TabBarSurfaceComposition.closeAffordances(entries, activeBufferId, rect, settings)
     val closeNodes = closeRegions.flatMap { hit =>
       TabBarSurfaceComposition.closeBufferIdOf(hit.focusId).map { bufferId =>
         AccessibleNode(
@@ -67,7 +69,7 @@ private[accessibility] object AccessibilityTabBar:
         )
       }
     }
-    val newTabRegions = TabBarSurfaceComposition.newTabAffordance(entries, rect, activeBufferId, maxTabWidth)
+    val newTabRegions = TabBarSurfaceComposition.newTabAffordance(entries, rect, activeBufferId, settings)
     val newTabNode = newTabRegions.toList.map { hit =>
       AccessibleNode(
         s"surface:${surfaceId.value}/new-tab",
