@@ -150,8 +150,10 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     val glyph   = ink.filter((x, _) => x >= left)
     val width   = glyph.map(_._1).max - glyph.map(_._1).min + 1
     val height  = glyph.map(_._2).max - glyph.map(_._2).min + 1
-    withClue("the + reaches the strip's edge: ")(glyph.map(_._1).max should be <= stripRight(s) - 3)
-    withClue(s"the + is $width wide and $height tall: ")(width * 10 should be >= height * 7)
+    val raster = bandOf(s).map(y => tail.map(x => if rgb(s.frame, x, y) != background then '#' else '.').mkString)
+    val picture = s"cell ${metrics.charWidth}px, the strip's last four cells:\n${raster.mkString("\n")}\n"
+    withClue(s"the + reaches the strip's edge. $picture")(glyph.map(_._1).max should be <= stripRight(s) - 3)
+    withClue(s"the + is $width wide and $height tall. $picture")(width * 10 should be >= height * 7)
   }
 
 class Java2DRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:
