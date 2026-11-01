@@ -511,9 +511,9 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
     )
-    // A tab is as wide as its label plus a padding cell, a close box and a padding cell: "one" -> 7, "two●" -> 8.
+    // A tab is as wide as its label plus a padding cell, a close box and a padding cell: "one" -> 7, "two ●" -> 9.
     // They fit the 18 columns left of the new-tab affordance (issue #1080), so tab 0 is [0,7) and, after the 2-column
-    // gap, tab 1 is [9,17).
+    // gap, tab 1 is [9,18).
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
@@ -525,13 +525,13 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
     // Each tab's text is its label followed by two spaces that stand for the close box and its padding, centred in the
     // tab: "one  " in 7 columns has 1 column of left padding, so "one" lands at [1,4). The separator glyph sits at
-    // column 7 (the end of that tab), then tab 1 starts at column 9 and "two●  " in 8 columns has 1 column of left
-    // padding, landing at [10,14).
+    // column 7 (the end of that tab), then tab 1 starts at column 9 and "two ●  " in 9 columns has 1 column of left
+    // padding, landing at [10,15).
     val row = surface.getRow(0)
     row.slice(1, 4) shouldBe "one"
     row.charAt(7) shouldBe '│'
     row.slice(10, 13) shouldBe "two"
-    row.charAt(13) shouldBe '●'
+    row.charAt(14) shouldBe '●'
     surface.getBg(1, 0) shouldBe Theme.light.panel.background
     surface.getBg(10, 0) shouldBe Theme.light.highlighted.background
   }

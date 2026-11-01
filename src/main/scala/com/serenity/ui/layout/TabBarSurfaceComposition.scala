@@ -111,7 +111,7 @@ object TabBarSurfaceComposition:
     */
   private val GapColumns = 2
 
-  private val PaddingCells = 1
+  val PaddingCells = 1
 
   /** Cells a tab spends on its own chrome around the title: a cell of padding either side, and the close box between
     * the title and the right padding (the close box's blank column and its `x`).

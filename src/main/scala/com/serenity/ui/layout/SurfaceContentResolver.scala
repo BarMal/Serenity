@@ -47,7 +47,8 @@ final case class OverlayRow(
     segments: List[OverlaySegment] = Nil,
     layout: OverlayRowLayout = OverlayRowLayout.Plain,
     leadingPadding: Int = 0,
-    segmentHighlightRadiusPx: Int = 0
+    segmentHighlightRadiusPx: Int = 0,
+    segmentInsetPx: Double = 0.0
 )
 
 final case class ResolvedSurfaceContent(

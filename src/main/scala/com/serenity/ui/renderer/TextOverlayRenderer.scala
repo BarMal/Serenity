@@ -166,8 +166,8 @@ object TextOverlayRenderer:
         val x     = math.round(rect.x).toInt
         val y     = math.round(rect.y).toInt
         val width = math.round(rect.width).toInt
-        val row   = overlayRowFor(box, text, highlightRadiusPx)
-        OverlayRowPainter.renderRow(
+        val row   = overlayRowFor(box, text, highlightRadiusPx, textInsetPx)
+        def paint(): Unit = OverlayRowPainter.renderRow(
           surface,
           x,
           y,
@@ -188,8 +188,20 @@ object TextOverlayRenderer:
           pixelY = Some(math.round(rect.y * cellMetrics.lineHeight).toInt),
           pixelHeight = Some(math.max(1, math.round(rect.height).toInt) * cellMetrics.lineHeight)
         )
+        if box.selected && highlightRadiusPx > 0 && isCloseBox(box) then
+          // The active tab's close box fills a square, which would poke out past the pill's rounded right corners.
+          val tabEnd = RoundedCorners(topLeft = false, topRight = true, bottomRight = true, bottomLeft = false)
+          surface.panelOutlines.fold(paint())(
+            _.withRoundRectClip(x, y, width + TabBarSurfaceComposition.PaddingCells, 1, tabEnd, highlightRadiusPx)(
+              paint()
+            )
+          )
+        else paint()
       }
     }
+
+  private def isCloseBox(box: SurfacePaintBox): Boolean =
+    box.focusId.exists(id => TabBarSurfaceComposition.closeBufferIdOf(id).nonEmpty)
 
   private def isNewTab(box: SurfacePaintBox): Boolean =
     box.focusId.contains(TabBarSurfaceComposition.NewTabFocusId)
@@ -197,11 +209,17 @@ object TextOverlayRenderer:
   /** A box with a tone but no segments of its own paints as one implicit segment carrying that tone, so the tone goes
     * through the same selected-wins colour rules as any segment's. Explicit segments keep their own tones.
     */
-  private def overlayRowFor(box: SurfacePaintBox, text: String, highlightRadiusPx: Int): OverlayRow =
+  private def overlayRowFor(
+    box: SurfacePaintBox,
+    text: String,
+    highlightRadiusPx: Int,
+    textInsetPx: Double
+  ): OverlayRow =
     val tonedWhole = box.segments.isEmpty && box.tone != OverlayTone.Normal
     OverlayRow(
       plainText = text,
       segmentHighlightRadiusPx = highlightRadiusPx,
+      segmentInsetPx = if highlightRadiusPx > 0 then textInsetPx else 0.0,
       selected = box.selected,
       cursorColumn = box.cursorOffset,
       segments =
