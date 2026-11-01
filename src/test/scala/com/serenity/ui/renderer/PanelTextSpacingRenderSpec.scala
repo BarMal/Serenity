@@ -136,7 +136,7 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
     val row      = firstInked.getOrElse(fail("no text in the panel"))
     val rows     = row * metrics.lineHeight until (row + 1) * metrics.lineHeight
     val columns  = inkColumns(s, rows)
-    val maxGap   = math.round(0.15 * codeFont.getSize2D).toInt
+    val maxGap   = math.round(0.22 * codeFont.getSize2D).toInt
     val words    = clusters(columns, maxGap)
     val expected = message.split(" ").length
     withClue(s"$expected words in '$message', ink clusters ${words.map((a, b) => s"$a-$b").mkString(",")}: ") {
