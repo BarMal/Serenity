@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.ChromeOn
 import com.serenity.keystroke.events.{MouseClick, MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState

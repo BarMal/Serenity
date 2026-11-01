@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, StatusLinePlacement, TextAreaInsets}
+import com.serenity.config.{StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*

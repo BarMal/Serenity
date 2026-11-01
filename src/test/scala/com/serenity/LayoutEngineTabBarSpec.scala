@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.{AppConfig, TabStripMode}
+import com.serenity.config.TabStripMode
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*

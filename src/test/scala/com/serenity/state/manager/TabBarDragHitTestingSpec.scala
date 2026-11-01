@@ -1,6 +1,5 @@
 package com.serenity.state.manager
 
-import com.serenity.ChromeOn
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.keystroke.events.{MouseDrag, MousePress}
