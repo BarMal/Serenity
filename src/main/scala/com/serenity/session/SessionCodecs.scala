@@ -9,6 +9,7 @@ import com.serenity.config.*
 import com.serenity.lsp.config.{LspServerOverride, LspUserConfig}
 import com.serenity.richtext.*
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
+import com.serenity.ui.fonts.FontSizes
 import com.serenity.ui.theme.{ColorFormat, DropCapColour}
 import io.circe.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
@@ -46,6 +47,10 @@ given Decoder[TextScaleMode] = Decoder.decodeString.emap { value =>
     case other                       => Left(s"Unknown text scale mode: $other")
 }
 
+given Encoder[FontSizes] = deriveEncoder
+
+given Decoder[FontSizes] = deriveDecoder
+
 given Encoder[FontConfig] = deriveEncoder
 
 given Decoder[FontConfig] = Decoder.instance { cursor =>
@@ -64,6 +69,7 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     textLigatures    <- cursor.getOrElse[Boolean]("textLigatures")(legacyLigatures)
     uiLigatures      <- cursor.getOrElse[Boolean]("uiLigatures")(FontConfig().uiLigatures)
     fallbackFamilies <- cursor.getOrElse[List[String]]("fallbackFamilies")(FontConfig().fallbackFamilies)
+    previousSizes    <- cursor.getOrElse[Option[FontSizes]]("previousSizes")(None)
   yield FontConfig(
     codeFontFamily = codeFontFamily,
     textFontFamily = textFontFamily,
@@ -76,7 +82,8 @@ given Decoder[FontConfig] = Decoder.instance { cursor =>
     enableLigatures = codeLigatures,
     textLigatures = textLigatures,
     uiLigatures = uiLigatures,
-    fallbackFamilies = fallbackFamilies
+    fallbackFamilies = fallbackFamilies,
+    previousSizes = previousSizes.map(_.clamped)
   )
 }
 
