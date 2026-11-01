@@ -3,8 +3,8 @@
 # A: the cold full frame as in #2382. B: the same cold frame (layout and all other caches fresh) but with Skia's fonts and
 # shapings already warm from an earlier frame of the same document. B minus A is the most that pre-shaping can return.
 set -euo pipefail
-ART="${1:?artifact dir}"; OUT="${2:?out dir}"; shift 2 || true
-ORDER=("${@:-A B B A}"); read -r -a ORDER <<<"${ORDER[*]}"
+ART="${1:?artifact dir}"; OUT="${2:?out dir}"; shift 2
+if [[ $# -gt 0 ]]; then ORDER=("$@"); else ORDER=(A B B A); fi
 mkdir -p "$OUT"; i=0
 for arm in "${ORDER[@]}"; do
   i=$((i+1)); d="$OUT/run$i-$arm"; mkdir -p "$d/home"
