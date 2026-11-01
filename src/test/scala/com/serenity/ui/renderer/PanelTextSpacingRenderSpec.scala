@@ -19,9 +19,9 @@ import org.scalatest.matchers.should.Matchers
 
 /** A docked panel draws its text in the proportional UI font, so a word must come out as one run of letters, not as
   * letters set on the monospace cell grid one by one, which leaves gaps inside words ("outl i ne") and lets a wide
-  * letter's cell wipe the one before it ("problens"). The panel is wide enough to show the empty Diagnostics summary
-  * "0 error | 0 warning | 0 info" whole, so its first content row has exactly eight words, which show up as eight
-  * clusters of ink.
+  * letter's cell wipe the one before it ("problens"). The panel is wide enough to show the empty Diagnostics summary "0
+  * error | 0 warning | 0 info" whole, so its first content row has exactly eight words, which show up as eight clusters
+  * of ink.
   */
 abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
 
