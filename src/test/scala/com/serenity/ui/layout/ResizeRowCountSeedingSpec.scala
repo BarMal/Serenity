@@ -39,7 +39,8 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
 
   private val richDocument = RichTextDocument(
     List(
-      RichTextParagraph.plain("A heading that is long enough to wrap once the panel is narrow", role = ParagraphRole.Heading(1)),
+      RichTextParagraph
+        .plain("A heading that is long enough to wrap once the panel is narrow", role = ParagraphRole.Heading(1)),
       RichTextParagraph.plain("A shorter heading", role = ParagraphRole.Heading(2)),
       RichTextParagraph.plain(prose, ParagraphAlignment.Left, ParagraphRole.dropCap(3)),
       RichTextParagraph.plain(prose, ParagraphAlignment.Center),
@@ -79,16 +80,15 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
     (documentName, buffer) <- documents
     (fontName, font)       <- fonts
   do
-    s"The $documentName counts in a $fontName font after a grow" should "equal a cold count at the new width, line by line" in {
+    s"The $documentName counts in a $fontName font after a grow" should "equal a cold count at the new width, line by line" in
       growths.foreach { (narrow, wide) =>
         val cache = WrappedLineCache.bounded()
         counts(buffer, narrow, font, cache)
 
         withClue(s"$narrow px to $wide px: ")(counts(buffer, wide, font, cache) shouldBe cold(buffer, wide, font))
       }
-    }
 
-    it should "never need more rows for a line that was one row" in {
+    it should "never need more rows for a line that was one row" in
       growths.foreach { (narrow, wide) =>
         val before = cold(buffer, narrow, font)
         val after  = cold(buffer, wide, font)
@@ -97,10 +97,9 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
           before.indices.filter(before(_) == 1).foreach(line => withClue(s"line $line: ")(after(line) shouldBe 1))
         }
       }
-    }
 
   "Growing the panel" should "wrap only the lines that were not one row" in {
-    val cache = WrappedLineCache.bounded()
+    val cache    = WrappedLineCache.bounded()
     val atNarrow = counts(plainBuffer, 333, serif, cache)
     val before   = wraps(cache)
 

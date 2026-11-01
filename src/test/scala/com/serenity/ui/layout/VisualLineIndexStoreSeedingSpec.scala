@@ -77,8 +77,8 @@ class VisualLineIndexStoreSeedingSpec extends AnyFlatSpec with Matchers:
   }
 
   "A key narrower than one the store has measured" should "measure every line" in {
-    val store = newStore
-    val _     = count(store, 200, text(), evenLinesFit(oddRows = 2))
+    val store  = newStore
+    val _      = count(store, 200, text(), evenLinesFit(oddRows = 2))
     val narrow = Measuring(evenLinesFit(oddRows = 3))
 
     count(store, 100, text(), narrow(_))

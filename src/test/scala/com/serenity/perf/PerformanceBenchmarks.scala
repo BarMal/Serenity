@@ -43,6 +43,7 @@ object PerformanceBenchmarks:
     ropeBenchmarks() ++
       RenderBenchmarks.frameBenchmarks(cursorWindow) ++
       LayoutSnapshotBenchmarks.benchmarks() ++
+      RowCountBenchmarks.benchmarks() ++
       CellGridBenchmarks.benchmarks() ++
       ReducerBenchmarks.benchmarks() ++
       ProseTypingBenchmarks.benchmarks() ++
