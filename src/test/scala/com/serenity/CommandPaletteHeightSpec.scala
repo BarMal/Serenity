@@ -43,8 +43,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
             ),
             focus = Focus.EditorPane(paneId)
           ),
-        runtime =
-          AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
+        runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
     val compact = LayoutEngine.calculateLayout(
       baseState.copy(persisted =
@@ -110,8 +109,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
             ),
             focus = Focus.EditorPane(paneId)
           ),
-        runtime =
-          AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
+        runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
     def itemSlots(viewport: ViewportSize): Int =
       val layout = LayoutEngine.calculateLayout(state, viewport)

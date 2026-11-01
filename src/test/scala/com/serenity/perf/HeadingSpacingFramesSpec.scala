@@ -1,6 +1,5 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -9,12 +8,12 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.keystroke.events.{InsertChar, PageDown, PageUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
-import com.serenity.setCursorPosition
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.{ChromeOn, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

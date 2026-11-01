@@ -1,6 +1,5 @@
 package com.serenity.ui.renderer
 
-import com.serenity.ChromeOn
 import java.awt.image.BufferedImage
 import java.awt.{Dimension, Font}
 import java.io.File
@@ -8,6 +7,7 @@ import java.nio.file.Paths
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
+import com.serenity.ChromeOn
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*

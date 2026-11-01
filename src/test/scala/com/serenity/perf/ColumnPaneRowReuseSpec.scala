@@ -1,11 +1,11 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}

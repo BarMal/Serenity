@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{InterfaceDensity}
+import com.serenity.config.InterfaceDensity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*

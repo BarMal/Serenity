@@ -1,12 +1,12 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
 import java.awt.image.BufferedImage
 import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}

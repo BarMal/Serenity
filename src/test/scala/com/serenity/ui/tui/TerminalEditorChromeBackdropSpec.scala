@@ -1,10 +1,8 @@
 package com.serenity.ui.tui
 
-import com.serenity.ChromeOn
 import java.awt.{Color, Font}
 import java.io.StringWriter
 
-import com.serenity.TestWorkspaceTrees
 import com.serenity.config.{AppConfig, StatusLineColors, StatusLinePlacement}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
@@ -21,6 +19,7 @@ import com.serenity.ui.layout.{
 }
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
+import com.serenity.{ChromeOn, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

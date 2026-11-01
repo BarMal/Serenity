@@ -1,7 +1,5 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
-import com.serenity.TestWorkspaceTrees
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
@@ -17,6 +15,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
+import com.serenity.{ChromeOn, TestWorkspaceTrees}
 
 /** Documents and editor states the benchmarks run against, kept apart from the measurements so that adding a benchmark
   * and adding a fixture stay separate edits.

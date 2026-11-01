@@ -1,12 +1,12 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, ProseMeasure, StatusLinePlacement, TabStripMode}
 import com.serenity.keystroke.events.PageDown
 import com.serenity.richtext.{

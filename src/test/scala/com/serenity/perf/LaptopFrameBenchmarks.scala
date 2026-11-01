@@ -1,6 +1,5 @@
 package com.serenity.perf
 
-import com.serenity.ChromeOn
 import java.awt.image.BufferedImage
 import java.awt.{Color, Font, Rectangle, Toolkit}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
@@ -39,7 +38,7 @@ import com.serenity.ui.renderer.{
   ScreenIdentity
 }
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
+import com.serenity.{ChromeOn, DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
@@ -342,9 +341,7 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      ChromeOn.config.copy(surfaceConfig =
-        ChromeOn.config.surfaceConfig.copy(typewriterScrollingEnabled = true)
-      )
+      ChromeOn.config.copy(surfaceConfig = ChromeOn.config.surfaceConfig.copy(typewriterScrollingEnabled = true))
     val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
