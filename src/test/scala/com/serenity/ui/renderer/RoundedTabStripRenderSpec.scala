@@ -137,7 +137,8 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   }
 
   it should "draw the whole of the trailing + inside the strip" in {
-    val s          = strip(radius = 12)
+    // At a zero radius the strip's own corners are plain background, so any ink is the glyph.
+    val s          = strip(radius = 0)
     val colours    = for y <- bandOf(s); x <- stripLeft(s) until stripRight(s) yield rgb(s.frame, x, y)
     val background = colours.groupBy(identity).maxBy(_._2.size)._1
     val window     = stripRight(s) - metrics.charWidth * 3 / 2 until stripRight(s)
