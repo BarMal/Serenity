@@ -1,14 +1,25 @@
 package com.serenity.perf
 
-/** One contiguous slice of the suite, `index` of `count` (1-based), so that CI can run half of it in each of two jobs
-  * and each shard keeps the suite's order (the warm-up budget is spent in that order).
+/** One contiguous slice of the suite, `index` of `count` (1-based), so that CI can run part of it in each of several
+  * jobs and each shard keeps the suite's order (the warm-up budget is spent in that order).
+  *
+  * Slices are equal except for two shards: the rows of the first half of the suite cost more than the second half's
+  * (one unsharded run, 132 timed rows: half of the time the rows themselves took, leaving out the warm-up extension,
+  * was spent by row 61, i.e. at 46%), so the first shard takes the first 45% and the second the rest. That figure is
+  * from one run and moves as rows are added.
   */
 final private[perf] case class BenchmarkShard(index: Int, count: Int):
 
   def select[A](rows: List[A]): List[A] =
-    rows.slice(rows.size * (index - 1) / count, rows.size * index / count)
+    rows.slice(boundary(index - 1, rows.size), boundary(index, rows.size))
+
+  private def boundary(slice: Int, size: Int): Int =
+    if count == 2 && slice == 1 then size * BenchmarkShard.FirstOfTwoPercent / 100
+    else size * slice / count
 
 private[perf] object BenchmarkShard:
+
+  val FirstOfTwoPercent: Int = 45
 
   private val Option = "--shard="
 

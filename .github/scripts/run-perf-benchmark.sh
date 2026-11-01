@@ -2,12 +2,16 @@
 # Runs PerformanceBenchmarks in <dir> under a virtual display and writes its CSV to <out>. Any further arguments are
 # benchmark names (prefixes) to run alone; with none, the whole suite runs.
 #   run-perf-benchmark.sh <dir> <out> [benchmark ...]
-# Needs SCREEN (e.g. 1920x1200x24), DPI and SCALE (Java2D's uiScale) in the environment.
+# Needs SCREEN (e.g. 1920x1200x24), DPI and SCALE (Java2D's uiScale) in the environment. SHARD (index/count, default 1/1)
+# runs only that contiguous slice of the suite.
 set -uo pipefail
 
 dir="$1" out="$2"
 shift 2
 names="$*"
+shard="${SHARD:-1/1}"
+shard_option=""
+if [ "$shard" != "1/1" ]; then shard_option="--shard=${shard}"; fi
 
 # sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes; strip both,
 # keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that crashes leaves an
@@ -18,7 +22,7 @@ names="$*"
 for attempt in 1 2; do
   (cd "$dir" && xvfb-run -a -s "-screen 0 ${SCREEN} -dpi ${DPI}" \
     sbt -v "set Test / run / javaOptions += \"-Dsun.java2d.uiScale=${SCALE}\"" \
-    "Test/runMain com.serenity.perf.PerformanceBenchmarks ${names}") > "$out.raw" 2>&1 || true
+    "Test/runMain com.serenity.perf.PerformanceBenchmarks ${shard_option} ${names}") > "$out.raw" 2>&1 || true
   sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$out.raw" \
     | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
     | sed 's/^\[info\] //' > "$out"
