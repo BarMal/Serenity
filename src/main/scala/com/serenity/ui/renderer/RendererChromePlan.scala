@@ -147,10 +147,11 @@ private[renderer] object RendererChromePlan:
     */
   val BleedPx: Int = 1
 
-  /** How far under its row a glyph's descender and its antialiasing reach. Kept small: a bounded repaint of the status
-    * row has to stay inside the tenth of the window `RendererRepaintRectsSpec` allows it.
+  /** How far under its row a glyph's descender and its antialiasing reach: the pixel the floating-mode scroll check
+    * found missing. Kept to that: a bounded repaint of the status row has to stay inside the tenth of the window
+    * `RendererRepaintRectsSpec` allows it, which a second pixel would exceed.
     */
-  val DescenderBleedPx: Int = 2
+  val DescenderBleedPx: Int = 1
 
   def withBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
