@@ -6,9 +6,9 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import com.serenity.app.AppRuntime
 import com.serenity.config.*
-import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend, KeyboardFidelityTier, TuiFrontend}
+import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend, TuiFrontend}
 import com.serenity.input.InputHandler
-import com.serenity.keystroke.KeyStrokeInfo
+import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{RenderCaches, StateManager}
@@ -43,7 +43,8 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
 
   /** A document longer than the screen, in a state of its own: the scene it makes needs its rows counted. */
   private def longDocument: AppState =
-    val buffer  = Buffer.fromString(BufferId(1), Vector.tabulate(300)(line => s"line $line " + "lorem ipsum " * 20).mkString("\n"))
+    val buffer =
+      Buffer.fromString(BufferId(1), Vector.tabulate(300)(line => s"line $line " + "lorem ipsum " * 20).mkString("\n"))
     val initial = AppState.initial(AppConfig.conventional)
     val state = initial.copy(
       runtime = initial.runtime.copy(viewportSize = Some(viewport)),

@@ -127,6 +127,14 @@ object AppRuntime:
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
 
+  /** A pane whose rows a background count has finished measuring has a bar to draw: tell the render loop. */
+  private[serenity] def damageOnScrollCounted(
+    notice: ScrollCountNotice,
+    emitDamage: Damage => IO[Unit],
+    dispatcher: Dispatcher[IO]
+  ): IO[Unit] =
+    IO(notice.listen(paneId => dispatcher.unsafeRunAndForget(emitDamage(Damage.Scrollbar(paneId)))))
+
   final private[serenity] case class RuntimeFailure(
       loopName: String,
       phase: String,
@@ -139,7 +147,7 @@ object AppRuntime:
     checkResize: IO[Option[ViewportSize]],
     runtime: FrontendRuntime,
     appConfig: AppConfig,
-    makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
+    makeStateManager: Option[(Logger[IO], ScrollCounting) => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
@@ -160,15 +168,16 @@ object AppRuntime:
         themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
         dictionaryCache   = DictionaryCache()
         scrollCountNotice = new ScrollCountNotice
-        stateManager <- makeStateManager.getOrElse(logger =>
+        scrollCounting =
+          ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
+        stateManager <- makeStateManager.getOrElse((logger, counting) =>
           StateManager.apply(
             logger,
             initialConfig = appConfig,
             dictionaryCache = dictionaryCache,
-            scrollCounting =
-              ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
+            scrollCounting = counting
           )
-        )(logger)
+        )(logger, scrollCounting)
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         _ <- AppStartup.initializeState(
           stateManager,
@@ -201,11 +210,7 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
-        _ <- IO(
-          scrollCountNotice.listen(paneId =>
-            resizeCallbackDispatcher.unsafeRunAndForget(emitDamage(Damage.Scrollbar(paneId)))
-          )
-        )
+        _                   <- damageOnScrollCounted(scrollCountNotice, emitDamage, resizeCallbackDispatcher)
         typingQuietTimer    <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
         frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
         latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
