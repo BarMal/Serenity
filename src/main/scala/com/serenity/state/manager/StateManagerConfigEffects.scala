@@ -260,8 +260,7 @@ final private[manager] class StateManagerConfigEffects(
         updateAppearanceConfig(_.withWindowChromeMode(mode)).void
       case InterfaceChromeIntent.SetMenuBarMode(mode) =>
         updateAppearanceConfig(_.withMenuBarMode(mode)).void
-      case InterfaceChromeIntent.SetUiLayout(layout) =>
-        switchLayout(layout)
+      case InterfaceChromeIntent.SetUiLayout(layout) => switchLayout(layout)
       case InterfaceChromeIntent.ToggleUiLayout =>
         currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
       case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>
