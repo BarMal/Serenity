@@ -216,7 +216,7 @@ private[perf] object LaptopFrameBenchmarks:
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
 
-  private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
+  private[perf] def scrolledToCursor(id: BufferId)(state: AppState): AppState =
     state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
       case Some((buffer, cursor)) =>
         val surface = state.persisted.config.surfaceConfig
