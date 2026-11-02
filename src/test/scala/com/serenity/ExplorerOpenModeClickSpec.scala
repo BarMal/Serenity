@@ -167,8 +167,14 @@ class ExplorerOpenModeClickSpec extends AnyFlatSpec with Matchers:
     openFiles(f).count(_.endsWith("notes.txt")) shouldBe 1
   }
 
+  /** The tabs of files on disk: a fresh editor also holds an untouched scratch buffer, which the explorer leaves be. */
   private def openTabs(f: Fixture): List[String] =
-    TabListContent.build(f.sm.getCurrentState.unsafeRunSync()).entries.map(_.title)
+    val state = f.sm.getCurrentState.unsafeRunSync()
+    TabListContent
+      .build(state)
+      .entries
+      .filter(entry => state.persisted.buffers.get(entry.bufferId).exists(_.document.filePath.nonEmpty))
+      .map(_.title)
 
   private def previewTabs(f: Fixture): List[String] =
     TabListContent.build(f.sm.getCurrentState.unsafeRunSync()).entries.filter(_.isPreview).map(_.title)
