@@ -177,13 +177,17 @@ private[manager] object PinnedPanelMouseHitTesting:
       }
       .getOrElse(Transition.pure(false))
 
-  /** Whether the `clickCount`th click of a run opens a row. A single-click mode acts on the first click only, so the
-    * second click of a double-click does not undo what the first did (a folder toggled twice, a file opened twice).
+  /** What the `clickCount`th click of a run does to a row, if anything. A single-click mode acts on the first click
+    * only, so the second click of a double-click does not undo what the first did (a folder toggled twice). In preview
+    * mode the second click keeps a file's preview tab, and does nothing to a folder.
     */
-  def opensOn(mode: ExplorerOpenMode, clickCount: Int): Boolean =
+  def clickEvent(mode: ExplorerOpenMode, clickCount: Int, isFolder: Boolean): Option[PanelInputEvent] =
     mode match
-      case ExplorerOpenMode.DoubleClick                            => clickCount >= 2
-      case ExplorerOpenMode.SingleClick | ExplorerOpenMode.Preview => clickCount == 1
+      case ExplorerOpenMode.DoubleClick => Option.when(clickCount >= 2)(PanelInputEvent.Activate)
+      case ExplorerOpenMode.SingleClick => Option.when(clickCount == 1)(PanelInputEvent.Activate)
+      case ExplorerOpenMode.Preview =>
+        if clickCount == 1 then Some(PanelInputEvent.Preview)
+        else Option.when(!isFolder)(PanelInputEvent.Activate)
 
   /** What a click on a directory row does once the click itself has selected that row, resolved against the state
     * carrying that selection, for the configured `explorer.open_mode`. `None` for a click that does not open the row or
@@ -194,15 +198,13 @@ private[manager] object PinnedPanelMouseHitTesting:
     selectedState: AppState,
     authoritativeScene: AuthoritativeUiScene
   ): Option[ComponentResult] =
-    Option
-      .when(opensOn(selectedState.persisted.config.inputConfig.explorerOpenMode, click.clickCount))(
-        pinnedDirectoryMouseHitAt(click, selectedState, authoritativeScene)
-      )
-      .flatten
-      .map(hit =>
+    val mode = selectedState.persisted.config.inputConfig.explorerOpenMode
+    pinnedDirectoryMouseHitAt(click, selectedState, authoritativeScene).flatMap { hit =>
+      clickEvent(mode, click.clickCount, hit.row.isDirectory).map(event =>
         PinnedPanelComponent(hit.position, wrapCache = authoritativeScene.wrappedLines)
-          .processEvent(PanelInputEvent.Activate, selectedState)
+          .processEvent(event, selectedState)
       )
+    }
 
   def locationClick(
     click: MouseClick,
