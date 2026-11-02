@@ -1,54 +1,60 @@
 package com.serenity.perf
 
-import java.awt.{Font, GraphicsEnvironment}
-import java.awt.image.BufferedImage
+import java.awt.GraphicsEnvironment
+import java.nio.file.Files
+import java.time.Duration
 
-import com.serenity.MockRenderSurface
-import com.serenity.state.manager.RenderCaches
-import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
-import com.serenity.ui.renderer.Java2DRenderSurface
+import scala.jdk.CollectionConverters.*
+
+import jdk.jfr.Recording
+import jdk.jfr.consumer.{RecordedEvent, RecordedFrame, RecordingFile}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Prints where the plain cell-grid frame's extra cost with rounded pane headers goes. Temporary: it times, in one JVM
-  * and interleaved, the real frames with the corner settings turned off one at a time, and the pane header fill on its
-  * own against the fill it replaced.
+/** Prints where the plain cell-grid frame spends time and allocates, by the project method nearest the sample. Temporary:
+  * it profiles the frame with Flight Recorder so the extra cost of the frame can be named.
   */
 class ChromeFrameCostDiagnosisSpec extends AnyFlatSpec with Matchers:
 
-  private def microsPerCall(calls: Int)(body: () => Unit): Double =
-    val start = System.nanoTime()
-    var i     = 0
-    while i < calls do
-      body()
-      i += 1
-    (System.nanoTime() - start) / 1000.0 / calls
+  private def projectFrame(event: RecordedEvent): String =
+    Option(event.getStackTrace).map(_.getFrames.asScala.toList).getOrElse(Nil)
+      .find(frame => frame.getMethod.getType.getName.startsWith("com.serenity") && !frame.getMethod.getType.getName.contains("perf."))
+      .fold("(no project frame)")(describe)
 
-  "The chrome frame cost" should "be printed per variant" in {
+  private def describe(frame: RecordedFrame): String =
+    s"${frame.getMethod.getType.getName.stripPrefix("com.serenity.")}.${frame.getMethod.getName}"
+
+  private def topFrame(event: RecordedEvent): String =
+    Option(event.getStackTrace).map(_.getFrames.asScala.toList).getOrElse(Nil).headOption.fold("(none)")(describe)
+
+  private def profile(name: String, frameRun: () => Any): Unit =
+    (1 to 3000).foreach(_ => frameRun())
+    val file      = Files.createTempFile("frame", ".jfr")
+    val recording = new Recording()
+    recording.enable("jdk.ExecutionSample").withPeriod(Duration.ofMillis(1))
+    recording.enable("jdk.ObjectAllocationSample").`with`("throttle", "20000/s")
+    recording.start()
+    (1 to 40000).foreach(_ => frameRun())
+    recording.stop()
+    recording.dump(file)
+    recording.close()
+    val events = RecordingFile.readAllEvents(file).asScala.toList
+    val cpu    = events.filter(_.getEventType.getName == "jdk.ExecutionSample")
+    val alloc  = events.filter(_.getEventType.getName == "jdk.ObjectAllocationSample")
+    def table(title: String, keyed: List[(String, Long)], total: Long): Unit =
+      println(s"DIAG [$name] $title total=$total")
+      keyed.groupMapReduce(_._1)(_._2)(_ + _).toList.sortBy(-_._2).take(18).foreach {
+        case (key, weight) => println(f"DIAG [$name]   ${100.0 * weight / math.max(1L, total)}%5.1f%%  $key")
+      }
+    table("cpu by project method", cpu.map(e => projectFrame(e) -> 1L), cpu.size.toLong)
+    table("cpu by top frame", cpu.map(e => topFrame(e) -> 1L), cpu.size.toLong)
+    val allocWeights = alloc.map(e => projectFrame(e) -> e.getLong("weight"))
+    table("allocation by project method", allocWeights, allocWeights.map(_._2).sum)
+    Files.deleteIfExists(file): Unit
+
+  "The chrome frame cost" should "be profiled" in {
     assume(!GraphicsEnvironment.isHeadless, "needs a display")
-    val frames =
-      (CellGridBenchmarks.benchmarks() ++ CellGridBenchmarks.chromeVariantBenchmarks())
-        .filter(_.name.startsWith("render.cell_grid.frame_ascii"))
-    val rounds = 6
-    val results = for round <- 1 to rounds; frame <- frames yield
-      frame.run()
-      val perFrame = microsPerCall(3000)(() => { frame.run(); () })
-      (frame.name, round, perFrame)
-    results.groupBy(_._1).toList.sortBy(_._1).foreach {
-      case (name, rows) => println(f"DIAG frame $name%-60s us/frame per round: ${rows.map(r => f"${r._3}%.1f").mkString(" ")}")
-    }
-
-    val metrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 14))
-    val image   = new BufferedImage(1200, 100, BufferedImage.TYPE_INT_RGB)
-    val caches  = RenderCaches.create()
-    val surface = new Java2DRenderSurface(image, metrics, Font(Font.MONOSPACED, Font.PLAIN, 14), _ => (), textCaches = caches.surfaceText)
-    val outlines = surface.panelOutlines.getOrElse(fail("no outlines"))
-    val colour   = RenderColor.fromAwt(java.awt.Color.LIGHT_GRAY)
-    surface.setBackgroundColor(colour)
-    val rounded = (1 to 5).map(_ => microsPerCall(200000)(() => { outlines.fillRoundRect(2, 0, 60, 1, RoundedCorners.Top, 12, colour); () }))
-    val plain   = (1 to 5).map(_ => microsPerCall(200000)(() => surface.putString(2, 0, " " * 60)))
-    println(f"DIAG header fill rounded us/call: ${rounded.map(v => f"$v%.2f").mkString(" ")}")
-    println(f"DIAG header fill putString us/call: ${plain.map(v => f"$v%.2f").mkString(" ")}")
-    val _ = new MockRenderSurface(1, 1)
+    val frames = (CellGridBenchmarks.benchmarks() ++ CellGridBenchmarks.chromeVariantBenchmarks())
+      .filter(b => b.name == "render.cell_grid.frame_ascii" || b.name.endsWith("flush_square_corners"))
+    frames.foreach(frame => profile(frame.name, frame.run))
   }
