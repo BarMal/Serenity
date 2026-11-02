@@ -2,7 +2,7 @@ package com.serenity.perf
 
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppStateValidation, BufferId}
-import com.serenity.ui.layout.PaneScroll
+import com.serenity.ui.layout.{LayoutEngine, PaneScroll}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -81,6 +81,18 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
       state.persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet should have size panes
       AppStateValidation.validationErrors(state) shouldBe Nil
     }
+
+  it should "lay two panes side by side and four as two columns of two" in {
+    def rects(panes: Int) =
+      val split  = MultiBufferFixture.split(MultiBufferFixture.state(Kind.Prose, 4, MultiBufferFixture.TestSize), panes)
+      val layout = LayoutEngine.calculateLayout(split, LaptopFrameBenchmarks.viewport)
+      LayoutEngine.calculatePaneLayouts(split, layout).values.toList
+
+    rects(2).map(_.x).distinct should have size 2
+    rects(2).map(_.y).distinct should have size 1
+    rects(4).map(_.x).distinct should have size 2
+    rects(4).map(_.y).distinct should have size 2
+  }
 
   it should "leave a one-pane state as it is" in {
     val state = MultiBufferFixture.state(Kind.Code, buffers = 3, MultiBufferFixture.TestSize)

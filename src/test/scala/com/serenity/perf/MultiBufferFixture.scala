@@ -2,11 +2,12 @@ package com.serenity.perf
 
 import scala.util.Random
 
+import com.serenity.StateManagerTestFixtures
 import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
-import com.serenity.state.models.{AppState, Buffer, BufferId, EditingState}
+import com.serenity.state.models.{AppState, Buffer, BufferId, EditingState, PaneId}
 import com.serenity.ui.layout.{PaneScroll, SplitAxis}
 
 /** Open buffers that differ line by line, for the rows that ask how performance scales with them (#2478). The text
@@ -29,6 +30,11 @@ private[perf] object MultiBufferFixture:
   /** The lines of the existing footprint rows, so the heap rows are comparable with them. */
   val FullSize: Size = Size(FootprintBenchmarks.DocumentLines)
   val TestSize: Size = Size(200)
+
+  /** The size of the laptop prose rows' document (`LaptopFrameBenchmarks.proseState`: 300 paragraphs), for the frame
+    * rows, whose cost follows the window and not the length of the buffers.
+    */
+  val LaptopSize: Size = Size(300 * ProseLinesPerParagraph)
 
   /** The largest prose buffer whose bar is counted late: one paragraph and one blank line each, just under the line
     * limit above which a bar is estimated at once (`PaneScroll.ExactLineLimit`).
@@ -74,12 +80,21 @@ private[perf] object MultiBufferFixture:
       runtime = base.runtime.copy(nextBufferId = BufferId(buffers + 1))
     )
 
-  /** `panes` panes side by side, the first showing the buffer it showed and each other showing the next buffer. */
+  /** One pane, two side by side, or four as two columns of two (as [[MultiPaneSession]] arranges them), each showing
+    * the next buffer: the first keeps the buffer it showed.
+    */
   def split(state: AppState, panes: Int): AppState =
-    (2 to panes).foldLeft(state) { (split, pane) =>
-      val next = BufferId(pane)
-      switchTo(EditorState.splitFocusedPane(split, SplitAxis.Vertical), next)
-    }
+    require(Set(1, 2, 4)(panes), s"$panes panes: the rows ask for 1, 2 or 4")
+    val first = state.persisted.layout.orderedPaneIds.head
+    def insert(from: AppState, after: PaneId, buffer: Int, axis: SplitAxis): (AppState, PaneId) =
+      StateManagerTestFixtures.insertPane(from, Some(after), Some(BufferId(buffer)), axis)
+    panes match
+      case 1 => state
+      case 2 => insert(state, first, 2, SplitAxis.Horizontal)._1
+      case _ =>
+        val (withRight, right) = insert(state, first, 2, SplitAxis.Horizontal)
+        val (withBelow, _)     = insert(withRight, first, 3, SplitAxis.Vertical)
+        insert(withBelow, right, 4, SplitAxis.Vertical)._1
 
   /** `buffer` in the active pane, as a tab click or `NextTab` puts it. */
   def switchTo(state: AppState, buffer: BufferId): AppState = EditorState.switchToBuffer(state, buffer)

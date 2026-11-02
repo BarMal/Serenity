@@ -456,7 +456,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** One step of a transition and back again, each frame carrying the damage `DamageProducer` reports for its step --
     * computed once up front, so the benchmark times the frame alone.
     */
-  final private class AlternatingTransition(before: AppState, after: AppState):
+  final private[perf] class AlternatingTransition(before: AppState, after: AppState):
     private val frames   = PersistingFrames()
     private val forward  = DamageProducer.forTransition(before, after)
     private val backward = DamageProducer.forTransition(after, before)
@@ -491,7 +491,7 @@ private[perf] object LaptopFrameBenchmarks:
       }
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
-  private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
+  private[perf] def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
     val width   = a.getWidth
     val pixelsA = a.getRGB(0, 0, width, a.getHeight, null, 0, width)
     val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
