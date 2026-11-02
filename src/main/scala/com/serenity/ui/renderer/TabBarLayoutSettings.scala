@@ -19,8 +19,8 @@ import com.serenity.ui.layout.{CloseReveal, TabBarSettings, TabTitleMeasure, Tex
 object TabBarLayoutSettings:
 
   def of(state: AppState, revealAll: Boolean = false, measures: TabBarMeasures = new TabBarMeasures): TabBarSettings =
-    val config = state.persisted.config
-    val gui    = !state.runtime.capabilities.isCellGrid
+    val config    = state.persisted.config
+    val gui       = !state.runtime.capabilities.isCellGrid
     val cellWidth = if gui then measures.cellWidthPx(config) else 0.0
     TabBarSettings(
       maxTabWidth = config.surfaceConfig.tabMaxWidth,

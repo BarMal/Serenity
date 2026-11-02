@@ -1,14 +1,14 @@
 package com.serenity.ui.renderer
 
 import com.serenity.config.AppConfig
-import com.serenity.state.models.AppState
 import com.serenity.rope.Balance
+import com.serenity.state.models.AppState
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Issue #2389: the tab strip's layout settings need the code font's cell width, which is measured on an image, so a
-  * frame that lays the strip out every time must not measure it every time. The remembered width is the one an
-  * uncached call measures.
+  * frame that lays the strip out every time must not measure it every time. The remembered width is the one an uncached
+  * call measures.
   */
 class TabBarMeasuresSpec extends AnyFlatSpec with Matchers:
 

@@ -355,7 +355,14 @@ object OverlayViewModel:
           )
         )
       case SurfaceContent.TabBar(entries, activeBufferId) =>
-        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect, TabBarLayoutSettings.of(state, measures = tabBarMeasures)))
+        Some(
+          TabBarSurfaceComposition.forTabBar(
+            entries,
+            activeBufferId,
+            rect,
+            TabBarLayoutSettings.of(state, measures = tabBarMeasures)
+          )
+        )
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
