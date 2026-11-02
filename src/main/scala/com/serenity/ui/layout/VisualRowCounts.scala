@@ -321,7 +321,12 @@ object VisualRowCounts:
         case _ => index
 
 /** The index of one text under one key in one store, by the identity of the store and the text. */
-final private class IndexIdentity(store: AnyRef, key: Any, content: AnyRef, stamp: AnyRef):
+final private class IndexIdentity(
+    private val store: AnyRef,
+    private val key: Any,
+    private val content: AnyRef,
+    private val stamp: AnyRef
+):
 
   override def equals(other: Any): Boolean =
     other match
