@@ -73,6 +73,12 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
   private def wraps(cache: WrappedLineCache.Bounded): Long =
     cache.wrapStats.coldWraps + cache.wrapStats.incrementalWraps
 
+  /** What counting the plain buffer from nothing costs in wraps, which a font's row-count certificate may reduce. */
+  private def coldWraps(widthPx: Int, font: Font): Long =
+    val cache = WrappedLineCache.bounded()
+    counts(plainBuffer, widthPx, font, cache)
+    wraps(cache)
+
   private val documents = List("plain text" -> plainBuffer, "rich text" -> richBuffer)
   private val fonts     = List("proportional" -> serif, "monospaced" -> monospace)
 
@@ -119,22 +125,23 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
     wraps(cache) - before shouldBe 0L
   }
 
-  "Shrinking the panel" should "wrap every line again" in {
+  "Shrinking the panel" should "cost as many wraps as a cold count at the new width" in {
     val cache = WrappedLineCache.bounded()
     counts(plainBuffer, 400, serif, cache)
     val before = wraps(cache)
 
     counts(plainBuffer, 333, serif, cache)
 
-    wraps(cache) - before shouldBe corpus.size.toLong
+    wraps(cache) - before shouldBe coldWraps(333, serif)
   }
 
-  "Growing the panel and changing the font" should "wrap every line again" in {
+  "Growing the panel and changing the font" should "cost as many wraps as a cold count" in {
     val cache = WrappedLineCache.bounded()
     counts(plainBuffer, 333, serif, cache)
     val before = wraps(cache)
+    val other  = Font(Font.SERIF, Font.PLAIN, 15)
 
-    counts(plainBuffer, 400, Font(Font.SERIF, Font.PLAIN, 15), cache)
+    counts(plainBuffer, 400, other, cache)
 
-    wraps(cache) - before shouldBe corpus.size.toLong
+    wraps(cache) - before shouldBe coldWraps(400, other)
   }
