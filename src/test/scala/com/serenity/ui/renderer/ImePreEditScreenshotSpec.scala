@@ -6,7 +6,6 @@ import java.io.File
 import java.nio.file.Paths
 import javax.imageio.ImageIO
 
-import com.serenity.config.AppConfig
 import com.serenity.{ChromeOn, ReferenceFrames}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
