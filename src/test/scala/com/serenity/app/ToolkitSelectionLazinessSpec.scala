@@ -49,7 +49,9 @@ class ToolkitSelectionLazinessSpec extends AnyFlatSpec with Matchers:
   it should "not load any AWT or Swing class when -Dawt.toolkit.name is passed, and treat it as the user's choice" in {
     val run = runChild(List("-Dawt.toolkit.name=XToolkit"))
     run.exitCode shouldBe 0
-    run.output.exists(line => line.startsWith("chose PlatformDefault") && line.contains("awt.toolkit.name")) shouldBe true
+    run.output.exists(line =>
+      line.startsWith("chose PlatformDefault") && line.contains("awt.toolkit.name")
+    ) shouldBe true
     loadedAwt(run) shouldBe Nil
   }
 

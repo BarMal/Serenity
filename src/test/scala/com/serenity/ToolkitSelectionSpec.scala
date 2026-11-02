@@ -92,7 +92,9 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
   it should "still lose to an explicit -Dawt.toolkit.name=XToolkit" in {
     val preset = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
     val flags  = List("-Dawt.toolkit.name=XToolkit")
-    val chosen = ToolkitSelection.choose(jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland"), ToolkitSelection.userProperties(preset, flags)))
+    val chosen = ToolkitSelection.choose(
+      jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland"), ToolkitSelection.userProperties(preset, flags))
+    )
     chosen.choice shouldBe Choice.PlatformDefault
     chosen.reason should include("awt.toolkit.name")
   }

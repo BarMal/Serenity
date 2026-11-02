@@ -101,9 +101,9 @@ object ToolkitSelection:
 
   private val ToolkitFlag = s"-D$ToolkitProperty="
 
-  /** Reads the running JVM, without loading `java.awt` (the arguments come from `java.management`). The class file is looked up as a resource so that nothing in `java.awt` gets loaded. The
-    * socket is probed only where its answer can matter: a Linux runtime with `WLToolkit`, in a session that names a
-    * Wayland socket or is asked for one.
+  /** Reads the running JVM, without loading `java.awt` (the arguments come from `java.management`). The class file is
+    * looked up as a resource so that nothing in `java.awt` gets loaded. The socket is probed only where its answer can
+    * matter: a Linux runtime with `WLToolkit`, in a session that names a Wayland socket or is asked for one.
     */
   def currentEnvironment: IO[Environment] =
     IO {
