@@ -165,10 +165,20 @@ object RenderBenchmarkRunner:
     settle()
     try
       val viewportLines = window.viewportSize.height
-      val drawn         = drawnSize(window, WindowPx(options.widthPx, options.heightPx))
-      val results = Scenario.values.toList.map { scenario =>
-        scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, drawn, refresh)
-      }
+      val asked         = WindowPx(options.widthPx, options.heightPx)
+      // The first scenario draws for seconds, by which time the window manager has had its say; the size the window
+      // reports before then can still be the one it was made with.
+      val (results, drawn) = Scenario.values.toList match
+        case first :: rest =>
+          val firstResult = timeScenario(window, fonts, factory, first, options, viewportLines, asked, refresh)
+          val kept        = currentSize(window)
+          (
+            (first -> firstResult) :: rest.map(scenario =>
+              scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, kept, refresh)
+            ),
+            kept
+          )
+        case Nil => (Nil, asked)
       val timed    = results.collect { case (scenario, Right(result)) => scenario -> result }.toMap
       val notTimed = results.collect { case (scenario, Left(reason)) => scenario -> reason }.toMap
       val stats    = timed.view.mapValues(_.stats).toMap
@@ -201,14 +211,6 @@ object RenderBenchmarkRunner:
     probeResize(window, scenario, startSize).map(_ =>
       timeFrames(window, fonts, factory, scenario, options, viewportLines, startSize, refresh)
     )
-
-  /** The size the window has once the window manager has had its say: the size asked for if it takes it, otherwise
-    * whatever it kept, which a tiling manager does from the first frame on.
-    */
-  private def drawnSize(window: SwingWindow, asked: WindowPx): WindowPx =
-    WindowSizing.await(() => currentSize(window), asked) match
-      case WindowSizing.Outcome.Applied(size) => size
-      case WindowSizing.Outcome.Kept(size)    => size
 
   private def currentSize(window: SwingWindow): WindowPx =
     val size = window.currentPreferredWindowSize
