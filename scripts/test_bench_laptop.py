@@ -103,6 +103,85 @@ class StatsTests(unittest.TestCase):
             self.assertIn("input-to-paint", result.stdout)
 
 
+class AwaitExitOrDumpTests(unittest.TestCase):
+    """What the script does once it has asked the app to end: wait a bounded time, and keep evidence of a hang.
+
+    The process is started inside the same bash that waits for it, as bench-laptop.sh does: a child of a test process
+    would stay a zombie, and `kill -0` still succeeds on a zombie.
+    """
+
+    IGNORES_SIGTERM = "bash -c 'trap \"\" TERM; while :; do sleep 0.2; done' &"
+
+    def _stub_jcmd(self, work):
+        path = os.path.join(work, "jcmd")
+        write(path, '#!/usr/bin/env bash\necho "threads of $1 ($2)"\n')
+        os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
+        return path
+
+    def _run(self, start_process, wait_seconds, prefix, env=None):
+        command = (
+            f'{start_process} pid=$!; await_exit_or_dump "$pid" {wait_seconds} "{prefix}"; status=$?; '
+            'for _ in 1 2 3 4 5 6 7 8; do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done; '
+            'if kill -0 "$pid" 2>/dev/null; then echo STILL_ALIVE; kill -9 "$pid"; fi; exit $status'
+        )
+        return lib(command, env)
+
+    def test_returns_success_and_writes_nothing_when_the_process_exits_in_time(self):
+        with tempfile.TemporaryDirectory() as work:
+            prefix = os.path.join(work, "run1-hang")
+            result = self._run("sleep 0.3 &", 10, prefix)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertFalse(os.path.exists(prefix + ".threads.txt"))
+
+    def test_dumps_the_threads_and_kills_a_process_that_outlives_the_wait(self):
+        with tempfile.TemporaryDirectory() as work:
+            prefix = os.path.join(work, "run1-hang")
+            result = self._run(self.IGNORES_SIGTERM, 1, prefix, {"BENCH_JCMD": self._stub_jcmd(work)})
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("STILL_ALIVE", result.stdout, "the hung process should have been killed")
+            with open(prefix + ".threads.txt", encoding="utf-8") as dump:
+                self.assertRegex(dump.read(), r"threads of \d+ \(Thread\.print\)")
+
+    def test_falls_back_to_sigquit_and_says_so_when_there_is_no_jcmd(self):
+        with tempfile.TemporaryDirectory() as work:
+            prefix = os.path.join(work, "run1-hang")
+            result = self._run(self.IGNORES_SIGTERM, 1, prefix, {"BENCH_JCMD": os.path.join(work, "no-such-jcmd")})
+            self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertNotIn("STILL_ALIVE", result.stdout)
+            with open(prefix + ".threads.txt", encoding="utf-8") as dump:
+                self.assertIn("jcmd not found; sent SIGQUIT", dump.read())
+
+
+class QuitSequenceTests(unittest.TestCase):
+    """bench-laptop.sh used to `wait` for the app with no bound, so a JVM that outlived its quit held the run for 24+
+    minutes (#2507)."""
+
+    def _quit_section(self):
+        with open(SCRIPT, encoding="utf-8") as handle:
+            text = handle.read()
+        return text[text.index('echo "[$(date +%T)] Quitting"') :]
+
+    def test_a_hung_app_is_dumped_and_killed_before_the_script_waits_on_it(self):
+        section = self._quit_section()
+        kill = section.index('kill "$serenity_pid"')
+        bounded = section.index("await_exit_or_dump")
+        unbounded = section.index('wait "$serenity_pid"')
+        self.assertLess(kill, bounded)
+        self.assertLess(bounded, unbounded)
+
+    def test_the_output_says_how_the_quit_key_was_sent_and_whether_the_modal_appeared(self):
+        section = self._quit_section()
+        self.assertIn("Quit key:", section)
+        self.assertIn("STATE MODAL", section)
+
+    def test_a_hang_keeps_the_app_logs_next_to_the_dump(self):
+        section = self._quit_section()
+        self.assertIn('hang_prefix="$RESULTS_DIR/${LABEL}-run${run_n}-hang"', section)
+        self.assertIn('"$hang_prefix.stdout.log"', section)
+        self.assertIn('"$hang_prefix.app.log"', section)
+        self.assertIn('"$hang_prefix"', section.split("await_exit_or_dump", 1)[1].split("\n", 1)[0])
+
+
 class WholeScriptTests(unittest.TestCase):
     def test_exits_non_zero_when_every_launch_fails(self):
         with tempfile.TemporaryDirectory() as work:

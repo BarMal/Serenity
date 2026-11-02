@@ -92,3 +92,27 @@ with open(out_path, "w") as f:
     w(f"\nFull results: {out_path}")
 PYEOF
 }
+
+# Waits up to <seconds> for <pid> to exit. A process still alive then is hung: its threads are written to
+# <prefix>.threads.txt (`jcmd <pid> Thread.print`, or SIGQUIT when there is no jcmd, which prints them to the JVM's own
+# stdout), and it is killed. Returns 0 when it exited in time and 1 when it had to be killed (#2507). BENCH_JCMD names
+# the jcmd to use, for the test.
+await_exit_or_dump() {
+  local pid="$1" seconds="$2" prefix="$3" jcmd="${BENCH_JCMD:-jcmd}" polls=0
+  while kill -0 "$pid" 2>/dev/null; do
+    if (( polls >= seconds * 2 )); then
+      if command -v "$jcmd" >/dev/null 2>&1; then
+        "$jcmd" "$pid" Thread.print >"$prefix.threads.txt" 2>&1 || true
+      else
+        echo "jcmd not found; sent SIGQUIT to $pid, so the thread dump is in the JVM's own stdout log" >"$prefix.threads.txt"
+        kill -QUIT "$pid" 2>/dev/null || true
+        sleep 1
+      fi
+      kill -9 "$pid" 2>/dev/null || true
+      return 1
+    fi
+    sleep 0.5
+    polls=$((polls + 1))
+  done
+  return 0
+}
