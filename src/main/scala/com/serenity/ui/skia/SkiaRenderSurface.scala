@@ -417,10 +417,18 @@ final class SkiaRenderSurface(
     )
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+    withPixelClip(
+      metrics.toPixelX(x),
+      metrics.toPixelY(y),
+      width * metrics.charWidth,
+      height * metrics.lineHeight
+    )(render)
+
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     val saved = canvas.save()
     userClipDepth.incrementAndGet()
     try
-      clipTo(metrics.toPixelX(x), metrics.toPixelY(y), width * metrics.charWidth, height * metrics.lineHeight)
+      clipTo(xPx, yPx, widthPx, heightPx)
       render
     finally
       userClipDepth.decrementAndGet()
