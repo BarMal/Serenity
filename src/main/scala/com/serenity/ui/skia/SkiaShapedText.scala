@@ -24,6 +24,11 @@ sealed trait SkiaShapedStretch:
   /** Draws the glyphs of `[from, until)` with the first of them at `x`. */
   def draw(canvas: Canvas, from: Int, until: Int, x: Float, baseline: Float, paint: Paint): Unit
 
+/** Stands in for a stretch while the keys a frame asks for are being collected: it has no glyphs and draws nothing. */
+private[skia] object UnshapedStretch extends SkiaShapedStretch:
+  def leftEdgeOf(charIndex: Int): Option[Float]                                                  = None
+  def draw(canvas: Canvas, from: Int, until: Int, x: Float, baseline: Float, paint: Paint): Unit = ()
+
 /** Latin-script text, shaped by HarfBuzz with caller-supplied runs: the glyphs and their positions stay on the JVM, so
   * a range is a blob built from a slice of them. `TextLine.make` and `Shaper.shape(text, font)` build ICU and font
   * fallback iterators on every call, about 3.7 ms each however short the text (#1812 spike), which these runs skip.
@@ -167,7 +172,7 @@ private object RunsStretch:
 /** Shapes stretches and remembers them, found by text and font. Two generations stand in for an eviction order, as in
   * [[ShapedTextCache]]. Shaping runs under one lock because a Skia `Shaper` holds state between calls.
   */
-final class SkiaShapedTextCache(
+open class SkiaShapedTextCache(
     capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity,
     warmup: WarmupStats = new WarmupStats(),
     fallbacks: FallbackFonts = FallbackFonts.system
@@ -212,6 +217,10 @@ final class SkiaShapedTextCache(
             current.set(new Stretches())
           val _ = current.get.put(key, stretch)
       }
+
+  /** The `(text, font)` of every stretch held, in either generation. */
+  private[serenity] def heldKeys: Set[(String, Font)] =
+    (current.get.keySet.asScala ++ previous.get.keySet.asScala).map(key => key.text -> key.font).toSet
 
   def promotions: Long = promotedN.sum()
 

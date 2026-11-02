@@ -1,8 +1,12 @@
 package com.serenity.perf
 
+import java.awt.font.TextAttribute
+
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.renderer.{FontSpec, FrameOutput, RenderSurface, RendererFramePlanner, ScreenIdentity}
@@ -25,15 +29,25 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
   private val code  = stateOf(BenchmarkFixtures.largeMultilineDocument(60))
   private val rich  = BenchmarkFixtures.editorStateForRichDocument(BenchmarkFixtures.largeRichTextDocument(30))
 
+  /** Fonts with layout attributes are the ones the Skia surface shapes; a plain one it draws as a string. */
+  private val layoutAttributes =
+    Map[TextAttribute, AnyRef](
+      TextAttribute.LIGATURES -> TextAttribute.LIGATURES_ON,
+      TextAttribute.KERNING   -> TextAttribute.KERNING_ON
+    ).asJava
+
+  private val shapingCode = codeFont.deriveFont(layoutAttributes)
+  private val shapingText = textFont.deriveFont(layoutAttributes)
+
   private def renderFrame(state: AppState, surface: RenderSurface, caches: RenderCaches): Unit =
     val _ = RendererFramePlanner.renderFrame(
       state,
       cursorVisible = false,
       surface,
       viewport,
-      caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
-      codeFont,
-      textFont,
+      caches.authoritativeScene.forState(state, viewport, shapingCode, shapingText),
+      shapingCode,
+      shapingText,
       uiFont,
       cellMetrics,
       uiMetrics,
@@ -43,9 +57,24 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
       caches = caches
     )
 
+  private def drawFrame(state: AppState, caches: RenderCaches): Unit =
+    val frame = SkiaFrames.newFrame(windowWidth, windowHeight)
+    val surface = SkiaFrames.surfaceOver(
+      frame,
+      cellMetrics,
+      shapingCode,
+      windowWidth,
+      windowHeight,
+      1.0,
+      persists = false,
+      caches,
+      None
+    )
+    renderFrame(state, surface, caches)
+
   private def drawnKeys(state: AppState): (RenderCaches, Set[(String, Font)]) =
     val caches = RenderCaches.create()
-    val _      = new Pooled(1.0, persists = false, caches).render(state, Damage.Everything)
+    drawFrame(state, caches)
     (caches, SkiaTextCaches.of(caches.backendCaches).shapedText.heldKeys)
 
   private def plannedKeys(state: AppState, drawn: RenderCaches): Vector[(String, Font)] =
@@ -54,7 +83,7 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
       skia,
       drawn.styledFonts,
       cellMetrics,
-      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(shapingCode),
       windowWidth,
       windowHeight,
       1.0
@@ -86,7 +115,7 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
       skia,
       caches.styledFonts,
       cellMetrics,
-      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(shapingCode),
       windowWidth,
       windowHeight,
       1.0
@@ -105,7 +134,7 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
       skia,
       caches.styledFonts,
       cellMetrics,
-      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(shapingCode),
       windowWidth,
       windowHeight,
       1.0
@@ -114,7 +143,7 @@ class ShapePlanSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
       skia.ahead.request(planned)
       skia.ahead.awaitIdle(30.seconds) shouldBe true
 
-      val _ = new Pooled(1.0, persists = false, caches).render(rich, Damage.Everything)
+      drawFrame(rich, caches)
 
       skia.shapedText.shapings shouldBe 0L
     finally skia.ahead.close()
