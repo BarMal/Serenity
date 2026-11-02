@@ -1,6 +1,7 @@
 import sbtassembly.AssemblyPlugin.autoImport.*
 import sbtassembly.MergeStrategy
 import com.serenity.release.PackageVersion
+import com.serenity.build.TestShards
 
 ThisBuild / scalaVersion := "3.9.0"
 
@@ -67,6 +68,14 @@ lazy val checkThirdPartyNotices =
 // The version comes from the annotated vX.Y.Z tag via sbt-dynver, and the numeric form a packager needs from
 // PackageVersion (project/PackageVersion.scala). Both read git, so a source tarball or a shallow clone with no tag
 // degrades to dynver's untagged version and to 1.0.0/dev rather than failing the build.
+// `sbt test` is split into this many CI jobs per OS (#2484); a job picks its share with SERENITY_TEST_SHARD=index/of. The
+// split follows project/test-shards.tsv (project/TestShards.scala).
+lazy val checkTestShards =
+  taskKey[Unit]("Fail if project/test-shards.tsv lists a suite that no longer exists or the shards do not cover every suite")
+lazy val generateTestShards =
+  taskKey[Unit]("Rewrite project/test-shards.tsv from the JUnit reports of the last full test run")
+val TestShardCount = 2
+
 lazy val gitDescribe = taskKey[String]("git describe over vX.Y.Z tags; the bare sha, or empty, when none is reachable")
 lazy val packageVersion =
   taskKey[Either[String, PackageVersion.Result]]("Numeric package version and channel for this checkout")
@@ -82,7 +91,36 @@ def gitOutput(root: File, args: String*): Option[String] =
 lazy val root = (project in file("."))
   .settings(
     // The package version module is build code under project/; compile it into the tests too so a spec can reach it.
-    Test / unmanagedSources += baseDirectory.value / "project" / "PackageVersion.scala",
+    Test / unmanagedSources ++= Seq(
+      baseDirectory.value / "project" / "PackageVersion.scala",
+      baseDirectory.value / "project" / "TestShards.scala"
+    ),
+    checkTestShards := {
+      val table = TestShards.parseTable(IO.readLines(baseDirectory.value / "project" / "test-shards.tsv")).fold(sys.error, identity)
+      TestShards.check(table, (Test / definedTestNames).value, TestShardCount) match {
+        case Left(errors) => sys.error(errors.mkString("\n"))
+        case Right(summary) =>
+          streams.value.log.info(
+            "checkTestShards: " + (1 to TestShardCount).map(s => s"shard $s has ${summary.suites(s)} suites, ${summary.seconds(s).round} s listed").mkString("; ")
+          )
+      }
+    },
+    generateTestShards := {
+      val reports = IO.listFiles(baseDirectory.value / "target" / "test-reports").toList.filter(_.getName.endsWith(".xml"))
+      val defined = (Test / definedTestNames).value.toSet
+      val seconds = TestShards.secondsFromReports(reports.map(IO.read(_))).filter { case (suite, _) => defined.contains(suite) }
+      val assigned = TestShards.balance(seconds, TestShardCount)
+      IO.write(
+        baseDirectory.value / "project" / "test-shards.tsv",
+        "# Suite, shard, seconds: regenerate with `sbt generateTestShards` after a full `sbt test` (#2484).\n" +
+          TestShards.render(seconds.map { case (suite, t) => suite -> TestShards.Entry(assigned(suite), t) })
+      )
+    },
+    Test / testOptions ++= sys.env.get("SERENITY_TEST_SHARD").filter(_.nonEmpty).toList.map { spec =>
+      val shard = TestShards.parseShard(spec).fold(sys.error, identity)
+      val table = TestShards.parseTable(IO.readLines(file("project") / "test-shards.tsv")).fold(sys.error, identity)
+      Tests.Filter(TestShards.select(table, shard, _))
+    },
     gitDescribe := gitOutput(
       baseDirectory.value,
       "describe",
