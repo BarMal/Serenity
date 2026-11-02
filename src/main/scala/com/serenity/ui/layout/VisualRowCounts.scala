@@ -69,6 +69,14 @@ final private[layout] case class VisualRowKey(
     fallback: FontFallback
 )
 
+private[layout] object VisualRowKey:
+
+  /** Whether `narrower`'s one-row lines are one row under `wider` too: the keys differ only in width, and a row that
+    * held a line at one width holds it at any greater one.
+    */
+  def seeds(narrower: VisualRowKey, wider: VisualRowKey): Boolean =
+    narrower.panelWidthPx < wider.panelWidthPx && narrower.copy(panelWidthPx = wider.panelWidthPx) == wider
+
 /** What the pixels a line's rows stack to depend on besides [[VisualRowKey]]: the prose zoom scales every run. */
 final private[layout] case class BandHeightKey(rows: VisualRowKey, proseScale: Float)
 

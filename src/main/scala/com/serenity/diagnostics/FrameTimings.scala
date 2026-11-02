@@ -42,7 +42,8 @@ final case class FrameTimingSummary(
     elapsedMs: Double,
     frames: Map[FrameKind, Int],
     phases: Map[FramePhase, PhaseStats],
-    counters: FrameCounterStats = FrameCounterStats.empty
+    counters: FrameCounterStats = FrameCounterStats.empty,
+    backend: String = ""
 ):
 
   def withCounters(counted: FrameCounterStats): FrameTimingSummary = copy(counters = counted)
@@ -69,7 +70,7 @@ final case class FrameTimingSummary(
     }
     val window = String.format(Locale.ROOT, "%.1f", seconds)
     val parts  = phaseParts ++ counters.logParts
-    s"[FRAME] window=${window}s ${frameRates.mkString(" ")} | ${if parts.isEmpty then "no samples" else parts.mkString(" | ")}"
+    s"[FRAME]${PresentPoint.tag(backend)} window=${window}s ${frameRates.mkString(" ")} | ${if parts.isEmpty then "no samples" else parts.mkString(" | ")}"
 
 /** The timings gathered since the last summary, plus the in-flight marks that tie one input to the frame showing it.
   *
@@ -164,12 +165,12 @@ object FrameTimingState:
   * Records nothing until [[setEnabled]] switches it on (`ui.render.frame_timing`), so with timing off every hook is a
   * flag read.
   */
-final class FrameTimings(clock: () => Long = () => System.nanoTime()):
+final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: String = ""):
   private val enabled = new AtomicBoolean(false)
   private val state   = new AtomicReference(FrameTimingState.start(clock()))
 
   /** Rides along with the frame phases so the frontends that already report them feed it without further wiring. */
-  val keyLatency: KeyLatencyTrace = KeyLatencyTrace(clock)
+  val keyLatency: KeyLatencyTrace = KeyLatencyTrace(clock, backend = backend)
 
   def isEnabled: Boolean = enabled.get()
 
@@ -227,4 +228,4 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime()):
   def drain(): FrameTimingSummary =
     val now      = clock()
     val previous = state.getAndUpdate(_.nextWindow(now))
-    previous.summary(now)
+    previous.summary(now).copy(backend = backend)
