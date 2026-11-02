@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
+import java.nio.file.{Files, Paths}
 
 import scala.util.Random
 
@@ -202,6 +203,11 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
     wraps(cache) shouldBe 40L
   }
 
+  private def recordBesideTestReports(line: String): Unit =
+    val directory = Paths.get("target", "test-reports")
+    Files.createDirectories(directory)
+    val _ = Files.writeString(directory.resolve("fast-row-count-fonts.txt"), line + System.lineSeparator())
+
   private val kerningPairs = "AVATAR To War Wa Ty Yo LT Te AV ff fi fl ffi 11 1/2 \"quoted\" -- ... (a) [b] {c}"
 
   private val proseLines: Vector[String] =
@@ -229,8 +235,11 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
 
   "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in {
     val tabled = proportionalFonts.collect { case (label, font) if NominalAdvances.of(font, frc).isDefined => label }
-    // Which fonts the guard reaches depends on the platform's font stack; CI logs it so the oracle's reach is on record.
-    info(s"proportional fonts that reach the guard on ${System.getProperty("os.name")}: ${tabled.mkString(", ")}")
+    // Which fonts the guard reaches depends on the platform's font stack. The CI console does not show `info`, so the
+    // list also goes beside the test reports, which each operating system uploads.
+    val reach = s"proportional fonts that reach the guard on ${System.getProperty("os.name")}: ${tabled.mkString(", ")}"
+    info(reach)
+    recordBesideTestReports(reach)
     proportionalFonts.foreach { (label, font) =>
       proseLines.foreach { text =>
         widthsAround(text, font).foreach { width =>
