@@ -180,11 +180,38 @@ final class SkiaShapedTextCache(
   private val previous   = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val shapedN    = new java.util.concurrent.atomic.AtomicLong(0)
   private val lineN      = new java.util.concurrent.atomic.AtomicLong(0)
+  private val aheadN     = new java.util.concurrent.atomic.AtomicLong(0)
   private val promotedN  = new java.util.concurrent.atomic.LongAdder()
   private val shapeLock  = new Object
   private val rotateLock = new Object
 
+  /** What a frame had to shape because the cache did not hold it. Text shaped ahead of a frame is not counted here: a
+    * frame's figures are read from this count before and after it draws, and another thread's work must not land in
+    * them.
+    */
   def shapings: Long = shapedN.get()
+
+  /** What [[ShapeAhead]]'s workers shaped, apart from [[shapings]]. */
+  def aheadShapings: Long = aheadN.get()
+
+  /** A shaper for a thread of its own: one holds state between calls, so threads do not share. */
+  private[skia] def newShaper(): Shaper = Shaper.Companion.make()
+
+  /** Shapes `text` in `font` with the calling thread's `shaper`, unless the cache holds it, and keeps it unless a frame
+    * kept it first. It takes no lock: its shaper is not the cache's.
+    */
+  private[skia] def shapeAhead(text: String, font: Font, shaper: Shaper): Unit =
+    val key = Key(text, font)
+    if Option(current.get.get(key)).orElse(Option(previous.get.get(key))).isEmpty then
+      val _       = aheadN.incrementAndGet()
+      val stretch = shape(shaper, text, font)
+      rotateLock.synchronized {
+        if Option(current.get.get(key)).isEmpty then
+          if current.get.size >= capacityPerGeneration then
+            previous.set(current.get)
+            current.set(new Stretches())
+          val _ = current.get.put(key, stretch)
+      }
 
   def promotions: Long = promotedN.sum()
 
@@ -205,7 +232,7 @@ final class SkiaShapedTextCache(
 
   private def shapeAndRemember(key: Key): SkiaShapedStretch =
     val _ = shapedN.incrementAndGet()
-    remember(key, timed(warmup.shaped)(shapeLock.synchronized(shape(key.text, key.font))))
+    remember(key, timed(warmup.shaped)(shapeLock.synchronized(shape(shaper, key.text, key.font))))
 
   private def promote(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
     promotedN.increment()
@@ -220,14 +247,14 @@ final class SkiaShapedTextCache(
     }
     stretch
 
-  private def shape(text: String, font: Font): SkiaShapedStretch =
-    if text.forall(_ < FirstCharNeedingScriptRuns) then shapeLatin(text, font)
-    else shapeWithRuns(text, font).getOrElse(shapeLine(text, font))
+  private def shape(shaper: Shaper, text: String, font: Font): SkiaShapedStretch =
+    if text.forall(_ < FirstCharNeedingScriptRuns) then shapeLatin(shaper, text, font)
+    else shapeWithRuns(shaper, text, font).getOrElse(shapeLine(text, font))
 
   /** Text of plain characters and a few simple symbols, shaped with the font runs `TextLine` would choose; `None` when
     * it is not such text, a character has no font, or the shaper does not give one glyph a character.
     */
-  private def shapeWithRuns(text: String, font: Font): Option[SkiaShapedStretch] =
+  private def shapeWithRuns(shaper: Shaper, text: String, font: Font): Option[SkiaShapedStretch] =
     Option.when(FallbackRuns.eligible(text))(text).flatMap { _ =>
       FallbackRuns.runsFor(text, font, fallbacks).flatMap { runs =>
         val collector = new GlyphCollector()
@@ -250,7 +277,7 @@ final class SkiaShapedTextCache(
     val _ = lineN.incrementAndGet()
     new LineStretch(TextLine.Companion.make(text, font), text.length)
 
-  private def shapeLatin(text: String, font: Font): SkiaShapedStretch =
+  private def shapeLatin(shaper: Shaper, text: String, font: Font): SkiaShapedStretch =
     val end       = text.length
     val collector = new GlyphCollector()
     shaper.shape(

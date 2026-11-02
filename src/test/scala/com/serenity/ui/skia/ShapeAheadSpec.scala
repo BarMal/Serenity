@@ -178,27 +178,30 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
     val rounds        = new AtomicInteger(0)
     val aheadFailures = new java.util.concurrent.atomic.AtomicLong(0L)
     (0 until 6).foreach { round =>
-      val caches = SkiaTextCaches.fresh()
-      val ahead  = new ShapeAhead(caches.shapedText, workers = 3)
+      val caches  = SkiaTextCaches.fresh()
+      val ahead   = new ShapeAhead(caches.shapedText, workers = 3)
       val drawers = Executors.newFixedThreadPool(4)
       try
-        val done = new CountDownLatch(4)
+        val done     = new CountDownLatch(4)
         val shuffled = new Random(round)
         ahead.request(shuffled.shuffle(Vector.fill(8)(Lines).flatten).map(_ -> font(caches)))
         (0 until 4).foreach { drawer =>
-          val _ = drawers.submit(new Runnable:
-            def run(): Unit =
-              try
-                val random = new Random(round * 10 + drawer)
-                (0 until 60).foreach { _ =>
-                  val line    = Lines(random.nextInt(Lines.size))
-                  val stretch = caches.shapedText.stretchOf(line, font(caches))
-                  val (expectedEdges, expectedPixels) = expected(line)
-                  if edges(stretch, line.length) != expectedEdges || pixels(stretch, line.length) != expectedPixels then
-                    failures.updateAndGet(line :: _)
-                }
-              catch case error: Throwable => failures.updateAndGet(s"${error.getClass.getSimpleName}: ${error.getMessage}" :: _)
-              finally done.countDown()
+          val _ = drawers.submit(
+            new Runnable:
+              def run(): Unit =
+                try
+                  val random = new Random(round * 10 + drawer)
+                  (0 until 60).foreach { _ =>
+                    val line                            = Lines(random.nextInt(Lines.size))
+                    val stretch                         = caches.shapedText.stretchOf(line, font(caches))
+                    val (expectedEdges, expectedPixels) = expected(line)
+                    if edges(stretch, line.length) != expectedEdges || pixels(stretch, line.length) != expectedPixels
+                    then failures.updateAndGet(line :: _)
+                  }
+                catch
+                  case error: Throwable =>
+                    failures.updateAndGet(s"${error.getClass.getSimpleName}: ${error.getMessage}" :: _)
+                finally done.countDown()
           )
         }
         done.await(120, TimeUnit.SECONDS) shouldBe true
@@ -253,7 +256,9 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
       styledFonts = com.serenity.ui.renderer.StyledFontCache()
     )
     try
-      surface.text.shapeAhead((0 until 4000).map(i => com.serenity.ui.renderer.ShapeAheadRequest(s"run $i of text", awt)))
+      surface.text.shapeAhead(
+        (0 until 4000).map(i => com.serenity.ui.renderer.ShapeAheadRequest(s"run $i of text", awt))
+      )
       surface.text.cancelShapeAhead()
       caches.ahead.awaitIdle(10.seconds) shouldBe true
 
@@ -262,7 +267,23 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
   }
 
   "A surface that does not shape ahead" should "ignore the request, by the capability's own default" in {
-    classOf[com.serenity.ui.renderer.Java2DRenderSurface]
-      .getMethod("shapeAhead", classOf[Seq[?]])
-      .getDeclaringClass shouldBe classOf[com.serenity.ui.renderer.TextDrawing]
+    val image = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_ARGB)
+    val java2d = new com.serenity.ui.renderer.Java2DRenderSurface(
+      image,
+      com.serenity.ui.layout.CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10),
+      new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12),
+      _ => (),
+      40,
+      20,
+      1.0,
+      1.0
+    )
+    val before = image.getRGB(0, 0, 40, 20, null, 0, 40).toList
+
+    java2d.text.shapeAhead(
+      Seq(com.serenity.ui.renderer.ShapeAheadRequest("anything", new java.awt.Font("Serif", 0, 12)))
+    )
+    java2d.text.cancelShapeAhead()
+
+    image.getRGB(0, 0, 40, 20, null, 0, 40).toList shouldBe before
   }

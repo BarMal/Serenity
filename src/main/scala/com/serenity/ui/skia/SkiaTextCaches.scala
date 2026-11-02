@@ -11,7 +11,10 @@ final case class SkiaTextCaches(
     images: SkiaImageCache,
     inks: SkiaInkCache = new SkiaInkCache(),
     warmup: WarmupStats = new WarmupStats()
-)
+):
+
+  /** Shapes text for this owner's frames in the background; its workers are made by the first request. */
+  lazy val ahead: ShapeAhead = new ShapeAhead(shapedText)
 
 object SkiaTextCaches:
 

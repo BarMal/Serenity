@@ -37,6 +37,15 @@ trait TextDrawing:
     */
   def shapesStretchesOf(text: String): Boolean = false
 
+  /** Asks for `requests` to be shaped in the background, so that a frame which draws the same text finds it shaped.
+    * Returns at once. A surface whose text is not shaped ahead, which is every surface but the Skia ones, ignores it,
+    * and so costs nothing.
+    */
+  def shapeAhead(requests: Seq[ShapeAheadRequest]): Unit = ()
+
+  /** Drops the requests not yet started, as input that makes them stale does. */
+  def cancelShapeAhead(): Unit = ()
+
   /** As [[drawRunPx]] for `stretch.substring(from, until)`, where `stretch` is text drawn in one font across several
     * runs. A raster surface shapes the stretch once and draws each run from those glyphs, so ligatures and kerning
     * reach across run boundaries; the default draws the run's own text.
@@ -244,3 +253,6 @@ trait PanelOutlineDrawing:
 
   /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit
+
+/** One stretch to shape ahead of a frame: the text a run is drawn from, and the font the frame draws it in. */
+final case class ShapeAheadRequest(text: String, font: java.awt.Font)
