@@ -31,7 +31,7 @@ object RendererPaneContent:
     orderedPanes.foreach { (paneId, pane) =>
       renderPlan.paneLayouts.get(paneId) match
         case Some(paneLayout) =>
-          aboveBottomOf(paneLayout.contentRect, context) {
+          withinPane(paneLayout.contentRect, SharedSides.of(paneId, renderPlan.paneLayouts), context) {
             renderEditorPane(
               pane,
               paneLayout,
@@ -50,13 +50,23 @@ object RendererPaneContent:
 
   /** A last row that starts inside the pane but ends past it is cut off at the pane's bottom edge. Left unclipped its
     * glyphs land on the status row, which a frame that repaints chrome clears and one that does not leaves covered, so
-    * the same document drew two ways depending on the frame before. Only the bottom is bounded: glyph overscan to the
-    * sides is deliberate.
+    * the same document drew two ways depending on the frame before.
+    *
+    * The sides are bounded only where another pane abuts: glyph overscan past them would land on the neighbour's
+    * pixels, which a frame that redraws only some rows keeps and a frame from scratch paints over (#2481). Overscan
+    * past a side nothing abuts is deliberate.
     */
-  private def aboveBottomOf(contentRect: LayoutRect, context: RenderContext)(paint: => Unit): Unit =
-    context.surface.panelOutlines match
-      case Some(clipping) if contentRect.bottom < context.surface.viewportHeight =>
-        clipping.withRectClip(0, 0, context.surface.viewportWidth, contentRect.bottom)(paint)
+  private def withinPane(contentRect: LayoutRect, shared: SharedSides, context: RenderContext)(
+    paint: => Unit
+  ): Unit =
+    val surface      = context.surface
+    val boundsBottom = contentRect.bottom < surface.viewportHeight
+    surface.panelOutlines match
+      case Some(clipping) if boundsBottom || shared.left || shared.right =>
+        val left   = if shared.left then contentRect.x else 0
+        val right  = if shared.right then contentRect.right else surface.viewportWidth
+        val bottom = if boundsBottom then contentRect.bottom else surface.viewportHeight
+        clipping.withRectClip(left, 0, right - left, bottom)(paint)
       case _ => paint
 
   /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
