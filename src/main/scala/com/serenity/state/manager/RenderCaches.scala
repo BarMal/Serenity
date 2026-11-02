@@ -12,7 +12,8 @@ import com.serenity.ui.renderer.{
   RendererFrameState,
   ShapedTextCache,
   StyledFontCache,
-  SurfaceTextCaches
+  SurfaceTextCaches,
+  TabBarMeasures
 }
 import com.serenity.ui.theme.ThemeHighlightCache
 
@@ -49,6 +50,7 @@ final class RenderCaches private (
     val styledFonts: StyledFontCache,
     val labelSprites: LabelSprites,
     val measuredAdvances: MeasuredTextAdvances,
+    val tabBarMeasures: TabBarMeasures,
     val compositionRevisions: CompositionRevisions,
     val backendCaches: BackendCaches,
     val framePhases: FramePhaseClock
@@ -82,6 +84,7 @@ object RenderCaches:
       StyledFontCache(),
       LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
+      new TabBarMeasures,
       new CompositionRevisions,
       new BackendCaches,
       new FramePhaseClock()

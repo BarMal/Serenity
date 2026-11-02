@@ -67,7 +67,7 @@ object PerformanceBenchmarks:
       BoundaryCacheBenchmarks.benchmarks() ++
       RowCountBenchmarks.benchmarks() ++
       TabStripBenchmarks.benchmarks() ++
-      CellGridBenchmarks.chromeVariantBenchmarks() ++
+      CellGridBenchmarks.floatingChromeBenchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 

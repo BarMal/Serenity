@@ -6,7 +6,7 @@ import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.ChromeOn
-import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle, PaneHeaderCorners}
+import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
@@ -177,25 +177,17 @@ private[perf] object CellGridBenchmarks:
       )
     )
 
-  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with, and in the flush
-    * chrome with the corner settings turned off one at a time, which tell where a change in the plain frame's cost
-    * comes from. Kept apart from [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order
-    * pins them to.
+  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with. Kept apart from
+    * [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order pins them to.
     */
-  def chromeVariantBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val flush = ChromeOn.config
-    val variants = List(
-      "floating_chrome"          -> flush.withDockedCornerStyle(DockedCornerStyle.Floating),
-      "flush_square_corners"     -> flush.withUiCornerRadiusPx(0),
-      "flush_square_pane_header" -> flush.withPaneHeaderCorners(PaneHeaderCorners.Square)
-    )
-    variants.map { (name, chrome) =>
-      val frame = frameOf(stateOf(text(asciiLine), chrome))
+  def floatingChromeBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    val frame = frameOf(stateOf(text(asciiLine), ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating)))
+    List(
       BenchmarkRunner.Benchmark(
-        s"render.cell_grid.frame_ascii.$name",
+        "render.cell_grid.frame_ascii.floating_chrome",
         3,
         12,
-        () => assert(hasPixels(frame()), s"cell-grid ASCII frame ($name) drew nothing"),
+        () => assert(hasPixels(frame()), "cell-grid ASCII frame in floating chrome drew nothing"),
         () => frame()
       )
-    }
+    )
