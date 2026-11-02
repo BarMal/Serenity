@@ -44,6 +44,12 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "record the scale the Skia layer drew at" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    report.environment.skiaDeviceScale.getOrElse(fail("no Skia layer scale")) should be > 0.0
+  }
+
   it should "measure what the Skia caches did in each cold frame, with a face built and a shaper made" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)

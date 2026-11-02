@@ -65,6 +65,7 @@ object PerformanceBenchmarks:
       EqualsBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       BoundaryCacheBenchmarks.benchmarks() ++
+      RowCountBenchmarks.benchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 
