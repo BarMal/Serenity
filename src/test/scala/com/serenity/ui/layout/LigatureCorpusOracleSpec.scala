@@ -195,8 +195,9 @@ class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValu
     disagreements(languageLines(), List(11.0f, 12.0f, 14.0f, 18.0f)) shouldBe Nil
   }
 
+  // 10,000 lines in the default suite, 100,000 where SERENITY_FUZZ_LINES says so (.github/workflows/ligature-oracle.yml).
   it should "never call one row a random printable line that the wrap wraps" in {
-    disagreements(fuzzLines(100000), List(12.0f)) shouldBe Nil
+    disagreements(fuzzLines(OracleCorpusSize.fuzzLines(sys.env)), List(12.0f)) shouldBe Nil
   }
 
   it should "call one row a good share of the lines the wrap puts on one row, so the corpus exercises it" in {
