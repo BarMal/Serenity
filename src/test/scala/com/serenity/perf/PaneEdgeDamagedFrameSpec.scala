@@ -10,9 +10,9 @@ import com.serenity.state.models.{AppState, Damage}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Beside another pane, a frame that redraws only the damaged rows must come out the same as a frame drawn from
-  * scratch for the same state, pixel for pixel. Two panes scrolled one line left a 5-column band at the shared edge
-  * that differed (#2481); the rest of the frame matched.
+/** Beside another pane, a frame that redraws only the damaged rows must come out the same as a frame drawn from scratch
+  * for the same state, pixel for pixel. Two panes scrolled one line left a 5-column band at the shared edge that
+  * differed (#2481); the rest of the frame matched.
   */
 class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
 

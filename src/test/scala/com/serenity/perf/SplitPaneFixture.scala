@@ -13,12 +13,12 @@ import com.serenity.{TestTemp, setBufferForPane, setCursorPosition, splitPaneHor
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
-/** A live `StateManager` with a prose buffer in each of 2 or 4 panes, resized to the laptop grid, every pane's cursor in
-  * the middle of its document and scrolled into view, the way a session that has been reading and editing has them. The
-  * first pane takes the keys. Two panes sit side by side; four are two columns of two (#2481).
+/** A live `StateManager` with a prose buffer in each of 2 or 4 panes, resized to the laptop grid, every pane's cursor
+  * in the middle of its document and scrolled into view, the way a session that has been reading and editing has them.
+  * The first pane takes the keys. Two panes sit side by side; four are two columns of two (#2481).
   */
 final private[perf] class SplitPaneFixture private (val manager: StateManager, val panes: List[PaneId])(using
-  IORuntime
+    IORuntime
 ):
 
   def current: AppState = manager.getCurrentState.unsafeRunSync()
@@ -55,9 +55,9 @@ private[perf] object SplitPaneFixture:
       shown <- showTheRest(manager, first, buffers)
       _     <- manager.applyEvent(ResizeEvent(LaptopFrameBenchmarks.viewport))
       _     <- shown.traverse_(placeCursor(manager, _))
-      _ <- manager.updateState(state => buffers.foldLeft(state)((s, id) => scrolledToCursor(id)(s)))
-      _ <- manager.switchToPane(first)
-      _ <- manager.runtimeLifecycle.awaitEffects
+      _     <- manager.updateState(state => buffers.foldLeft(state)((s, id) => scrolledToCursor(id)(s)))
+      _     <- manager.switchToPane(first)
+      _     <- manager.runtimeLifecycle.awaitEffects
     yield shown).unsafeRunSync()
     new SplitPaneFixture(manager, shown)
 
