@@ -40,6 +40,29 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("power").as[String] shouldBe Right("battery")
   }
 
+  it should "say whether the scenes were built as the app builds them, in the text and the JSON" in {
+    val like = BenchmarkReport(environment.copy(scenesLikeTheApp = true), results, Verdict.SkiaWins)
+
+    like.markdown should include("Scenes are built as the app builds them")
+    like.markdown should include("measured after the frame")
+    like.markdown should include("font sets are made once")
+    like.markdown should not include "Scenes are built whole inside the frame"
+    parse(like.json).toOption.get.hcursor
+      .downField("environment")
+      .downField("scenesLikeTheApp")
+      .as[Boolean] shouldBe Right(true)
+  }
+
+  it should "say so when the scenes were built whole inside the frame" in {
+    report.markdown should include("Scenes are built whole inside the frame")
+    report.markdown should include("font sets are made again for every cold frame")
+    report.markdown should not include "Scenes are built as the app builds them"
+    parse(report.json).toOption.get.hcursor
+      .downField("environment")
+      .downField("scenesLikeTheApp")
+      .as[Boolean] shouldBe Right(false)
+  }
+
   it should "say unknown for a machine it could not read" in {
     report.markdown should include("governor unknown")
     val json = parse(report.json).toOption.get.hcursor.downField("environment")
