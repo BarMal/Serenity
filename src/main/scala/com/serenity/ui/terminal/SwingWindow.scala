@@ -216,7 +216,13 @@ class SwingWindow(
     */
   private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
     layerPresenterRef.getAndSet(Some(presenter)).filterNot(_ eq presenter).foreach(_.dispose())
-    presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+    val stamps = new LayerPresentStamps(frameTimings)
+    presenter.onPublished(() => stamps.published())
+    presenter.onDrawStarted(() => stamps.drawStarted())
+    presenter.onRendered { () =>
+      stamps.drawFinished()
+      framePresentedRef.get().foreach(_.apply())
+    }
 
   private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
 

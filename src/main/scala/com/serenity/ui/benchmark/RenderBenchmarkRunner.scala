@@ -8,7 +8,7 @@ import javax.swing.SwingUtilities
 import scala.util.Try
 
 import cats.syntax.either.*
-import com.serenity.config.WindowChromeMode
+import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
@@ -116,7 +116,8 @@ object RenderBenchmarkRunner:
       coldPhases = measuredSkia.flatMap(_.coldPhases),
       java2dColdSplit = java2d.coldSplit,
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
-      fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts)))
+      fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
+      skiaDeviceScale = measuredSkia.map(_.deviceScale)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -155,8 +156,18 @@ object RenderBenchmarkRunner:
     settle()
     try
       val viewportLines = window.viewportSize.height
+      val startSize     = window.currentPreferredWindowSize
       val timed = Scenario.values.toList.map { scenario =>
-        scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, refresh)
+        scenario -> timeScenario(
+          window,
+          fonts,
+          factory,
+          scenario,
+          options,
+          viewportLines,
+          WindowPx(startSize.width, startSize.height),
+          refresh
+        )
       }.toMap
       val stats = timed.view.mapValues(_.stats).toMap
       Measured(
@@ -179,9 +190,10 @@ object RenderBenchmarkRunner:
     scenario: Scenario,
     options: RenderBenchmarkOptions,
     viewportLines: Int,
+    startSize: WindowPx,
     refresh: RefreshRate
   )(using Balance): Timed =
-    val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines)
+    val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines, startSize)
     val shared = RenderCaches.create()
     def cachesFor(step: BenchmarkScript.Step) =
       if step.frame == BenchmarkScript.FrameKind.ColdFull then RenderCaches.create() else shared
@@ -197,8 +209,12 @@ object RenderBenchmarkRunner:
         )
       )
     }
-    steps.take(options.warmup).foreach(step => timed(window)(draw(window, fonts, factory, step, cachesFor(step))))
+    steps.take(options.warmup).foreach { step =>
+      resizeIfAsked(window, step)
+      timed(window)(draw(window, fonts, factory, step, cachesFor(step)))
+    }
     val measured = steps.drop(options.warmup).map { step =>
+      resizeIfAsked(window, step)
       val caches      = cachesFor(step)
       val renderNanos = new AtomicLong(0L)
       val sample = timed(window) {
@@ -216,6 +232,7 @@ object RenderBenchmarkRunner:
           .map(s => ColdFrameSplit.Sample(renderNanos.get, s.nanos, caches.framePhases.snapshot))
       )
     }
+    if scenario == Scenario.ResizeWindow then resize(window, startSize)
     val samples = measured.map(_.sample)
     val warmups = measured.flatMap(_.warmup)
     Timed(
@@ -250,7 +267,8 @@ object RenderBenchmarkRunner:
         factory
       )
     step.frame match
-      case BenchmarkScript.FrameKind.Full | BenchmarkScript.FrameKind.ColdFull => full()
+      case BenchmarkScript.FrameKind.Full | BenchmarkScript.FrameKind.ColdFull | BenchmarkScript.FrameKind.Resized(_) =>
+        full()
       case BenchmarkScript.FrameKind.CaretOnly(visible) =>
         val painted = RendererCursorOverlay.renderCursorOnly(
           step.state,
@@ -264,6 +282,18 @@ object RenderBenchmarkRunner:
           caches
         )
         if !painted then full()
+
+  /** The window is brought to the size before the frame is timed, so the figure is the first frame at the new size,
+    * from the render call to its presentation; the toolkit's own resize and the compositor are not in it.
+    */
+  private def resizeIfAsked(window: SwingWindow, step: BenchmarkScript.Step): Unit =
+    step.frame match
+      case BenchmarkScript.FrameKind.Resized(size) => resize(window, size)
+      case _                                       => ()
+
+  private def resize(window: SwingWindow, size: WindowPx): Unit =
+    window.resizeToPreferred(PreferredWindowSize(size.width, size.height))
+    settle()
 
   /** The nanoseconds from calling `render` to the last presentation of what it published, or `None` if there was none.
     */
