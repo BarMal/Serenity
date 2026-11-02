@@ -86,5 +86,47 @@ class ShardJobTests(unittest.TestCase):
         self.assertIn("EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}", _SHARDS)
 
 
+class CompileOnceTests(unittest.TestCase):
+    """One compile job per OS builds the classes and the shards reuse them (#2484), so each shard stops spending a
+    quarter to a third of its time compiling the same 2,766 sources."""
+
+    def test_a_compile_job_builds_the_tests_and_uploads_the_result_named_for_its_os(self) -> None:
+        job = _job(_SHARDS, "compile")
+        self.assertIn("runs-on: ${{ inputs.os }}", job)
+        self.assertIn("sbt -v Test/compile", job)
+        self.assertNotIn("clean", job)
+        self.assertIn("uses: actions/upload-artifact@v4", job)
+        self.assertIn("name: compiled-${{ inputs.label }}", job)
+
+    def test_the_compile_job_has_its_own_hang_guard_inside_its_job_limit(self) -> None:
+        job = _job(_SHARDS, "compile")
+        guard = int(re.search(r"HANG_MINUTES: '(\d+)'", job).group(1))
+        limit = int(re.search(r"timeout-minutes: (\d+)", job).group(1))
+        self.assertLess(guard, limit)
+        self.assertIn("run-tests-with-hang-dump.sh sbt", job)
+
+    def test_the_shards_wait_for_the_compile_job_and_restore_its_classes_before_testing(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        self.assertIn("needs: compile", job)
+        restore = job.index("actions/download-artifact@v4")
+        self.assertIn("name: compiled-${{ inputs.label }}", job[restore:])
+        self.assertLess(restore, job.index("Run tests"))
+
+    def test_the_shards_run_test_without_clean_so_the_restored_classes_count(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        run = re.search(r"run: bash \.github/scripts/run-tests-with-hang-dump\.sh (sbt [^\n]+)", job).group(1)
+        self.assertEqual("sbt -v test", run)
+
+    def test_a_shard_that_had_to_recompile_says_so_but_still_runs(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        self.assertIn("compiling", job)
+        self.assertIn("::warning::", job)
+
+    def test_the_extracted_files_are_the_whole_build_output_and_nothing_else(self) -> None:
+        compile_job = _job(_SHARDS, "compile")
+        self.assertRegex(compile_job, r"tar [^\n]*compiled\.tar[^\n]* target project/target")
+        self.assertIn("path: compiled.tar", compile_job)
+
+
 if __name__ == "__main__":
     unittest.main()

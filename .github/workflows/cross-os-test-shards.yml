@@ -4,6 +4,12 @@ name: Cross-OS Test Shards
 # whose "Test (windows)" and "Test (macos)" jobs wait for these and keep the check names branch protection lists (#2016).
 # A shard runs the suites project/test-shards.tsv gives it (project/TestShards.scala); a suite the table does not list is
 # placed by a hash of its name, so every suite runs in exactly one shard.
+#
+# Compiling the 1,100 main and 1,670 test sources takes 14 minutes of a 38-minute macOS job and needs about 3.2 GB of the
+# 4 GB heap, so one `compile` job per OS does it once and the shards restore its output. The zinc analysis in that output
+# is keyed by content, not by file times (checked by restoring it onto sources and dependency jars given new times:
+# nothing recompiled), and runner paths are the same from job to job on one OS. If a restore ever did not match, sbt
+# recompiles what changed, which is slower but correct; the shard says so in a warning.
 on:
   workflow_call:
     inputs:
@@ -25,8 +31,48 @@ permissions:
   contents: read
 
 jobs:
+  compile:
+    name: Compile (${{ inputs.label }})
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Compile main and test sources
+        shell: bash
+        # A compile that hangs holds a runner as a hanging test does, so it gets the same thread dump and stop.
+        env:
+          HANG_MINUTES: '40'
+        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v Test/compile
+
+      # One archive instead of thousands of class files, so the upload is a single file and keeps the file times the
+      # analysis was written with.
+      - name: Archive the build output
+        shell: bash
+        run: tar cf compiled.tar target project/target
+
+      - name: Upload the build output
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiled-${{ inputs.label }}
+          path: compiled.tar
+          retention-days: 1
+
   test-shard:
     name: Test (${{ inputs.label }}, shard ${{ matrix.shard }}/2)
+    needs: compile
     runs-on: ${{ inputs.os }}
     timeout-minutes: 60
     strategy:
@@ -50,7 +96,7 @@ jobs:
 
       # Tests run inside sbt's own JVM (no `fork`), so SBT_OPTS reaches them. GC and safepoint logs plus the stall
       # sampler's file (StallSampler) let a test that overshot its budget (#2016) be matched to a whole-JVM stall by
-      # wall-clock time. Written outside target/ because `clean` deletes that directory.
+      # wall-clock time. Written outside target/ so extracting the build output into target/ cannot touch it.
       - name: Enable JVM stall diagnostics
         shell: bash
         # The extra options come last, so an -Xmx there wins over the one in .jvmopts.
@@ -61,13 +107,36 @@ jobs:
           echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log $EXTRA_JVM_OPTS" >> "$GITHUB_ENV"
           echo "SERENITY_TEST_SHARD=${{ matrix.shard }}/2" >> "$GITHUB_ENV"
 
+      - name: Download the build output
+        uses: actions/download-artifact@v4
+        with:
+          name: compiled-${{ inputs.label }}
+
+      - name: Restore the build output
+        shell: bash
+        run: |
+          tar xf compiled.tar
+          rm compiled.tar
+
+      # Costs a launcher start when the restore matched. When it did not, sbt recompiles here, under the hang guard and
+      # before the tests start, and the warning names it.
+      - name: Check the restored build output
+        shell: bash
+        env:
+          HANG_MINUTES: '40'
+        run: |
+          bash .github/scripts/run-tests-with-hang-dump.sh sbt -v Test/compile 2>&1 | tee restore-check.log
+          if grep -q 'compiling [0-9]* Scala source' restore-check.log; then
+            echo "::warning::The restored build output did not match, so this shard recompiled; see the compiling lines above."
+          fi
+
       - name: Run tests
         shell: bash
         # Fails with a thread dump after HANG_MINUTES instead of holding the runner for 6 hours on a hang. The script's
         # default of 40 stops a run that takes 39 minutes, so the limit is raised to sit inside the job's 60.
         env:
           HANG_MINUTES: '52'
-        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
+        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v test
 
       # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
       # JUnit XML reports are printed and uploaded as well, as Desktop Publish does.
