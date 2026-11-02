@@ -36,7 +36,8 @@ private[perf] object SplitPaneFixture:
 
   given Balance = Balance.default
 
-  def open(paneCount: Int)(using IORuntime): SplitPaneFixture =
+  /** `documentOf` gives the text of the pane with that 1-based index; by default prose. */
+  def open(paneCount: Int, documentOf: Int => String = prose)(using IORuntime): SplitPaneFixture =
     require(Set(2, 4)(paneCount), s"$paneCount panes: the fixture builds 2 or 4")
     given LoggerFactory[IO] = NoOpFactory[IO]
     val config              = AppConfig.conventional
@@ -46,20 +47,26 @@ private[perf] object SplitPaneFixture:
       dictionaryCache = WarmDictionary.cacheFor(config)
     ).unsafeRunSync()
     val shown = (for
-      _ <- manager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
-      buffers <- (1 to paneCount).toList.traverse(index =>
-        manager.createBuffer(BenchmarkFixtures.loremIpsumProse(paragraphs = 300 + index), None)
-      )
-      first <- manager.getCurrentState.map(_.persisted.layout.editorPanes.keys.head)
-      _     <- manager.setBufferForPane(first, buffers.head)
-      shown <- showTheRest(manager, first, buffers)
-      _     <- manager.applyEvent(ResizeEvent(LaptopFrameBenchmarks.viewport))
-      _     <- shown.traverse_(placeCursor(manager, _))
-      _     <- manager.updateState(state => buffers.foldLeft(state)((s, id) => scrolledToCursor(id)(s)))
-      _     <- manager.switchToPane(first)
-      _     <- manager.runtimeLifecycle.awaitEffects
+      _       <- manager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
+      buffers <- (1 to paneCount).toList.traverse(index => manager.createBuffer(documentOf(index), None))
+      first   <- manager.getCurrentState.map(_.persisted.layout.editorPanes.keys.head)
+      _       <- manager.setBufferForPane(first, buffers.head)
+      shown   <- showTheRest(manager, first, buffers)
+      _       <- manager.applyEvent(ResizeEvent(LaptopFrameBenchmarks.viewport))
+      _       <- shown.traverse_(placeCursor(manager, _))
+      _       <- manager.updateState(state => buffers.foldLeft(state)((s, id) => scrolledToCursor(id)(s)))
+      _       <- manager.switchToPane(first)
+      _       <- manager.runtimeLifecycle.awaitEffects
     yield shown).unsafeRunSync()
     new SplitPaneFixture(manager, shown)
+
+  def prose(index: Int): String = BenchmarkFixtures.loremIpsumProse(paragraphs = 300 + index)
+
+  /** Short lines that each start with a combining acute accent, which a font draws to the left of where it is placed,
+    * so the ink of every line reaches past the left edge of its pane.
+    */
+  def overhangingLines(index: Int): String =
+    (1 to 800).map(line => s"́ pane $index line $line, with words enough to fill out the row").mkString("\n")
 
   private def showTheRest(manager: StateManager, first: PaneId, buffers: List[BufferId]): IO[List[PaneId]] =
     buffers match

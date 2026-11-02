@@ -18,7 +18,12 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  final private case class Scenario(name: String, panes: Int, step: SplitPaneFixture => (AppState, AppState))
+  final private case class Scenario(
+      name: String,
+      panes: Int,
+      step: SplitPaneFixture => (AppState, AppState),
+      document: Int => String = SplitPaneFixture.prose
+  )
 
   private val scenarios = List(
     Scenario("two panes, a one-line scroll", 2, _.transition(ScrollDown(1))),
@@ -26,7 +31,19 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
     Scenario("four panes, a one-line scroll", 4, _.transition(ScrollDown(1))),
     Scenario("two panes, a keystroke", 2, _.typing()),
     Scenario("four panes, a page down", 4, _.transition(PageDown)),
-    Scenario("four panes, a keystroke", 4, _.typing())
+    Scenario("four panes, a keystroke", 4, _.typing()),
+    Scenario(
+      "four panes whose lines overhang the left edge, a one-line scroll",
+      4,
+      _.transition(ScrollDown(1)),
+      SplitPaneFixture.overhangingLines
+    ),
+    Scenario(
+      "two panes whose lines overhang the left edge, a one-line scroll",
+      2,
+      _.transition(ScrollDown(1)),
+      SplitPaneFixture.overhangingLines
+    )
   )
 
   private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
@@ -37,7 +54,7 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
 
   scenarios.foreach { scenario =>
     s"A damaged frame of ${scenario.name}" should "equal a frame drawn from scratch, pixel for pixel" in {
-      val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes))
+      val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes, scenario.document))
       val damage          = DamageProducer.forTransition(before, after)
       damage should not be Damage.Everything
 
