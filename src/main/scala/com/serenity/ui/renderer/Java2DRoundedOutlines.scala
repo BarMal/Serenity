@@ -1,6 +1,8 @@
 package com.serenity.ui.renderer
 
+import java.awt.image.BufferedImage
 import java.awt.{BasicStroke, Color, Graphics2D, RenderingHints}
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.color.RenderColor
@@ -61,13 +63,33 @@ final private[renderer] class Java2DRoundedOutlines(
       )
       // Hard-edged, like the clip it replaces: a pixel is wholly the fill or left as it was, so drawing the same shape
       // again, or into a cached layer and compositing that, gives the same pixels. The border is anti-aliased over it.
-      if corners.topLeft then g.fill(RoundedPath.cornerFill(RoundedPath.Corner.TopLeft, px, py, radius))
-      if corners.topRight then g.fill(RoundedPath.cornerFill(RoundedPath.Corner.TopRight, px + pw - radius, py, radius))
-      if corners.bottomRight then
-        g.fill(RoundedPath.cornerFill(RoundedPath.Corner.BottomRight, px + pw - radius, py + ph - radius, radius))
-      if corners.bottomLeft then
-        g.fill(RoundedPath.cornerFill(RoundedPath.Corner.BottomLeft, px, py + ph - radius, radius))
+      if corners.topLeft then fillCorner(RoundedPath.Corner.TopLeft, px, py, radius)
+      if corners.topRight then fillCorner(RoundedPath.Corner.TopRight, px + pw - radius, py, radius)
+      if corners.bottomRight then fillCorner(RoundedPath.Corner.BottomRight, px + pw - radius, py + ph - radius, radius)
+      if corners.bottomLeft then fillCorner(RoundedPath.Corner.BottomLeft, px, py + ph - radius, radius)
     rounds
+
+  /** Each corner's rows as runs of rectangles, found once per corner and radius by filling the corner's path the way it
+    * used to be drawn. A few rectangles cost far less than rasterising a path, which every status bar and pane header
+    * paid for on every frame.
+    */
+  private val cornerRuns = new ConcurrentHashMap[(RoundedPath.Corner, Int), Array[Int]]()
+
+  private def fillCorner(corner: RoundedPath.Corner, x: Int, y: Int, radius: Int): Unit =
+    if translatesOnly then
+      val runs = cornerRuns.computeIfAbsent((corner, radius), key => Java2DRoundedOutlines.runsOf(key._1, key._2))
+      Iterator.range(0, runs.length, 4).foreach { at =>
+        g.fillRect(x + runs(at), y + runs(at + 1), runs(at + 2), runs(at + 3))
+      }
+    else g.fill(RoundedPath.cornerFill(corner, x, y, radius))
+
+  /** Whether one logical pixel is one device pixel here, which is what the rectangles are worked out for: under a scale
+    * the path fills finer than the rectangles can.
+    */
+  private def translatesOnly: Boolean =
+    val transform = g.getTransform
+    transform.getScaleX == 1.0 && transform.getScaleY == 1.0 && transform.getShearX == 0.0 &&
+    transform.getShearY == 0.0
 
   private def withAntialiasing(draw: => Unit): Unit =
     val savedAlias   = g.getRenderingHint(RenderingHints.KEY_ANTIALIASING)
@@ -152,3 +174,30 @@ final private[renderer] class Java2DRoundedOutlines(
       finally
         userClipDepth.decrementAndGet()
         g.setClip(savedClip)
+
+private[renderer] object Java2DRoundedOutlines:
+
+  /** The rectangles, as `x, y, width, height` four to a run, that give the pixels a hard-edged fill of
+    * `RoundedPath.cornerFill(corner, 0, 0, radius)` gives. Rows with the same span are one rectangle.
+    */
+  def runsOf(corner: RoundedPath.Corner, radius: Int): Array[Int] =
+    val image = new BufferedImage(radius, radius, BufferedImage.TYPE_INT_ARGB)
+    val g     = image.createGraphics()
+    g.setColor(Color.WHITE)
+    g.fill(RoundedPath.cornerFill(corner, 0, 0, radius))
+    g.dispose()
+    def span(row: Int): Option[(Int, Int)] =
+      val filled = (0 until radius).filter(column => (image.getRGB(column, row) >>> 24) != 0)
+      filled.headOption.zip(filled.lastOption)
+    val runs = (0 until radius).foldLeft(List.empty[Run]) { (done, row) =>
+      span(row) match
+        case None => done
+        case Some((from, to)) =>
+          done match
+            case last :: earlier if last.continuedBy(row, from, to) => last.copy(height = last.height + 1) :: earlier
+            case _                                                  => Run(from, row, to - from + 1, 1) :: done
+    }
+    runs.reverse.flatMap(run => List(run.x, run.y, run.width, run.height)).toArray
+
+  final private case class Run(x: Int, y: Int, width: Int, height: Int):
+    def continuedBy(row: Int, from: Int, to: Int): Boolean = x == from && width == to - from + 1 && y + height == row
