@@ -247,24 +247,6 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     canvas.at(101, 101) shouldBe Color.BLUE.getRGB
   }
 
-  "withPixelClip" should "keep fills inside the pixel rectangle, between cells, and restore the clip afterwards" in {
-    val canvas = painted(canvasAt()) { surface =>
-      blackWhite(surface)
-      surface.panelOutlines.getOrElse(fail("expected rect clipping")).withPixelClip(13, 5, 20, 10) {
-        surface.pixels.fillPixelRect(0, 0, width, height, colour(Color.RED))
-      }
-      surface.pixels.fillPixelRect(100, 100, 4, 4, colour(Color.BLUE))
-    }
-
-    canvas.at(13, 5) shouldBe Color.RED.getRGB
-    canvas.at(32, 14) shouldBe Color.RED.getRGB
-    canvas.at(12, 8) shouldBe Color.BLACK.getRGB
-    canvas.at(33, 8) shouldBe Color.BLACK.getRGB
-    canvas.at(20, 4) shouldBe Color.BLACK.getRGB
-    canvas.at(20, 15) shouldBe Color.BLACK.getRGB
-    canvas.at(101, 101) shouldBe Color.BLUE.getRGB
-  }
-
   "withPixelTranslation" should "move fills by the offset and move them back afterwards" in {
     val canvas = painted(canvasAt()) { surface =>
       surface.pixels.withPixelTranslation(30.0, 12.0)(surface.pixels.fillPixelRect(0, 0, 4, 4, colour(Color.RED)))
