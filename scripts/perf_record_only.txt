@@ -1,0 +1,7 @@
+# Benchmarks measured and printed by the perf gate but never failed on: a new row has no baseline, so it records first
+# and is gated only once the owner has read its numbers (issue #2478). One name prefix a line; # starts a comment.
+# Remove a line to start gating its rows. `scrollbar.` is meant to stay: the late count runs on another thread.
+buffers.
+panes.
+scrollbar.
+footprint.buffers_

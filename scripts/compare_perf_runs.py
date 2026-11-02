@@ -46,6 +46,7 @@ import argparse
 import statistics
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from check_perf_regression import Row, build_parser, check_memory, parse_csv
 
@@ -54,6 +55,7 @@ DEFAULT_MIN_DELTA_MS = 0.05
 DEFAULT_MIN_PAIRS = 2
 DEFAULT_UNSTABLE_SPREAD = 2.0
 MIN_BASELINE_MS = 0.001
+DEFAULT_RECORD_ONLY = Path(__file__).resolve().parent / "perf_record_only.txt"
 
 
 @dataclass(frozen=True)
@@ -144,6 +146,17 @@ def median_rows(runs: list[dict[str, Row]]) -> dict[str, Row]:
     return rows
 
 
+def load_record_only(path: Path) -> list[str]:
+    """The name prefixes in `path`, one a line; blank lines and `#` comments are skipped."""
+    with open(path) as handle:
+        lines = (line.split("#", 1)[0].strip() for line in handle)
+        return [line for line in lines if line]
+
+
+def is_record_only(name: str, prefixes: list[str]) -> bool:
+    return any(name.startswith(prefix) for prefix in prefixes)
+
+
 def main_with_args(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base", nargs="+", required=True, help="Base-commit run CSVs, in run order")
@@ -154,6 +167,14 @@ def main_with_args(argv: list[str]) -> int:
     parser.add_argument("--unstable-spread", type=float, default=DEFAULT_UNSTABLE_SPREAD)
     parser.add_argument("--write-flagged", metavar="FILE", help="Write the timing regressions to FILE, one name a line, and exit 2 for them")
     parser.add_argument("--only", metavar="FILE", help="Judge only the benchmarks named in FILE, from runs made to confirm them")
+    parser.add_argument(
+        "--record-only",
+        metavar="FILE",
+        type=Path,
+        default=DEFAULT_RECORD_ONLY,
+        help="Name prefixes, one a line, of benchmarks that are measured and printed but never fail the build "
+        "(default: perf_record_only.txt beside this script)",
+    )
     args = parser.parse_args(argv)
 
     if len(args.base) != len(args.head):
@@ -178,18 +199,22 @@ def main_with_args(argv: list[str]) -> int:
         print(f"::error::No benchmark has {args.min_pairs} usable base/head pairs -- nothing was compared.")
         return 1
 
+    record_only = load_record_only(args.record_only)
     print(f"{'benchmark':<55} {'base p50':>12} {'head p50':>12} {'ratio':>7} {'pairs':>5}")
     for v in verdicts:
-        flag = " <-- REGRESSION" if v.regressed else (" (unstable base)" if v.unstable else "")
+        if is_record_only(v.name, record_only):
+            flag = " (recorded, not gated)"
+        else:
+            flag = " <-- REGRESSION" if v.regressed else (" (unstable base)" if v.unstable else "")
         print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5}{flag}")
-    regressions = [v for v in verdicts if v.regressed]
+    regressions = [v for v in verdicts if v.regressed and not is_record_only(v.name, record_only)]
     level = "warning" if args.write_flagged else "error"
     for v in regressions:
         print(
             f"::{level}::{v.name}: fastest-run head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
             f"({v.base_ms:.5f}ms -> {v.head_ms:.5f}ms), past {args.threshold}x."
         )
-    unstable = [v for v in verdicts if v.unstable and not v.regressed]
+    unstable = [v for v in verdicts if v.unstable and not v.regressed and not is_record_only(v.name, record_only)]
     if unstable:
         print(f"::notice::{len(unstable)} benchmark(s) had base runs more than {args.unstable_spread}x apart; see log.")
     if args.only:
@@ -197,7 +222,9 @@ def main_with_args(argv: list[str]) -> int:
             return 1
         print("\nEvery flagged benchmark was back under the threshold on the confirmation runs; the first reading is forgiven.")
         return 0
-    memory_failures = check_memory(median_rows(base_runs), median_rows(head_runs), build_parser().parse_args(["-", "-"]))
+    gated = {name: row for name, row in median_rows(head_runs).items() if not is_record_only(name, record_only)}
+    base_gated = {name: row for name, row in median_rows(base_runs).items() if not is_record_only(name, record_only)}
+    memory_failures = check_memory(base_gated, gated, build_parser().parse_args(["-", "-"]))
     if memory_failures:
         return 1
     if regressions and args.write_flagged:

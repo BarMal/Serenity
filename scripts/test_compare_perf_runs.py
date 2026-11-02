@@ -134,6 +134,107 @@ class PairedGateTests(unittest.TestCase):
         self.assertAlmostEqual(verdicts[0].ratio, 2.2)
 
 
+class RecordOnlyTests(unittest.TestCase):
+    """Rows named in the record-only list are measured and printed, but never fail the build (issue #2478): a new row
+    has no baseline, so it records first and is gated only once the owner has read its numbers."""
+
+    HEADER = (
+        "Serenity performance benchmarks\n"
+        "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
+    )
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+
+    def _write(self, name: str, rows: dict[str, tuple[float, int | None]]) -> str:
+        path = os.path.join(self._tmpdir.name, name)
+        with open(path, "w") as handle:
+            handle.write(self.HEADER)
+            for row, (p50, retained) in rows.items():
+                handle.write(f"{row},1,1,1,0,{p50},{p50 * 1.2},0,,,{'' if retained is None else retained}\n")
+        return path
+
+    def _list(self, *lines: str) -> str:
+        path = os.path.join(self._tmpdir.name, "record_only.txt")
+        with open(path, "w") as handle:
+            handle.write("\n".join(lines) + "\n")
+        return path
+
+    def _gate(self, base_rows, head_rows, record_only: str | None, *extra: str) -> int:
+        base = [self._write(f"b{i}.csv", base_rows) for i in range(3)]
+        head = [self._write(f"h{i}.csv", head_rows) for i in range(3)]
+        arguments = ["--base", *base, "--head", *head, *extra]
+        if record_only is not None:
+            arguments += ["--record-only", record_only]
+        return compare_perf_runs.main_with_args(arguments)
+
+    def test_a_listed_row_three_times_slower_does_not_fail(self) -> None:
+        listed = self._list("panes.")
+        self.assertEqual(
+            self._gate({"panes.split2.typing_frame": (1.0, None), "other": (1.0, None)},
+                       {"panes.split2.typing_frame": (3.0, None), "other": (1.0, None)}, listed),
+            0,
+        )
+
+    def test_an_unlisted_row_three_times_slower_still_fails(self) -> None:
+        listed = self._list("panes.")
+        self.assertEqual(
+            self._gate({"panes.split2.typing_frame": (1.0, None), "other": (1.0, None)},
+                       {"panes.split2.typing_frame": (1.0, None), "other": (3.0, None)}, listed),
+            1,
+        )
+
+    def test_the_list_matches_by_prefix_and_ignores_comments_and_blank_lines(self) -> None:
+        listed = self._list("# new rows record first", "", "scrollbar.four_panes", "buffers.")
+        self.assertEqual(
+            self._gate({"scrollbar.four_panes.all_bars": (2.0, None), "buffers.switch_cold_frame.open_20.prose": (2.0, None)},
+                       {"scrollbar.four_panes.all_bars": (9.0, None), "buffers.switch_cold_frame.open_20.prose": (9.0, None)}, listed),
+            0,
+        )
+
+    def test_a_listed_rows_retained_heap_growth_does_not_fail_either(self) -> None:
+        mib = 1024 * 1024
+        listed = self._list("footprint.buffers_")
+        self.assertEqual(
+            self._gate({"footprint.buffers_20_shown": (1.0, 10 * mib)}, {"footprint.buffers_20_shown": (1.0, 40 * mib)}, listed), 0
+        )
+
+    def test_an_unlisted_rows_retained_heap_growth_still_fails(self) -> None:
+        mib = 1024 * 1024
+        listed = self._list("footprint.buffers_")
+        self.assertEqual(
+            self._gate({"footprint.other": (1.0, 10 * mib)}, {"footprint.other": (1.0, 40 * mib)}, listed), 1
+        )
+
+    def test_a_listed_row_is_still_printed_and_marked(self) -> None:
+        import contextlib
+        import io
+
+        listed = self._list("panes.")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self._gate({"panes.split2.typing_frame": (1.0, None)}, {"panes.split2.typing_frame": (3.0, None)}, listed)
+        line = next(l for l in out.getvalue().splitlines() if l.startswith("panes.split2.typing_frame"))
+        self.assertIn("recorded, not gated", line)
+        self.assertIn("3.00x", line)
+
+    def test_a_run_with_only_listed_rows_still_compares_something(self) -> None:
+        listed = self._list("panes.")
+        self.assertEqual(self._gate({"panes.a": (1.0, None)}, {"panes.a": (1.0, None)}, listed), 0)
+
+    def test_the_default_list_is_the_one_in_the_repo_and_names_the_new_scaling_rows(self) -> None:
+        self.assertTrue(compare_perf_runs.DEFAULT_RECORD_ONLY.exists())
+        prefixes = compare_perf_runs.load_record_only(compare_perf_runs.DEFAULT_RECORD_ONLY)
+        for expected in ("buffers.", "panes.", "scrollbar.", "footprint.buffers_"):
+            self.assertIn(expected, prefixes)
+
+    def test_without_the_option_the_repo_list_applies(self) -> None:
+        self.assertEqual(
+            self._gate({"panes.split2.typing_frame": (1.0, None)}, {"panes.split2.typing_frame": (3.0, None)}, None), 0
+        )
+
+
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
 
