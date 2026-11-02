@@ -205,23 +205,21 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   }
 
   /** A pixel clearly outside the strip's arc at one of its corners: further out than the radius by more than a pixel. */
-  private def outsideArc(radius: Int): List[(Int, Int, Int, Int)] =
-    for
+  private def outsideArc(radius: Int): List[(Int, Int)] =
+    (for
       dy <- 0 until radius
       dx <- 0 until radius
-      centreDistance = math.hypot(radius - dx - 0.5, radius - dy - 0.5)
-      if centreDistance > radius + 1.5
-    yield (dx, dy, dx, dy)
+      if math.hypot(radius - dx - 0.5, radius - dy - 0.5) > radius + 1.5
+    yield (dx, dy)).toList
 
   private def cornerPixels(s: Strip, radius: Int): List[(Int, Int)] =
     val left   = stripLeft(s)
     val right  = stripRight(s) - 1
     val top    = bandOf(s).start
     val bottom = bandOf(s).end - 1
-    outsideArc(radius).flatMap {
-      case (dx, dy, _, _) =>
-        List((left + dx, top + dy), (right - dx, top + dy), (right - dx, bottom - dy), (left + dx, bottom - dy))
-    }
+    outsideArc(radius).flatMap((dx, dy) =>
+      List((left + dx, top + dy), (right - dx, top + dy), (right - dx, bottom - dy), (left + dx, bottom - dy))
+    )
 
   List(2, 24).foreach { count =>
     "A rounded tab strip with " + count + " tabs" should "show what is behind it outside each arc, never its own fill" in {
