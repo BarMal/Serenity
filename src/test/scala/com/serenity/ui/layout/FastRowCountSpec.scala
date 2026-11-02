@@ -159,10 +159,10 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
     rows.rowsIn(0) shouldBe 7
   }
 
-  "A code font with ligatures" should "wrap every line, since shaping may change what a character advances" in {
+  "A code font with ligatures" should "wrap every line until its certificate is built, since shaping may change what a character advances" in {
     val font   = codeFont(12.0f, ligatures = true)
     val buffer = Buffer.fromString(bufferId, Vector.tabulate(40)(line => s"  val value$line = $line").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = WrappedLineCache.bounded(layoutMemos = LayoutMemos((_: Runnable) => ()))
 
     counted(buffer, 1472, font, cache) shouldBe Vector.fill(40)(1)
 

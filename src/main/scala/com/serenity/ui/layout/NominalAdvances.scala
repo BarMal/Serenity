@@ -44,10 +44,18 @@ private[layout] object NominalAdvances:
   /** The table for `font`, or `None` when something may set a character at an advance other than its own. */
   def of(font: Font, frc: FontRenderContext): Option[NominalAdvances] =
     val shapedText = ShapedTextCache()
-    val probes     = shapedText.probes
-    if GlyphAdvances
-          .layoutAdvanceMatchesSum(font, frc, probes) && !GlyphAdvances.shapingMaySubstitute(font, frc, probes)
-    then measured(font, frc, shapedText)
+    if GlyphAdvances.shapingMaySubstitute(font, frc, shapedText.probes) then None
+    else ofLayoutAdvances(font, frc, shapedText)
+
+  /** The table of a font whose layout advance is the sum of its glyphs', whatever shaping may do to a run. The caller
+    * answers for that: see [[LigatureCertificate]].
+    */
+  private[layout] def ofLayoutAdvances(
+    font: Font,
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
+  ): Option[NominalAdvances] =
+    if GlyphAdvances.layoutAdvanceMatchesSum(font, frc, shapedText.probes) then measured(font, frc, shapedText)
     else None
 
   private def measured(font: Font, frc: FontRenderContext, shapedText: ShapedTextCache): Option[NominalAdvances] =

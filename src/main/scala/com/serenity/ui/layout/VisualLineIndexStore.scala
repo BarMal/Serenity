@@ -38,6 +38,10 @@ final class VisualLineIndexStore[K](maxEntries: Int):
 
   def size: Int = synchronized(entries.size())
 
+  private[layout] def forget(key: K): Unit = synchronized {
+    val _ = entries.remove(key)
+  }
+
   def counts(
     key: K,
     content: Rope,
