@@ -49,3 +49,51 @@ class TabBarMeasuresSpec extends AnyFlatSpec with Matchers:
     remembered.map(_.maxTabWidth).distinct shouldBe List(fresh.maxTabWidth)
     measures.measurements shouldBe 1L
   }
+
+  private val wideTitles = List("README.md", "Makefile", "MMMMMMMM", "wwwwww", "Buffer 1", "i")
+
+  it should "measure each title once across layout passes for the same font settings" in {
+    val state    = AppState.initial(config)
+    val measures = new TabBarMeasures
+
+    val first  = wideTitles.map(title => TabBarLayoutSettings.of(state, measures = measures).measure.cells(title))
+    val second = wideTitles.map(title => TabBarLayoutSettings.of(state, measures = measures).measure.cells(title))
+
+    second shouldBe first
+    measures.titleMeasurements shouldBe wideTitles.size.toLong
+  }
+
+  it should "count a title in the cells a fresh, uncached measure counts it in" in {
+    val state    = AppState.initial(config)
+    val measures = new TabBarMeasures
+    val fresh    = TabBarLayoutSettings.of(state)
+
+    val remembered = TabBarLayoutSettings.of(state, measures = measures)
+
+    wideTitles.map(remembered.measure.cells) shouldBe wideTitles.map(fresh.measure.cells)
+    wideTitles.map(remembered.measure.fit(_, 6)) shouldBe wideTitles.map(fresh.measure.fit(_, 6))
+  }
+
+  it should "measure the titles again when the font settings change" in {
+    val measures = new TabBarMeasures
+    val larger = config.withFontConfig(
+      config.editorConfig.fontConfig.copy(fontSize = config.editorConfig.fontConfig.fontSize + 6.0f)
+    )
+
+    wideTitles.foreach(title => measures.titleAdvancePx(title, config.editorConfig.fontConfig))
+    wideTitles.foreach(title => measures.titleAdvancePx(title, larger.editorConfig.fontConfig))
+
+    measures.titleMeasurements shouldBe 2L * wideTitles.size
+  }
+
+  it should "keep a bounded number of title advances" in {
+    val measures = new TabBarMeasures
+    val fontCfg  = config.editorConfig.fontConfig
+    val distinct = (0 until TabBarMeasures.TitleCapacity + 10).map(index => s"Title $index")
+
+    distinct.foreach(title => measures.titleAdvancePx(title, fontCfg))
+    val before = measures.titleMeasurements
+    measures.titleAdvancePx(distinct.head, fontCfg)
+
+    measures.titleMeasurements shouldBe before + 1L
+  }

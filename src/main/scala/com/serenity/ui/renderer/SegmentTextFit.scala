@@ -12,8 +12,14 @@ import com.serenity.ui.layout.SegmentTitleFit
   */
 private[renderer] object SegmentTextFit:
 
-  private def advanceOf(text: String, font: Font, context: FontRenderContext): Double =
-    if text.isEmpty then 0.0 else TextLayout(text, font, context).getAdvance.toDouble
+  private def advanceOf(
+    text: String,
+    font: Font,
+    context: FontRenderContext,
+    advances: Option[MeasuredTextAdvances]
+  ): Double =
+    if text.isEmpty then 0.0
+    else advances.fold(TextLayout(text, font, context).getAdvance.toDouble)(_.advanceOf(text, font, context).toDouble)
 
   def fit(
     text: String,
@@ -21,16 +27,17 @@ private[renderer] object SegmentTextFit:
     font: Font,
     context: Option[FontRenderContext],
     cellWidthPx: Int,
-    insetPx: Double
+    insetPx: Double,
+    advances: Option[MeasuredTextAdvances] = None
   ): String =
     context match
       case Some(renderContext) if cellWidthPx > 0 =>
         val availablePx = fit.cells * cellWidthPx - insetPx
-        if advanceOf(text, font, renderContext) <= availablePx then text
+        if advanceOf(text, font, renderContext, advances) <= availablePx then text
         else
           Iterator
             .range(text.length - 1, -1, -1)
             .map(length => text.take(length) + fit.ellipsis)
-            .find(advanceOf(_, font, renderContext) <= availablePx)
+            .find(advanceOf(_, font, renderContext, advances) <= availablePx)
             .getOrElse("")
       case _ => text

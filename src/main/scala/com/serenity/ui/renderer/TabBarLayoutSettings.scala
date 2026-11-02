@@ -1,12 +1,8 @@
 package com.serenity.ui.renderer
 
-import java.awt.font.TextLayout
-import java.util.concurrent.ConcurrentHashMap
-
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.state.models.AppState
-import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CloseReveal, TabBarSettings, TabTitleMeasure, TextLayoutSnapshot}
+import com.serenity.ui.layout.{CloseReveal, TabBarSettings, TabTitleMeasure}
 
 /** The tab strip's layout settings for a state, built the same way for the renderer, accessibility, and click and drag
   * hit testing, so all four lay the strip out identically.
@@ -24,7 +20,7 @@ object TabBarLayoutSettings:
     val cellWidth = if gui then measures.cellWidthPx(config) else 0.0
     TabBarSettings(
       maxTabWidth = config.surfaceConfig.tabMaxWidth,
-      measure = if gui then proportional(config, cellWidth) else TabTitleMeasure.CellGrid,
+      measure = if gui then proportional(config, cellWidth, measures) else TabTitleMeasure.CellGrid,
       reveal = if revealAll then CloseReveal.All else revealFor(state),
       edgeInsetCells = if gui then edgeInsetCells(config, cellWidth) else 0
     )
@@ -39,19 +35,12 @@ object TabBarLayoutSettings:
     if state.runtime.capabilities.isCellGrid then CloseReveal.ActiveOnly
     else state.runtime.pointerGesture.hoveredTab.fold(CloseReveal.ActiveOnly)(CloseReveal.Hovered(_))
 
-  /** Each call measures afresh and remembers a title's advance only for the layout passes that use this measure, so the
-    * object holds no state between calls and a font change needs no invalidation.
+  /** A title's advance comes from `measures`, which remembers it for as long as the font settings stay the same, so
+    * laying the strip out again for the same titles measures nothing. A font change needs no invalidation: the font
+    * settings are part of what an advance is remembered for.
     */
-  private def proportional(config: AppConfig, cellWidth: Double): TabTitleMeasure =
+  private def proportional(config: AppConfig, cellWidth: Double, measures: TabBarMeasures): TabTitleMeasure =
     val fontConfig = config.editorConfig.fontConfig
-    val font       = FontLoader.previewUiFont(fontConfig)
-    val context    = TextLayoutSnapshot.defaultFontRenderContext()
-    val advances   = new ConcurrentHashMap[String, java.lang.Double]()
     def advanceOf(label: String): Double =
-      if label.isEmpty then 0.0
-      else
-        advances.computeIfAbsent(
-          label,
-          text => java.lang.Double.valueOf(TextLayout(text, font, context).getAdvance.toDouble)
-        )
+      if label.isEmpty then 0.0 else measures.titleAdvancePx(label, fontConfig)
     TabTitleMeasure.proportional(advanceOf, SurfaceTextInset.px(config), cellWidth)

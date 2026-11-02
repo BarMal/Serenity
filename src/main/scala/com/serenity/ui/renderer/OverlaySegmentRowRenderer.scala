@@ -36,7 +36,8 @@ object OverlaySegmentRowRenderer:
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
     font: Font,
-    cellWidthPx: Int = 0
+    cellWidthPx: Int = 0,
+    advances: Option[MeasuredTextAdvances] = None
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -51,7 +52,8 @@ object OverlaySegmentRowRenderer:
         defaultForeground,
         defaultBackground,
         font,
-        cellWidthPx
+        cellWidthPx,
+        advances
       )
     else
       val baseCellWidth = width / segments.length
@@ -85,7 +87,8 @@ object OverlaySegmentRowRenderer:
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
     font: Font,
-    cellWidthPx: Int = 0
+    cellWidthPx: Int = 0,
+    advances: Option[MeasuredTextAdvances] = None
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -107,7 +110,8 @@ object OverlaySegmentRowRenderer:
             font,
             highlightRadiusPx = if segment.selected then row.segmentHighlightRadiusPx else 0,
             glyphInsetPx = row.segmentInsetPx,
-            cellWidthPx = cellWidthPx
+            cellWidthPx = cellWidthPx,
+            advances = advances
           )
           val afterCell = cursorX + cellWidth
           val afterSeparator =
@@ -276,7 +280,8 @@ object OverlaySegmentRowRenderer:
     font: Font,
     highlightRadiusPx: Int = 0,
     glyphInsetPx: Double = 0.0,
-    cellWidthPx: Int = 0
+    cellWidthPx: Int = 0,
+    advances: Option[MeasuredTextAdvances] = None
   ): Unit =
     val iconWidth = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
     val iconGap   = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
@@ -284,7 +289,15 @@ object OverlaySegmentRowRenderer:
     // text, cut by pixels to that room, so what the layout counted in cells can never run into the cells that follow.
     val text = segment.titleFit match
       case Some(fit) =>
-        SegmentTextFit.fit(segment.text, fit, font, surface.text.fontRenderContext, cellWidthPx, glyphInsetPx)
+        SegmentTextFit.fit(
+          segment.text,
+          fit,
+          font,
+          surface.text.fontRenderContext,
+          cellWidthPx,
+          glyphInsetPx,
+          advances
+        )
       case None => segment.text.take(math.max(0, width - iconWidth - iconGap))
     val renderWidth = iconWidth + iconGap + text.length
     val renderX = segment.titleFit match
