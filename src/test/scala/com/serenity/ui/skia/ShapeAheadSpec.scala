@@ -60,6 +60,7 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
 
       caches.shapedText.shapings shouldBe 0L
       caches.shapedText.aheadShapings shouldBe Lines.distinct.size.toLong
+      ahead.failures shouldBe 0L
     finally ahead.close()
   }
 
@@ -173,8 +174,9 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
         line -> (edges(stretch, line.length), pixels(stretch, line.length))
       }.toMap
 
-    val failures = new AtomicReference(List.empty[String])
-    val rounds   = new AtomicInteger(0)
+    val failures      = new AtomicReference(List.empty[String])
+    val rounds        = new AtomicInteger(0)
+    val aheadFailures = new java.util.concurrent.atomic.AtomicLong(0L)
     (0 until 6).foreach { round =>
       val caches = SkiaTextCaches.fresh()
       val ahead  = new ShapeAhead(caches.shapedText, workers = 3)
@@ -201,6 +203,7 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
         }
         done.await(120, TimeUnit.SECONDS) shouldBe true
         ahead.awaitIdle(30.seconds) shouldBe true
+        val _ = aheadFailures.addAndGet(ahead.failures)
         val _ = rounds.incrementAndGet()
       finally
         ahead.close()
@@ -209,4 +212,57 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
 
     failures.get shouldBe empty
     rounds.get shouldBe 6
+    aheadFailures.get shouldBe 0L
+  }
+
+  "A Skia surface's text capability" should "shape ahead into the cache the surface draws with" in {
+    val metrics = com.serenity.ui.layout.CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
+    val caches  = SkiaTextCaches.fresh()
+    val target  = Surface.Companion.makeRasterN32Premul(210, 130)
+    val surface = new SkiaRenderSurface(
+      target.getCanvas,
+      metrics,
+      com.serenity.ui.renderer.FontSpec.fromAwt(awt),
+      () => (),
+      210,
+      130,
+      caches = caches,
+      styledFonts = com.serenity.ui.renderer.StyledFontCache()
+    )
+    try
+      surface.text.shapeAhead(Lines.map(com.serenity.ui.renderer.ShapeAheadRequest(_, awt)))
+      caches.ahead.awaitIdle(10.seconds) shouldBe true
+
+      caches.shapedText.aheadShapings shouldBe Lines.distinct.size.toLong
+      caches.shapedText.shapings shouldBe 0L
+    finally caches.ahead.close()
+  }
+
+  it should "drop what has not started when it is cancelled" in {
+    val metrics = com.serenity.ui.layout.CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10)
+    val caches  = SkiaTextCaches.fresh()
+    val target  = Surface.Companion.makeRasterN32Premul(210, 130)
+    val surface = new SkiaRenderSurface(
+      target.getCanvas,
+      metrics,
+      com.serenity.ui.renderer.FontSpec.fromAwt(awt),
+      () => (),
+      210,
+      130,
+      caches = caches,
+      styledFonts = com.serenity.ui.renderer.StyledFontCache()
+    )
+    try
+      surface.text.shapeAhead((0 until 4000).map(i => com.serenity.ui.renderer.ShapeAheadRequest(s"run $i of text", awt)))
+      surface.text.cancelShapeAhead()
+      caches.ahead.awaitIdle(10.seconds) shouldBe true
+
+      caches.shapedText.aheadShapings should be < 4000L
+    finally caches.ahead.close()
+  }
+
+  "A surface that does not shape ahead" should "ignore the request, by the capability's own default" in {
+    classOf[com.serenity.ui.renderer.Java2DRenderSurface]
+      .getMethod("shapeAhead", classOf[Seq[?]])
+      .getDeclaringClass shouldBe classOf[com.serenity.ui.renderer.TextDrawing]
   }
