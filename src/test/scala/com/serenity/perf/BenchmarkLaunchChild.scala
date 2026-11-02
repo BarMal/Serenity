@@ -12,4 +12,12 @@ object CellGridFontChild:
 object WindowFailureChild:
 
   def main(args: Array[String]): Unit =
+    val watcher = new Thread(() =>
+      (1 to 4).foreach { _ =>
+        Thread.sleep(5000)
+        println(s"displayable windows: ${java.awt.Window.getWindows.count(_.isDisplayable)}")
+      }
+    )
+    watcher.setDaemon(true)
+    watcher.start()
     val _ = PerformanceBenchmarks.withSuite(_ => throw new ExceptionInInitializerError("benchmark setup failed"))
