@@ -37,9 +37,13 @@ class ProcessServiceRealSpec extends AnyFlatSpec with Matchers:
     }
 
   private def eventually(within: FiniteDuration)(condition: => Boolean): Boolean =
-    val deadline = System.nanoTime() + within.toNanos
-    while !condition && System.nanoTime() < deadline do Thread.sleep(50)
-    condition
+    def poll(remaining: FiniteDuration): IO[Boolean] =
+      IO(condition).flatMap {
+        case true                                => IO.pure(true)
+        case false if remaining <= Duration.Zero => IO.pure(false)
+        case false                               => IO.sleep(50.millis) *> poll(remaining - 50.millis)
+      }
+    poll(within).unsafeRunSync()
 
   "A process started through the service" should "leave no descendant behind once it is released" in {
     assume(posix, "the tree kill is POSIX-only for now")
