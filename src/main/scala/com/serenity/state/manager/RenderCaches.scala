@@ -59,6 +59,26 @@ final class RenderCaches private (
 
 object RenderCaches:
 
+  /** PROBE ONLY: everything shared with `real` but the per-frame state. */
+  def forPlanning(real: RenderCaches): RenderCaches =
+    new RenderCaches(
+      RendererFrameState(64),
+      real.themeHighlightCache,
+      real.graphemeSegmentationCache,
+      real.authoritativeScene,
+      real.markdownPreviewCache,
+      real.chapterGhosts,
+      real.wrappedLines,
+      FrameCounters(),
+      real.shapedText,
+      real.styledFonts,
+      real.labelSprites,
+      real.measuredAdvances,
+      new CompositionRevisions,
+      new BackendCaches,
+      new FramePhaseClock()
+    )
+
   /** `rendererFrameStateCacheCapacity` mirrors `RendererFrameState.cacheCapacity`'s own default/config source
     * (`AppConfig.surfaceConfig.rendererFrameStateCacheCapacity`) -- callers that build a `RenderCaches` before a config
     * is loaded (or that don't care) get the same 64-entry default that module has always used.
