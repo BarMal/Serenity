@@ -20,7 +20,7 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
   implicit override val patienceConfig: PatienceConfig =
     PatienceConfig(timeout = Span(5, Seconds), interval = Span(20, Millis))
 
-  private val Title     = "Serenity resize spec"
+  private val Titles    = new java.util.concurrent.atomic.AtomicInteger(0)
   private val Elsewhere = new Point(37, 41)
   private val Target    = PreferredWindowSize(800, 500)
 
@@ -29,14 +29,20 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
     */
   private def afterResize(ask: com.serenity.ui.terminal.SwingWindow => Unit)(check: Frame => Unit): Unit =
     DisplayExclusive {
+      // A title of its own: a window an earlier test closed can still be listed under the same one.
+      val title   = s"Serenity resize spec ${Titles.incrementAndGet()}"
       val metrics = CellMetrics(8, 16, 12)
       val window =
-        new SwingWindow(new Dimension(640, 400), metrics, WindowChromeMode.Auto, metrics, windowTitle = Title)
+        new SwingWindow(new Dimension(640, 400), metrics, WindowChromeMode.Auto, metrics, windowTitle = title)
       window.start()
       try
-        val frame = Frame.getFrames.find(_.getTitle == Title).getOrElse(fail("no window"))
-        SwingUtilities.invokeAndWait(() => frame.setLocation(Elsewhere.x, Elsewhere.y))
-        eventually(frame.getLocation shouldBe Elsewhere)
+        val frame = Frame.getFrames.find(_.getTitle == title).getOrElse(fail("no window"))
+        // Until the toolkit has mapped the window it may still place it, so the move is asked for again until it holds.
+        eventually(frame.isShowing shouldBe true)
+        eventually {
+          SwingUtilities.invokeAndWait(() => frame.setLocation(Elsewhere.x, Elsewhere.y))
+          frame.getLocation shouldBe Elsewhere
+        }
         ask(window)
         eventually((frame.getWidth, frame.getHeight) shouldBe (Target.width, Target.height))
         check(frame)
