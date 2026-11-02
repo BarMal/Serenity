@@ -48,6 +48,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
     "perf/RenderBenchmarks.scala",
+    "perf/TabStripBenchmarks.scala",
     "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
@@ -68,7 +69,11 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "FrameBackend.scala",
     "perf/SkiaFrameBenchmarks.scala",
     "ui/renderer/Java2DRunPaintSpec.scala",
+    "ui/renderer/PanelTextSpacingRenderSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",
+    "ui/renderer/RoundedChromeRenderSpec.scala",
+    "ui/renderer/RoundedPanelDrawingSpec.scala",
+    "ui/renderer/RoundedTabStripRenderSpec.scala",
     "ui/renderer/SurfaceTextContractSpec.scala"
   )
 

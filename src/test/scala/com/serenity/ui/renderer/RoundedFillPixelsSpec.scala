@@ -1,12 +1,12 @@
 package com.serenity.ui.renderer
 
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font}
+import java.awt.Color
+import java.util.concurrent.atomic.AtomicInteger
 
-import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
-import com.serenity.{FramePixels, Java2DFrames}
+import com.serenity.MockRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +18,6 @@ class RoundedFillPixelsSpec extends AnyFlatSpec with Matchers:
 
   private val page = new Color(250, 250, 250)
   private val fill = new Color(30, 90, 160)
-  private val font = new Font(Font.MONOSPACED, Font.PLAIN, 12)
 
   private val cellX     = 1
   private val cellY     = 1
@@ -75,20 +74,28 @@ class RoundedFillPixelsSpec extends AnyFlatSpec with Matchers:
     g.dispose()
     image
 
-  private def drawn(metrics: CellMetrics, widthPx: Int, heightPx: Int, corners: RoundedCorners, radius: Int) =
-    val frame    = Java2DFrames.newFrame(widthPx, heightPx)
-    val surface  = Java2DFrames.surfaceOver(frame, metrics, font, widthPx, heightPx, 1.0, false, RenderCaches.create())
-    val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
-    surface.clearViewport(RenderColor.fromAwt(page))
+  private def drawn(
+    metrics: CellMetrics,
+    widthPx: Int,
+    heightPx: Int,
+    corners: RoundedCorners,
+    radius: Int
+  ): BufferedImage =
+    val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
+    val g     = image.createGraphics()
+    g.setColor(page)
+    g.fillRect(0, 0, widthPx, heightPx)
+    val outlines =
+      new Java2DRoundedOutlines(new MockRenderSurface(1, 1), g, metrics, _ => fill, (_, _, _, _) => (), AtomicInteger(0))
     outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, corners, radius, RenderColor.fromAwt(fill)) shouldBe true
-    surface.flush()
-    frame
+    g.dispose()
+    image
 
-  private def differences(actual: FramePixels, expected: BufferedImage): List[(Int, Int)] =
+  private def differences(actual: BufferedImage, expected: BufferedImage): List[(Int, Int)] =
     for
       y <- (0 until expected.getHeight).toList
       x <- 0 until expected.getWidth
-      if (actual.rgbAt(x, y) & 0xffffff) != (expected.getRGB(x, y) & 0xffffff)
+      if (actual.getRGB(x, y) & 0xffffff) != (expected.getRGB(x, y) & 0xffffff)
     yield (x, y)
 
   List(1 -> List(6, 8, 12), 2 -> List(12, 16, 24)).foreach {
