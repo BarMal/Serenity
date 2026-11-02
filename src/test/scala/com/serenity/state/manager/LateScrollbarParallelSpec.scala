@@ -103,6 +103,16 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       (waits > 0 && notices.arrived
         .tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, waits - 1))
 
+  /** Waits until every pane has been told its bar is counted, then checks none is told twice. A bar can show in a
+    * scene as soon as its rows are measured, before the run that measured them has told every pane, so the notices are
+    * what is waited on.
+    */
+  private def toldOnce(notices: Notices, state: AppState): Unit =
+    val all = panes(state)
+    notices.arrived.tryAcquire(all.size, 60, TimeUnit.SECONDS) shouldBe true
+    notices.arrived.tryAcquire(1, 300, TimeUnit.MILLISECONDS) shouldBe false
+    notices.heard.asScala.toList.sortBy(_.value) shouldBe all.sortBy(_.value)
+
   private def withPool[A](threads: Int)(body: Executor => A): A =
     val pool = ScrollCountExecutor.pool(threads)
     body(pool)
@@ -114,10 +124,9 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       val state   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
 
       scene.forState(state, viewport).paneScrolls shouldBe empty
-      barsLand(scene, notices, state, viewport, waits = 12) shouldBe true
+      toldOnce(notices, state)
 
       scene.forState(state, viewport).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(state)
-      notices.heard.asScala.toList.sortBy(_.value) shouldBe panes(state).sortBy(_.value)
     }
 
   "Four panes of one buffer counted on four threads" should "each end with the bar one thread counts, told once" in
@@ -126,10 +135,10 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
       val state   = fourPanes(Vector(prose("shared")))
 
-      barsLand(scene, notices, state, viewport, waits = 12) shouldBe true
+      scene.forState(state, viewport)
+      toldOnce(notices, state)
 
       scene.forState(state, viewport).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(state)
-      notices.heard.asScala.toList.sortBy(_.value) shouldBe panes(state).sortBy(_.value)
     }
 
   "Edits and resizes across four panes on four threads" should "end with each pane's bar for its last text and width" in
