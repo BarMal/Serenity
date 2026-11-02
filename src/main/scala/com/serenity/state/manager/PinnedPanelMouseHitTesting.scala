@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.syntax.all.*
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, ExplorerOpenMode}
 import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.*
 import com.serenity.state.components.*
@@ -45,8 +45,8 @@ final private[manager] class PinnedPanelMouseHitTesting(port: PinnedPanelMouseHi
     if click.button != MouseButton.Primary then IO.pure(false)
     else
       commit(PinnedPanelMouseHitTesting.select(click, state, focusPanel = true, authoritativeScene)).flatTap {
-        case true if click.clickCount >= 2 => activateSelectedDirectoryRow(click)
-        case _                             => IO.unit
+        case true => activateSelectedDirectoryRow(click)
+        case _    => IO.unit
       }
 
   /** Activation resolves against the committed selection, the same row a keyboard Enter would now activate. */
@@ -177,8 +177,17 @@ private[manager] object PinnedPanelMouseHitTesting:
       }
       .getOrElse(Transition.pure(false))
 
-  /** What a double-click on a directory row does once the click itself has selected that row, resolved against the
-    * state carrying that selection. `None` for a single click or a click that no longer lands on a row.
+  /** Whether the `clickCount`th click of a run opens a row. A single-click mode acts on the first click only, so the
+    * second click of a double-click does not undo what the first did (a folder toggled twice, a file opened twice).
+    */
+  def opensOn(mode: ExplorerOpenMode, clickCount: Int): Boolean =
+    mode match
+      case ExplorerOpenMode.DoubleClick                            => clickCount >= 2
+      case ExplorerOpenMode.SingleClick | ExplorerOpenMode.Preview => clickCount == 1
+
+  /** What a click on a directory row does once the click itself has selected that row, resolved against the state
+    * carrying that selection, for the configured `explorer.open_mode`. `None` for a click that does not open the row or
+    * no longer lands on one.
     */
   def activation(
     click: MouseClick,
@@ -186,7 +195,9 @@ private[manager] object PinnedPanelMouseHitTesting:
     authoritativeScene: AuthoritativeUiScene
   ): Option[ComponentResult] =
     Option
-      .when(click.clickCount >= 2)(pinnedDirectoryMouseHitAt(click, selectedState, authoritativeScene))
+      .when(opensOn(selectedState.persisted.config.inputConfig.explorerOpenMode, click.clickCount))(
+        pinnedDirectoryMouseHitAt(click, selectedState, authoritativeScene)
+      )
       .flatten
       .map(hit =>
         PinnedPanelComponent(hit.position, wrapCache = authoritativeScene.wrappedLines)

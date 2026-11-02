@@ -3,7 +3,8 @@ package com.serenity.state.manager
 import java.nio.file.Paths
 
 import com.serenity.DockedPanelFixtures
-import com.serenity.config.TextAreaInsets
+import com.serenity.config.AppConfigOps.withExplorerOpenMode
+import com.serenity.config.{ExplorerOpenMode, TextAreaInsets}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.components.ComponentResult
@@ -194,7 +195,10 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   }
 
   "PinnedPanelMouseHitTesting.activation" should "open a double-clicked file row, and do nothing for a single click" in {
-    val state  = withExplorer
+    val explorer = withExplorer
+    val state = explorer.copy(persisted =
+      explorer.persisted.copy(config = explorer.persisted.config.withExplorerOpenMode(ExplorerOpenMode.DoubleClick))
+    )
     val (x, y) = explorerRowPoint(state, 2)
     val selected = run(state)(
       PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true, AuthoritativeUiScene())
