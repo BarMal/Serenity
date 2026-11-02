@@ -181,7 +181,15 @@ object Main extends IOApp:
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
-        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks, graphics.surfaces)
+        case (hooks, role) =>
+          runAs(
+            role,
+            launchOptionsForLogging,
+            requestRestart,
+            hooks,
+            graphics.surfaces,
+            graphics.backend.backend.configKey
+          )
       }
     yield ExitCode.Success
 
@@ -205,7 +213,8 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
-    surfaces: FrameSurfaceFactory
+    surfaces: FrameSurfaceFactory,
+    backend: String
   )(using
     logger: Logger[IO]
   ): IO[Unit] =
@@ -214,9 +223,9 @@ object Main extends IOApp:
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -232,6 +241,7 @@ object Main extends IOApp:
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
     surfaces: FrameSurfaceFactory,
+    backend: String,
     store: CrashRecord,
     previousRun: PreviousRun
   )(using logger: Logger[IO]): IO[Unit] =
@@ -283,7 +293,8 @@ object Main extends IOApp:
         askedPlan,
         requestRestart,
         StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker),
-        surfaces
+        surfaces,
+        backend
       )
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
@@ -311,7 +322,8 @@ object Main extends IOApp:
       plan: StartupRecovery.Plan,
       requestRestart: RestartMode => IO[Unit],
       markStarted: IO[Unit],
-      surfaces: FrameSurfaceFactory
+      surfaces: FrameSurfaceFactory,
+      backend: String
   )
 
   /** Which session this process may write, and the files later launches hand it. */
@@ -370,7 +382,7 @@ object Main extends IOApp:
       smokeReady   <- Deferred[IO, Unit]
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
-      frameTimings   = FrameTimings()
+      frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (
         SwingWindow.resource(
           initialDisplay.codeMetrics,

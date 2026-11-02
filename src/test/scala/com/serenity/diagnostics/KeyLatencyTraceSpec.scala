@@ -329,3 +329,22 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
   it should "leave the keystroke trace off unless asked" in {
     FrameTimings().keyLatency.isEnabled shouldBe false
   }
+
+  "LatencyWindow.summaryLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
+    val skia = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "skia")
+    skia.summaryLine shouldBe
+      "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+
+    val java2d = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "java2d")
+    java2d.summaryLine shouldBe
+      "[LATENCY] summary backend=java2d presented=paint-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+  }
+
+  "KeyLatencyTrace.drain" should "carry the backend it was made for into the window" in {
+    val clock = ManualClock()
+    val trace = KeyLatencyTrace(() => clock.read(), () => WallClockMs, backend = "skia")
+    trace.setEnabled(true)
+
+    trace.drain().backend shouldBe "skia"
+    trace.drain().summaryLine should include("backend=skia presented=render-callback-end")
+  }
