@@ -34,6 +34,16 @@ object SkiaTextCaches:
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 
+  /** Gives `into` what a new document leaves of `from`'s caches: the faces stay, since they depend on the fonts and not
+    * on the text, and the shaped text, images and inks start empty. Nothing happens if `from` never drew with Skia.
+    */
+  def keepingFonts(from: BackendCaches, into: BackendCaches): Unit =
+    if heldBy(from) then
+      val warmup = new WarmupStats()
+      val _ = into.getOrCreate(Key)(
+        SkiaTextCaches(of(from).fonts, new SkiaShapedTextCache(warmup = warmup), new SkiaImageCache(), warmup = warmup)
+      )
+
   /** What first use has cost `owner`'s Skia text caches so far, if it has any. */
   def warmupOf(owner: BackendCaches): Option[WarmupStats.Snapshot] =
     Option.when(heldBy(owner))(of(owner).warmup.snapshot)
