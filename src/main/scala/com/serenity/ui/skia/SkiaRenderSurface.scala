@@ -240,9 +240,8 @@ final class SkiaRenderSurface(
     clipGlyphToRun: Boolean = false
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
-      val shapedBefore = shapedText.shapings
-      val shaped       = shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font)
-      activity.shaped(shapedText.shapings - shapedBefore)
+      val shaped =
+        activity.counting(shapedText)(shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font))
       shaped.draw(canvas, from, until, xPx, (yPx + ascentPx).toFloat, glyphPaint())
     }
 
@@ -260,9 +259,7 @@ final class SkiaRenderSurface(
     val face = fonts.faceFor(currentFontRef.get())
     val ink  = glyphPaint()
     if SkiaShapedTextCache.worthShaping(currentFontRef.get(), s) then
-      val before = shapedText.shapings
-      shapedText.stretchOf(s, face.font).draw(canvas, from, until, x, baseline, ink)
-      activity.shaped(shapedText.shapings - before)
+      activity.counting(shapedText)(shapedText.stretchOf(s, face.font)).draw(canvas, from, until, x, baseline, ink)
     else
       val _ = canvas.drawString(s.substring(from, until), x, baseline, face.font, ink)
 
@@ -469,7 +466,9 @@ final class SkiaRenderSurface(
   /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read
     * as it was before the copy. A clip in force (inside [[withRectClip]]) still bounds the copy, which Java2D's raw
     * graphics would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows
-    * of one.
+    * of one. A source that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs)
+    * copies only the part inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the
+    * rect's own corner would move it sideways.
     */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
@@ -485,17 +484,23 @@ final class SkiaRenderSurface(
           PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
         )
       else
-        val snap  = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
-        val saved = canvas.save()
-        try
-          val _ = canvas.resetMatrix()
-          fill.setBlendMode(BlendMode.SRC)
-          fill.setColor(OpaqueBlack)
-          val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
-          fill.setBlendMode(BlendMode.SRC_OVER)
-        finally
-          restoreTo(saved)
-          snap.close()
+        val insideLeft   = left.max(0)
+        val insideTop    = top.max(0)
+        val insideRight  = (left + width).min(surface.getWidth)
+        val insideBottom = (top + height).min(surface.getHeight)
+        if insideRight > insideLeft && insideBottom > insideTop then
+          val snap =
+            surface.makeImageSnapshot(IRect.Companion.makeLTRB(insideLeft, insideTop, insideRight, insideBottom))
+          val saved = canvas.save()
+          try
+            val _ = canvas.resetMatrix()
+            fill.setBlendMode(BlendMode.SRC)
+            fill.setColor(OpaqueBlack)
+            val _ = canvas.drawImage(snap, insideLeft.toFloat, (insideTop + moved).toFloat, fill)
+            fill.setBlendMode(BlendMode.SRC_OVER)
+          finally
+            restoreTo(saved)
+            snap.close()
     }
 
   def hideCursor(): Unit = ()

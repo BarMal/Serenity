@@ -29,7 +29,7 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
     val entry  = result.report.invalidEntries.find(_.key == "ui.render.wayland")
     entry.map(_.value) shouldBe Some("sideways")
     entry.map(_.reason).getOrElse("") should include("java2d, skia-raster or xwayland")
-    result.config.surfaceConfig.renderWayland shouldBe WaylandRender.Java2D
+    result.config.surfaceConfig.renderWayland shouldBe WaylandRender.SkiaRaster
   }
 
   "The invalid-entry warning" should "reach the log text with the key, the value and the choices" in {

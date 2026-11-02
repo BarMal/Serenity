@@ -52,6 +52,66 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  it should "hold DisplayExclusive in every spec that shows a real window" in {
+    val unguarded = specSourcesWithPerf.flatMap { path =>
+      val content  = Files.readString(path)
+      val relative = testRoot.relativize(path).toString.replace('\\', '/')
+      Option.when(showsRealWindow(content) && !holdsDisplayExclusive(content))(relative)
+    }
+
+    withClue(
+      s"specs that put a real window on the shared display without DisplayExclusive (screen captures and 'no window open' checks in other specs see it; wrap the code that has the window up in DisplayExclusive): $unguarded; "
+    )(unguarded shouldBe Nil)
+  }
+
+  it should "recognise the calls that put a real window up, and a spec that takes the lock" in {
+    List(
+      "val window = new SwingWindow(size, metrics)",
+      "SwingWindow.resource(metrics = m).use(_ => IO.unit)",
+      "PerformanceBenchmarks.withSuite(_.size)",
+      "LaptopFrameBenchmarks.presentWindowResource(a, b)",
+      "frame.setVisible(true)",
+      "val f = new JFrame(\"x\")"
+    ).foreach(source => withClue(source)(showsRealWindow(source) shouldBe true))
+    List(
+      "SwingWindow.imageSourceRegion(clip, 200, 100, 200, 100)",
+      "new SwingWindow.ReusableImagePool",
+      "val shown = window.shownFrames",
+      "frame.setVisible(false)"
+    ).foreach(source => withClue(source)(showsRealWindow(source) shouldBe false))
+    holdsDisplayExclusive("DisplayExclusive(body)") shouldBe true
+    holdsDisplayExclusive("DisplayExclusive.withShowingWindowsAfter(body)") shouldBe true
+    holdsDisplayExclusive("val x = DisplayExclusive {\n  body\n}") shouldBe true
+    holdsDisplayExclusive("DisplayExclusive:\n  body") shouldBe true
+    holdsDisplayExclusive("val x = 1") shouldBe false
+    holdsDisplayExclusive("// the lock is DisplayExclusive, take it") shouldBe false
+  }
+
+  private def specSourcesWithPerf: List[Path] =
+    Using.resource(Files.walk(testRoot)) { stream =>
+      stream
+        .iterator()
+        .asScala
+        .filter(path => Files.isRegularFile(path))
+        .filter(path => path.getFileName.toString.endsWith("Spec.scala"))
+        .toList
+    }
+
+  private def showsRealWindow(source: String): Boolean = RealWindowPatterns.exists(_.findFirstIn(source).nonEmpty)
+
+  private def holdsDisplayExclusive(source: String): Boolean = TakesDisplayExclusive.findFirstIn(source).nonEmpty
+
+  private val TakesDisplayExclusive = raw"\bDisplayExclusive\s*(\(|\{|:[ \t]*[\r\n]|\.\s*withShowingWindowsAfter)".r
+
+  private val RealWindowPatterns = List(
+    raw"\bnew\s+SwingWindow\s*\(",
+    raw"\bSwingWindow\s*\.\s*resource\s*\(",
+    raw"\.withSuite\s*\(",
+    raw"\bpresentWindowResource\s*\(",
+    raw"\.setVisible\s*\(\s*true\s*\)",
+    raw"\bnew\s+(JFrame|JWindow|JDialog)\s*\("
+  ).map(_.r)
+
   private def scalaTestSources: List[Path] =
     Using.resource(Files.walk(testRoot)) { stream =>
       stream
@@ -80,5 +140,8 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
     "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",
     "testkit/RuntimeShutdownWatch.scala"          -> "the watcher's own sampling interval on a daemon thread",
-    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout"
+    "io/MainThreadHandoffSpec.scala"              -> "work that overruns the handoff's start timeout",
+    "ui/skia/SkiaLayerHostSpec.scala"             -> "polls a native window's paint, which signals no completion",
+    "ui/skia/SkiaLayerRedrawSpec.scala" -> "polls a native window's draws, which signal no completion; and waits to see that none follow",
+    "ui/skia/SkiaLayerWindowSpec.scala" -> "polls a native window's paint, which signals no completion"
   )

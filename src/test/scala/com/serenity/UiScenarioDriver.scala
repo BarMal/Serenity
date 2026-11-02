@@ -21,7 +21,6 @@ import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{
   Effects,
   FontSpec,
-  Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
   RenderImage,
@@ -100,20 +99,20 @@ final class UiScenarioDriver private (
     state.map { current =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
-      val image = new BufferedImage(
-        Java2DRenderSurface.deviceImageDimension(logicalWidth, environment.deviceScale),
-        Java2DRenderSurface.deviceImageDimension(logicalHeight, environment.deviceScale),
-        BufferedImage.TYPE_INT_ARGB
+      val caches        = com.serenity.state.manager.RenderCaches.create()
+      val frame0 = SkiaFrames.newFrame(
+        math.ceil(logicalWidth * environment.deviceScale).toInt,
+        math.ceil(logicalHeight * environment.deviceScale).toInt
       )
-      val surface = new Java2DRenderSurface(
-        image,
+      val surface = SkiaFrames.surfaceOver(
+        frame0,
         environment.cellMetrics,
         codeFont,
-        _ => (),
         logicalWidth,
         logicalHeight,
         environment.deviceScale,
-        environment.deviceScale
+        persists = false,
+        caches
       )
       val recordingSurface = new ScenarioRecordingSurface(surface, environment.cellMetrics)
       RendererEntryPoints.render(
@@ -127,8 +126,9 @@ final class UiScenarioDriver private (
         environment.cellMetrics,
         environment.cellMetrics,
         cursorColor = None,
-        com.serenity.state.manager.RenderCaches.create()
+        caches
       )
+      val image    = frame0.toImage
       val layout   = LayoutEngine.calculateLayoutWithUI(current, environment.viewport)
       val contract = EditorLayoutContract.from(current, environment.viewport, layout)
       val frame    = ScenarioFrame(image, evidenceFor(current, contract, image, recordingSurface))

@@ -14,12 +14,13 @@ private[serenity] object UiSceneBuilder:
 
   type Build = (AppState, ViewportSize, Font, Font, Option[CellMetrics]) => UiSceneSnapshot
 
-  def apply(wrappedLines: WrappedLineCache): Build =
+  def apply(wrappedLines: WrappedLineCache, counting: ScrollCounting = ScrollCounting.Inline): Build =
     (state, viewportSize, codeFont, textFont, cellMetrics) =>
-      build(wrappedLines, state, viewportSize, codeFont, textFont, cellMetrics)
+      build(wrappedLines, counting, state, viewportSize, codeFont, textFont, cellMetrics)
 
   private def build(
     wrappedLines: WrappedLineCache,
+    counting: ScrollCounting,
     state: AppState,
     viewportSize: ViewportSize,
     codeFont: Font,
@@ -48,7 +49,7 @@ private[serenity] object UiSceneBuilder:
           )
           val scroll =
             Option.when(!columnModeActive && ScrollbarLayout.hasBar(state, paneLayout))(
-              paneScroll(
+              ScrollKey(laidOut.widthPx, buffer.document.contentVersion) -> paneScroll(
                 state,
                 buffer,
                 laidOut.viewport,
@@ -57,15 +58,26 @@ private[serenity] object UiSceneBuilder:
                 laidOut.font,
                 laidOut.fontMetrics,
                 laidOut.forceCellLayout,
-                wrappedLines
+                wrappedLines,
+                counting
               )
             )
           paneId -> (laidOut.snapshot, laidOut.columns, scroll)
     }
     val textSnapshots   = perPane.view.mapValues(_._1).toMap
     val columnSnapshots = perPane.view.mapValues(_._2).filter(_._2.nonEmpty).toMap
-    val paneScrolls     = perPane.flatMap((paneId, parts) => parts._3.map(paneId -> _))
-    base.withTextSnapshots(textSnapshots).withColumnSnapshots(columnSnapshots).withPaneScrolls(paneScrolls)
+    val scrolls         = perPane.flatMap((paneId, parts) => parts._3.map(paneId -> _))
+    val paneScrolls = scrolls.flatMap {
+      case (paneId, (_, Right(scroll))) => Some(paneId -> scroll)
+      case (paneId, (key, Left(_)))     => counting.shownWhile(paneId, key).map(paneId -> _)
+    }
+    val pendingScrolls = scrolls.flatMap((paneId, scroll) => scroll._2.left.toOption.map(paneId -> _))
+    base
+      .withTextSnapshots(textSnapshots)
+      .withColumnSnapshots(columnSnapshots)
+      .withPaneScrolls(paneScrolls)
+      .withPendingScrolls(pendingScrolls)
+      .withScrollKeys(scrolls.map((paneId, scroll) => paneId -> scroll._1))
 
   /** Counted as the wrap that laid the pane's rows out, so the bar's rows and the viewport's agree. The lines the
     * snapshot has just drawn whole are counted from it rather than wrapped a second time, which keeps an edit's cost to
@@ -80,8 +92,9 @@ private[serenity] object UiSceneBuilder:
     font: Font,
     fontMetrics: CellMetrics,
     forceCellLayout: Boolean,
-    wrappedLines: WrappedLineCache
-  ): PaneScroll =
+    wrappedLines: WrappedLineCache,
+    counting: ScrollCounting
+  ): Either[PendingScroll, PaneScroll] =
     val surfaceConfig = state.persisted.config.surfaceConfig
     val rows =
       if !surfaceConfig.wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
@@ -103,7 +116,10 @@ private[serenity] object UiSceneBuilder:
           dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
           fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
-    PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
+    if counting.isDeferred then
+      val pending = PendingScroll(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines)
+      pending.counted.toRight(pending)
+    else Right(PaneScroll.of(rows, viewport.topLine, viewport.topVisualLine, viewport.visibleLines))
 
   /** The rows of each line `snapshot` draws from its first row to its last: not the first when the view starts part-way
     * through it, nor the last, which the snapshot may have cut short.

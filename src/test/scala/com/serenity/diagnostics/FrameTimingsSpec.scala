@@ -211,3 +211,24 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     timings.renderFinished(FrameKind.Full)
     timings.drain().frames shouldBe empty
   }
+
+  "FrameTimingSummary.logLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
+    val skia = FrameTimings(() => 0L, backend = "skia")
+    skia.drain().logLine should startWith("[FRAME] backend=skia presented=render-callback-end window=")
+
+    val java2d = FrameTimings(() => 0L, backend = "java2d")
+    java2d.drain().logLine should startWith("[FRAME] backend=java2d presented=paint-end window=")
+
+    val raster = FrameTimings(() => 0L, backend = "skia-raster")
+    raster.drain().logLine should startWith("[FRAME] backend=skia-raster presented=paint-end window=")
+  }
+
+  it should "say nothing about a backend that was never named" in {
+    FrameTimings(() => 0L).drain().logLine should startWith("[FRAME] window=")
+  }
+
+  "PresentPoint.of" should "call the end of Skiko's render callback the presentation of the Skia layer, and the end of a canvas paint everything else" in {
+    PresentPoint.of("skia") shouldBe "render-callback-end"
+    PresentPoint.of("skia-raster") shouldBe "paint-end"
+    PresentPoint.of("java2d") shouldBe "paint-end"
+  }
