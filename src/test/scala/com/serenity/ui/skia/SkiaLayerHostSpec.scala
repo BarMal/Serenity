@@ -142,7 +142,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       showsExactly(window, raster, marker = 0x203040)
     }
 
-  it should "report the render API once, on its first draw, and leave what it draws alone" in
+  it should "report the render API once, on its first draw, and leave what it draws alone" in {
     val lines = new java.util.concurrent.ConcurrentLinkedQueue[String]()
     withReportingWindow(line => lines.add(line)) { window =>
       window.host.publish(record(scene))
@@ -152,6 +152,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       eventually("a second draw")(window.host.renderCount > seen)
       lines.toArray.toList shouldBe List(s"[RENDER] skia layer renderApi=${window.host.renderApi}")
     }
+  }
 
   it should "draw the carets over the retained picture without recording the picture again" in
     withWindow { window =>
