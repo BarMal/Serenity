@@ -6,7 +6,7 @@
 # With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
 # the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
 #
-# BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc.log:uptime
+# BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc-%p.log:uptime
 # -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"); it is recorded in the conditions file. Each run's
 # whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout.
 #
