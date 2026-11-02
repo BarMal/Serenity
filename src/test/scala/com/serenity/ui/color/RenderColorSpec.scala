@@ -1,10 +1,9 @@
 package com.serenity.ui.color
 
 import java.awt.Color
-import java.awt.image.BufferedImage
 
+import com.serenity.ReferenceFrames
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -101,15 +100,15 @@ class RenderColorSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyC
       math.round(channel(foreground) * clampedWeight + channel(background) * backgroundWeight).toInt
     Color(blendChannel(_.getRed), blendChannel(_.getGreen), blendChannel(_.getBlue))
 
-  "Java2DRenderSurface" should "paint exactly the RenderColor it is handed and report it back unchanged" in {
-    val image   = new BufferedImage(20, 20, BufferedImage.TYPE_INT_ARGB)
-    val font    = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val surface = new Java2DRenderSurface(image, CellMetrics.fromFont(font), font, _ => ())
-    val teal    = RenderColor.fromArgb(0xff336699)
+  "A render surface" should "paint exactly the RenderColor it is handed and report it back unchanged" in {
+    val font      = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val reference = ReferenceFrames.over(20, 20, CellMetrics.fromFont(font), font, 20, 20)
+    val surface   = reference.surface
+    val teal      = RenderColor.fromArgb(0xff336699)
 
     surface.setBackgroundColor(teal)
-    surface.fillPixelRect(0, 0, 4, 4, teal)
+    surface.pixels.fillPixelRect(0, 0, 4, 4, teal)
 
     surface.getBackgroundColor shouldBe teal
-    image.getRGB(1, 1) shouldBe 0xff336699
+    reference.image.getRGB(1, 1) shouldBe 0xff336699
   }

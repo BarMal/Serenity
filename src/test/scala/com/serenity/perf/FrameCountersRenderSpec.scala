@@ -4,12 +4,13 @@ import java.awt.Font
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.SkiaFrames
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,24 +30,22 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
   private val wholeGridPx = viewport.width.toLong * cellMetrics.charWidth * viewport.height * cellMetrics.lineHeight
 
   final private class CountedFrames:
-    private val image  = LaptopFrameBenchmarks.frameImage()
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
     def render(state: AppState, damage: Damage): FrameCounts =
-      val surface = new Java2DRenderSurface(
-        image,
+      val surface = SkiaFrames.surfaceOver(
+        frame,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
-        logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
-        deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-        deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
-        contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        LaptopFrameBenchmarks.LogicalWidthPx,
+        LaptopFrameBenchmarks.LogicalHeightPx,
+        LaptopFrameBenchmarks.DeviceScale,
+        persists = true,
+        caches,
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -145,16 +144,15 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
   "Frame counters left off" should "record nothing while frames are drawn" in {
     val (before, _) = transition(InsertChar('x'))
     val caches      = RenderCaches.create()
-    val surface = new Java2DRenderSurface(
-      LaptopFrameBenchmarks.frameImage(),
+    val surface = SkiaFrames.surfaceOver(
+      SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx),
       cellMetrics,
       codeFont,
-      _ => (),
-      logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
-      logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
-      deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-      deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
-      textCaches = caches.surfaceText
+      LaptopFrameBenchmarks.LogicalWidthPx,
+      LaptopFrameBenchmarks.LogicalHeightPx,
+      LaptopFrameBenchmarks.DeviceScale,
+      persists = false,
+      caches
     )
 
     val _ = RendererFramePlanner.renderFrame(
