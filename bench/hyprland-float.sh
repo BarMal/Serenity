@@ -6,6 +6,9 @@
 #   hyprland-float.sh off                 drop every rule added at run time
 #   hyprland-float.sh status              show the benchmark window as Hyprland sees it
 #
+# `status` reads `hyprctl clients -j`, so it needs `jq`. `on` tries the hyprlang `keyword` forms and then, for a Lua
+# config (Hyprland 0.55 and later, where `keyword` is refused), `hyprctl eval` with an `hl.window_rule` call.
+#
 # `off` is `hyprctl reload`: Hyprland has no way to remove one rule, so a rule or keyword set by hand since the
 # config was last read goes too.
 
@@ -13,7 +16,19 @@ WINDOW_TITLE='^Serenity render benchmark'
 
 hypr_ok() { [[ "$(hyprctl "$@" 2>&1)" == ok* ]]; }
 
-# The rule syntax changed between Hyprland releases, so the older form is tried and then the newer.
+# A Lua config rejects `hyprctl keyword`, so the rule goes in as Lua. The value format of `size` is not confirmed against
+# the 0.55 documentation, so the string form is tried and then the table form.
+add_lua_rule() {
+  local width="$1" height="$2" size
+  for size in "\"$width $height\"" "{$width, $height}"; do
+    if hypr_ok eval "hl.window_rule({ name = \"serenity-render-benchmark\", match = { title = \"$WINDOW_TITLE\" }, float = true, size = $size, center = true })"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# The rule syntax changed between Hyprland releases, so the older form is tried, then the newer, then Lua.
 add_rules() {
   local width="$1" height="$2"
   if hypr_ok keyword windowrulev2 "float,title:$WINDOW_TITLE" \
@@ -24,10 +39,21 @@ add_rules() {
     && hypr_ok keyword windowrule "size $width $height, match:title $WINDOW_TITLE" \
     && hypr_ok keyword windowrule "center on, match:title $WINDOW_TITLE"; then
     echo "float rules added (windowrule)"
+  elif add_lua_rule "$width" "$height"; then
+    echo "float rules added (eval)"
   else
-    echo "hyprctl refused the float rules in both syntaxes" >&2
+    echo "hyprctl refused the float rules in every syntax (windowrulev2, windowrule, eval)" >&2
     return 1
   fi
+}
+
+show_window() {
+  command -v jq >/dev/null || { echo "jq not found: status reads hyprctl clients -j" >&2; return 2; }
+  local report
+  report="$(hyprctl clients -j | jq -r --arg prefix "${WINDOW_TITLE#^}" '
+    .[] | select(.title | startswith($prefix))
+    | "title: \(.title)", "floating: \(if .floating then 1 else 0 end)", "size: \(.size | join(","))", "at: \(.at | join(","))"')"
+  echo "${report:-no benchmark window}"
 }
 
 main() {
@@ -35,7 +61,7 @@ main() {
   case "${1:-}" in
     on) add_rules "${2:-1600}" "${3:-1000}" ;;
     off) hyprctl reload >/dev/null && echo "rules reloaded away" ;;
-    status) hyprctl clients | grep -A12 "title: Serenity render benchmark" || echo "no benchmark window" ;;
+    status) show_window ;;
     *) echo "usage: $0 on [WIDTH HEIGHT] | off | status" >&2; return 2 ;;
   esac
 }
