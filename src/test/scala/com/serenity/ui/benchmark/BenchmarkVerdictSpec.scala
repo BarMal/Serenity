@@ -16,7 +16,9 @@ class BenchmarkVerdictSpec extends AnyFlatSpec with Matchers:
     Scenario.ScrollOneLine   -> stats(7, 10),
     Scenario.ScrollFiveLines -> stats(8, 12),
     Scenario.PageDown        -> stats(15, 22),
-    Scenario.CaretBlink      -> stats(2, 3)
+    Scenario.CaretBlink      -> stats(2, 3),
+    Scenario.WarmFullFrame   -> stats(12, 18),
+    Scenario.ResizeWindow    -> stats(30, 45)
   )
 
   private def results(skia: Map[Scenario, FrameStats]) =
@@ -100,3 +102,19 @@ class BenchmarkVerdictSpec extends AnyFlatSpec with Matchers:
       case Verdict.NotMeasured(reason) => reason should include("page down")
       case other                       => fail(s"expected no verdict, got $other")
   }
+
+  it should "leave the warm full frame and the resize out of the owner's rule, however Skia does there" in
+    List(Scenario.WarmFullFrame, Scenario.ResizeWindow).foreach { scenario =>
+      val slower = allFaster.updated(scenario, stats(java2d(scenario).p50Ms * 4, java2d(scenario).p95Ms * 4))
+      withClue(scenario.label) {
+        BenchmarkVerdict.of(results(slower), gpu) shouldBe Verdict.SkiaWins
+      }
+    }
+
+  it should "not let dropped frames in a scenario outside the rule withhold the verdict" in
+    List(Scenario.WarmFullFrame, Scenario.ResizeWindow).foreach { scenario =>
+      val dropped = allFaster.updated(scenario, stats(1, 1, dropped = 3))
+      withClue(scenario.label) {
+        BenchmarkVerdict.of(results(dropped), gpu) shouldBe Verdict.SkiaWins
+      }
+    }

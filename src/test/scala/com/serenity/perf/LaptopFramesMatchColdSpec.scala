@@ -5,13 +5,13 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, DockedCornerStyle}
+import com.serenity.{ChromeOn, SkiaFrames}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -32,23 +32,21 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
   final private class PersistingImage:
-    private val image  = LaptopFrameBenchmarks.frameImage()
+    private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
     def render(state: AppState, damage: Damage): BufferedImage =
-      val surface = new Java2DRenderSurface(
-        image,
+      val surface = SkiaFrames.surfaceOver(
+        frame,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = LaptopFrameBenchmarks.LogicalWidthPx,
-        logicalHeightPx = LaptopFrameBenchmarks.LogicalHeightPx,
-        deviceScaleX = LaptopFrameBenchmarks.DeviceScale,
-        deviceScaleY = LaptopFrameBenchmarks.DeviceScale,
-        contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        LaptopFrameBenchmarks.LogicalWidthPx,
+        LaptopFrameBenchmarks.LogicalHeightPx,
+        LaptopFrameBenchmarks.DeviceScale,
+        persists = true,
+        caches,
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -66,15 +64,10 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
         damage,
         caches = caches
       )
-      image
+      frame.toImage
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
-    val cold = LaptopFrameBenchmarks.renderedFrame(
-      state,
-      RenderCaches.create(),
-      LaptopFrameBenchmarks.frameImage(),
-      cursorVisible = false
-    )
+    val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
     val diffs = for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight
