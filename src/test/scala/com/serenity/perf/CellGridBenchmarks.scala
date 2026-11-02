@@ -177,16 +177,16 @@ private[perf] object CellGridBenchmarks:
       )
     )
 
-  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with, and in the
-    * flush chrome with the corner settings turned off one at a time, which tell where a change in the plain frame's
-    * cost comes from. Kept apart from [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up
-    * order pins them to.
+  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with, and in the flush
+    * chrome with the corner settings turned off one at a time, which tell where a change in the plain frame's cost
+    * comes from. Kept apart from [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order
+    * pins them to.
     */
   def chromeVariantBenchmarks(): List[BenchmarkRunner.Benchmark] =
     val flush = ChromeOn.config
     val variants = List(
-      "floating_chrome" -> flush.withDockedCornerStyle(DockedCornerStyle.Floating),
-      "flush_square_corners" -> flush.withUiCornerRadiusPx(0),
+      "floating_chrome"          -> flush.withDockedCornerStyle(DockedCornerStyle.Floating),
+      "flush_square_corners"     -> flush.withUiCornerRadiusPx(0),
       "flush_square_pane_header" -> flush.withPaneHeaderCorners(PaneHeaderCorners.Square)
     )
     variants.map { (name, chrome) =>
