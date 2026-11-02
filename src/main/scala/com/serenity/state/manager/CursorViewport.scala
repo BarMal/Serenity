@@ -200,7 +200,7 @@ object CursorViewport:
       )
 
   /** The rows of the pane's own font that fit `buffer`'s pane. */
-  private[manager] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
+  private[serenity] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
     val fontConfig = currentState.persisted.config.editorConfig.fontConfig
     rowsDrawnPerScreen(
       buffer.viewport,
