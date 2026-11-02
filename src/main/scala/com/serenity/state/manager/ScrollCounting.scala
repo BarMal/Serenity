@@ -70,7 +70,19 @@ object ScrollCounting:
 
     final private case class Exact(scroll: PaneScroll, key: ScrollKey)
 
+    final private case class Waiter(replaced: AtomicBoolean, settle: () => Unit)
+
+    final private class Run(first: Waiter):
+      private val waiting = new AtomicReference[Option[List[Waiter]]](Some(List(first)))
+
+      def join(waiter: Waiter): Boolean = waiting.updateAndGet(_.map(waiter :: _)).isDefined
+
+      def idle(): Boolean = waiting.get.forall(_.forall(_.replaced.get))
+
+      def close(): List[Waiter] = waiting.getAndSet(None).getOrElse(Nil)
+
     private val wanted    = new ConcurrentHashMap[PaneId, Wanted]()
+    private val runs      = new ConcurrentHashMap[AnyRef, Run]()
     private val lastExact = new ConcurrentHashMap[PaneId, Exact]()
     private val widths    = new ConcurrentHashMap[PaneId, Integer]()
 
@@ -96,10 +108,31 @@ object ScrollCounting:
         val resizing = Option(widths.put(paneId, Integer.valueOf(key.widthPx))).exists(_.intValue != key.widthPx)
         val next     = Wanted(rows, new AtomicBoolean(false), new AtomicReference(() => ()))
         Option(wanted.put(paneId, next)).foreach(_.cancel())
-        def start(): Unit =
-          if !next.replaced.get then
-            executor.execute { () =>
-              rows.measureRest(next.replaced.get)
-              if !next.replaced.get && wanted.remove(paneId, next) then onCounted(paneId)
-            }
-        if resizing then next.timer.set(quiet.after(ResizeQuietPeriod)(() => start())) else start()
+        if resizing then next.timer.set(quiet.after(ResizeQuietPeriod)(() => begin(paneId, next)))
+        else begin(paneId, next)
+
+    /** Panes whose rows share an index share one run: the first pane to begin measures it on the executor, the others
+      * wait on it. The run measures until every pane waiting on it has been replaced.
+      */
+    private def begin(paneId: PaneId, next: Wanted): Unit =
+      if !next.replaced.get then
+        val waiter    = Waiter(next.replaced, () => finish(paneId, next))
+        val fresh     = new Run(waiter)
+        val identity  = next.rows.sharedIndex
+        val run       = identity.fold(fresh)(shared => Option(runs.putIfAbsent(shared, fresh)).getOrElse(fresh))
+        if run eq fresh then executor.execute(() => lead(identity, next.rows, run))
+        else if !run.join(waiter) then begin(paneId, next)
+
+    private def lead(identity: Option[AnyRef], rows: VisualRowCounts, run: Run): Unit =
+      rows.measureRest(run.idle)
+      identity.foreach(runs.remove(_, run))
+      run.close().foreach(_.settle())
+
+    /** A pane whose run ended before its rows were all measured, because the panes it was running for were replaced
+      * while this one joined, is counted again.
+      */
+    private def finish(paneId: PaneId, next: Wanted): Unit =
+      if !next.replaced.get then
+        if next.rows.allMeasured then
+          if wanted.remove(paneId, next) then onCounted(paneId)
+        else begin(paneId, next)

@@ -359,16 +359,18 @@ final private[serenity] class AuthoritativeUiScene(
     }
     val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
     settled(
+      state.persisted.layout.activeEditorPaneId,
       publishedScene(key)
         .map(countedSince(key, _))
         .getOrElse(buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics)))
     )
 
   /** Tells the counting what the scene just handed out shows, a cached scene as much as a new one: a bar still waiting
-    * has its count, a counted one ends any count that was waiting on another size.
+    * has its count, a counted one ends any count that was waiting on another size. The focused pane's count is handed
+    * in first, so with more panes than count threads it is the one that starts.
     */
-  private def settled(scene: UiSceneSnapshot): UiSceneSnapshot =
-    scene.scrollKeys.foreach { (paneId, key) =>
+  private def settled(focused: Option[PaneId], scene: UiSceneSnapshot): UiSceneSnapshot =
+    scene.scrollKeys.toList.sortBy((paneId, _) => !focused.contains(paneId)).foreach { (paneId, key) =>
       scene.pendingScrolls.get(paneId) match
         case Some(pending) => counting.count(paneId, pending.rows, key)
         case None          => scene.paneScrolls.get(paneId).foreach(counting.counted(paneId, _, key))
