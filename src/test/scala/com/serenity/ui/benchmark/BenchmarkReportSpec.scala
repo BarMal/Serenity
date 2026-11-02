@@ -70,7 +70,9 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     )
     val rendered = BenchmarkReport(drawn, results, Verdict.SkiaWins)
 
-    rendered.markdown should include("Canvas drawn at 1470x832 device pixels (Java2D), 1470x832 device pixels (Skia layer).")
+    rendered.markdown should include(
+      "Canvas drawn at 1470x832 device pixels (Java2D), 1470x832 device pixels (Skia layer)."
+    )
     val json = parse(rendered.json).toOption.get.hcursor.downField("environment").downField("drawnCanvas")
     json.downField("Skia layer").downField("width").as[Int] shouldBe Right(1470)
   }
