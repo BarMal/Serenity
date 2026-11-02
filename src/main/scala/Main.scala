@@ -31,7 +31,7 @@ import com.serenity.diagnostics.{
   TuiConsoleLogFilter
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
-import com.serenity.input.{ImeDiagnostics, SwingInputHandler}
+import com.serenity.input.{FileDropHandler, ImeDiagnostics, SwingInputHandler}
 import com.serenity.io.{FileDialogSelection, SwingFileDialog}
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -392,9 +392,10 @@ object Main extends IOApp:
           frameTimings,
           startup.plan.windowTitle
         ),
-        PaintExecutionContext.resource
+        PaintExecutionContext.resource,
+        FileDrops.create(description => logger.info(s"[DROP] $description"))
       ).tupled
-        .use { (swingWin, paintEc) =>
+        .use { (swingWin, paintEc, drops) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
           val fileDialogSelection = FileDialogSelection.forThisProcess(actualAppConfig.fileDialogMode)
@@ -407,6 +408,8 @@ object Main extends IOApp:
                   swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
                 }
             else IO.unit
+          val installFileDrop    = IO(swingWin.installFileDrop(FileDropHandler(drops.dropped, drops.offered)))
+          val initialWindowSetup = initialScaleSync >> installFileDrop
 
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {
@@ -493,7 +496,7 @@ object Main extends IOApp:
                 applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
               )
 
-              initialScaleSync >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
+              initialWindowSetup >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
                 initialViewportSize = swingWin.viewportSize,
                 checkResize = IO(swingWin.doResizeIfNecessary()),
                 runtime = frontendRuntime,
@@ -532,7 +535,7 @@ object Main extends IOApp:
                 registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
                 openPath = launchOptions.openPath,
                 frontend = GuiFrontend,
-                forwardedOpens = session.forwardedOpens.evalTap(_ => IO(swingWin.bringToFront())),
+                forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(swingWin.bringToFront())),
                 quitRequests = session.quitRequests,
                 fileOrFolderOpen = fileDialog.supportsFileOrFolder
               )
