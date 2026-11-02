@@ -408,6 +408,9 @@ object Main extends IOApp:
                 }
             else IO.unit
 
+          val scaledAndLogged =
+            initialScaleSync >> logger.info(swingWin.displaySnapshot(appConfig.preferredWindowSize).logLine)
+
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {
               IO {
@@ -493,7 +496,7 @@ object Main extends IOApp:
                 applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
               )
 
-              initialScaleSync >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
+              scaledAndLogged >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
                 initialViewportSize = swingWin.viewportSize,
                 checkResize = IO(swingWin.doResizeIfNecessary()),
                 runtime = frontendRuntime,

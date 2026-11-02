@@ -17,7 +17,7 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.ImeRequestsHost
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
-import com.serenity.ui.display.DisplayScale
+import com.serenity.ui.display.{DisplayScale, DisplaySnapshot}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.theme.Theme
 
@@ -482,6 +482,18 @@ class SwingWindow(
 
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
+
+  def displaySnapshot(preferred: Option[PreferredWindowSize]): DisplaySnapshot =
+    DisplaySnapshot(
+      toolkitClass = Toolkit.getDefaultToolkit.getClass.getName,
+      scale = DisplayScale.forComponent(canvas),
+      frameWidthPx = frame.getWidth,
+      frameHeightPx = frame.getHeight,
+      canvasWidthPx = canvas.getWidth,
+      canvasHeightPx = canvas.getHeight,
+      preferredWidthPx = preferred.map(_.width),
+      preferredHeightPx = preferred.map(_.height)
+    )
 
   private def chromeControlFont: Font =
     new Font(Font.SANS_SERIF, Font.PLAIN, chromeMetricsRef.get().titleFontSize)
