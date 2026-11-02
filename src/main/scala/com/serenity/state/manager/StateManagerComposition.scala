@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.effect.*
 import cats.syntax.foldable.*
 import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.diagnostics.ShutdownTrace
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.{LspEffect, LspNotices}
@@ -425,9 +426,11 @@ private[manager] class StateManagerComposition(
   // Shutting the effects down also cancels a running project task, destroying its process.
   private def forceQuit: IO[Unit] =
     operations.shutdownEffects() >> modelCommit.currentState.flatMap { state =>
-      sessionPersistence
-        .onAppClose(clearCloseActions(state))
-        .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
+      ShutdownTrace.step("session save on close")(
+        sessionPersistence
+          .onAppClose(clearCloseActions(state))
+          .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit"))
+      )(using logger) >>
         quitSignal.complete(()).attempt.void
     }
 
