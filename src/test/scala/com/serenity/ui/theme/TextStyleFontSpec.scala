@@ -6,7 +6,7 @@ import java.awt.font.TextAttribute
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The single font deriver shared by the draw path (`Java2DRenderSurface.enableStyle`) and the measured-layout caret
+/** The single font deriver shared by the draw path (the Java2D surface's `enableStyle`) and the measured-layout caret
   * measurement, so glyph advances and drawn glyphs can never disagree.
   */
 class TextStyleFontSpec extends AnyFlatSpec with Matchers:

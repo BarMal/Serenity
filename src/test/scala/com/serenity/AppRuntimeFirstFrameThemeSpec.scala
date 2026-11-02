@@ -12,7 +12,7 @@ import com.serenity.input.InputHandler
 import com.serenity.keystroke.KeyStrokeInfo
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{RenderCaches, StateManager}
+import com.serenity.state.manager.{RenderCaches, ScrollCounting, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
@@ -53,7 +53,7 @@ class AppRuntimeFirstFrameThemeSpec extends AnyFlatSpec with Matchers:
           _: RenderCaches
         ) => themes.update(_ :+ state.persisted.theme.name)
         val config = AppConfig.default.withThemeFollowConfig(ThemeFollowConfig(followSystem = followSystem))
-        val manager = (logger: Logger[IO]) =>
+        val manager = (logger: Logger[IO], _: ScrollCounting) =>
           IO.blocking(TestTemp.directory("first-frame-theme")).flatMap { root =>
             StateManager(
               logger,

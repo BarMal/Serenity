@@ -38,9 +38,10 @@ import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
 import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
+import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
-import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingWindow}
+import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingPaintProbe, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -70,6 +71,22 @@ object Main extends IOApp:
         IO(println(VersionBanner.current)).as(ExitCode.Success)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
+      case Right(options) if options.renderBenchmark.isDefined =>
+        // The benchmark opens its own windows, so the toolkit is settled first, but no editor, session or config is.
+        GraphicsStartup
+          .current(GraphicsStartup.launchOf(options))
+          .flatMap(graphics =>
+            options.renderBenchmark.fold(IO.pure(ExitCode.Error))(
+              RenderBenchmark.run(
+                _,
+                java.nio.file.Path.of("."),
+                System.out,
+                startup =
+                  s"toolkit ${graphics.toolkit.choice} (${graphics.toolkit.reason}); ${graphics.backend.logLine}"
+              )
+            )
+          )
+          .handleErrorWith(reportStartupFailure(options, console))
       case Right(options) =>
         // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
         // depends on the renderer, so both are settled together here.
@@ -164,7 +181,15 @@ object Main extends IOApp:
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
-        case (hooks, role) => runAs(role, launchOptionsForLogging, requestRestart, hooks, graphics.surfaces)
+        case (hooks, role) =>
+          runAs(
+            role,
+            launchOptionsForLogging,
+            requestRestart,
+            hooks,
+            graphics.surfaces,
+            graphics.backend.backend.configKey
+          )
       }
     yield ExitCode.Success
 
@@ -188,7 +213,8 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
-    surfaces: FrameSurfaceFactory
+    surfaces: FrameSurfaceFactory,
+    backend: String
   )(using
     logger: Logger[IO]
   ): IO[Unit] =
@@ -197,9 +223,9 @@ object Main extends IOApp:
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -215,6 +241,7 @@ object Main extends IOApp:
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
     surfaces: FrameSurfaceFactory,
+    backend: String,
     store: CrashRecord,
     previousRun: PreviousRun
   )(using logger: Logger[IO]): IO[Unit] =
@@ -266,7 +293,8 @@ object Main extends IOApp:
         askedPlan,
         requestRestart,
         StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker),
-        surfaces
+        surfaces,
+        backend
       )
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
@@ -294,7 +322,8 @@ object Main extends IOApp:
       plan: StartupRecovery.Plan,
       requestRestart: RestartMode => IO[Unit],
       markStarted: IO[Unit],
-      surfaces: FrameSurfaceFactory
+      surfaces: FrameSurfaceFactory,
+      backend: String
   )
 
   /** Which session this process may write, and the files later launches hand it. */
@@ -353,7 +382,7 @@ object Main extends IOApp:
       smokeReady   <- Deferred[IO, Unit]
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
-      frameTimings   = FrameTimings()
+      frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (
         SwingWindow.resource(
           initialDisplay.codeMetrics,
@@ -474,9 +503,9 @@ object Main extends IOApp:
                 appConfig = actualAppConfig,
                 configNotice = configNotice,
                 recovery = startup.plan,
-                onFirstFrame =
-                  startup.markStarted >> IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
-                makeStateManager = Some(logger =>
+                onFirstFrame = startup.markStarted >> SwingPaintProbe.report(swingWin, logger) >>
+                  IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+                makeStateManager = Some((logger, scrollCounting) =>
                   com.serenity.state.manager.StateManager.apply(
                     logger,
                     policy = SessionManager.SessionPolicy.interactive,
@@ -495,7 +524,8 @@ object Main extends IOApp:
                     uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
                     windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
                     onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                    fileDialog = Some(fileDialog)
+                    fileDialog = Some(fileDialog),
+                    scrollCounting = scrollCounting
                   )
                 ),
                 awaitExternalQuit =

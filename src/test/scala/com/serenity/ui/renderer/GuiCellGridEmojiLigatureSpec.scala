@@ -5,6 +5,7 @@ import java.awt.font.TextAttribute
 import java.awt.image.BufferedImage
 import java.nio.file.Paths
 
+import com.serenity.ReferenceFrames
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
@@ -40,8 +41,9 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
   private def s(codePoints: Int*): String = String(codePoints.toArray, 0, codePoints.length)
 
   private def painted(text: String, style: TextStyle, primary: Font): BufferedImage =
-    val image   = new BufferedImage(40 * cell, 3 * metrics.lineHeight, BufferedImage.TYPE_INT_RGB)
-    val surface = new Java2DRenderSurface(image, metrics, primary, _ => (), 40 * cell, 3 * metrics.lineHeight, 1.0, 1.0)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
@@ -55,11 +57,12 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
       styledSegments = Some(List(StyledText(text, style, black, white))),
       fallback = Some(CellFallback(primary, fallback, WrappedLineCache.bounded()))
     )
-    image
+    reference.image
 
   private def repainted(text: String, primary: Font): BufferedImage =
-    val image   = new BufferedImage(40 * cell, 3 * metrics.lineHeight, BufferedImage.TYPE_INT_RGB)
-    val surface = new Java2DRenderSurface(image, metrics, primary, _ => (), 40 * cell, 3 * metrics.lineHeight, 1.0, 1.0)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, primary, 40 * cell, 3 * metrics.lineHeight)
+    val surface = reference.surface
     surface.setForegroundColor(black)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
@@ -85,7 +88,7 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
       cellPx = cell,
       fallback = Some(CellFallback(primary, fallback, WrappedLineCache.bounded()))
     )
-    image
+    reference.image
 
   private def inkPixels(image: BufferedImage, fromCell: Int, untilCell: Int): Int =
     (for

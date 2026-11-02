@@ -8,13 +8,14 @@ import org.jetbrains.skia.{Bitmap, ImageInfo, Surface}
 final private[skia] case class SkiaLiftedPixels(area: DeviceArea, bitmap: Bitmap) extends LiftedPixels
 
 /** Lifts pixels off a raster `Surface` that keeps them from frame to frame, and puts them back. `onRestored` is told
-  * when it has written to the surface, so the surface can forget which of its pixels it knows to be clean.
+  * where it has written to the surface, so the surface can forget which of its pixels it knows to be clean and note
+  * what the frame painted.
   */
 final private[skia] class SkiaPixelLifting(
     surface: Surface,
     deviceScaleX: Double,
     deviceScaleY: Double,
-    onRestored: () => Unit
+    onRestored: DeviceArea => Unit
 ) extends PixelLifting:
 
   override def lift(area: PixelRect, spare: Option[LiftedPixels]): LiftedPixels =
@@ -38,6 +39,6 @@ final private[skia] class SkiaPixelLifting(
 
   override def putBack(lifted: LiftedPixels): Unit = lifted match
     case SkiaLiftedPixels(device, bitmap) if !device.isEmpty =>
-      onRestored()
+      onRestored(device)
       surface.writePixels(bitmap, device.left, device.top)
     case _ => ()

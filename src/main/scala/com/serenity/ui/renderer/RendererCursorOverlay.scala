@@ -359,14 +359,15 @@ object RendererCursorOverlay:
         swingWin.acquireBaseImage,
         caches.surfaceText,
         caches.backendCaches,
-        () => repaintRegion.get()
+        () => repaintRegion.get(),
+        attachLayer = swingWin.attachLayerPresenter
       )
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt)
+      caches.framePhases.layout(caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt))
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state,
@@ -385,22 +386,25 @@ object RendererCursorOverlay:
       // A start page also has no persisted content to reason about, so this always forces a full repaint.
       swingWin.onCursorOverlayReady(None)(Nil)
     } { scene =>
-      RendererFramePlanner
-        .renderFrame(
-          state,
-          cursorVisible = false,
-          surface,
-          viewportSize,
-          scene,
-          codeFont.toAwt,
-          textFont.toAwt,
-          uiFont.toAwt,
-          swingWin.metrics,
-          uiMetrics,
-          cursorColor = None,
-          output,
-          damage,
-          caches
+      caches.framePhases
+        .draw(
+          RendererFramePlanner
+            .renderFrame(
+              state,
+              cursorVisible = false,
+              surface,
+              viewportSize,
+              scene,
+              codeFont.toAwt,
+              textFont.toAwt,
+              uiFont.toAwt,
+              swingWin.metrics,
+              uiMetrics,
+              cursorColor = None,
+              output,
+              damage,
+              caches
+            )
         )
         // No plan means the start page was drawn under a blocking prompt: no caret and nothing to reuse, but the
         // window must still repaint it, or the frame stays unseen until something else does.

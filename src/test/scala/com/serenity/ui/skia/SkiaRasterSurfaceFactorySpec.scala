@@ -54,6 +54,9 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
 
     def copiedPixels: Option[Long] = SkiaRasterSurfaceFactory.lastCopiedPixels(caches.backendCaches)
 
+  /** What a fill records as painted: its rectangle and the pixel a fractional edge could spill into. */
+  private def paintedArea(rect: PixelRect): Int = (rect.widthPx + 1) * (rect.heightPx + 1)
+
   private def pixelsOf(image: BufferedImage): Array[Int] =
     image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth).map(_ & 0xffffff)
 
@@ -121,7 +124,7 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val _ = paint(window, model, List(second -> green), Some(List(second)))
     window.copiedPixels shouldBe Some(100L * 100)
     val image = paint(window, model, List(third -> blue), Some(List(third)))
-    window.copiedPixels shouldBe Some((third.widthPx * third.heightPx + second.widthPx * second.heightPx).toLong)
+    window.copiedPixels shouldBe Some((paintedArea(third) + paintedArea(second)).toLong)
     pixelsOf(image) shouldBe model.snapshot
   }
 

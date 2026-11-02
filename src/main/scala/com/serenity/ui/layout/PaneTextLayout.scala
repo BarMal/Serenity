@@ -83,7 +83,7 @@ object PaneTextLayout:
     val viewport = baseViewport.copy(
       leftColumn = leftColumn,
       visibleColumns = visibleColumns,
-      visibleLines = math.max(1, heightPx / math.max(1, fontMetrics.lineHeight))
+      visibleLines = ScrollLimits.rowsThatFit(heightPx, fontMetrics.lineHeight)
     )
     val proseScale      = com.serenity.ui.theme.RichTextStyling.proseZoom(font.getSize2D)
     val forceCellLayout = cellMetrics.isDefined

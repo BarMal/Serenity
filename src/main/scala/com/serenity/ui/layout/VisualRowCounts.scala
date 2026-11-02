@@ -47,6 +47,12 @@ sealed abstract class VisualRowCounts:
     */
   def estimatedLineAtRow(row: Int): (Int, Int)
 
+  /** Whether every line of the document has been measured, so the answers above need measure nothing more. */
+  def allMeasured: Boolean
+
+  /** Measures each line nobody has measured yet, one at a time, and stops before the next one once `stop` says so. */
+  def measureRest(stop: () => Boolean): Unit
+
 /** What a line's visual row count depends on besides its text. The buffer's rich-text styling and the way its inline
   * Markdown is restyled are the other inputs: they change without the text changing, so they stamp the index instead
   * (see [[VisualLineIndexStore]]) -- a new document or a caret on another line would otherwise leave a new key behind
@@ -62,6 +68,14 @@ final private[layout] case class VisualRowKey(
     dropCapsEnabled: Boolean,
     fallback: FontFallback
 )
+
+private[layout] object VisualRowKey:
+
+  /** Whether `narrower`'s one-row lines are one row under `wider` too: the keys differ only in width, and a row that
+    * held a line at one width holds it at any greater one.
+    */
+  def seeds(narrower: VisualRowKey, wider: VisualRowKey): Boolean =
+    narrower.panelWidthPx < wider.panelWidthPx && narrower.copy(panelWidthPx = wider.panelWidthPx) == wider
 
 /** What the pixels a line's rows stack to depend on besides [[VisualRowKey]]: the prose zoom scales every run. */
 final private[layout] case class BandHeightKey(rows: VisualRowKey, proseScale: Float)
@@ -157,6 +171,10 @@ object VisualRowCounts:
     def estimatedLineAtRow(row: Int): (Int, Int) =
       rowBelow(0, row.max(0)).getOrElse(if lineCount <= 0 then (0, 0) else (lineCount - 1, measure(lineCount - 1) - 1))
 
+    def allMeasured: Boolean = true
+
+    def measureRest(stop: () => Boolean): Unit = ()
+
     @tailrec
     private def below(line: Int, consumedRows: Int, targetRow: Int): Option[(Int, Int)] =
       if line >= lineCount then None
@@ -250,6 +268,18 @@ object VisualRowCounts:
         val filled = if exact then measuredThrough(seen, 0, lineCount) else seen
         ((filled.rowOfLine(top), filled.rowOfLine(lineCount)), filled)
       }
+
+    def allMeasured: Boolean = store.indexFor(key, content, stamp, revision).firstUnmeasuredFrom(0).isEmpty
+
+    @tailrec
+    def measureRest(stop: () => Boolean): Unit =
+      if !stop() then
+        val index = store.indexFor(key, content, stamp, revision)
+        index.firstUnmeasuredFrom(0) match
+          case None => ()
+          case Some(line) =>
+            store.update(key, content, index.measured(line, measure(line)), stamp, revision)
+            measureRest(stop)
 
     def estimatedLineAtRow(row: Int): (Int, Int) =
       val index = store.indexFor(key, content, stamp, revision)
