@@ -320,6 +320,18 @@ object ArchitectureChecks {
       }
     }
 
+  /** The process service is a leaf: it may be used from anywhere, so it must not depend on the code that uses it. */
+  private def processLeafViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/scala/com/serenity/process/")) Nil
+    else {
+      val hits = lines.count { line =>
+        val text = line.trim
+        text.startsWith("import com.serenity.") && !text.startsWith("import com.serenity.process")
+      }
+      if (hits == 0) Nil
+      else Seq(Violation(path, "process service depends on other Serenity packages (#2508)", hits))
+    }
+
   /** Declarations that can never move out of an object, each with the reason. Kept apart from the baseline: the
     * baseline only shrinks as code is fixed, while an entry here is removed by a redesign, argued in
     * docs/allowlist-review.md. An entry that no longer matches a declaration fails [[check]], so this list cannot rot.
@@ -365,7 +377,7 @@ object ArchitectureChecks {
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
         stateOwnershipViolations(path, lines) ++ documentContentViolations(path, lines) ++
-        processOwnershipViolations(path, lines)
+        processOwnershipViolations(path, lines) ++ processLeafViolations(path, lines)
     }
     structural ++ purityViolations(files.map { case (path, lines) => PurityChecks.parse(path, lines) })
   }
@@ -807,6 +819,23 @@ object ArchitectureChecks {
           Vector("", "  new ProcessBuilder(a)", "  new ProcessBuilder(b)", "")
         ).map(v => (v.detail, v.measured)),
       "ArchitectureChecks self-test failed (a process violation's identity must not depend on its line number)"
+    )
+
+    def checkLeaf(description: String, path: String, line: String, expectCaught: Boolean): Unit =
+      require(
+        processLeafViolations(path, Vector(line)).nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected the import to be " +
+          s"${if (expectCaught) "caught" else "ignored"}"
+      )
+
+    val servicePath = "main/scala/com/serenity/process/Sample.scala"
+    checkLeaf("the service importing editor state", servicePath, "import com.serenity.state.models.AppState", true)
+    checkLeaf("the service importing its own package", servicePath, "import com.serenity.process.ProcessSpec", false)
+    checkLeaf(
+      "another package importing the service",
+      "main/scala/com/serenity/lsp/Sample.scala",
+      "import com.serenity.process.ProcessService",
+      false
     )
   }
 }
