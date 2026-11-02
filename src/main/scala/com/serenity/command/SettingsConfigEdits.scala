@@ -2,6 +2,7 @@ package com.serenity.command
 
 import com.serenity.config.{SpellCheckConfig, SpellCheckLanguage}
 import com.serenity.ui.fonts.FontLoader.{FontConfig, TextScaleMode}
+import com.serenity.ui.fonts.FontSizes
 
 /** What a font intent does to a [[FontConfig]], shared by the live settings and by a preset being edited. */
 object FontConfigEdit:
@@ -22,9 +23,13 @@ object FontConfigEdit:
           )
       case FontIntent.SetFontSize(size) =>
         _.copy(fontSize = clampFontSize(size), textFontSize = clampFontSize(size))
-      case FontIntent.SetCodeFontSize(size)  => _.copy(fontSize = clampFontSize(size))
-      case FontIntent.SetTextFontSize(size)  => _.copy(textFontSize = clampFontSize(size))
-      case FontIntent.SetUiFontSize(size)    => _.copy(uiFontSize = clampFontSize(size))
+      case FontIntent.SetCodeFontSize(size)     => _.copy(fontSize = clampFontSize(size))
+      case FontIntent.SetTextFontSize(size)     => _.copy(textFontSize = clampFontSize(size))
+      case FontIntent.SetUiFontSize(size)       => _.copy(uiFontSize = clampFontSize(size))
+      case FontIntent.SetAllFontSizes(size)     => _.withSizes(FontSizes.all(size))
+      case FontIntent.ConfirmSetAllFontSizes(_) => identity
+      case FontIntent.UndoFontSizeChange =>
+        config => config.previousSizes.fold(config)(previous => config.withSizes(previous).copy(previousSizes = None))
       case FontIntent.SetTextScaleMode(mode) => _.copy(textScaleMode = mode)
       case FontIntent.SetTextScaleMultiplier(scale) =>
         _.copy(textScaleMode = TextScaleMode.Manual, textScaleMultiplier = FontConfig.clampTextScale(scale))
@@ -38,8 +43,18 @@ object FontConfigEdit:
       case FontIntent.ToggleLigatures =>
         config => config.copy(enableLigatures = !config.enableLigatures, textLigatures = !config.textLigatures)
 
-  private def clampFontSize(size: Float): Float =
-    size.max(8.0f).min(48.0f)
+  /** The live settings' edit: the same change, remembering the sizes it replaced so one level of it can be undone. A
+    * preset being edited takes [[apply]] instead and remembers nothing.
+    */
+  def recording(intent: FontIntent): FontConfig => FontConfig =
+    intent match
+      case FontIntent.UndoFontSizeChange => apply(intent)
+      case _ =>
+        config =>
+          val edited = apply(intent)(config)
+          if edited.sizes == config.sizes then edited else edited.copy(previousSizes = Some(config.sizes))
+
+  private def clampFontSize(size: Float): Float = FontSizes.clamp(size)
 
 /** What a spell-check intent does to a [[SpellCheckConfig]]; none for the intent that acts on the cursor's word. */
 object SpellCheckConfigEdit:

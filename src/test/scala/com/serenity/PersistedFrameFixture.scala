@@ -17,7 +17,7 @@ import org.scalatest.matchers.should.Matchers
 /** A window's frame loop at the laptop's device scale, for specs that compare what a damaged frame leaves in a
   * persisting image with a frame drawn from scratch: two pooled images drawn in turn, as `SwingWindow` alternates them.
   *
-  * Which renderer paints the frames is [[frames]]: Java2D unless a spec overrides it, so one body of assertions runs
+  * Which renderer paints the frames is [[frames]]: Skia unless a spec overrides it, so one body of assertions runs
   * against every [[RenderSurface]] that claims to persist and copy pixels.
   */
 trait PersistedFrameFixture:
@@ -25,7 +25,7 @@ trait PersistedFrameFixture:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  protected def frames: FrameBackend = Java2DFrames
+  protected def frames: FrameBackend = SkiaFrames
 
   protected val paneId: PaneId                = PaneId(0)
   protected val bufferId: BufferId            = BufferId(1)
