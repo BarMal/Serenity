@@ -3,6 +3,7 @@ package com.serenity.perf
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppStateValidation, BufferId}
 import com.serenity.ui.layout.{LayoutEngine, PaneScroll}
+import com.serenity.ui.skia.SkiaShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -35,6 +36,27 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
     code.linesIterator.map(_.length).max should be < 120
     prose.linesIterator.filter(_.nonEmpty).map(_.length).min should be > 300
     (prose.length.toDouble / code.length) should (be > 0.8 and be < 1.25)
+  }
+
+  it should "ask for shaping in every line when told to, which plain Latin text never does" in {
+    val font = new java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 14)
+    def lines(shaped: Boolean) =
+      MultiBufferFixture
+        .document(Kind.Prose, 1, MultiBufferFixture.TestSize, shaped)
+        .linesIterator
+        .filter(_.nonEmpty)
+        .toList
+
+    lines(shaped = true).foreach(line => SkiaShapedTextCache.worthShaping(font, line) shouldBe true)
+    lines(shaped = false).foreach(line => SkiaShapedTextCache.worthShaping(font, line) shouldBe false)
+  }
+
+  it should "keep the shaped document as distinct from the others as the plain one" in {
+    val documents = (1 to 3).map(index =>
+      linesOf(MultiBufferFixture.document(Kind.Prose, index, MultiBufferFixture.TestSize, shaped = true))
+    )
+
+    documents.combinations(2).foreach(pair => (pair.head intersect pair(1)) shouldBe empty)
   }
 
   "MultiBufferFixture.state" should "open the asked-for buffers, all different, with the first shown" in

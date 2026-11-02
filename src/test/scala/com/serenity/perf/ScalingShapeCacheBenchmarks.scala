@@ -12,8 +12,8 @@ import com.serenity.ui.skia.{SkiaShapedTextCache, SkiaTextCaches}
   *
   * Not part of the perf gate, like [[SkiaFrameBenchmarks]]: it prints a table to read. Run it with
   * `sbt "Test / runMain com.serenity.perf.ScalingShapeCacheBenchmarks"`; an optional argument is the number of buffers
-  * (default 20). The first pass pays for every stretch once; from the second, a miss is a stretch the cache had
-  * dropped.
+  * (default 20); code and plain prose are drawn without the shaper, so a third table uses prose in which every line
+  * needs it. The first pass pays for every stretch once; from the second, a miss is a stretch the cache had dropped.
   */
 private[perf] object ScalingShapeCacheBenchmarks:
 
@@ -58,9 +58,10 @@ private[perf] object ScalingShapeCacheBenchmarks:
     kind: MultiBufferFixture.Kind,
     buffers: Int,
     passes: Int,
-    size: MultiBufferFixture.Size
+    size: MultiBufferFixture.Size,
+    shaped: Boolean = false
   ): (Vector[Vector[FrameTraffic]], FrameTraffic) =
-    val state  = MultiBufferFixture.state(kind, buffers, size)
+    val state  = MultiBufferFixture.state(kind, buffers, size, shaped)
     val caches = RenderCaches.create()
     val cache  = SkiaTextCaches.of(caches.backendCaches).shapedText
     val traffic = Vector.tabulate(passes) { _ =>
@@ -81,10 +82,11 @@ private[perf] object ScalingShapeCacheBenchmarks:
     }
     (traffic, counters(cache))
 
-  private def report(kind: MultiBufferFixture.Kind, buffers: Int): Unit =
-    val (traffic, totals) = trace(kind, buffers, Passes, MultiBufferFixture.FullSize)
+  private def report(kind: MultiBufferFixture.Kind, shaped: Boolean, buffers: Int): Unit =
+    val (traffic, totals) = trace(kind, buffers, Passes, MultiBufferFixture.FullSize, shaped)
+    val what              = if shaped then s"${kind.label} (combining marks, every line shaped)" else kind.label
     println(
-      s"shape cache, $buffers ${kind.label} buffers, one frame each per pass (container figures unless on a laptop)"
+      s"shape cache, $buffers $what buffers, one frame each per pass (container figures unless on a laptop)"
     )
     println(
       f"${"pass"}%5s ${"frames"}%7s ${"p50 ms"}%9s ${"lookups"}%9s ${"misses"}%8s ${"older hits"}%11s ${"evicted"}%9s ${"hit rate"}%9s"
@@ -102,4 +104,5 @@ private[perf] object ScalingShapeCacheBenchmarks:
 
   def main(args: Array[String]): Unit =
     val buffers = args.headOption.flatMap(_.toIntOption).getOrElse(20)
-    MultiBufferFixture.Kind.values.foreach(report(_, buffers))
+    MultiBufferFixture.Kind.values.foreach(kind => report(kind, shaped = false, buffers))
+    report(MultiBufferFixture.Kind.Prose, shaped = true, buffers)

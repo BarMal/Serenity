@@ -43,10 +43,14 @@ private[perf] object MultiBufferFixture:
 
   private val WordsPerParagraph = 100
 
-  def document(kind: Kind, index: Int, size: Size): String =
+  /** `shaped` puts a combining acute accent in every word of prose, so that each line needs the shaper: plain Latin
+    * text is drawn without it (`SkiaShapedTextCache.worthShaping`), which leaves the shape cache unused.
+    */
+  def document(kind: Kind, index: Int, size: Size, shaped: Boolean = false): String =
     kind match
-      case Kind.Code  => (1 to size.lines).map(codeLine(index, _)).mkString("\n")
-      case Kind.Prose => (1 to size.lines / ProseLinesPerParagraph).map(paragraph(index, _)).mkString("\n\n")
+      case Kind.Code => (1 to size.lines).map(codeLine(index, _)).mkString("\n")
+      case Kind.Prose =>
+        (1 to size.lines / ProseLinesPerParagraph).map(paragraph(index, _, shaped)).mkString("\n\n")
 
   private def randomFor(index: Int, n: Int): Random = new Random(index * 1_000_003L + n)
 
@@ -54,19 +58,22 @@ private[perf] object MultiBufferFixture:
     val token = randomFor(index, n).alphanumeric.take(24).mkString
     s"val item_${index}_$n = compute($index, $n, \"$token\") // line $n of buffer $index"
 
-  private def paragraph(index: Int, n: Int): String =
+  private def paragraph(index: Int, n: Int, shaped: Boolean): String =
     val random = randomFor(index, n)
     val words  = Vector.fill(WordsPerParagraph)(random.alphanumeric.take(3 + random.nextInt(7)).mkString.toLowerCase)
-    words.mkString(" ").capitalize + "."
+    val marked = if shaped then words.map(word => word.head.toString + CombiningAcute + word.tail) else words
+    marked.mkString(" ").capitalize + "."
+
+  private val CombiningAcute = "\u0301"
 
   /** `buffers` buffers of `kind`, in id order 1 to `buffers`, the first shown in the one pane. */
-  def state(kind: Kind, buffers: Int, size: Size): AppState =
+  def state(kind: Kind, buffers: Int, size: Size, shaped: Boolean = false): AppState =
     val language = Option.when(kind == Kind.Code)(LanguageId.Scala)
-    val base     = BenchmarkFixtures.editorState(document(kind, 1, size), language)
+    val base     = BenchmarkFixtures.editorState(document(kind, 1, size, shaped), language)
     val shown    = base.persisted.buffers(BufferId(1))
     val opened = (2 to buffers).map { index =>
       val id     = BufferId(index)
-      val buffer = Buffer.fromString(id, document(kind, index, size))
+      val buffer = Buffer.fromString(id, document(kind, index, size, shaped))
       id -> buffer.copy(
         document = buffer.document.copy(language = language),
         viewport = shown.viewport,

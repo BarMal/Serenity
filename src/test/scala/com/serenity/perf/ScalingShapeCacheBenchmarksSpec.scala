@@ -60,3 +60,13 @@ class ScalingShapeCacheBenchmarksSpec extends AnyFlatSpec with Matchers:
 
     passes(1).map(_.shapings).sum should be < passes.head.map(_.shapings).sum
   }
+
+  it should "look up far more text once every line needs shaping than for plain prose, which never reaches the cache" in {
+    def lookups(shaped: Boolean): Long =
+      ScalingShapeCacheBenchmarks
+        .trace(MultiBufferFixture.Kind.Prose, buffers = 2, passes = 1, MultiBufferFixture.TestSize, shaped)
+        ._2
+        .lookups
+
+    lookups(shaped = true) should be > lookups(shaped = false)
+  }
