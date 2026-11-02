@@ -29,7 +29,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   private val columns  = 90
   private val rowCount = 18
   private val paneId   = PaneId(0)
-  private val tabs     = List(BufferId(1), BufferId(2))
+  private def idsOf(count: Int): List[BufferId] = (1 to count).map(BufferId(_)).toList
 
   private val baseFont =
     Font.createFont(
@@ -40,7 +40,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   private def codeFont = baseFont.deriveFont(Font.PLAIN, 14.0f * scale)
   private def metrics  = CellMetrics.fromFont(codeFont)
 
-  private def stateWith(config: AppConfig): AppState =
+  private def stateWith(config: AppConfig, tabs: List[BufferId]): AppState =
     val buffers = tabs.map(id => Buffer.fromString(id, "The quick brown fox.\n" * 20))
     val base    = AppState.initial(config)
     base.copy(persisted =
@@ -48,7 +48,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
         buffers = buffers.map(b => b.id -> b).toMap,
         bufferOrder = tabs,
         layout = Layout(
-          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, tabs(1))),
+          editorPanes = Map(paneId -> EditorPane.withBuffer(paneId, tabs.last)),
           activeEditorPaneId = Some(paneId),
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
@@ -74,14 +74,15 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     Files.createDirectories(directory)
     val _ = ImageIO.write(image, "png", directory.resolve(s"${getClass.getSimpleName}-r$radius.png").toFile)
 
-  private def strip(radius: Int): Strip =
+  private def strip(radius: Int, tabCount: Int = 2): Strip =
+    val tabs = idsOf(tabCount)
     val base = AppConfig.conventional
     val config = base
       .withUiCornerRadiusPx(radius)
       .withDockedCornerStyle(DockedCornerStyle.Floating)
       .withPaneHeaderCorners(PaneHeaderCorners.Rounded)
       .withFontConfig(base.editorConfig.fontConfig.copy(uiFontSize = 12.0f * scale))
-    val state    = stateWith(config)
+    val state    = stateWith(config, tabs)
     val widthPx  = columns * metrics.charWidth
     val heightPx = rowCount * metrics.lineHeight
     val frame    = frames.newFrame(widthPx, heightPx)
@@ -105,17 +106,17 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .getOrElse(fail("no tab strip"))
     val entries = tabs.map(id => TabListEntry(id, s"Buffer ${id.value}", isDirty = false))
     val active = TabBarSurfaceComposition
-      .forTabBar(entries, Some(tabs(1)), rect, TabBarLayoutSettings.of(state))
+      .forTabBar(entries, Some(tabs.last), rect, TabBarLayoutSettings.of(state))
       .hitRegions
-      .lift(1)
+      .find(_.focusId == TabBarSurfaceComposition.focusId(tabs.last))
       .getOrElse(fail("no active tab region"))
       .rect
     val newTab = TabBarSurfaceComposition
-      .newTabAffordance(entries, rect, Some(tabs(1)), TabBarLayoutSettings.of(state))
+      .newTabAffordance(entries, rect, Some(tabs.last), TabBarLayoutSettings.of(state))
       .getOrElse(fail("no new-tab region"))
       .rect
     save(frame, rect, radius)
-    Strip(frame, rect, active, newTab, TabBarLayoutSettings.of(state).measure.cells(s"Buffer ${tabs(1).value}"))
+    Strip(frame, rect, active, newTab, TabBarLayoutSettings.of(state).measure.cells(s"Buffer ${tabs.last.value}"))
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
 
@@ -201,6 +202,50 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     withClue(s"the + is $width wide and $height tall. $picture")(width * 10 should be >= height * 7)
     withClue(s"the + starts at its cell. $picture")(ink.map(_._1).min should be > from)
     withClue(s"the + ends inside the strip. $picture")(ink.map(_._1).max should be < stripRight(s))
+  }
+
+  /** A pixel clearly outside the strip's arc at one of its corners: further out than the radius by more than a pixel. */
+  private def outsideArc(radius: Int): List[(Int, Int, Int, Int)] =
+    for
+      dy <- 0 until radius
+      dx <- 0 until radius
+      centreDistance = math.hypot(radius - dx - 0.5, radius - dy - 0.5)
+      if centreDistance > radius + 1.5
+    yield (dx, dy, dx, dy)
+
+  private def cornerPixels(s: Strip, radius: Int): List[(Int, Int)] =
+    val left   = stripLeft(s)
+    val right  = stripRight(s) - 1
+    val top    = bandOf(s).start
+    val bottom = bandOf(s).end - 1
+    outsideArc(radius).flatMap {
+      case (dx, dy, _, _) =>
+        List((left + dx, top + dy), (right - dx, top + dy), (right - dx, bottom - dy), (left + dx, bottom - dy))
+    }
+
+  List(2, 24).foreach { count =>
+    "A rounded tab strip with " + count + " tabs" should "show what is behind it outside each arc, never its own fill" in {
+      val radius = 12 * scale
+      val s      = strip(radius = 12, tabCount = count)
+      val own    = Set(stripBackground(s), highlight(s))
+      val poked  = cornerPixels(s, radius).filter((x, y) => own.contains(rgb(s.frame, x, y)))
+      withClue(s"pixels of the strip's own colours outside its arcs, first ${poked.take(6)}: ")(poked shouldBe empty)
+    }
+
+    it should "keep the tabs and the + clear of the rounded ends" in {
+      val s      = strip(radius = 12, tabCount = count)
+      val inset  = math.ceil(12.0 * scale / metrics.charWidth).toInt
+      val left   = s.rect.x + inset
+      val right  = s.rect.x + s.rect.width - inset
+      val active = (s.activeTab.x, s.activeTab.x + s.activeTab.width)
+      val newTab = (s.newTab.x, s.newTab.x + s.newTab.width)
+      withClue(s"active tab $active, + $newTab, room [$left, $right): ") {
+        active._1 should be >= left.toDouble
+        active._2 should be <= right.toDouble
+        newTab._1 should be >= left.toDouble
+        newTab._2 should be <= right.toDouble
+      }
+    }
   }
 
 class Java2DRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:
