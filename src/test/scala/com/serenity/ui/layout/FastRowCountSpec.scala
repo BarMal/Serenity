@@ -227,7 +227,10 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
       List(12.0f, 16.0f).map(size => s"previewTextFont ligatures off $size pt" -> textNoLig(size)) ++
       plainOf.map(family => s"$family 14 pt, kerning on" -> withKern(Font(family, Font.PLAIN, 14).deriveFont(14.0f)))
 
-  "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in
+  "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in {
+    val tabled = proportionalFonts.collect { case (label, font) if NominalAdvances.of(font, frc).isDefined => label }
+    // Which fonts the guard reaches depends on the platform's font stack; CI logs it so the oracle's reach is on record.
+    println(s"PROPORTIONAL-ORACLE ${System.getProperty("os.name")}: with a table: ${tabled.mkString(", ")}")
     proportionalFonts.foreach { (label, font) =>
       proseLines.foreach { text =>
         widthsAround(text, font).foreach { width =>
@@ -238,6 +241,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         }
       }
     }
+  }
 
   it should "have no table when kerning is asked for" in
     proportionalFonts.filter(_._1.endsWith("kerning on")).foreach { (label, font) =>
