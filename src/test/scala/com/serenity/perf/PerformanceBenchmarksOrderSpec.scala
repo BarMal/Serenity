@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import java.awt.GraphicsEnvironment
 
+import com.serenity.testkit.DisplayExclusive
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -56,11 +57,12 @@ class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
 
   "The performance suite" should "start with the rows the warm-up budget is spent on, in this order" in {
     assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
-    PerformanceBenchmarks.withSuite(_.map(_.name).take(firstRows.length)) shouldBe firstRows
+    // The suite is built inside two real windows, which other specs' screen captures and window checks must not see.
+    DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name).take(firstRows.length))) shouldBe firstRows
   }
 
   it should "have no two benchmarks with the same name" in {
     assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
-    val names = PerformanceBenchmarks.withSuite(_.map(_.name))
+    val names = DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name)))
     names.distinct shouldBe names
   }
