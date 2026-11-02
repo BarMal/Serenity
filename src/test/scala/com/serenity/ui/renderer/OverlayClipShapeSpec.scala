@@ -7,7 +7,7 @@ import com.serenity.MockRenderSurface
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.state.models.UiSurface
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow, RoundedCorners, TextOverlayView}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow, RoundedCorners}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
