@@ -384,11 +384,11 @@ class Java2DRenderSurface(
       height * metrics.lineHeight
     )(render)
 
-  override def withPixelClip(px: Int, py: Int, pw: Int, ph: Int)(render: => Unit): Unit =
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     val savedClip = g.getClip
     userClipDepth.incrementAndGet()
     try
-      g.clip(new Rectangle2D.Double(px, py, pw, ph))
+      g.clip(new Rectangle2D.Double(xPx, yPx, widthPx, heightPx))
       render
     finally
       userClipDepth.decrementAndGet()
