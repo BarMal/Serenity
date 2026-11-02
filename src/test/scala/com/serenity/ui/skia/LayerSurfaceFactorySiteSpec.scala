@@ -6,8 +6,8 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.swing.JPanel
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
 import com.serenity.ui.renderer.{
   FrameSurfaceFactory,
   FrameSurfaceRequest,

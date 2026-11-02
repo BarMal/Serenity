@@ -7,6 +7,7 @@ import java.awt.image.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
@@ -463,7 +464,8 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  final case class DeviceScale(x: Double, y: Double)
+  type DeviceScale = DisplayScale.DeviceScale
+  val DeviceScale: DisplayScale.DeviceScale.type = DisplayScale.DeviceScale
 
   /** `Graphics2D` can only express "no clip" as a null `Shape`. */
   @SuppressWarnings(Array("org.wartremover.warts.Null"))

@@ -3,8 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.awt.{Color, Rectangle}
 
+import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
 import com.serenity.ui.terminal.LayerPresenter
 
 /** A caret to fill over a presented frame. */

@@ -4,8 +4,8 @@ import java.awt.Rectangle
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
 
 /** A [[RenderTarget]] with no window system behind it: it hands out images, records what the renderer publishes, and
   * answers the caret overlay the way a window does once a base frame has been published.

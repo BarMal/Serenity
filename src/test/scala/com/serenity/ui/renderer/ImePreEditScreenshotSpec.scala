@@ -13,7 +13,6 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
-import com.serenity.ui.terminal.SwingCanvasGeometry
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -17,8 +17,9 @@ import com.serenity.perf.TypingStatistics.{Bucket, BucketSummary, Summary}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.ViewportSize
-import com.serenity.ui.renderer.{FakeRenderTarget, Java2DRenderSurface}
+import com.serenity.ui.renderer.FakeRenderTarget
 import com.serenity.ui.theme.Theme
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -224,7 +225,7 @@ object TypingProfile:
         ViewportSize(120, 40),
         1280,
         800,
-        Java2DRenderSurface.DeviceScale(1.0, 1.0)
+        DisplayScale.One
       )
       framesDrawn = new AtomicInteger(0)
       frames = OffscreenWarmUpFrames

@@ -11,7 +11,6 @@ import com.serenity.ui.renderer.{
   FontSpec,
   FrameSurfaceFactory,
   FrameSurfaceRequest,
-  Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
   RenderImage,
