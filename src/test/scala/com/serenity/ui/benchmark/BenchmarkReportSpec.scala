@@ -75,6 +75,20 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
   }
 
+  it should "state the scale the Skia layer drew at beside Java2D's, in the text and the JSON" in {
+    val scaled = BenchmarkReport(environment.copy(skiaDeviceScale = Some(1.0)), results, Verdict.SkiaWins)
+    scaled.markdown should include("Skia layer scale 1.0")
+    val json = parse(scaled.json).getOrElse(fail("not JSON")).hcursor.downField("environment")
+    json.downField("deviceScale").as[Double] shouldBe Right(2.0)
+    json.downField("skiaDeviceScale").as[Double] shouldBe Right(1.0)
+  }
+
+  it should "leave the Skia layer's scale out when it was not measured" in {
+    report.markdown should not include "Skia layer scale"
+    val json = parse(report.json).getOrElse(fail("not JSON")).hcursor.downField("environment")
+    json.downField("skiaDeviceScale").succeeded shouldBe false
+  }
+
   it should "say where a cold frame's time goes in the Skia caches" in {
     val phases = ColdFramePhases(
       frames = 20,
