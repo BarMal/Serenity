@@ -66,6 +66,23 @@ class FileDropHandlerSpec extends AnyFlatSpec with Matchers:
     recorder.droppedBatches shouldBe Nil
   }
 
+  it should "open a drag once when the same drop reaches the handler twice, as it can through nested drop targets" in {
+    val recorder = Recorder()
+    val drag     = fileDrag
+
+    recorder.handler.handle(drag) shouldBe true
+    recorder.handler.handle(drag) shouldBe true
+    recorder.droppedBatches shouldBe List(List(notes))
+  }
+
+  it should "open a second, separate drag of the same file" in {
+    val recorder = Recorder()
+
+    recorder.handler.handle(fileDrag) shouldBe true
+    recorder.handler.handle(fileDrag) shouldBe true
+    recorder.droppedBatches shouldBe List(List(notes), List(notes))
+  }
+
   "entered" should "log what the drag offers, once, and say whether it is welcome" in {
     val recorder = Recorder()
 
