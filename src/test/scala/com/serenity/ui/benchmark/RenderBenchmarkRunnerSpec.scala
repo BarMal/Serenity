@@ -50,14 +50,23 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     report.environment.skiaDeviceScale.getOrElse(fail("no Skia layer scale")) should be > 0.0
   }
 
-  it should "measure what the Skia caches did in each cold frame, with a face built and a shaper made" in {
+  it should "build its scenes as the app does" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    report.environment.scenesLikeTheApp shouldBe true
+  }
+
+  // Changed with #2465 M1, by the owner's decision (c6572431154): a cold frame no longer builds the faces again, since
+  // the app makes them once. The test used to require a face built in every cold frame.
+  it should "measure what the Skia caches did in each cold frame: no face built, a shaper made, text shaped" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     val phases = report.environment.coldPhases.getOrElse(fail("no cold-frame phases"))
     phases.frames shouldBe 3
-    phases.facesPerFrame should be > 0.0
-    phases.faceMsPerFrame should be > 0.0
+    phases.facesPerFrame shouldBe 0.0
+    phases.faceMsPerFrame shouldBe 0.0
     phases.shapersPerFrame shouldBe 1.0
+    phases.shapingsPerFrame should be > 0.0
   }
 
   it should "split each backend's cold frame into layout and drawing, whose sum is within the render call" in {
