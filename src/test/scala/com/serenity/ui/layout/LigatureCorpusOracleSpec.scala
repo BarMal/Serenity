@@ -45,7 +45,9 @@ class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValu
       .max(1)
 
   /** Lines the certificate calls one row that the wrap does not, with the width, as `size pt, width: line`. */
-  private def disagreements(lines: Seq[String], sizes: List[Float]): List[String] =
+  private def disagreements(corpus: Seq[String], sizes: List[Float]): List[String] =
+    // A line repeated in the corpus (a closing brace, an import) is counted once: the same text gives the same answer.
+    val lines = corpus.distinct
     sizes.flatMap { size =>
       val font  = ligatureFont(size)
       val table = LigatureCertificate.of(font, frc).value
