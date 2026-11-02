@@ -25,6 +25,18 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   ): BenchmarkReport =
     DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup, rasterFactory))
 
+  /** The report with every window still showing when the run is done, listed while the lock is still held, so none is
+    * another spec's.
+    */
+  private def runExclusivelyListingOpenWindows(
+    options: RenderBenchmarkOptions,
+    skiaFactory: FrameSurfaceFactory,
+    rasterFactory: Option[FrameSurfaceFactory] = None
+  ): (BenchmarkReport, List[Window]) =
+    DisplayExclusive.withShowingWindowsAfter(
+      RenderBenchmarkRunner.run(options, skiaFactory, Right(()), "", rasterFactory)
+    )
+
   private def withDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
 
@@ -188,18 +200,19 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   it should "report a raster arm that fails, and still report the other two" in {
     withDisplay()
     val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
-    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(failing))
+    val (report, open) =
+      runExclusivelyListingOpenWindows(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(failing))
     report.results.foreach { result =>
       result.raster shouldBe None
       result.java2d.count shouldBe 3
       result.skia.map(_.count) shouldBe Some(3)
     }
     report.environment.rasterNote.getOrElse("") should include("no raster surface")
-    Window.getWindows.filter(_.isShowing) shouldBe empty
+    open shouldBe empty
   }
 
   it should "leave no window open" in {
     withDisplay()
-    val _ = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
-    Window.getWindows.filter(_.isShowing) shouldBe empty
+    val (_, open) = runExclusivelyListingOpenWindows(small, SynchronousSkiaLayerSurfaceFactory)
+    open shouldBe empty
   }
