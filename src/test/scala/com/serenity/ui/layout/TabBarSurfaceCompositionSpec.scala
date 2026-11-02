@@ -475,13 +475,13 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   }
 
   "an edge inset" should "keep every tab, close box and the new-tab box inside the strip less its ends" in {
-    val rect      = LayoutRect(0, 0, 40, 1)
-    val inset     = TabBarSettings(edgeInsetCells = 2, reveal = CloseReveal.All)
-    val entries   = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
-    val active    = Some(BufferId(1))
-    val resolved  = TabBarSurfaceComposition.forTabBar(entries, active, rect, inset)
-    val closes    = TabBarSurfaceComposition.closeAffordances(entries, active, rect, inset)
-    val newTab    = TabBarSurfaceComposition.newTabAffordance(entries, rect, active, inset).toList
+    val rect       = LayoutRect(0, 0, 40, 1)
+    val inset      = TabBarSettings(edgeInsetCells = 2, reveal = CloseReveal.All)
+    val entries    = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
+    val active     = Some(BufferId(1))
+    val resolved   = TabBarSurfaceComposition.forTabBar(entries, active, rect, inset)
+    val closes     = TabBarSurfaceComposition.closeAffordances(entries, active, rect, inset)
+    val newTab     = TabBarSurfaceComposition.newTabAffordance(entries, rect, active, inset).toList
     val everything = resolved.hitRegions ++ closes ++ newTab
 
     everything.map(_.rect.x).min should be >= 2.0
@@ -492,7 +492,7 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
   it should "lay out exactly as the strip would without it, shifted in, and leave the row's rect alone" in {
     val entries = List(entry(0, "one"), entry(1, "two"))
     val plain   = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(0)), LayoutRect(0, 0, 36, 1))
-    val inset   = TabBarSurfaceComposition.forTabBar(
+    val inset = TabBarSurfaceComposition.forTabBar(
       entries,
       Some(BufferId(0)),
       LayoutRect(0, 0, 40, 1),

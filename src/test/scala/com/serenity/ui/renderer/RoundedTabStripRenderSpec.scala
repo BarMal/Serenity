@@ -26,9 +26,9 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
   protected def frames: FrameBackend
   protected def scale: Int
 
-  private val columns  = 90
-  private val rowCount = 18
-  private val paneId   = PaneId(0)
+  private val columns                           = 90
+  private val rowCount                          = 18
+  private val paneId                            = PaneId(0)
   private def idsOf(count: Int): List[BufferId] = (1 to count).map(BufferId(_)).toList
 
   private val baseFont =
@@ -204,7 +204,8 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     withClue(s"the + ends inside the strip. $picture")(ink.map(_._1).max should be < stripRight(s))
   }
 
-  /** A pixel clearly outside the strip's arc at one of its corners: further out than the radius by more than a pixel. */
+  /** A pixel clearly outside the strip's arc at one of its corners: further out than the radius by more than a pixel.
+    */
   private def outsideArc(radius: Int): List[(Int, Int)] =
     (for
       dy <- 0 until radius

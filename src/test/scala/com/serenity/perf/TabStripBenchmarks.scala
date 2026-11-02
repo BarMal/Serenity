@@ -32,15 +32,13 @@ private[perf] object TabStripBenchmarks:
   private val columns  = widthPx / cells.charWidth
   private val rect     = LayoutRect(0, 0, columns, 1)
   private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
-  private val config   = AppConfig.conventional.withUiCornerRadiusPx(12).withDockedCornerStyle(DockedCornerStyle.Floating)
+  private val config = AppConfig.conventional.withUiCornerRadiusPx(12).withDockedCornerStyle(DockedCornerStyle.Floating)
 
   private def stateWith(count: Int): AppState =
     val ids     = (1 to count).map(BufferId(_)).toList
     val base    = AppState.initial(config)
     val buffers = ids.map(id => Buffer.fromString(id, s"buffer $id"))
-    base.copy(persisted =
-      base.persisted.copy(buffers = buffers.map(b => b.id -> b).toMap, bufferOrder = ids)
-    )
+    base.copy(persisted = base.persisted.copy(buffers = buffers.map(b => b.id -> b).toMap, bufferOrder = ids))
 
   private def entriesOf(count: Int): List[TabListEntry] =
     (1 to count).toList.map(id => TabListEntry(BufferId(id), s"Quarterly notes $id", isDirty = id % 3 == 0))
@@ -53,7 +51,8 @@ private[perf] object TabStripBenchmarks:
     val active  = Some(BufferId(count))
     val overlay = TextOverlayView(
       rect = rect,
-      composition = Some(TabBarSurfaceComposition.forTabBar(entriesOf(count), active, rect, TabBarLayoutSettings.of(state))),
+      composition =
+        Some(TabBarSurfaceComposition.forTabBar(entriesOf(count), active, rect, TabBarLayoutSettings.of(state))),
       surfaceId = Some(UiSurface.TabBarSurfaceId)
     )
     () =>

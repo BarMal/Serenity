@@ -1,12 +1,12 @@
 package com.serenity.ui.renderer
 
-import java.awt.image.BufferedImage
 import java.awt.Color
+import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicInteger
 
+import com.serenity.MockRenderSurface
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
-import com.serenity.MockRenderSurface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -86,7 +86,14 @@ class RoundedFillPixelsSpec extends AnyFlatSpec with Matchers:
     g.setColor(page)
     g.fillRect(0, 0, widthPx, heightPx)
     val outlines =
-      new Java2DRoundedOutlines(new MockRenderSurface(1, 1), g, metrics, _ => fill, (_, _, _, _) => (), AtomicInteger(0))
+      new Java2DRoundedOutlines(
+        new MockRenderSurface(1, 1),
+        g,
+        metrics,
+        _ => fill,
+        (_, _, _, _) => (),
+        AtomicInteger(0)
+      )
     outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, corners, radius, RenderColor.fromAwt(fill)) shouldBe true
     g.dispose()
     image

@@ -6,13 +6,13 @@ import java.io.File
 import java.nio.file.Paths
 import javax.imageio.ImageIO
 
-import com.serenity.{ChromeOn, ReferenceFrames}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
+import com.serenity.{ChromeOn, ReferenceFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
