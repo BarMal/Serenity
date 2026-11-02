@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
+import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.MockRenderSurface
 import com.serenity.config.{AppConfig, DockedCornerStyle}
@@ -18,13 +19,13 @@ import org.scalatest.matchers.should.Matchers
 class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
 
   final private class CountingSurface extends MockRenderSurface(40, 6):
-    var shapeClips: Int   = 0
-    var roundedFills: Int = 0
+    val shapeClips   = AtomicInteger(0)
+    val roundedFills = AtomicInteger(0)
 
     override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
       render: => Unit
     ): Unit =
-      shapeClips += 1
+      shapeClips.incrementAndGet(): Unit
       render
 
     override def fillRoundRect(
@@ -36,7 +37,7 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
       radiusPx: Int,
       color: RenderColor
     ): Boolean =
-      roundedFills += 1
+      roundedFills.incrementAndGet(): Unit
       true
 
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
@@ -57,12 +58,12 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
   "A status line with rounded corners" should "be filled with its corners and clipped to no shape" in {
     val surface = paint(Some(UiSurface.StatusLineSurfaceId))
 
-    surface.shapeClips shouldBe 0
-    surface.roundedFills should be >= 1
+    surface.shapeClips.get shouldBe 0
+    surface.roundedFills.get should be >= 1
   }
 
   "A floating panel with rounded corners" should "keep the exact shape clip" in {
     val surface = paint(None)
 
-    surface.shapeClips shouldBe 1
+    surface.shapeClips.get shouldBe 1
   }
