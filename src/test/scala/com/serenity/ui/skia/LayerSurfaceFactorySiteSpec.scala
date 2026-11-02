@@ -42,7 +42,7 @@ class LayerSurfaceFactorySiteSpec extends AnyFlatSpec with Matchers:
     )
 
   "A layer factory" should "draw on Java2D, and build no host, when the site is not a Swing canvas" in {
-    val built   = new AtomicInteger(0)
+    val built = new AtomicInteger(0)
     val factory = new LayerSurfaceFactory(
       _ =>
         val _ = built.incrementAndGet()

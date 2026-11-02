@@ -8,6 +8,7 @@ import com.serenity.ui.layout.{
   ColumnPaging,
   LayoutEngine,
   RichTextContext,
+  ScrollLimits,
   TextLayoutSnapshot,
   TextLayoutSnapshotColumnMode,
   VisualRowCounts,
@@ -118,24 +119,7 @@ object CursorViewport:
         )
 
     // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
-    val visualRows =
-      if !wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
-      else
-        VisualRowCounts.forBuffer(
-          buffer,
-          wrapWidthPx,
-          font,
-          cellMetricsOverride,
-          forceCellLayout,
-          wrapCache,
-          dropCapsEnabled,
-          markdownViewMode,
-          tabSize,
-          headings = headings,
-          openings = openings,
-          dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
-          fallback = fontFallback
-        )
+    val visualRows = visualRowsFor(buffer, currentState, wrapCache)
 
     // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
     // logical lines) and carrying the partial offset into whatever line that lands on so the cursor stays centred.
@@ -154,16 +138,10 @@ object CursorViewport:
     val lineCount = buffer.document.content.lineCount
     // Every line is at least one row, so the bottom-aligned top is never above `lineCount - effectiveVisibleLines`; a
     // desired top above that cannot exceed it, and the last screen need not be measured.
-    def exceedsBottomWindow: Option[(Int, Int)] =
-      if lineCount <= 0 || rawTopLine < lineCount - effectiveVisibleLines then None
-      else
-        val (bottomLine, bottomVisualLine) = visualRows.rowAbove(lineCount, effectiveVisibleLines)
-        val exceedsBottom =
-          rawTopLine > bottomLine || (rawTopLine == bottomLine && rawTopVisualLine > bottomVisualLine)
-        Option.when(exceedsBottom)((bottomLine, bottomVisualLine))
     val (clampedTopLine, topVisualLine) =
-      if typewriterScrollingEnabled then (rawTopLine, rawTopVisualLine)
-      else exceedsBottomWindow.getOrElse((rawTopLine, rawTopVisualLine))
+      if typewriterScrollingEnabled || lineCount <= 0 || rawTopLine < lineCount - effectiveVisibleLines then
+        (rawTopLine, rawTopVisualLine)
+      else ScrollLimits.last(visualRows, effectiveVisibleLines).clamp(rawTopLine, rawTopVisualLine)
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else
@@ -191,6 +169,46 @@ object CursorViewport:
       topVisualLine = topVisualLine
     )
 
+  /** The visual rows of `buffer`'s lines as the pane wraps them, for the limits the wheel and the cursor both keep to.
+    */
+  private[manager] def visualRowsFor(
+    buffer: Buffer,
+    currentState: AppState,
+    wrapCache: WrappedLineCache
+  ): VisualRowCounts =
+    val config     = currentState.persisted.config
+    val isTui      = currentState.runtime.capabilities.isCellGrid
+    val fontConfig = config.editorConfig.fontConfig
+    val viewport   = buffer.viewport
+    if !config.surfaceConfig.wordWrapEnabled then VisualRowCounts.oneRowPerLine(buffer.document.content.lineCount)
+    else
+      VisualRowCounts.forBuffer(
+        buffer,
+        if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth
+        else TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig),
+        previewFontForBuffer(buffer, fontConfig),
+        if isTui then Some(CellMetrics.cellUnit) else None,
+        isTui,
+        wrapCache,
+        config.documentConfig.dropCapsEnabled,
+        config.inlineMarkdownViewMode,
+        buffer.effectiveIndentation(config.indentation).tabSize,
+        headings = currentState.effectiveHeadingSettings,
+        openings = buffer.effectiveOpenings(config.openingsConfig),
+        dropCapGapEm = config.documentConfig.dropCapGapEm,
+        fallback = fontConfig.fallback
+      )
+
+  /** The rows of the pane's own font that fit `buffer`'s pane. */
+  private[manager] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
+    val fontConfig = currentState.persisted.config.editorConfig.fontConfig
+    rowsDrawnPerScreen(
+      buffer.viewport,
+      fontConfig,
+      previewFontForBuffer(buffer, fontConfig),
+      currentState.runtime.capabilities.isCellGrid
+    )
+
   /** `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the panel's
     * grid rows, the same convention `gridWrapWidthPx` uses for columns) -- it does not vary with which font a pane
     * actually draws with. A document-font pane whose font has a taller line height than the code font fits fewer of its
@@ -211,7 +229,7 @@ object CursorViewport:
       val codeLineHeightPx =
         CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
       val panelHeightPx = viewport.visibleLines * codeLineHeightPx
-      math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+      ScrollLimits.rowsThatFit(panelHeightPx, CellMetrics.fromFont(font).lineHeight)
 
   /** Column-based document layout (issue #1338, Phase 1): discrete snapping only -- the viewport always lands on the
     * first column of the page holding the cursor's column, so that column is shown from its own top row. Columns are

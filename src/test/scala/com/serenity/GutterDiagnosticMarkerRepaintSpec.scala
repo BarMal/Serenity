@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.spellcheck.SpellChecker
@@ -53,12 +51,12 @@ class GutterDiagnosticMarkerRepaintSpec extends AnyFlatSpec with Matchers with P
     val y      = math.round(cellMetrics.toPixelY(gutter.y + row) * scale).toInt + 1
     (x, y)
 
-  private def stamp(image: BufferedImage, at: (Int, Int)): (Int, Int) =
-    image.setRGB(at._1, at._2, sentinel)
+  private def stamp(image: FramePixels, at: (Int, Int)): (Int, Int) =
+    image.stamp(at._1, at._2, sentinel)
     at
 
-  private def survives(image: BufferedImage, at: (Int, Int)): Boolean =
-    (image.getRGB(at._1, at._2) & 0xffffff) == sentinel
+  private def survives(image: FramePixels, at: (Int, Int)): Boolean =
+    (image.rgbAt(at._1, at._2) & 0xffffff) == sentinel
 
   "A keystroke frame" should "leave the markers of the rows it kept untouched" in {
     val before  = stateWithErrors(Some(LanguageId.Scala))

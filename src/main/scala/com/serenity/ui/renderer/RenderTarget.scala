@@ -5,6 +5,7 @@ import java.awt.{Color, Rectangle}
 
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
+import com.serenity.ui.terminal.LayerPresenter
 
 /** A caret to fill over a presented frame. */
 final case class CaretPaint(rect: Rectangle, color: Color)
@@ -28,6 +29,12 @@ trait RenderTarget:
   def metrics: CellMetrics
   def viewportSize: ViewportSize
   def geometry: SurfaceGeometry
+
+  /** What a backend that hosts a layer needs to find on the target; a target that hosts nothing has none. */
+  def presentationSite: PresentationSite = PresentationSite.None
+
+  /** Hands the target the layer a backend made, so it can give the layer the carets and the pointer cursor. */
+  def attachLayerPresenter(presenter: LayerPresenter): Unit = ()
 
   def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage
 

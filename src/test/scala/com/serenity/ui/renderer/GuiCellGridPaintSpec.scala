@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 import java.awt.image.BufferedImage
 
+import com.serenity.ReferenceFrames
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,14 +25,15 @@ class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
 
   /** `text` painted from cell 1 in the foreground `ink` on the red background. */
   private def painted(text: String, ink: RenderColor = black): BufferedImage =
-    val image   = new BufferedImage(40 * cell, 3 * metrics.lineHeight, BufferedImage.TYPE_INT_RGB)
-    val surface = new Java2DRenderSurface(image, metrics, font, _ => (), 40 * cell, 3 * metrics.lineHeight, 1.0, 1.0)
+    val reference =
+      ReferenceFrames.over(40 * cell, 3 * metrics.lineHeight, metrics, font, 40 * cell, 3 * metrics.lineHeight)
+    val surface = reference.surface
     surface.setForegroundColor(ink)
     surface.setBackgroundColor(white)
     surface.clearViewport(white)
     surface.setBackgroundColor(red)
     surface.putString(1, 1, text)
-    image
+    reference.image
 
   private def rgb(image: BufferedImage, x: Int, y: Int): Int = image.getRGB(x, y) & 0xffffff
 

@@ -340,7 +340,8 @@ object RendererCursorOverlay:
     uiMetrics: CellMetrics,
     cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
-    caches: RenderCaches = RenderCaches.create()
+    caches: RenderCaches = RenderCaches.create(),
+    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
   ): Boolean =
     val viewportSize = target.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
@@ -349,19 +350,25 @@ object RendererCursorOverlay:
     val output        = Some(FrameOutput(target.geometry.identity, repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // carets are filled over it separately, so the base frame here is pure pane content and chrome.
-    val surface = Java2DRenderSurface.forFrame(
-      target.metrics,
-      codeFont.toAwt,
-      target.geometry,
-      target.onBaseImageReady,
-      target.acquireBaseImage,
-      caches.surfaceText
+    val surface = surfaces.create(
+      FrameSurfaceRequest(
+        target.metrics,
+        codeFont.toAwt,
+        target.geometry,
+        target.presentationSite,
+        target.onBaseImageReady,
+        target.acquireBaseImage,
+        caches.surfaceText,
+        caches.backendCaches,
+        () => repaintRegion.get(),
+        attachLayer = target.attachLayerPresenter
+      )
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
-      caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt)
+      caches.framePhases.layout(caches.authoritativeScene.forState(state, viewportSize, codeFont.toAwt, textFont.toAwt))
     ) { page =>
       RendererEntryPoints.renderStartPageFrame(
         state,
@@ -380,22 +387,25 @@ object RendererCursorOverlay:
       // A start page also has no persisted content to reason about, so this always forces a full repaint.
       target.onCursorOverlayReady(None)(Nil)
     } { scene =>
-      RendererFramePlanner
-        .renderFrame(
-          state,
-          cursorVisible = false,
-          surface,
-          viewportSize,
-          scene,
-          codeFont.toAwt,
-          textFont.toAwt,
-          uiFont.toAwt,
-          target.metrics,
-          uiMetrics,
-          cursorColor = None,
-          output,
-          damage,
-          caches
+      caches.framePhases
+        .draw(
+          RendererFramePlanner
+            .renderFrame(
+              state,
+              cursorVisible = false,
+              surface,
+              viewportSize,
+              scene,
+              codeFont.toAwt,
+              textFont.toAwt,
+              uiFont.toAwt,
+              target.metrics,
+              uiMetrics,
+              cursorColor = None,
+              output,
+              damage,
+              caches
+            )
         )
         // No plan means the start page was drawn under a blocking prompt: no caret and nothing to reuse, but the
         // window must still repaint it, or the frame stays unseen until something else does.

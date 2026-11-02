@@ -2,8 +2,11 @@ package com.serenity.app
 
 import java.nio.file.Path
 
+import cats.data.Validated
 import cats.syntax.all.*
 import com.monovore.decline.{Command, Help, Opts}
+import com.serenity.config.{RenderBackendSetting, WaylandRender}
+import com.serenity.ui.benchmark.RenderBenchmarkOptions
 
 /** @param showVersion
   *   `--version`: print the build identity and exit without starting the editor. Carried here rather than handled
@@ -18,6 +21,13 @@ import com.monovore.decline.{Command, Help, Opts}
   *   `--reset-config`: move `config.conf` aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param resetSession
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
+  * @param renderer
+  *   `--renderer=auto|skia|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
+  * @param waylandRender
+  *   `--wayland-render=java2d|skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
+  * @param renderBenchmark
+  *   `--render-benchmark`: time Java2D and the Skia layer side by side on one scripted document, print and write the
+  *   report, and quit without starting the editor. `None` unless the flag is given.
   */
 final case class LaunchOptions(
     openPaths: List[Path] = Nil,
@@ -29,7 +39,10 @@ final case class LaunchOptions(
     safeMode: Boolean = false,
     smokeTest: Boolean = false,
     resetConfig: Boolean = false,
-    resetSession: Boolean = false
+    resetSession: Boolean = false,
+    renderer: Option[RenderBackendSetting] = None,
+    waylandRender: Option[WaylandRender] = None,
+    renderBenchmark: Option[RenderBenchmarkOptions] = None
 ):
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
@@ -98,9 +111,85 @@ object LaunchOptions:
       )
       .orFalse
 
+  private val renderer: Opts[Option[RenderBackendSetting]] =
+    Opts
+      .option[String](
+        "renderer",
+        "Which renderer paints the window: auto, skia or java2d. Beats SERENITY_RENDER_BACKEND and ui.render.backend.",
+        metavar = "auto|skia|java2d"
+      )
+      .mapValidated(value =>
+        RenderBackendSetting
+          .fromConfigKey(value)
+          .toValidNel(s"Unknown renderer '$value'; expected auto, skia or java2d.")
+      )
+      .orNone
+
+  private val waylandRender: Opts[Option[WaylandRender]] =
+    Opts
+      .option[String](
+        "wayland-render",
+        "What a Wayland session does when Skia would paint the window: java2d (keep native Wayland and Java2D), " +
+          "skia-raster (Skia on the CPU under native Wayland) or xwayland (X11 toolkit, so Skia can use the GPU). " +
+          "Beats SERENITY_WAYLAND_RENDER and ui.render.wayland.",
+        metavar = "java2d|skia-raster|xwayland"
+      )
+      .mapValidated(value =>
+        WaylandRender
+          .fromConfigKey(value)
+          .toValidNel(s"Unknown Wayland render '$value'; expected java2d, skia-raster or xwayland.")
+      )
+      .orNone
+
+  private val renderBenchmark: Opts[Option[RenderBenchmarkOptions]] =
+    val defaults = RenderBenchmarkOptions()
+    (
+      Opts
+        .flag(
+          "render-benchmark",
+          "Time Java2D and the Skia layer side by side on one scripted document, print and save the report, then quit."
+        )
+        .orFalse,
+      Opts
+        .option[String]("render-benchmark-size", "Window size for --render-benchmark.", metavar = "WIDTHxHEIGHT")
+        .mapValidated(value => RenderBenchmarkOptions.parseSize(value).toValidatedNel)
+        .orNone,
+      Opts
+        .option[Int]("render-benchmark-frames", "Frames timed per scenario for --render-benchmark.", metavar = "count")
+        .mapValidated(count => Validated.condNel(count > 0, count, "--render-benchmark-frames must be at least 1."))
+        .orNone,
+      Opts
+        .option[Int]("render-benchmark-warmup", "Frames drawn untimed first, per scenario.", metavar = "count")
+        .mapValidated(count => Validated.condNel(count >= 0, count, "--render-benchmark-warmup cannot be negative."))
+        .orNone
+    ).mapN { (on, size, frames, warmup) =>
+      Option.when(on)(
+        RenderBenchmarkOptions(
+          size.fold(defaults.widthPx)(_._1),
+          size.fold(defaults.heightPx)(_._2),
+          frames.getOrElse(defaults.frames),
+          warmup.getOrElse(defaults.warmup)
+        )
+      )
+    }
+
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
-      (open, eco, tui, gui, alpha, version, safeMode, smokeTest, resetConfig, resetSession).mapN(LaunchOptions.apply)
+      (
+        open,
+        eco,
+        tui,
+        gui,
+        alpha,
+        version,
+        safeMode,
+        smokeTest,
+        resetConfig,
+        resetSession,
+        renderer,
+        waylandRender,
+        renderBenchmark
+      ).mapN(LaunchOptions.apply)
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,

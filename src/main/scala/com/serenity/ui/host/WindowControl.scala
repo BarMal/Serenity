@@ -1,11 +1,14 @@
 package com.serenity.ui.host
 
+import scala.annotation.unused
+
 import cats.effect.IO
 import com.serenity.config.PreferredWindowSize
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.AccessibilitySnapshot
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.theme.Theme
+import org.typelevel.log4cats.Logger
 
 /** What the application asks of a window as a window: its lifecycle, its size, the platform's view of the display and
   * the cursor. Nothing here is specific to one window system.
@@ -39,3 +42,6 @@ trait WindowControl:
 
   /** The scale the display asks text to be drawn at. */
   def detectedDeviceTextScale: Double
+
+  /** Logs what the first frames did on screen; a window that keeps no such record logs nothing. */
+  def reportFirstPaints(@unused logger: Logger[IO]): IO[Unit] = IO.unit

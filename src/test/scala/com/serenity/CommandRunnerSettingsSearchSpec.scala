@@ -80,7 +80,9 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       "ui-element-gap",
       "ui-outline-thickness",
       "render-fps",
-      "render-damage-granularity"
+      "render-damage-granularity",
+      "render-backend",
+      "render-wayland"
     )
   }
 
@@ -195,11 +197,14 @@ class CommandRunnerSettingsSearchSpec extends AnyFlatSpec with Matchers:
       .activate(registry, AppConfig.default.withShowAllSettingsRegardlessOfMode(true))
       .updateSearchTerm("font")
 
-    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-prose-font")
-    runner.visibleItems.exists {
-      case group: CommandSurfaceItem.GroupItem => group.id == "settings-code-font"
-      case _                                   => false
-    } shouldBe true
+    // "Font Sizes" leads Typography (#2405), so it is the first font group; the per-role groups still follow it.
+    runner.visibleItems.headOption.map(_.id) shouldBe Some("settings-font-sizes")
+    List("settings-prose-font", "settings-code-font").foreach { id =>
+      runner.visibleItems.exists {
+        case group: CommandSurfaceItem.GroupItem => group.id == id
+        case _                                   => false
+      } shouldBe true
+    }
   }
 
   // issue #1060: a font-family picker embedded inside a settings row (e.g. rich text's "Selection Font Family",

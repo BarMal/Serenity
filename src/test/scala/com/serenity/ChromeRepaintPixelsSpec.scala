@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
@@ -16,20 +14,20 @@ import org.scalatest.matchers.should.Matchers
   * "Not repainted" is observed on the image itself: a sentinel colour is stamped into the pooled image the next frame
   * will draw into, and survives only if nothing repainted those pixels.
   */
-class ChromeRepaintPixelsSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
+abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
   private val scale    = 2.0
   private val sentinel = 0xff00ff
 
   /** A device pixel just inside the top-left corner of the cell `rowOffset` rows down `cells`, away from glyph ink. */
-  private def stamp(image: BufferedImage, cells: LayoutRect, rowOffset: Int = 0): (Int, Int) =
+  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0): (Int, Int) =
     val x = math.round(cellMetrics.toPixelX(cells.x) * scale).toInt + 1
     val y = math.round(cellMetrics.toPixelY(cells.y + rowOffset) * scale).toInt + 1
-    image.setRGB(x, y, sentinel)
+    image.stamp(x, y, sentinel)
     (x, y)
 
-  private def survives(image: BufferedImage, at: (Int, Int)): Boolean =
-    (image.getRGB(at._1, at._2) & 0xffffff) == sentinel
+  private def survives(image: FramePixels, at: (Int, Int)): Boolean =
+    (image.rgbAt(at._1, at._2) & 0xffffff) == sentinel
 
   private def nonEmpty(rect: LayoutRect): Boolean = rect.width > 0 && rect.height > 0
 
@@ -99,3 +97,13 @@ class ChromeRepaintPixelsSpec extends AnyFlatSpec with Matchers with PersistedFr
 
     differingPixels(drawn, cold(second)) shouldBe empty
   }
+
+class ChromeRepaintPixelsSpec extends ChromeRepaintPixelsBehaviour
+
+/** The same assertions with Skia painting into off-screen raster surfaces. Whether a row was repainted or copied is
+  * read from sentinel pixels and whether a frame equals a cold one is compared against Skia's own cold frame, so none
+  * of it depends on how Skia and Java2D rasterise a glyph differently: the tolerance is zero because both sides of
+  * every comparison come from the same rasteriser.
+  */
+class SkiaChromeRepaintPixelsSpec extends ChromeRepaintPixelsBehaviour:
+  override protected def frames: FrameBackend = SkiaFrames

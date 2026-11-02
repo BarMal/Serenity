@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import scala.jdk.CollectionConverters.*
 
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.fonts.LogicalFontFamilies
 
 final case class TextStyle(
     isBold: Boolean = false,
@@ -44,11 +45,15 @@ object TextStyle:
     * An underline is not part of the font: the surface draws it as a rule under the run, so an underlined run shares
     * the font of its plain counterpart. Strikethrough is still a font attribute.
     */
-  def styledFont(base: Font, style: TextStyle): Font =
+  def styledFont(
+    base: Font,
+    style: TextStyle,
+    resolve: String => String = LogicalFontFamilies.system.resolve
+  ): Font =
     val fontMode = style.fontMode
     val size     = style.fontSize.getOrElse(base.getSize2D).max(1.0f)
     val styled = style.fontFamily match
-      case Some(family) => Font(family, fontMode, size.round.max(1)).deriveFont(fontMode, size)
+      case Some(family) => Font(resolve(family), fontMode, size.round.max(1)).deriveFont(fontMode, size)
       case None         => derivedFrom(base, fontMode, size)
     if style.isStrikethrough then
       val strike: Map[TextAttribute, AnyRef] = Map(TextAttribute.STRIKETHROUGH -> TextAttribute.STRIKETHROUGH_ON)
