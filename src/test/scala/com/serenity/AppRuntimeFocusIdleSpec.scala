@@ -368,7 +368,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             ) => idleRenderCalls.update(_ + 1)
           ),
           appConfig = fastConfig,
-          makeStateManager = Some(_ => IO.pure(stateManager)),
+          makeStateManager = Some((_, _) => IO.pure(stateManager)),
           awaitExternalQuit = closeRequested.get,
           registerResizeCallback = _ => (),
           registerFocusCallback = cb => focusCallbackHolder.set(Some(cb))
@@ -421,7 +421,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
               ) => IO.raiseError(RuntimeException("idle render failed"))
             ),
             appConfig = AppConfig.conventional,
-            makeStateManager = Some(logger =>
+            makeStateManager = Some((logger, _) =>
               StateManager.apply(
                 logger,
                 policy = SessionManager.SessionPolicy(saveOnAppClose = false),
