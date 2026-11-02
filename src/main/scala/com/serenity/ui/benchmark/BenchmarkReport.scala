@@ -78,7 +78,8 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    (List(startup, drawnLine, canvasLine, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ notTimed ++
+    (List(startup).flatten ++ List(sceneBuildLine) ++
+      List(drawnLine, canvasLine, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ notTimed ++
       List(agreement, sync, pictures).flatten)
       .map(line => s"\n$line")
 
@@ -98,6 +99,14 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     }
 
   private def size(window: WindowPx): String = s"${window.width}x${window.height}"
+
+  private def sceneBuildLine: String =
+    if environment.scenesLikeTheApp then
+      "Scenes are built as the app builds them: a pane's whole-document row count is measured after the frame, and the " +
+        "font sets are made once, before the timed frames."
+    else
+      "Scenes are built whole inside the frame: every row of the document is counted in the frame, and the font sets " +
+        "are made again for every cold frame."
 
   private def agreementLine(agreement: FallbackAgreement): String =
     val base =
@@ -191,18 +200,19 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       environment.skiaRenderApi.fold(cause => "skiaUnavailable" -> cause.asJson, api => "skiaRenderApi" -> api.asJson)
     Json.obj(
       List(
-        "os"             -> environment.os.asJson,
-        "java"           -> environment.java.asJson,
-        "width"          -> environment.widthPx.asJson,
-        "height"         -> environment.heightPx.asJson,
-        "deviceScale"    -> environment.deviceScale.asJson,
-        "toolkit"        -> environment.toolkit.asJson,
-        "startup"        -> environment.startup.asJson,
-        "refreshHz"      -> environment.refresh.hz.asJson,
-        "refreshAssumed" -> environment.refresh.assumed.asJson,
-        "cpuModel"       -> environment.machine.cpuModel.asJson,
-        "cpuGovernor"    -> environment.machine.cpuGovernor.asJson,
-        "power"          -> environment.machine.power.asJson,
+        "os"               -> environment.os.asJson,
+        "java"             -> environment.java.asJson,
+        "width"            -> environment.widthPx.asJson,
+        "height"           -> environment.heightPx.asJson,
+        "deviceScale"      -> environment.deviceScale.asJson,
+        "scenesLikeTheApp" -> environment.scenesLikeTheApp.asJson,
+        "toolkit"          -> environment.toolkit.asJson,
+        "startup"          -> environment.startup.asJson,
+        "refreshHz"        -> environment.refresh.hz.asJson,
+        "refreshAssumed"   -> environment.refresh.assumed.asJson,
+        "cpuModel"         -> environment.machine.cpuModel.asJson,
+        "cpuGovernor"      -> environment.machine.cpuGovernor.asJson,
+        "power"            -> environment.machine.power.asJson,
         api
       ) ++ environment.rasterNote.map(note => "rasterNote" -> note.asJson).toList ++
         environment.skiaDeviceScale.map(scale => "skiaDeviceScale" -> scale.asJson).toList ++
