@@ -84,9 +84,11 @@ private[components] object ExplorerPanelKeys:
     before: TreeView[Path, DirectoryTreeNode],
     next: TreeView[Path, DirectoryTreeNode]
   ): DirectoryTreeData =
-    val expandedPaths = next.expanded - tree.rootPath
-    (expandedPaths -- before.expanded)
-      .foldLeft(tree.copy(expandedPaths = expandedPaths))(_.retried(_))
+    val folded = tree.copy(
+      expandedPaths = next.expanded - tree.rootPath,
+      rootCollapsed = !next.expanded.contains(tree.rootPath)
+    )
+    (next.expanded -- before.expanded).foldLeft(folded)(_.retried(_))
 
   private def open(path: Path, currentState: AppState): ComponentResult =
     ComponentResult.reducerResult(
