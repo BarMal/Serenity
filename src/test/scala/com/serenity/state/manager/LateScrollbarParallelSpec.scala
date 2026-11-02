@@ -103,9 +103,9 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       (waits > 0 && notices.arrived
         .tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, waits - 1))
 
-  /** Waits until every pane has been told its bar is counted, then checks none is told twice. A bar can show in a
-    * scene as soon as its rows are measured, before the run that measured them has told every pane, so the notices are
-    * what is waited on.
+  /** Waits until every pane has been told its bar is counted, then checks none is told twice. A bar can show in a scene
+    * as soon as its rows are measured, before the run that measured them has told every pane, so the notices are what
+    * is waited on.
     */
   private def toldOnce(notices: Notices, state: AppState): Unit =
     val all = panes(state)
