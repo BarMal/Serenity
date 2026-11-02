@@ -93,9 +93,10 @@ private[perf] object ScalingBenchmarks:
       () => transition.nextFrame()
     )
 
-  /** A damaged frame must match a cold one pixel for pixel. With two or more panes, pixels within one cell of the edge
-    * between two panes are let through and reported (#2481): a one-line scroll leaves a band of five device columns
-    * there that a cold frame draws differently. Anything elsewhere fails.
+  /** A damaged frame must match a cold one pixel for pixel. Where two panes share an edge, the five device columns
+    * [edge - 3, edge + 1] are let through (#2481): a one-line scroll leaves differences there that a cold frame draws
+    * differently, and none have been seen elsewhere. Any other pixel fails, so does a wider band. The fix for #2481
+    * removes this allowance.
     */
   private def verifySplitFrames(
     name: String,
@@ -106,23 +107,29 @@ private[perf] object ScalingBenchmarks:
     List(after, before).foreach { expected =>
       val drawn   = transition.nextFrame()
       val cold    = LaptopFrameBenchmarks.renderedFrame(expected, RenderCaches.create(), image, cursorVisible = false)
-      val bands   = paneEdgeBands(expected)
-      val outside = LaptopFrameBenchmarks.differingPixels(drawn, cold).filterNot((x, _) => bands.exists(_.contains(x)))
+      val outside = outsideEdgeColumns(LaptopFrameBenchmarks.differingPixels(drawn, cold), sharedEdges(expected))
       assert(
         outside.isEmpty,
-        s"$name: the damaged frame differs from a full frame in ${outside.size} pixels away from the pane edges: " +
+        s"$name: the damaged frame differs from a full frame in ${outside.size} pixels outside the pane-edge columns: " +
           outside.take(8).mkString(" ")
       )
     }
 
-  /** The device columns within one cell of an edge that two panes share. */
-  private def paneEdgeBands(state: AppState): List[Range] =
+  private[perf] def edgeColumns(edge: Int): Range = (edge - 3) to (edge + 1)
+
+  private[perf] def outsideEdgeColumns(
+    differing: IndexedSeq[(Int, Int)],
+    edges: List[Int]
+  ): IndexedSeq[(Int, Int)] =
+    differing.filterNot((x, _) => edges.exists(edge => edgeColumns(edge).contains(x)))
+
+  /** Device columns of the edges that two panes share. */
+  private def sharedEdges(state: AppState): List[Int] =
     val layout = LayoutEngine.calculateLayout(state, LaptopFrameBenchmarks.viewport)
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout).values.toList
     val cell   = LaptopFrameBenchmarks.cellMetrics.charWidth * LaptopFrameBenchmarks.DeviceScale.toInt
     val lefts  = panes.map(_.x).toSet
-    val shared = panes.map(_.right).filter(lefts.contains).distinct
-    shared.map(edge => (edge * cell - cell) to (edge * cell + cell))
+    panes.map(_.right).filter(lefts.contains).distinct.map(_ * cell)
 
   private def lateBars: BenchmarkRunner.Benchmark =
     val state = ScrollbarTiming.withScrollbar(

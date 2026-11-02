@@ -46,3 +46,18 @@ class ScalingBenchmarksSpec extends AnyFlatSpec with Matchers:
         row.run()
       }
     }
+
+  "The pane-edge allowance (#2481)" should "cover exactly the five device columns the damaged frame is known to get wrong" in {
+    ScalingBenchmarks.edgeColumns(1540) shouldBe (1537 to 1541)
+  }
+
+  it should "let through differences inside those five columns and nothing outside them" in {
+    val inside  = (1537 to 1541).map(x => (x, 3))
+    val outside = Vector((1536, 3), (1542, 3), (0, 0))
+
+    ScalingBenchmarks.outsideEdgeColumns(inside ++ outside, List(1540)) shouldBe outside
+  }
+
+  it should "let nothing through when there is no shared edge" in {
+    ScalingBenchmarks.outsideEdgeColumns(Vector((1539, 2)), Nil) shouldBe Vector((1539, 2))
+  }
