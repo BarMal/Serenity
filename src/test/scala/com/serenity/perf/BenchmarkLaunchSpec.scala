@@ -2,7 +2,7 @@ package com.serenity.perf
 
 import java.awt.GraphicsEnvironment
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import java.util.concurrent.TimeUnit
 
 import scala.jdk.CollectionConverters.*
