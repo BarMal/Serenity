@@ -2,11 +2,12 @@ package com.serenity.perf
 
 import scala.util.Random
 
+import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, Buffer, BufferId, EditingState}
-import com.serenity.ui.layout.SplitAxis
+import com.serenity.ui.layout.{PaneScroll, SplitAxis}
 
 /** Open buffers that differ line by line, for the rows that ask how performance scales with them (#2478). The text
   * caches are keyed by text, not by buffer, so buffers that repeat each other's lines would share every entry and hide
@@ -23,12 +24,18 @@ private[perf] object MultiBufferFixture:
   /** `lines` code lines, or `lines / ProseLinesPerParagraph` prose paragraphs: about the same characters either way. */
   final case class Size(lines: Int)
 
+  private val ProseLinesPerParagraph = 8
+
   /** The lines of the existing footprint rows, so the heap rows are comparable with them. */
   val FullSize: Size = Size(FootprintBenchmarks.DocumentLines)
   val TestSize: Size = Size(200)
 
-  private val ProseLinesPerParagraph = 8
-  private val WordsPerParagraph      = 100
+  /** The largest prose buffer whose bar is counted late: one paragraph and one blank line each, just under the line
+    * limit above which a bar is estimated at once (`PaneScroll.ExactLineLimit`).
+    */
+  val LateCountSize: Size = Size(((PaneScroll.ExactLineLimit + 1) / 2) * ProseLinesPerParagraph)
+
+  private val WordsPerParagraph = 100
 
   def document(kind: Kind, index: Int, size: Size): String =
     kind match
@@ -60,9 +67,10 @@ private[perf] object MultiBufferFixture:
         editing = EditingState(shown.editing.cursors)
       )
     }.toMap
-    val all = base.persisted.buffers ++ opened
+    val all    = base.persisted.buffers ++ opened
+    val config = if kind == Kind.Prose then AppConfig.conventional else base.persisted.config
     base.copy(
-      persisted = base.persisted.copy(buffers = all, bufferOrder = all.keys.toList.sortBy(_.value)),
+      persisted = base.persisted.copy(buffers = all, bufferOrder = all.keys.toList.sortBy(_.value), config = config),
       runtime = base.runtime.copy(nextBufferId = BufferId(buffers + 1))
     )
 

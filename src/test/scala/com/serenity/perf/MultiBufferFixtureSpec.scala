@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppStateValidation, BufferId}
+import com.serenity.ui.layout.PaneScroll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -11,22 +12,21 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
 
   private def linesOf(text: String): Set[String] = text.linesIterator.filter(_.nonEmpty).toSet
 
-  "MultiBufferFixture.document" should "give each buffer index its own lines, so no cache keyed by text is shared" in {
+  "MultiBufferFixture.document" should "give each buffer index its own lines, so no cache keyed by text is shared" in
     Kind.values.foreach { kind =>
       withClue(kind.label) {
-        val documents = (1 to 3).map(index => linesOf(MultiBufferFixture.document(kind, index, MultiBufferFixture.TestSize)))
+        val documents =
+          (1 to 3).map(index => linesOf(MultiBufferFixture.document(kind, index, MultiBufferFixture.TestSize)))
         documents.foreach(_.size should be > 10)
         documents.combinations(2).foreach(pair => (pair.head intersect pair(1)) shouldBe empty)
       }
     }
-  }
 
-  it should "be the same document for the same index, so a run can be repeated" in {
+  it should "be the same document for the same index, so a run can be repeated" in
     Kind.values.foreach { kind =>
       MultiBufferFixture.document(kind, 4, MultiBufferFixture.TestSize) shouldBe
         MultiBufferFixture.document(kind, 4, MultiBufferFixture.TestSize)
     }
-  }
 
   it should "make code of short lines and prose of long ones, each buffer about as many characters as the other kind" in {
     val code  = MultiBufferFixture.document(Kind.Code, 1, MultiBufferFixture.FullSize)
@@ -37,7 +37,7 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
     (prose.length.toDouble / code.length) should (be > 0.8 and be < 1.25)
   }
 
-  "MultiBufferFixture.state" should "open the asked-for buffers, all different, with the first shown" in {
+  "MultiBufferFixture.state" should "open the asked-for buffers, all different, with the first shown" in
     Kind.values.foreach { kind =>
       val state = MultiBufferFixture.state(kind, buffers = 20, MultiBufferFixture.TestSize)
 
@@ -47,9 +47,30 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
       state.persisted.layout.editorPanes should have size 1
       AppStateValidation.validationErrors(state) shouldBe Nil
     }
+
+  it should "wrap prose, as the laptop prose rows do, and leave code unwrapped" in {
+    MultiBufferFixture
+      .state(Kind.Prose, 2, MultiBufferFixture.TestSize)
+      .persisted
+      .config
+      .surfaceConfig
+      .wordWrapEnabled shouldBe true
+    MultiBufferFixture
+      .state(Kind.Code, 2, MultiBufferFixture.TestSize)
+      .persisted
+      .config
+      .surfaceConfig
+      .wordWrapEnabled shouldBe false
   }
 
-  "MultiBufferFixture.split" should "show a different buffer in each of the panes" in {
+  it should "make a late-count buffer of prose with just under the exact limit of lines" in {
+    val lines = MultiBufferFixture.document(Kind.Prose, 1, MultiBufferFixture.LateCountSize).linesIterator.size
+
+    lines should be <= PaneScroll.ExactLineLimit
+    lines should be > PaneScroll.ExactLineLimit - 4
+  }
+
+  "MultiBufferFixture.split" should "show a different buffer in each of the panes" in
     Seq(2, 4).foreach { panes =>
       val state = MultiBufferFixture.split(
         MultiBufferFixture.state(Kind.Code, buffers = 20, MultiBufferFixture.TestSize),
@@ -60,7 +81,6 @@ class MultiBufferFixtureSpec extends AnyFlatSpec with Matchers:
       state.persisted.layout.editorPanes.values.flatMap(_.bufferId).toSet should have size panes
       AppStateValidation.validationErrors(state) shouldBe Nil
     }
-  }
 
   it should "leave a one-pane state as it is" in {
     val state = MultiBufferFixture.state(Kind.Code, buffers = 3, MultiBufferFixture.TestSize)
