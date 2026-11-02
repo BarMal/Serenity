@@ -5,6 +5,7 @@ import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import com.serenity.perf.BenchmarkMain
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.renderer.{FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
 

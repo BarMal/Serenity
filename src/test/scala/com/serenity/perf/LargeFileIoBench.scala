@@ -9,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.io.FileManager
+import com.serenity.perf.BenchmarkMain
 import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
 

@@ -6,6 +6,7 @@ import scala.annotation.tailrec
 
 import com.serenity.lsp.client.LspFramer
 import com.serenity.lsp.client.LspFramer.FrameDecoder
+import com.serenity.perf.BenchmarkMain
 import fs2.Chunk
 import io.circe.Json
 import io.circe.syntax.*

@@ -6,7 +6,7 @@ package com.serenity.perf
   * benchmark that opened a window has two. A `LinkageError` such as `ExceptionInInitializerError` also skips every
   * `Resource` finalizer, so the windows are never closed (#2486). Exiting here is what ends the process.
   */
-private[perf] object BenchmarkMain:
+private[serenity] object BenchmarkMain:
 
   val FailureExitCode: Int = 1
 
