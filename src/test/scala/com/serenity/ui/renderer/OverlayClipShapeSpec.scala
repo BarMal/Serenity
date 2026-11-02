@@ -62,6 +62,13 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
     surface.roundedFills.get should be >= 1
   }
 
+  "A tab strip with rounded corners" should "be filled with its corners and clipped to no shape" in {
+    val surface = paint(Some(UiSurface.TabBarSurfaceId))
+
+    surface.shapeClips.get shouldBe 0
+    surface.roundedFills.get should be >= 1
+  }
+
   "A floating panel with rounded corners" should "keep the exact shape clip" in {
     val surface = paint(None)
 

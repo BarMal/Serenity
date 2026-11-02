@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.font.TextLayout
 import java.util.concurrent.ConcurrentHashMap
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.state.models.AppState
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, CloseReveal, TabBarSettings, TabTitleMeasure, TextLayoutSnapshot}
@@ -19,11 +19,22 @@ import com.serenity.ui.layout.{CellMetrics, CloseReveal, TabBarSettings, TabTitl
 object TabBarLayoutSettings:
 
   def of(state: AppState, revealAll: Boolean = false): TabBarSettings =
+    val gui = !state.runtime.capabilities.isCellGrid
     TabBarSettings(
       maxTabWidth = state.persisted.config.surfaceConfig.tabMaxWidth,
       measure = measureFor(state),
-      reveal = if revealAll then CloseReveal.All else revealFor(state)
+      reveal = if revealAll then CloseReveal.All else revealFor(state),
+      edgeInsetCells = if gui then edgeInsetCells(state.persisted.config) else 0
     )
+
+  /** The cells at each end of a floating strip that its arcs cut into, which nothing square may be painted in. */
+  private def edgeInsetCells(config: AppConfig): Int =
+    val radius = config.scaledUiCornerRadiusPx
+    if radius <= 0 || config.dockedCornerStyle != DockedCornerStyle.Floating then 0
+    else math.ceil(radius / cellWidthPx(config)).toInt
+
+  private def cellWidthPx(config: AppConfig): Double =
+    CellMetrics.fromFont(FontLoader.previewCodeFont(config.editorConfig.fontConfig)).charWidth.toDouble
 
   private def revealFor(state: AppState): CloseReveal =
     if state.runtime.capabilities.isCellGrid then CloseReveal.ActiveOnly
@@ -39,7 +50,7 @@ object TabBarLayoutSettings:
   private def proportional(config: AppConfig): TabTitleMeasure =
     val fontConfig = config.editorConfig.fontConfig
     val font       = FontLoader.previewUiFont(fontConfig)
-    val cellWidth  = CellMetrics.fromFont(FontLoader.previewCodeFont(fontConfig)).charWidth.toDouble
+    val cellWidth  = cellWidthPx(config)
     val context    = TextLayoutSnapshot.defaultFontRenderContext()
     val advances   = new ConcurrentHashMap[String, java.lang.Double]()
     def advanceOf(label: String): Double =

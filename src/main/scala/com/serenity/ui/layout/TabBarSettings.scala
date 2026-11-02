@@ -50,8 +50,16 @@ object TabTitleMeasure:
 final case class TabBarSettings(
     maxTabWidth: Int = TabMaxWidth.Default,
     measure: TabTitleMeasure = TabTitleMeasure.CellGrid,
-    reveal: CloseReveal = CloseReveal.ActiveOnly
-)
+    reveal: CloseReveal = CloseReveal.ActiveOnly,
+    edgeInsetCells: Int = 0
+):
+
+  /** The part of the strip the tabs, the close boxes and the new-tab box lie in: the strip less the cells at each end
+    * that its rounded corners cut into, so nothing painted in a square cell reaches an arc.
+    */
+  def contentRect(rect: LayoutRect): LayoutRect =
+    val inset = math.max(0, math.min(edgeInsetCells, (rect.width - 1) / 2))
+    rect.copy(x = rect.x + inset, width = rect.width - 2 * inset)
 
 object TabBarSettings:
 

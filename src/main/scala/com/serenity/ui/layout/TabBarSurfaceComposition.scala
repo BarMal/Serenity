@@ -82,7 +82,8 @@ object TabBarSurfaceComposition:
     activeBufferId: Option[BufferId] = None,
     settings: TabBarSettings = TabBarSettings.Default
   ): Option[SurfaceHitRegion] =
-    if entries.isEmpty then None else Some(newTabRegion(layOut(entries, activeBufferId, rect, settings), rect))
+    val content = settings.contentRect(rect)
+    if entries.isEmpty then None else Some(newTabRegion(layOut(entries, activeBufferId, content, settings), content))
 
   private def newTabRegion(layout: TabBarLayout, rect: LayoutRect): SurfaceHitRegion =
     val rightEdge = rect.x + rect.width - NewTabAffordanceWidth
@@ -297,7 +298,8 @@ object TabBarSurfaceComposition:
         focusOrder = Nil
       )
     else
-      val layout      = layOut(entries, activeBufferId, rect, settings)
+      val content     = settings.contentRect(rect)
+      val layout      = layOut(entries, activeBufferId, content, settings)
       val allocations = layout.allocations
       val overflowing = layout.hiddenCount > 0
 
@@ -325,7 +327,7 @@ object TabBarSurfaceComposition:
 
       val rowBox = SurfacePaintBox(
         kind = SurfacePaintKind.Text,
-        rect = LogicalPixelRect(bounds.x, bounds.y, bounds.width, math.min(1.0, bounds.height)),
+        rect = LogicalPixelRect(content.x.toDouble, bounds.y, content.width.toDouble, math.min(1.0, bounds.height)),
         text = Some(segments.map(_.text).mkString(" ")),
         segments = segments,
         layout = SurfacePaintLayout.Distributed
@@ -335,7 +337,7 @@ object TabBarSurfaceComposition:
       // than as another `Distributed` segment of `rowBox` -- it addresses no `BufferId`, so it has no place in a row
       // whose segments are otherwise one-to-one with `entries`.
       val newTabBox =
-        val region = newTabRegion(layout, rect)
+        val region = newTabRegion(layout, content)
         SurfacePaintBox(
           kind = SurfacePaintKind.Text,
           rect = region.rect,
@@ -349,7 +351,7 @@ object TabBarSurfaceComposition:
       // `newTabBox` does above, rather than as another `Distributed` segment of `rowBox` -- and is derived from
       // `closeRegions` itself (not re-walked here) so the painted glyph and its click target can never drift apart
       // (issue #1078).
-      val closeBoxes = closeRegions(layout, rect, settings.reveal).map { region =>
+      val closeBoxes = closeRegions(layout, content, settings.reveal).map { region =>
         SurfacePaintBox(
           kind = SurfacePaintKind.Text,
           rect = region.rect,
@@ -452,5 +454,6 @@ object TabBarSurfaceComposition:
     rect: LayoutRect,
     settings: TabBarSettings = TabBarSettings.Default
   ): List[SurfaceHitRegion] =
+    val content = settings.contentRect(rect)
     if entries.isEmpty then Nil
-    else closeRegions(layOut(entries, activeBufferId, rect, settings), rect, settings.reveal)
+    else closeRegions(layOut(entries, activeBufferId, content, settings), content, settings.reveal)

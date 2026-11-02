@@ -70,11 +70,12 @@ object TextOverlayRenderer:
 
     surface.effects.foreach(_.setAlpha(overlay.alphaMultiplier))
 
-    // A shape clip sends every cell painted through it down Java2D's slow path, which the status line, painted in every
-    // frame, cannot afford. It paints plain text on one fill, so that fill takes the rounded corners and the clip stays
-    // a rectangle. The tab strip and the floating panels keep the exact shape clip: they paint their own backgrounds.
+    // A shape clip sends every cell painted through it down Java2D's slow path, which the status line and the tab strip
+    // cannot afford: they are painted in every frame that changes them. They take their rounded corners from one hard
+    // edged fill and are clipped to a rectangle; the tab strip's layout keeps everything it paints clear of the arcs.
+    // A floating panel is painted rarely, and keeps the exact shape clip.
     val radiusPx   = config.scaledUiCornerRadiusPx
-    val shapedFill = isStatusLine && corners.any && radiusPx > 0
+    val shapedFill = isQuietLine && corners.any && radiusPx > 0
     withOptionalRoundRectClip(surface, rect, if shapedFill then RoundedCorners.None else corners, radiusPx) {
       surface.setForegroundColor(fg)
       surface.setBackgroundColor(bg)
