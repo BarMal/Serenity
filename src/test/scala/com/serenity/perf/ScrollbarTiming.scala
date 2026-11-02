@@ -56,3 +56,6 @@ private[perf] object ScrollbarTiming:
     stamps.asScala.view.mapValues(_.longValue).toMap
 
   def lastBarNanos[K](waits: Map[K, Long]): Long = waits.values.max
+
+  /** The waits from the first bar to the last. */
+  def arrivalOrder[K](waits: Map[K, Long]): List[Long] = waits.values.toList.sorted

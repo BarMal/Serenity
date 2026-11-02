@@ -51,3 +51,7 @@ class ScrollbarTimingSpec extends AnyFlatSpec with Matchers:
   "ScrollbarTiming.lastBarNanos" should "be the longest wait" in {
     ScrollbarTiming.lastBarNanos(Map("a" -> 5L, "b" -> 9L, "c" -> 7L)) shouldBe 9L
   }
+
+  "ScrollbarTiming.arrivalOrder" should "list the waits from the first bar to the last" in {
+    ScrollbarTiming.arrivalOrder(Map("a" -> 9L, "b" -> 5L, "c" -> 7L)) shouldBe List(5L, 7L, 9L)
+  }
