@@ -287,12 +287,13 @@ object WrappedLineCache:
     private val incrementalCount                   = new AtomicLong(0L)
     private val rowCount                           = new AtomicLong(0L)
     private val measuredCount                      = new AtomicLong(0L)
-    private val visualRows = new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val bandRows   = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
-    private val fences     = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
-    private val columns    = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
-    private val openings   = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
-    private val coverages  = FallbackCoverages(FallbackCoverages.DefaultCapacity)
+    private val visualRows =
+      new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries, VisualRowKey.seeds)
+    private val bandRows  = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
+    private val fences    = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
+    private val columns   = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
+    private val openings  = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
+    private val coverages = FallbackCoverages(FallbackCoverages.DefaultCapacity)
 
     private val itemisations = FallbackItemisations(coverages, FallbackItemisations.DefaultEntries)
 
