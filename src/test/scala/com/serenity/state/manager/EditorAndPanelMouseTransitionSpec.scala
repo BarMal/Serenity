@@ -210,7 +210,9 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
       AuthoritativeUiScene()
     ) should matchPattern {
       case Some(
-            ComponentResult.ReducerUpdate(ReducerResult(_, List(AppEffect.File(FileEffect.DirectLoadFile(`readme`)))))
+            ComponentResult.ReducerUpdate(
+              ReducerResult(_, List(AppEffect.File(FileEffect.OpenFromExplorer(`readme`, false))))
+            )
           ) =>
     }
     PinnedPanelMouseHitTesting.activation(MouseClick(x, y), selected, AuthoritativeUiScene()) shouldBe None
