@@ -249,4 +249,9 @@ trait PanelOutlineDrawing:
     * that does not address pixels has nothing finer than a cell to bound, so by default `render` runs unclipped;
     * callers only ask where [[RenderSurface.addressesPixels]].
     */
-  def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit = render
+  def withPixelClip(
+    @unused xPx: Int,
+    @unused yPx: Int,
+    @unused widthPx: Int,
+    @unused heightPx: Int
+  )(render: => Unit): Unit = render
