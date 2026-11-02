@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.time.Duration
 
 import scala.jdk.CollectionConverters.*
+import scala.util.chaining.*
 
 import jdk.jfr.Recording
 import jdk.jfr.consumer.{RecordedEvent, RecordedFrame, RecordingFile}
@@ -18,8 +19,11 @@ class ChromeFrameCostDiagnosisSpec extends AnyFlatSpec with Matchers:
 
   private def projectFrame(event: RecordedEvent): String =
     Option(event.getStackTrace).map(_.getFrames.asScala.toList).getOrElse(Nil)
-      .find(frame => frame.getMethod.getType.getName.startsWith("com.serenity") && !frame.getMethod.getType.getName.contains("perf."))
-      .fold("(no project frame)")(describe)
+      .filter(frame => frame.getMethod.getType.getName.startsWith("com.serenity") && !frame.getMethod.getType.getName.contains("perf."))
+      .take(2)
+      .map(describe)
+      .mkString(" <- ")
+      .pipe(text => if text.isEmpty then "(no project frame)" else text)
 
   private def describe(frame: RecordedFrame): String =
     s"${frame.getMethod.getType.getName.stripPrefix("com.serenity.")}.${frame.getMethod.getName}"
@@ -38,7 +42,12 @@ class ChromeFrameCostDiagnosisSpec extends AnyFlatSpec with Matchers:
     recording.stop()
     recording.dump(file)
     recording.close()
-    val events = RecordingFile.readAllEvents(file).asScala.toList
+    val thread = Thread.currentThread.threadId
+    val events = RecordingFile
+      .readAllEvents(file)
+      .asScala
+      .toList
+      .filter(e => Option(e.getThread).exists(_.getJavaThreadId == thread))
     val cpu    = events.filter(_.getEventType.getName == "jdk.ExecutionSample")
     val alloc  = events.filter(_.getEventType.getName == "jdk.ObjectAllocationSample")
     def table(title: String, keyed: List[(String, Long)], total: Long): Unit =
