@@ -20,6 +20,12 @@ final private[serenity] class RowCertificates(builder: Executor):
   def of(key: NominalAdvances.Key): Option[NominalAdvances] =
     if revoked.contains(key) then None else exact(key).orElse(shapedFor(key))
 
+  /** Installs `table` as the built certificate of a font set with ligatures, as if the builder had made it: for specs
+    * of what a wrong certificate does.
+    */
+  private[serenity] def plant(key: NominalAdvances.Key, table: NominalAdvances): Unit =
+    val _ = built.put(key, Some(table))
+
   /** Withdraws the font's certificate for good. True for the call that did, so a miscount is reported once. */
   def revoke(key: NominalAdvances.Key): Boolean =
     val first = revoked.add(key)

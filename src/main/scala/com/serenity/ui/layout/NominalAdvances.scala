@@ -13,9 +13,14 @@ import com.serenity.ui.renderer.ShapedTextCache
   * for it (`GlyphAdvances.measureRun`), so whether it fits a row can be read off them without wrapping the line. They
   * are fractional and need not agree with the integer cell grid.
   */
-final private[layout] class NominalAdvances private (advances: Array[Float]):
+final private[serenity] class NominalAdvances private (advances: Array[Float]):
 
   def advanceOf(char: Char): Float = advances(char - NominalAdvances.FirstPrintable)
+
+  /** The same table with every advance multiplied by `factor`: a certificate that is wrong by construction, for specs
+    * of what happens when one is.
+    */
+  private[serenity] def scaled(factor: Float): NominalAdvances = new NominalAdvances(advances.map(_ * factor))
 
   /** Whether `text` is one row of `widthPx`: it is printable ASCII and its summed advance clears the width by the
     * margin within which the wrap itself declines to decide and measures the row exactly. Anything else is not said to
@@ -32,7 +37,7 @@ final private[layout] class NominalAdvances private (advances: Array[Float]):
     val width = total(0, 0.0f)
     width >= 0.0f && width + ParagraphMeasurement.DecisionGuardPx < widthPx.toFloat
 
-private[layout] object NominalAdvances:
+private[serenity] object NominalAdvances:
 
   /** What a font and rendering context are measured under; both compare structurally. */
   final case class Key(font: Font, frc: FontRenderContext)
