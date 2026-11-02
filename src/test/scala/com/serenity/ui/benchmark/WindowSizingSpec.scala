@@ -12,11 +12,14 @@ class WindowSizingSpec extends AnyFlatSpec with Matchers:
 
   /** A clock that moves only when the code under test pauses. */
   final private class Clock:
-    var now: Long    = 0L
-    val pauses       = scala.collection.mutable.ArrayBuffer.empty[Long]
-    def read(): Long = now
+    private val elapsed = new java.util.concurrent.atomic.AtomicLong(0L)
+    val pauses          = new java.util.concurrent.ConcurrentLinkedQueue[Long]()
+    def now: Long       = elapsed.get
+    def read(): Long    = elapsed.get
+
     def pause(millis: Long): Unit =
-      pauses += millis; now += millis
+      val _ = pauses.add(millis)
+      val _ = elapsed.addAndGet(millis)
 
   "WindowSizing.awaitApplied" should "return at once when the window already has the size asked for" in {
     val clock = new Clock
@@ -25,7 +28,7 @@ class WindowSizingSpec extends AnyFlatSpec with Matchers:
       WindowSizing.awaitApplied(() => asked, asked, timeoutMillis = 250, pollMillis = 5, clock.read, clock.pause)
 
     outcome shouldBe WindowSizing.Outcome.Applied(asked)
-    clock.pauses shouldBe empty
+    clock.pauses.isEmpty shouldBe true
   }
 
   it should "wait until the window has the size, and say it was applied" in {
@@ -36,7 +39,7 @@ class WindowSizingSpec extends AnyFlatSpec with Matchers:
       WindowSizing.awaitApplied(() => sizes.next(), asked, timeoutMillis = 250, pollMillis = 5, clock.read, clock.pause)
 
     outcome shouldBe WindowSizing.Outcome.Applied(asked)
-    clock.pauses.toList shouldBe List(5L, 5L)
+    clock.pauses.toArray.toList shouldBe List(5L, 5L)
   }
 
   it should "say the window was kept at its size once the time is up, with the size it had" in {
