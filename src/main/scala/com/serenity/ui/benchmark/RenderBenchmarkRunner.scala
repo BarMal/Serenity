@@ -117,7 +117,8 @@ object RenderBenchmarkRunner:
       java2dColdSplit = java2d.coldSplit,
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
-      skiaDeviceScale = measuredSkia.map(_.deviceScale)
+      skiaDeviceScale = measuredSkia.map(_.deviceScale),
+      scenesLikeTheApp = true
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -194,9 +195,10 @@ object RenderBenchmarkRunner:
     refresh: RefreshRate
   )(using Balance): Timed =
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines, startSize)
-    val shared = RenderCaches.create()
+    val bench  = new BenchmarkCaches()
+    val shared = bench.shared()
     def cachesFor(step: BenchmarkScript.Step) =
-      if step.frame == BenchmarkScript.FrameKind.ColdFull then RenderCaches.create() else shared
+      if step.frame == BenchmarkScript.FrameKind.ColdFull then bench.cold(shared) else shared
     // A frame for the caret to blink over, and a starting point that is the same on both backends.
     steps.headOption.foreach { first =>
       timed(window)(
