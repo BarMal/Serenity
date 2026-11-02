@@ -230,7 +230,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in {
     val tabled = proportionalFonts.collect { case (label, font) if NominalAdvances.of(font, frc).isDefined => label }
     // Which fonts the guard reaches depends on the platform's font stack; CI logs it so the oracle's reach is on record.
-    println(s"PROPORTIONAL-ORACLE ${System.getProperty("os.name")}: with a table: ${tabled.mkString(", ")}")
+    info(s"proportional fonts that reach the guard on ${System.getProperty("os.name")}: ${tabled.mkString(", ")}")
     proportionalFonts.foreach { (label, font) =>
       proseLines.foreach { text =>
         widthsAround(text, font).foreach { width =>
