@@ -8,7 +8,8 @@
 #
 # BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc-%p.log:uptime
 # -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"); it is recorded in the conditions file. Each run's
-# whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout.
+# whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout. A JVM still alive after the
+# quit key is thread-dumped (<label>-run<N>.threads), sent SIGTERM and, after BENCH_QUIT_GRACE seconds (15), SIGKILL.
 #
 # Runs Serenity from <jar> with an isolated config, drives deterministic input,
 # collects [FRAME] timing lines, and reports p50/p95 per phase.
@@ -120,7 +121,7 @@ CFG
   done
   if ! $started; then
     echo "ERROR: timed out waiting for initial render" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
 
@@ -133,7 +134,7 @@ CFG
   done
   if [[ -z "$win_id" ]]; then
     echo "ERROR: could not find Serenity window" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
   local win_hex
@@ -194,8 +195,7 @@ CFG
   echo "[$(date +%T)] Quitting" | tee -a "$out"
   xdotool key --window "$win_id" ctrl+q 2>/dev/null || true
   sleep 2
-  kill "$serenity_pid" 2>/dev/null || true
-  wait "$serenity_pid" 2>/dev/null || true
+  stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
 
   # Collect FRAME lines
   log_file="$(find_app_log "$bench_home" || echo /dev/null)"

@@ -3,6 +3,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import time
 import unittest
 
 BENCH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "bench")
@@ -134,6 +135,75 @@ class DisplayConditionsTests(unittest.TestCase):
             os.symlink(shutil.which("bash"), os.path.join(only_bash, "bash"))
             result = lib("display_conditions", {"PATH": only_bash})
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
+class StopAppTests(unittest.TestCase):
+    """stop_app ends a JVM that is still alive after the quit key, and leaves a thread dump when it will not go."""
+
+    def fake_jcmd(self, work):
+        path = os.path.join(work, "fake-jcmd")
+        write(path, '#!/usr/bin/env bash\necho "JCMD-DUMP for pid $1 ($2)"\n')
+        os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
+        return path
+
+    def spawn_stubborn(self, work):
+        """A process that ignores SIGTERM and answers SIGQUIT the way a JVM does, by printing a dump to its stdout."""
+        out = open(os.path.join(work, "stdout.log"), "w", encoding="utf-8")
+        process = subprocess.Popen(
+            ["bash", "-c", 'trap "" TERM; trap "echo STDOUT-DUMP" QUIT; while true; do sleep 0.2; done'],
+            stdout=out,
+            stderr=subprocess.DEVNULL,
+        )
+        self.addCleanup(lambda: process.poll() is None and process.kill())
+        return process
+
+    def test_a_jvm_that_ignores_sigterm_is_dumped_then_killed_within_the_grace(self):
+        with tempfile.TemporaryDirectory() as work, tempfile.TemporaryDirectory() as results:
+            process = self.spawn_stubborn(work)
+            started = time.monotonic()
+            result = lib(
+                f'stop_app {process.pid} "{results}" x 3',
+                {"BENCH_QUIT_GRACE": "1", "BENCH_JCMD": self.fake_jcmd(work)},
+            )
+            elapsed = time.monotonic() - started
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertLess(elapsed, 15)
+            self.assertIsNotNone(process.wait(timeout=5))
+            with open(os.path.join(results, "x-run3.threads"), encoding="utf-8") as dumps:
+                text = dumps.read()
+            self.assertEqual(text.count("JCMD-DUMP"), 2, text)
+            self.assertIn("after the quit key", text)
+            self.assertIn("after SIGTERM", text)
+            self.assertIn("still alive", result.stdout + result.stderr)
+
+    def test_a_jvm_that_exits_on_sigterm_is_dumped_once_and_not_killed_hard(self):
+        with tempfile.TemporaryDirectory() as work, tempfile.TemporaryDirectory() as results:
+            process = subprocess.Popen(["bash", "-c", 'trap "echo STDOUT-DUMP" QUIT; while true; do sleep 0.2; done'], stdout=subprocess.DEVNULL)
+            self.addCleanup(lambda: process.poll() is None and process.kill())
+            result = lib(
+                f'stop_app {process.pid} "{results}" x 1',
+                {"BENCH_QUIT_GRACE": "5", "BENCH_JCMD": self.fake_jcmd(work)},
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIsNotNone(process.wait(timeout=5))
+            with open(os.path.join(results, "x-run1.threads"), encoding="utf-8") as dumps:
+                text = dumps.read()
+            self.assertEqual(text.count("JCMD-DUMP"), 1, text)
+            self.assertNotIn("still alive", result.stdout + result.stderr)
+
+    def test_a_jvm_that_already_exited_is_left_alone(self):
+        with tempfile.TemporaryDirectory() as work, tempfile.TemporaryDirectory() as results:
+            process = subprocess.Popen(["true"])
+            process.wait()
+            result = lib(f'stop_app {process.pid} "{results}" x 1', {"BENCH_JCMD": self.fake_jcmd(work)})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(os.listdir(results), [])
+
+    def test_the_script_stops_the_app_through_it(self):
+        with open(SCRIPT, encoding="utf-8") as source:
+            text = source.read()
+        self.assertIn('stop_app "$serenity_pid"', text)
+        self.assertNotIn('kill "$serenity_pid" 2>/dev/null || true\n  wait', text)
 
 
 class StatsTests(unittest.TestCase):
