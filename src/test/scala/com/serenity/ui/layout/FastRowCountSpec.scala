@@ -201,3 +201,45 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
 
     wraps(cache) shouldBe 40L
   }
+
+  private val kerningPairs = "AVATAR To War Wa Ty Yo LT Te AV ff fi fl ffi 11 1/2 \"quoted\" -- ... (a) [b] {c}"
+
+  private val proseLines: Vector[String] =
+    val random = Random(13)
+    val words  = List("the", "quick", "Brown", "fox", "AVATAR", "To", "War", "Typography", "affine", "office", "waffle")
+    Vector("", "x", "Wa", kerningPairs) ++ Vector.fill(60) {
+      val count = List(1, 4, 12, 30, 60)(random.nextInt(5))
+      Vector
+        .fill(count)(words(random.nextInt(words.size)) + List("", ",", ".", "!", " --")(random.nextInt(5)))
+        .mkString(" ")
+    }
+
+  private def proportionalFonts: List[(String, Font)] =
+    val plainOf = List(Font.SERIF, Font.SANS_SERIF)
+    val withKern = (font: Font) =>
+      font.deriveFont(java.util.Map.of(java.awt.font.TextAttribute.KERNING, java.awt.font.TextAttribute.KERNING_ON))
+    val textNoLig = (size: Float) => FontLoader.previewTextFont(config.copy(fontSize = size, textLigatures = false))
+    plainOf.flatMap(family =>
+      List(12.0f, 14.0f, 18.0f).map(size =>
+        s"$family $size pt" -> Font(family, Font.PLAIN, size.toInt).deriveFont(size)
+      )
+    ) ++
+      List(12.0f, 16.0f).map(size => s"previewTextFont ligatures off $size pt" -> textNoLig(size)) ++
+      plainOf.map(family => s"$family 14 pt, kerning on" -> withKern(Font(family, Font.PLAIN, 14).deriveFont(14.0f)))
+
+  "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in
+    proportionalFonts.foreach { (label, font) =>
+      proseLines.foreach { text =>
+        widthsAround(text, font).foreach { width =>
+          withClue(s"$label, width $width, '$text': ") {
+            counted(Buffer.fromString(bufferId, text), width, font, WrappedLineCache.bounded()) shouldBe
+              Vector(wrapped(text, width, font))
+          }
+        }
+      }
+    }
+
+  it should "have no table when kerning is asked for" in
+    proportionalFonts.filter(_._1.endsWith("kerning on")).foreach { (label, font) =>
+      withClue(s"$label: ")(NominalAdvances.of(font, frc) shouldBe None)
+    }
