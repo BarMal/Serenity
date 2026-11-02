@@ -47,19 +47,28 @@ class ScrollCountExecutorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "run no more counts at once than it has threads" in {
-    val pool    = ScrollCountExecutor.pool(threads = 2)
-    val running = new java.util.concurrent.atomic.AtomicInteger(0)
-    val highest = new java.util.concurrent.atomic.AtomicInteger(0)
-    val done    = new CountDownLatch(8)
+    val pool     = ScrollCountExecutor.pool(threads = 2)
+    val running  = new java.util.concurrent.atomic.AtomicInteger(0)
+    val highest  = new java.util.concurrent.atomic.AtomicInteger(0)
+    val firstTwo = new CountDownLatch(2)
+    val aThird   = new CountDownLatch(3)
+    val release  = new CountDownLatch(1)
+    val done     = new CountDownLatch(8)
     (1 to 8).foreach(_ =>
       pool.execute { () =>
         highest.accumulateAndGet(running.incrementAndGet(), math.max): Unit
-        Thread.sleep(20)
+        firstTwo.countDown()
+        aThird.countDown()
+        val _ = release.await(30, TimeUnit.SECONDS)
         running.decrementAndGet(): Unit
         done.countDown()
       }
     )
+    firstTwo.await(30, TimeUnit.SECONDS) shouldBe true
+    val thirdStartedWhileTwoHeld = aThird.await(300, TimeUnit.MILLISECONDS)
+    release.countDown()
     done.await(30, TimeUnit.SECONDS) shouldBe true
+    thirdStartedWhileTwoHeld shouldBe false
     highest.get should be <= 2
   }
 
