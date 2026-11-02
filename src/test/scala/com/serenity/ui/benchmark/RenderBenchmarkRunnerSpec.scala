@@ -44,6 +44,17 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
   }
 
+  it should "record the size each window was drawn at, and time the resize when the window can be resized" in {
+    withDisplay()
+    val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
+    report.environment.drawnWindows.map(_._1) shouldBe List("Java2D", "Skia layer")
+    report.environment.drawnWindows.foreach { (arm, size) =>
+      withClue(arm)((size.width, size.height) should not be (0, 0))
+    }
+    report.environment.notTimed shouldBe empty
+    report.results.map(_.scenario) should contain(Scenario.ResizeWindow)
+  }
+
   it should "record the scale the Skia layer drew at" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
