@@ -310,7 +310,7 @@ object UiPreset:
       case (Some(tree), (docked, surface)) =>
         val (splitId, leafId) = tree.nextDockIds(surface.id)
         tree
-          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.runtime.viewportSize)
+          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.panelViewportSize)
           .orElse(Some(tree))
       case (None, _) =>
         None

@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
@@ -31,11 +32,11 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
   private val fontConfig =
-    AppConfig.conventional.editorConfig.fontConfig.copy(textFontFamily = Font.SERIF, textFontSize = 14f)
+    ChromeOn.config.editorConfig.fontConfig.copy(textFontFamily = Font.SERIF, textFontSize = 14f)
   private val textFont = FontLoader.previewTextFont(fontConfig)
 
   private val columnConfig =
-    AppConfig.conventional
+    ChromeOn.config
       .withFontConfig(fontConfig)
       .withColumnMode(true)
       .withColumnTargetWidth(40)

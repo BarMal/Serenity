@@ -7,7 +7,7 @@ import java.nio.file.Paths
 import javax.imageio.ImageIO
 import javax.swing.JPanel
 
-import com.serenity.config.AppConfig
+import com.serenity.ChromeOn
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
@@ -45,7 +45,7 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
         editing = EditingState(List(CursorPosition(0, 10))),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleLines = 5, visibleColumns = viewport.width)
       )
-    val config = AppConfig.conventional
+    val config = ChromeOn.config
     val base =
       AppState.initial(config.withFontConfig(config.editorConfig.fontConfig.copy(fallbackFamilies = List("IPAGothic"))))
     val state = base.copy(

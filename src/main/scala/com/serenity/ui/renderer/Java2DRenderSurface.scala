@@ -45,7 +45,7 @@ class Java2DRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
   override def addressesPixels: Boolean = true
@@ -120,6 +120,9 @@ class Java2DRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+
+  private val roundedOutlines =
+    Java2DRoundedOutlines(this, g, metrics, paintColor, painted.touched(_, _, _, _), userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)

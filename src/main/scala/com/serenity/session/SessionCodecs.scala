@@ -139,14 +139,18 @@ given Decoder[WaylandRender] = configKeyDecoder("WaylandRender", WaylandRender.v
 given Encoder[InterfaceDensity] = configKeyEncoder(_.configKey)
 given Decoder[InterfaceDensity] = configKeyDecoder("InterfaceDensity", InterfaceDensity.values, _.configKey)
 
-given Encoder[MenuBarMode]    = configKeyEncoder(_.configKey)
-given Decoder[MenuBarMode]    = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
-given Encoder[UiLayout]       = configKeyEncoder(_.configKey)
-given Decoder[UiLayout]       = configKeyDecoder("UiLayout", UiLayout.values, _.configKey)
-given Encoder[TabStripMode]   = configKeyEncoder(_.configKey)
-given Decoder[TabStripMode]   = configKeyDecoder("TabStripMode", TabStripMode.values, _.configKey)
-given Encoder[FileDialogMode] = configKeyEncoder(_.configKey)
-given Decoder[FileDialogMode] = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
+given Encoder[MenuBarMode]       = configKeyEncoder(_.configKey)
+given Decoder[MenuBarMode]       = configKeyDecoder("MenuBarMode", MenuBarMode.values, _.configKey)
+given Encoder[UiLayout]          = configKeyEncoder(_.configKey)
+given Decoder[UiLayout]          = configKeyDecoder("UiLayout", UiLayout.values, _.configKey)
+given Encoder[TabStripMode]      = configKeyEncoder(_.configKey)
+given Decoder[TabStripMode]      = configKeyDecoder("TabStripMode", TabStripMode.values, _.configKey)
+given Encoder[FileDialogMode]    = configKeyEncoder(_.configKey)
+given Decoder[FileDialogMode]    = configKeyDecoder("FileDialogMode", FileDialogMode.values, _.configKey)
+given Encoder[DockedCornerStyle] = configKeyEncoder(_.configKey)
+given Decoder[DockedCornerStyle] = configKeyDecoder("DockedCornerStyle", DockedCornerStyle.values, _.configKey)
+given Encoder[PaneHeaderCorners] = configKeyEncoder(_.configKey)
+given Decoder[PaneHeaderCorners] = configKeyDecoder("PaneHeaderCorners", PaneHeaderCorners.values, _.configKey)
 
 given Encoder[PreferredWindowSize] = deriveEncoder
 given Decoder[PreferredWindowSize] = deriveDecoder

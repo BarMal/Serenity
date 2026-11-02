@@ -2,7 +2,7 @@ package com.serenity
 
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.config.{AppConfig, InterfaceDensity}
+import com.serenity.config.InterfaceDensity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -26,7 +26,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(List(cursor)))
     val pane = EditorPane.withBuffer(paneId, bufferId)
 
-    val initial = AppState.initial(AppConfig.conventional)
+    val initial = AppState.initial(ChromeOn.config)
     initial.copy(
       persisted = initial.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -77,7 +77,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val base = baseState(cursor = CursorPosition(0, 5))
     val state = base.copy(
       persisted = base.persisted
-        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withUiElementGap(Some(0.5))),
+        .copy(config = AppState.initial(ChromeOn.config).persisted.config.withUiElementGap(Some(0.5))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -151,7 +151,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val state = base.copy(
       persisted = base.persisted.copy(config =
         AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .persisted
           .config
           .withInterfaceDensity(com.serenity.config.InterfaceDensity.Compact)
@@ -189,7 +189,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       persisted = base.persisted
         .copy(config =
           AppState
-            .initial(AppConfig.conventional)
+            .initial(ChromeOn.config)
             .persisted
             .config
             .withUiElementGap(Some(0))
@@ -288,7 +288,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, topVisualLine = 2, leftColumn = 0, visibleColumns = 80, visibleLines = 20)
       )
     val pane    = EditorPane.withBuffer(paneId, bufferId)
-    val initial = AppState.initial(AppConfig.conventional)
+    val initial = AppState.initial(ChromeOn.config)
     val state = initial.copy(
       persisted = initial.persisted.copy(
         config = initial.persisted.config.withUiElementGap(Some(1)),
@@ -346,7 +346,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 8, leftColumn = 0, visibleLines = 30, visibleColumns = 80)
       )
     val pane    = EditorPane.withBuffer(paneId, bufferId)
-    val initial = AppState.initial(AppConfig.conventional)
+    val initial = AppState.initial(ChromeOn.config)
     val state = initial.copy(
       persisted = initial.persisted.copy(
         config = initial.persisted.config.withWordWrap(false).withFontConfig(MeasuredRows.driftingFontConfig),
@@ -390,7 +390,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val base = baseState()
     val state = base.copy(
       persisted = base.persisted
-        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withCommandRunnerVisibleRows(Some(7))),
+        .copy(config = AppState.initial(ChromeOn.config).persisted.config.withCommandRunnerVisibleRows(Some(7))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -418,13 +418,13 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional)
+      .activate(registry, ChromeOn.config)
       .updateSearchTerm("op")(using registry)
     val cursor = CursorPosition(1, 2)
     val base   = baseState(cursor = cursor)
     val state = base.copy(
       persisted = base.persisted
-        .copy(config = AppState.initial(AppConfig.conventional).persisted.config.withUiElementGap(Some(2))),
+        .copy(config = AppState.initial(ChromeOn.config).persisted.config.withUiElementGap(Some(2))),
       runtime = base.runtime.copy(uiSurfaces =
         List(
           UiSurface(
@@ -455,12 +455,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "preserve fractional cursor and nested-surface gaps as logical-pixel offsets" in {
     val cursor = CursorPosition(1, 2)
-    val runner = CommandRunner.empty.activate(CommandRegistry.default, AppConfig.conventional)
+    val runner = CommandRunner.empty.activate(CommandRegistry.default, ChromeOn.config)
     val base   = baseState(cursor = cursor)
     val state = base.copy(
       persisted = base.persisted.copy(config =
         AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .persisted
           .config
           .withAppMode(com.serenity.config.AppMode.Prose)

@@ -511,26 +511,39 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)
     )
-    // 20 columns available, minus 2 reserved for the trailing new-tab affordance (issue #1080) -> 18 columns for
-    // tabs, minus 1 gap reserving 2 columns -> 16 content columns split 8/8.
+    // A tab is its label plus a padding cell either side, and the active tab a two-cell close box besides: "one" -> 5,
+    // "two ●" active -> 9. Tab 0 is [0,5) and, after the 2-column gap, tab 1 is [7,16).
     val composition = com.serenity.ui.layout.TabBarSurfaceComposition.forTabBar(
       entries,
       activeBufferId = Some(com.serenity.state.models.BufferId(1)),
-      rect = LayoutRect(0, 0, 20, 1)
+      rect = LayoutRect(0, 0, 20, 1),
+      settings = com.serenity.ui.layout.TabBarSettings(measure =
+        com.serenity.ui.layout.TabTitleMeasure.proportional(
+          label =>
+            if label.isEmpty then 0.0
+            else
+              java.awt.font
+                .TextLayout(label, font, com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext())
+                .getAdvance
+                .toDouble
+          ,
+          com.serenity.ui.renderer.SurfaceTextInset.px(AppConfig.default),
+          metrics.charWidth.toDouble
+        )
+      )
     )
     val overlay = TextOverlayView(rect = LayoutRect(0, 0, 20, 3), composition = Some(composition))
 
     renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = false, font, metrics)
 
-    // Tab 0 ("one") is centered in its 8-column cell at [0,8): (8-3)/2 = 2 columns of left padding, so "one" lands
-    // at [2,5). The separator glyph sits at column 8 (the end of that cell), then tab 1's cell starts at column 10
-    // (one column for the glyph, one blank column after it) and is itself centered: (8-5)/2 = 1 column of left
-    // padding for "two ●", landing at [11,16).
-    val row = surface.getRow(0)
-    row.slice(2, 5) shouldBe "one"
-    row.charAt(8) shouldBe '│'
-    row.slice(11, 14) shouldBe "two"
-    row.charAt(15) shouldBe '●'
-    surface.getBg(2, 0) shouldBe Theme.light.panel.background
-    surface.getBg(11, 0) shouldBe Theme.light.highlighted.background
+    // A title starts one padding cell into its tab, wherever the layout put the tab, and the separator is the cell
+    // after the first tab.
+    val tabs = composition.hitRegions.map(_.rect.x.toInt)
+    val row  = surface.getRow(0)
+    row.slice(tabs(0) + 1, tabs(0) + 4) shouldBe "one"
+    row.charAt(tabs(1) - 2) shouldBe '│'
+    row.slice(tabs(1) + 1, tabs(1) + 4) shouldBe "two"
+    row.charAt(tabs(1) + 5) shouldBe '●'
+    surface.getBg(tabs(0) + 1, 0) shouldBe Theme.light.panel.background
+    surface.getBg(tabs(1) + 1, 0) shouldBe Theme.light.highlighted.background
   }

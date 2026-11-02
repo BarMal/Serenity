@@ -18,7 +18,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
   "The command palette" should "apply interface density to editor spacing and overlay height" in {
     val runner = com.serenity.command.CommandRunner.empty.activate(
       com.serenity.command.CommandRegistry.default,
-      com.serenity.config.AppConfig.conventional
+      com.serenity.ChromeOn.config
     )
     val commandSurface = UiSurface(
       SurfaceId("command-runner"),
@@ -28,10 +28,10 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val baseState = AppState
-      .initial(com.serenity.config.AppConfig.conventional)
+      .initial(com.serenity.ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(com.serenity.config.AppConfig.conventional)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha\nbeta\ngamma")),
@@ -43,8 +43,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
             ),
             focus = Focus.EditorPane(paneId)
           ),
-        runtime =
-          AppState.initial(com.serenity.config.AppConfig.conventional).runtime.copy(uiSurfaces = List(commandSurface))
+        runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
     val compact = LayoutEngine.calculateLayout(
       baseState.copy(persisted =
@@ -85,7 +84,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
   it should "grow the command palette with the viewport rather than capping it at a few rows (#1045)" in {
     val runner = com.serenity.command.CommandRunner.empty.activate(
       com.serenity.command.CommandRegistry.default,
-      com.serenity.config.AppConfig.conventional
+      com.serenity.ChromeOn.config
     )
     val commandSurface = UiSurface(
       SurfaceId("command-runner"),
@@ -95,10 +94,10 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
     val paneId   = PaneId(0)
     val bufferId = BufferId(1)
     val state = AppState
-      .initial(com.serenity.config.AppConfig.conventional)
+      .initial(com.serenity.ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(com.serenity.config.AppConfig.conventional)
+          .initial(com.serenity.ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> Buffer.fromString(bufferId, "alpha")),
@@ -110,8 +109,7 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
             ),
             focus = Focus.EditorPane(paneId)
           ),
-        runtime =
-          AppState.initial(com.serenity.config.AppConfig.conventional).runtime.copy(uiSurfaces = List(commandSurface))
+        runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
     def itemSlots(viewport: ViewportSize): Int =
       val layout = LayoutEngine.calculateLayout(state, viewport)

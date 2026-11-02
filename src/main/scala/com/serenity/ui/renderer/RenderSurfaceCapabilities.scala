@@ -6,7 +6,7 @@ import scala.annotation.unused
 
 import com.serenity.config.CursorMode
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.PixelRect
+import com.serenity.ui.layout.{PixelRect, RoundedCorners}
 
 /** Character- and pixel-run text drawing. Every real [[RenderSurface]] implements this -- a surface that cannot draw
   * text cannot render Serenity's UI -- so [[RenderSurface.text]] exposes it directly rather than as an `Option`: the
@@ -244,3 +244,47 @@ trait PanelOutlineDrawing:
 
   /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit
+
+  /** [[strokeRect]] with the `corners` rounded to `radiusPx` device pixels. A surface that cannot round draws the
+    * square frame, and so does a zero radius or no rounded corner.
+    */
+  def strokeRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int,
+    color: RenderColor,
+    strokeWidth: Float
+  ): Unit =
+    strokeRect(x, y, width, height, color, strokeWidth)
+
+  /** Fills the rectangle with `color`, the `corners` rounded to `radiusPx` device pixels, and says whether it did. It
+    * does not when nothing rounds (a zero radius, no rounded corner, or a surface that cannot round): the caller fills
+    * the cells as it always has. Unlike [[withRoundRectClip]] it keeps no clip alive, which is what makes it cheap
+    * enough for the chrome drawn every frame.
+    */
+  def fillRoundRect(
+    @unused x: Int,
+    @unused y: Int,
+    @unused width: Int,
+    @unused height: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int,
+    @unused color: RenderColor
+  ): Boolean = false
+
+  /** Restricts `render` to the rectangle with the `corners` rounded to `radiusPx` device pixels, so a panel's fill
+    * takes the same shape as its outline. With nothing to round (a zero radius, no rounded corner, or a surface that
+    * cannot round) it just renders: clipping a fill to its own rectangle changes nothing.
+    */
+  def withRoundRectClip(
+    @unused x: Int,
+    @unused y: Int,
+    @unused width: Int,
+    @unused height: Int,
+    @unused corners: RoundedCorners,
+    @unused radiusPx: Int
+  )(render: => Unit): Unit =
+    render

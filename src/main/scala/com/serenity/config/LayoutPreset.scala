@@ -84,6 +84,14 @@ object LayoutPreset:
       (config, value) => config.withScrollbar(value),
       minimal = false,
       conventional = true
+    ),
+    Element[DockedCornerStyle](
+      "ui.docked_corner_style",
+      Set.empty,
+      _.interfaceConfig.dockedCornerStyle,
+      (config, value) => config.withDockedCornerStyle(value),
+      minimal = DockedCornerStyle.Flush,
+      conventional = DockedCornerStyle.Floating
     )
   )
 

@@ -120,7 +120,8 @@ object RendererFramePlanner:
           uiFont,
           cellMetrics,
           uiMetrics,
-          caches
+          caches,
+          Some(viewportSize)
         )
         // The prepared scene is reused while the layout is, which says nothing of the annotations drawn on it.
         val editorRenderPlan = prepared.renderPlan.copy(

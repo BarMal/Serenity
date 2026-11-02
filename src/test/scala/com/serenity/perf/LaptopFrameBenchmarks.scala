@@ -7,7 +7,7 @@ import javax.swing.SwingUtilities
 
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
-import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.config.{AppConfig, DockedCornerStyle, PreferredWindowSize}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{
   DeleteBackward,
@@ -38,7 +38,7 @@ import com.serenity.ui.renderer.{
   ScreenIdentity
 }
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
+import com.serenity.{ChromeOn, DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
@@ -170,7 +170,7 @@ private[perf] object LaptopFrameBenchmarks:
     */
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 150,
     dictionaryCache: Option[DictionaryCache] = None,
     grid: ViewportSize = viewport
@@ -187,7 +187,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 0,
     cursorColumn: Int = 0,
     dictionaryCache: Option[DictionaryCache] = None,
@@ -341,9 +341,7 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      AppConfig.conventional.copy(surfaceConfig =
-        AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
-      )
+      ChromeOn.config.copy(surfaceConfig = ChromeOn.config.surfaceConfig.copy(typewriterScrollingEnabled = true))
     val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
@@ -509,6 +507,10 @@ private[perf] object LaptopFrameBenchmarks:
     val afterScroll = current
     val typing      = AlternatingTransition(beforeTyping, afterTyping)
     val scroll      = AlternatingTransition(afterTyping, afterScroll)
+    val (floatingManager, _) =
+      proseStateManager(config = ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating))
+    val (beforeFloating, afterFloating) = TypingTransition.of(floatingManager)
+    val floatingTyping                  = AlternatingTransition(beforeFloating, afterFloating)
     List(
       BenchmarkRunner.Benchmark(
         "laptop.render.typing_frame_2x",
@@ -529,6 +531,13 @@ private[perf] object LaptopFrameBenchmarks:
           scroll.verify("scroll", MaxScrollRowsDrawn)
         ,
         () => scroll.nextFrame()
+      ),
+      BenchmarkRunner.Benchmark(
+        "laptop.render.typing_frame_floating_2x",
+        2,
+        12,
+        () => floatingTyping.verify("floating typing", MaxTypingRowsDrawn),
+        () => floatingTyping.nextFrame()
       ),
       BenchmarkRunner.Benchmark(
         "laptop.damage.typing_transition",

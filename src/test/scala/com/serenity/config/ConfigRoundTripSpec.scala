@@ -114,6 +114,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withStartupWarmUp(false)
     .withScrollbar(true)
     .withTabStrip(TabStripMode.Auto)
+    .withTabMaxWidth(40)
     .withUiLayout(UiLayout.Conventional)
     .withDiagnosticHighlightBlendWeight(0.2)
     .withCursorMode(CursorMode.Steady)
@@ -137,6 +138,9 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withInterfaceDensity(InterfaceDensity.Compact)
     .withUiElementGap(Some(2.0))
     .withUiOutlineThicknessPx(3)
+    .withUiCornerRadiusPx(20)
+    .withDockedCornerStyle(DockedCornerStyle.Floating)
+    .withPaneHeaderCorners(PaneHeaderCorners.Square)
     .withFileDialogMode(FileDialogMode.Swing)
     .withThemeFollowConfig(
       ThemeFollowConfig(followSystem = true, lightTheme = "paper", darkTheme = "ink", highContrastTheme = "contrast")

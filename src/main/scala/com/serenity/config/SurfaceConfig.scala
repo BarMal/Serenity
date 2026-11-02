@@ -15,6 +15,7 @@ final case class SurfaceConfig(
     wordWrapEnabled: Boolean = true,
     scrollbarEnabled: Boolean = true,
     tabStrip: TabStripMode = TabStripMode.Auto,
+    tabMaxWidth: Int = TabMaxWidth.Default,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
@@ -104,6 +105,7 @@ final case class SurfaceConfig(
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
       proseMeasure = proseMeasure.map(ProseMeasure.clamp),
+      tabMaxWidth = TabMaxWidth.clamp(tabMaxWidth),
       viewportSizing = viewportSizing.normalized,
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )

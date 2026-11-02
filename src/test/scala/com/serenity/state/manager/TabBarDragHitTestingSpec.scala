@@ -6,7 +6,8 @@ import com.serenity.keystroke.events.{MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.layout.{LayoutEngine, TabBarSurfaceComposition, ViewportSize}
+import com.serenity.ui.renderer.TabBarLayoutSettings
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,23 +21,34 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 30-column viewport, with `BufferId(9)` focused --
-    * `TabBarSurfaceComposition`'s overflow window (`maxVisibleCount`/`visibleWindow`) fits only 4 tabs at
-    * `MinTabWidth`, so this overflows and, centred on the active tab (index 9), windows to entries [6,7,8,9]
-    * (`BufferId(6)`..`BufferId(9)`) -- what's actually painted. An `activeBufferId = None` window instead centres on
-    * index 0, windowing to entries [0,1,2,3] (`BufferId(0)`..`BufferId(3)`).
+  /** Ten open buffers (`BufferId(0)`..`BufferId(9)`) in a 46-column viewport, with `BufferId(9)` focused. Ten tabs do
+    * not fit 46 columns, so the strip overflows and its window is centred on the active tab (index 9), which scrolls
+    * the first tabs out: what is painted is the tabs `paintedTabs` lists. An `activeBufferId = None` window would
+    * centre on index 0 instead and show the first tabs.
     */
   private def overflowingState: AppState =
-    val base         = AppState.initial(com.serenity.config.AppConfig.conventional)
+    val base         = AppState.initial(com.serenity.ChromeOn.config)
     val extraBuffers = (1 to 9).map(i => BufferId(i) -> Buffer.fromString(BufferId(i), s"buffer$i"))
     val withBuffers = base.copy(
-      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(30, 10))),
+      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(46, 10))),
       persisted = base.persisted.copy(
         buffers = base.persisted.buffers ++ extraBuffers,
         bufferOrder = base.persisted.bufferOrder ++ (1 to 9).map(BufferId.apply)
       )
     )
     EditorState.switchToBuffer(withBuffers, BufferId(9))
+
+  /** The tabs the strip paints for `state`, left to right, with a column inside each. */
+  private def paintedTabs(state: AppState): List[(BufferId, Int)] =
+    val viewport = state.runtime.viewportSize.getOrElse(fail("expected a viewport"))
+    val rect     = LayoutEngine.calculateLayoutWithUI(state, viewport).tabBarRect.getOrElse(fail("expected a tab bar"))
+    val (entries, active) = state.tabBarSurface.map(_.content) match
+      case Some(SurfaceContent.TabBar(listed, activeBufferId)) => (listed, activeBufferId)
+      case _                                                   => fail("expected tab bar content")
+    TabBarSurfaceComposition
+      .forTabBar(entries, active, rect, TabBarLayoutSettings.of(state))
+      .hitRegions
+      .flatMap(region => TabBarSurfaceComposition.bufferIdOf(region.focusId).map(_ -> (region.rect.x.toInt + 1)))
 
   private def fixture(state: AppState) =
     val stateRef = Ref.of[IO, AppState](state).unsafeRunSync()
@@ -46,31 +58,41 @@ class TabBarDragHitTestingSpec extends AnyFlatSpec with Matchers:
     )
     (new TabBarDragHitTesting(port), stateRef)
 
+  "the overflowing fixture" should "paint a window centred on the active tab, which hides the first tabs" in {
+    val painted = paintedTabs(overflowingState).map(_._1)
+
+    painted should contain(BufferId(9))
+    painted should not contain BufferId(0)
+    painted.size should be >= 2
+  }
+
   "handleTabBarPress" should
     "start a drag session on the tab actually painted under the cursor, not the index-0-centred window" in {
       val state                      = overflowingState
       val (dragHitTesting, stateRef) = fixture(state)
+      val (painted, col)             = paintedTabs(state).headOption.getOrElse(fail("expected painted tabs"))
 
-      // Column 14 lands on the third visible tab slot ([12,16)): BufferId(8) in the active-tab-centred window
-      // ([6,7,8,9]) that is actually painted; BufferId(2) in the index-0-centred window ([0,1,2,3]) that
-      // `activeBufferId = None` would wrongly produce.
-      val started = dragHitTesting.handleTabBarPress(MousePress(col = 14, row = 0), state).unsafeRunSync()
+      val started = dragHitTesting.handleTabBarPress(MousePress(col = col, row = 0), state).unsafeRunSync()
 
       started shouldBe true
-      stateRef.get.unsafeRunSync().runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(8)))
+      painted should not be BufferId(0)
+      stateRef.get.unsafeRunSync().runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(painted))
     }
 
   "handleTabBarDrag" should
     "reorder onto the tab actually painted under the cursor, not the index-0-centred window" in {
       val started                    = overflowingState
       val (dragHitTesting, stateRef) = fixture(started)
+      val tabs                       = paintedTabs(started)
+      val (first, firstCol)          = tabs.headOption.getOrElse(fail("expected painted tabs"))
+      val (target, targetCol)        = tabs.lastOption.getOrElse(fail("expected painted tabs"))
 
-      dragHitTesting.handleTabBarPress(MousePress(col = 2, row = 0), started).unsafeRunSync()
+      dragHitTesting.handleTabBarPress(MousePress(col = firstCol, row = 0), started).unsafeRunSync()
       val afterPress = stateRef.get.unsafeRunSync()
-      afterPress.runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(BufferId(6)))
+      afterPress.runtime.pointerGesture.tabDragSession shouldBe Some(TabDragSession(first))
 
-      dragHitTesting.handleTabBarDrag(MouseDrag(col = 14, row = 0), afterPress).unsafeRunSync()
+      dragHitTesting.handleTabBarDrag(MouseDrag(col = targetCol, row = 0), afterPress).unsafeRunSync()
 
       stateRef.get.unsafeRunSync().persisted.bufferOrder shouldBe
-        EditorState.reorderBuffer(afterPress, BufferId(6), BufferId(8)).persisted.bufferOrder
+        EditorState.reorderBuffer(afterPress, first, target).persisted.bufferOrder
     }

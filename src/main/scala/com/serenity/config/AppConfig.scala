@@ -101,6 +101,15 @@ final case class AppConfig(
   def uiOutlineThicknessPx: Int =
     interfaceConfig.outlineThicknessPx
 
+  def uiCornerRadiusPx: Int =
+    interfaceConfig.cornerRadiusPx
+
+  def dockedCornerStyle: DockedCornerStyle =
+    interfaceConfig.dockedCornerStyle
+
+  def paneHeaderCorners: PaneHeaderCorners =
+    interfaceConfig.paneHeaderCorners
+
   def menuBarMode: MenuBarMode =
     interfaceConfig.menuBar
 
@@ -121,6 +130,12 @@ final case class AppConfig(
     */
   def scaledUiOutlineThicknessPx: Float =
     (uiOutlineThicknessPx * uiChromeScale).toFloat.max(0.5f)
+
+  /** [[uiCornerRadiusPx]] scaled by [[uiChromeScale]] for the same reason as [[scaledUiOutlineThicknessPx]]: the radius
+    * stays proportionate to the panel as the UI font size changes.
+    */
+  def scaledUiCornerRadiusPx: Int =
+    math.round(uiCornerRadiusPx * uiChromeScale).toInt.max(0)
 
   /** Create a new config with syntax highlighting toggled */
   def withSyntaxHighlighting(enabled: Boolean): AppConfig =
@@ -210,6 +225,9 @@ final case class AppConfig(
 
   def withTabStrip(mode: TabStripMode): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(tabStrip = mode))
+
+  def withTabMaxWidth(value: Int): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(tabMaxWidth = value))
 
   /** Create a new config with word wrapping toggled */
   def withWordWrap(enabled: Boolean): AppConfig =
@@ -433,6 +451,15 @@ final case class AppConfig(
   def withUiOutlineThicknessPx(thickness: Int): AppConfig =
     withInterfaceConfig(interfaceConfig.copy(outlineThicknessPx = thickness))
 
+  def withUiCornerRadiusPx(radius: Int): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(cornerRadiusPx = radius))
+
+  def withDockedCornerStyle(style: DockedCornerStyle): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(dockedCornerStyle = style))
+
+  def withPaneHeaderCorners(corners: PaneHeaderCorners): AppConfig =
+    withInterfaceConfig(interfaceConfig.copy(paneHeaderCorners = corners))
+
   def withThemeFollowConfig(config: ThemeFollowConfig): AppConfig =
     copy(themeFollowConfig = config)
 
@@ -475,6 +502,8 @@ object AppConfig:
   val MaxUiElementGap: Double                   = 8.0
   val MinUiOutlineThicknessPx: Int              = 1
   val MaxUiOutlineThicknessPx: Int              = 8
+  val MinUiCornerRadiusPx: Int                  = 0
+  val MaxUiCornerRadiusPx: Int                  = 32
   val MinCommandRunnerVisibleRows: Int          = 1
   val MaxCommandRunnerVisibleRows: Int          = 20
   val MinCommandRunnerItemGapRows: Double       = 0.0
@@ -497,6 +526,9 @@ object AppConfig:
 
   def clampUiOutlineThicknessPx(thickness: Int): Int =
     thickness.max(MinUiOutlineThicknessPx).min(MaxUiOutlineThicknessPx)
+
+  def clampUiCornerRadiusPx(radius: Int): Int =
+    radius.max(MinUiCornerRadiusPx).min(MaxUiCornerRadiusPx)
 
   def clampWheelScrollLines(lines: Int): Int =
     lines.max(1).min(50)

@@ -5,6 +5,8 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
+import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
@@ -89,8 +91,10 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     s"${differences.size} pixels differ in x ${xs.minOption.getOrElse(0)}-${xs.maxOption.getOrElse(0)}, " +
       s"y runs ${runs.reverse.take(24).map((from, to) => s"$from-$to").mkString(",")}"
 
-  private def transition(event: Event): (AppState, AppState) =
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
+  private val floating: AppConfig = ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating)
+
+  private def transition(event: Event, config: AppConfig = ChromeOn.config): (AppState, AppState) =
+    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(config = config)
     val before            = stateManager.getCurrentState.unsafeRunSync()
     stateManager.applyEvent(event).unsafeRunSync()
     (before, stateManager.getCurrentState.unsafeRunSync())
@@ -120,3 +124,41 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     withClue(s"the frame scrolled to, ${summary(there)}: ")(there shouldBe empty)
     withClue(s"the frame scrolled back from, ${summary(back)}: ")(back shouldBe empty)
   }
+
+  "A typing frame in floating chrome" should "equal a frame drawn from scratch, there and back" in {
+    val (before, after) = transition(InsertChar('x'), floating)
+
+    val (there, back) = differencesThrough(before, after)
+
+    withClue(s"the frame typed into, ${summary(there)}: ")(there shouldBe empty)
+    withClue(s"the frame typed back out of, ${summary(back)}: ")(back shouldBe empty)
+  }
+
+  "A wheel scroll in floating chrome" should "equal a frame drawn from scratch, there and back" in {
+    val (before, after) = transition(ScrollDown(3), floating)
+
+    val (there, back) = differencesThrough(before, after)
+
+    withClue(s"the frame scrolled to, ${summary(there)}: ")(there shouldBe empty)
+    withClue(s"the frame scrolled back from, ${summary(back)}: ")(back shouldBe empty)
+  }
+
+  private def withTabStrip(state: AppState): AppState =
+    val second = Buffer.fromString(BufferId(9000), "a second buffer, so the tab strip shows")
+    state.copy(persisted =
+      state.persisted.copy(
+        buffers = state.persisted.buffers + (second.id -> second),
+        bufferOrder = state.persisted.bufferOrder :+ second.id
+      )
+    )
+
+  "A typing frame under floating chrome with the tab strip showing" should
+    "equal a frame drawn from scratch, there and back" in {
+      val (typedBefore, typedAfter) = transition(InsertChar('x'), floating)
+      val (before, after)           = (withTabStrip(typedBefore), withTabStrip(typedAfter))
+
+      val (there, back) = differencesThrough(before, after)
+
+      withClue(s"the frame typed into, ${summary(there)}: ")(there shouldBe empty)
+      withClue(s"the frame typed back out of, ${summary(back)}: ")(back shouldBe empty)
+    }

@@ -72,7 +72,7 @@ object SessionPinnedPanel:
         for
           tree     <- state.persisted.layout.workspaceTree
           position <- tree.positionForSurface(surface.id)
-          size     <- tree.currentSize(surface.id, state.runtime.viewportSize)
+          size     <- tree.currentSize(surface.id, state.panelViewportSize)
           panel    <- fromSurfaceContent(surface.content, position, size)
         yield panel
       case _ =>

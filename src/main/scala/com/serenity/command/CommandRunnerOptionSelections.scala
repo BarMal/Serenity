@@ -35,6 +35,8 @@ object CommandRunnerOptionSelections:
       "window-chrome"              -> windowChromeModeIndex(config.windowChromeMode),
       "ui-layout"                  -> uiLayoutIndex(config.uiLayout),
       "menu-bar"                   -> menuBarModeIndex(config.menuBarMode),
+      "docked-corner-style"        -> dockedCornerStyleIndex(interfaceConfig.dockedCornerStyle),
+      "pane-header-corners"        -> paneHeaderCornersIndex(interfaceConfig.paneHeaderCorners),
       "markdown-view"              -> markdownViewModeIndex(documentConfig.markdownViewMode),
       "default-document-mode"      -> defaultDocumentModeIndex(documentConfig.defaultMode),
       "drop-caps-enabled"          -> enabledIndex(documentConfig.dropCapsEnabled),
@@ -98,6 +100,16 @@ object CommandRunnerOptionSelections:
     layout match
       case UiLayout.Minimal      => 0
       case UiLayout.Conventional => 1
+
+  private def dockedCornerStyleIndex(style: DockedCornerStyle): Int =
+    style match
+      case DockedCornerStyle.Floating => 0
+      case DockedCornerStyle.Flush    => 1
+
+  private def paneHeaderCornersIndex(corners: PaneHeaderCorners): Int =
+    corners match
+      case PaneHeaderCorners.Rounded => 0
+      case PaneHeaderCorners.Square  => 1
 
   private def menuBarModeIndex(mode: MenuBarMode): Int =
     mode match

@@ -1,7 +1,5 @@
 package com.serenity.perf
 
-import com.serenity.TestWorkspaceTrees
-import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
@@ -17,6 +15,7 @@ import com.serenity.state.models.{
 }
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
+import com.serenity.{ChromeOn, TestWorkspaceTrees}
 
 /** Documents and editor states the benchmarks run against, kept apart from the measurements so that adding a benchmark
   * and adding a fixture stay separate edits.
@@ -47,7 +46,7 @@ private[perf] object BenchmarkFixtures:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         theme = Theme.light,
-        config = AppConfig.conventional.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
+        config = ChromeOn.config.withLineNumbers(false).withoutStatusLine.withWordWrap(false)
       ),
       // AppState.initial seeds runtime.nextBufferId = BufferId(1) to follow its own initial buffer 0. This fixture
       // replaces the buffer map wholesale with a hand-picked BufferId(1), so nextBufferId must move past it too --

@@ -194,7 +194,13 @@ object CommandRunnerSettingsGroups:
             CommandRunnerSettingsRenderItems.renderBackendOptionItem(optionSelections),
             CommandRunnerSettingsRenderItems.renderWaylandOptionItem(optionSelections)
           )
-        )
+        ) ++ onFrontend.rows(guiOnly, input("ui-corner-radius")) ++ onFrontend.rows(
+          guiOnly,
+          List(
+            CommandRunnerSettingsAppearanceItems.dockedCornerStyleOptionItem(optionSelections),
+            CommandRunnerSettingsAppearanceItems.paneHeaderCornersOptionItem(optionSelections)
+          )
+        ) ++ onFrontend.rows(guiOnly, input("tab-max-width"))
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
     val keysGroup = group(

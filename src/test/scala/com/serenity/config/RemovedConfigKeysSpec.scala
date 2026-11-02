@@ -77,13 +77,13 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
   "A session written before a setting was removed" should "still decode, ignoring the removed field" in
     assertSessionIgnores("postProcessingEffect" -> Json.fromString("Glow"))
 
-  "A config file naming the removed panel material, shadow and corner settings" should "load and report each once" in
+  // `ui.corner_radius` came back in #2389 (owner decision, reversing #1811's removal), so it is no longer listed here.
+  "A config file naming the removed panel material, shadow and blur settings" should "load and report each once" in
     assertRemovedAndIgnored(
       "ui.material"         -> "crystal",
       "ui.shadows"          -> "false",
       "ui.background_style" -> "glass-like",
-      "ui.blur_radius"      -> "0.42",
-      "ui.corner_radius"    -> "12"
+      "ui.blur_radius"      -> "0.42"
     )
 
   it should "treat their older spellings as removed too" in
@@ -95,18 +95,15 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "ui.background.style" -> "solid",
       "ui_background_style" -> "transparent",
       "ui.blur.radius"      -> "0.1",
-      "ui_blur_radius"      -> "0.2",
-      "ui.corner.radius"    -> "4",
-      "ui_corner_radius"    -> "6"
+      "ui_blur_radius"      -> "0.2"
     )
 
-  "A session saved with panel material, shadow and corner settings" should "still decode, ignoring them" in
+  "A session saved with panel material, shadow and blur settings" should "still decode, ignoring them" in
     assertSessionIgnores(
       "materialPreset"   -> Json.fromString("crystal"),
       "uiShadowsEnabled" -> Json.fromBoolean(false),
       "backgroundStyle"  -> Json.fromString("GlassLike"),
-      "blurRadius"       -> Json.fromDoubleOrNull(0.42),
-      "uiCornerRadiusPx" -> Json.fromInt(12)
+      "blurRadius"       -> Json.fromDoubleOrNull(0.42)
     )
 
   "A config file naming the removed companion sprite and visual flair settings" should "load and report each once" in

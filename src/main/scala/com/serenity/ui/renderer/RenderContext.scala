@@ -23,8 +23,17 @@ final case class RenderContext(
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
     uiMetrics: CellMetrics,
-    caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create()
+    caches: com.serenity.state.manager.RenderCaches = com.serenity.state.manager.RenderCaches.create(),
+    window: Option[ViewportSize] = None
 ):
+
+  /** The whole window in cells, which a layer or bounded surface drawing part of it cannot say: what chrome corners
+    * measure "against the window's edge" from.
+    */
+  def windowSize(state: AppState): ViewportSize =
+    window
+      .orElse(state.runtime.viewportSize)
+      .getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
 
   def fontForRole(role: TypographyRole): java.awt.Font =
     role match

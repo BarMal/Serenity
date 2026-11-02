@@ -49,6 +49,18 @@ private[config] object ConfigFieldsCursorAndWindow:
         thickness >= AppConfig.MinUiOutlineThicknessPx && thickness <= AppConfig.MaxUiOutlineThicknessPx
       )
     )(_.uiOutlineThicknessPx, (config, value) => config.withUiOutlineThicknessPx(value)),
+    // Not `filtered`: an out-of-range radius is clamped to the nearest bound, and `ConfigManager.invalidEntry` reports it.
+    named("ui.corner_radius", "uiCornerRadiusPx", "ui.corner.radius", "ui_corner_radius")(
+      int.mapped(AppConfig.clampUiCornerRadiusPx, radius => radius)
+    )(_.uiCornerRadiusPx, (config, value) => config.withUiCornerRadiusPx(value)),
+    field("ui.docked_corner_style")(enumerated(DockedCornerStyle.fromConfigKey, _.configKey))(
+      _.dockedCornerStyle,
+      (config, value) => config.withDockedCornerStyle(value)
+    ),
+    field("ui.pane_header_corners")(enumerated(PaneHeaderCorners.fromConfigKey, _.configKey))(
+      _.paneHeaderCorners,
+      (config, value) => config.withPaneHeaderCorners(value)
+    ),
     field("ui.file_dialog")(enumerated(FileDialogMode.fromConfigKey, _.configKey))(
       _.fileDialogMode,
       (config, value) => config.withFileDialogMode(value)

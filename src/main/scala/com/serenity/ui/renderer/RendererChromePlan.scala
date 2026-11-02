@@ -147,9 +147,28 @@ private[renderer] object RendererChromePlan:
     */
   val BleedPx: Int = 1
 
+  /** How far under its row a glyph's descender and its antialiasing reach: the pixel the floating-mode scroll check
+    * found missing. Kept to that: a bounded repaint of the status row has to stay inside the tenth of the window
+    * `RendererRepaintRectsSpec` allows it, which a second pixel would exceed.
+    */
+  val DescenderBleedPx: Int = 1
+
   def withBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
     else band
+
+  /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the row
+    * holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the window's
+    * bottom edge there is nothing below to take. The window's rows are the layout's own, which a surface cut larger
+    * than the layout does not change.
+    */
+  def withDescenderBleed(context: RenderContext)(band: PixelRect): PixelRect =
+    if !context.surface.addressesPixels then band
+    else
+      val rows       = context.window.fold(context.surface.viewportHeight)(_.height)
+      val gridBottom = rows * context.cellMetrics.lineHeight
+      val room       = DescenderBleedPx.min((gridBottom - band.yPx - band.heightPx).max(0))
+      band.copy(heightPx = band.heightPx + room)
 
   /** Every place chrome is painted. */
   private[renderer] def regions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
@@ -166,9 +185,10 @@ private[renderer] object RendererChromePlan:
         .filter(_.gutterWidthCells > 0)
         .map(ColumnRails.railRect(layout.contentRect, _))
     }
-    (List(contract.leftSpacerRect, contract.rightSpacerRect) ++ contract.gutterRect.toList ++
+    val toPixels = pixelRectOf(context.cellMetrics)
+    (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
-      .map(pixelRectOf(context.cellMetrics))
+      .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context))
 
   /** The active pane's last row when the pane showed another number of rows in the frame this surface last drew: the
     * counter below the last row belongs to it, and what lay there then is no longer what lies there now.
@@ -246,7 +266,7 @@ private[renderer] object RendererChromePlan:
       case (paneId, layout) if !repaint.headers.includes(paneId) =>
         contract.paneHeaderRect(paneId).getOrElse(layout.headerRect)
     }
-    spacers ++ (statusRow ++ headers).map(toPixels) ++
+    spacers ++ headers.map(toPixels) ++ statusRow.map(toPixels).map(withDescenderBleed(context)) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 

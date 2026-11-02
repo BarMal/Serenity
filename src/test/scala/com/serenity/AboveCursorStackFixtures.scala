@@ -21,7 +21,7 @@ object AboveCursorStackFixtures:
 
   def editorWithComment(line: Int, viewport: ViewportSize = StackViewport): AppState =
     val base =
-      AppState.initial(com.serenity.config.AppConfig.conventional.withFontConfig(MeasuredRows.driftingFontConfig))
+      AppState.initial(ChromeOn.config.withFontConfig(MeasuredRows.driftingFontConfig))
     val text   = List.fill(40)("abcdefghijklmnopqrstuvwxyz").mkString("\n")
     val buffer = Buffer.fromString(BufferId(0), text)
     val comment =

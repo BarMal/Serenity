@@ -444,12 +444,15 @@ object DamageProducer:
 
   /** The tab strip is derived too (`AppState.tabBarSurface`), and shows each buffer's title and dirty glyph -- the same
     * facts a pane header shows, so it changes on the keystroke that raises [[Damage.PaneChrome]]. A strip shown on both
-    * sides stays inside its own rect, so its change is scoped to the strip. Only a strip shown on both sides is
-    * compared: one appearing or going away is left to whatever reported it before.
+    * sides stays inside its own rect, so its change is scoped to the strip. The tab under the pointer is not part of
+    * the strip's content, but it decides which inactive tab shows its close box, so a change of it damages the strip
+    * too. Only a strip shown on both sides is compared: one appearing or going away is left to whatever reported it
+    * before.
     */
   private def tabBarDamage(before: AppState, after: AppState): Damage =
+    val hoverChanged = before.runtime.pointerGesture.hoveredTab != after.runtime.pointerGesture.hoveredTab
     (before.tabBarSurface, after.tabBarSurface) match
-      case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip =>
+      case (Some(beforeStrip), Some(afterStrip)) if beforeStrip != afterStrip || hoverChanged =>
         Damage.Surface(UiSurface.TabBarSurfaceId)
       case _ => Damage.Nothing
 

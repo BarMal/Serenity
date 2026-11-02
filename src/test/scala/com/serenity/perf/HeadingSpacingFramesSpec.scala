@@ -8,12 +8,12 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.keystroke.events.{InsertChar, PageDown, PageUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
-import com.serenity.setCursorPosition
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
+import com.serenity.{ChromeOn, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -42,7 +42,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     .withLevel(2)(_.copy(spaceBefore = Some(1.0f), spaceAfter = Some(0.5f)))
 
   private val spacedConfig   = AppConfig.default.withHeadingsConfig(spacing)
-  private val spacedChrome   = AppConfig.conventional.withHeadingsConfig(spacing)
+  private val spacedChrome   = ChromeOn.config.withHeadingsConfig(spacing)
   private val numberedConfig = spacedConfig.withLineNumbers(true)
 
   private def paragraph(text: String, role: ParagraphRole = ParagraphRole.Body): RichTextParagraph =

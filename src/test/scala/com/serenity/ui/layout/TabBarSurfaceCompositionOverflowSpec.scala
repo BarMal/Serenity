@@ -23,7 +23,7 @@ class TabBarSurfaceCompositionOverflowSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hide tabs once the count exceeds what the minimum width allows, reporting how many are hidden" in {
-    // Only a handful of tabs can fit at MinTabWidth=4 (plus 2-column gaps) in 24 columns; far fewer than 20 tabs.
+    // Only a handful of tabs can fit at their floors (plus 2-column gaps) in 24 columns; far fewer than 20 tabs.
     val window = TabBarSurfaceComposition.visibleWindow(entries(20), None, availableWidth = 24)
 
     window.visible.size should be < 20

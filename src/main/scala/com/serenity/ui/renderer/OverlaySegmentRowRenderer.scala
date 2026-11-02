@@ -35,12 +35,24 @@ object OverlaySegmentRowRenderer:
     theme: Theme,
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
-    font: Font
+    font: Font,
+    cellWidthPx: Int = 0
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
     else if segments.exists(_.allocatedWidth.nonEmpty) then
-      renderCompactDistributedRow(surface, x, y, width, row, theme, defaultForeground, defaultBackground, font)
+      renderCompactDistributedRow(
+        surface,
+        x,
+        y,
+        width,
+        row,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font,
+        cellWidthPx
+      )
     else
       val baseCellWidth = width / segments.length
       val remainder     = width % segments.length
@@ -72,7 +84,8 @@ object OverlaySegmentRowRenderer:
     theme: Theme,
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
-    font: Font
+    font: Font,
+    cellWidthPx: Int = 0
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -91,7 +104,10 @@ object OverlaySegmentRowRenderer:
             theme,
             defaultForeground,
             defaultBackground,
-            font
+            font,
+            highlightRadiusPx = if segment.selected then row.segmentHighlightRadiusPx else 0,
+            glyphInsetPx = row.segmentInsetPx,
+            cellWidthPx = cellWidthPx
           )
           val afterCell = cursorX + cellWidth
           val afterSeparator =
@@ -257,26 +273,51 @@ object OverlaySegmentRowRenderer:
     theme: Theme,
     defaultForeground: RenderColor,
     defaultBackground: RenderColor,
-    font: Font
+    font: Font,
+    highlightRadiusPx: Int = 0,
+    glyphInsetPx: Double = 0.0,
+    cellWidthPx: Int = 0
   ): Unit =
-    val iconWidth   = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
-    val iconGap     = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
-    val text        = segment.text.take(math.max(0, width - iconWidth - iconGap))
+    val iconWidth = segment.inlineIcon.map(_.length).getOrElse(0).min(width)
+    val iconGap   = if iconWidth > 0 && width > iconWidth && segment.text.nonEmpty then 1 else 0
+    // A title that says where it starts and how much room it has is left-aligned and, where the surface can measure
+    // text, cut by pixels to that room, so what the layout counted in cells can never run into the cells that follow.
+    val text = segment.titleFit match
+      case Some(fit) =>
+        SegmentTextFit.fit(segment.text, fit, font, surface.text.fontRenderContext, cellWidthPx, glyphInsetPx)
+      case None => segment.text.take(math.max(0, width - iconWidth - iconGap))
     val renderWidth = iconWidth + iconGap + text.length
-    val leftPad     = math.max(0, (width - renderWidth) / 2)
-    val renderX     = x + leftPad
-    renderSegmentText(
-      surface,
-      renderX,
-      y,
-      renderWidth,
-      text,
-      segment,
-      theme,
-      defaultForeground,
-      defaultBackground,
-      font
-    )
+    val renderX = segment.titleFit match
+      case Some(fit) => x + fit.insetCells
+      case None      => x + math.max(0, (width - renderWidth) / 2)
+    def paintText(): Unit =
+      renderSegmentText(
+        surface,
+        renderX,
+        y,
+        renderWidth,
+        text,
+        segment,
+        theme,
+        defaultForeground,
+        defaultBackground,
+        font
+      )
+    // A selected tab in a rounded strip is a pill over its whole cell, so its fill and its title's own square fill
+    // are cut to the same arcs. The glyph pass is shifted right by the text inset, and the cell is not: the pill is
+    // drawn back at the cell's true edges and only the text is moved in.
+    surface.panelOutlines.filter(_ => highlightRadiusPx > 0) match
+      case Some(outlines) =>
+        val pill = segment.backgroundColor
+          .getOrElse(theme.highlighted.background)
+          .withAlpha(defaultBackground.alpha)
+        surface.pixels.withPixelTranslation(-glyphInsetPx, 0.0) {
+          outlines.withRoundRectClip(x, y, width, 1, RoundedCorners.All, highlightRadiusPx) {
+            val _ = outlines.fillRoundRect(x, y, width, 1, RoundedCorners.All, highlightRadiusPx, pill)
+            surface.pixels.withPixelTranslation(glyphInsetPx, 0.0)(paintText())
+          }
+        }
+      case None => paintText()
 
   def renderSegmentText(
     surface: RenderSurface,
