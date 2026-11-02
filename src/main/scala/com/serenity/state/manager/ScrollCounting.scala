@@ -116,10 +116,10 @@ object ScrollCounting:
       */
     private def begin(paneId: PaneId, next: Wanted): Unit =
       if !next.replaced.get then
-        val waiter    = Waiter(next.replaced, () => finish(paneId, next))
-        val fresh     = new Run(waiter)
-        val identity  = next.rows.sharedIndex
-        val run       = identity.fold(fresh)(shared => Option(runs.putIfAbsent(shared, fresh)).getOrElse(fresh))
+        val waiter   = Waiter(next.replaced, () => finish(paneId, next))
+        val fresh    = new Run(waiter)
+        val identity = next.rows.sharedIndex
+        val run      = identity.fold(fresh)(shared => Option(runs.putIfAbsent(shared, fresh)).getOrElse(fresh))
         if run eq fresh then executor.execute(() => lead(identity, next.rows, run))
         else if !run.join(waiter) then begin(paneId, next)
 

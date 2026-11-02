@@ -78,9 +78,9 @@ class ScrollCountExecutorSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "use daemon threads named for the count, so none keeps the process alive" in {
-    val pool  = ScrollCountExecutor.pool(threads = 2)
-    val seen  = new ConcurrentLinkedQueue[(String, Boolean)]()
-    val done  = new CountDownLatch(1)
+    val pool = ScrollCountExecutor.pool(threads = 2)
+    val seen = new ConcurrentLinkedQueue[(String, Boolean)]()
+    val done = new CountDownLatch(1)
     pool.execute { () =>
       seen.add((Thread.currentThread.getName, Thread.currentThread.isDaemon)): Unit
       done.countDown()

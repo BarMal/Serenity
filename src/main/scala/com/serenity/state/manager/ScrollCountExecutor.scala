@@ -36,8 +36,8 @@ object ScrollCountExecutor:
     * handed in, and idle threads end.
     */
   def pool(threads: Int): Executor =
-    val named  = new AtomicInteger(0)
-    val width  = threads.max(1)
+    val named = new AtomicInteger(0)
+    val width = threads.max(1)
     val workers = new ThreadPoolExecutor(
       width,
       width,

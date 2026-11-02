@@ -86,20 +86,28 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   final private class Notices:
     val heard   = new ConcurrentLinkedQueue[PaneId]()
     val arrived = new Semaphore(0)
+
     def tell(paneId: PaneId): Unit =
       heard.add(paneId): Unit
       arrived.release()
 
   /** Draws `state` until every one of its panes shows a bar, waiting on the notices between draws. */
-  @tailrec private def barsLand(scene: AuthoritativeUiScene, notices: Notices, state: AppState, size: ViewportSize, waits: Int): Boolean =
+  @tailrec private def barsLand(
+    scene: AuthoritativeUiScene,
+    notices: Notices,
+    state: AppState,
+    size: ViewportSize,
+    waits: Int
+  ): Boolean =
     scene.forState(state, size).paneScrolls.keySet == panes(state).toSet ||
-      (waits > 0 && notices.arrived.tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, waits - 1))
+      (waits > 0 && notices.arrived
+        .tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, waits - 1))
 
   private def withPool[A](threads: Int)(body: Executor => A): A =
     val pool = ScrollCountExecutor.pool(threads)
     body(pool)
 
-  "Four panes of different buffers counted on four threads" should "each end with the bar one thread counts, told once" in {
+  "Four panes of different buffers counted on four threads" should "each end with the bar one thread counts, told once" in
     withPool(4) { pool =>
       val notices = new Notices
       val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
@@ -111,9 +119,8 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       scene.forState(state, viewport).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(state)
       notices.heard.asScala.toList.sortBy(_.value) shouldBe panes(state).sortBy(_.value)
     }
-  }
 
-  "Four panes of one buffer counted on four threads" should "each end with the bar one thread counts, told once" in {
+  "Four panes of one buffer counted on four threads" should "each end with the bar one thread counts, told once" in
     withPool(4) { pool =>
       val notices = new Notices
       val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
@@ -124,9 +131,8 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       scene.forState(state, viewport).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(state)
       notices.heard.asScala.toList.sortBy(_.value) shouldBe panes(state).sortBy(_.value)
     }
-  }
 
-  "Edits and resizes across four panes on four threads" should "end with each pane's bar for its last text and width" in {
+  "Edits and resizes across four panes on four threads" should "end with each pane's bar for its last text and width" in
     withPool(4) { pool =>
       val notices = new Notices
       val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
@@ -138,8 +144,9 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
         case ((before, _), round) =>
           val bufferId = BufferId(1 + random.nextInt(4))
           val size     = sizes(random.nextInt(sizes.size))
-          val after    = edited(before, bufferId, prose(s"round $round buffer ${bufferId.value}", 300 + random.nextInt(200)))
-          val sized    = LayoutEngine.syncViewportDimensions(after, size)
+          val after =
+            edited(before, bufferId, prose(s"round $round buffer ${bufferId.value}", 300 + random.nextInt(200)))
+          val sized = LayoutEngine.syncViewportDimensions(after, size)
           scene.forState(sized, size)
           (sized, size)
       }
@@ -147,7 +154,6 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       barsLand(scene, notices, last, lastSize, waits = 40) shouldBe true
       scene.forState(last, lastSize).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(last, lastSize)
     }
-  }
 
   "Panes whose rows share an index" should "start one count between them and tell every pane" in {
     val executor = new ByHand
