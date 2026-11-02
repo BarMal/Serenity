@@ -371,8 +371,9 @@ private[perf] object PresentBenchmarks:
     Rows(rows.map(_._1), rows.map(_._2).toMap)
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
-    val rows    = benchmarks
-    val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
-    PresentReport.print(results, rows.breakdownOf, rows.trafficOf)
-    sys.exit(0)
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
+      val rows    = benchmarks
+      val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
+      PresentReport.print(results, rows.breakdownOf, rows.trafficOf)
+      sys.exit(0)

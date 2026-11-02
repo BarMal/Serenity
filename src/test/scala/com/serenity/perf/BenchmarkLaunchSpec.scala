@@ -19,10 +19,16 @@ class BenchmarkLaunchSpec extends AnyFlatSpec with Matchers:
 
   final private case class ChildRun(exitCode: Int, output: String)
 
-  private def runChild(main: String, workingDirectory: Path, headless: Boolean): ChildRun =
+  private def runChild(
+    main: String,
+    workingDirectory: Path,
+    headless: Boolean,
+    arguments: List[String] = Nil
+  ): ChildRun =
     val javaBin = Paths.get(System.getProperty("java.home"), "bin", "java").toString
     val builder = new ProcessBuilder(
-      (List(javaBin) ++ Option.when(headless)("-Djava.awt.headless=true") ++ List("-cp", testClasspath, main)).asJava
+      (List(javaBin) ++ Option.when(headless)("-Djava.awt.headless=true") ++
+        List("-cp", testClasspath, main) ++ arguments).asJava
     ).directory(workingDirectory.toFile).redirectErrorStream(true)
     val process = builder.start()
     val output  = new StringBuilder
@@ -43,6 +49,22 @@ class BenchmarkLaunchSpec extends AnyFlatSpec with Matchers:
 
     withClue(run.output)(run.exitCode shouldBe 0)
     run.output should include("loaded")
+  }
+
+  "A benchmark launch that finishes" should "end the process normally, as it did without the wrapper" in {
+    val run =
+      runChild("com.serenity.perf.BenchmarkMainChild", Paths.get("").toAbsolutePath, headless = true, List("success"))
+
+    withClue(run.output)(run.exitCode shouldBe 0)
+    run.output should include("finished")
+  }
+
+  "A benchmark launch that throws" should "print the failure and end the process with a non-zero exit code" in {
+    val run =
+      runChild("com.serenity.perf.BenchmarkMainChild", Paths.get("").toAbsolutePath, headless = true, List("failure"))
+
+    withClue(run.output)(run.exitCode shouldBe 1)
+    run.output should include("IllegalStateException: benchmark failed")
   }
 
   "A benchmark launch that fails with a window open" should "end the process with a non-zero exit code" in {

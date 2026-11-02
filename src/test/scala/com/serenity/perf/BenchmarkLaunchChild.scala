@@ -4,7 +4,8 @@ package com.serenity.perf
 object CellGridFontChild:
 
   def main(args: Array[String]): Unit =
-    println(s"loaded ${CellGridBenchmarks.benchmarks().size} cell grid benchmarks")
+    BenchmarkMain.run:
+      println(s"loaded ${CellGridBenchmarks.benchmarks().size} cell grid benchmarks")
 
 /** Builds the suite inside its windows as `PerformanceBenchmarks.main` does, then fails with a `LinkageError` -- the
   * kind `NonFatal` does not catch -- while the windows are open.
@@ -12,12 +13,15 @@ object CellGridFontChild:
 object WindowFailureChild:
 
   def main(args: Array[String]): Unit =
-    val watcher = new Thread(() =>
-      (1 to 4).foreach { _ =>
-        Thread.sleep(5000)
-        println(s"displayable windows: ${java.awt.Window.getWindows.count(_.isDisplayable)}")
-      }
-    )
-    watcher.setDaemon(true)
-    watcher.start()
-    val _ = PerformanceBenchmarks.withSuite(_ => throw new ExceptionInInitializerError("benchmark setup failed"))
+    BenchmarkMain.run:
+      val _ = PerformanceBenchmarks.withSuite(_ => throw new ExceptionInInitializerError("benchmark setup failed"))
+
+/** Runs the body the first argument names inside [[BenchmarkMain]]. */
+object BenchmarkMainChild:
+
+  def main(args: Array[String]): Unit =
+    BenchmarkMain.run:
+      args.headOption match
+        case Some("success") => println("finished")
+        case Some("failure") => throw new IllegalStateException("benchmark failed")
+        case other           => throw new IllegalArgumentException(s"unknown mode $other")

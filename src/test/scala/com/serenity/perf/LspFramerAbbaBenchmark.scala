@@ -115,17 +115,18 @@ object LspFramerAbbaBenchmark:
     f"| ${scenario.name} | $aMs%.2f +- $aSd%.2f | $bMs%.2f +- $bSd%.2f | ${bMs / aMs}%.2fx | $aKb%.0f | $bKb%.0f | ${bKb / aKb}%.2fx |"
 
   def main(args: Array[String]): Unit =
-    val cycles = args.headOption.flatMap(_.toIntOption).getOrElse(4)
-    val rows = scenarios.map { scenario =>
-      (1 to 6).foreach(_ => Order.foreach(side => slot(side, scenario)))
-      val slots = (1 to cycles).flatMap(_ => Order.map(slot(_, scenario)))
-      report(scenario, slots)
-    }
-    println(s"ABBA, $cycles cycles x 8 slots per scenario (${cycles * 4} slots per side), 6 warm-up cycles discarded")
-    println("A = mutable decoder, B = pure decoder; time and allocation are per whole-stream decode")
-    println()
-    println(
-      "| Scenario | A ms (mean +- sd) | B ms (mean +- sd) | B / A time | A KiB alloc | B KiB alloc | B / A alloc |"
-    )
-    println("| --- | --- | --- | --- | --- | --- | --- |")
-    rows.foreach(println)
+    BenchmarkMain.run:
+      val cycles = args.headOption.flatMap(_.toIntOption).getOrElse(4)
+      val rows = scenarios.map { scenario =>
+        (1 to 6).foreach(_ => Order.foreach(side => slot(side, scenario)))
+        val slots = (1 to cycles).flatMap(_ => Order.map(slot(_, scenario)))
+        report(scenario, slots)
+      }
+      println(s"ABBA, $cycles cycles x 8 slots per scenario (${cycles * 4} slots per side), 6 warm-up cycles discarded")
+      println("A = mutable decoder, B = pure decoder; time and allocation are per whole-stream decode")
+      println()
+      println(
+        "| Scenario | A ms (mean +- sd) | B ms (mean +- sd) | B / A time | A KiB alloc | B KiB alloc | B / A alloc |"
+      )
+      println("| --- | --- | --- | --- | --- | --- | --- |")
+      rows.foreach(println)

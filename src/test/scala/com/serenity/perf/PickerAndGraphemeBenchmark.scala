@@ -74,5 +74,6 @@ object PickerAndGraphemeBenchmark:
     }
 
   def main(args: Array[String]): Unit =
-    pickerReport()
-    graphemeReport()
+    BenchmarkMain.run:
+      pickerReport()
+      graphemeReport()
