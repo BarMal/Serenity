@@ -63,6 +63,22 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("Skia layer").downField("height").as[Int] shouldBe Right(1028)
   }
 
+  it should "name the canvas size in device pixels the frames were drawn at, per backend" in {
+    val drawn = environment.copy(
+      drawnWindows = List("Java2D" -> WindowPx(735, 458), "Skia layer" -> WindowPx(735, 458)),
+      drawnCanvases = List("Java2D" -> WindowPx(1470, 832), "Skia layer" -> WindowPx(1470, 832))
+    )
+    val rendered = BenchmarkReport(drawn, results, Verdict.SkiaWins)
+
+    rendered.markdown should include("Canvas drawn at 1470x832 device pixels (Java2D), 1470x832 device pixels (Skia layer).")
+    val json = parse(rendered.json).toOption.get.hcursor.downField("environment").downField("drawnCanvas")
+    json.downField("Skia layer").downField("width").as[Int] shouldBe Right(1470)
+  }
+
+  it should "say nothing of a canvas size that was not recorded" in {
+    report.markdown should not include "Canvas drawn at"
+  }
+
   it should "say nothing of a drawn size that was not recorded" in {
     report.markdown should not include "Window drawn at"
     report.markdown should not include "Window asked for"

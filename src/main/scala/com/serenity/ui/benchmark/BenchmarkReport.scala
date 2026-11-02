@@ -78,7 +78,7 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    (List(startup, drawnLine, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ notTimed ++
+    (List(startup, drawnLine, canvasLine, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ notTimed ++
       List(agreement, sync, pictures).flatten)
       .map(line => s"\n$line")
 
@@ -89,6 +89,12 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       else
         val drawn = environment.drawnWindows.map((arm, drawnSize) => s"${size(drawnSize)} ($arm)").mkString(", ")
         s"Window asked for ${size(asked)} and drawn at $drawn. Every row below was drawn at that size, since the window manager decided the size."
+    }
+
+  private def canvasLine: Option[String] =
+    Option.when(environment.drawnCanvases.nonEmpty) {
+      val canvases = environment.drawnCanvases.map((arm, px) => s"${size(px)} device pixels ($arm)").mkString(", ")
+      s"Canvas drawn at $canvases."
     }
 
   private def size(window: WindowPx): String = s"${window.width}x${window.height}"
@@ -207,6 +213,11 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         Option
           .when(environment.drawnWindows.nonEmpty)(
             "drawn" -> Json.obj(environment.drawnWindows.map((arm, window) => arm -> windowJson(window))*)
+          )
+          .toList ++
+        Option
+          .when(environment.drawnCanvases.nonEmpty)(
+            "drawnCanvas" -> Json.obj(environment.drawnCanvases.map((arm, window) => arm -> windowJson(window))*)
           )
           .toList ++
         Option

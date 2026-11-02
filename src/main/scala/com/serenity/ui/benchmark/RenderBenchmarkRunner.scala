@@ -60,6 +60,7 @@ object RenderBenchmarkRunner:
   final private case class Measured(
       name: String,
       drawn: WindowPx,
+      drawnCanvas: WindowPx,
       notTimed: Map[Scenario, String],
       stats: Map[Scenario, FrameStats],
       deviceScale: Double,
@@ -126,6 +127,7 @@ object RenderBenchmarkRunner:
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
       skiaDeviceScale = measuredSkia.map(_.deviceScale),
       drawnWindows = arms.map(arm => arm.name -> arm.drawn),
+      drawnCanvases = arms.map(arm => arm.name -> arm.drawnCanvas),
       notTimed = notTimed
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
@@ -185,6 +187,7 @@ object RenderBenchmarkRunner:
       Measured(
         name,
         drawn,
+        canvasPixels(window),
         notTimed,
         stats,
         Java2DRenderSurface.deviceScaleFor(window.canvas).x,
@@ -211,6 +214,10 @@ object RenderBenchmarkRunner:
     probeResize(window, scenario, startSize).map(_ =>
       timeFrames(window, fonts, factory, scenario, options, viewportLines, startSize, refresh)
     )
+
+  private def canvasPixels(window: SwingWindow): WindowPx =
+    val (width, height) = window.canvasDevicePixels
+    WindowPx(width, height)
 
   private def currentSize(window: SwingWindow): WindowPx =
     val size = window.currentPreferredWindowSize

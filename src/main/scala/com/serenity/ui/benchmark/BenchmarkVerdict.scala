@@ -29,6 +29,7 @@ final case class BenchmarkEnvironment(
     fallbackAgreement: Option[FallbackAgreement] = None,
     skiaDeviceScale: Option[Double] = None,
     drawnWindows: List[(String, WindowPx)] = Nil,
+    drawnCanvases: List[(String, WindowPx)] = Nil,
     notTimed: Map[Scenario, String] = Map.empty
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */

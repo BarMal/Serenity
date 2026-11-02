@@ -411,6 +411,12 @@ class SwingWindow(
     val d = pixelSize.get()
     metrics.viewportSize(d.width, d.height)
 
+  /** What the canvas is drawn at, in device pixels: its size in Swing units times the screen's scale. */
+  def canvasDevicePixels: (Int, Int) =
+    val size  = canvas.getSize
+    val scale = DisplayScale.forComponent(canvas)
+    (Math.round(size.width * scale.x).toInt, Math.round(size.height * scale.y).toInt)
+
   def currentPreferredWindowSize: PreferredWindowSize =
     val d = frame.getSize
     PreferredWindowSize(d.width, d.height).normalized

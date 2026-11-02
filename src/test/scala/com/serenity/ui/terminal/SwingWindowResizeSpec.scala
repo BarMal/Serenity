@@ -68,3 +68,32 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
     withDisplay()
     afterResize(_.resizeToPreferred(Target))(frame => eventually(frame.getLocation should not be Elsewhere))
   }
+
+  "canvasDevicePixels" should "be the canvas size in Swing units times the screen scale" in {
+    withDisplay()
+    afterResize(_.resizeToPreferred(Target, recentre = false)) { _ => }
+    DisplayExclusive {
+      val metrics = CellMetrics(8, 16, 12)
+      val window =
+        new SwingWindow(
+          new Dimension(640, 400),
+          metrics,
+          WindowChromeMode.Auto,
+          metrics,
+          windowTitle = s"Serenity canvas spec ${Titles.incrementAndGet()}"
+        )
+      window.start()
+      try
+        eventually(window.canvas.isShowing shouldBe true)
+        eventually {
+          val scale = com.serenity.ui.display.DisplayScale.forComponent(window.canvas)
+          val size  = window.canvas.getSize
+          window.canvasDevicePixels shouldBe (
+            Math.round(size.width * scale.x).toInt,
+            Math.round(size.height * scale.y).toInt
+          )
+          size.width should be > 0
+        }
+      finally window.stop()
+    }
+  }
