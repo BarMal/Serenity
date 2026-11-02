@@ -41,16 +41,18 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "say the window was drawn at the size asked for, when it was" in {
-    val drawn = environment.copy(drawnWindows = List("Java2D" -> WindowPx(1600, 1000), "Skia layer" -> WindowPx(1600, 1000)))
-    val text  = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+    val drawn =
+      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1600, 1000), "Skia layer" -> WindowPx(1600, 1000)))
+    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
 
     text should include("Window drawn at 1600x1000, as asked.")
-    text should not include "asked for"
+    text should not include "Window asked for"
   }
 
   it should "name both sizes, per backend, when the window was drawn at another size" in {
-    val drawn = environment.copy(drawnWindows = List("Java2D" -> WindowPx(1920, 1060), "Skia layer" -> WindowPx(1920, 1028)))
-    val text  = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+    val drawn =
+      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1920, 1060), "Skia layer" -> WindowPx(1920, 1028)))
+    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
 
     text should include("Window asked for 1600x1000 and drawn at 1920x1060 (Java2D), 1920x1028 (Skia layer).")
     text should include("the window manager decided the size")

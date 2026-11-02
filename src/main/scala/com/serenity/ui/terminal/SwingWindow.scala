@@ -415,7 +415,10 @@ class SwingWindow(
     val d = frame.getSize
     PreferredWindowSize(d.width, d.height).normalized
 
-  def resizeToPreferred(size: PreferredWindowSize): Unit =
+  /** `recentre` puts the window back in the middle of the screen, as a change of the preferred size always has; a
+    * caller that resizes the window again and again, as the render benchmark does, asks for it to stay where it is.
+    */
+  def resizeToPreferred(size: PreferredWindowSize, recentre: Boolean = true): Unit =
     val normalized = size.normalized
     SwingUtilities.invokeLater { () =>
       val dimension = new Dimension(normalized.width, normalized.height)
@@ -426,7 +429,7 @@ class SwingWindow(
       canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
-      frame.setLocationRelativeTo(null)
+      if recentre then frame.setLocationRelativeTo(null)
       publishCanvasResize(canvas.getSize(), canvasFallback)
       val _ = canvas.requestFocusInWindow()
     }
