@@ -9,8 +9,10 @@ import java.util.concurrent.atomic.AtomicReference
   * display. `onOffered` is told what each drag offers when it enters, which is what shows why a drop did nothing on a
   * toolkit that offers a flavor nobody expected.
   */
-final case class FileDropHandler(onDropped: List[Path] => Unit, onOffered: String => Unit)(
-    private val lastTaken: AtomicReference[WeakReference[Transferable]] = new AtomicReference(new WeakReference(null))
+final class FileDropHandler private (
+    onDropped: List[Path] => Unit,
+    onOffered: String => Unit,
+    lastTaken: AtomicReference[Option[WeakReference[Transferable]]]
 ):
 
   def accepts(flavors: Array[DataFlavor]): Boolean = DroppedPaths.offersPaths(flavors)
@@ -26,11 +28,14 @@ final case class FileDropHandler(onDropped: List[Path] => Unit, onOffered: Strin
     DroppedPaths.from(transferable) match
       case Nil => false
       case paths =>
-        val previous = lastTaken.getAndSet(new WeakReference(transferable))
-        if previous.get ne transferable then onDropped(paths)
+        val previous = lastTaken.getAndSet(Some(new WeakReference(transferable)))
+        if !previous.exists(_.get eq transferable) then onDropped(paths)
         true
 
 object FileDropHandler:
+
+  def apply(onDropped: List[Path] => Unit, onOffered: String => Unit): FileDropHandler =
+    new FileDropHandler(onDropped, onOffered, new AtomicReference(None))
 
   def describe(flavors: Array[DataFlavor]): String =
     if flavors.isEmpty then "Drag offers no flavors"
