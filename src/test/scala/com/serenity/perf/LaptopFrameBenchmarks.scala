@@ -64,10 +64,10 @@ private[perf] object LaptopFrameBenchmarks:
   val MaxTypingRowsDrawn = 6L
   val MaxScrollRowsDrawn = 12L
 
-  private[perf] val codeFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val textFont       = Font(Font.SERIF, Font.PLAIN, 14)
-  private val cellMetrics    = CellMetrics.fromFont(codeFont)
-  private val viewport =
+  private[perf] val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private[perf] val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
+  private[perf] val cellMetrics = CellMetrics.fromFont(codeFont)
+  private[perf] val viewport =
     ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
   private val bufferId = BufferId(1)
 
