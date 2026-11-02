@@ -255,10 +255,8 @@ final class SkiaRenderSurface(
   override def shapesStretchesOf(text: String): Boolean =
     SkiaShapedTextCache.worthShaping(baseFontRef.get(), text)
 
-  override def shapeAhead(requests: Seq[ShapeAheadRequest]): Unit =
-    caches.ahead.request(requests.map(request => request.text -> fonts.faceFor(request.font).font))
-
-  override def cancelShapeAhead(): Unit = caches.ahead.cancel()
+  override def shapeAhead(requests: Seq[ShapeAheadRequest]): Unit = caches.ahead.requestFaces(requests, fonts)
+  override def cancelShapeAhead(): Unit                           = caches.ahead.cancel()
 
   /** Draws `s[from, until)` with its first glyph at `x`, shaped when the font or the text asks for it. */
   private def drawText(s: String, from: Int, until: Int, x: Float, baseline: Float): Unit =

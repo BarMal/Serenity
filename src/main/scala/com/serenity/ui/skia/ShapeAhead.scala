@@ -7,6 +7,7 @@ import java.util.concurrent.{LinkedBlockingQueue, ThreadFactory, ThreadPoolExecu
 import scala.annotation.tailrec
 import scala.concurrent.duration.FiniteDuration
 
+import com.serenity.ui.renderer.ShapeAheadRequest
 import org.jetbrains.skia.Font
 import org.jetbrains.skia.shaper.Shaper
 
@@ -29,11 +30,14 @@ final class ShapeAhead(cache: SkiaShapedTextCache, workers: Int = ShapeAhead.Def
   private val shapers    = new ThreadLocal[Shaper]()
 
   private val pool =
-    val executor = new ThreadPoolExecutor(workers, workers, IdleSeconds, TimeUnit.SECONDS, queue, WorkerThreads)
+    val executor = new ThreadPoolExecutor(workers, workers, IdleSeconds, TimeUnit.SECONDS, queue, new WorkerThreads)
     executor.allowCoreThreadTimeOut(true)
     executor
 
   /** Asks for each of `batch` to be shaped, in the order given. Returns at once. */
+  def requestFaces(requests: Seq[ShapeAheadRequest], fonts: SkiaFontCache): Unit =
+    request(requests.map(request => request.text -> fonts.faceFor(request.font).font))
+
   def request(batch: Seq[(String, Font)]): Unit =
     if !closed.get then
       val asked = generation.get
@@ -101,12 +105,11 @@ object ShapeAhead:
   private val IdleSeconds = 5L
   private val PollNanos   = 500_000L
 
-  private val Names = new AtomicInteger(0)
-
-  private object WorkerThreads extends ThreadFactory:
+  final private class WorkerThreads extends ThreadFactory:
+    private val names = new AtomicInteger(0)
 
     def newThread(task: Runnable): Thread =
-      val thread = new Thread(task, s"serenity-shape-ahead-${Names.incrementAndGet()}")
+      val thread = new Thread(task, s"serenity-shape-ahead-${names.incrementAndGet()}")
       thread.setDaemon(true)
       thread.setPriority(Thread.MIN_PRIORITY)
       thread
