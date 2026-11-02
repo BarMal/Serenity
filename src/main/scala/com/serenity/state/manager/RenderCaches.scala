@@ -67,7 +67,8 @@ object RenderCaches:
     */
   def create(
     rendererFrameStateCacheCapacity: Int = 64,
-    scrollCounting: ScrollCounting = ScrollCounting.Inline
+    scrollCounting: ScrollCounting = ScrollCounting.Inline,
+    styledFonts: StyledFontCache = StyledFontCache()
   ): RenderCaches =
     val shapedText   = ShapedTextCache()
     val wrappedLines = WrappedLineCache.sharing(shapedText)
@@ -81,7 +82,7 @@ object RenderCaches:
       wrappedLines,
       FrameCounters(),
       shapedText,
-      StyledFontCache(),
+      styledFonts,
       LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
       new TabBarMeasures,
