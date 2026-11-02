@@ -224,8 +224,9 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
 
   List(2, 24).foreach { count =>
     "A rounded tab strip with " + count + " tabs" should "show what is behind it outside each arc, never its own fill" in {
-      val radius = 12 * scale
-      val s      = strip(radius = 12, tabCount = count)
+      val s = strip(radius = 12, tabCount = count)
+      // A radius is capped at half the strip's height, so the arc is that of the capped one.
+      val radius = math.min(12 * scale, bandOf(s).size / 2)
       val own    = Set(stripBackground(s), highlight(s))
       val poked  = cornerPixels(s, radius).filter((x, y) => own.contains(rgb(s.frame, x, y)))
       withClue(s"pixels of the strip's own colours outside its arcs, first ${poked.take(6)}: ")(poked shouldBe empty)
