@@ -2,7 +2,7 @@ import java.io.PrintStream
 import java.nio.file.Path
 
 import scala.concurrent.ExecutionContext
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration, DurationInt}
 
 import cats.effect.*
 import cats.effect.unsafe.IORuntimeConfig
@@ -39,7 +39,7 @@ import com.serenity.state.models.RestartMode
 import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
-import com.serenity.ui.display.DisplayScale
+import com.serenity.ui.display.{DisplayScale, DisplaySettling}
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingPaintProbe, SwingWindow}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
@@ -408,8 +408,19 @@ object Main extends IOApp:
                 }
             else IO.unit
 
+          val settledLogged =
+            DisplaySettling
+              .untilSettled(
+                IO.blocking(swingWin.displaySnapshot(appConfig.preferredWindowSize)),
+                interval = 250.millis,
+                maxWait = 5.seconds
+              )
+              .flatMap(outcome => logger.info(outcome.snapshot.settledLogLine(outcome.settled)))
+              .handleErrorWith(error => logger.warn(s"[DISPLAY] settled size unavailable: ${error.getMessage}"))
+
           val scaledAndLogged =
-            initialScaleSync >> logger.info(swingWin.displaySnapshot(appConfig.preferredWindowSize).logLine)
+            initialScaleSync >> logger.info(swingWin.displaySnapshot(appConfig.preferredWindowSize).logLine) >>
+              settledLogged.start.void
 
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {

@@ -33,3 +33,13 @@ class DisplaySnapshotSpec extends AnyFlatSpec with Matchers:
   it should "say none when only one dimension is configured" in {
     wayland.copy(preferredHeightPx = None).logLine should endWith("preferred=none")
   }
+
+  "DisplaySnapshot.settledLogLine" should "carry the same fields as logLine, after saying whether the size had settled" in {
+    wayland.settledLogLine(settled = true) shouldBe
+      "[DISPLAY] settled=true toolkit=sun.awt.wl.WLToolkit scale=2.0x2.0 frame=2048x1536 canvas=2040x1500 " +
+      "preferred=1024x768"
+  }
+
+  it should "say so when the size was still changing" in {
+    wayland.settledLogLine(settled = false) should startWith("[DISPLAY] settled=false ")
+  }
