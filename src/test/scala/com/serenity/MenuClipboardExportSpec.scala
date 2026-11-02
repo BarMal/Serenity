@@ -19,8 +19,8 @@ import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
 import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-/** The context menu runs Copy and Cut as commands (`RunCommand`), which enqueue the clipboard event inside the dispatch.
-  * The text they copy has to reach the system clipboard the way a Ctrl+C does (#2511).
+/** The context menu runs Copy and Cut as commands (`RunCommand`), which enqueue the clipboard event inside the
+  * dispatch. The text they copy has to reach the system clipboard the way a Ctrl+C does (#2511).
   */
 class MenuClipboardExportSpec extends AnyFlatSpec with Matchers:
 
@@ -34,12 +34,12 @@ class MenuClipboardExportSpec extends AnyFlatSpec with Matchers:
 
   private def inEditor(batches: List[List[PendingInput]]): IO[(Vector[String], String)] =
     for
-      stateManager <- StateManager(logger, dictionaryCache = SharedDictionary.default)
-      bufferId     <- stateManager.createNewEmptyBuffer
-      state        <- stateManager.getCurrentState
-      _            <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
-      written      <- Ref.of[IO, Vector[String]](Vector.empty)
-      router       <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
+      stateManager    <- StateManager(logger, dictionaryCache = SharedDictionary.default)
+      bufferId        <- stateManager.createNewEmptyBuffer
+      state           <- stateManager.getCurrentState
+      _               <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
+      written         <- Ref.of[IO, Vector[String]](Vector.empty)
+      router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
       cursorVisible   <- Ref.of[IO, Boolean](true)
       translatorCache <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
       context = AppRuntimeRenderLoops.InputBatchContext(
@@ -57,8 +57,8 @@ class MenuClipboardExportSpec extends AnyFlatSpec with Matchers:
         .through(AppRuntimeRenderLoops.inputBatchPhase(context))
         .compile
         .drain
-      writes  <- written.get
-      after   <- stateManager.getCurrentState
+      writes <- written.get
+      after  <- stateManager.getCurrentState
       content = after.persisted.buffers(bufferId).document.content.collect()
     yield (writes, content)
 
