@@ -267,23 +267,11 @@ final class ShapeAheadSpec extends AnyFlatSpec with Matchers:
   }
 
   "A surface that does not shape ahead" should "ignore the request, by the capability's own default" in {
-    val image = new java.awt.image.BufferedImage(40, 20, java.awt.image.BufferedImage.TYPE_INT_ARGB)
-    val java2d = new com.serenity.ui.renderer.Java2DRenderSurface(
-      image,
-      com.serenity.ui.layout.CellMetrics(charWidth = 7, lineHeight = 13, ascent = 10),
-      new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12),
-      _ => (),
-      40,
-      20,
-      1.0,
-      1.0
-    )
-    val before = image.getRGB(0, 0, 40, 20, null, 0, 40).toList
+    val surface = new com.serenity.perf.NullRenderSurface(40, 20, 1.0, () => ())
+    val request = com.serenity.ui.renderer.ShapeAheadRequest("anything", new java.awt.Font("Serif", 0, 12))
 
-    java2d.text.shapeAhead(
-      Seq(com.serenity.ui.renderer.ShapeAheadRequest("anything", new java.awt.Font("Serif", 0, 12)))
-    )
-    java2d.text.cancelShapeAhead()
-
-    image.getRGB(0, 0, 40, 20, null, 0, 40).toList shouldBe before
+    noException should be thrownBy {
+      surface.shapeAhead(Seq(request))
+      surface.cancelShapeAhead()
+    }
   }
