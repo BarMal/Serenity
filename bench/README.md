@@ -39,6 +39,13 @@ java -cp serenity-perf.jar com.serenity.perf.PerformanceBenchmarks laptop.
 
 Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and power source the same across labels (baseline A used `powersave` on AC), and leave the keyboard and mouse alone while it runs, since the input is injected into the focused window.
 
+`BENCH_JAVA_OPTS` passes JVM options to every launch and is recorded in the conditions file, for example
+`BENCH_JAVA_OPTS="-Xlog:gc:file=$PWD/gc.log:uptime -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"`
+(the GC log is one file for all three runs; the uptime stamps tell them apart). Each run's whole app log and stdout are
+kept beside its run file as `<label>-run<N>.applog` and `.stdout`, so the per-key `[LATENCY]` lines and anything Skiko
+prints are there afterwards. The conditions file also records each monitor's mode with its refresh rate and scale
+(`hyprctl`) and the OpenGL renderer (`glxinfo -B`) when those tools exist.
+
 `bench-laptop.sh` sources `bench/bench-lib.sh` (keep the two together). It finds the app's log under either `$HOME/.local/state/serenity/` or `$HOME/.serenity/`, reads AC power from whichever `AC*` supply reports it, and exits non-zero when no run produced a `[FRAME]` timing line, so a batch of failed launches is not mistaken for a result. `scripts/test_bench_laptop.py` covers these.
 
 ## Time to first frame of a packaged image

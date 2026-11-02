@@ -6,6 +6,10 @@
 # With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
 # the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
 #
+# BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc.log:uptime
+# -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"); it is recorded in the conditions file. Each run's
+# whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout.
+#
 # Runs Serenity from <jar> with an isolated config, drives deterministic input,
 # collects [FRAME] timing lines, and reports p50/p95 per phase.
 # Runs 3 times; reports median across runs.
@@ -60,10 +64,9 @@ record_conditions() {
   echo "CPU governor: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)" >> "$out"
   echo "Load average: $(uptime)" >> "$out"
   echo "" >> "$out"
-  if command -v hyprctl &>/dev/null; then
-    echo "Hyprland monitors:" >> "$out"
-    hyprctl monitors 2>/dev/null | grep -E "Monitor|scale|resolution" >> "$out" || true
-  fi
+  echo "Java options: ${BENCH_JAVA_OPTS:-}" >> "$out"
+  echo "Display:" >> "$out"
+  display_conditions >> "$out"
   cat "$out"
   echo ""
 }
@@ -74,7 +77,7 @@ run_once() {
   local out="$RESULTS_DIR/${LABEL}-run${run_n}.txt"
   local bench_home
   bench_home="$(mktemp -d /tmp/serenity-bench-XXXXXX)"
-  trap "rm -rf '$bench_home'" RETURN
+  trap "keep_run_artifacts '$bench_home' '$RESULTS_DIR' '$LABEL' '$run_n'; rm -rf '$bench_home'" RETURN
 
   # Seed isolated config
   mkdir -p "$bench_home/.serenity"
@@ -90,7 +93,7 @@ CFG
   echo "--- Run $run_n: load average before: $(uptime | awk -F'load average:' '{print $2}')" | tee "$out"
 
   # Launch Serenity
-  java -Duser.home="$bench_home" -jar "$JAR" --gui "${RENDERER_FLAG[@]}" "$LOREM_FILE" \
+  java ${BENCH_JAVA_OPTS:-} -Duser.home="$bench_home" -jar "$JAR" --gui "${RENDERER_FLAG[@]}" "$LOREM_FILE" \
     > "$bench_home/stdout.log" 2>&1 &
   local serenity_pid=$!
   echo "Launched PID $serenity_pid" | tee -a "$out"

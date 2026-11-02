@@ -1,4 +1,5 @@
 import os
+import shutil
 import stat
 import subprocess
 import tempfile
@@ -86,6 +87,55 @@ class RunDataTests(unittest.TestCase):
             self.assertEqual(lib(f'runs_with_data "{results}" x').stdout.strip(), "0")
 
 
+class KeepRunArtifactsTests(unittest.TestCase):
+    def test_keeps_the_app_log_and_stdout_beside_the_run_file(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as results:
+            write(os.path.join(home, ".local", "state", "serenity", "serenity.log"), "per-key [LATENCY] line\n")
+            write(os.path.join(home, "stdout.log"), "skiko long frame\n")
+            result = lib(f'keep_run_artifacts "{home}" "{results}" x 2')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            with open(os.path.join(results, "x-run2.applog"), encoding="utf-8") as kept:
+                self.assertEqual(kept.read(), "per-key [LATENCY] line\n")
+            with open(os.path.join(results, "x-run2.stdout"), encoding="utf-8") as kept:
+                self.assertEqual(kept.read(), "skiko long frame\n")
+
+    def test_a_run_that_never_wrote_a_log_still_succeeds(self):
+        with tempfile.TemporaryDirectory() as home, tempfile.TemporaryDirectory() as results:
+            result = lib(f'keep_run_artifacts "{home}" "{results}" x 1')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(os.listdir(results), [])
+
+
+class DisplayConditionsTests(unittest.TestCase):
+    def fake_tools(self, work):
+        fake_bin = os.path.join(work, "bin")
+        os.makedirs(fake_bin)
+        for name, body in (
+            ("hyprctl", 'echo "Monitor eDP-1 (ID 0):"; echo "\t2880x1800@120.00000 at 0x0"; echo "\tscale: 2.00"; echo "\tfocused: yes"'),
+            ("glxinfo", 'echo "OpenGL renderer string: Mesa Intel(R) UHD Graphics 620"; echo "extra"'),
+        ):
+            path = os.path.join(fake_bin, name)
+            write(path, f"#!/usr/bin/env bash\n{body}\n")
+            os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR)
+        return fake_bin
+
+    def test_records_the_refresh_rate_scale_and_gpu(self):
+        with tempfile.TemporaryDirectory() as work:
+            fake_bin = self.fake_tools(work)
+            result = lib("display_conditions", {"PATH": fake_bin + os.pathsep + os.environ["PATH"]})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("@120.00000", result.stdout)
+            self.assertIn("scale: 2.00", result.stdout)
+            self.assertIn("Intel(R) UHD Graphics 620", result.stdout)
+            self.assertNotIn("focused", result.stdout)
+
+    def test_says_nothing_and_succeeds_without_the_tools(self):
+        with tempfile.TemporaryDirectory() as only_bash:
+            os.symlink(shutil.which("bash"), os.path.join(only_bash, "bash"))
+            result = lib("display_conditions", {"PATH": only_bash})
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+
 class StatsTests(unittest.TestCase):
     def test_stats_fail_when_no_run_produced_a_frame_line(self):
         with tempfile.TemporaryDirectory() as results:
@@ -130,6 +180,52 @@ class WholeScriptTests(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("No run produced data", result.stdout + result.stderr)
+
+
+    def run_script(self, work, java_body, extra_env=None):
+        fake_bin = os.path.join(work, "bin")
+        os.makedirs(fake_bin)
+        java = os.path.join(fake_bin, "java")
+        write(java, "#!/usr/bin/env bash\n" + java_body)
+        os.chmod(java, os.stat(java).st_mode | stat.S_IXUSR)
+        jar = os.path.join(work, "Serenity.jar")
+        write(jar, "not a jar\n")
+        bench = os.path.join(work, "bench")
+        os.makedirs(bench)
+        for name in ("bench-laptop.sh", "bench-lib.sh"):
+            with open(os.path.join(BENCH, name), encoding="utf-8") as source:
+                write(os.path.join(bench, name), source.read())
+        write(os.path.join(bench, "lorem-bench.txt"), "lorem\n")
+        env = dict(os.environ, PATH=fake_bin + os.pathsep + os.environ["PATH"], BENCH_RUN_PAUSE="0", **(extra_env or {}))
+        subprocess.run(
+            ["bash", os.path.join(bench, "bench-laptop.sh"), jar, "t"], capture_output=True, text=True, env=env, check=False
+        )
+        return os.path.join(bench, "bench-results")
+
+    def test_passes_bench_java_opts_to_the_jvm_and_records_them(self):
+        with tempfile.TemporaryDirectory() as work:
+            args_file = os.path.join(work, "args.txt")
+            results = self.run_script(
+                work,
+                f'if [[ "$1" == "-version" ]]; then echo "openjdk 25" >&2; exit 0; fi\nprintf "%s\\n" "$@" > "{args_file}"\nexit 1\n',
+                {"BENCH_JAVA_OPTS": "-Xlog:gc:file=/tmp/gc.log -Dskiko.fps.longFrames.show=true"},
+            )
+            with open(args_file, encoding="utf-8") as handle:
+                args = handle.read().splitlines()
+            self.assertIn("-Xlog:gc:file=/tmp/gc.log", args)
+            self.assertIn("-Dskiko.fps.longFrames.show=true", args)
+            self.assertLess(args.index("-Xlog:gc:file=/tmp/gc.log"), args.index("-jar"))
+            with open(os.path.join(results, "t-conditions.txt"), encoding="utf-8") as handle:
+                self.assertIn("Java options: -Xlog:gc:file=/tmp/gc.log -Dskiko.fps.longFrames.show=true", handle.read())
+
+    def test_keeps_stdout_of_a_launch_that_died(self):
+        with tempfile.TemporaryDirectory() as work:
+            results = self.run_script(
+                work,
+                'if [[ "$1" == "-version" ]]; then echo "openjdk 25" >&2; exit 0; fi\necho "skiko says hello"\nexit 1\n',
+            )
+            with open(os.path.join(results, "t-run1.stdout"), encoding="utf-8") as handle:
+                self.assertIn("skiko says hello", handle.read())
 
 
 if __name__ == "__main__":

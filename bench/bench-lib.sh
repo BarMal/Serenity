@@ -11,6 +11,30 @@ find_app_log() {
   return 1
 }
 
+# keep_run_artifacts <home> <results dir> <label> <run>: copies a run's whole app log and its stdout/stderr to
+# <label>-run<N>.applog and .stdout beside the run file, which keeps only the [FRAME] and [LATENCY] summary lines.
+# Skiko's own reports (skiko.fps.*) and any -Xlog output sent to stdout are only ever in these. Succeeds when a run
+# wrote neither, so it is safe to call from a launch that died.
+keep_run_artifacts() {
+  local home="$1" results_dir="$2" label="$3" run="$4" log
+  log="$(find_app_log "$home" || true)"
+  if [[ -n "$log" ]]; then cp "$log" "$results_dir/$label-run$run.applog"; fi
+  if [[ -f "$home/stdout.log" ]]; then cp "$home/stdout.log" "$results_dir/$label-run$run.stdout"; fi
+  return 0
+}
+
+# The display facts a key-to-screen run depends on: each monitor's mode with its refresh rate and scale (hyprctl), and
+# the GPU the OpenGL path runs on (glxinfo). Prints nothing for a tool that is not installed.
+display_conditions() {
+  if command -v hyprctl &>/dev/null; then
+    hyprctl monitors 2>/dev/null | grep -E "Monitor|@|scale" || true
+  fi
+  if command -v glxinfo &>/dev/null; then
+    glxinfo -B 2>/dev/null | grep -E "renderer string|OpenGL version" || true
+  fi
+  return 0
+}
+
 # Whether the machine is on AC power, from whichever AC* supply reports it (AC, AC0, ACAD, ...).
 ac_online() {
   local dir="${BENCH_POWER_SUPPLY_DIR:-/sys/class/power_supply}" supply
