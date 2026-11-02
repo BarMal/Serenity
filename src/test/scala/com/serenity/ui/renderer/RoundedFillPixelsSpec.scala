@@ -76,8 +76,8 @@ class RoundedFillPixelsSpec extends AnyFlatSpec with Matchers:
     image
 
   private def drawn(metrics: CellMetrics, widthPx: Int, heightPx: Int, corners: RoundedCorners, radius: Int) =
-    val frame   = Java2DFrames.newFrame(widthPx, heightPx)
-    val surface = Java2DFrames.surfaceOver(frame, metrics, font, widthPx, heightPx, 1.0, false, RenderCaches.create())
+    val frame    = Java2DFrames.newFrame(widthPx, heightPx)
+    val surface  = Java2DFrames.surfaceOver(frame, metrics, font, widthPx, heightPx, 1.0, false, RenderCaches.create())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, corners, radius, RenderColor.fromAwt(fill)) shouldBe true
