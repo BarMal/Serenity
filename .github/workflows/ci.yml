@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # ready_for_review re-runs CI when a draft is marked ready, which is what starts Auto Squash Merge.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
