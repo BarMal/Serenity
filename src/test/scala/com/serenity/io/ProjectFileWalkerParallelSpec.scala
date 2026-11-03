@@ -6,7 +6,6 @@ import java.time.Instant
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
@@ -66,6 +65,30 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
     )
     root
 
+  /** A reader that holds each read it `holds` until a second such read has started, for at most five seconds. Reads
+    * that never overlap each wait out the five seconds and leave `overlapped` false, so overlap is shown without a
+    * wall-clock sleep.
+    */
+  final private class Rendezvous(reader: DirectoryReader, holds: Path => Boolean):
+    private val bothIn   = new CountDownLatch(2)
+    private val inFlight = new AtomicInteger(0)
+    private val maximum  = new AtomicInteger(0)
+
+    val read: DirectoryReader = directory =>
+      if !holds(directory) then reader(directory)
+      else
+        val now = inFlight.incrementAndGet()
+        val _   = maximum.accumulateAndGet(now, math.max)
+        try
+          bothIn.countDown()
+          val _ = bothIn.await(5, TimeUnit.SECONDS)
+          reader(directory)
+        finally
+          val _ = inFlight.decrementAndGet()
+
+    def overlapped: Boolean = bothIn.getCount == 0 && maximum.get > 1
+    def mostAtOnce: Int     = maximum.get
+
   "A parallel walk" should "list exactly what the serial walk lists, cut at the same place for every limit" in
     forAll(projectGen) { (files, ignores) =>
       val root   = materialize(files, ignores)
@@ -107,22 +130,13 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
   }
 
   it should "read several directories at once, but never more than its parallelism" in {
-    val root     = wide(directories = 24, filesEach = 2)
-    val inFlight = new AtomicInteger(0)
-    val maximum  = new AtomicInteger(0)
-    val reader: DirectoryReader = directory =>
-      val now = inFlight.incrementAndGet()
-      val _   = maximum.accumulateAndGet(now, math.max)
-      try
-        Thread.sleep(15)
-        ProjectFileWalker.readDirectory(directory)
-      finally
-        val _ = inFlight.decrementAndGet()
+    val root   = wide(directories = 24, filesEach = 2)
+    val meeter = Rendezvous(ProjectFileWalker.readDirectory, holds = _ != root)
 
     val walked = ProjectFileWalker
       .build(
         root,
-        reader,
+        meeter.read,
         Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty),
         Int.MaxValue,
         Int.MaxValue,
@@ -132,8 +146,8 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
       .unsafeRunSync()
 
     walked.files should have size 48
-    maximum.get should be > 1
-    maximum.get should be <= 4
+    meeter.overlapped shouldBe true
+    meeter.mostAtOnce should be <= 4
   }
 
   it should "skip a directory that cannot be read, and still fail when the root cannot" in {
@@ -197,7 +211,6 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
       cancelled <- fiber.cancel.start
       _         <- IO(release.countDown())
       _         <- cancelled.joinWithNever
-      _         <- IO.sleep(50.millis)
     yield (reachedIt, atCancel, started.get)).unsafeRunSync()
 
     val (reachedTwoReads, readsAtCancel, readsAfter) = both
@@ -206,26 +219,20 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
   }
 
   "Revalidating a project in parallel" should "read again exactly the directories that changed, several at once" in {
-    val root     = wide(directories = 12, filesEach = 2)
-    val seen     = new AtomicReference(Vector.empty[Path])
-    val inFlight = new AtomicInteger(0)
-    val maximum  = new AtomicInteger(0)
+    val root    = wide(directories = 12, filesEach = 2)
+    val seen    = new AtomicReference(Vector.empty[Path])
+    val meeting = new AtomicReference(Option.empty[Rendezvous])
     val reader: DirectoryReader = directory =>
-      val now = inFlight.incrementAndGet()
-      val _   = maximum.accumulateAndGet(now, math.max)
-      try
-        val _ = seen.updateAndGet(_ :+ directory)
-        Thread.sleep(15)
-        ProjectFileWalker.readDirectory(directory)
-      finally
-        val _ = inFlight.decrementAndGet()
+      val _ = seen.updateAndGet(_ :+ directory)
+      meeting.get.fold(ProjectFileWalker.readDirectory(directory))(_.read(directory))
     val index = ProjectFileIndex.emptyReading(reader, IO.pure(Vector.empty), 4096, parallelism = 4)
     index.listing(root, _ => IO.unit).unsafeRunSync()
 
     val changed = Vector("d01", "d04", "d07", "d10").map(root.resolve(_))
     changed.foreach(directory => write(directory, "added.txt"))
     seen.set(Vector.empty)
-    maximum.set(0)
+    val meeter = Rendezvous(ProjectFileWalker.readDirectory, holds = _ => true)
+    meeting.set(Some(meeter))
 
     val revalidated = index.listing(root, _ => IO.unit).unsafeRunSync()
     val fresh = ProjectFileIndex
@@ -235,5 +242,5 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
 
     revalidated shouldBe fresh
     seen.get.toSet shouldBe changed.toSet
-    maximum.get should be > 1
+    meeter.overlapped shouldBe true
   }
