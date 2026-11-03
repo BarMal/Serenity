@@ -4,19 +4,13 @@ import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ProjectTrustStoreSpec extends AnyFlatSpec with Matchers:
 
-  private def withTempDirectory[A](body: Path => A): A =
-    val directory = Files.createTempDirectory("project-trust-store")
-    try body(directory)
-    finally
-      Files
-        .walk(directory)
-        .sorted(java.util.Comparator.reverseOrder())
-        .forEach(path => Files.deleteIfExists(path): Unit)
+  private def withTempDirectory[A](body: Path => A): A = TestTemp.within("project-trust-store")(body)
 
   private val at = Instant.parse("2026-11-03T09:00:00Z")
 
