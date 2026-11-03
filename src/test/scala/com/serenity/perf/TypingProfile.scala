@@ -89,15 +89,16 @@ object TypingProfile:
       "[--cold-dictionary] [--preload-dictionary]"
 
   def main(args: Array[String]): Unit =
-    val outcome = for
-      parsed <- args.toList match
-        case scenario :: count :: flags => count.toIntOption.toRight(Usage).map((scenario, _, flags))
-        case _                          => Left(Usage)
-      (scenario, count, flags) = parsed
-      options <- Options.parse(flags)
-    yield run(scenario, count, options)
-    outcome.left.foreach(message => Console.err.println(message))
-    sys.exit(if outcome.isRight then 0 else 2)
+    BenchmarkMain.run:
+      val outcome = for
+        parsed <- args.toList match
+          case scenario :: count :: flags => count.toIntOption.toRight(Usage).map((scenario, _, flags))
+          case _                          => Left(Usage)
+        (scenario, count, flags) = parsed
+        options <- Options.parse(flags)
+      yield run(scenario, count, options)
+      outcome.left.foreach(message => Console.err.println(message))
+      sys.exit(if outcome.isRight then 0 else 2)
 
   private def run(scenario: String, count: Int, options: Options): Unit =
     scenario match

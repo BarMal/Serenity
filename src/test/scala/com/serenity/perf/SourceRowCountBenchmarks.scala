@@ -88,6 +88,7 @@ private[perf] object SourceRowCountBenchmarks:
     }
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
 end SourceRowCountBenchmarks
