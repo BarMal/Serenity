@@ -5,7 +5,9 @@
 #
 # Fails when the launcher is missing, exits non-zero, never prints the ready line, prints an uncaught exception or a
 # warning from the JVM itself (a restricted native-access call, a deprecated sun.misc.Unsafe call: the package is
-# missing a launch option the JDK expects), leaves a JVM crash log (hs_err_pid*.log), or does not finish in time.
+# missing a launch option the JDK expects), logs a class-data archive error (the archive was dumped with different
+# module options than the launcher passes, so the JVM drops its module-graph optimisation), leaves a JVM crash log
+# (hs_err_pid*.log), or does not finish in time.
 set -euo pipefail
 
 launcher="${1:?usage: $0 path/to/launcher [timeout-seconds]}"
@@ -35,8 +37,9 @@ fail() {
   exit 1
 }
 
-# The working directory is where a crashing JVM leaves hs_err_pid*.log.
-(cd "$work_dir" && exec "$launcher" --smoke-test --safe-mode) >"$log" 2>&1 &
+# The working directory is where a crashing JVM leaves hs_err_pid*.log. -Xlog:cds makes the JVM say why it refused an
+# archive: the mismatch is only an info line on the first start and an error line on every later one.
+(cd "$work_dir" && JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:+$JAVA_TOOL_OPTIONS }-Xlog:cds" exec "$launcher" --smoke-test --safe-mode) >"$log" 2>&1 &
 pid=$!
 
 elapsed=0
@@ -63,6 +66,9 @@ if grep -Eq '^Exception in thread|^Caused by:' "$log"; then
 fi
 if grep -Eq '^WARNING: (A restricted method|A terminally deprecated method|Use --enable-native-access|Restricted methods)' "$log"; then
   fail "App image printed a JVM warning; the package is missing a launch option the JDK expects."
+fi
+if grep -Eq '\[error\]\[cds\]|Mismatched values for property' "$log"; then
+  fail "App image printed a class-data archive error; the archive and the launcher options disagree."
 fi
 if compgen -G "$work_dir/hs_err_pid*.log" >/dev/null; then
   cat "$work_dir"/hs_err_pid*.log >&2

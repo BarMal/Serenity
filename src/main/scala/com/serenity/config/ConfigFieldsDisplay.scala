@@ -29,6 +29,16 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.renderDamageGranularity,
       (config, value) => config.withRenderDamageGranularity(value)
     ),
+    named("ui.render.backend", "renderBackend", "render.backend", "render_backend")(
+      enumerated(
+        RenderBackendSetting.fromConfigKey,
+        _.configKey,
+        text => RenderBackendSetting.values.find(_.toString == text)
+      )
+    )(_.surfaceConfig.renderBackend, (config, value) => config.withRenderBackend(value)),
+    named("ui.render.wayland", "renderWayland", "render.wayland", "render_wayland")(
+      enumerated(WaylandRender.fromConfigKey, _.configKey, text => WaylandRender.values.find(_.toString == text))
+    )(_.surfaceConfig.renderWayland, (config, value) => config.withRenderWayland(value)),
     field(
       "ui.render.cache_capacity",
       "render.frame_state_cache_capacity",
@@ -45,6 +55,10 @@ private[config] object ConfigFieldsDisplay:
     field("ui.render.layer_cache", "render.layer_cache", "render_layer_cache")(boolean)(
       _.surfaceConfig.layerCachingEnabled,
       (config, value) => config.withLayerCaching(value)
+    ),
+    field("ui.render.skia_vsync", "render.skia_vsync", "render_skia_vsync")(boolean)(
+      _.surfaceConfig.renderSkiaVsync,
+      (config, value) => config.withRenderSkiaVsync(value)
     ),
     field("ui.render.frame_timing", "render.frame_timing", "render_frame_timing")(boolean)(
       _.surfaceConfig.frameTimingEnabled,

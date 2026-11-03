@@ -165,7 +165,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         ) => IO.unit
       ),
       appConfig = AppConfig.default,
-      makeStateManager = Some(logger =>
+      makeStateManager = Some((logger, _) =>
         IO.blocking(TestTemp.file("serenity-session-root", ".tmp")).flatMap { fileRoot =>
           StateManager.apply(
             logger,
@@ -209,7 +209,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
         ) => IO.unit
       ),
       appConfig = AppConfig.default,
-      makeStateManager = Some(logger =>
+      makeStateManager = Some((logger, _) =>
         StateManager.apply(
           logger,
           policy = SessionManager.SessionPolicy(saveOnAppClose = true),

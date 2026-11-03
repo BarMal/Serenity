@@ -5,7 +5,7 @@ import java.awt.geom.AffineTransform
 /** Where a label's ink lands in device pixels: its origin on the pixel grid plus the sixteenth of a pixel it starts
   * past it, and the integral device scale it was drawn at.
   */
-final private[renderer] case class LabelAnchor(
+final private[ui] case class LabelAnchor(
     deviceX: Int,
     deviceBaseline: Int,
     phaseSixteenths: Int,
@@ -13,7 +13,7 @@ final private[renderer] case class LabelAnchor(
     scaleY: Int
 )
 
-private[renderer] object LabelAnchor:
+private[ui] object LabelAnchor:
 
   /** Only an integral device scale puts a label's baseline on a whole device pixel, which a sprite needs: it is blitted
     * 1:1, never resampled.

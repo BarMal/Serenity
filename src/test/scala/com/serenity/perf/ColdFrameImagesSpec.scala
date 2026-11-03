@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import java.awt.image.BufferedImage
 
+import com.serenity.FramePixels
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.richtext.{RichTextDocument, RichTextParagraph, RichTextRun}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,6 +21,8 @@ class ColdFrameImagesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
       y <- 0 until image.getHeight
       x <- 0 until image.getWidth
     yield image.getRGB(x, y)).toVector
+
+  private def pixels(frame: FramePixels): Vector[Int] = frame.rgbPixels.toVector
 
   private def paragraph(seed: String): RichTextParagraph =
     RichTextParagraph(List(RichTextRun((1 to 60).map(n => s"${seed}word$n").mkString(" "))))
@@ -54,12 +57,12 @@ class ColdFrameImagesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
     val blank  = pixels(BufferedImage(40, 30, BufferedImage.TYPE_INT_RGB))
 
     images.lend(40, 30, 2) { lent =>
-      lent.drawn.foreach(_.setRGB(7, 9, 0x123456))
-      lent.screen.setRGB(11, 3, 0xabcdef)
+      lent.drawn.foreach(_.stamp(7, 9, 0x123456))
+      lent.screen.stamp(11, 3, 0xabcdef)
     }
 
     images.lend(40, 30, 2) { lent =>
-      lent.drawn.map(pixels).foreach(_ shouldBe blank)
+      lent.drawn.map(frame => pixels(frame)).foreach(_ shouldBe blank)
       pixels(lent.screen) shouldBe blank
     }
     images.created shouldBe 1
