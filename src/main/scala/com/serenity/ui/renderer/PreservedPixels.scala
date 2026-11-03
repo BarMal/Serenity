@@ -48,9 +48,23 @@ object PreservedPixels:
       })
       .toList
 
-  /** Everything inside `widthPx` x `heightPx` but `kept`. */
-  private[renderer] def allowed(widthPx: Int, heightPx: Int, kept: List[PixelRect]): Shape =
-    val area = new Area(new Rectangle2D.Double(0, 0, widthPx, heightPx))
+  /** The kept rects within `margin` of the box a draw is bounded to: where its ink can reach one. */
+  private[renderer] def near(
+    kept: List[PixelRect],
+    left: Int,
+    top: Int,
+    right: Int,
+    bottom: Int,
+    margin: Int
+  ): List[PixelRect] =
+    kept.filter(rect =>
+      rect.xPx < right + margin && rect.xPx + rect.widthPx > left - margin && rect.yPx < bottom + margin &&
+        rect.yPx + rect.heightPx > top - margin
+    )
+
+  /** Everything but `kept`. */
+  private[renderer] def allowed(kept: List[PixelRect]): Shape =
+    val area = new Area(new Rectangle2D.Double(0, 0, 1 << 20, 1 << 20))
     kept.foreach(rect =>
       area.subtract(new Area(new Rectangle2D.Double(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
     )
