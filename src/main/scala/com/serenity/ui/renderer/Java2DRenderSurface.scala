@@ -378,14 +378,18 @@ class Java2DRenderSurface(
     g.setStroke(savedStroke)
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
-    val px        = metrics.toPixelX(x)
-    val py        = metrics.toPixelY(y)
-    val pw        = width * metrics.charWidth
-    val ph        = height * metrics.lineHeight
+    withPixelClip(
+      metrics.toPixelX(x),
+      metrics.toPixelY(y),
+      width * metrics.charWidth,
+      height * metrics.lineHeight
+    )(render)
+
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     val savedClip = g.getClip
     userClipDepth.incrementAndGet()
     try
-      g.clip(new Rectangle2D.Double(px, py, pw, ph))
+      g.clip(new Rectangle2D.Double(xPx, yPx, widthPx, heightPx))
       render
     finally
       userClipDepth.decrementAndGet()
