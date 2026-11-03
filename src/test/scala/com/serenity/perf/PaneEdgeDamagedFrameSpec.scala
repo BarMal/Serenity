@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.{PageDown, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -23,6 +24,26 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
       panes: Int,
       step: SplitPaneFixture => (AppState, AppState),
       document: Int => String = SplitPaneFixture.prose
+  )
+
+  /** The cell grid a frame is laid out on. Cell metrics come from the platform's font, so a mismatch that needs a
+    * particular cell size shows only on the machine whose font has it; macOS's 7x15 cells failed on CI alone (#2481).
+    */
+  final private case class Grid(name: String, metrics: CellMetrics, viewport: ViewportSize)
+
+  private def gridOf(name: String, metrics: CellMetrics): Grid =
+    Grid(
+      name,
+      metrics,
+      ViewportSize(
+        LaptopFrameBenchmarks.LogicalWidthPx / metrics.charWidth,
+        LaptopFrameBenchmarks.LogicalHeightPx / metrics.lineHeight
+      )
+    )
+
+  private val grids = List(
+    Grid("this machine's cells", LaptopFrameBenchmarks.cellMetrics, LaptopFrameBenchmarks.viewport),
+    gridOf("7x15 cells", CellMetrics(7, 15, 12, displayWidthAware = true))
   )
 
   private val scenarios = List(
@@ -52,25 +73,55 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
     val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
     pixelsA.indices.filter(index => pixelsA(index) != pixelsB(index)).map(index => (index % width, index / width))
 
-  scenarios.foreach { scenario =>
-    s"A damaged frame of ${scenario.name}" should "equal a frame drawn from scratch, pixel for pixel" in {
-      val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes, scenario.document))
+  private def argb(image: BufferedImage, x: Int, y: Int): String =
+    if x < 0 || y < 0 || x >= image.getWidth || y >= image.getHeight then "--------"
+    else f"${image.getRGB(x, y)}%08x"
+
+  /** What a mismatch needs to be understood on a machine nobody can reach (#2481): the metrics that place a device
+    * pixel in a cell, the damage the frame drew, and both frames' pixels around the first mismatch.
+    */
+  private def diagnosis(
+    drawn: BufferedImage,
+    cold: BufferedImage,
+    differing: IndexedSeq[(Int, Int)],
+    damage: Damage,
+    metrics: CellMetrics
+  ): String =
+    val (x, y) = differing.head
+    def around(image: BufferedImage): String =
+      (y - 2 to y + 2).map(row => (x - 6 to x + 6).map(col => argb(image, col, row)).mkString(" ")).mkString("\n  ")
+    s"""${differing.size} pixels differ: ${differing.take(40).mkString(", ")}
+       |os=${System.getProperty("os.name")} ${System.getProperty("os.arch")} scale=${LaptopFrameBenchmarks.DeviceScale}
+       |charWidth=${metrics.charWidth} lineHeight=${metrics.lineHeight} first mismatch in cell column ${x / LaptopFrameBenchmarks.DeviceScale / metrics.charWidth}, row ${y / LaptopFrameBenchmarks.DeviceScale / metrics.lineHeight}
+       |damage=$damage
+       |drawn, x ${x - 6}..${x + 6}, y ${y - 2}..${y + 2}:
+       |  ${around(drawn)}
+       |cold:
+       |  ${around(cold)}
+       |""".stripMargin
+
+  for
+    grid     <- grids
+    scenario <- scenarios
+  do
+    s"A damaged frame of ${scenario.name} on ${grid.name}" should "equal a frame drawn from scratch, pixel for pixel" in {
+      val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes, scenario.document, grid.viewport))
       val damage          = DamageProducer.forTransition(before, after)
       damage should not be Damage.Everything
 
-      val frames = LaptopFrameBenchmarks.PersistingFrames()
+      val frames = LaptopFrameBenchmarks.PersistingFrames(cellMetrics = grid.metrics, viewport = grid.viewport)
       val _      = frames.render(before, Damage.Everything)
       val drawn  = frames.render(after, damage)
       val cold = LaptopFrameBenchmarks.renderedFrame(
         after,
         RenderCaches.create(),
         LaptopFrameBenchmarks.frameImage(),
-        cursorVisible = false
+        cursorVisible = false,
+        metrics = grid.metrics,
+        grid = grid.viewport
       )
 
       val differing = differingPixels(drawn, cold)
-      withClue(s"${differing.size} pixels differ, in device columns ${differing.map(_._1).distinct.sorted}: ")(
-        differing shouldBe empty
-      )
+      val clue      = if differing.isEmpty then "" else diagnosis(drawn, cold, differing, damage, grid.metrics)
+      withClue(clue)(differing shouldBe empty)
     }
-  }

@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, switchToPane, updateState}
 import com.serenity.state.manager.{CursorViewport, StateManager}
 import com.serenity.state.models.{AppState, BufferId, PaneId}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition, splitPaneHorizontal, splitPaneVertical}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
@@ -37,7 +38,11 @@ private[perf] object SplitPaneFixture:
   given Balance = Balance.default
 
   /** `documentOf` gives the text of the pane with that 1-based index; by default prose. */
-  def open(paneCount: Int, documentOf: Int => String = prose)(using IORuntime): SplitPaneFixture =
+  def open(
+    paneCount: Int,
+    documentOf: Int => String = prose,
+    grid: ViewportSize = LaptopFrameBenchmarks.viewport
+  )(using IORuntime): SplitPaneFixture =
     require(Set(2, 4)(paneCount), s"$paneCount panes: the fixture builds 2 or 4")
     given LoggerFactory[IO] = NoOpFactory[IO]
     val config              = AppConfig.conventional
@@ -52,7 +57,7 @@ private[perf] object SplitPaneFixture:
       first   <- manager.getCurrentState.map(_.persisted.layout.editorPanes.keys.head)
       _       <- manager.setBufferForPane(first, buffers.head)
       shown   <- showTheRest(manager, first, buffers)
-      _       <- manager.applyEvent(ResizeEvent(LaptopFrameBenchmarks.viewport))
+      _       <- manager.applyEvent(ResizeEvent(grid))
       _       <- shown.traverse_(placeCursor(manager, _))
       _       <- manager.updateState(state => buffers.foldLeft(state)((s, id) => scrolledToCursor(id)(s)))
       _       <- manager.switchToPane(first)

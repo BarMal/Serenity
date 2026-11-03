@@ -98,11 +98,13 @@ private[perf] object LaptopFrameBenchmarks:
     state: AppState,
     caches: RenderCaches,
     image: BufferedImage,
-    cursorVisible: Boolean = true
+    cursorVisible: Boolean = true,
+    metrics: CellMetrics = cellMetrics,
+    grid: ViewportSize = viewport
   ): BufferedImage =
     val surface = new Java2DRenderSurface(
       image,
-      cellMetrics,
+      metrics,
       codeFont,
       _ => (),
       logicalWidthPx = LogicalWidthPx,
@@ -115,10 +117,10 @@ private[perf] object LaptopFrameBenchmarks:
       state,
       cursorVisible,
       surface,
-      viewport,
+      grid,
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
-      cellMetrics,
+      metrics,
       None,
       caches
     )
