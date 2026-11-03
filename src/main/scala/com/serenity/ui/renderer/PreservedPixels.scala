@@ -1,8 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.Shape
-import java.awt.geom.{Area, Rectangle2D}
-
 import com.serenity.state.models.PaneId
 import com.serenity.ui.layout.{DirtyLineDiff, PixelRect}
 
@@ -61,13 +58,3 @@ object PreservedPixels:
       rect.xPx < right + margin && rect.xPx + rect.widthPx > left - margin && rect.yPx < bottom + margin &&
         rect.yPx + rect.heightPx > top - margin
     )
-
-  /** `box` but `kept`: the part of a draw's reach it may ink. The box stays small, as a clip shape is flattened into
-    * rows, which a shape the size of the whole plane makes a million of.
-    */
-  private[renderer] def allowed(box: PixelRect, kept: List[PixelRect]): Shape =
-    val area = new Area(new Rectangle2D.Double(box.xPx, box.yPx, box.widthPx, box.heightPx))
-    kept.foreach(rect =>
-      area.subtract(new Area(new Rectangle2D.Double(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
-    )
-    area
