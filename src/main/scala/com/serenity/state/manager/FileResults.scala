@@ -113,7 +113,51 @@ private[manager] object FileResults:
   /** Adds the loaded buffer under a fresh id, focuses it and dismisses the start page -- only the start page: every
     * other surface, docked panels included, is part of the workspace the file opens into (#1672).
     */
-  def loaded(state: AppState, path: Path, loaded: Buffer): AppState =
+  def loaded(state: AppState, path: Path, loaded: Buffer, intent: OpenIntent = OpenIntent.Tab): AppState =
+    if intent != OpenIntent.Tab && openBufferFor(state, path).isDefined then surfaced(state, path, intent)
+    else opened(state, path, loaded, intent)
+
+  def openBufferFor(state: AppState, path: Path): Option[BufferId] =
+    val wanted = path.normalize
+    state.persisted.bufferOrder.find(id =>
+      state.persisted.buffers.get(id).exists(_.document.filePath.exists(_.normalize == wanted))
+    )
+
+  /** Shows the tab of a file that is already open. Opening it to keep makes a preview tab permanent; previewing a file
+    * leaves every tab as it was.
+    */
+  def surfaced(state: AppState, path: Path, intent: OpenIntent): AppState =
+    openBufferFor(state, path).fold(state) { bufferId =>
+      val shown = EditorState.focusBuffer(EditorState.rebalancePanes(state, Some(bufferId)), bufferId)
+      if intent == OpenIntent.Keep && shown.runtime.previewTab.exists(_.bufferId == bufferId) then
+        shown.copy(runtime = shown.runtime.copy(previewTab = None))
+      else shown
+    }
+
+  /** A preview tab that is still one: untouched since it opened, so nothing in it can be lost by replacing it. */
+  private def replaceablePreview(state: AppState): Option[BufferId] =
+    state.runtime.previewTab.collect {
+      case PreviewTab(bufferId, version)
+          if state.persisted.buffers
+            .get(bufferId)
+            .exists(b => !b.document.isDirty && b.document.contentVersion == version) =>
+        bufferId
+    }
+
+  private def asPreview(state: AppState, bufferId: BufferId): AppState =
+    val replaced = replaceablePreview(state).filter(_ != bufferId)
+    val version  = state.persisted.buffers.get(bufferId).fold(0L)(_.document.contentVersion)
+    val tab      = Some(PreviewTab(bufferId, version))
+    replaced.fold(state.copy(runtime = state.runtime.copy(previewTab = tab))) { old =>
+      val inPlace = state.persisted.bufferOrder.filterNot(_ == bufferId).map(id => if id == old then bufferId else id)
+      val removed = EditorState.removeBuffer(state, old)
+      removed.copy(
+        persisted = removed.persisted.copy(bufferOrder = inPlace),
+        runtime = removed.runtime.copy(previewTab = tab)
+      )
+    }
+
+  private def opened(state: AppState, path: Path, loaded: Buffer, intent: OpenIntent): AppState =
     // Skipping ids in use keeps a drifted `nextBufferId` (#858) from overwriting a live buffer.
     val bufferId =
       Iterator
@@ -137,7 +181,8 @@ private[manager] object FileResults:
       focused.runtime.viewportSize.fold(focused)(viewportSize =>
         LayoutEngine.syncViewportDimensions(focused, viewportSize)
       )
-    withRecentFile(resized, path)
+    val placed = if intent == OpenIntent.Preview then asPreview(resized, bufferId) else resized
+    withRecentFile(placed, path)
 
   def withoutRecentFiles(state: AppState): AppState =
     state.copy(persisted = state.persisted.copy(recentFiles = Nil, recentFilesByMode = Map.empty, recentFolders = Nil))
