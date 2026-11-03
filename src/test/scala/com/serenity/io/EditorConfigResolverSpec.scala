@@ -1,5 +1,6 @@
 package com.serenity.io
 
+import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
@@ -53,11 +54,15 @@ class EditorConfigResolverSpec extends AnyFlatSpec with Matchers:
     val config   = write(root.resolve(".editorconfig"), "root = true\n[*]\nindent_size = 2\n")
     val file     = write(root.resolve("a.txt"), "x")
     val resolver = EditorConfigResolver()
+    val stamped  = Files.getLastModifiedTime(config)
 
     indentation(resolver, file).tabSize shouldBe Some(2)
 
+    // Same length as before, so only the timestamp can tell the files apart; set it rather than hope the clock ticked.
     val _ = Files.writeString(config, "root = true\n[*]\nindent_size = 6\n")
+    val _ = Files.setLastModifiedTime(config, FileTime.fromMillis(stamped.toMillis + 5000L))
 
+    Files.getLastModifiedTime(config) should not be stamped
     indentation(resolver, file).tabSize shouldBe Some(6)
   }
 
