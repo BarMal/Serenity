@@ -3,7 +3,6 @@ package com.serenity.trust
 import java.nio.file.{Files, Path}
 import java.time.Instant
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
