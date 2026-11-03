@@ -22,7 +22,7 @@ final case class WatchedChanges(files: Set[Path], overflowed: Set[Path]):
     WatchedChanges(files ++ other.files, overflowed ++ other.overflowed)
 
 object WatchedChanges:
-  val none: WatchedChanges                       = WatchedChanges(Set.empty, Set.empty)
+  val none: WatchedChanges                    = WatchedChanges(Set.empty, Set.empty)
   def files(paths: Set[Path]): WatchedChanges = WatchedChanges(paths, Set.empty)
 
 /** A directory watcher (#1623): the background half of external-change detection, complementing the focus-in re-check
@@ -163,8 +163,8 @@ object FileChangeWatcher:
     }
 
   /** A key is reset after being drained so it keeps reporting: an unreset key stops queuing events for its directory.
-    * An `OVERFLOW` names no file -- the JDK keeps at most 512 pending events per key and replaces the rest with one -- so
-    * it reports the whole directory instead of nothing.
+    * An `OVERFLOW` names no file -- the JDK keeps at most 512 pending events per key and replaces the rest with one --
+    * so it reports the whole directory instead of nothing.
     */
   private[io] def drainKey(key: WatchKey): IO[WatchedChanges] =
     IO.blocking {
@@ -173,7 +173,8 @@ object FileChangeWatcher:
           key.pollEvents().asScala.foldLeft(WatchedChanges.none) { (seen, event) =>
             if event.kind == OVERFLOW then seen ++ WatchedChanges(Set.empty, Set(directory))
             else
-              Option(event.context()).collect { case name: Path => directory.resolve(name) }
+              Option(event.context())
+                .collect { case name: Path => directory.resolve(name) }
                 .fold(seen)(file => seen ++ WatchedChanges.files(Set(file)))
           }
         case _ => WatchedChanges.none
