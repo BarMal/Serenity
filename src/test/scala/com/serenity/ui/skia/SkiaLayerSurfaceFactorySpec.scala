@@ -9,7 +9,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface}
-import com.serenity.ui.terminal.{LayerPresenter, SwingCanvasGeometry, SwingPresentationSite, SwingWindow}
+import com.serenity.ui.terminal.{LayerPresenter, SwingWindow}
 import org.jetbrains.skia.Picture
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,8 +49,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
       FrameSurfaceRequest(
         CellMetrics(8, 16, 12),
         new Font(Font.MONOSPACED, Font.PLAIN, 12),
-        SwingCanvasGeometry.of(canvas),
-        SwingPresentationSite(canvas),
+        canvas,
         image =>
           val _ = shown.updateAndGet(image :: _)
         ,

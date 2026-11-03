@@ -41,12 +41,13 @@ object CaretRecordingSurface:
 
   final case class CaretFill(rect: PixelRect, color: Color)
 
-  def forGeometry(metrics: CellMetrics, font: Font, geometry: SurfaceGeometry): CaretRecordingSurface =
+  def forCanvas(metrics: CellMetrics, font: Font, canvas: javax.swing.JPanel): CaretRecordingSurface =
+    val scale = Java2DRenderSurface.deviceScaleFor(canvas)
     new CaretRecordingSurface(
       metrics,
       font,
-      geometry.logicalWidthPx,
-      geometry.logicalHeightPx,
-      geometry.deviceScale.x,
-      geometry.deviceScale.y
+      Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width),
+      Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height),
+      scale.x,
+      scale.y
     )

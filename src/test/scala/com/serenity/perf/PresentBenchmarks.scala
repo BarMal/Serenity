@@ -26,7 +26,6 @@ import com.serenity.ui.renderer.{
 }
 import com.serenity.ui.skia.{PresentPhase, SkiaRasterSurfaceFactory}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
-import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 
 /** Scratch benchmark for #2380: a window's frame through `FrameSurfaceFactory.Java2D` or `SkiaRasterSurfaceFactory`,
   * end to end from the surface request to the published image (so including the raster copy-out), with the
@@ -104,8 +103,7 @@ private[perf] object PresentBenchmarks:
         FrameSurfaceRequest(
           fonts.metrics,
           fonts.code,
-          SwingCanvasGeometry.of(canvas),
-          SwingPresentationSite(canvas),
+          canvas,
           image =>
             pool.publish(image)
             published.set(image)

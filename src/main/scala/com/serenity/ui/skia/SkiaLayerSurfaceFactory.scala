@@ -5,8 +5,14 @@ import javax.swing.JPanel
 
 import scala.util.{Failure, Success, Try}
 
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, RenderSurface}
-import com.serenity.ui.terminal.SwingPresentationSite
+import com.serenity.ui.renderer.{
+  FontSpec,
+  FrameSurfaceFactory,
+  FrameSurfaceRequest,
+  Java2DRenderSurface,
+  RenderSurface,
+  ScreenIdentity
+}
 import org.jetbrains.skia.PictureRecorder
 import org.slf4j.LoggerFactory
 
@@ -23,21 +29,22 @@ class LayerSurfaceFactory private[ui] (
 ) extends FrameSurfaceFactory:
 
   def create(request: FrameSurfaceRequest): RenderSurface =
-    request.site match
-      case SwingPresentationSite(canvas) =>
-        LayerSurfaceFactory.WindowLayer
-          .of(canvas)
-          .host(request, canvas, buildHost)
-          .fold(fallback.create(request))(record(request, _))
-      case _ => fallback.create(request)
+    LayerSurfaceFactory.WindowLayer
+      .of(request.canvas)
+      .host(request, buildHost)
+      .fold(fallback.create(request))(record(request, _))
 
   private def record(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
-    val geometry      = request.geometry
-    val logicalWidth  = geometry.logicalWidthPx
-    val logicalHeight = geometry.logicalHeightPx
-    val scale         = geometry.deviceScale
+    val canvas        = request.canvas
+    val logicalWidth  = Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
+    val logicalHeight = Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
+    val scale         = Java2DRenderSurface.deviceScaleFor(canvas)
     val recorder      = new PictureRecorder()
-    val recording     = PictureRecording.begin(recorder, geometry.deviceWidthPx, geometry.deviceHeightPx)
+    val recording = PictureRecording.begin(
+      recorder,
+      Java2DRenderSurface.deviceImageDimension(logicalWidth, scale.x),
+      Java2DRenderSurface.deviceImageDimension(logicalHeight, scale.y)
+    )
     SkiaRenderSurface.onCanvas(
       recording,
       request.metrics,
@@ -52,7 +59,7 @@ class LayerSurfaceFactory private[ui] (
         recorder.close()
         host.publish(picture)
       ,
-      layerCacheOwner = Some(geometry.identity)
+      layerCacheOwner = Some(ScreenIdentity(canvas))
     )
 
 /** Frames for a window whose layer could not be made: painted by Skia on the CPU, and by Java2D only if that cannot
@@ -93,12 +100,12 @@ object LayerSurfaceFactory:
 
     private val state = new AtomicReference[State](State.Unbuilt)
 
-    def host(request: FrameSurfaceRequest, canvas: JPanel, build: JPanel => LayerHost): Option[LayerHost] =
+    def host(request: FrameSurfaceRequest, build: JPanel => LayerHost): Option[LayerHost] =
       state.get() match
         case State.Ready(host) => Some(host)
         case State.Failed      => None
         case State.Unbuilt =>
-          Try(build(canvas)) match
+          Try(build(request.canvas)) match
             case Success(host) =>
               state.set(State.Ready(host))
               request.attachLayer(host)

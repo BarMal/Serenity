@@ -175,7 +175,7 @@ object RendererCursorOverlay:
   def renderCursorOnly(
     state: AppState,
     cursorVisible: Boolean,
-    target: RenderTarget,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
     codeFont: FontSpec,
     textFont: FontSpec,
     uiFont: FontSpec,
@@ -183,7 +183,7 @@ object RendererCursorOverlay:
     cursorColor: Option[RenderColor],
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
-    val viewportSize = target.viewportSize
+    val viewportSize = swingWin.viewportSize
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
@@ -192,8 +192,8 @@ object RendererCursorOverlay:
     )(_ => false) { authoritativeScene =>
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
-      target.onCursorOverlayReady(Some(Nil)) {
-        val surface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+      swingWin.onCursorOverlayReady(Some(Nil)) {
+        val surface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state,
           authoritativeScene,
@@ -204,7 +204,7 @@ object RendererCursorOverlay:
           codeFont.toAwt,
           textFont.toAwt,
           uiFont.toAwt,
-          target.metrics,
+          swingWin.metrics,
           uiMetrics,
           caches
         )
@@ -218,7 +218,7 @@ object RendererCursorOverlay:
           codeFont.toAwt,
           textFont.toAwt,
           uiFont.toAwt,
-          target.metrics,
+          swingWin.metrics,
           uiMetrics,
           caches
         )
@@ -333,7 +333,7 @@ object RendererCursorOverlay:
   /** Render a base frame and its cursor overlay without recalculating the editor layout. */
   def renderWithCursorOverlay(
     state: AppState,
-    target: RenderTarget,
+    swingWin: com.serenity.ui.terminal.SwingWindow,
     codeFont: FontSpec,
     textFont: FontSpec,
     uiFont: FontSpec,
@@ -343,25 +343,24 @@ object RendererCursorOverlay:
     caches: RenderCaches = RenderCaches.create(),
     surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
   ): Boolean =
-    val viewportSize = target.viewportSize
+    val viewportSize = swingWin.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
     // record is still kept up to date so the next frame knows what the screen is showing.
     val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
-    val output        = Some(FrameOutput(target.geometry.identity, repaintRegion))
+    val output        = Some(FrameOutput(ScreenIdentity(swingWin.canvas), repaintRegion))
     // The pooled acquirer is what lets this frame reuse the pixels of the last frame drawn into the same image; the
     // carets are filled over it separately, so the base frame here is pure pane content and chrome.
     val surface = surfaces.create(
       FrameSurfaceRequest(
-        target.metrics,
+        swingWin.metrics,
         codeFont.toAwt,
-        target.geometry,
-        target.presentationSite,
-        target.onBaseImageReady,
-        target.acquireBaseImage,
+        swingWin.canvas,
+        swingWin.onBaseImageReady,
+        swingWin.acquireBaseImage,
         caches.surfaceText,
         caches.backendCaches,
         () => repaintRegion.get(),
-        attachLayer = target.attachLayerPresenter
+        attachLayer = swingWin.attachLayerPresenter
       )
     )
     // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
@@ -376,7 +375,7 @@ object RendererCursorOverlay:
         surface,
         viewportSize,
         uiFont,
-        target.metrics,
+        swingWin.metrics,
         uiMetrics,
         output,
         caches
@@ -385,7 +384,7 @@ object RendererCursorOverlay:
       // itself -- only onCursorOverlayReady does. The editor branch below reaches it naturally via its cursor
       // composite step; the startup page has no cursor to draw, but still needs this call to actually get painted.
       // A start page also has no persisted content to reason about, so this always forces a full repaint.
-      target.onCursorOverlayReady(None)(Nil)
+      swingWin.onCursorOverlayReady(None)(Nil)
     } { scene =>
       caches.framePhases
         .draw(
@@ -399,7 +398,7 @@ object RendererCursorOverlay:
               codeFont.toAwt,
               textFont.toAwt,
               uiFont.toAwt,
-              target.metrics,
+              swingWin.metrics,
               uiMetrics,
               cursorColor = None,
               output,
@@ -409,10 +408,10 @@ object RendererCursorOverlay:
         )
         // No plan means the start page was drawn under a blocking prompt: no caret and nothing to reuse, but the
         // window must still repaint it, or the frame stays unseen until something else does.
-        .fold(target.onCursorOverlayReady(None)(Nil)) { renderPlan =>
+        .fold(swingWin.onCursorOverlayReady(None)(Nil)) { renderPlan =>
           val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
-          target.onCursorOverlayReady(baseDirtyRects) {
-            val cursorSurface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+          swingWin.onCursorOverlayReady(baseDirtyRects) {
+            val cursorSurface = CaretRecordingSurface.forCanvas(swingWin.metrics, codeFont.toAwt, swingWin.canvas)
             val _ = paintCursorsOnly(
               state,
               cursorSurface,
@@ -423,7 +422,7 @@ object RendererCursorOverlay:
               codeFont.toAwt,
               textFont.toAwt,
               uiFont.toAwt,
-              target.metrics,
+              swingWin.metrics,
               uiMetrics,
               caches
             )
@@ -432,5 +431,7 @@ object RendererCursorOverlay:
         }
     }
 
-  private def caretPaints(surface: CaretRecordingSurface): List[CaretPaint] =
-    surface.recordedFills.map(fill => CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color))
+  private def caretPaints(surface: CaretRecordingSurface): List[com.serenity.ui.terminal.SwingWindow.CaretPaint] =
+    surface.recordedFills.map(fill =>
+      com.serenity.ui.terminal.SwingWindow.CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color)
+    )

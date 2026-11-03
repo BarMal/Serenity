@@ -11,7 +11,6 @@ import com.serenity.state.models.AppState
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints, SurfaceTextCaches}
-import com.serenity.ui.terminal.SwingCanvasGeometry
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -200,7 +199,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val surface = Java2DRenderSurface.forFrame(
       metrics,
       font,
-      SwingCanvasGeometry.of(canvas),
+      canvas,
       _ => (),
       (width, height, imageType) =>
         val image = new BufferedImage(width, height, imageType)

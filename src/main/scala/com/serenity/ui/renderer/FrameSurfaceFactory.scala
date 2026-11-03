@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 import java.awt.image.BufferedImage
+import javax.swing.JPanel
 
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.terminal.LayerPresenter
@@ -16,8 +17,7 @@ import com.serenity.ui.terminal.LayerPresenter
 final case class FrameSurfaceRequest(
     metrics: CellMetrics,
     font: Font,
-    geometry: SurfaceGeometry,
-    site: PresentationSite,
+    canvas: JPanel,
     onFlush: BufferedImage => Unit,
     acquireImage: (Int, Int, Int) => BufferedImage,
     textCaches: SurfaceTextCaches,
@@ -37,7 +37,7 @@ object FrameSurfaceFactory:
     Java2DRenderSurface.forFrame(
       request.metrics,
       request.font,
-      request.geometry,
+      request.canvas,
       request.onFlush,
       request.acquireImage,
       request.textCaches,

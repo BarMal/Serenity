@@ -7,7 +7,6 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JComponent
 
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.RenderTarget
 
 /** Frame-buffer pooling and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that class's companion object
   * so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to keep `SwingWindow.scala`
@@ -15,8 +14,7 @@ import com.serenity.ui.renderer.RenderTarget
   */
 private[terminal] trait SwingWindowImageSupport:
 
-  type CaretPaint = com.serenity.ui.renderer.CaretPaint
-  val CaretPaint = com.serenity.ui.renderer.CaretPaint
+  final private[serenity] case class CaretPaint(rect: Rectangle, color: Color)
 
   /** A two-image frame pool: the render thread draws into the spare while the EDT presents the published image.
     *
@@ -84,7 +82,7 @@ private[terminal] trait SwingWindowImageSupport:
   private val MaxLeaseWaitNanos = 50_000_000L
 
   def shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible: Boolean): Boolean =
-    RenderTarget.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible)
+    !cursorVisible
 
   /** What the canvas still has to repaint for the frames published since it last painted. */
   private[serenity] enum CanvasRepaint:

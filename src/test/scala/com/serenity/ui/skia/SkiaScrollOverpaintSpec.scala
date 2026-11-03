@@ -11,7 +11,6 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FrameSurfaceRequest, RenderImage, RenderSurface}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
-import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -40,8 +39,7 @@ class SkiaScrollOverpaintSpec extends AnyFlatSpec with Matchers:
       FrameSurfaceRequest(
         metrics,
         new Font(Font.MONOSPACED, Font.PLAIN, 12),
-        SwingCanvasGeometry.of(canvas),
-        SwingPresentationSite(canvas),
+        canvas,
         image =>
           pool.publish(image)
           shown.set(Some(image))

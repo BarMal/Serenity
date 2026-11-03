@@ -1,7 +1,6 @@
 package com.serenity.ui.terminal
 
-import java.awt.Component
-import java.awt.dnd.{DnDConstants, DropTarget, DropTargetAdapter, DropTargetDragEvent, DropTargetDropEvent}
+import java.awt.dnd.{DnDConstants, DropTargetAdapter, DropTargetDragEvent, DropTargetDropEvent}
 
 import com.serenity.input.FileDropHandler
 
@@ -22,9 +21,3 @@ final class FileDropTarget(handler: FileDropHandler) extends DropTargetAdapter:
 
   private def respond(event: DropTargetDragEvent, welcome: Boolean): Unit =
     if welcome then event.acceptDrag(DnDConstants.ACTION_COPY) else event.rejectDrag()
-
-object FileDropTarget:
-
-  /** A drop is answered by the component under the pointer, so each of `components` gets its own drop target. */
-  def install(components: Seq[Component], handler: FileDropHandler): Unit =
-    components.foreach(component => new DropTarget(component, DnDConstants.ACTION_COPY, FileDropTarget(handler)))
