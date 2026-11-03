@@ -13,9 +13,14 @@ import com.serenity.ui.renderer.ShapedTextCache
   * for it (`GlyphAdvances.measureRun`), so whether it fits a row can be read off them without wrapping the line. They
   * are fractional and need not agree with the integer cell grid.
   */
-final private[layout] class NominalAdvances private (advances: Array[Float]):
+final private[serenity] class NominalAdvances private (advances: Array[Float]):
 
   def advanceOf(char: Char): Float = advances(char - NominalAdvances.FirstPrintable)
+
+  /** The same table with every advance multiplied by `factor`: a certificate that is wrong by construction, for specs
+    * of what happens when one is.
+    */
+  private[serenity] def scaled(factor: Float): NominalAdvances = new NominalAdvances(advances.map(_ * factor))
 
   /** Whether `text` is one row of `widthPx`: it is printable ASCII and its summed advance clears the width by the
     * margin within which the wrap itself declines to decide and measures the row exactly. Anything else is not said to
@@ -32,7 +37,7 @@ final private[layout] class NominalAdvances private (advances: Array[Float]):
     val width = total(0, 0.0f)
     width >= 0.0f && width + ParagraphMeasurement.DecisionGuardPx < widthPx.toFloat
 
-private[layout] object NominalAdvances:
+private[serenity] object NominalAdvances:
 
   /** What a font and rendering context are measured under; both compare structurally. */
   final case class Key(font: Font, frc: FontRenderContext)
@@ -44,10 +49,18 @@ private[layout] object NominalAdvances:
   /** The table for `font`, or `None` when something may set a character at an advance other than its own. */
   def of(font: Font, frc: FontRenderContext): Option[NominalAdvances] =
     val shapedText = ShapedTextCache()
-    val probes     = shapedText.probes
-    if GlyphAdvances
-          .layoutAdvanceMatchesSum(font, frc, probes) && !GlyphAdvances.shapingMaySubstitute(font, frc, probes)
-    then measured(font, frc, shapedText)
+    if GlyphAdvances.shapingMaySubstitute(font, frc, shapedText.probes) then None
+    else ofLayoutAdvances(font, frc, shapedText)
+
+  /** The table of a font whose layout advance is the sum of its glyphs', whatever shaping may do to a run. The caller
+    * answers for that: see [[LigatureCertificate]].
+    */
+  private[layout] def ofLayoutAdvances(
+    font: Font,
+    frc: FontRenderContext,
+    shapedText: ShapedTextCache
+  ): Option[NominalAdvances] =
+    if GlyphAdvances.layoutAdvanceMatchesSum(font, frc, shapedText.probes) then measured(font, frc, shapedText)
     else None
 
   private def measured(font: Font, frc: FontRenderContext, shapedText: ShapedTextCache): Option[NominalAdvances] =
