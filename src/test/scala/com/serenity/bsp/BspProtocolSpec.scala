@@ -17,7 +17,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class BspProtocolSpec extends AnyFlatSpec with Matchers:
 
-  private final case class Recorded(outgoing: Boolean, message: Json)
+  final private case class Recorded(outgoing: Boolean, message: Json)
 
   private val session: Vector[Recorded] =
     Using.resource(Source.fromResource("bsp/sbt-1.10.7-session.jsonl"))(_.getLines().toVector).map { line =>
@@ -91,32 +91,41 @@ class BspProtocolSpec extends AnyFlatSpec with Matchers:
       CompileOutcome.ServerError(-32601, "method not found")
   }
 
-  it should "read a published error with its file, range, severity and reset flag" in {
-    val published = received
-      .filter(json => method(json).contains("build/publishDiagnostics"))
-      .flatMap(json => BspProtocol.inbound(json).toOption)
-      .collect { case BspInbound.Notification(BspNotification.Diagnostics(params)) => params }
+  it should "read a published error with its file, target, range and severity" in {
+    val published = publishedFor(Path.of("/workspace/hello/src/main/scala/Hello.scala"))
       .find(_.diagnostics.nonEmpty)
       .getOrElse(fail("no diagnostics with an error in the recording"))
 
-    published.document shouldBe Path.of("/workspace/hello/src/main/scala/Hello.scala")
     published.target shouldBe BuildTargetId("file:/workspace/hello/#sbt-proj/Compile")
-    published.reset shouldBe true
     published.diagnostics.map(d => (d.message, d.severity, d.range)) shouldBe List(
       ("value nope is not a member of Int", Some(1), DiagnosticRange(0, 47, 0, 53))
     )
   }
+
+  it should "keep each publication's reset flag as sbt sent it: clear, add the error, replace it, clear once fixed" in {
+    publishedFor(Path.of("/workspace/hello/src/main/scala/Hello.scala")).map(p =>
+      (p.reset, p.diagnostics.size)
+    ) shouldBe
+      Vector((true, 0), (false, 1), (true, 1), (true, 0))
+  }
+
+  private def publishedFor(document: Path): Vector[PublishDiagnostics] =
+    received
+      .flatMap(json => BspProtocol.inbound(json).toOption)
+      .collect { case BspInbound.Notification(BspNotification.Diagnostics(params)) => params }
+      .filter(_.document == document)
 
   it should "read task start, progress and finish, and the run's output as log messages" in {
     val notifications = received.flatMap(json => BspProtocol.inbound(json).toOption).collect {
       case BspInbound.Notification(notification) => notification
     }
 
-    notifications.collectFirst { case started: BspNotification.TaskStarted => started.message } shouldBe Some(
+    notifications.collectFirst { case started: BspNotification.TaskStarted => started.message }.flatten shouldBe Some(
       "Compiling sbt-proj"
     )
-    notifications.collectFirst { case progress: BspNotification.TaskProgressed => (progress.progress, progress.total) }
-      .flatten2 shouldBe Some((10L, 30L))
+    notifications.collectFirst {
+      case progress: BspNotification.TaskProgressed => (progress.progress, progress.total)
+    }.flatten2 shouldBe Some((10L, 30L))
     notifications.collectFirst { case finished: BspNotification.TaskFinished => finished.status } shouldBe Some(1)
     notifications.collect { case log: BspNotification.Log => log.message }.exists(_.startsWith("hi ")) shouldBe true
   }
@@ -132,7 +141,11 @@ class BspProtocolSpec extends AnyFlatSpec with Matchers:
     val main = BuildTargetId("file:/workspace/hello/#sbt-proj/Compile")
 
     val written = Vector(
-      BspProtocol.request(1, "build/initialize", BspProtocol.initializeParams(root, "serenity-spike", "0", List("scala", "java"))),
+      BspProtocol.request(
+        1,
+        "build/initialize",
+        BspProtocol.initializeParams(root, "serenity-spike", "0", List("scala", "java"))
+      ),
       BspProtocol.notification("build/initialized", Json.obj()),
       BspProtocol.request(2, "workspace/buildTargets", Json.obj()),
       BspProtocol.request(3, "buildTarget/compile", BspProtocol.compileParams(List(main), "o1")),
