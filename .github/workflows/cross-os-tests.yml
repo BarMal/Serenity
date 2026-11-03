@@ -59,7 +59,13 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-windows.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (windows)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (windows, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
 
   test-macos:
     name: Test (macos)
@@ -71,4 +77,10 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-macos.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (macos)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (macos, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
