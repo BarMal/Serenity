@@ -60,3 +60,13 @@ class LspFolderTrustedReducerSpec extends AnyFlatSpec with Matchers:
   it should "announce nothing in prose mode, which has no servers" in {
     reopened(SystemEventReducer.reduce(LspEvent.LspFolderTrusted(root), withBuffers(AppMode.Prose))) shouldBe empty
   }
+
+  "Revoked trust" should "announce every open document again, so folders still trusted get their servers back" in {
+    val result = SystemEventReducer.reduce(LspEvent.LspTrustRevoked, withBuffers(AppMode.Code))
+
+    reopened(result) shouldBe List(inside, outside, nested, prefix).map(_.toUri.toString)
+  }
+
+  it should "announce nothing in prose mode" in {
+    reopened(SystemEventReducer.reduce(LspEvent.LspTrustRevoked, withBuffers(AppMode.Prose))) shouldBe empty
+  }

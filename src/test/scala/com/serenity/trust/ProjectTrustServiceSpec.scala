@@ -52,3 +52,37 @@ class ProjectTrustServiceSpec extends AnyFlatSpec with Matchers:
     loaded.problem.isDefined shouldBe true
     loaded.service.current.unsafeRunSync() shouldBe ProjectTrust.empty
   }
+
+  it should "revoke every trusted folder covering a root, and keep that across a reload" in withTempDirectory {
+    directory =>
+      val file   = directory.resolve("trust.conf")
+      val parent = ProjectKey.of(directory)
+      val root   = ProjectKey.of(directory.resolve("app"))
+      val other  = ProjectKey.of(directory.resolveSibling("unrelated"))
+
+      val (revoked, reloaded) = (for
+        loaded   <- ProjectTrustService.load(file)
+        _        <- loaded.service.trustFolder(parent)
+        _        <- loaded.service.trustFolder(root)
+        _        <- loaded.service.trustFolder(other)
+        revoked  <- loaded.service.revokeCovering(root)
+        reloaded <- ProjectTrustService.load(file).flatMap(_.service.current)
+      yield (revoked, reloaded)).unsafeRunSync()
+
+      revoked shouldBe List(parent, root)
+      reloaded.isTrusted(root) shouldBe false
+      reloaded.isTrusted(other) shouldBe true
+  }
+
+  it should "revoke nothing, and write nothing, when no trusted folder covers the root" in withTempDirectory {
+    directory =>
+      val file = directory.resolve("trust.conf")
+
+      val revoked = ProjectTrustService
+        .load(file)
+        .flatMap(_.service.revokeCovering(ProjectKey.of(directory.resolve("app"))))
+        .unsafeRunSync()
+
+      revoked shouldBe empty
+      Files.exists(file) shouldBe false
+  }

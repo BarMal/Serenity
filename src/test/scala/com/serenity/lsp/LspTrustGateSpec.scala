@@ -26,6 +26,8 @@ class LspTrustGateSpec extends AnyFlatSpec with Matchers:
   final private class FakeTrust(state: Ref[IO, ProjectTrust]) extends ProjectTrustAccess:
     override def current: IO[ProjectTrust]               = state.get
     override def trustFolder(root: ProjectKey): IO[Unit] = state.update(_.trust(root, Instant.EPOCH))
+    override def revokeCovering(root: ProjectKey): IO[List[ProjectKey]] =
+      state.modify(trust => (trust.covering(root).foldLeft(trust)(_.revoke(_)), trust.covering(root)))
 
   final private case class Harness(
       gate: LspTrustGate,
@@ -108,4 +110,27 @@ class LspTrustGateSpec extends AnyFlatSpec with Matchers:
 
     stillTrusted shouldBe false
     signalled shouldBe None
+  }
+
+  it should "trust a folder on request, as accepting the notice does" in {
+    val (key, admitted) = harness(ProjectTrust.empty, answer = None) { h =>
+      for
+        key      <- h.gate.trustFolder(root)
+        signal   <- h.trusted.get.timeout(5.seconds)
+        admitted <- h.gate.admit(root, metals, CommandSource.BuiltIn)
+      yield (signal == key, admitted)
+    }
+
+    key shouldBe true
+    admitted shouldBe true
+  }
+
+  it should "revoke the folders covering a root, so its servers are refused again" in {
+    val trusted = ProjectTrust.empty.trust(ProjectKey.of(root.getParent), Instant.EPOCH)
+    val (revoked, admitted) = harness(trusted, answer = None) { h =>
+      (h.gate.revokeCovering(root), h.gate.admit(root, metals, CommandSource.BuiltIn)).tupled
+    }
+
+    revoked shouldBe List(ProjectKey.of(root.getParent))
+    admitted shouldBe false
   }

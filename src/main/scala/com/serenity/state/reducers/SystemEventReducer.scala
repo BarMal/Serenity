@@ -36,19 +36,18 @@ object SystemEventReducer:
       case LspEvent.LspDiagnosticsReceived(_, _) | LspEvent.LspSemanticTokensReceived(_, _) |
           LspEvent.LspSemanticTokensRangeReceived(_, _, _, _) | LspEvent.LspSemanticTokensEdited(_, _) |
           LspEvent.LspSemanticTokensUnavailable(_) | LspEvent.LspProgressReceived(_, _, _) |
-          LspEvent.LspFolderTrusted(_) =>
+          LspEvent.LspFolderTrusted(_) | LspEvent.LspTrustRevoked =>
         true
       case LspEvent.LspHoverReceived(_, _) | LspEvent.LspCompletionReceived(_, _) |
           LspEvent.LspDefinitionReceived(_, _, _, _) | LspEvent.LspReferencesReceived(_, _, _) |
           LspEvent.LspRenameReceived(_, _) | LspEvent.LspServerStopped(_) | LspEvent.LspWorkspaceEditRequested(_) =>
         false
 
-  /** Every open document under a newly trusted `root`, opened to its servers again: they were refused the first time.
-    */
-  private def reannounced(root: java.nio.file.Path, state: AppState): List[AppEffect] =
+  /** Every open document under `root`, or every one at all, opened to its servers again after trust changed. */
+  private def reannounced(root: Option[java.nio.file.Path], state: AppState): List[AppEffect] =
     LanguageToolingDocuments
       .of(state)
-      .filter(_.path.toAbsolutePath.normalize().startsWith(root))
+      .filter(document => root.forall(document.path.toAbsolutePath.normalize().startsWith))
       .map(document =>
         AppEffect.LspQueue(LspQueueEffect.Enqueue(LspEffect.FileOpened(document.uri, document.language, document.text)))
       )
@@ -95,7 +94,8 @@ object SystemEventReducer:
       case LspEvent.LspServerStopped(languageId) => withProgress(state, languageId, _ => Nil)
 
       case LspEvent.LspWorkspaceEditRequested(edits) => WorkspaceEditReducer(edits, state)
-      case LspEvent.LspFolderTrusted(root)           => ReducerResult(state, reannounced(root, state))
+      case LspEvent.LspFolderTrusted(root)           => ReducerResult(state, reannounced(Some(root), state))
+      case LspEvent.LspTrustRevoked                  => ReducerResult(state, reannounced(None, state))
 
       case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
         withOpenDocumentData(rawUri, state) { (uri, languageService) =>

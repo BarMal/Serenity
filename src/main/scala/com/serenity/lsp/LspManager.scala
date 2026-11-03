@@ -75,6 +75,17 @@ object LspManager:
     /** Drop every cached resolution, for the editor letting every server go. No-op by default, like the above. */
     def evictAllResolutions: IO[Unit] = IO.unit
 
+    /** Trusts the folder the server for `fileUri` would serve. */
+    def trustFolderOf(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[TrustChange] =
+      IO.pure(TrustChange("Folder trust is not available here.", stopServers = false))
+
+    /** Revokes every trusted folder the server root for `fileUri` lies in. */
+    def revokeTrustOf(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[TrustChange] =
+      IO.pure(TrustChange("Folder trust is not available here.", stopServers = false))
+
+  /** What a trust command did, in words for the user, and whether the servers it had allowed must stop. */
+  final private[lsp] case class TrustChange(message: String, stopServers: Boolean)
+
   /** `trust` decides which workspace roots may start servers at all (#2526): an untrusted root keeps its servers off,
     * and accepting the notice that says so announces the folder's open documents again.
     */
@@ -401,6 +412,16 @@ object LspManager:
       case LspEffect.MessageRequestAnswered(prompt, choice) =>
         pool.notices.answer(prompt, choice)
 
+      case LspEffect.TrustFolder(rawUri, languageId) =>
+        pool.trustFolderOf(languageId, DocumentUri(rawUri)).flatMap(change => pool.notices.told(change.message))
+
+      case LspEffect.RevokeFolderTrust(rawUri, languageId) =>
+        pool.revokeTrustOf(languageId, DocumentUri(rawUri)).flatMap { change =>
+          (releaseAll(pool, documentVersions, openDocuments, requestContexts, requestFibers, semanticTokens) >>
+            applyEvent(LspEvent.LspTrustRevoked)).whenA(change.stopServers) >>
+            pool.notices.told(change.message)
+        }
+
       case LspEffect.SemanticTokensRequested(rawUri, languageId) =>
         semanticTokens.refreshNow(rawUri, languageId)
 
@@ -542,10 +563,7 @@ object LspManager:
               case None =>
                 logger.info(s"[LSP] No server available for ${languageId.id}").as(None)
               case Some(config) =>
-                val filePath = uriToPath(fileUri)
-                WorkspaceRootDetector.detect(filePath, languageId).flatMap { rootOpt =>
-                  val rootUri = rootOpt.map(r => WorkspaceRootUri(r.toUri.toString)).getOrElse(parentUri(fileUri))
-                  val root    = rootOpt.orElse(Option(Paths.get(filePath).getParent)).getOrElse(Paths.get(filePath))
+                workspaceRoot(languageId, fileUri).flatMap { (root, rootUri) =>
                   val source =
                     if userConfig.servers.exists(_.contains(languageId.id)) then CommandSource.UserLayer
                     else CommandSource.BuiltIn
@@ -566,6 +584,32 @@ object LspManager:
         resolutionCache.evict(languageId, fileUri)
 
       override def evictAllResolutions: IO[Unit] = resolutionCache.evictAll
+
+      override def trustFolderOf(languageId: LanguageId, fileUri: DocumentUri): IO[TrustChange] =
+        workspaceRoot(languageId, fileUri).flatMap((root, _) => gate.trustFolder(root)).map { key =>
+          TrustChange(s"Trusted ${key.path}: its language servers can start.", stopServers = false)
+        }
+
+      override def revokeTrustOf(languageId: LanguageId, fileUri: DocumentUri): IO[TrustChange] =
+        workspaceRoot(languageId, fileUri).flatMap { (root, _) =>
+          gate.revokeCovering(root).map {
+            case Nil => TrustChange(s"$root is not in a trusted folder.", stopServers = false)
+            case revoked =>
+              TrustChange(
+                s"Revoked trust for ${revoked.map(_.path).mkString(", ")}: its language servers have stopped.",
+                stopServers = true
+              )
+          }
+        }
+
+  /** The root a server for `fileUri` would serve: its project root, or the file's own folder when there is none. */
+  private def workspaceRoot(languageId: LanguageId, fileUri: DocumentUri): IO[(java.nio.file.Path, WorkspaceRootUri)] =
+    val filePath = uriToPath(fileUri)
+    WorkspaceRootDetector.detect(filePath, languageId).map { rootOpt =>
+      val rootUri = rootOpt.map(r => WorkspaceRootUri(r.toUri.toString)).getOrElse(parentUri(fileUri))
+      val root    = rootOpt.orElse(Option(Paths.get(filePath).getParent)).getOrElse(Paths.get(filePath))
+      (root, rootUri)
+    }
 
   private def uriToPath(uri: DocumentUri): String =
     val s = uri.value

@@ -60,6 +60,12 @@ final private[lsp] class LspConnectionPool private (
   def evictResolution(languageId: LanguageId, uri: DocumentUri): IO[Unit] =
     provider.evictResolution(languageId, uri)
 
+  def trustFolderOf(languageId: LanguageId, uri: DocumentUri): IO[LspManager.TrustChange] =
+    provider.trustFolderOf(languageId, uri)
+
+  def revokeTrustOf(languageId: LanguageId, uri: DocumentUri): IO[LspManager.TrustChange] =
+    provider.revokeTrustOf(languageId, uri)
+
   /** The connection serving `uri`, starting one if its server is not running -- unless that server is down and still
     * inside the backoff or give-up its crashes earned, in which case the document waits for the restart.
     */
