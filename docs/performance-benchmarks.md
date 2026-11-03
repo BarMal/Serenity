@@ -153,7 +153,7 @@ The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, s
 
 `-Dserenity.bench.warmup.rowCapSeconds=` and `runCapSeconds=` change the caps for a study, and `-Dserenity.bench.warmup=off` turns the extension off. Rows with `fixedSampleCount` (those that grow the state they time, such as `prose.markdown_enter.renumber`, which adds a line per call) are not extended: extra calls would change their p50 instead of settling it. That is why `prose.markdown_enter.renumber` read 3.97x slower in the first experiment.
 
-**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only.
+**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 1x job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only. The 2x HiDPI job is not sharded: it runs only the scale-sensitive rows, selected by name prefix (see "CI perf job shape").
 
 **Measured** (12 full runs with the extension against 12 without, 4-core container; container figures):
 
@@ -171,19 +171,30 @@ Still wide with the extension: `layout.aligned_prose.moved_lines` (about 15x slo
 
 ## CI perf job shape -- issue #2464
 
-The `perf` job runs the suite as four matrix entries: shard 1/2 and 2/2 at 1x, and shard 1/2 and 2/2 at 2x (each entry
-benchmarks the base commit and the head in three pairs, then runs the confirmation for what it flagged, on its own
-rows). `timeout-minutes` is 75.
+The `perf` job runs as three matrix entries: shard 1/2 and 2/2 of the whole suite at 1x, and one unsharded 2x HiDPI
+entry over the scale-sensitive rows only (each entry benchmarks the base commit and the head in three pairs, then runs
+the confirmation for what it flagged, on its own rows). `timeout-minutes` comes from the entry: 75 for the 1x shards,
+40 for the 2x entry.
+
+**2x runs only the rows that depend on the scale (#2557).** Over 1,592 result artifacts, 128 of 131 rows had a median
+p50 at 2x within 0.8 to 1.25 times of the 1x one (`render.hidpi_frame.java2d` 1.001x, `render.full_frame.java2d`
+0.999x), so the 1x shards already judge them. The three that differ are `laptop.present.swing_fresh_frame_synced_1500x1000`
+(6.4x), `laptop.present.swing_paint_caret_1500x1000` (1.36x) and `layout.cold_font.shaping_barriers` (0.74x). The 2x entry
+runs the names `laptop.present.`, `render.hidpi_frame`, `render.full_frame` and `layout.cold_font.`, as prefixes (the
+runner's existing name arguments: `run-perf-benchmark.sh <dir> <out> [name ...]`), so a new row with one of those
+prefixes joins on its own. The comparison only looks at rows both sides measured, so a subset needs nothing else. The
+retained-heap (`footprint.`) rows match none of the prefixes and stay with shard 1 at 1x.
 
 | | before the warm-up extension | after it, unsharded (runs 41350271015, 41350357868) |
 | --- | ---: | ---: |
 | 1x job | 35.8 to 38.1 min | 57.3 and 58.3 min (about 53 without the 4.3 to 4.5 min confirmation) |
-| 2x job | 45.4 min | sharded: 33.0 to 40.3 min per shard |
+| 2x job | 45.4 min | sharded: 33.0 to 40.3 min per shard (since replaced by the one short job above) |
 
 The 1x job was within 2 minutes of the old limit of 60. Check names are `Performance benchmarks (shard i/2)` and
-`Performance benchmarks (2x HiDPI, shard i/2)`; the artifacts are `perf-benchmark-results-shard-i` and
-`perf-benchmark-results-2x-shard-i`. `scripts/test_perf_matrix.py` pins that every scale runs as complete shards with
-distinct names, and that the timeout is set. The retained-heap rows run in shard 1 only.
+`Performance benchmarks (2x HiDPI)`; the artifacts are `perf-benchmark-results-shard-i` and
+`perf-benchmark-results-2x`. `scripts/test_perf_matrix.py` pins that 1x runs as complete shards, that 2x is one entry
+whose prefixes cover every scale-sensitive row named above, that names are distinct, and that every entry sets a
+timeout. The retained-heap rows run in shard 1 only.
 
 ## ABBA protocol
 

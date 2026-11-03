@@ -50,6 +50,9 @@ class ShardOptionTests(unittest.TestCase):
         self.assertEqual(self._option(self._checkout(True), "1/1"), "")
         self.assertEqual(self._option(self._checkout(True), None), "")
 
+    def test_an_empty_shard_from_an_unsharded_matrix_entry_is_the_whole_suite(self) -> None:
+        self.assertEqual(self._option(self._checkout(True), ""), "")
+
 
 if __name__ == "__main__":
     unittest.main()
