@@ -14,7 +14,11 @@ cache="$app/Contents/app/serenity.aot"
 summary="${GITHUB_STEP_SUMMARY:-/dev/stdout}"
 failed=0
 
-row() { printf '| %s | %s | %s |\n' "$1" "$2" "$3" >>"$summary"; [[ "$2" == PASS ]] || failed=1; }
+row() {
+  printf '| %s | %s | %s |\n' "$1" "$2" "$3" >>"$summary"
+  printf 'SPIKE_ROW | %s | %s | %s\n' "$1" "$2" "$3"
+  [[ "$2" == PASS ]] || failed=1
+}
 
 launch_log() { JAVA_TOOL_OPTIONS="-Xlog:aot" "$1/Contents/MacOS/Serenity" 2>&1; }
 
