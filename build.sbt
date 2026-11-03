@@ -97,6 +97,7 @@ lazy val architectureCheck        = taskKey[Unit]("Fail if any file or method gr
 lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-check baseline from the current tree")
 
 lazy val moduleGraphBaselineFile = settingKey[File]("Baseline of known upward module edges (#2502)")
+lazy val moduleAssignmentFile    = settingKey[File]("Files whose module is not their package's default (#2502)")
 lazy val moduleGraphSelfTest =
   taskKey[Unit]("Regression guard for ModuleGraph itself: decoder, graph, cycles and ratchet")
 lazy val moduleGraph = taskKey[Unit]("Report the semanticdb file and module dependency graph (read-only)")
@@ -554,23 +555,39 @@ lazy val app = (project in file("modules/app"))
       )
     },
     moduleGraphBaselineFile := (ThisBuild / baseDirectory).value / "project" / "module-graph-baseline.tsv",
+    moduleAssignmentFile    := (ThisBuild / baseDirectory).value / "project" / "module-assignment.tsv",
     moduleGraphSelfTest := {
-      ModuleGraphSelfTest.run()
+      try ModuleGraphSelfTest.run()
+      catch {
+        case failure: Throwable =>
+          streams.value.log.error(s"moduleGraphSelfTest: ${failure.getMessage}")
+          throw failure
+      }
       streams.value.log.info("moduleGraphSelfTest: decoder, graph, cycles and ratchet behave")
     },
     moduleGraph := {
       moduleGraphSelfTest.value
       (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      val report    = ModuleGraph.report(documents)
+      val documents = ModuleGraph.readDocuments(
+        crossTarget.value / "meta" / "META-INF" / "semanticdb",
+        (ThisBuild / baseDirectory).value
+      )
+      val report = ModuleGraph.report(documents, ModuleGraph.readAssignment(moduleAssignmentFile.value))
       IO.write(target.value / "module-graph.txt", report)
       streams.value.log.info(report)
     },
     moduleGraphCheck := {
       moduleGraphSelfTest.value
       (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      ModuleGraph.check(documents, ModuleGraph.readBaseline(moduleGraphBaselineFile.value)) match {
+      val documents = ModuleGraph.readDocuments(
+        crossTarget.value / "meta" / "META-INF" / "semanticdb",
+        (ThisBuild / baseDirectory).value
+      )
+      ModuleGraph.check(
+        documents,
+        ModuleGraph.readBaseline(moduleGraphBaselineFile.value),
+        ModuleGraph.readAssignment(moduleAssignmentFile.value)
+      ) match {
         case None => streams.value.log.info("moduleGraphCheck: no new upward module edges")
         case Some(report) =>
           sys.error(
@@ -585,8 +602,12 @@ lazy val app = (project in file("modules/app"))
     },
     writeModuleGraphBaseline := {
       (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      val edges     = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(documents))
+      val documents = ModuleGraph.readDocuments(
+        crossTarget.value / "meta" / "META-INF" / "semanticdb",
+        (ThisBuild / baseDirectory).value
+      )
+      val edges = ModuleGraph
+        .upwardEdges(ModuleGraph.fileGraph(documents), ModuleGraph.readAssignment(moduleAssignmentFile.value))
       ModuleGraph.writeBaseline(moduleGraphBaselineFile.value, edges)
       streams.value.log.info(
         s"module-graph baseline written: ${edges.size} entries at ${moduleGraphBaselineFile.value}"
