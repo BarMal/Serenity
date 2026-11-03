@@ -14,7 +14,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
+import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay}
 import com.serenity.ui.skia.{
   FallbackAgreement,
   SkiaLayerHost,
@@ -22,7 +22,7 @@ import com.serenity.ui.skia.{
   SynchronousSkiaLayerSurfaceFactory,
   WarmupStats
 }
-import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
+import com.serenity.ui.terminal.{LayerDrawStats, SwingCanvasGeometry, SwingWindow}
 
 /** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
   *
@@ -173,7 +173,7 @@ object RenderBenchmarkRunner:
       val stats = timed.view.mapValues(_.stats).toMap
       Measured(
         stats,
-        Java2DRenderSurface.deviceScaleFor(window.canvas).x,
+        SwingCanvasGeometry.deviceScaleOf(window.canvas).x,
         window.layerPresenter.map(_.renderApi),
         window.layerPresenter.map(_ => SkiaLayerHost.layersOn(window.canvas)),
         window.layerPresenter.map(_.drawStats),

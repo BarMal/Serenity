@@ -96,6 +96,22 @@ object ArchitectureChecks {
       "the command layer must stay frontend-agnostic (issue #1669): read FrontendCapabilities instead of reaching " +
         "into a concrete frontend's own implementation package",
       mainOnly = true
+    ),
+    // #2380: the renderer paints into a RenderTarget and the host seam hands the application a window by capability;
+    // a Swing component is the Swing window's own business, so a second window system (SDL3) can plug in beside it.
+    ImportRule(
+      "com/serenity/ui/renderer",
+      Seq("javax.swing"),
+      "the renderer paints into a RenderTarget and reads its size and scale from it (#2380): a Swing component " +
+        "belongs to the Swing window in ui.terminal",
+      mainOnly = true
+    ),
+    ImportRule(
+      "com/serenity/ui/host",
+      Seq("javax.swing", "java.awt.Component", "java.awt.Window", "java.awt.Frame", "java.awt.Toolkit", "ui.terminal"),
+      "the window-host seam names capabilities, not a window system (#2380): its Swing implementation lives in " +
+        "ui.terminal",
+      mainOnly = true
     )
   )
 
@@ -511,6 +527,37 @@ object ArchitectureChecks {
         "import com.serenity.ui.fonts.FontLoader"
       ),
       expectCaught = true
+    )
+
+    check(
+      "a Swing component named from the renderer",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "  def scaleOf(canvas: javax.swing.JPanel): Double = 1.0"
+      ),
+      expectCaught = true,
+      path = "main/scala/com/serenity/ui/renderer/Sample.scala"
+    )
+
+    check(
+      "a window-system class named from the host seam",
+      Vector(
+        "package com.serenity.ui.host",
+        "import java.awt.Frame"
+      ),
+      expectCaught = true,
+      path = "main/scala/com/serenity/ui/host/Sample.scala"
+    )
+
+    check(
+      "AWT data classes in the host seam, which the renderer is built on",
+      Vector(
+        "package com.serenity.ui.host",
+        "import java.awt.Rectangle",
+        "import java.awt.image.BufferedImage"
+      ),
+      expectCaught = false,
+      path = "main/scala/com/serenity/ui/host/Sample.scala"
     )
 
     def checkDispatcherPath(description: String, line: String, path: String, expectCaught: Boolean): Unit = {

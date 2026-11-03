@@ -3,7 +3,6 @@ package com.serenity.perf
 import java.lang.management.ManagementFactory
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.LockSupport
-import javax.swing.JPanel
 
 import scala.annotation.tailrec
 import scala.concurrent.duration.*
@@ -18,7 +17,9 @@ import com.serenity.perf.TypingStatistics.{Bucket, BucketSummary, Summary}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
+import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.ViewportSize
+import com.serenity.ui.renderer.FakeRenderTarget
 import com.serenity.ui.theme.Theme
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.noop.NoOpLogger
@@ -220,11 +221,16 @@ object TypingProfile:
     val program = for
       display    <- RuntimeDisplayState.create(config.editorConfig.fontConfig)
       firstInput <- Deferred[IO, Unit]
-      canvas = new JPanel
-      _ <- IO(canvas.setSize(1280, 800))
+      target = new FakeRenderTarget(
+        display.snapshot.codeMetrics,
+        ViewportSize(120, 40),
+        1280,
+        800,
+        DisplayScale.One
+      )
       framesDrawn = new AtomicInteger(0)
       frames = OffscreenWarmUpFrames
-        .forCanvas(canvas, () => ViewportSize(120, 40), () => display.snapshot)
+        .forTarget(target, () => ViewportSize(120, 40), () => display.snapshot)
         .map(offscreen =>
           offscreen.copy(full =
             (state, damage, caches) => IO(framesDrawn.incrementAndGet()) >> offscreen.full(state, damage, caches)
