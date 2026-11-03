@@ -81,7 +81,7 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
     val (x, y)  = differing.head
     def around(image: BufferedImage): String =
       (y - 2 to y + 2).map(row => (x - 6 to x + 6).map(col => argb(image, col, row)).mkString(" ")).mkString("\n  ")
-    s"""${differing.size} pixels differ: ${differing.take(40).mkString(", ")}
+    s"""${differing.size} pixels differ on device rows ${differing.map(_._2).distinct.sorted.mkString(", ")}: ${differing.take(40).mkString(", ")}
        |os=${System.getProperty("os.name")} ${System.getProperty("os.arch")} scale=${LaptopFrameBenchmarks.DeviceScale}
        |charWidth=${metrics.charWidth} lineHeight=${metrics.lineHeight} first mismatch in cell column ${x / LaptopFrameBenchmarks.DeviceScale / metrics.charWidth}, row ${y / LaptopFrameBenchmarks.DeviceScale / metrics.lineHeight}
        |damage=$damage

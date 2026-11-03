@@ -114,7 +114,9 @@ private[renderer] object RendererChromePlan:
       ChromeRepaint(
         spacers = signals.rowsOverflow,
         statusRow = Damage.touchesChrome(damage),
-        headers = Repaint.only(Damage.paneChromeIds(damage)),
+        headers = Repaint.only(Damage.paneChromeIds(damage) ++ dirtyRowsByPane.collect {
+          case (id, rows) if rows.contains(0) => id
+        }),
         lineNumberRows =
           if signals.rowsOverflow && contract.rightLineNumberRect.isDefined then Repaint.all[Int]
           else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved),

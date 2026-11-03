@@ -184,9 +184,10 @@ object RendererFramePlanner:
     )
     val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
     PanelLayers.forgetStale(state, panels, context.surface, context.caches)
-    val chrome     = framePlan.map(_.chrome).getOrElse(ChromeRepaint.Whole)
-    val keptOff    = PreservedPixels.of(context, framePlan)
-    val dirtyByRow = framePlan.map(_.dirtyRowsByPane.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap).getOrElse(Map.empty)
+    val chrome  = framePlan.map(_.chrome).getOrElse(ChromeRepaint.Whole)
+    val keptOff = PreservedPixels.of(context, framePlan)
+    val dirtyByRow =
+      framePlan.map(_.dirtyRowsByPane.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap).getOrElse(Map.empty)
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () => keptOff(RendererChromePlan.paint(state, context, editorRenderPlan, chrome)) },
       EditorContentLayerId -> { () =>
