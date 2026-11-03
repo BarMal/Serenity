@@ -6,6 +6,7 @@ import java.time.Instant
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.build.{BuildCandidate, Detection, OutputChannel, TaskEvent, TaskKind, TaskOutcome, TaskRequest}
 import com.serenity.trust.{CommandSource, ProjectKey, ProjectTrust, TrustGrant}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -14,11 +15,10 @@ import org.scalatest.matchers.should.Matchers
 class CommandTableProviderSpec extends AnyFlatSpec with Matchers:
 
   private def withProject[A](marker: String)(body: Path => A): A =
-    val root = Files.createTempDirectory("command-table")
-    Files.writeString(root.resolve(marker), "")
-    try body(root.toRealPath())
-    finally
-      Files.walk(root).sorted(java.util.Comparator.reverseOrder()).forEach(path => Files.deleteIfExists(path): Unit)
+    TestTemp.within("command-table") { root =>
+      Files.writeString(root.resolve(marker), "")
+      body(root.toRealPath())
+    }
 
   private def grantFor(candidate: BuildCandidate): TrustGrant =
     val projectKey = ProjectKey.of(candidate.root)
@@ -141,9 +141,8 @@ class CommandTableProviderSpec extends AnyFlatSpec with Matchers:
       }
   }
 
-  it should "find nothing, and run nothing, where there is no marker" in {
-    val root = Files.createTempDirectory("command-table-empty")
-    try
+  it should "find nothing, and run nothing, where there is no marker" in TestTemp.within("command-table-empty") {
+    root =>
       val (detected, ran) = (for
         (provider, ran) <- recordingProvider(0, Nil)
         detected        <- provider.detect(root)
@@ -151,7 +150,6 @@ class CommandTableProviderSpec extends AnyFlatSpec with Matchers:
       yield (detected, commands)).unsafeRunSync()
       ran shouldBe empty
       detected.collect { case found: Detection.Found => found } shouldBe empty
-    finally Files.deleteIfExists(root): Unit
   }
 
   it should "not run anything to detect a project" in withProject("Cargo.toml") { root =>

@@ -1,11 +1,12 @@
 package com.serenity.build
 
-import java.nio.file.{Files, Path}
+import java.nio.file.Path
 import java.time.Instant
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref, Resource}
 import cats.syntax.all.*
+import com.serenity.TestTemp
 import com.serenity.trust.{CommandSource, ProjectKey, ProjectTrust, TrustGrant}
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
@@ -13,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 
 class BuildCoordinatorSpec extends AnyFlatSpec with Matchers:
 
-  private val root: Path = Files.createTempDirectory("build-coordinator").toRealPath()
+  private val root: Path = TestTemp.directory("build-coordinator").toRealPath()
 
   private def trusted: ProjectTrust = ProjectTrust.empty.trust(ProjectKey.of(root), Instant.EPOCH)
 
