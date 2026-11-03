@@ -75,14 +75,14 @@ object LspManager:
 
     /** Trusts the folder the server for `fileUri` would serve. */
     def trustFolderOf(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[TrustChange] =
-      IO.pure(TrustChange("Folder trust is not available here.", stopServers = false))
+      IO.pure(TrustChange("Folder trust is not available here.", revoked = Nil))
 
     /** Revokes every trusted folder the server root for `fileUri` lies in. */
     def revokeTrustOf(@unused languageId: LanguageId, @unused fileUri: DocumentUri): IO[TrustChange] =
-      IO.pure(TrustChange("Folder trust is not available here.", stopServers = false))
+      IO.pure(TrustChange("Folder trust is not available here.", revoked = Nil))
 
-  /** What a trust command did, in words for the user, and whether the servers it had allowed must stop. */
-  final private[lsp] case class TrustChange(message: String, stopServers: Boolean)
+  /** What a trust command did, in words for the user, and the folders no longer trusted, whose servers must stop. */
+  final private[lsp] case class TrustChange(message: String, revoked: List[java.nio.file.Path])
 
   /** `trust` decides which workspace roots may start servers at all (#2526): an untrusted root keeps its servers off,
     * and accepting the notice that says so announces the folder's open documents again.
@@ -415,8 +415,12 @@ object LspManager:
 
       case LspEffect.RevokeFolderTrust(rawUri, languageId) =>
         pool.revokeTrustOf(languageId, DocumentUri(rawUri)).flatMap { change =>
-          (releaseAll(pool, documentVersions, openDocuments, requestContexts, requestFibers, semanticTokens) >>
-            applyEvent(LspEvent.LspTrustRevoked)).whenA(change.stopServers) >>
+          change.revoked.flatTraverse(pool.releaseRoot).flatMap { released =>
+            released.traverse_ { uri =>
+              invalidateDocument(uri, requestContexts, requestFibers) >> semanticTokens.documentClosed(uri) >>
+                documentVersions.update(_ - uri) >> openDocuments.update(_ - uri)
+            }
+          } >> applyEvent(LspEvent.LspTrustRevoked(change.revoked)).whenA(change.revoked.nonEmpty) >>
             pool.notices.told(change.message)
         }
 

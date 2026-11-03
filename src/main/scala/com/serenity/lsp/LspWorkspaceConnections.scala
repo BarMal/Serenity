@@ -56,17 +56,17 @@ private[lsp] object LspWorkspaceConnections:
 
       override def trustFolderOf(languageId: LanguageId, fileUri: DocumentUri): IO[TrustChange] =
         workspaceRoot(languageId, fileUri).flatMap((root, _) => gate.trustFolder(root)).map { key =>
-          TrustChange(s"Trusted ${key.path}: its language servers can start.", stopServers = false)
+          TrustChange(s"Trusted ${key.path}: its language servers can start.", revoked = Nil)
         }
 
       override def revokeTrustOf(languageId: LanguageId, fileUri: DocumentUri): IO[TrustChange] =
         workspaceRoot(languageId, fileUri).flatMap { (root, _) =>
           gate.revokeCovering(root).map {
-            case Nil => TrustChange(s"$root is not in a trusted folder.", stopServers = false)
+            case Nil => TrustChange(s"$root is not in a trusted folder.", revoked = Nil)
             case revoked =>
               TrustChange(
                 s"Revoked trust for ${revoked.map(_.path).mkString(", ")}: its language servers have stopped.",
-                stopServers = true
+                revoked = revoked.map(_.path)
               )
           }
         }
