@@ -7,6 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref, Resource}
+import cats.syntax.all.*
 import com.serenity.keystroke.events.{Event, LspEvent}
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
