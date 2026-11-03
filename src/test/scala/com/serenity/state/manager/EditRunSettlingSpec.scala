@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
-import cats.effect.unsafe.implicits.global
+import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
@@ -17,9 +17,10 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{DeterministicClock, SharedDictionary}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
+import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
@@ -29,10 +30,20 @@ import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
   * (#1879): centring, the language-server sync, the preview bump and the lane resubmissions all follow the run's final
   * state, which must be the state applying the same events one at a time reaches.
   */
-class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
+class EditRunSettlingSpec extends AnyFlatSpec with Matchers with BeforeAndAfterAll:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = NoOpFactory[IO]
+
+  // Undo grouping ends an edit run after a pause of over a second between keys (`EditClock.Pause`). The editors here are
+  // compared by their undo history, so a stall of that size on a loaded runner between the one-at-a-time editor's keys
+  // would leave it a step ahead of the batched one (#2484); on this clock no gap between keys is more than a few ms.
+  private val clock = DeterministicClock()
+  given IORuntime   = clock.runtime
+
+  override protected def afterAll(): Unit =
+    clock.shutdown()
+    super.afterAll()
 
   private val words =
     "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore".split(" ")
