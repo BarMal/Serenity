@@ -73,12 +73,17 @@ class MultiPaneSessionSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  "MultiPaneSession.transition" should "scroll the active pane's viewport by a line" in {
+  "MultiPaneSession.transition" should "scroll the active pane's viewport down by a row" in {
     val session         = MultiPaneSession.open(2, Small)
     val (before, after) = session.transition(ScrollDown(1))
     val active          = before.persisted.layout.editorPanes(session.panes.head).bufferId.get
 
-    after.persisted.buffers(active).viewport.topLine should be > before.persisted.buffers(active).viewport.topLine
+    // A wheel step counts on-screen rows (#2493), so the top line stays put while the first line is still wrapping.
+    def top(state: AppState) =
+      val viewport = state.persisted.buffers(active).viewport
+      (viewport.topLine, viewport.topVisualLine)
+
+    Ordering[(Int, Int)].gt(top(after), top(before)) shouldBe true
   }
 
   it should "move the cursor of the active pane down a page" in {
