@@ -48,13 +48,15 @@ object RenderBenchmarkRunner:
   final private case class Timed(
       stats: FrameStats,
       coldPhases: Option[ColdFramePhases],
-      coldSplit: Option[ColdFrameSplit]
+      coldSplit: Option[ColdFrameSplit],
+      shapeTraffic: Option[ShapingTraffic]
   )
 
   final private case class ColdFrame(
       sample: Option[FrameTimer.Sample],
       warmup: Option[WarmupStats.Snapshot],
-      split: Option[ColdFrameSplit.Sample]
+      split: Option[ColdFrameSplit.Sample],
+      shaping: ShapingTraffic.Frame
   )
 
   final private case class Measured(
@@ -64,7 +66,8 @@ object RenderBenchmarkRunner:
       layers: Option[Int],
       draws: Option[LayerDrawStats],
       coldPhases: Option[ColdFramePhases],
-      coldSplit: Option[ColdFrameSplit]
+      coldSplit: Option[ColdFrameSplit],
+      shapeTraffic: Map[Scenario, ShapingTraffic]
   )
 
   def run(
@@ -118,7 +121,9 @@ object RenderBenchmarkRunner:
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
       skiaDeviceScale = measuredSkia.map(_.deviceScale),
-      scenesLikeTheApp = true
+      scenesLikeTheApp = true,
+      java2dShapeTraffic = java2d.shapeTraffic,
+      skiaShapeTraffic = measuredSkia.fold(Map.empty[Scenario, ShapingTraffic])(_.shapeTraffic)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -178,7 +183,8 @@ object RenderBenchmarkRunner:
         window.layerPresenter.map(_ => SkiaLayerHost.layersOn(window.canvas)),
         window.layerPresenter.map(_.drawStats),
         timed.get(Scenario.ColdFullFrame).flatMap(_.coldPhases),
-        timed.get(Scenario.ColdFullFrame).flatMap(_.coldSplit)
+        timed.get(Scenario.ColdFullFrame).flatMap(_.coldSplit),
+        timed.flatMap((scenario, result) => result.shapeTraffic.map(scenario -> _))
       )
     finally
       window.stop()
@@ -215,6 +221,7 @@ object RenderBenchmarkRunner:
       resizeIfAsked(window, step)
       timed(window)(draw(window, fonts, factory, step, cachesFor(step)))
     }
+    val _ = shared.frameCounters.drain()
     val measured = steps.drop(options.warmup).map { step =>
       resizeIfAsked(window, step)
       val caches      = cachesFor(step)
@@ -224,14 +231,16 @@ object RenderBenchmarkRunner:
         draw(window, fonts, factory, step, caches)
         renderNanos.set(System.nanoTime() - started)
       }
-      val cold = step.frame == BenchmarkScript.FrameKind.ColdFull
+      val shaping = ShapingTraffic.Frame.of(caches.frameCounters.drain())
+      val cold    = step.frame == BenchmarkScript.FrameKind.ColdFull
       ColdFrame(
         sample,
         Option.when(cold)(SkiaTextCaches.warmupOf(caches.backendCaches)).flatten,
         Option
           .when(cold)(sample)
           .flatten
-          .map(s => ColdFrameSplit.Sample(renderNanos.get, s.nanos, caches.framePhases.snapshot))
+          .map(s => ColdFrameSplit.Sample(renderNanos.get, s.nanos, caches.framePhases.snapshot)),
+        shaping
       )
     }
     if scenario == Scenario.ResizeWindow then resize(window, startSize)
@@ -245,7 +254,8 @@ object RenderBenchmarkRunner:
         refreshNanos = refresh.nanos
       ),
       ColdFramePhases.of(warmups.size, warmups.foldLeft(WarmupStats.Snapshot.empty)(_ + _)),
-      ColdFrameSplit.of(measured.flatMap(_.split))
+      ColdFrameSplit.of(measured.flatMap(_.split)),
+      ShapingTraffic.of(measured.map(_.shaping))
     )
 
   private def draw(
