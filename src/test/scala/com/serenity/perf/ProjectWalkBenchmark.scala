@@ -38,18 +38,19 @@ object ProjectWalkBenchmark:
     root
 
   def main(args: Array[String]): Unit =
-    val root = synthetic()
-    println(s"tree: ${Directories * FilesPerFolder} files in $Directories directories under $root")
-    (1 to 3).foreach { round =>
-      val before = millis(MasterWalker.list(root, Int.MaxValue - 1).unsafeRunSync().size.ensuring(_ > 0))
-      val index  = ProjectFileIndex.empty()
-      val first  = millis(index.listing(root, _ => IO.unit).unsafeRunSync().files.size.ensuring(_ > 0))
-      Thread.sleep(2500)
-      val reopen = millis(index.listing(root, _ => IO.unit).unsafeRunSync().files.size.ensuring(_ > 0))
-      println(
-        f"round $round: master open (full walk) $before%.1f ms | index first open $first%.1f ms | index reopen $reopen%.1f ms"
-      )
-    }
+    BenchmarkMain.run:
+      val root = synthetic()
+      println(s"tree: ${Directories * FilesPerFolder} files in $Directories directories under $root")
+      (1 to 3).foreach { round =>
+        val before = millis(MasterWalker.list(root, Int.MaxValue - 1).unsafeRunSync().size.ensuring(_ > 0))
+        val index  = ProjectFileIndex.empty()
+        val first  = millis(index.listing(root, _ => IO.unit).unsafeRunSync().files.size.ensuring(_ > 0))
+        Thread.sleep(2500)
+        val reopen = millis(index.listing(root, _ => IO.unit).unsafeRunSync().files.size.ensuring(_ > 0))
+        println(
+          f"round $round: master open (full walk) $before%.1f ms | index first open $first%.1f ms | index reopen $reopen%.1f ms"
+        )
+      }
 
   /** `ProjectFileWalker` as at master 4f74549, unchanged apart from its name and the return type. */
   private object MasterWalker:

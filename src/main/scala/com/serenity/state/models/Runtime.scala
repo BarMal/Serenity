@@ -15,6 +15,8 @@ final case class Runtime(
     actionStack: List[AppAction] = Nil,
     viewportSize: Option[ViewportSize] = None,
     nextBufferId: BufferId = BufferId(0),
+    // The tab the explorer last opened as a preview, which the next preview replaces; never saved with the workspace.
+    previewTab: Option[PreviewTab] = None,
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
     clipboard: Option[String] = None,

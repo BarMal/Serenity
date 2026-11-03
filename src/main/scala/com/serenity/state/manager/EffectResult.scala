@@ -62,7 +62,7 @@ private[manager] enum EffectResult:
 
   /** A reopen as `encoding` found the file's bytes don't fit it (#1627). */
   case FileReopenFailed(bufferId: BufferId, encoding: TextEncoding)
-  case FileLoaded(path: Path, loaded: Buffer)
+  case FileLoaded(path: Path, loaded: Buffer, intent: OpenIntent = OpenIntent.Tab)
   case FileLoadFailed(path: Path, error: Throwable)
 
   /** The files a rename names that no buffer held are open now, so its remaining edits can be applied (#1965). */
@@ -139,7 +139,18 @@ private[manager] enum EffectResult:
   /** A notice's time ran out by `nowNanos`; every notice due by then leaves (#1717). */
   case NoticesExpired(nowNanos: Long)
 
+/** How a loaded file takes its place: `Tab` always as a new tab; the explorer's `Keep` and `Preview` switch to the
+  * file's tab when it is already open, and `Preview` otherwise opens a tab that the next preview replaces.
+  */
+private[manager] enum OpenIntent:
+  case Tab, Keep, Preview
+
 private[manager] object EffectResult:
+
+  def withIntent(result: EffectResult, intent: OpenIntent): EffectResult =
+    result match
+      case EffectResult.FileLoaded(path, loaded, _) => EffectResult.FileLoaded(path, loaded, intent)
+      case other                                    => other
 
   def applyIfCurrent(
     state: AppState,
@@ -168,7 +179,7 @@ private[manager] object EffectResult:
       case FileReloaded(bufferId, path, contentAtRequest, disk) =>
         FileResults.reloaded(state, bufferId, path, contentAtRequest, disk)
       case FileReopenFailed(bufferId, encoding) => ReopenWithEncoding.withFailureShown(state, bufferId, encoding)
-      case FileLoaded(path, loaded)             => FileResults.loaded(state, path, loaded)
+      case FileLoaded(path, loaded, intent)     => FileResults.loaded(state, path, loaded, intent)
       // A failed save changes nothing: the buffer stays dirty. Its error is not lost here -- it travels in the result
       // to `commitSave`, which hands it to the submitter's `onFailure` or raises it to the caller that awaited the save.
       case FileSaveFailed(_, _)         => state

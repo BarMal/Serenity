@@ -39,6 +39,10 @@ final class VisualLineIndexStore[K](maxEntries: Int, seedsFrom: (K, K) => Boolea
 
   def size: Int = synchronized(entries.size())
 
+  private[layout] def forget(key: K): Unit = synchronized {
+    val _ = entries.remove(key)
+  }
+
   def counts(
     key: K,
     content: Rope,

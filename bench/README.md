@@ -39,6 +39,15 @@ java -cp serenity-perf.jar com.serenity.perf.PerformanceBenchmarks laptop.
 
 Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and power source the same across labels (baseline A used `powersave` on AC), and leave the keyboard and mouse alone while it runs, since the input is injected into the focused window.
 
+`BENCH_JAVA_OPTS` passes JVM options to every launch and is recorded in the conditions file, for example
+`BENCH_JAVA_OPTS="-Xlog:gc:file=$PWD/gc-%p.log:uptime -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"`
+(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). Each run's whole app log and stdout are
+kept beside its run file as `<label>-run<N>.applog` and `.stdout`, so the per-key `[LATENCY]` lines and anything Skiko
+prints are there afterwards. A JVM that is still alive after the quit key (it has been seen to log `Quitting` and then never exit) is thread-dumped to
+`<label>-run<N>.threads`, sent SIGTERM and, after `BENCH_QUIT_GRACE` seconds (15), killed, so one hang costs seconds and
+leaves a stack instead of blocking the batch. The conditions file also records each monitor's mode with its refresh rate and scale
+(`hyprctl`) and the OpenGL renderer (`glxinfo -B`) when those tools exist.
+
 `bench-laptop.sh` sources `bench/bench-lib.sh` (keep the two together). It finds the app's log under either `$HOME/.local/state/serenity/` or `$HOME/.serenity/`, reads AC power from whichever `AC*` supply reports it, and exits non-zero when no run produced a `[FRAME]` timing line, so a batch of failed launches is not mistaken for a result. `scripts/test_bench_laptop.py` covers these.
 
 ## Time to first frame of a packaged image

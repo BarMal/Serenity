@@ -5,6 +5,7 @@ import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import com.serenity.perf.BenchmarkMain
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.renderer.{FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
 
@@ -30,33 +31,34 @@ object FontFirstUseRepro:
   )
 
   def main(args: Array[String]): Unit =
-    val family  = args.lift(0).getOrElse("Liberation Serif")
-    val threads = args.lift(1).flatMap(_.toIntOption).getOrElse(32)
-    val size    = args.lift(2).flatMap(_.toIntOption).getOrElse(17)
-    val font = Font(family, Font.PLAIN, size).deriveFont(
-      java.util.Map.of[TextAttribute, Object](
-        TextAttribute.KERNING,
-        TextAttribute.KERNING_ON,
-        TextAttribute.LIGATURES,
-        TextAttribute.LIGATURES_ON
+    BenchmarkMain.run:
+      val family  = args.lift(0).getOrElse("Liberation Serif")
+      val threads = args.lift(1).flatMap(_.toIntOption).getOrElse(32)
+      val size    = args.lift(2).flatMap(_.toIntOption).getOrElse(17)
+      val font = Font(family, Font.PLAIN, size).deriveFont(
+        java.util.Map.of[TextAttribute, Object](
+          TextAttribute.KERNING,
+          TextAttribute.KERNING_ON,
+          TextAttribute.LIGATURES,
+          TextAttribute.LIGATURES_ON
+        )
       )
-    )
-    val frc      = FontRenderContext(AffineTransform(), true, true)
-    val gate     = CountDownLatch(1)
-    val pool     = Executors.newFixedThreadPool(threads)
-    val finished = CountDownLatch(threads)
-    (0 until threads).foreach { _ =>
-      pool.execute { () =>
-        gate.await()
-        try cachedValues(font, frc)
-        finally finished.countDown()
+      val frc      = FontRenderContext(AffineTransform(), true, true)
+      val gate     = CountDownLatch(1)
+      val pool     = Executors.newFixedThreadPool(threads)
+      val finished = CountDownLatch(threads)
+      (0 until threads).foreach { _ =>
+        pool.execute { () =>
+          gate.await()
+          try cachedValues(font, frc)
+          finally finished.countDown()
+        }
       }
-    }
-    gate.countDown()
-    val _   = finished.await(5, TimeUnit.MINUTES)
-    val bad = disagreements(font, frc)
-    pool.shutdown()
-    println(if bad.isEmpty then s"OK ${settledDigest(font, frc)}" else s"BAD ${bad.mkString(",")}")
+      gate.countDown()
+      val _   = finished.await(5, TimeUnit.MINUTES)
+      val bad = disagreements(font, frc)
+      pool.shutdown()
+      println(if bad.isEmpty then s"OK ${settledDigest(font, frc)}" else s"BAD ${bad.mkString(",")}")
 
   private def cachedValues(font: Font, frc: FontRenderContext): Unit =
     Texts.foreach { text =>

@@ -63,6 +63,29 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       .as[Boolean] shouldBe Right(false)
   }
 
+  it should "print each scenario's shapings per frame on both backends, in the text and the JSON" in {
+    val withTraffic = environment.copy(
+      java2dShapeTraffic = Map(Scenario.PageDown -> ShapingTraffic(100, 20.0, 90L, 0.0, 0L)),
+      skiaShapeTraffic = Map(Scenario.PageDown -> ShapingTraffic(100, 1.5, 12L, 0.5, 3L))
+    )
+    val shaped = BenchmarkReport(withTraffic, results, Verdict.SkiaWins)
+
+    shaped.markdown should include("Shaping per frame")
+    shaped.markdown should include("| page down | 20.00 | 90 | 1.50 | 12 | 0.50 | 3 |")
+    val skia = parse(shaped.json).toOption.get.hcursor
+      .downField("environment")
+      .downField("shapeTraffic")
+      .downField("skia")
+      .downField("page down")
+    skia.downField("frames").as[Int] shouldBe Right(100)
+    skia.downField("shapingsMax").as[Long] shouldBe Right(12L)
+    skia.downField("promotionsMean").as[Double] shouldBe Right(0.5)
+  }
+
+  it should "print no shaping table when no scenario has the counts" in {
+    report.markdown should not include "Shaping per frame"
+  }
+
   it should "say unknown for a machine it could not read" in {
     report.markdown should include("governor unknown")
     val json = parse(report.json).toOption.get.hcursor.downField("environment")
