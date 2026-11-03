@@ -1,7 +1,7 @@
 package com.serenity.io
 
 import java.io.IOException
-import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY}
+import java.nio.file.StandardWatchEventKinds.{ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW}
 import java.nio.file.{FileSystems, Files, Path, WatchKey}
 import java.util.concurrent.TimeUnit
 
@@ -11,6 +11,19 @@ import scala.util.{Try, Using}
 
 import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
+
+/** What a watcher saw: the files reported changed, and the watched directories whose individual reports were lost
+  * because the platform's event queue overflowed, so anything in them may have changed.
+  */
+final case class WatchedChanges(files: Set[Path], overflowed: Set[Path]):
+  def isEmpty: Boolean = files.isEmpty && overflowed.isEmpty
+
+  def ++(other: WatchedChanges): WatchedChanges =
+    WatchedChanges(files ++ other.files, overflowed ++ other.overflowed)
+
+object WatchedChanges:
+  val none: WatchedChanges                       = WatchedChanges(Set.empty, Set.empty)
+  def files(paths: Set[Path]): WatchedChanges = WatchedChanges(paths, Set.empty)
 
 /** A directory watcher (#1623): the background half of external-change detection, complementing the focus-in re-check
   * `StateManagerEffectHandlers.observeFocusedExternalRevisionEffect` already does. Directories rather than files are
@@ -28,17 +41,17 @@ final class FileChangeWatcher private (backend: FileChangeWatcher.Backend):
     */
   def sync(directories: Set[Path]): IO[Unit] = backend.sync(directories)
 
-  /** The files that changed within `timeout`, or nothing. */
-  def pollChangedFiles(timeout: FiniteDuration): IO[Set[Path]] = backend.poll(timeout)
+  /** What changed within `timeout`, or nothing. */
+  def pollChangedFiles(timeout: FiniteDuration): IO[WatchedChanges] = backend.poll(timeout)
 
   /** Waits, without waking, until a watched file changes, then keeps collecting until `settle` passes with nothing new,
     * so a burst of writes to one file -- an editor saving in several steps, a checkout -- arrives as one report. A file
     * that never stops changing is reported after [[FileChangeWatcher.MaxSettleRounds]] rounds regardless.
     */
-  def awaitChangedFiles(settle: FiniteDuration): IO[Set[Path]] =
+  def awaitChangedFiles(settle: FiniteDuration): IO[WatchedChanges] =
     backend.await.flatMap(settled(settle, _, FileChangeWatcher.MaxSettleRounds))
 
-  private def settled(settle: FiniteDuration, seen: Set[Path], roundsLeft: Int): IO[Set[Path]] =
+  private def settled(settle: FiniteDuration, seen: WatchedChanges, roundsLeft: Int): IO[WatchedChanges] =
     IO.sleep(settle) >> backend.ready.flatMap { more =>
       if more.isEmpty || roundsLeft <= 1 then IO.pure(seen ++ more)
       else settled(settle, seen ++ more, roundsLeft - 1)
@@ -50,9 +63,9 @@ object FileChangeWatcher:
 
   final private[io] case class Backend(
       sync: Set[Path] => IO[Unit],
-      poll: FiniteDuration => IO[Set[Path]],
-      await: IO[Set[Path]],
-      ready: IO[Set[Path]]
+      poll: FiniteDuration => IO[WatchedChanges],
+      await: IO[WatchedChanges],
+      ready: IO[WatchedChanges]
   )
 
   /** The platform watcher, or [[polling]] where the default filesystem has no `WatchService` or only the JDK's built-in
@@ -94,12 +107,12 @@ object FileChangeWatcher:
     listDirectory: Path => IO[Map[Path, (Long, Long)]]
   ): Resource[IO, FileChangeWatcher] =
     Resource.eval(Ref.of[IO, Map[Path, Listing]](Map.empty).map { listings =>
-      val changes = rescan(listings, listDirectory)
-      val await   = (IO.sleep(interval) >> changes).iterateUntil(_.nonEmpty)
+      val changes = rescan(listings, listDirectory).map(WatchedChanges.files)
+      val await   = (IO.sleep(interval) >> changes).iterateUntil(!_.isEmpty)
       new FileChangeWatcher(
         Backend(
           sync = directories => syncListings(listings, directories, listDirectory),
-          poll = timeout => await.timeoutTo(timeout, IO.pure(Set.empty)),
+          poll = timeout => await.timeoutTo(timeout, IO.pure(WatchedChanges.none)),
           await = await,
           ready = changes
         )
@@ -113,7 +126,7 @@ object FileChangeWatcher:
           sync = directories => syncKeys(service, registrations, directories),
           poll = timeout =>
             IO.blocking(Option(service.poll(timeout.length, timeout.unit))).flatMap {
-              case None      => IO.pure(Set.empty)
+              case None      => IO.pure(WatchedChanges.none)
               case Some(key) => (drainKey(key), drainReadyKeys(service)).mapN(_ ++ _)
             },
           // Interruptible so the loop can stop waiting when the watched set empties or the editor quits.
@@ -143,23 +156,27 @@ object FileChangeWatcher:
       yield ()
     }
 
-  private def drainReadyKeys(service: java.nio.file.WatchService): IO[Set[Path]] =
+  private def drainReadyKeys(service: java.nio.file.WatchService): IO[WatchedChanges] =
     IO.blocking(Option(service.poll())).flatMap {
-      case None      => IO.pure(Set.empty)
+      case None      => IO.pure(WatchedChanges.none)
       case Some(key) => (drainKey(key), drainReadyKeys(service)).mapN(_ ++ _)
     }
 
-  // A key is reset after being drained so it keeps reporting: an unreset key stops queuing events for its directory.
-  private def drainKey(key: WatchKey): IO[Set[Path]] =
+  /** A key is reset after being drained so it keeps reporting: an unreset key stops queuing events for its directory.
+    * An `OVERFLOW` names no file -- the JDK keeps at most 512 pending events per key and replaces the rest with one -- so
+    * it reports the whole directory instead of nothing.
+    */
+  private[io] def drainKey(key: WatchKey): IO[WatchedChanges] =
     IO.blocking {
       val changed = key.watchable() match
         case directory: Path =>
-          key
-            .pollEvents()
-            .asScala
-            .flatMap(event => Option(event.context()).collect { case name: Path => directory.resolve(name) })
-            .toSet
-        case _ => Set.empty[Path]
+          key.pollEvents().asScala.foldLeft(WatchedChanges.none) { (seen, event) =>
+            if event.kind == OVERFLOW then seen ++ WatchedChanges(Set.empty, Set(directory))
+            else
+              Option(event.context()).collect { case name: Path => directory.resolve(name) }
+                .fold(seen)(file => seen ++ WatchedChanges.files(Set(file)))
+          }
+        case _ => WatchedChanges.none
       key.reset()
       changed
     }
