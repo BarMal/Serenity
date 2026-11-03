@@ -58,6 +58,10 @@ class AggregateJobTests(unittest.TestCase):
 
 
 _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+# Once the merge train is live it runs Windows and macOS once per batch instead (#2553 item 3).
+_TRAIN_GATE = (
+    "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))"
+)
 _CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 _PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()
 
@@ -78,11 +82,11 @@ class DraftGateTests(unittest.TestCase):
                     ["opened", "synchronize", "reopened", "ready_for_review"], _pull_request_types(text)
                 )
 
-    def test_shards_and_their_required_checks_skip_drafts_together(self) -> None:
+    def test_shards_and_their_checks_skip_drafts_and_live_train_pull_requests_together(self) -> None:
         for label in ("windows", "macos"):
             with self.subTest(label=label):
-                self.assertIn(f"    if: {_DRAFT_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
-                self.assertIn(f"    if: always() && {_DRAFT_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
+                self.assertIn(f"    if: {_TRAIN_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
+                self.assertIn(f"    if: always() && {_TRAIN_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
 
     def test_the_three_os_package_build_skips_drafts(self) -> None:
         self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
