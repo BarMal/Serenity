@@ -54,6 +54,10 @@ leaves a stack instead of blocking the batch. The conditions file also records e
 
 `bench/ttfw.py <launcher> <runs> <label> [warm-up-runs]` launches a packaged app image with `--smoke-test --safe-mode` and reports the median wall time to the first painted frame (the `SERENITY_SMOKE_READY` line) and to exit. It needs a display and the image from a `desktop-release.yml` run (artifact `Serenity-linux-x64`, the zip of `dist/Serenity`); the laptop does not build. The warm-up run is discarded, which lets an AppCDS image write its archive.
 
+### Start-up as benchmark rows (#2420)
+
+`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
+
 ### How much start-up varies (#2420)
 
 `bench/startup-variance.sh <app-image> <runs-per-round> <out-dir>` runs `ttfw.py` in six rounds ordered warm, cold, cold, warm, warm, cold, so drift falls on both modes alike. "Cold" means the image's AOT cache is moved aside (the OS file cache stays warm). `bench/startup-spread.py` pools the rounds into n, median, coefficient of variation and max/min per mode. The manual `startup-variance.yml` workflow runs it on a GitHub runner against the Linux image of a Desktop Package Check run (`image_run_id`), to decide whether start-up rows can gate in CI or only track a trend.
