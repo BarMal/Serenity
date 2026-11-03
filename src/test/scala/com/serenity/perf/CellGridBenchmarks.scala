@@ -114,6 +114,9 @@ private[perf] object CellGridBenchmarks:
         )
         .sum
 
+  /** The frame rows settle the JIT before sampling, as the layout rows do. A frame runs the chrome's code once, and
+    * unsettled they timed the first few hundred frames of a JVM, where that code is still interpreted.
+    */
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
     val asciiFrame    = frameOf(stateOf(text(asciiLine)))
     val mixedFrame    = frameOf(stateOf(text(mixedLine)))
@@ -128,28 +131,32 @@ private[perf] object CellGridBenchmarks:
         3,
         12,
         () => assert(hasPixels(asciiFrame()), "cell-grid ASCII frame drew nothing"),
-        () => asciiFrame()
+        () => asciiFrame(),
+        settleJit = true
       ),
       BenchmarkRunner.Benchmark(
         "render.cell_grid.frame_mixed",
         3,
         12,
         () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
-        () => mixedFrame()
+        () => mixedFrame(),
+        settleJit = true
       ),
       BenchmarkRunner.Benchmark(
         "render.cell_grid.frame_emoji",
         3,
         12,
         () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
-        () => emojiFrame()
+        () => emojiFrame(),
+        settleJit = true
       ),
       BenchmarkRunner.Benchmark(
         "render.cell_grid.frame_emoji_clusters",
         3,
         12,
         () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
-        () => clusterFrame()
+        () => clusterFrame(),
+        settleJit = true
       ),
       BenchmarkRunner.Benchmark(
         "layout.cell_grid.emoji_cluster_lines",
@@ -188,6 +195,7 @@ private[perf] object CellGridBenchmarks:
         3,
         12,
         () => assert(hasPixels(frame()), "cell-grid ASCII frame in floating chrome drew nothing"),
-        () => frame()
+        () => frame(),
+        settleJit = true
       )
     )
