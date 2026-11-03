@@ -45,12 +45,19 @@ jpackage --type app-image --name Serenity --input "$work/input" --main-jar Seren
   --mac-package-identifier com.barmal.serenity --dest "$work/dist" \
   --java-options '-XX:+UseG1GC' --java-options '--enable-native-access=ALL-UNNAMED' || exit 1
 
-# Train before any signature exists, then name the cache in the launcher config (the file must exist first).
-JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$cache" "$app/Contents/MacOS/Serenity" >"$work/training.log" 2>&1
+# The bundled runtime may carry no bin/java, and -XX:AOTCacheOutput forks one to assemble the cache, so show what the
+# runtime has and record and assemble through the app launcher instead (JEP 483 two steps: record, then create).
+echo "Runtime layout: $(find "$app/Contents/runtime" -maxdepth 4 \( -name 'java*' -o -name 'libjli*' \) | sed "s|$app/||" | tr '\n' ' ')"
+config="$app/Contents/app/serenity.aotconf"
+JAVA_TOOL_OPTIONS="-XX:AOTMode=record -XX:AOTConfiguration=$config" "$app/Contents/MacOS/Serenity" >"$work/record.log" 2>&1
+JAVA_TOOL_OPTIONS="-XX:AOTMode=create -XX:AOTConfiguration=$config -XX:AOTCache=$cache" "$app/Contents/MacOS/Serenity" >"$work/create.log" 2>&1
+rm -f "$config"
 if [[ -s "$cache" ]]; then
-  row "Train before signing" PASS "$(du -h "$cache" | cut -f1) at Contents/app/serenity.aot"
+  row "Train before signing (record, then create, through the app launcher)" PASS "$(du -h "$cache" | cut -f1) at Contents/app/serenity.aot"
 else
-  cat "$work/training.log"; row "Train before signing" FAIL "no cache written"; exit 1
+  cat "$work/record.log" "$work/create.log"
+  row "Train before signing (record, then create, through the app launcher)" FAIL "$(tail -2 "$work/create.log" | tr '\n' ' ' | cut -c1-200)"
+  exit 1
 fi
 awk '{ print } /^\[JavaOptions\]$/ { print "java-options=-XX:AOTCache=$APPDIR/serenity.aot" }' "$cfg" >"$work/cfg" && cat "$work/cfg" >"$cfg"
 grep -q 'AOTCache' "$cfg" || { row "Name the cache in Serenity.cfg" FAIL "option missing"; exit 1; }
