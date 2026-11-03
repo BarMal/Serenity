@@ -3,7 +3,8 @@ package com.serenity.ui.renderer
 import java.awt.Shape
 import java.awt.geom.{Area, Rectangle2D}
 
-import com.serenity.ui.layout.PixelRect
+import com.serenity.state.models.PaneId
+import com.serenity.ui.layout.{DirtyLineDiff, PixelRect}
 
 /** Keeps a frame's painting off the pixels it holds correct (#2481). A redrawn row's antialiased ink reaches a little
   * past its band; where the row beside it is kept or copied, that ink would land on pixels that already carry it, and a
@@ -11,10 +12,17 @@ import com.serenity.ui.layout.PixelRect
   */
 final class PreservedPixels private (context: RenderContext, kept: List[PixelRect]):
 
-  def apply(paint: => Unit): Unit =
-    context.surface.panelOutlines match
-      case Some(clipping) if kept.nonEmpty && context.surface.addressesPixels => clipping.withoutPixels(kept)(paint)
-      case _                                                                  => paint
+  private def clipping: Option[PanelOutlineDrawing] =
+    context.surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => kept.nonEmpty && context.surface.addressesPixels)
+
+  def apply(paint: => Unit): Unit = clipping.fold(paint)(_.withoutPixels(kept)(paint))
+
+  /** The rows to paint for `dirtyRows`: under the clip, the kept rows beside them too, whose ink still reaches the band
+    * that was cleared. Without a clip they would paint over pixels that are kept, so only the dirty rows are painted.
+    */
+  def rowsToPaint(dirtyRows: Map[PaneId, Set[Int]]): Map[PaneId, Set[Int]] =
+    if clipping.isEmpty then dirtyRows
+    else dirtyRows.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap
 
 object PreservedPixels:
 

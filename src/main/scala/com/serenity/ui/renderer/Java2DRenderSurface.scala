@@ -122,8 +122,7 @@ class Java2DRenderSurface(
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
 
-  /** A clip that keeps off pixels: text draws must restore it, but unlike [[userClipDepth]] it keeps labels on sprites.
-    */
+  // Text draws restore a clip they find; unlike a `userClipDepth` one, this keeps labels on their sprites.
   private val exclusionDepth = AtomicInteger(0)
 
   override def setFont(newFont: FontSpec): Unit =
@@ -398,6 +397,8 @@ class Java2DRenderSurface(
     finally
       userClipDepth.decrementAndGet()
       g.setClip(savedClip)
+
+  override def keepsOffPixels: Boolean = true
 
   override def withoutPixels(kept: scala.collection.immutable.List[PixelRect])(render: => Unit): Unit =
     val savedClip = g.getClip

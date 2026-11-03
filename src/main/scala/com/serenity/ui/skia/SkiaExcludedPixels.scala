@@ -11,6 +11,8 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
   protected def canvas: Canvas
 
+  override def keepsOffPixels: Boolean = true
+
   override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
     val saved = canvas.save()
     try

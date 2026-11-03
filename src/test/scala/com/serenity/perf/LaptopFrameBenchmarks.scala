@@ -59,9 +59,11 @@ private[perf] object LaptopFrameBenchmarks:
   val DeviceScale     = 2.0
 
   /** The rows a damaged frame may redraw: the typed row with a row of margin either side and the rows its reflow moves,
-    * and the rows a three-line wheel scroll uncovers with the same margin.
+    * and the rows a three-line wheel scroll uncovers with the same margin. A row beside them is painted as well, under
+    * a clip that keeps it off the kept rows, so that its ink still reaches the band that was cleared (#2481): two more
+    * rows for a typed row.
     */
-  val MaxTypingRowsDrawn = 6L
+  val MaxTypingRowsDrawn = 8L
   val MaxScrollRowsDrawn = 12L
 
   private[perf] val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)

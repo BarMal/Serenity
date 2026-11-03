@@ -262,3 +262,7 @@ trait PanelOutlineDrawing:
     * cells, which spill nothing, so by default `render` runs unclipped.
     */
   def withoutPixels(@unused kept: List[PixelRect])(render: => Unit): Unit = render
+
+  /** Whether [[withoutPixels]] really keeps drawing off `kept`. A frame paints the rows beside redrawn ones only then.
+    */
+  def keepsOffPixels: Boolean = false
