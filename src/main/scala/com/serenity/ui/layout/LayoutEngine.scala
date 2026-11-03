@@ -3,8 +3,6 @@ package com.serenity.ui.layout
 import com.serenity.config.{InterfaceDensityMetrics, SurfaceConfig, TextAreaInsets}
 import com.serenity.state.models.*
 
-final case class ViewportSize(width: Int, height: Int)
-
 final case class LayoutRect(x: Int, y: Int, width: Int, height: Int):
   def right: Int   = x + width
   def bottom: Int  = y + height

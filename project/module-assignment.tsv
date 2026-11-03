@@ -189,12 +189,14 @@ ui/layout/MeasurementMemo.scala	base
 ui/layout/PeekOverlay.scala	command
 ui/layout/PinnedPanel.scala	command
 ui/layout/PixelRect.scala	base
+ui/layout/ScreenPosition.scala	base
 ui/layout/ScrollbarGeometry.scala	base
 ui/layout/SettledProbe.scala	base
 ui/layout/ShapedCaretStops.scala	base
 ui/layout/SpacingScale.scala	model
 ui/layout/TabStops.scala	base
 ui/layout/TerminalScrollbar.scala	base
+ui/layout/ViewportSize.scala	base
 ui/layout/VisualLineIndex.scala	base
 ui/layout/WideCells.scala	base
 ui/layout/WorkspaceTree.scala	model
