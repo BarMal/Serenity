@@ -1,0 +1,32 @@
+name: AOT macOS Spike
+
+# #2522 item 1c: does a macOS bundle trained before signing use its AOT cache once signed with the hardened runtime, copied
+# to /Applications and shipped in a DMG? A measurement, not a product workflow: it runs when this file or its script change.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/aot-macos-spike.yml
+      - scripts/aot-macos-spike.sh
+      - ci/aot-macos-spike/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  spike:
+    name: AOT cache on a signed macOS bundle
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Train, sign and launch from three locations
+        shell: bash
+        run: scripts/aot-macos-spike.sh "$(mktemp -d)"
