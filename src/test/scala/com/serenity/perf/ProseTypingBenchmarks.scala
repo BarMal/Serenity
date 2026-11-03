@@ -36,7 +36,8 @@ private[perf] object ProseTypingBenchmarks:
 
   /** Runs just these benchmarks, which need no window: `sbt "Test/runMain com.serenity.perf.ProseTypingBenchmarks"`. */
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   private def withCursor(state: AppState, line: Int, column: Int): AppState =
     state.copy(persisted =

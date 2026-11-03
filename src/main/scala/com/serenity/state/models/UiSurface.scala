@@ -214,7 +214,7 @@ final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntr
   * or `Buffer <id>` for one not yet saved to disk) -- never the full path, matching `RendererPaneChrome.renderHeader`'s
   * existing per-pane header title.
   */
-final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean)
+final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean, isPreview: Boolean = false)
 
 enum SurfacePlacement:
   case AboveCursor

@@ -159,6 +159,7 @@ private[perf] object SkiaFrameBenchmarks:
       backendBenchmarks("skia_raster.bundled_ligature_font", SkiaFrames, bundled)
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
-    val results = BenchmarkRunner.runMatching(args.toList, benchmarks)
-    BenchmarkRunner.printResults(results)
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
+      val results = BenchmarkRunner.runMatching(args.toList, benchmarks)
+      BenchmarkRunner.printResults(results)
