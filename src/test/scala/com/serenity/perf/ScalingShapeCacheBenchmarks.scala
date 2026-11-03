@@ -103,6 +103,7 @@ private[perf] object ScalingShapeCacheBenchmarks:
     )
 
   def main(args: Array[String]): Unit =
-    val buffers = args.headOption.flatMap(_.toIntOption).getOrElse(20)
-    MultiBufferFixture.Kind.values.foreach(kind => report(kind, shaped = false, buffers))
-    report(MultiBufferFixture.Kind.Prose, shaped = true, buffers)
+    BenchmarkMain.run:
+      val buffers = args.headOption.flatMap(_.toIntOption).getOrElse(20)
+      MultiBufferFixture.Kind.values.foreach(kind => report(kind, shaped = false, buffers))
+      report(MultiBufferFixture.Kind.Prose, shaped = true, buffers)
