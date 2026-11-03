@@ -226,7 +226,8 @@ object TabBarSurfaceComposition:
             text = allocation.displayTitle,
             selected = activeBufferId.contains(allocation.entry.bufferId),
             trailingSeparator = index < allocations.size - 1 || overflowing,
-            allocatedWidth = Some(allocation.allocatedWidth)
+            allocatedWidth = Some(allocation.allocatedWidth),
+            italic = allocation.entry.isPreview
           )
       }
       val overflowSegment =
