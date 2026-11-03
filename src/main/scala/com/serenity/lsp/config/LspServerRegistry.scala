@@ -32,7 +32,7 @@ object LspServerRegistry:
   )
 
   def resolve(languageId: LanguageId, userConfig: LspUserConfig): IO[Option[LspServerConfig]] =
-    IO.blocking(resolution(languageId, userConfig).server)
+    IO.blocking(resolution(languageId, userConfig).availableServer)
 
   /** Why `languageId` has a server or not. `servers` and `onPath` are parameters so the rules can be checked for any
     * registry and any set of installed commands.

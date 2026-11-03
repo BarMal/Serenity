@@ -70,13 +70,13 @@ class LspResolutionSpec extends AnyFlatSpec with Matchers with OptionValues:
     }
   }
 
-  "The server of a resolution" should "be present only when it is available" in {
+  "The available server of a resolution" should "be present only when the server is available" in {
     val server = LspServerRegistry.builtIn.headOption.value
 
-    LspResolution.Available(server).server shouldBe Some(server)
-    LspResolution.NotInstalled(server).server shouldBe None
-    LspResolution.Disabled.server shouldBe None
-    LspResolution.NoServerExists.server shouldBe None
+    LspResolution.Available(server).availableServer shouldBe Some(server)
+    LspResolution.NotInstalled(server).availableServer shouldBe None
+    LspResolution.Disabled.availableServer shouldBe None
+    LspResolution.NoServerExists.availableServer shouldBe None
   }
 
   private def path(dirs: String*): String = dirs.mkString(File.pathSeparator)

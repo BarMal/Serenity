@@ -17,7 +17,7 @@ enum LspResolution:
 
   case Available(server: LspServerConfig)
 
-  def server: Option[LspServerConfig] =
+  def availableServer: Option[LspServerConfig] =
     this match
       case Available(server)                           => Some(server)
       case NoServerExists | Disabled | NotInstalled(_) => None
