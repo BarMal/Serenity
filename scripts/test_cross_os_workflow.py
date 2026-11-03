@@ -88,6 +88,26 @@ class DraftGateTests(unittest.TestCase):
         self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
 
 
+def _concurrency(text: str) -> dict[str, str]:
+    block = re.search(r"^concurrency:\n((?:  [^\n]*\n)+)", text, re.M).group(1)
+    return dict(re.findall(r"^  ([a-z-]+): ([^\n]+)$", block, re.M))
+
+
+class ConcurrencyTests(unittest.TestCase):
+    """A newer push may cancel a pull request's older run, but never a master, nightly or dispatched run: one shared,
+    cancelling group left master with no completed Windows or macOS result after the 11-02 nightly (#2557)."""
+
+    def test_only_pull_request_runs_cancel_an_older_run(self) -> None:
+        self.assertEqual("${{ github.event_name == 'pull_request' }}", _concurrency(_CALLER)["cancel-in-progress"])
+
+    def test_the_nightly_has_its_own_group_so_a_master_push_cannot_replace_it_while_it_waits(self) -> None:
+        self.assertEqual(
+            "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+            "${{ github.event_name == 'schedule' && '-nightly' || '' }}",
+            _concurrency(_CALLER)["group"],
+        )
+
+
 class ShardCountTests(unittest.TestCase):
     def test_the_shard_count_agrees_in_build_workflow_and_environment(self) -> None:
         count = int(re.search(r"val TestShardCount = (\d+)", _BUILD).group(1))
