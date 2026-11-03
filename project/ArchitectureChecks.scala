@@ -107,6 +107,22 @@ object ArchitectureChecks {
       mainOnly = true
     ),
     ImportRule(
+      "com/serenity/facts",
+      Seq(
+        "com.serenity.state",
+        "com.serenity.ui",
+        "com.serenity.config",
+        "com.serenity.command",
+        "com.serenity.app",
+        "com.serenity.session",
+        "com.serenity.document",
+        "com.serenity.frontend",
+        "com.serenity.lsp"
+      ),
+      "the fact store sits low and knows no languages (#2531 R2): producers are handed to it, it reaches for nothing",
+      mainOnly = true
+    ),
+    ImportRule(
       "com/serenity/ui/host",
       Seq("javax.swing", "java.awt.Component", "java.awt.Window", "java.awt.Frame", "java.awt.Toolkit", "ui.terminal"),
       "the window-host seam names capabilities, not a window system (#2380): its Swing implementation lives in " +
