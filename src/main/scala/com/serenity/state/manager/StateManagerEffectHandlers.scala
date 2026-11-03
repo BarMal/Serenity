@@ -236,10 +236,11 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def interpretFileEffect(effect: FileEffect): IO[Unit] =
     effect match
-      case FileEffect.SaveBuffer(bufferId)         => saveBufferEffect(bufferId)
-      case FileEffect.SaveBufferAs(bufferId, path) => saveBufferAsEffect(bufferId, path)
-      case FileEffect.DirectLoadFile(path)         => directLoadFileEffect(path)
-      case FileEffect.OpenForRenameEdit(pending)   => openFilesForRenameEdit(pending)
+      case FileEffect.SaveBuffer(bufferId)            => saveBufferEffect(bufferId)
+      case FileEffect.SaveBufferAs(bufferId, path)    => saveBufferAsEffect(bufferId, path)
+      case FileEffect.DirectLoadFile(path)            => directLoadFileEffect(path)
+      case FileEffect.OpenFromExplorer(path, preview) => openFromExplorer(path, preview)
+      case FileEffect.OpenForRenameEdit(pending)      => openFilesForRenameEdit(pending)
 
   private def interpretExplorerEffect(effect: ExplorerEffect): IO[Unit] =
     effect match

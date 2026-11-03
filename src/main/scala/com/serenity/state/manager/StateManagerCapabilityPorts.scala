@@ -87,6 +87,7 @@ private[manager] trait EffectFilePort:
   def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit]
   def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]
   def loadFile(path: Path): IO[Unit]
+  def openFromExplorer(path: Path, preview: Boolean): IO[Unit]
 
   /** Opens `path` and returns once its buffer is in the state: for lane jobs, not the dispatcher. */
   def openFile(path: Path): IO[Unit]
