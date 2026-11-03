@@ -8,9 +8,9 @@ import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** Why a language has no language server running for it (#2523): there is none to run, the user turned it off, or it
-  * is not installed. Each asks something different of the user, so none may be answered with another's notice. The
-  * rules hold for every language in the registry, so they are checked over all of them.
+/** Why a language has no language server running for it (#2523): there is none to run, the user turned it off, or it is
+  * not installed. Each asks something different of the user, so none may be answered with another's notice. The rules
+  * hold for every language in the registry, so they are checked over all of them.
   */
 class LspResolutionSpec extends AnyFlatSpec with Matchers with OptionValues:
 
@@ -35,18 +35,16 @@ class LspResolutionSpec extends AnyFlatSpec with Matchers with OptionValues:
       LspResolution.NoServerExists
   }
 
-  "A language the user disabled" should "resolve to Disabled, installed or not" in {
+  "A language the user disabled" should "resolve to Disabled, installed or not" in
     LspServerRegistry.builtIn.map(_.languageId).foreach { language =>
       resolution(language, disabled(language), everything) shouldBe LspResolution.Disabled
       resolution(language, disabled(language), nothing) shouldBe LspResolution.Disabled
     }
-  }
 
-  "A configured server that is not on the path" should "resolve to NotInstalled, carrying the server to name" in {
+  "A configured server that is not on the path" should "resolve to NotInstalled, carrying the server to name" in
     LspServerRegistry.builtIn.foreach { server =>
       resolution(server.languageId, LspUserConfig.empty, nothing) shouldBe LspResolution.NotInstalled(server)
     }
-  }
 
   it should "name the command the user configured" in {
     val language = LspServerRegistry.builtIn.map(_.languageId).headOption.value
@@ -64,11 +62,10 @@ class LspResolutionSpec extends AnyFlatSpec with Matchers with OptionValues:
       case other                           => fail(s"expected Available, got $other")
   }
 
-  "A configured server that is on the path" should "resolve to Available" in {
+  "A configured server that is on the path" should "resolve to Available" in
     LspServerRegistry.builtIn.foreach { server =>
       resolution(server.languageId, LspUserConfig.empty, everything) shouldBe LspResolution.Available(server)
     }
-  }
 
   "The available server of a resolution" should "be present only when the server is available" in {
     val server = LspServerRegistry.builtIn.headOption.value
