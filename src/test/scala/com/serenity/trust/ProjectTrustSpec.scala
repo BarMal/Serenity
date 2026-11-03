@@ -8,24 +8,24 @@ import org.scalatest.matchers.should.Matchers
 
 class ProjectTrustSpec extends AnyFlatSpec with Matchers:
 
-  private val root: Path     = Paths.get("/work/app").toAbsolutePath
-  private val at: Instant    = Instant.parse("2026-11-03T09:00:00Z")
-  private val key            = ProjectKey.of(root)
-  private val command        = List("rust-analyzer")
-  private val bspFile        = root.resolve(".bsp/sbt.json")
-  private val bspArgv        = List("java", "-jar", "sbt-launch.jar", "-bsp")
-  private val bspSource      = CommandSource.Project(bspFile, sha256 = "aaaa")
-  private val trustedProject = ProjectTrust.empty.trust(key, at)
+  private val root: Path                       = Paths.get("/work/app").toAbsolutePath
+  private val at: Instant                      = Instant.parse("2026-11-03T09:00:00Z")
+  private val projectKey                       = ProjectKey.of(root)
+  private val command                          = List("rust-analyzer")
+  private val bspFile                          = root.resolve(".bsp/sbt.json")
+  private val bspArgv                          = List("java", "-jar", "sbt-launch.jar", "-bsp")
+  private val bspSource: CommandSource.Project = CommandSource.Project(bspFile, sha256 = "aaaa")
+  private val trustedProject                   = ProjectTrust.empty.trust(projectKey, at)
 
   "ProjectTrust" should "refuse every source, built-in included, for an untrusted root" in {
     for source <- List(CommandSource.BuiltIn, CommandSource.UserLayer, bspSource) do
-      ProjectTrust.empty.grant(key, source, command) shouldBe Left(TrustRefusal.ProjectUntrusted(key))
+      ProjectTrust.empty.grant(projectKey, source, command) shouldBe Left(TrustRefusal.ProjectUntrusted(projectKey))
   }
 
   it should "grant built-in and user-layer commands once the root is trusted" in {
     for source <- List(CommandSource.BuiltIn, CommandSource.UserLayer) do
-      val grant = trustedProject.grant(key, source, command)
-      grant.map(_.root) shouldBe Right(key)
+      val grant = trustedProject.grant(projectKey, source, command)
+      grant.map(_.root) shouldBe Right(projectKey)
       grant.map(_.command) shouldBe Right(command)
   }
 
@@ -42,25 +42,27 @@ class ProjectTrustSpec extends AnyFlatSpec with Matchers:
   it should "refuse a project-sourced command until its fingerprint is approved" in {
     val fingerprint = CommandFingerprint.of(bspSource, bspArgv)
 
-    trustedProject.grant(key, bspSource, bspArgv) shouldBe
-      Left(TrustRefusal.CommandNotApproved(key, bspArgv, fingerprint))
-    trustedProject.approve(key, fingerprint).grant(key, bspSource, bspArgv).map(_.command) shouldBe Right(bspArgv)
+    trustedProject.grant(projectKey, bspSource, bspArgv) shouldBe
+      Left(TrustRefusal.CommandNotApproved(projectKey, bspArgv, fingerprint))
+    trustedProject.approve(projectKey, fingerprint).grant(projectKey, bspSource, bspArgv).map(_.command) shouldBe Right(
+      bspArgv
+    )
   }
 
   it should "ask again when the project file or its argv changes" in {
-    val approved = trustedProject.approve(key, CommandFingerprint.of(bspSource, bspArgv))
-    val edited   = CommandSource.Project(bspFile, sha256 = "bbbb")
-    val newArgv  = bspArgv :+ "--debug"
+    val approved              = trustedProject.approve(projectKey, CommandFingerprint.of(bspSource, bspArgv))
+    val edited: CommandSource = CommandSource.Project(bspFile, sha256 = "bbbb")
+    val newArgv               = bspArgv :+ "--debug"
 
-    approved.grant(key, edited, bspArgv).isLeft shouldBe true
-    approved.grant(key, bspSource, newArgv).isLeft shouldBe true
+    approved.grant(projectKey, edited, bspArgv).isLeft shouldBe true
+    approved.grant(projectKey, bspSource, newArgv).isLeft shouldBe true
   }
 
   it should "still refuse an approved command once its root is no longer trusted" in {
     val fingerprint = CommandFingerprint.of(bspSource, bspArgv)
-    val revoked     = trustedProject.approve(key, fingerprint).revoke(key)
+    val revoked     = trustedProject.approve(projectKey, fingerprint).revoke(projectKey)
 
-    revoked.grant(key, bspSource, bspArgv) shouldBe Left(TrustRefusal.ProjectUntrusted(key))
+    revoked.grant(projectKey, bspSource, bspArgv) shouldBe Left(TrustRefusal.ProjectUntrusted(projectKey))
     revoked.approved shouldBe empty
   }
 
@@ -69,5 +71,5 @@ class ProjectTrustSpec extends AnyFlatSpec with Matchers:
   }
 
   "ProjectKey" should "normalise a path so that `..` cannot alias a different root" in {
-    ProjectKey.of(root.resolve("sub/..")) shouldBe key
+    ProjectKey.of(root.resolve("sub/..")) shouldBe projectKey
   }

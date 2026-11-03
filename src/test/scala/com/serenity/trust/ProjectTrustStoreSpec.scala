@@ -14,7 +14,10 @@ class ProjectTrustStoreSpec extends AnyFlatSpec with Matchers:
     val directory = Files.createTempDirectory("project-trust-store")
     try body(directory)
     finally
-      Files.walk(directory).sorted(java.util.Comparator.reverseOrder()).forEach(path => Files.deleteIfExists(path): Unit)
+      Files
+        .walk(directory)
+        .sorted(java.util.Comparator.reverseOrder())
+        .forEach(path => Files.deleteIfExists(path): Unit)
 
   private val at = Instant.parse("2026-11-03T09:00:00Z")
 
@@ -24,10 +27,10 @@ class ProjectTrustStoreSpec extends AnyFlatSpec with Matchers:
 
   it should "round-trip trusted roots and approvals, including paths that need quoting" in withTempDirectory {
     directory =>
-      val file   = directory.resolve("trust.conf")
-      val rootA  = ProjectKey.of(directory.resolve("app \"one\""))
-      val rootB  = ProjectKey.of(directory.resolve("lib"))
-      val source = CommandSource.Project(directory.resolve("lib/.bsp/sbt.json"), sha256 = "abc")
+      val file                          = directory.resolve("trust.conf")
+      val rootA                         = ProjectKey.of(directory.resolve("app \"one\""))
+      val rootB                         = ProjectKey.of(directory.resolve("lib"))
+      val source: CommandSource.Project = CommandSource.Project(directory.resolve("lib/.bsp/sbt.json"), sha256 = "abc")
       val trust = ProjectTrust.empty
         .trust(rootA, at)
         .trust(rootB, at.plusSeconds(60))

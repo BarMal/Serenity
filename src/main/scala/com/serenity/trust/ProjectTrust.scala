@@ -56,7 +56,7 @@ object TrustGrant:
   private[trust] def apply(root: ProjectKey, command: List[String]): TrustGrant = (root, command)
 
   extension (grant: TrustGrant)
-    def root: ProjectKey       = grant._1
+    def root: ProjectKey      = grant._1
     def command: List[String] = grant._2
 
 enum TrustRefusal:
