@@ -9,6 +9,40 @@ import com.serenity.ui.layout.{ScrollLimits, WrappedLineCache}
   */
 object ScrollBoundary:
 
+  /** Whether the wheel moves rows. Column mode pages by column and keeps its own logical-line scroll. */
+  def scrollsByRows(state: AppState): Boolean =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    !(surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled)
+
+  /** Moves the pane `rows` on-screen rows down, or up when negative, then clamps it. A line that wraps into many rows
+    * is scrolled through row by row, which a step of whole lines cannot do for a document of one long line.
+    */
+  def scrollRows(
+    state: AppState,
+    paneId: PaneId,
+    rows: Int,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): AppState =
+    val shown = state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(state.persisted.buffers.get)
+    shown match
+      case Some(buffer) if rows != 0 =>
+        val viewport = buffer.viewport
+        val counts   = CursorViewport.visualRowsFor(buffer, state, wrapCache)
+        val (line, row) =
+          if rows > 0 then
+            counts
+              .rowBelow(viewport.topLine, viewport.topVisualLine + rows)
+              .getOrElse((counts.lineCount - 1, Int.MaxValue))
+          else if -rows <= viewport.topVisualLine then (viewport.topLine, viewport.topVisualLine + rows)
+          else counts.rowAbove(viewport.topLine, -rows - viewport.topVisualLine)
+        val moved = buffer.copy(viewport = viewport.scrolledTo(line, viewport.leftColumn, row))
+        clampPane(
+          state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> moved))),
+          paneId,
+          wrapCache
+        )
+      case _ => state
+
   def clampPane(state: AppState, paneId: PaneId, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
     val surfaceConfig = state.persisted.config.surfaceConfig
     val columnMode    = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled

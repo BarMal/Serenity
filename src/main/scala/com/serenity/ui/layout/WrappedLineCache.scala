@@ -53,6 +53,9 @@ sealed abstract class WrappedLineCache:
     revision: Option[ContentRevision] = None
   ): VisualRowCounts
 
+  /** Forgets the row counts kept for `key`, so the next count of that buffer measures every line again. */
+  private[layout] def dropVisualRowCounts(key: VisualRowKey): Unit
+
   /** How many pixels the rows of each logical line stack to, in the same edit-following index as [[visualRowCounts]]:
     * what column paging fills a column by.
     */
@@ -191,6 +194,8 @@ object WrappedLineCache:
     ): VisualRowCounts =
       VisualRowCounts.walking(content.lineCount, measure)
 
+    private[layout] def dropVisualRowCounts(key: VisualRowKey): Unit = ()
+
     private[layout] def bandHeights(
       key: BandHeightKey,
       content: Rope,
@@ -230,11 +235,16 @@ object WrappedLineCache:
   def measuring(shapedText: ShapedTextCache, layoutMemos: LayoutMemos): Measuring =
     new Measuring(shapedText, layoutMemos)
 
-  def bounded(maxLines: Int = DefaultMaxLines, maxChars: Long = DefaultMaxChars): Bounded =
-    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache())
+  def bounded(
+    maxLines: Int = DefaultMaxLines,
+    maxChars: Long = DefaultMaxChars,
+    layoutMemos: LayoutMemos = LayoutMemos()
+  ): Bounded =
+    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache(), layoutMemos)
 
   /** A default-sized cache whose wraps measure through `shapedText`, which the painter of the same owner must share. */
-  def sharing(shapedText: ShapedTextCache): Bounded = new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText)
+  def sharing(shapedText: ShapedTextCache): Bounded =
+    new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText, LayoutMemos())
 
   final private case class TableColumnsEntry(
       content: Rope,
@@ -275,18 +285,21 @@ object WrappedLineCache:
   /** An access-ordered LRU. Rendering and the state dispatcher may run on different threads, so every map access holds
     * this instance's monitor; wrapping a missed line happens outside it.
     */
-  final class Bounded private[WrappedLineCache] (maxLines: Int, maxChars: Long, shaper: ShapedTextCache)
-      extends WrappedLineCache:
+  final class Bounded private[WrappedLineCache] (
+      maxLines: Int,
+      maxChars: Long,
+      shaper: ShapedTextCache,
+      private[serenity] val layoutMemos: LayoutMemos
+  ) extends WrappedLineCache:
     private[serenity] def shapedText: ShapedTextCache = shaper
 
-    private[serenity] val layoutMemos: LayoutMemos = LayoutMemos()
-    private val entries                            = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
-    private val recent                             = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
-    private val retainedChar                       = new AtomicLong(0L)
-    private val coldCount                          = new AtomicLong(0L)
-    private val incrementalCount                   = new AtomicLong(0L)
-    private val rowCount                           = new AtomicLong(0L)
-    private val measuredCount                      = new AtomicLong(0L)
+    private val entries          = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
+    private val recent           = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
+    private val retainedChar     = new AtomicLong(0L)
+    private val coldCount        = new AtomicLong(0L)
+    private val incrementalCount = new AtomicLong(0L)
+    private val rowCount         = new AtomicLong(0L)
+    private val measuredCount    = new AtomicLong(0L)
     private val visualRows =
       new VisualLineIndexStore[VisualRowKey](VisualLineIndexStore.DefaultMaxEntries, VisualRowKey.seeds)
     private val bandRows  = new VisualLineIndexStore[BandHeightKey](VisualLineIndexStore.DefaultMaxEntries)
@@ -391,6 +404,8 @@ object WrappedLineCache:
       revision: Option[ContentRevision]
     ): VisualRowCounts =
       visualRows.counts(key, content, measure, stamp, revision)
+
+    private[layout] def dropVisualRowCounts(key: VisualRowKey): Unit = visualRows.forget(key)
 
     private[layout] def bandHeights(
       key: BandHeightKey,

@@ -18,6 +18,9 @@ final case class CellMetrics(charWidth: Int, lineHeight: Int, ascent: Int, displ
   def toCol(pixelX: Int): Int = if charWidth > 0 then pixelX / charWidth else 0
   def toRow(pixelY: Int): Int = if lineHeight > 0 then pixelY / lineHeight else 0
 
+  def pixelRect(col: Int, row: Int, cols: Int, rows: Int): PixelRect =
+    PixelRect(toPixelX(col), toPixelY(row), cols * charWidth, rows * lineHeight)
+
   /** Derive a ViewportSize in cell units from a pixel viewport. Fractional cells at the right/bottom edge are excluded
     * — those pixels stay background-filled.
     */

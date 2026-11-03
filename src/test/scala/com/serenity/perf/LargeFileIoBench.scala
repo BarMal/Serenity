@@ -9,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.io.FileManager
+import com.serenity.perf.BenchmarkMain
 import com.serenity.rope.Balance
 import com.serenity.state.models.BufferId
 
@@ -23,18 +24,19 @@ object LargeFileIoBench:
     def describe: String = s"$millis ms, allocated ${allocatedBytes >> 20} MB, peak heap ${peakBytes >> 20} MB"
 
   def main(args: Array[String]): Unit =
-    val megabytes  = args.headOption.flatMap(_.toIntOption).getOrElse(50)
-    val terminator = if args.contains("crlf") then "\r\n" else "\n"
-    val path       = TestTemp.file("serenity-large", ".txt")
-    try
-      writeSample(path, megabytes.toLong * 1024 * 1024, terminator)
-      val manager        = new FileManager()
-      val (buffer, load) = measured(manager.loadFile(path, BufferId(1)).unsafeRunSync())
-      val (_, save)      = measured(manager.saveBuffer(buffer, path).unsafeRunSync())
-      println(s"size=${megabytes}MB terminator=${terminator.length}")
-      println(s"open: ${load.describe}")
-      println(s"save: ${save.describe}")
-    finally Files.deleteIfExists(path)
+    BenchmarkMain.run:
+      val megabytes  = args.headOption.flatMap(_.toIntOption).getOrElse(50)
+      val terminator = if args.contains("crlf") then "\r\n" else "\n"
+      val path       = TestTemp.file("serenity-large", ".txt")
+      try
+        writeSample(path, megabytes.toLong * 1024 * 1024, terminator)
+        val manager        = new FileManager()
+        val (buffer, load) = measured(manager.loadFile(path, BufferId(1)).unsafeRunSync())
+        val (_, save)      = measured(manager.saveBuffer(buffer, path).unsafeRunSync())
+        println(s"size=${megabytes}MB terminator=${terminator.length}")
+        println(s"open: ${load.describe}")
+        println(s"save: ${save.describe}")
+      finally Files.deleteIfExists(path)
 
   private def measured[A](run: => A): (A, Measurement) =
     val threads = ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]

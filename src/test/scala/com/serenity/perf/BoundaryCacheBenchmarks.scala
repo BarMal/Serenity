@@ -33,7 +33,8 @@ private[perf] object BoundaryCacheBenchmarks:
   def benchmarks(): List[BenchmarkRunner.Benchmark] = boundaryBenchmarks() ++ findBenchmarks() ++ countBenchmarks()
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   /** A cluster is more than one char, so a boundary question next to it cannot be answered by the plain-neighbour fast
     * path and reaches the `BreakIterator`: e with a combining acute, a thumbs-up with a skin tone, and the Devanagari
