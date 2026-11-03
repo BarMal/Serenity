@@ -7,6 +7,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{MenuBarMode, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
+import com.serenity.input.FileDropHandler
 import com.serenity.ui.host.WindowHost
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -44,3 +45,6 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
     val onMac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac")
     withHost(host => host.menus(MenuBarMode.Visible).isDefined shouldBe !onMac)
   }
+
+  it should "take a file-drop handler through the control, not only on the Swing window" in
+    withHost(host => noException should be thrownBy host.control.installFileDrop(FileDropHandler(_ => (), _ => ())))

@@ -14,7 +14,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
-import com.serenity.input.ImeRequestsHost
+import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
@@ -393,6 +393,10 @@ class SwingWindow(
       frame.requestFocus()
       val _ = canvas.requestFocusInWindow()
     }
+
+  /** Makes the window take file drops: the drop target covers the content pane and the canvas. */
+  override def installFileDrop(handler: FileDropHandler): Unit =
+    SwingUtilities.invokeLater(() => FileDropTarget.install(Seq(frame.getContentPane, canvas), handler))
 
   def start(): Unit =
     val showWindow: Runnable = () =>

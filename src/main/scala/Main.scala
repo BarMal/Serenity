@@ -31,7 +31,7 @@ import com.serenity.diagnostics.{
   TuiConsoleLogFilter
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
-import com.serenity.input.ImeDiagnostics
+import com.serenity.input.{FileDropHandler, ImeDiagnostics}
 import com.serenity.io.FileDialogSelection
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
@@ -394,9 +394,10 @@ object Main extends IOApp:
             frameTimings,
             startup.plan.windowTitle
           ),
-        PaintExecutionContext.resource
+        PaintExecutionContext.resource,
+        FileDrops.create(description => logger.info(s"[DROP] $description"))
       ).tupled
-        .use { (host, paintEc) =>
+        .use { (host, paintEc, drops) =>
           val actualAppConfig =
             resolveAutoTextScale(appConfig, host.control.detectedDeviceTextScale)
           val fileDialogSelection = FileDialogSelection.forThisProcess(actualAppConfig.fileDialogMode)
@@ -409,6 +410,8 @@ object Main extends IOApp:
                   host.control.updateMetrics(display.codeMetrics, display.uiMetrics)
                 }
             else IO.unit
+          val installFileDrop    = IO(host.control.installFileDrop(FileDropHandler(drops.dropped, drops.offered)))
+          val initialWindowSetup = initialScaleSync >> installFileDrop
 
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {
@@ -490,7 +493,7 @@ object Main extends IOApp:
               applyPointerShape = shape => IO(host.control.updatePointerShape(shape))
             )
 
-            initialScaleSync >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
+            initialWindowSetup >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
               initialViewportSize = host.target.viewportSize,
               checkResize = IO(host.control.doResizeIfNecessary()),
               runtime = frontendRuntime,
@@ -529,7 +532,7 @@ object Main extends IOApp:
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),
               openPath = launchOptions.openPath,
               frontend = GuiFrontend,
-              forwardedOpens = session.forwardedOpens.evalTap(_ => IO(host.control.bringToFront())),
+              forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(host.control.bringToFront())),
               quitRequests = session.quitRequests,
               fileOrFolderOpen = fileDialog.supportsFileOrFolder
             )

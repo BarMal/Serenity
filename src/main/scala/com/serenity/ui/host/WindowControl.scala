@@ -4,6 +4,7 @@ import scala.annotation.unused
 
 import cats.effect.IO
 import com.serenity.config.PreferredWindowSize
+import com.serenity.input.FileDropHandler
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.AccessibilitySnapshot
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -45,3 +46,6 @@ trait WindowControl:
 
   /** Logs what the first frames did on screen; a window that keeps no such record logs nothing. */
   def reportFirstPaints(@unused logger: Logger[IO]): IO[Unit] = IO.unit
+
+  /** Makes the window take file drops; a window that cannot be dropped on ignores the handler. */
+  def installFileDrop(@unused handler: FileDropHandler): Unit = ()
