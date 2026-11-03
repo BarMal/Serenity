@@ -51,19 +51,22 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
     val directory = Gen.choose(0, 4).flatMap(Gen.listOfN(_, segment)).map(_.mkString("/"))
     val file      = (directory, fileName).mapN((d, f) => if d.isEmpty then f else s"$d/$f")
     val pattern   = Gen.oneOf("*.log", "b/", "!keep.log", "/x.txt", "deep/", "*.md")
-    val ignore    = (directory, Gen.choose(1, 3).flatMap(Gen.listOfN(_, pattern))).mapN((d, ps) => d -> ps.mkString("\n"))
+    val ignore = (directory, Gen.choose(1, 3).flatMap(Gen.listOfN(_, pattern))).mapN((d, ps) => d -> ps.mkString("\n"))
     (Gen.choose(1, 40).flatMap(Gen.listOfN(_, file)), Gen.choose(0, 3).flatMap(Gen.listOfN(_, ignore)))
       .mapN((files, ignores) => (files.toVector, ignores.toMap))
 
-  extension [A, B](pair: (Gen[A], Gen[B])) private def mapN[C](f: (A, B) => C): Gen[C] = pair._1.flatMap(a => pair._2.map(f(a, _)))
+  extension [A, B](pair: (Gen[A], Gen[B]))
+    private def mapN[C](f: (A, B) => C): Gen[C] = pair._1.flatMap(a => pair._2.map(f(a, _)))
 
   private def materialize(files: Vector[String], ignores: Map[String, String]): Path =
     val root = TestTemp.directory("parallel-walk-random")
     files.foreach(write(root, _))
-    ignores.foreach((directory, rules) => write(root, if directory.isEmpty then ".gitignore" else s"$directory/.gitignore", rules))
+    ignores.foreach((directory, rules) =>
+      write(root, if directory.isEmpty then ".gitignore" else s"$directory/.gitignore", rules)
+    )
     root
 
-  "A parallel walk" should "list exactly what the serial walk lists, cut at the same place for every limit" in {
+  "A parallel walk" should "list exactly what the serial walk lists, cut at the same place for every limit" in
     forAll(projectGen) { (files, ignores) =>
       val root   = materialize(files, ignores)
       val total  = ProjectFileWalker.list(root, limit = 100000, parallelism = 1).unsafeRunSync().files.size
@@ -73,7 +76,6 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
           ProjectFileWalker.list(root, limit, parallelism = 1).unsafeRunSync()
       }
     }
-  }
 
   it should "report the same partial listings as the serial walk, each made of whole directories" in {
     val root = aged {
@@ -98,7 +100,9 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
     parallelFinal shouldBe serialFinal
     val complete = parallelFinal.files.groupBy(file => Option(file.getParent)).view.mapValues(_.toSet).toMap
     parallel.foreach { partial =>
-      partial.files.groupBy(file => Option(file.getParent)).foreach((parent, found) => found.toSet shouldBe complete(parent))
+      partial.files
+        .groupBy(file => Option(file.getParent))
+        .foreach((parent, found) => found.toSet shouldBe complete(parent))
     }
   }
 
@@ -116,7 +120,15 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
         val _ = inFlight.decrementAndGet()
 
     val walked = ProjectFileWalker
-      .build(root, reader, Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty), Int.MaxValue, Int.MaxValue, _ => IO.unit, parallelism = 4)
+      .build(
+        root,
+        reader,
+        Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty),
+        Int.MaxValue,
+        Int.MaxValue,
+        _ => IO.unit,
+        parallelism = 4
+      )
       .unsafeRunSync()
 
     walked.files should have size 48
@@ -131,9 +143,23 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
       else ProjectFileWalker.readDirectory(directory)
 
     val walked = ProjectFileWalker
-      .build(root, unreadable, Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty), Int.MaxValue, Int.MaxValue, _ => IO.unit, parallelism = 4)
+      .build(
+        root,
+        unreadable,
+        Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty),
+        Int.MaxValue,
+        Int.MaxValue,
+        _ => IO.unit,
+        parallelism = 4
+      )
       .unsafeRunSync()
-    walked.files.map(ProjectFileWalker.slashed).sorted shouldBe Vector("d00/f0.txt", "d01/f0.txt", "d02/f0.txt", "d04/f0.txt", "d05/f0.txt")
+    walked.files.map(ProjectFileWalker.slashed).sorted shouldBe Vector(
+      "d00/f0.txt",
+      "d01/f0.txt",
+      "d02/f0.txt",
+      "d04/f0.txt",
+      "d05/f0.txt"
+    )
 
     ProjectFileWalker
       .list(root.resolve("missing"), limit = 10, parallelism = 4)

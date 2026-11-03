@@ -76,9 +76,9 @@ final class ProjectFileIndex private (
         else revalidated(root, tree.directories, extras.rules).map(ProjectTree(_, tree.extras))
     yield current
 
-  /** Visits the tree level by level, reading again just the directories that changed. Within a level the checks and
-    * the reads run up to `parallelism` at once; the reads are then applied in order. That is safe because a reread
-    * changes only its own directory and what lies below it, and the rules it inherits come from directories above.
+  /** Visits the tree level by level, reading again just the directories that changed. Within a level the checks and the
+    * reads run up to `parallelism` at once; the reads are then applied in order. That is safe because a reread changes
+    * only its own directory and what lies below it, and the rules it inherits come from directories above.
     */
   private def revalidated(
     root: Path,
@@ -91,16 +91,15 @@ final class ProjectFileIndex private (
         IO.parTraverseN(parallelism)(level) { directory =>
           IO.blocking(directories.get(directory).forall(changed(root, directory, _))).map(directory -> _)
         }.flatMap { checked =>
-            val (changedDirectories, unchanged) = checked.partitionMap((directory, isChanged) =>
-              if isChanged then Left(directory) else Right(directory)
-            )
-            val below = unchanged.flatMap(directory => subdirectories(directories, directory))
-            IO.parTraverseN(parallelism)(changedDirectories)(directory => rescanned(root, base, directory, directories))
-              .flatMap(_.foldLeftM((directories, below)) { (state, rescan) =>
-                applied(root, rescan, state._1).map((updated, more) => (updated, state._2 ++ more))
-              })
-              .map(Left(_))
-          }
+          val (changedDirectories, unchanged) =
+            checked.partitionMap((directory, isChanged) => if isChanged then Left(directory) else Right(directory))
+          val below = unchanged.flatMap(directory => subdirectories(directories, directory))
+          IO.parTraverseN(parallelism)(changedDirectories)(directory => rescanned(root, base, directory, directories))
+            .flatMap(_.foldLeftM((directories, below)) { (state, rescan) =>
+              applied(root, rescan, state._1).map((updated, more) => (updated, state._2 ++ more))
+            })
+            .map(Left(_))
+        }
     }
 
   /** A changed directory read again, beside what it held before; nothing for one that was never listed. */
@@ -112,7 +111,8 @@ final class ProjectFileIndex private (
 
   private def rescanned(root: Path, base: IgnoreRules, directory: Path, snapshots: Snapshots): IO[Option[Rescan]] =
     snapshots.get(directory).traverse { before =>
-      IO.blocking(scan(root, directory, rulesAbove(directory, snapshots, base), read)).attempt
+      IO.blocking(scan(root, directory, rulesAbove(directory, snapshots, base), read))
+        .attempt
         .map(Rescan(directory, before, _))
     }
 
