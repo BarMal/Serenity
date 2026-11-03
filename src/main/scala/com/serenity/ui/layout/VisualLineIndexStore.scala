@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.util.LinkedHashMap
 
 import scala.annotation.tailrec
+import scala.jdk.CollectionConverters.*
 
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{LazyBlockIndex, MarkdownInlineView}
@@ -21,7 +22,7 @@ import com.serenity.ui.theme.HeadingSettings
   * The state dispatcher and a render may run on different threads, so every map access holds this instance's monitor;
   * measuring happens outside it, and the last refinement stored wins.
   */
-final class VisualLineIndexStore[K](maxEntries: Int):
+final class VisualLineIndexStore[K](maxEntries: Int, seedsFrom: (K, K) => Boolean = (_: K, _: K) => false):
 
   final private case class Entry(
       content: Rope,
@@ -53,15 +54,30 @@ final class VisualLineIndexStore[K](maxEntries: Int):
     stamp: AnyRef = VisualLineIndexStore.Unstamped,
     revision: Option[ContentRevision] = None
   ): VisualLineIndex =
-    synchronized(Option(entries.get(key))) match
-      case None => VisualLineIndex.unmeasured(content.lineCount)
-      case Some(head) =>
-        val entry = head.describing(content).getOrElse(head)
-        VisualLineIndexStore.stampsRelate(entry.stamp, stamp) match
-          case StampRelation.Unrelated => VisualLineIndex.unmeasured(content.lineCount)
-          case StampRelation.Same      => followed(entry, content, revision)
-          case StampRelation.AgreesBefore(line) =>
-            VisualLineIndexStore.unmeasuredFrom(followed(entry, content, revision), line)
+    synchronized(Option(entries.get(key)).toRight(seedingEntry(key))) match
+      case Left(None)        => VisualLineIndex.unmeasured(content.lineCount)
+      case Left(Some(donor)) => described(donor, content, stamp, revision).keepingOneRowLines
+      case Right(head)       => described(head, content, stamp, revision)
+
+  /** The entry of the key that seeds `key` and knows the most: of the keys that may seed it, the one every other seeds.
+    * Call with the monitor held.
+    */
+  private def seedingEntry(key: K): Option[Entry] =
+    val donors = entries.entrySet().asScala.filter(held => seedsFrom(held.getKey, key)).toList
+    donors.reduceOption((a, b) => if seedsFrom(a.getKey, b.getKey) then b else a).map(_.getValue)
+
+  private def described(
+    head: Entry,
+    content: Rope,
+    stamp: AnyRef,
+    revision: Option[ContentRevision]
+  ): VisualLineIndex =
+    val entry = head.describing(content).getOrElse(head)
+    VisualLineIndexStore.stampsRelate(entry.stamp, stamp) match
+      case StampRelation.Unrelated => VisualLineIndex.unmeasured(content.lineCount)
+      case StampRelation.Same      => followed(entry, content, revision)
+      case StampRelation.AgreesBefore(line) =>
+        VisualLineIndexStore.unmeasuredFrom(followed(entry, content, revision), line)
 
   private def followed(entry: Entry, content: Rope, revision: Option[ContentRevision]): VisualLineIndex =
     if isSameContent(entry.content, content) then entry.index

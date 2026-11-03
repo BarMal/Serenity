@@ -225,10 +225,12 @@ object StateManager:
     projectTasksEnabled: Boolean = true,
     restarter: Option[RestartMode => IO[Unit]] = None,
     dictionaryCache: DictionaryCache = DictionaryCache(),
-    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system
+    appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system,
+    scrollCounting: ScrollCounting = ScrollCounting.Inline
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
-    val renderCaches = RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity)
+    val renderCaches =
+      RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity, scrollCounting)
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       themeNames                  <- themeManager.listAvailableThemes.handleErrorWith(_ => IO.pure(Nil))
