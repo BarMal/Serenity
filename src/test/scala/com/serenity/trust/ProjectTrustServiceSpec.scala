@@ -3,19 +3,13 @@ package com.serenity.trust
 import java.nio.file.{Files, Path}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class ProjectTrustServiceSpec extends AnyFlatSpec with Matchers:
 
-  private def withTempDirectory[A](body: Path => A): A =
-    val directory = Files.createTempDirectory("project-trust-service")
-    try body(directory)
-    finally
-      Files
-        .walk(directory)
-        .sorted(java.util.Comparator.reverseOrder())
-        .forEach(path => Files.deleteIfExists(path): Unit)
+  private def withTempDirectory[A](body: Path => A): A = TestTemp.within("project-trust-service")(body)
 
   "ProjectTrustService" should "start from what the store holds" in withTempDirectory { directory =>
     val file = directory.resolve("trust.conf")
