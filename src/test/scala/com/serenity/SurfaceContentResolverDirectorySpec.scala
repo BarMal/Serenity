@@ -50,7 +50,7 @@ class SurfaceContentResolverDirectorySpec extends AnyFlatSpec with Matchers:
     pinned.rows.map(_.plainText) shouldBe List("Selected: src", "src", "test", "build.sbt")
   }
 
-  it should "resolve directory trees with an explicit root row and lazy-load markers" in {
+  it should "resolve directory trees with an explicit root row, lazy-load markers and no panel title" in {
     val content = SurfaceContent.DirectoryTree(tree, Some(root.resolve("src")))
 
     val pinned = SurfaceContentResolver.resolve(
@@ -59,7 +59,7 @@ class SurfaceContentResolverDirectorySpec extends AnyFlatSpec with Matchers:
       SurfaceRenderMode.Pinned
     )
 
-    pinned.title shouldBe Some("repo")
+    pinned.title shouldBe None
     pinned.rows.map(_.plainText) shouldBe List(
       "▾ repo",
       "  ▾ src",
