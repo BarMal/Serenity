@@ -1,0 +1,40 @@
+name: macOS pane-edge diagnostic
+
+# Temporary (#2481): runs only the two specs that fail on macOS, on a push to this branch, so the evidence costs one
+# macOS job instead of a whole matrix. Removed before the pull request leaves draft.
+on:
+  push:
+    branches:
+      - claude/macos-diag-a-2481
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Pane-edge specs (macos)
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - name: Run the two specs
+        shell: bash
+        run: sbt -v "testOnly com.serenity.perf.PaneEdgeDamagedFrameSpec com.serenity.perf.ScalingBenchmarksSpec"
+      - name: Print failure detail
+        if: failure()
+        shell: bash
+        run: |
+          shopt -s nullglob
+          for report in target/test-reports/*.xml; do
+            if grep -q -e '<failure' -e '<error' "$report"; then
+              echo "::group::$report"
+              cat "$report"
+              echo "::endgroup::"
+            fi
+          done
