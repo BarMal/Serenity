@@ -1,7 +1,6 @@
 package com.serenity.ui.terminal
 
 import java.awt.*
-import java.awt.dnd.{DnDConstants, DropTarget}
 import java.awt.event.*
 import java.awt.im.InputMethodRequests
 import java.awt.image.BufferedImage
@@ -18,9 +17,12 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
-import com.serenity.ui.display.{DisplayScale, DisplaySnapshot}
+import com.serenity.ui.display.DisplayScale
+import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.{CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
 import com.serenity.ui.theme.Theme
+import org.typelevel.log4cats.Logger
 
 class SwingWindow(
     initialPixelSize: Dimension,
@@ -30,7 +32,8 @@ class SwingWindow(
     frameTimings: FrameTimings = FrameTimings(),
     env: Map[String, String] = sys.env,
     windowTitle: String = SwingWindow.WindowTitle
-):
+) extends RenderTarget
+    with WindowControl:
 
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
@@ -65,7 +68,7 @@ class SwingWindow(
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
-  private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
+  private val publishedCaretsRef       = new AtomicReference[scala.List[CaretPaint]](Nil)
   // Kept through the caret's blink-off phases, so the input method's candidate window has somewhere to be.
   private val lastCaretRef           = new AtomicReference[Option[Rectangle]](None)
   private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
@@ -197,7 +200,7 @@ class SwingWindow(
     * or the whole canvas whenever `baseDirtyRects` itself is `None`.
     */
   def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
-    paintCarets: => scala.List[SwingWindow.CaretPaint]
+    paintCarets: => scala.List[CaretPaint]
   ): Boolean =
     val presenter = layerPresenterRef.get()
     if baseImageRef.get().isDefined || presenter.exists(_.baseAvailable) then
@@ -215,7 +218,7 @@ class SwingWindow(
   /** From now on a GPU layer shows the base frame: it is handed the carets and the pointer cursor, and disposed when
     * the window stops.
     */
-  private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
+  override def attachLayerPresenter(presenter: LayerPresenter): Unit =
     layerPresenterRef.getAndSet(Some(presenter)).filterNot(_ eq presenter).foreach(_.dispose())
     val stamps = new LayerPresentStamps(frameTimings)
     presenter.onPublished(() => stamps.published())
@@ -239,7 +242,7 @@ class SwingWindow(
     */
   private[serenity] def setOnFramePresented(callback: () => Unit): Unit = framePresentedRef.set(Some(callback))
 
-  private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
+  def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
 
   private def toggleMaximize(): Unit =
@@ -391,15 +394,9 @@ class SwingWindow(
       val _ = canvas.requestFocusInWindow()
     }
 
-  /** Makes the window take file drops: the drop target covers the content pane and the canvas, since a drop is answered
-    * by the component under the pointer.
-    */
-  def installFileDrop(handler: FileDropHandler): Unit =
-    SwingUtilities.invokeLater { () =>
-      Seq[Component](frame.getContentPane, canvas).foreach { component =>
-        new DropTarget(component, DnDConstants.ACTION_COPY, FileDropTarget(handler))
-      }
-    }
+  /** Makes the window take file drops: the drop target covers the content pane and the canvas. */
+  override def installFileDrop(handler: FileDropHandler): Unit =
+    SwingUtilities.invokeLater(() => FileDropTarget.install(Seq(frame.getContentPane, canvas), handler))
 
   def start(): Unit =
     val showWindow: Runnable = () =>
@@ -494,17 +491,11 @@ class SwingWindow(
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
 
-  def displaySnapshot(preferred: Option[PreferredWindowSize]): DisplaySnapshot =
-    DisplaySnapshot(
-      toolkitClass = Toolkit.getDefaultToolkit.getClass.getName,
-      scale = DisplayScale.forComponent(canvas),
-      frameWidthPx = frame.getWidth,
-      frameHeightPx = frame.getHeight,
-      canvasWidthPx = canvas.getWidth,
-      canvasHeightPx = canvas.getHeight,
-      preferredWidthPx = preferred.map(_.width),
-      preferredHeightPx = preferred.map(_.height)
-    )
+  def geometry: SurfaceGeometry = SwingCanvasGeometry.of(canvas)
+
+  override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
+
+  override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 
   private def chromeControlFont: Font =
     new Font(Font.SANS_SERIF, Font.PLAIN, chromeMetricsRef.get().titleFontSize)

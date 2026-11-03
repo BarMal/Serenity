@@ -181,24 +181,25 @@ private[perf] object TypingPaintProfile:
     println(s"typed ${loop(0L)} frames of ${variant.label}")
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
-    val widthPx  = sys.props.getOrElse("profile.width", "1920").toInt
-    val heightPx = sys.props.getOrElse("profile.height", "1080").toInt
-    val scale    = sys.props.getOrElse("profile.scale", "1").toDouble
-    sys.props.get("profile.seconds").map(_.toDouble) match
-      case Some(seconds) =>
-        val chrome = sys.props.getOrElse("profile.chrome", "full")
-        val variant = variants
-          .find(_.label == chrome)
-          .getOrElse(
-            throw IllegalArgumentException(
-              s"profile.chrome must be one of ${variants.map(_.label).mkString(", ")}, not $chrome"
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
+      val widthPx  = sys.props.getOrElse("profile.width", "1920").toInt
+      val heightPx = sys.props.getOrElse("profile.height", "1080").toInt
+      val scale    = sys.props.getOrElse("profile.scale", "1").toDouble
+      sys.props.get("profile.seconds").map(_.toDouble) match
+        case Some(seconds) =>
+          val chrome = sys.props.getOrElse("profile.chrome", "full")
+          val variant = variants
+            .find(_.label == chrome)
+            .getOrElse(
+              throw IllegalArgumentException(
+                s"profile.chrome must be one of ${variants.map(_.label).mkString(", ")}, not $chrome"
+              )
             )
-          )
-        val factory = sys.props.getOrElse("profile.variant", "skia") match
-          case "skia"  => SkiaRasterSurfaceFactory
-          case "floor" => NullSurfaceFactory()
-          case other   => throw IllegalArgumentException(s"profile.variant must be skia or floor, not $other")
-        typeFor(seconds, factory, variant, widthPx, heightPx, scale)
-      case None => report(widthPx, heightPx, scale)
-    sys.exit(0)
+          val factory = sys.props.getOrElse("profile.variant", "skia") match
+            case "skia"  => SkiaRasterSurfaceFactory
+            case "floor" => NullSurfaceFactory()
+            case other   => throw IllegalArgumentException(s"profile.variant must be skia or floor, not $other")
+          typeFor(seconds, factory, variant, widthPx, heightPx, scale)
+        case None => report(widthPx, heightPx, scale)
+      sys.exit(0)

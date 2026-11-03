@@ -11,7 +11,6 @@ import com.serenity.ui.renderer.{
   FontSpec,
   FrameSurfaceFactory,
   FrameSurfaceRequest,
-  Java2DRenderSurface,
   PanelOutlineDrawing,
   PixelDrawing,
   RenderImage,
@@ -119,12 +118,12 @@ final class NullSurfaceFactory extends FrameSurfaceFactory:
   private val publish = new AtomicReference[() => Unit](() => ())
 
   def create(request: FrameSurfaceRequest): RenderSurface =
-    val canvas        = request.canvas
-    val logicalWidth  = Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-    val logicalHeight = Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-    val scale         = Java2DRenderSurface.deviceScaleFor(canvas)
-    val widthPx       = Java2DRenderSurface.deviceImageDimension(logicalWidth, scale.x)
-    val heightPx      = Java2DRenderSurface.deviceImageDimension(logicalHeight, scale.y)
+    val geometry      = request.geometry
+    val logicalWidth  = geometry.logicalWidthPx
+    val logicalHeight = geometry.logicalHeightPx
+    val scale         = geometry.deviceScale
+    val widthPx       = geometry.deviceWidthPx
+    val heightPx      = geometry.deviceHeightPx
     publish.set { () =>
       val image = request.acquireImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
       request.onFlush(image)

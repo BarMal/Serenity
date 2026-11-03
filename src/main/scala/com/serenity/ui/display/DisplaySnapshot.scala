@@ -1,5 +1,9 @@
 package com.serenity.ui.display
 
+import java.awt.{Component, Toolkit}
+import javax.swing.SwingUtilities
+
+import com.serenity.config.PreferredWindowSize
 import com.serenity.ui.display.DisplayScale.DeviceScale
 
 /** What the window and the toolkit say about their size once the window is shown, in one log line, so a window that is
@@ -31,3 +35,19 @@ final case class DisplaySnapshot(
       case _                           => "none"
     s"[DISPLAY] ${prefix}toolkit=$toolkitClass scale=${scale.x}x${scale.y} frame=${frameWidthPx}x$frameHeightPx " +
       s"canvas=${canvasWidthPx}x$canvasHeightPx preferred=$preferred"
+
+object DisplaySnapshot:
+
+  /** The frame is the canvas's window, so a canvas with no window reads as a 0x0 frame. */
+  def of(canvas: Component, preferred: Option[PreferredWindowSize]): DisplaySnapshot =
+    val frame = Option(SwingUtilities.getWindowAncestor(canvas))
+    DisplaySnapshot(
+      toolkitClass = Toolkit.getDefaultToolkit.getClass.getName,
+      scale = DisplayScale.forComponent(canvas),
+      frameWidthPx = frame.fold(0)(_.getWidth),
+      frameHeightPx = frame.fold(0)(_.getHeight),
+      canvasWidthPx = canvas.getWidth,
+      canvasHeightPx = canvas.getHeight,
+      preferredWidthPx = preferred.map(_.width),
+      preferredHeightPx = preferred.map(_.height)
+    )

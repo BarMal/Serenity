@@ -1,5 +1,8 @@
 package com.serenity.ui.display
 
+import javax.swing.JPanel
+
+import com.serenity.config.PreferredWindowSize
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,4 +45,23 @@ class DisplaySnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "say so when the size was still changing" in {
     wayland.settledLogLine(settled = false) should startWith("[DISPLAY] settled=false ")
+  }
+
+  "DisplaySnapshot.of" should "read the canvas size and the configured size, and say 0x0 for a frame it has no window for" in {
+    val canvas = new JPanel
+    canvas.setSize(1024, 768)
+
+    val snapshot = DisplaySnapshot.of(canvas, Some(PreferredWindowSize(1024, 768)))
+
+    snapshot.canvasWidthPx shouldBe 1024
+    snapshot.canvasHeightPx shouldBe 768
+    snapshot.frameWidthPx shouldBe 0
+    snapshot.frameHeightPx shouldBe 0
+    snapshot.preferredWidthPx shouldBe Some(1024)
+    snapshot.preferredHeightPx shouldBe Some(768)
+    snapshot.scale shouldBe DisplayScale.One
+  }
+
+  it should "say none for a window size that is not configured" in {
+    DisplaySnapshot.of(new JPanel, None).logLine should endWith("preferred=none")
   }

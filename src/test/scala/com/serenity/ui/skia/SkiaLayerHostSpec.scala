@@ -46,7 +46,9 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     def capture(): BufferedImage =
       new Robot().createScreenCapture(new Rectangle(screenOrigin, new Dimension(canvas.getWidth, canvas.getHeight)))
 
-  private def withWindow[A](body: Window => A): A =
+  private def withWindow[A](body: Window => A): A = withReportingWindow(_ => ())(body)
+
+  private def withReportingWindow[A](report: String => Unit)(body: Window => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
     DisplayExclusive:
       val canvas = new JPanel(null)
@@ -60,7 +62,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         f.setVisible(true)
         f
       }
-      val host = SkiaLayerHost.create(canvas)
+      val host = SkiaLayerHost.createWith(canvas, syncGpu = false, LayerRedraw.forLayer, report)
       try
         val _ = onEdt(canvas.requestFocusInWindow())
         body(new Window(frame, canvas, host))
@@ -139,6 +141,18 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val raster = SkiaPixels.read(expected)
       showsExactly(window, raster, marker = 0x203040)
     }
+
+  it should "report the render API once, on its first draw, and leave what it draws alone" in {
+    val lines = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+    withReportingWindow(line => lines.add(line)) { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      val seen = window.host.renderCount
+      window.host.publish(record(scene))
+      eventually("a second draw")(window.host.renderCount > seen)
+      lines.toArray.toList shouldBe List(s"[RENDER] skia layer renderApi=${window.host.renderApi}")
+    }
+  }
 
   it should "draw the carets over the retained picture without recording the picture again" in
     withWindow { window =>
