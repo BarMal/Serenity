@@ -42,56 +42,59 @@ def payload(*runs: dict) -> dict:
 
 
 class VerdictTests(unittest.TestCase):
-    def test_passes_when_newest_completed_run_is_green_on_the_built_sha(self) -> None:
-        verdict = gate.check(payload(run("2026-11-03T03:17:00Z")), BUILT)
+    def test_passes_with_the_sha_of_the_newest_completed_run_when_it_is_green(self) -> None:
+        verdict = gate.check(payload(run("2026-11-03T03:17:00Z")))
         self.assertTrue(verdict.passed)
+        self.assertEqual(verdict.sha, BUILT)
 
     def test_fails_when_newest_completed_run_is_red(self) -> None:
-        verdict = gate.check(payload(run("2026-11-03T03:17:00Z", conclusion="failure")), BUILT)
+        verdict = gate.check(payload(run("2026-11-03T03:17:00Z", conclusion="failure")))
         self.assertFalse(verdict.passed)
         self.assertIn("failure", verdict.reason)
 
     def test_cancelled_and_skipped_runs_are_not_green(self) -> None:
         for conclusion in ("cancelled", "skipped", "timed_out", None):
             with self.subTest(conclusion=conclusion):
-                verdict = gate.check(payload(run("2026-11-03T03:17:00Z", conclusion=conclusion)), BUILT)
+                verdict = gate.check(payload(run("2026-11-03T03:17:00Z", conclusion=conclusion)))
                 self.assertFalse(verdict.passed)
 
     def test_fails_when_there_is_no_run_at_all(self) -> None:
-        verdict = gate.check(payload(), BUILT)
+        verdict = gate.check(payload())
         self.assertFalse(verdict.passed)
         self.assertIn("no completed", verdict.reason)
 
     def test_fails_when_only_unfinished_runs_exist(self) -> None:
-        verdict = gate.check(payload(run("2026-11-03T03:17:00Z", status="in_progress", conclusion=None)), BUILT)
+        verdict = gate.check(payload(run("2026-11-03T03:17:00Z", status="in_progress", conclusion=None)))
         self.assertFalse(verdict.passed)
         self.assertIn("no completed", verdict.reason)
 
-    def test_fails_when_the_nightly_tested_a_different_sha(self) -> None:
-        verdict = gate.check(payload(run("2026-11-03T03:17:00Z", sha=OTHER)), BUILT)
-        self.assertFalse(verdict.passed)
-        self.assertIn(OTHER[:12], verdict.reason)
-        self.assertIn(BUILT[:12], verdict.reason)
+    def test_the_sha_is_the_nightlys_whatever_master_has_moved_on_to(self) -> None:
+        verdict = gate.check(payload(run("2026-11-03T10:50:00Z", sha=OTHER)))
+        self.assertTrue(verdict.passed)
+        self.assertEqual(verdict.sha, OTHER)
+
+    def test_a_failure_carries_no_sha(self) -> None:
+        self.assertIsNone(gate.check(payload(run("2026-11-03T03:17:00Z", conclusion="failure"))).sha)
 
     def test_judges_the_newest_completed_run_whatever_order_the_api_lists_them(self) -> None:
         old_green = run("2026-11-02T03:17:00Z")
         new_red = run("2026-11-03T03:17:00Z", conclusion="failure")
-        self.assertFalse(gate.check(payload(old_green, new_red), BUILT).passed)
-        self.assertFalse(gate.check(payload(new_red, old_green), BUILT).passed)
+        self.assertFalse(gate.check(payload(old_green, new_red)).passed)
+        self.assertFalse(gate.check(payload(new_red, old_green)).passed)
 
     def test_a_run_still_in_progress_is_ignored_in_favour_of_the_last_completed_one(self) -> None:
         verdict = gate.check(
             payload(
                 run("2026-11-03T03:17:00Z", status="in_progress", conclusion=None, sha=OTHER),
                 run("2026-11-02T03:17:00Z"),
-            ),
-            BUILT,
+            )
         )
         self.assertTrue(verdict.passed)
+        self.assertEqual(verdict.sha, BUILT)
 
     def test_reason_is_one_line(self) -> None:
         for body in (payload(), payload(run("2026-11-03T03:17:00Z", conclusion="failure"))):
-            self.assertNotIn("\n", gate.check(body, BUILT).reason)
+            self.assertNotIn("\n", gate.check(body).reason)
 
 
 class MainTests(unittest.TestCase):
@@ -106,21 +109,21 @@ class MainTests(unittest.TestCase):
             sys.stdin = original
         return code, out.getvalue(), err.getvalue()
 
-    def test_reads_stdin_and_exits_zero_on_pass(self) -> None:
-        code, out, _ = self._main(["--sha", BUILT], json.dumps(payload(run("2026-11-03T03:17:00Z"))))
+    def test_reads_stdin_and_prints_only_the_sha_on_pass(self) -> None:
+        code, out, _ = self._main([], json.dumps(payload(run("2026-11-03T03:17:00Z"))))
         self.assertEqual(code, 0)
-        self.assertEqual(len(out.strip().splitlines()), 1)
+        self.assertEqual(out.strip(), BUILT)
 
     def test_reads_a_file_and_exits_one_on_fail(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runs.json"
             path.write_text(json.dumps(payload(run("2026-11-03T03:17:00Z", conclusion="failure"))))
-            code, _, err = self._main(["--sha", BUILT, str(path)])
+            code, _, err = self._main([str(path)])
         self.assertEqual(code, 1)
         self.assertEqual(len(err.strip().splitlines()), 1)
 
     def test_unparseable_input_fails_with_a_reason(self) -> None:
-        code, _, err = self._main(["--sha", BUILT], "not json")
+        code, _, err = self._main([], "not json")
         self.assertEqual(code, 1)
         self.assertIn("not valid JSON", err)
 

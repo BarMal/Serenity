@@ -26,39 +26,35 @@ permissions:
 
 jobs:
   # A master build (the nightly, or a manual dispatch on master) does not re-run the suite: the Cross-OS Tests nightly
-  # already runs it on Windows and macOS, and the Linux job in ci.yml covers Linux (#2557). Instead it requires that
-  # nightly to be green on the very commit being built, and pins the build and publish jobs to that commit. It does
-  # not poll: Desktop Publish starts 86 minutes after the nightly and a shard is capped at 60, so an unfinished nightly
-  # is late or stuck, and a re-run of this workflow once it finishes is clearer than a wait that can time out.
+  # already runs it on Windows and macOS, and the Linux job in ci.yml covers Linux (#2557). Instead it takes the newest
+  # completed scheduled Cross-OS run on master, fails unless that run is green, and outputs the commit it tested; the
+  # build and publish jobs check out exactly that commit. It is the nightly's commit rather than master's head because
+  # GitHub can delay a scheduled run by hours while master moves on, so requiring the two to match would rarely publish.
   # Tag builds and dispatches from other branches have no nightly to lean on, so they run the suite themselves.
   gate:
     name: Require green Cross-OS nightly
     runs-on: ubuntu-latest
     outputs:
-      sha: ${{ steps.commit.outputs.sha }}
+      sha: ${{ steps.nightly.outputs.sha }}
     steps:
-      - name: Check out repository
+      - name: Check out the gate script
         if: github.ref == 'refs/heads/master'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
-
-      - name: Resolve the commit to build
-        id: commit
-        if: github.ref == 'refs/heads/master'
-        shell: bash
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          sparse-checkout: scripts
 
       - name: Require a green Cross-OS nightly
+        id: nightly
         if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
-          BUILD_SHA: ${{ steps.commit.outputs.sha }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-os-tests.yml/runs?branch=master&event=schedule&per_page=20" \
-            | python3 scripts/cross_os_nightly_gate.py --sha "$BUILD_SHA"
+          SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-os-tests.yml/runs?branch=master&event=schedule&per_page=20" \
+            | python3 scripts/cross_os_nightly_gate.py)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.artifact_suffix }}

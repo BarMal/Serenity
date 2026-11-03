@@ -40,10 +40,18 @@ class GateJobTests(unittest.TestCase):
         self.assertIn("gh api", job)
         self.assertIn("GH_TOKEN: ${{ github.token }}", job)
 
-    def test_gate_job_pipes_the_runs_to_the_script_with_the_sha_being_built(self) -> None:
-        step = _step(_job(_WORKFLOW, "gate"), "Require a green Cross-OS nightly")
-        self.assertIn("scripts/cross_os_nightly_gate.py --sha", step)
+    def test_gate_job_pipes_the_runs_to_the_script_and_exports_the_sha_it_prints(self) -> None:
+        job = _job(_WORKFLOW, "gate")
+        step = _step(job, "Require a green Cross-OS nightly")
+        self.assertIn("python3 scripts/cross_os_nightly_gate.py", step)
+        self.assertNotIn("--sha", step)
         self.assertIn("set -euo pipefail", step)
+        self.assertIn('echo "sha=$SHA" >> "$GITHUB_OUTPUT"', step)
+        self.assertIn("sha: ${{ steps.nightly.outputs.sha }}", job)
+
+    def test_gate_job_does_not_resolve_master_head(self) -> None:
+        job = _job(_WORKFLOW, "gate")
+        self.assertNotIn("rev-parse", job)
 
     def test_gate_only_applies_to_master_builds(self) -> None:
         step = _step(_job(_WORKFLOW, "gate"), "Require a green Cross-OS nightly")
