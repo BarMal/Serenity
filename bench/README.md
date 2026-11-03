@@ -95,7 +95,7 @@ java \
 python3 bench/jfr-aggregate.py typing_random.jfr --top 20
 ```
 
-On a machine that does build, `-cp "$(sbt -batch "export Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
+On a machine that does build, `-cp "$(sbt -batch "export app/Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
 
 `TypingProfile` also prints `RESULT` lines (p50, p95, mean ms per event and allocated bytes per event); `cold_typing` prints the mean and p95 per keystroke bucket (1-50, 51-100, 101-200, 201-400, 401-600) and runs in a fresh JVM with no warm-up, for example `... TypingProfile cold_typing 300 --pace-ms=100 --warm-ms=1500`.
 

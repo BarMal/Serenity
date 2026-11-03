@@ -84,5 +84,48 @@ class CompareTests(unittest.TestCase):
             self.assertIn("notices.md", problems[0])
 
 
+class NormalisationTests(unittest.TestCase):
+    """Two builds of different commits differ in the version string and the generated BuildInfo; nothing else may."""
+
+    def _capture(self, tmp: str, name: str, entries: dict[str, bytes], text: str) -> Path:
+        jars = Path(tmp) / f"{name}-jars"
+        jars.mkdir()
+        jar = _jar(jars / "Serenity.jar", entries)
+        files = Path(tmp) / f"{name}-files"
+        files.mkdir()
+        notice = files / "notes.txt"
+        notice.write_text(text)
+        out = Path(tmp) / name
+        build_outputs.capture(out, jars=[jar], files=[notice])
+        return out
+
+    def test_an_ignored_entry_may_differ(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            before = self._capture(tmp, "before", {"a": b"1", "com/serenity/BuildInfo.class": b"x"}, "t")
+            after = self._capture(tmp, "after", {"a": b"1", "com/serenity/BuildInfo.class": b"y"}, "t")
+            self.assertTrue(build_outputs.compare(before, after))
+            self.assertEqual(build_outputs.compare(before, after, ignore_entries=[r"com/serenity/BuildInfo.*"]), [])
+
+    def test_an_ignored_entry_that_differs_in_name_only_does_not_hide_other_entries(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            before = self._capture(tmp, "before", {"a": b"1", "com/serenity/BuildInfo.class": b"x"}, "t")
+            after = self._capture(tmp, "after", {"a": b"2", "com/serenity/BuildInfo.class": b"y"}, "t")
+            problems = build_outputs.compare(before, after, ignore_entries=[r"com/serenity/BuildInfo.*"])
+            self.assertEqual(len(problems), 1)
+
+    def test_a_normalised_pattern_is_equal_in_text_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            before = self._capture(tmp, "before", {"a": b"1"}, "version 0.0.0+52-aaaa")
+            after = self._capture(tmp, "after", {"a": b"1"}, "version 0.0.0+56-bbbb+2026")
+            self.assertTrue(build_outputs.compare(before, after))
+            self.assertEqual(build_outputs.compare(before, after, normalise=[r"0\.0\.0\+\S+"]), [])
+
+    def test_normalising_does_not_hide_a_real_text_difference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            before = self._capture(tmp, "before", {"a": b"1"}, "version 0.0.0+52-aaaa one")
+            after = self._capture(tmp, "after", {"a": b"1"}, "version 0.0.0+56-bbbb two")
+            self.assertTrue(build_outputs.compare(before, after, normalise=[r"0\.0\.0\+\S+"]))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ contents count.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import sys
 import zipfile
@@ -40,7 +41,20 @@ def capture(out: Path, jars: list[Path], files: list[Path]) -> None:
         shutil.copyfile(file, out / file.name)
 
 
-def compare(before: Path, after: Path) -> list[str]:
+def _normalised(text: str, normalise: list[str]) -> str:
+    for pattern in normalise:
+        text = re.sub(pattern, "<normalised>", text)
+    return text
+
+
+def compare(
+    before: Path, after: Path, ignore_entries: list[str] | None = None, normalise: list[str] | None = None
+) -> list[str]:
+    """Differences between two captures. `ignore_entries` are regexes for jar entries that may differ (a generated
+    file carrying the commit or the time); `normalise` are regexes replaced before text is compared (version strings).
+    """
+    ignore = [re.compile(pattern) for pattern in ignore_entries or []]
+    normalise = normalise or []
     problems: list[str] = []
     names = sorted({p.name for p in before.iterdir()} | {p.name for p in after.iterdir()})
     for name in names:
@@ -48,7 +62,12 @@ def compare(before: Path, after: Path) -> list[str]:
         if not left.exists() or not right.exists():
             problems.append(f"{name}: present only {'before' if left.exists() else 'after'}")
         elif name.endswith(".entries"):
-            old, new = set(left.read_text().splitlines()), set(right.read_text().splitlines())
+
+            def keep(line: str) -> bool:
+                return not any(pattern.fullmatch(line.split("\t")[0]) for pattern in ignore)
+
+            old = {line for line in left.read_text().splitlines() if keep(line)}
+            new = {line for line in right.read_text().splitlines() if keep(line)}
             gone, added = sorted(old - new), sorted(new - old)
             if gone or added:
                 problems.append(
@@ -57,8 +76,13 @@ def compare(before: Path, after: Path) -> list[str]:
                     + "\n"
                     + "\n".join(f"  + {line}" for line in added[:20])
                 )
-        elif left.read_bytes() != right.read_bytes():
-            problems.append(f"{name}: contents differ")
+        else:
+            try:
+                same = _normalised(left.read_text(), normalise) == _normalised(right.read_text(), normalise)
+            except UnicodeDecodeError:
+                same = left.read_bytes() == right.read_bytes()
+            if not same:
+                problems.append(f"{name}: contents differ")
     return problems
 
 
@@ -72,11 +96,13 @@ def main(argv: list[str]) -> int:
     cmp = sub.add_parser("compare")
     cmp.add_argument("before", type=Path)
     cmp.add_argument("after", type=Path)
+    cmp.add_argument("--ignore-entry", action="append", default=[], help="regex for jar entries allowed to differ")
+    cmp.add_argument("--normalise", action="append", default=[], help="regex replaced before comparing text files")
     args = parser.parse_args(argv)
     if args.command == "capture":
         capture(args.out, args.jar, args.file)
         return 0
-    problems = compare(args.before, args.after)
+    problems = compare(args.before, args.after, args.ignore_entry, args.normalise)
     print("\n".join(problems) if problems else "build outputs identical")
     return 1 if problems else 0
 

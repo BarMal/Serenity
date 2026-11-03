@@ -50,7 +50,7 @@ jobs:
         shell: bash
         env:
           SERENITY_FUZZ_LINES: '100000'
-        run: sbt -v "testOnly com.serenity.ui.layout.LigatureCorpusOracleSpec"
+        run: sbt -v "app/testOnly com.serenity.ui.layout.LigatureCorpusOracleSpec"
 
       - name: Upload test reports
         if: always()
