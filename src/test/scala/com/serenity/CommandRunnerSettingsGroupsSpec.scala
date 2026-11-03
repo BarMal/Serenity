@@ -91,6 +91,7 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
     )
     nestedGroup("settings-navigation").label shouldBe "Comments"
     group("settings-typography").children.map(_.id) shouldBe List(
+      "settings-font-sizes",
       "settings-prose-font",
       "settings-code-font",
       "settings-ui-font",
@@ -126,7 +127,9 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "ui-element-gap",
       "ui-outline-thickness",
       "render-fps",
-      "render-damage-granularity"
+      "render-damage-granularity",
+      "render-backend",
+      "render-wayland"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"

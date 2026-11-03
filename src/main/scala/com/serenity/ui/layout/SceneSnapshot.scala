@@ -92,7 +92,11 @@ final case class UiSceneSnapshot(
     modal: List[SceneNode],
     focusOrder: List[SceneNodeId],
     // Where each pane with a scrollbar sits in its document: rendering paints the bar from it, mouse targeting drags it.
-    paneScrolls: Map[PaneId, PaneScroll] = Map.empty
+    paneScrolls: Map[PaneId, PaneScroll] = Map.empty,
+    // A pane whose bar is not drawn yet because its lines are still being measured.
+    pendingScrolls: Map[PaneId, PendingScroll] = Map.empty,
+    // What each pane's bar was laid out against, so a count knows which width and text it is for.
+    scrollKeys: Map[PaneId, ScrollKey] = Map.empty
 ):
 
   def nodesInPaintOrder: List[SceneNode] =
@@ -118,6 +122,12 @@ final case class UiSceneSnapshot(
 
   def withPaneScrolls(scrolls: Map[PaneId, PaneScroll]): UiSceneSnapshot =
     copy(paneScrolls = scrolls)
+
+  def withPendingScrolls(pending: Map[PaneId, PendingScroll]): UiSceneSnapshot =
+    copy(pendingScrolls = pending)
+
+  def withScrollKeys(keys: Map[PaneId, ScrollKey]): UiSceneSnapshot =
+    copy(scrollKeys = keys)
 
 object UiSceneSnapshot:
 

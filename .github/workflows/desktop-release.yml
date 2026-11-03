@@ -28,6 +28,9 @@ jobs:
     name: Build ${{ matrix.artifact_suffix }}
     if: "!startsWith(github.head_ref, 'claude/')"
     runs-on: ${{ matrix.os }}
+    # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
+    env:
+      SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
     strategy:
       fail-fast: false
       matrix:
@@ -74,6 +77,11 @@ jobs:
           set -euo pipefail
           mkdir -p package-input dist
           cp target/scala-*/Serenity.jar package-input/Serenity.jar
+          # Skiko loads its native library from app/natives (-Dskiko.library.path below), never from the jar: a Mach-O
+          # file inside a jar cannot carry our signature, and Skiko would otherwise unpack it into ~/.skiko (#2028).
+          # The runnable jar published beside the image keeps its natives; only the copy the image ships is stripped.
+          cp package-input/Serenity.jar "dist/Serenity-${{ matrix.artifact_suffix }}.jar"
+          java scripts/SkikoNatives.java package-input/Serenity.jar package-input/natives "${{ matrix.artifact_suffix }}"
           # GPL-3.0-or-later requires the licence to travel with every copy (#2019); jpackage copies the whole input
           # directory into the app image, so these land beside the jar inside the signed bundle on macOS too.
           cp LICENSE THIRD-PARTY-NOTICES.md package-input/
@@ -109,6 +117,7 @@ jobs:
             --java-options '-XX:+UseG1GC'
             --java-options '-XX:MaxRAMPercentage=25'
             --java-options '-XX:G1PeriodicGCInterval=60000'
+            --java-options '-Dskiko.library.path=$APPDIR/natives'
           )
           # JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native
           # access is granted, so the launcher grants it. The other warning is sun.misc.Unsafe: Scala's lazy vals
@@ -119,18 +128,35 @@ jobs:
             --java-options '--enable-native-access=ALL-UNNAMED'
             --java-options '--sun-misc-unsafe-memory-access=allow'
           )
-          # AppCDS (see DEVELOPMENT.md): the launcher maps a class-data archive kept beside the jar and written on the
-          # first exit. A dynamic archive needs the runtime's own base archive, and jlink needs the java launcher left
-          # in the image to generate one. Not on macOS, where writing into the signed bundle would break its signature.
+          # Class-data sharing (see DEVELOPMENT.md). The runtime always gets its base archive from jlink; a dynamic
+          # archive needs it, and jlink needs the java launcher left in the image to generate one. macOS has neither:
+          # writing into the signed bundle would break its signature. Windows maps an AppCDS archive kept beside the
+          # jar and written on the first exit. Linux ships a JDK 25 AOT cache instead, written by the training step
+          # below; the JVM refuses -XX:AOTCache together with the AppCDS options, so Linux sets only one of them.
           if [ "$(uname -s)" != "Darwin" ]; then
+            APP_ARGS+=(--jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive")
+          fi
+          if [ "${RUNNER_OS:-}" = "Windows" ]; then
             APP_ARGS+=(
-              --jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive"
               --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa'
               --java-options '-XX:+AutoCreateSharedArchive'
             )
           fi
-          cp package-input/Serenity.jar dist/Serenity.jar
           jpackage "${APP_ARGS[@]}"
+          # jlink dumped the base archive without --enable-native-access, which the launcher passes: the JVM would log a
+          # mismatch on every start and drop its archived module graph (#2407).
+          if [ "$(uname -s)" != "Darwin" ]; then
+            scripts/regenerate-base-cds-archive.sh dist/Serenity
+          fi
+          if [ -z "$(find dist -type f -path "*/app/natives/*skiko-*" -print -quit)" ]; then
+            echo "App image is missing the Skiko native library under app/natives" >&2
+            exit 1
+          fi
+          IMAGE_JAR="$(find dist -type f -path "*/app/Serenity.jar" -print -quit)"
+          if jar tf "$IMAGE_JAR" | grep -E 'skiko-(linux|macos|windows)-' >/dev/null; then
+            echo "App image Serenity.jar still contains a Skiko native library" >&2
+            exit 1
+          fi
           for notice in LICENSE THIRD-PARTY-NOTICES.md; do
             if [ -z "$(find dist -type f -path "*/app/$notice" -print -quit)" ]; then
               echo "App image is missing $notice" >&2
@@ -156,6 +182,20 @@ jobs:
           fi
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity 120
 
+      # The cache is written from a run of the finished image, so it follows the smoke test that proves the image
+      # starts. The check then proves a missing or stale cache (jar changed after training) still starts the app.
+      - name: Train and check Linux AOT cache
+        if: runner.os == 'Linux'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Image before training: $(du -sh dist/Serenity | cut -f1) on disk, $(tar czf - dist/Serenity | wc -c) bytes gzipped"
+          xvfb-run -a -s "-screen 0 1280x800x24" scripts/train-aot-cache.sh dist/Serenity 120
+          xvfb-run -a -s "-screen 0 1280x800x24" scripts/check-aot-cache.sh dist/Serenity 120
+          ls -l dist/Serenity/lib/app/serenity.aot
+          echo "Image after training: $(du -sh dist/Serenity | cut -f1) on disk, $(tar czf - dist/Serenity | wc -c) bytes gzipped"
+
       - name: Test the window-wait helper
         if: runner.os == 'Windows'
         shell: pwsh
@@ -166,12 +206,20 @@ jobs:
         shell: pwsh
         run: ./scripts/verify-windows-launcher.ps1
 
+      # The class-data archive disagreements (and the JVM's native-access warnings) only show when the packaged image is
+      # launched; the script runs under Git Bash on the Windows runner.
+      - name: Smoke-test Windows app image
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        shell: bash
+        run: scripts/smoke-test-app-image.sh dist/Serenity/Serenity.exe 120
+
       - name: Sign macOS app image
         if: runner.os == 'macOS'
         shell: bash
         run: |
           set -euo pipefail
-          codesign --force --deep --sign - dist/Serenity.app
+          scripts/sign-macos-app.sh dist/Serenity.app -
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'
@@ -190,12 +238,28 @@ jobs:
             zip -r Serenity-${{ matrix.artifact_suffix }}.zip Serenity
           fi
 
+      # Loads the natives from where the image ships them, after signing, with the stripped jar: a pass means the
+      # app/natives layout works and, on macOS, that the re-signed dylib is still accepted by the loader (#2028).
+      - name: Probe Skiko natives in the app image
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DIR="$(dirname "$(find dist -type f -path '*/app/Serenity.jar' -print -quit)")"
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb libgl1 libfontconfig1
+            PROBE=(xvfb-run -a java)
+          else
+            PROBE=(java)
+          fi
+          "${PROBE[@]}" -Dskiko.library.path="$APP_DIR/natives" -cp "$APP_DIR/Serenity.jar" scripts/SkikoProbe.java | tee probe.log
+          grep -q '^SKIKO_PROBE_OK ' probe.log
+
       - name: Upload runnable JAR artifact
-        if: runner.os == 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: Serenity-jar
-          path: dist/Serenity.jar
+          name: Serenity-jar-${{ matrix.artifact_suffix }}
+          path: dist/Serenity-${{ matrix.artifact_suffix }}.jar
           if-no-files-found: error
           retention-days: 1
 

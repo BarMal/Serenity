@@ -16,7 +16,7 @@ import com.serenity.ui.layout.PixelRect
   * nothing. A surface is painted by one thread at a time; the edges of the last run and of everything else painted are
   * contained scratch arrays for that reason.
   */
-final private[renderer] class PaintedPixels:
+final private[ui] class PaintedPixels:
   import PaintedPixels.*
 
   private val clean       = AtomicReference[Option[CleanBackground]](None)

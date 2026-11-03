@@ -188,6 +188,12 @@ object CommandRunnerSettingsGroups:
         onFrontend.rows(guiOnly, input("ui-outline-thickness")) ++ List(
           CommandRunnerSettingsRenderItems.renderFpsOptionItem(optionSelections),
           CommandRunnerSettingsRenderItems.renderDamageGranularityOptionItem(optionSelections)
+        ) ++ onFrontend.rows(
+          guiOnly,
+          List(
+            CommandRunnerSettingsRenderItems.renderBackendOptionItem(optionSelections),
+            CommandRunnerSettingsRenderItems.renderWaylandOptionItem(optionSelections)
+          )
         )
     )
     val bufferLanguageGroup = CommandRunnerSettingsItems.bufferLanguageGroupItem(context.bufferLanguage)
@@ -240,6 +246,7 @@ object CommandRunnerSettingsGroups:
       onFrontend.rows(
         guiOnly,
         List(
+          Some(CommandRunnerSettingsFontSizes.group(inputItems, context)),
           Option.when(showProseSettings)(proseFontGroup),
           Option.when(showCodeSettings)(codeFontGroup),
           Some(uiFontGroup),
@@ -247,7 +254,8 @@ object CommandRunnerSettingsGroups:
         ).flatten
       ) ++ Option.when(showProseSettings && richTextGroup.children.nonEmpty)(richTextGroup)
     )
-    val headingsGroup = CommandRunnerSettingsHeadingItems.group(optionSelections, inputItems, fontFamilies, onFrontend)
+    val headingsGroup =
+      CommandRunnerSettingsHeadingItems.group(optionSelections, inputItems, fontFamilies, onFrontend)
     val lookGroup = group(
       "settings-look",
       "Look",

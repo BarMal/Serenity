@@ -109,6 +109,18 @@ object CharWidth:
           sum(index + Character.charCount(codePoint), cells + of(codePoint))
       sum(from, 0)
 
+  /** The cells `text` takes: the sum of [[ofCluster]] over its grapheme clusters. */
+  def ofText(text: String): Int =
+    if text.forall(_ < FirstNonTrivial) then text.length
+    else
+      @annotation.tailrec
+      def sum(index: Int, cells: Int): Int =
+        if index >= text.length then cells
+        else
+          val end = clusterEnd(text, index)
+          sum(end, cells + ofCluster(text, index, end))
+      sum(0, 0)
+
   /** Whether the cluster `text[from, until)` is one that terminals are not agreed on and that takes two cells: a
     * regional-indicator pair; a variation selector 16 straight after an emoji base (`Emoji=Yes`, which stands in for
     * the list of valid emoji variation sequences, ICU not exposing it); or a pictograph joined to another by a joiner,
