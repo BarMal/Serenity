@@ -1,6 +1,6 @@
 package com.serenity.lsp.config
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.IO
 
@@ -32,9 +32,23 @@ object LspServerRegistry:
   )
 
   def resolve(languageId: LanguageId, userConfig: LspUserConfig): IO[Option[LspServerConfig]] =
-    IO.blocking {
-      configuredServer(languageId, userConfig).filter(config => isAvailable(config.command))
-    }
+    IO.blocking(resolution(languageId, userConfig).server)
+
+  /** Why `languageId` has a server or not. `servers` and `onPath` are parameters so the rules can be checked for any
+    * registry and any set of installed commands.
+    */
+  def resolution(
+    languageId: LanguageId,
+    userConfig: LspUserConfig,
+    onPath: String => Boolean = isAvailable,
+    servers: List[LspServerConfig] = builtIn
+  ): LspResolution =
+    if !servers.exists(_.languageId == languageId) then LspResolution.NoServerExists
+    else
+      configuredServer(languageId, userConfig, servers) match
+        case None                                   => LspResolution.Disabled
+        case Some(server) if onPath(server.command) => LspResolution.Available(server)
+        case Some(server)                           => LspResolution.NotInstalled(server)
 
   def availableServers(userConfig: LspUserConfig): IO[List[LspServerConfig]] =
     IO.blocking {
@@ -43,8 +57,12 @@ object LspServerRegistry:
       )
     }
 
-  def configuredServer(languageId: LanguageId, userConfig: LspUserConfig): Option[LspServerConfig] =
-    builtIn.find(_.languageId == languageId).flatMap { config =>
+  def configuredServer(
+    languageId: LanguageId,
+    userConfig: LspUserConfig,
+    servers: List[LspServerConfig] = builtIn
+  ): Option[LspServerConfig] =
+    servers.find(_.languageId == languageId).flatMap { config =>
       userConfig.servers.flatMap(_.get(languageId.id)) match
         case Some(override_) if override_.enabled.contains(false) =>
           None
@@ -64,10 +82,19 @@ object LspServerRegistry:
     }
 
   private def isAvailable(command: String): Boolean =
-    val pathDirs = sys.env
-      .getOrElse("PATH", "")
+    isOnPath(
+      command,
+      sys.env.getOrElse("PATH", ""),
+      sys.props.getOrElse("os.name", "").toLowerCase.contains("windows"),
+      Files.isExecutable
+    )
+
+  /** Whether some directory of `pathVariable` holds an executable `command`, with the Windows launcher suffixes tried
+    * first on Windows.
+    */
+  def isOnPath(command: String, pathVariable: String, isWindows: Boolean, isExecutable: Path => Boolean): Boolean =
+    val suffixes = if isWindows then List(".exe", ".cmd", ".bat", "") else List("")
+    pathVariable
       .split(java.io.File.pathSeparator)
       .toList
-    val isWindows = sys.props.getOrElse("os.name", "").toLowerCase.contains("windows")
-    val suffixes  = if isWindows then List(".exe", ".cmd", ".bat", "") else List("")
-    pathDirs.exists(dir => suffixes.exists(suffix => Files.isExecutable(Paths.get(dir, command + suffix))))
+      .exists(dir => suffixes.exists(suffix => isExecutable(Paths.get(dir, command + suffix))))
