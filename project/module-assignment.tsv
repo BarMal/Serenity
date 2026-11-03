@@ -162,6 +162,7 @@ state/models/RestartMode.scala	base
 state/models/SemanticTokensState.scala	base
 state/models/SpellCheckAnalysis.scala	base
 state/models/SpellIgnores.scala	base
+state/models/SurfacePlacement.scala	config
 state/models/ThemeDiscoveryState.scala	base
 state/models/TopK.scala	base
 state/models/TypingActivity.scala	base

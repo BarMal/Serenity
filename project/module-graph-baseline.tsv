@@ -27,9 +27,6 @@ command	src/main/scala/com/serenity/state/models/EditingContext.scala	model	src/
 command	src/main/scala/com/serenity/state/models/PanelRegistry.scala	model	src/main/scala/com/serenity/state/models/AppState.scala
 command	src/main/scala/com/serenity/state/models/PanelRegistry.scala	model	src/main/scala/com/serenity/state/models/UiSurface.scala
 command	src/main/scala/com/serenity/ui/layout/PinnedPanel.scala	model	src/main/scala/com/serenity/state/models/UiSurface.scala
-config	src/main/scala/com/serenity/config/AppConfig.scala	model	src/main/scala/com/serenity/state/models/UiSurface.scala
-config	src/main/scala/com/serenity/config/ConfigFieldsDocumentsAndCommandRunner.scala	model	src/main/scala/com/serenity/state/models/UiSurface.scala
-config	src/main/scala/com/serenity/config/SurfaceConfig.scala	model	src/main/scala/com/serenity/state/models/UiSurface.scala
 layout	src/main/scala/com/serenity/ui/layout/LaidOutPanes.scala	render	src/main/scala/com/serenity/ui/renderer/RendererCursorGlyphs.scala
 layout	src/main/scala/com/serenity/ui/layout/LaidOutPanes.scala	render	src/main/scala/com/serenity/ui/renderer/RendererPaneContent.scala
 layout	src/main/scala/com/serenity/ui/renderer/MeasuredTextAdvances.scala	render	src/main/scala/com/serenity/ui/renderer/RendererFrameState.scala
