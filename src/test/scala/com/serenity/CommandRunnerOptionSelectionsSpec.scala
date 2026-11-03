@@ -126,7 +126,10 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
     CommandRunnerOptionSelections.default(AppConfig.default.withRenderBackend(RenderBackendSetting.Java2D))(
       "render-backend"
     ) shouldBe 2
-    CommandRunnerOptionSelections.default(AppConfig.default)("render-wayland") shouldBe 0
+    CommandRunnerOptionSelections.default(AppConfig.default)("render-wayland") shouldBe 1
+    CommandRunnerOptionSelections.default(AppConfig.default.withRenderWayland(WaylandRender.Java2D))(
+      "render-wayland"
+    ) shouldBe 0
     CommandRunnerOptionSelections.default(AppConfig.default.withRenderWayland(WaylandRender.XWayland))(
       "render-wayland"
     ) shouldBe 2

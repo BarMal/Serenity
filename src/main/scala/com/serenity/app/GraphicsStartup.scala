@@ -24,7 +24,8 @@ object GraphicsStartup:
   final case class Resolved(
       toolkit: ToolkitSelection.Decision,
       backend: Decision,
-      surfaces: FrameSurfaceFactory
+      surfaces: FrameSurfaceFactory,
+      skiaVsync: Boolean = false
   )
 
   def launchOf(options: LaunchOptions): Launch =
@@ -36,8 +37,9 @@ object GraphicsStartup:
     )
 
   /** The production wiring: the config file and the Skiko probe, both reached only when a windowed launch gets that
-    * far, then the toolkit property is set. The catalogue offers the raster surface, which selection picks only on
-    * Wayland when `ui.render.wayland` asks for `skia-raster`.
+    * far, then the toolkit property is set. The catalogue offers the GPU layer, which selection picks wherever the
+    * probe passes, and the raster surface, which it picks only on Wayland when `ui.render.wayland` asks for
+    * `skia-raster`.
     */
   def current(launch: Launch): IO[Resolved] =
     ToolkitSelection.currentEnvironment
@@ -51,6 +53,17 @@ object GraphicsStartup:
         )
       )
       .flatTap(resolved => ToolkitSelection(resolved.toolkit))
+      .flatTap(resolved => applySkiaVsync(resolved))
+
+  private def applySkiaVsync(resolved: Resolved): IO[Unit] =
+    IO.whenA(resolved.backend.backend == RenderBackend.Skia)(
+      IO {
+        val explicit = Option(System.getProperty(SkiaVsync.Property)).map(SkiaVsync.Property -> _).toMap
+        SkiaVsync
+          .property(resolved.skiaVsync, sys.env, explicit)
+          .foreach((key, value) => System.setProperty(key, value))
+      }
+    )
 
   def resolve(
     launch: Launch,
@@ -60,11 +73,17 @@ object GraphicsStartup:
     probe: IO[Probe]
   ): IO[Resolved] =
     val base = ToolkitSelection.choose(environment)
-    val settled: IO[(ToolkitSelection.Decision, Decision)] =
-      if !launch.windowed then IO.pure((base, javaOnly("terminal or headless launch")))
-      else if launch.safeMode then IO.pure((base, javaOnly("safe mode")))
-      else configured.flatMap(settings => settleWindowed(launch, environment, catalogue, base, settings, probe))
-    settled.map((toolkit, decision) => Resolved(toolkit, decision, catalogue.factoryFor(decision.backend)))
+    val settled: IO[(ToolkitSelection.Decision, Decision, Boolean)] =
+      if !launch.windowed then IO.pure((base, javaOnly("terminal or headless launch"), false))
+      else if launch.safeMode then IO.pure((base, javaOnly("safe mode"), false))
+      else
+        configured.flatMap(settings =>
+          settleWindowed(launch, environment, catalogue, base, settings, probe)
+            .map((toolkit, decision) => (toolkit, decision, settings.skiaVsync))
+        )
+    settled.map((toolkit, decision, vsync) =>
+      Resolved(toolkit, decision, catalogue.factoryFor(decision.backend), vsync)
+    )
 
   private def settleWindowed(
     launch: Launch,

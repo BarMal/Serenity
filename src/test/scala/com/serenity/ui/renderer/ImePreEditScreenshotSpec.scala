@@ -1,12 +1,12 @@
 package com.serenity.ui.renderer
 
+import java.awt.Font
 import java.awt.image.BufferedImage
-import java.awt.{Dimension, Font}
 import java.io.File
 import java.nio.file.Paths
 import javax.imageio.ImageIO
-import javax.swing.JPanel
 
+import com.serenity.ReferenceFrames
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
@@ -67,11 +67,8 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
     Composition(PaneId(0), bufferId, CursorPosition(0, 10), 0L, text, clauses, caret)
 
   private def paint(state: AppState): BufferedImage =
-    val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
-    val panel = new JPanel
-    panel.setPreferredSize(new Dimension(widthPx, heightPx))
-    panel.setSize(new Dimension(widthPx, heightPx))
-    val surface = Java2DRenderSurface.forImage(image, metrics, codeFont, panel, _ => (), SurfaceTextCaches.fresh())
+    val reference = ReferenceFrames.over(widthPx, heightPx, metrics, codeFont, widthPx, heightPx)
+    val surface   = reference.surface
     RendererEntryPoints.render(
       CompositionPreview.displayed(state, revisions),
       cursorVisible = true,
@@ -84,7 +81,7 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
       RenderCaches.create()
     )
     surface.flush()
-    image
+    reference.image
 
   private def save(name: String, image: BufferedImage): Unit =
     sys.env.get("IME_SCREENSHOTS_DIR").foreach { dir =>

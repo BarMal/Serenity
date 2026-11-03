@@ -164,11 +164,13 @@ object CommandRunnerSettingsInputItems:
       CommandRunnerSettingsInputItemsInputAndFont.inputItems(v.inputConfig.wheelScrollLines) ++
       CommandRunnerSettingsInputItemsInputAndFont.autoSaveItems(config.autoSaveConfig.delayMillis) ++
       CommandRunnerSettingsInputItemsFollowSystem.items(config.themeFollowConfig) ++
-      CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
-        v.codeFontSizeValue,
-        v.textFontSizeValue,
-        v.uiFontSizeValue,
-        v.textScaleValue
+      CommandRunnerSettingsFontSizes.withGroupRows(
+        CommandRunnerSettingsInputItemsInputAndFont.fontSizeItems(
+          v.codeFontSizeValue,
+          v.textFontSizeValue,
+          v.uiFontSizeValue,
+          v.textScaleValue
+        )
       ) ++
       CommandRunnerSettingsHeadingItems.inputItems(config.headingsConfig) ++
       CommandRunnerSettingsKeymapItems.buildKeymapInputItems(v.inputConfig)

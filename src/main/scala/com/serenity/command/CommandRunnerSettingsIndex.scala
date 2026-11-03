@@ -29,11 +29,13 @@ final class CommandRunnerSettingsIndex(val inputs: CommandRunnerSettingsIndex.In
   private lazy val searchableGroups: List[SearchableGroup] =
     distinctGroupsBelow(settingsGroups).map(SearchableGroup.from)
 
-  // A preset page's copy of a setting is never offered on its own.
+  // A preset page's copy of a setting is never offered on its own, and nor is a per-role font size row, whose size the
+  // Font Sizes group offers (#2405).
   private lazy val searchableLeaves: List[SettingLeaf] =
     settingsGroups
       .flatMap(group => leavesOf(group, Nil, Nil))
       .filterNot(leaf => CommandRunnerSettingsPresetScope.isScopedItemId(leaf.item.id))
+      .filterNot(leaf => CommandRunnerSettingsFontSizes.isListedInGroup(leaf.item.id))
 
   def matchingSettingsResults(term: String): List[CommandSurfaceItem] =
     val lowerTerm = CommandRunnerSearch.normalizedSearchTerm(term)

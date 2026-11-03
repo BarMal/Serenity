@@ -87,7 +87,8 @@ object RendererEntryPoints:
         swingWin.acquireBaseImage,
         caches.surfaceText,
         caches.backendCaches,
-        () => repaintRegion.get()
+        () => repaintRegion.get(),
+        attachLayer = swingWin.attachLayerPresenter
       )
     )
     val viewportSize = swingWin.viewportSize

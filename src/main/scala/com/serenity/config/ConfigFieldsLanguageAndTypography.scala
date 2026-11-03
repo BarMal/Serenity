@@ -96,6 +96,10 @@ private[config] object ConfigFieldsLanguageAndTypography:
       _.editorConfig.fontConfig.uiFontSize,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(uiFontSize = value))
     ),
+    field("typography.previous_sizes")(previousFontSizes)(
+      _.editorConfig.fontConfig.previousSizes,
+      (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(previousSizes = value))
+    ),
     field("typography.scale.mode", "font.scale.mode", "font_scale_mode")(textScaleMode)(
       _.editorConfig.fontConfig.textScaleMode,
       (config, value) => config.withFontConfig(config.editorConfig.fontConfig.copy(textScaleMode = value))

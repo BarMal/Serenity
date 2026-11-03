@@ -95,6 +95,36 @@ class StartupRowsTest(unittest.TestCase):
             warm = next(line for line in text.splitlines() if line.startswith("startup.warm.first_frame,"))
             self.assertEqual(warm.split(",")[1:4], ["3", "2", "1"])
 
+    def test_records_the_discarded_samples_as_context_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            result = _run(str(_image(root) / "bin" / "Serenity"), "3", "--csv", str(csv), "--discard", "2")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            lines = {line.split(",")[1]: line.split(",")[2:] for line in csv.read_text().splitlines() if line.startswith("context,")}
+            for mode in ("warm", "cold"):
+                values = lines[f"discarded_{mode}_ms"]
+                self.assertEqual(len(values), 2, values)
+                self.assertTrue(all(float(value) > 0 for value in values))
+            self.assertGreater(float(lines["discarded_cold_ms"][0]), float(lines["discarded_warm_ms"][0]))
+
+    def test_discarded_samples_do_not_enter_the_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            _run(str(_image(root) / "bin" / "Serenity"), "3", "--csv", str(csv), "--discard", "2")
+            rows = check_perf_regression.parse_csv(str(csv))
+            self.assertEqual(sorted(rows), ["startup.cold.first_frame", "startup.warm.first_frame"])
+            warm = next(line for line in csv.read_text().splitlines() if line.startswith("startup.warm.first_frame,"))
+            self.assertEqual(warm.split(",")[1], "3")
+
+    def test_writes_no_discard_lines_when_nothing_is_discarded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            _run(str(_image(root) / "bin" / "Serenity"), "2", "--csv", str(csv), "--discard", "0")
+            self.assertNotIn("discarded_warm_ms", csv.read_text())
+
     def test_alternates_warm_and_cold_launches(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

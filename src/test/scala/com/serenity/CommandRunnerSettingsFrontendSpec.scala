@@ -21,6 +21,7 @@ class CommandRunnerSettingsFrontendSpec extends AnyFlatSpec with Matchers:
   private val guiOnlyRowIds = List(
     "window-chrome",
     "ui-outline-thickness",
+    "settings-font-sizes",
     "settings-prose-font",
     "settings-code-font",
     "settings-ui-font",
