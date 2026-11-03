@@ -35,7 +35,7 @@ class AggregateJobTests(unittest.TestCase):
                 job = _job(_CALLER, f"test-{label}")
                 self.assertIn(f"    name: Test ({label})\n", job + "\n")
                 self.assertIn(f"    needs: shards-{label}\n", job + "\n")
-                self.assertIn("    if: always()\n", job + "\n")
+                self.assertIn("    if: always() && ", job + "\n")
 
     def test_a_shard_that_did_not_succeed_fails_the_check(self) -> None:
         for label in ("windows", "macos"):
@@ -55,6 +55,37 @@ class AggregateJobTests(unittest.TestCase):
     def test_there_are_no_other_jobs_to_claim_the_required_names(self) -> None:
         jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", _CALLER.split("\njobs:\n", 1)[1], re.M)
         self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos"], jobs)
+
+
+_DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+_CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+_PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()
+
+
+def _pull_request_types(text: str) -> list[str]:
+    match = re.search(r"^  pull_request:\n(?:    #[^\n]*\n)*    types: \[([a-z_, ]+)\]\n", text, re.M)
+    return [] if match is None else [t.strip() for t in match.group(1).split(",")]
+
+
+class DraftGateTests(unittest.TestCase):
+    """Draft pull requests run Linux CI only; Windows and macOS start when the pull request is marked ready (owner
+    decision on #2484, 2026-11-03, while shared runners were starved)."""
+
+    def test_marking_ready_starts_cross_os_ci_and_the_package_check(self) -> None:
+        for name, text in (("cross-os", _CALLER), ("ci", _CI), ("package", _PACKAGE)):
+            with self.subTest(workflow=name):
+                self.assertEqual(
+                    ["opened", "synchronize", "reopened", "ready_for_review"], _pull_request_types(text)
+                )
+
+    def test_shards_and_their_required_checks_skip_drafts_together(self) -> None:
+        for label in ("windows", "macos"):
+            with self.subTest(label=label):
+                self.assertIn(f"    if: {_DRAFT_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
+                self.assertIn(f"    if: always() && {_DRAFT_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
+
+    def test_the_three_os_package_build_skips_drafts(self) -> None:
+        self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
 
 
 class ShardCountTests(unittest.TestCase):
