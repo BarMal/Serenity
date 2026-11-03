@@ -4,6 +4,7 @@ import java.nio.file.Path
 
 import com.serenity.io.ProjectFileListing
 import com.serenity.keystroke.events.ModalInsertChar
+import com.serenity.perf.BenchmarkMain
 import com.serenity.rope.{Balance, Rope, RopeCharacterSource, nextGraphemeBoundary, previousGraphemeBoundary}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer}
@@ -74,5 +75,6 @@ object PickerAndGraphemeBenchmark:
     }
 
   def main(args: Array[String]): Unit =
-    pickerReport()
-    graphemeReport()
+    BenchmarkMain.run:
+      pickerReport()
+      graphemeReport()

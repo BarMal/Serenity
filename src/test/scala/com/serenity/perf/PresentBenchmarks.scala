@@ -3,11 +3,11 @@ package com.serenity.perf
 import java.awt.geom.AffineTransform
 import java.awt.image.{BufferedImage, ColorModel}
 import java.awt.{Font, GraphicsConfiguration, GraphicsDevice, GraphicsEnvironment, Rectangle}
-import java.nio.file.{Files, Path}
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
-import scala.jdk.CollectionConverters.*
+import scala.util.Using
 
 import cats.effect.unsafe.IORuntime
 import com.serenity.config.AppConfig
@@ -26,6 +26,7 @@ import com.serenity.ui.renderer.{
 }
 import com.serenity.ui.skia.{PresentPhase, SkiaRasterSurfaceFactory}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
+import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 
 /** Scratch benchmark for #2380: a window's frame through `FrameSurfaceFactory.Java2D` or `SkiaRasterSurfaceFactory`,
   * end to end from the surface request to the published image (so including the raster copy-out), with the
@@ -103,7 +104,8 @@ private[perf] object PresentBenchmarks:
         FrameSurfaceRequest(
           fonts.metrics,
           fonts.code,
-          canvas,
+          SwingCanvasGeometry.of(canvas),
+          SwingPresentationSite(canvas),
           image =>
             pool.publish(image)
             published.set(image)
@@ -179,10 +181,16 @@ private[perf] object PresentBenchmarks:
     val states     = ProseStates(prose)
     Cycling(Window(factory, widthPx, heightPx, scale, grid), states.scrollCycle)
 
+  private val CodeFixtureResource = "/perf/present-code-fixture.txt"
+
+  /** A frozen copy of the first 6,000 lines of the renderer sources, so the rows measure the same text on every run,
+    * machine and commit; reading the live sources made the input drift with the code being measured.
+    */
   private def codeText: String =
-    val root  = Path.of("src", "main", "scala", "com", "serenity", "ui", "renderer")
-    val files = Files.list(root).iterator().asScala.filter(_.toString.endsWith(".scala")).toList.sortBy(_.toString)
-    files.flatMap(file => Files.readAllLines(file).asScala).take(6000).mkString("\n")
+    Option(getClass.getResourceAsStream(CodeFixtureResource)) match
+      case Some(stream) =>
+        Using.resource(stream)(in => new String(in.readAllBytes(), StandardCharsets.UTF_8)).stripSuffix("\n")
+      case None => sys.error(s"$CodeFixtureResource is not on the classpath")
 
   /** The states and windows every row draws, made once for a window size and scale. */
   final private class Scenarios(factory: FrameSurfaceFactory, widthPx: Int, heightPx: Int, scale: Double)(using
@@ -371,8 +379,9 @@ private[perf] object PresentBenchmarks:
     Rows(rows.map(_._1), rows.map(_._2).toMap)
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
-    val rows    = benchmarks
-    val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
-    PresentReport.print(results, rows.breakdownOf, rows.trafficOf)
-    sys.exit(0)
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
+      val rows    = benchmarks
+      val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
+      PresentReport.print(results, rows.breakdownOf, rows.trafficOf)
+      sys.exit(0)

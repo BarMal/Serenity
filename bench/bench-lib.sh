@@ -11,6 +11,69 @@ find_app_log() {
   return 1
 }
 
+# keep_run_artifacts <home> <results dir> <label> <run>: copies a run's whole app log and its stdout/stderr to
+# <label>-run<N>.applog and .stdout beside the run file, which keeps only the [FRAME] and [LATENCY] summary lines.
+# Skiko's own reports (skiko.fps.*) and any -Xlog output sent to stdout are only ever in these. Succeeds when a run
+# wrote neither, so it is safe to call from a launch that died.
+keep_run_artifacts() {
+  local home="$1" results_dir="$2" label="$3" run="$4" log
+  log="$(find_app_log "$home" || true)"
+  if [[ -n "$log" ]]; then cp "$log" "$results_dir/$label-run$run.applog"; fi
+  if [[ -f "$home/stdout.log" ]]; then cp "$home/stdout.log" "$results_dir/$label-run$run.stdout"; fi
+  return 0
+}
+
+# A thread dump of <pid> appended to <file> under <heading>: jcmd's (BENCH_JCMD, default jcmd), which is bounded to 20 s
+# because attaching to a wedged JVM can itself hang, and SIGQUIT, which makes a JVM print its dump to its own stdout
+# (the run's .stdout). Either may be missing; neither can fail the caller.
+dump_threads() {
+  local pid="$1" file="$2" heading="$3" jcmd="${BENCH_JCMD:-jcmd}"
+  echo "=== $heading ($(date +%T)) ===" >> "$file"
+  if command -v "$jcmd" &>/dev/null; then timeout 20 "$jcmd" "$pid" Thread.print >> "$file" 2>&1 || true; fi
+  kill -QUIT "$pid" 2>/dev/null || true
+  return 0
+}
+
+# stop_app <pid> <results dir> <label> <run>: ends a JVM that is still alive after the quit key. A JVM that went away
+# on its own is left alone. One still there gets a thread dump (the state the quit hung in), SIGTERM, up to
+# BENCH_QUIT_GRACE seconds (default 15) to go, and if it ignores that a second dump (the state of a hung shutdown) and
+# SIGKILL. Without the bound a JVM that logs "Quitting" and never exits blocks the whole batch on `wait`. The dumps are
+# in <label>-run<N>.threads.
+# Whether <pid> is a running process: `kill -0` alone also says yes for a zombie, a child that has exited and not yet
+# been waited for.
+app_alive() {
+  kill -0 "$1" 2>/dev/null && [[ "$(ps -o stat= -p "$1" 2>/dev/null)" != Z* ]]
+}
+
+stop_app() {
+  local pid="$1" results_dir="$2" label="$3" run="$4" grace="${BENCH_QUIT_GRACE:-15}" waited=0
+  local dumps="$results_dir/$label-run$run.threads"
+  if app_alive "$pid"; then
+    dump_threads "$pid" "$dumps" "after the quit key"
+    kill "$pid" 2>/dev/null || true
+    while app_alive "$pid" && (( waited < grace )); do sleep 1; waited=$((waited + 1)); done
+    if app_alive "$pid"; then
+      echo "WARNING: pid $pid still alive $grace s after SIGTERM; saving a thread dump to $dumps, then SIGKILL" >&2
+      dump_threads "$pid" "$dumps" "after SIGTERM"
+      kill -KILL "$pid" 2>/dev/null || true
+    fi
+  fi
+  wait "$pid" 2>/dev/null || true
+  return 0
+}
+
+# The display facts a key-to-screen run depends on: each monitor's mode with its refresh rate and scale (hyprctl), and
+# the GPU the OpenGL path runs on (glxinfo). Prints nothing for a tool that is not installed.
+display_conditions() {
+  if command -v hyprctl &>/dev/null; then
+    hyprctl monitors 2>/dev/null | grep -E "Monitor|@|scale" || true
+  fi
+  if command -v glxinfo &>/dev/null; then
+    glxinfo -B 2>/dev/null | grep -E "renderer string|OpenGL version" || true
+  fi
+  return 0
+}
+
 # Whether the machine is on AC power, from whichever AC* supply reports it (AC, AC0, ACAD, ...).
 ac_online() {
   local dir="${BENCH_POWER_SUPPLY_DIR:-/sys/class/power_supply}" supply
