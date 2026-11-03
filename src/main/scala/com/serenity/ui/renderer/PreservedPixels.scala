@@ -10,25 +10,31 @@ import com.serenity.ui.layout.{DirtyLineDiff, PixelRect}
   * past its band; where the row beside it is kept or copied, that ink would land on pixels that already carry it, and a
   * partly covered edge composited twice is not what a frame drawn from scratch shows.
   */
-final class PreservedPixels private (context: RenderContext, kept: List[PixelRect]):
+final class PreservedPixels private (context: RenderContext, kept: List[PixelRect], copiesRows: Boolean):
 
   private def clipping: Option[PanelOutlineDrawing] =
     context.surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => kept.nonEmpty && context.surface.addressesPixels)
 
   def apply(paint: => Unit): Unit = clipping.fold(paint)(_.withoutPixels(kept)(paint))
 
-  /** The rows to paint for `dirtyRows`: under the clip, the kept rows beside them too, whose ink still reaches the band
-    * that was cleared. Without a clip they would paint over pixels that are kept, so only the dirty rows are painted.
+  /** The rows to paint for `dirtyRows`. In a frame that copies rows, the kept rows beside the redrawn ones are painted
+    * too, under the clip: a copied row carries its neighbour's ink, but the band a redrawn row cleared has lost the ink
+    * its kept neighbour put there. A frame that copies nothing keeps its rows where they were, and paints `dirtyRows`;
+    * so does a surface that cannot clip, as those rows would be painted over pixels that are kept.
     */
   def rowsToPaint(dirtyRows: Map[PaneId, Set[Int]]): Map[PaneId, Set[Int]] =
-    if clipping.isEmpty then dirtyRows
+    if clipping.isEmpty || !copiesRows then dirtyRows
     else dirtyRows.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap
 
 object PreservedPixels:
 
   /** A frame redrawing only some rows keeps the others; chrome it keeps is left out, as ink beside it is a row's. */
   def of(context: RenderContext, framePlan: Option[FramePlan]): PreservedPixels =
-    new PreservedPixels(context, joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptRows)))
+    new PreservedPixels(
+      context,
+      joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptRows)),
+      framePlan.exists(_.blits.nonEmpty)
+    )
 
   /** Kept rows are one rect each and mostly adjacent, so a clip of them all is the same few rects, not one per row. */
   private[renderer] def joinedRows(rects: List[PixelRect]): List[PixelRect] =
