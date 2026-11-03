@@ -17,7 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, StateDifference}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -99,7 +99,12 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
   private def undoDepth(stateManager: StateManager): IO[Int] =
     stateManager.getModel.map(_.undo.undoStack.size)
 
-  private def matchesPerEvent(config: AppConfig, slices: List[List[Event]], after: List[Event] = Nil): Unit =
+  private def matchesPerEvent(
+    configName: String,
+    config: AppConfig,
+    slices: List[List[Event]],
+    after: List[Event] = Nil
+  ): Unit =
     val program = for
       (batched, bufferId) <- editor(config)
       (perEvent, _)       <- editor(config)
@@ -111,7 +116,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           actual        <- shown(batched, bufferId)
           batchedDepth  <- undoDepth(batched)
           perEventDepth <- undoDepth(perEvent)
-        yield Option.when(actual != expected || batchedDepth != perEventDepth)(s"slice $index (${slice.size} events)")
+        yield Option.when(actual != expected || batchedDepth != perEventDepth)(
+          s"$configName: slice $index (${slice.size} events): " +
+            StateDifference.describe(expected, actual, perEventDepth, batchedDepth).mkString("; ")
+        )
       }
       afterDiffer <- after.zipWithIndex.traverse { (event, index) =>
         for
@@ -119,7 +127,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           _        <- perEvent.applyEvent(event)
           expected <- shown(perEvent, bufferId)
           actual   <- shown(batched, bufferId)
-        yield Option.when(actual != expected)(s"$event #$index after the slices")
+        yield Option.when(actual != expected)(
+          s"$configName: $event #$index after the slices: " +
+            StateDifference.describe(expected, actual, 0, 0).mkString("; ")
+        )
       }
     yield (differ ++ afterDiffer).flatten
     program.unsafeRunSync() shouldBe empty
@@ -168,9 +179,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave every slice as applying its events one at a time would, undo steps included" in
-    List(wrapped, typewriter, unwrapped).foreach(
+    List("wrapped" -> wrapped, "typewriter" -> typewriter, "unwrapped" -> unwrapped).foreach((name, config) =>
       matchesPerEvent(
-        _,
+        name,
+        config,
         List(
           heldBackspace,
           editing,
@@ -188,7 +200,9 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
       ) ++
         List.fill[Event](3)(MoveRight) ++ List[Event](MoveToEnd, MoveUp, MoveUp, MoveDown) ++ typed(4, 8L) ++
         List[Event](ColumnLeft, ColumnRight, ExtendSelectionPageDown) ++ List.fill[Event](4)(DeleteBackward)
-    List(wrapped, typewriter).foreach(matchesPerEvent(_, List(reading), after = List.fill[Event](6)(Undo)))
+    List("wrapped" -> wrapped, "typewriter" -> typewriter).foreach((name, config) =>
+      matchesPerEvent(name, config, List(reading), after = List.fill[Event](6)(Undo))
+    )
   }
 
   "The language-server sync after a run" should "send one change carrying the run's final text" in {
