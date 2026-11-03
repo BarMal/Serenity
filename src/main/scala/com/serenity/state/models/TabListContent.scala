@@ -9,9 +9,16 @@ object TabListContent:
     val entries = state.persisted.bufferOrder.flatMap { bufferId =>
       state.persisted.buffers
         .get(bufferId)
-        .map(buffer => TabListEntry(bufferId, titleFor(buffer), buffer.document.isDirty))
+        .map(buffer =>
+          TabListEntry(bufferId, titleFor(buffer), buffer.document.isDirty, isPreview = isPreview(state, buffer))
+        )
     }
     SurfaceContent.TabList(entries, state.focusedBufferId)
+
+  private def isPreview(state: AppState, buffer: Buffer): Boolean =
+    state.runtime.previewTab.exists(tab =>
+      tab.bufferId == buffer.id && tab.contentVersion == buffer.document.contentVersion
+    )
 
   /** Mirrors `RendererPaneChrome.renderHeader`'s title, minus its own "- unsaved" text suffix: the widget carries dirty
     * state as its own field, rendered as a persistent glyph rather than appended text (issue #1307's own ask).

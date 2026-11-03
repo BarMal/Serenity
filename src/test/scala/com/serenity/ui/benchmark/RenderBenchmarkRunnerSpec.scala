@@ -62,6 +62,18 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     report.environment.skiaDeviceScale.getOrElse(fail("no Skia layer scale")) should be > 0.0
   }
 
+  it should "count the shapings of every scenario's frames on both backends, and the cold frame's on Skia" in {
+    withDisplay()
+    val environment = runExclusively(small, SynchronousSkiaLayerSurfaceFactory).environment
+    Scenario.values.foreach { scenario =>
+      withClue(scenario.label) {
+        environment.java2dShapeTraffic.get(scenario).map(_.frames) shouldBe Some(3)
+        environment.skiaShapeTraffic.get(scenario).map(_.frames) shouldBe Some(3)
+      }
+    }
+    environment.skiaShapeTraffic(Scenario.ColdFullFrame).shapingsMean should be > 0.0
+  }
+
   it should "build its scenes as the app does" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
