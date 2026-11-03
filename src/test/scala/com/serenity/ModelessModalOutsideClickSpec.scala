@@ -4,6 +4,8 @@ import java.nio.file.Paths
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfigOps.withExplorerOpenMode
+import com.serenity.config.ExplorerOpenMode
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -113,8 +115,11 @@ class ModelessModalOutsideClickSpec extends AnyFlatSpec with Matchers:
     val explorerId = SurfaceId("explorer")
     val (sm, _)    = editorWith(text)
     sm.updateState(state =>
+      val selectOnly = state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withExplorerOpenMode(ExplorerOpenMode.DoubleClick))
+      )
       DockedPanelFixtures
-        .dock(state, explorerId, SurfaceContent.DirectoryTree(tree, Some(root)), PanelPosition.Left, 28)
+        .dock(selectOnly, explorerId, SurfaceContent.DirectoryTree(tree, Some(root)), PanelPosition.Left, 28)
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
     sm.applyEvent(OpenFind).unsafeRunSync()
