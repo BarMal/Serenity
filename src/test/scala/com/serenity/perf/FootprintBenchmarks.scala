@@ -119,6 +119,7 @@ private[perf] object FootprintBenchmarks:
     scenarios.filter(s => prefixes.isEmpty || prefixes.exists(s.name.startsWith)).map(measure)
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(runMatching(args.toList))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(runMatching(args.toList))
 
 end FootprintBenchmarks

@@ -27,7 +27,8 @@ final case class BenchmarkEnvironment(
     java2dColdSplit: Option[ColdFrameSplit] = None,
     skiaColdSplit: Option[ColdFrameSplit] = None,
     fallbackAgreement: Option[FallbackAgreement] = None,
-    skiaDeviceScale: Option[Double] = None
+    skiaDeviceScale: Option[Double] = None,
+    scenesLikeTheApp: Boolean = false
 ):
   /** Skiko falls back to its software redrawers where a GPU API cannot start; those are not a GPU result. */
   def gpuUsed: Boolean = skiaRenderApi.exists(api => !api.startsWith("SOFTWARE") && api != "UNKNOWN")

@@ -16,15 +16,16 @@ object PerformanceBenchmarks:
   given Balance = Balance.default
 
   def main(args: Array[String]): Unit =
-    val (shard, names) = BenchmarkShard.fromArgs(args.toList).fold(error => sys.error(error), identity)
-    val session        = WarmupExtension.Session.standard()
-    val results = withSuite { all =>
-      val selected = shard.fold(all)(_.select(all))
-      val timed    = BenchmarkRunner.runMatching(names, selected, session)
-      // The retained-heap rows belong to the first shard only, so they are measured once.
-      if shard.forall(_.index == 1) then timed ++ FootprintBenchmarks.runMatching(names) else timed
-    }
-    BenchmarkRunner.printResults(results)
+    BenchmarkMain.run:
+      val (shard, names) = BenchmarkShard.fromArgs(args.toList).fold(error => sys.error(error), identity)
+      val session        = WarmupExtension.Session.standard()
+      val results = withSuite { all =>
+        val selected = shard.fold(all)(_.select(all))
+        val timed    = BenchmarkRunner.runMatching(names, selected, session)
+        // The retained-heap rows belong to the first shard only, so they are measured once.
+        if shard.forall(_.index == 1) then timed ++ FootprintBenchmarks.runMatching(names) else timed
+      }
+      BenchmarkRunner.printResults(results)
 
   /** Builds the whole suite, in the order it runs, inside the windows it needs, and hands it to `use`. */
   private[perf] def withSuite[A](use: List[BenchmarkRunner.Benchmark] => A): A =
@@ -64,6 +65,7 @@ object PerformanceBenchmarks:
       ModalWrapBenchmarks.benchmarks() ++
       EditorConfigBenchmarks.benchmarks() ++
       EqualsBenchmarks.benchmarks() ++
+      SourceRowCountBenchmarks.benchmarks() ++
       FindReplaceBenchmarks.benchmarks() ++
       BoundaryCacheBenchmarks.benchmarks() ++
       RowCountBenchmarks.benchmarks() ++

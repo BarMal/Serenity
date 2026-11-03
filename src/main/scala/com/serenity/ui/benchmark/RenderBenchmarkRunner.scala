@@ -14,7 +14,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, Java2DRenderSurface, RendererCursorOverlay}
+import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay}
 import com.serenity.ui.skia.{
   FallbackAgreement,
   SkiaLayerHost,
@@ -22,7 +22,7 @@ import com.serenity.ui.skia.{
   SynchronousSkiaLayerSurfaceFactory,
   WarmupStats
 }
-import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
+import com.serenity.ui.terminal.{LayerDrawStats, SwingCanvasGeometry, SwingWindow}
 
 /** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
   *
@@ -117,7 +117,8 @@ object RenderBenchmarkRunner:
       java2dColdSplit = java2d.coldSplit,
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
-      skiaDeviceScale = measuredSkia.map(_.deviceScale)
+      skiaDeviceScale = measuredSkia.map(_.deviceScale),
+      scenesLikeTheApp = true
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))
 
@@ -172,7 +173,7 @@ object RenderBenchmarkRunner:
       val stats = timed.view.mapValues(_.stats).toMap
       Measured(
         stats,
-        Java2DRenderSurface.deviceScaleFor(window.canvas).x,
+        SwingCanvasGeometry.deviceScaleOf(window.canvas).x,
         window.layerPresenter.map(_.renderApi),
         window.layerPresenter.map(_ => SkiaLayerHost.layersOn(window.canvas)),
         window.layerPresenter.map(_.drawStats),
@@ -194,9 +195,10 @@ object RenderBenchmarkRunner:
     refresh: RefreshRate
   )(using Balance): Timed =
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines, startSize)
-    val shared = RenderCaches.create()
+    val bench  = new BenchmarkCaches()
+    val shared = bench.shared()
     def cachesFor(step: BenchmarkScript.Step) =
-      if step.frame == BenchmarkScript.FrameKind.ColdFull then RenderCaches.create() else shared
+      if step.frame == BenchmarkScript.FrameKind.ColdFull then bench.cold(shared) else shared
     // A frame for the caret to blink over, and a starting point that is the same on both backends.
     steps.headOption.foreach { first =>
       timed(window)(
