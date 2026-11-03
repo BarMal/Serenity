@@ -43,6 +43,16 @@ object SystemEventReducer:
           LspEvent.LspRenameReceived(_, _) | LspEvent.LspServerStopped(_) | LspEvent.LspWorkspaceEditRequested(_) =>
         false
 
+  /** Every open document under a newly trusted `root`, opened to its servers again: they were refused the first time.
+    */
+  private def reannounced(root: java.nio.file.Path, state: AppState): List[AppEffect] =
+    LanguageToolingDocuments
+      .of(state)
+      .filter(_.path.toAbsolutePath.normalize().startsWith(root))
+      .map(document =>
+        AppEffect.LspQueue(LspQueueEffect.Enqueue(LspEffect.FileOpened(document.uri, document.language, document.text)))
+      )
+
   private def reduceAcceptedLspEvent(event: LspEvent, state: AppState): ReducerResult =
     event match
       case LspEvent.LspDiagnosticsReceived(rawUri, diagnostics) =>
@@ -85,17 +95,7 @@ object SystemEventReducer:
       case LspEvent.LspServerStopped(languageId) => withProgress(state, languageId, _ => Nil)
 
       case LspEvent.LspWorkspaceEditRequested(edits) => WorkspaceEditReducer(edits, state)
-
-      case LspEvent.LspFolderTrusted(root) =>
-        val reopened = LanguageToolingDocuments
-          .of(state)
-          .filter(_.path.toAbsolutePath.normalize().startsWith(root))
-          .map(document =>
-            AppEffect.LspQueue(
-              LspQueueEffect.Enqueue(LspEffect.FileOpened(document.uri, document.language, document.text))
-            )
-          )
-        ReducerResult(state, reopened)
+      case LspEvent.LspFolderTrusted(root)           => ReducerResult(state, reannounced(root, state))
 
       case LspEvent.LspSemanticTokensReceived(rawUri, tokens) =>
         withOpenDocumentData(rawUri, state) { (uri, languageService) =>
