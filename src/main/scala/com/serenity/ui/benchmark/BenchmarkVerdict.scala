@@ -28,6 +28,9 @@ final case class BenchmarkEnvironment(
     skiaColdSplit: Option[ColdFrameSplit] = None,
     fallbackAgreement: Option[FallbackAgreement] = None,
     skiaDeviceScale: Option[Double] = None,
+    drawnWindows: List[(String, WindowPx)] = Nil,
+    drawnCanvases: List[(String, WindowPx)] = Nil,
+    notTimed: Map[Scenario, String] = Map.empty,
     scenesLikeTheApp: Boolean = false,
     java2dShapeTraffic: Map[Scenario, ShapingTraffic] = Map.empty,
     skiaShapeTraffic: Map[Scenario, ShapingTraffic] = Map.empty
