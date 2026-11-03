@@ -24,11 +24,13 @@ private[renderer] trait Java2DKeptOff extends PanelOutlineDrawing:
 
   /** Runs `draw`, whose ink stays within a little more than the box `left, top, right, bottom`, off the kept rects. */
   protected def awayFromKept(left: Int, top: Int, right: Int, bottom: Int)(draw: => Unit): Unit =
-    val near = PreservedPixels.near(keptRects.get, left, top, right, bottom, (bottom - top).max(1) / 2)
+    val margin = (bottom - top).max(1) / 2
+    val near   = PreservedPixels.near(keptRects.get, left, top, right, bottom, margin)
     if near.isEmpty then draw
     else
+      val reach = PixelRect(left - margin, top - margin, right - left + 2 * margin, bottom - top + 2 * margin)
       val saved = clipGraphics.getClip
       try
-        clipGraphics.clip(PreservedPixels.allowed(near))
+        clipGraphics.clip(PreservedPixels.allowed(reach, near))
         draw
       finally clipGraphics.setClip(saved)

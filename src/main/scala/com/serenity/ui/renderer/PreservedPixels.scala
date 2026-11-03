@@ -62,9 +62,11 @@ object PreservedPixels:
         rect.yPx + rect.heightPx > top - margin
     )
 
-  /** Everything but `kept`. */
-  private[renderer] def allowed(kept: List[PixelRect]): Shape =
-    val area = new Area(new Rectangle2D.Double(0, 0, 1 << 20, 1 << 20))
+  /** `box` but `kept`: the part of a draw's reach it may ink. The box stays small, as a clip shape is flattened into
+    * rows, which a shape the size of the whole plane makes a million of.
+    */
+  private[renderer] def allowed(box: PixelRect, kept: List[PixelRect]): Shape =
+    val area = new Area(new Rectangle2D.Double(box.xPx, box.yPx, box.widthPx, box.heightPx))
     kept.foreach(rect =>
       area.subtract(new Area(new Rectangle2D.Double(rect.xPx, rect.yPx, rect.widthPx, rect.heightPx)))
     )
