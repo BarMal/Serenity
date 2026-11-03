@@ -266,10 +266,10 @@ class SwingWindow(
     chromePaletteRef,
     maximizedRef,
     () => frame,
-    () => chromeControlFont,
-    () => chromeButtonSize,
-    () => chromeSpacerSize,
-    () => chromeTitleBarSize,
+    () => chromeMetricsRef.get().controlFont,
+    () => chromeMetricsRef.get().buttonSize,
+    () => chromeMetricsRef.get().spacerSize,
+    () => chromeMetricsRef.get().titleBarSize,
     () => toggleMaximize(),
     activateChromeControl,
     windowTitle
@@ -429,10 +429,12 @@ class SwingWindow(
     val d = frame.getSize
     PreferredWindowSize(d.width, d.height).normalized
 
+  override def resizeToPreferred(size: PreferredWindowSize): Unit = resizeToPreferred(size, recentre = true)
+
   /** `recentre` puts the window back in the middle of the screen, as a change of the preferred size always has; a
     * caller that resizes the window again and again, as the render benchmark does, asks for it to stay where it is.
     */
-  def resizeToPreferred(size: PreferredWindowSize, recentre: Boolean = true): Unit =
+  def resizeToPreferred(size: PreferredWindowSize, recentre: Boolean): Unit =
     val normalized = size.normalized
     SwingUtilities.invokeLater { () =>
       val dimension = new Dimension(normalized.width, normalized.height)
@@ -506,29 +508,14 @@ class SwingWindow(
 
   override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 
-  private def chromeControlFont: Font =
-    new Font(Font.SANS_SERIF, Font.PLAIN, chromeMetricsRef.get().titleFontSize)
-
-  private def chromeButtonSize: Dimension =
-    val chrome = chromeMetricsRef.get()
-    new Dimension(chrome.buttonWidth, chrome.titleBarHeight)
-
-  private def chromeSpacerSize: Dimension =
-    val chrome = chromeMetricsRef.get()
-    new Dimension(3 * chrome.buttonWidth, chrome.titleBarHeight)
-
-  private def chromeTitleBarSize: Dimension =
-    new Dimension(0, chromeMetricsRef.get().titleBarHeight)
-
   private def applyChromeMetrics(metrics: CellMetrics): Unit =
     if usesCustomChrome then
       val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(metrics)
       chromeMetricsRef.set(chrome)
-      val controlFont = chromeControlFont
-      controlButtonsRef.get().foreach(button => button.setPreferredSize(chromeButtonSize))
-      titleLabelRef.get().foreach(_.setFont(controlFont))
-      titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
-      titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
+      controlButtonsRef.get().foreach(button => button.setPreferredSize(chrome.buttonSize))
+      titleLabelRef.get().foreach(_.setFont(chrome.controlFont))
+      titleSpacerRef.get().foreach(_.setPreferredSize(chrome.spacerSize))
+      titleBarRef.get().foreach(_.setPreferredSize(chrome.titleBarSize))
       frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))
