@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.IORuntime
 import com.serenity.config.AppConfig
-import com.serenity.diagnostics.FrameCounts
+import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
@@ -244,15 +244,24 @@ private[perf] object PresentBenchmarks:
       }
 
   /** The phase times of a row's most recent frames, which are the ones its samples were taken from. */
-  final private[perf] class PhaseLog(drain: () => Map[PresentPhase, Long]):
+  final private[perf] class PhaseLog(drain: () => Map[PresentPhase, Long], counts: () => FrameCounts):
+    def this(source: PhaseSource) = this(source.drain, source.counts)
+
     private val RecentFrames = 200
     private val recent       = new AtomicReference(Vector.empty[PresentReport.FramePhases])
+    private val shapes       = new AtomicReference(Vector.empty[PresentReport.ShapeFigures])
 
     def timing(run: () => Any): () => Any = () =>
       val started    = System.nanoTime()
       val result     = run()
       val frameNanos = System.nanoTime() - started
       val phases     = drain()
+      val frame      = counts()
+      val _ = shapes.updateAndGet(
+        _.appended(
+          PresentReport.ShapeFigures(frame(FrameCounter.ShapingCalls), frame(FrameCounter.ShapePromotions))
+        ).takeRight(RecentFrames)
+      )
       val _ = recent.updateAndGet { frames =>
         (frames :+ PresentReport.FramePhases(
           phases.getOrElse(PresentPhase.Plan, 0L),
@@ -266,12 +275,23 @@ private[perf] object PresentBenchmarks:
 
     def breakdown: PresentReport.PhaseBreakdown = PresentReport.PhaseBreakdown.median(recent.get())
 
+    def traffic: PresentReport.ShapeTrafficStats = PresentReport.ShapeTrafficStats.of(shapes.get())
+
+  /** Where a row reads the phases and the counters of the frame it has just timed. */
+  final private[perf] case class PhaseSource(drain: () => Map[PresentPhase, Long], counts: () => FrameCounts)
+
+  private[perf] object PhaseSource:
+    def of(window: Window): PhaseSource   = PhaseSource(window.drainPhases, () => window.lastFrame)
+    def of(cycling: Cycling): PhaseSource = PhaseSource(cycling.drainPhases, () => cycling.lastFrame)
+
   /** The rows to run, and the phase breakdown of each once it has run. */
   final private[perf] class Rows(
       val benchmarks: List[BenchmarkRunner.Benchmark],
       logs: Map[String, PhaseLog]
   ):
     def breakdownOf(name: String): Option[PresentReport.PhaseBreakdown] = logs.get(name).map(_.breakdown)
+
+    def trafficOf(name: String): Option[PresentReport.ShapeTrafficStats] = logs.get(name).map(_.traffic)
 
   def benchmarks(using IORuntime): Rows =
     val backend  = sys.props.getOrElse("present.backend", "java2d")
@@ -291,17 +311,17 @@ private[perf] object PresentBenchmarks:
 
     def row(
       name: String,
-      drain: () => Map[PresentPhase, Long],
+      source: PhaseSource,
       verify: () => Unit,
       run: () => Any
     ): (BenchmarkRunner.Benchmark, (String, PhaseLog)) =
-      val log = PhaseLog(drain)
+      val log = PhaseLog(source)
       BenchmarkRunner.Benchmark(named(name), 3, 20, verify, log.timing(run), settleJit = true) -> (named(name) -> log)
 
     if sys.props.contains("present.diag") then scenarios.printCounters()
 
     val scrollDownRow =
-      val log = PhaseLog(longWindow.drainPhases)
+      val log = PhaseLog(PhaseSource.of(longWindow))
       BenchmarkRunner.Benchmark(
         named("scroll_down_frame"),
         30,
@@ -318,7 +338,7 @@ private[perf] object PresentBenchmarks:
     val rows = List(
       row(
         "typing_frame",
-        typing.drainPhases,
+        PhaseSource.of(typing),
         () =>
           assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
           assert(hasPixels(typing.next()), "typing frame drew nothing")
@@ -327,7 +347,7 @@ private[perf] object PresentBenchmarks:
       ),
       row(
         "scroll_frame",
-        scroll.drainPhases,
+        PhaseSource.of(scroll),
         () =>
           assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
           assert(hasPixels(scroll.next()), "scroll frame drew nothing")
@@ -337,13 +357,13 @@ private[perf] object PresentBenchmarks:
       scrollDownRow,
       row(
         "full_prose_frame",
-        proseWin.drainPhases,
+        PhaseSource.of(proseWin),
         () => assert(hasPixels(proseWin.render(proseFull, Damage.Everything)), "prose frame drew nothing"),
         () => proseWin.render(proseFull, Damage.Everything)
       ),
       row(
         "full_code_frame",
-        codeWin.drainPhases,
+        PhaseSource.of(codeWin),
         () => assert(hasPixels(codeWin.render(codeFull, Damage.Everything)), "code frame drew nothing"),
         () => codeWin.render(codeFull, Damage.Everything)
       )
@@ -354,5 +374,5 @@ private[perf] object PresentBenchmarks:
     import cats.effect.unsafe.implicits.global
     val rows    = benchmarks
     val results = BenchmarkRunner.runMatching(args.toList, rows.benchmarks)
-    PresentReport.print(results, rows.breakdownOf)
+    PresentReport.print(results, rows.breakdownOf, rows.trafficOf)
     sys.exit(0)

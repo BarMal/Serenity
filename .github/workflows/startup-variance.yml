@@ -11,7 +11,7 @@ on:
         description: Id of a Desktop Package Check run that uploaded the Serenity-linux-x64 artifact
         required: true
       runs_per_round:
-        description: Timed launches per round; six rounds run, so 5 gives 30 per mode
+        description: Timed launches per round; six rounds run, three per mode, so 5 gives 15 per mode
         required: false
         default: '5'
 

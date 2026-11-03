@@ -233,15 +233,23 @@ object BenchmarkRunner:
     case _ => None
 
   /** Runs the benchmarks whose names start with any of `prefixes`, or all of them when there are none. */
-  private[perf] def runMatching(prefixes: List[String], benchmarks: List[Benchmark]): List[BenchmarkResult] =
-    benchmarks.filter(b => prefixes.isEmpty || prefixes.exists(b.name.startsWith)).map(runBenchmark)
+  private[perf] def runMatching(
+    prefixes: List[String],
+    benchmarks: List[Benchmark],
+    warmup: WarmupExtension.Session = WarmupExtension.Session.off
+  ): List[BenchmarkResult] =
+    benchmarks.filter(b => prefixes.isEmpty || prefixes.exists(b.name.startsWith)).map(runBenchmark(_, warmup))
 
-  private[perf] def runBenchmark(declared: Benchmark): BenchmarkResult =
+  private[perf] def runBenchmark(
+    declared: Benchmark,
+    warmup: WarmupExtension.Session = WarmupExtension.Session.off
+  ): BenchmarkResult =
     val benchmark = declared.copy(run = slowed(declared.run))
     benchmark.verify()
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
     sink.addAndGet(warmupAcc)
+    sink.addAndGet(warmup.extend(benchmark.run, warmupInvocations, growsState = benchmark.fixedSampleCount))
     if benchmark.settleJit || BenchmarkIterationCounts.JitSettled.contains(benchmark.name) then
       sink.addAndGet(settle(benchmark.run, System.nanoTime() + MaxSettleNanos, Vector.empty, 0L))
     val batch   = calibrate(benchmark.run, 1).max(benchmark.minBatch)

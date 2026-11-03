@@ -49,9 +49,19 @@ final class VisualLineIndex private (private val root: VisualLineIndex.Tree):
     val middle         = if inserted > 0 then node(Leaf, Piece.unmeasured(inserted), Leaf) else Leaf
     new VisualLineIndex(concat(concat(before, middle), after))
 
+  /** This index with every line unmeasured except those measured as one row. */
+  def keepingOneRowLines: VisualLineIndex = new VisualLineIndex(onlyOneRowLines(root))
+
   private[layout] def isBalanced: Boolean = balanced(root)
 
 object VisualLineIndex:
+
+  private def onlyOneRowLines(tree: Tree): Tree =
+    tree match
+      case Leaf => Leaf
+      case Node(left, piece, right) =>
+        val kept = if piece.measured && piece.rows != 1 then Piece.unmeasured(1) else piece
+        node(onlyOneRowLines(left), kept, onlyOneRowLines(right))
 
   def unmeasured(lineCount: Int): VisualLineIndex =
     new VisualLineIndex(if lineCount > 0 then node(Leaf, Piece.unmeasured(lineCount), Leaf) else Leaf)
