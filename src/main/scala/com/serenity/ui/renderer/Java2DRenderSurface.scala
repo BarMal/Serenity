@@ -122,6 +122,10 @@ class Java2DRenderSurface(
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
 
+  /** A clip that keeps off pixels: text draws must restore it, but unlike [[userClipDepth]] it keeps labels on sprites.
+    */
+  private val exclusionDepth = AtomicInteger(0)
+
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
     g.setFont(newFont.toAwt)
@@ -186,7 +190,7 @@ class Java2DRenderSurface(
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
       if hasText then
         g.setColor(fgRef.get())
-        val savedClip = if userClipDepth.get() == 0 then None else Option(g.getClip)
+        val savedClip = if userClipDepth.get() + exclusionDepth.get() == 0 then None else Option(g.getClip)
         try
           if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
@@ -393,6 +397,16 @@ class Java2DRenderSurface(
       render
     finally
       userClipDepth.decrementAndGet()
+      g.setClip(savedClip)
+
+  override def withoutPixels(kept: scala.collection.immutable.List[PixelRect])(render: => Unit): Unit =
+    val savedClip = g.getClip
+    exclusionDepth.incrementAndGet()
+    try
+      g.clip(PreservedPixels.allowed(effectiveLogicalWidthPx, effectiveLogicalHeightPx, kept))
+      render
+    finally
+      exclusionDepth.decrementAndGet()
       g.setClip(savedClip)
 
   override def fillPixelRect(
