@@ -132,10 +132,10 @@ object ProjectFileWalker:
   ): IO[Either[Frontier, Walked]] =
     scans
       .foldLeftM[IO, Either[Walked, Frontier]](Right(next)) {
-        case (stopped @ Left(_), _)                                     => IO.pure(stopped)
-        case (Right(current), _) if current.files > limit               => IO.pure(Left(Walked(current.done, truncated = true)))
+        case (stopped @ Left(_), _)                       => IO.pure(stopped)
+        case (Right(current), _) if current.files > limit => IO.pure(Left(Walked(current.done, truncated = true)))
         case (Right(_), (directory, Left(error))) if directory == RootDirectory => IO.raiseError(error)
-        case (Right(current), (_, Left(_)))                             => IO.pure(Right(current))
+        case (Right(current), (_, Left(_)))                                     => IO.pure(Right(current))
         case (Right(current), (directory, Right((snapshot, rules)))) =>
           announce(
             Frontier(
