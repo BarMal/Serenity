@@ -29,8 +29,8 @@ object RichDocumentOpenBenchmarks:
   private val Iterations = 40
 
   def benchmarks: List[BenchmarkRunner.Benchmark] =
-    val docx = docxFixture
-    val odt  = odtFixture
+    lazy val docx = docxFixture
+    lazy val odt  = odtFixture
     List(
       openBenchmark("richdoc.open.docx", docx, DocxDocumentCodec.readBytesWithFidelity),
       openBenchmark("richdoc.open.odt", odt, OdtDocumentCodec.readBytesWithFidelity)
@@ -42,15 +42,18 @@ object RichDocumentOpenBenchmarks:
 
   private def openBenchmark(
     name: String,
-    bytes: Array[Byte],
+    archive: => Array[Byte],
     open: Array[Byte] => Either[com.serenity.richtext.RichTextCodecException, com.serenity.richtext.RichTextImport]
   ): BenchmarkRunner.Benchmark =
-    BenchmarkRunner.Benchmark(
-      name,
-      3,
-      Iterations,
-      () => assert(open(bytes).exists(_.document.paragraphs.size == ParagraphCount)),
-      () => open(bytes)
+    lazy val bytes = archive
+    BenchmarkRunner.Benchmark.building(bytes)(
+      BenchmarkRunner.Benchmark(
+        name,
+        3,
+        Iterations,
+        () => assert(open(bytes).exists(_.document.paragraphs.size == ParagraphCount)),
+        () => open(bytes)
+      )
     )
 
   private def document: RichTextDocument =

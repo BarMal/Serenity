@@ -136,30 +136,32 @@ private[perf] object LaptopFrameBenchmarks:
       preferredWindowSize = Some(PreferredWindowSize(LogicalWidthPx, LogicalHeightPx))
     )
 
-  def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
+  def benchmarks(presentWindow: => SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
     renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
-    val caches     = RenderCaches.create()
-    val prose      = proseState
-    val withPanel  = proseWithPinnedPanelState
-    val proseImage = frameImage()
-    val panelImage = frameImage()
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.render.prose_frame_2x",
-        2,
-        8,
-        () => assert(hasPixels(renderedFrame(prose, caches, proseImage)), "prose frame drew nothing"),
-        () => renderedFrame(prose, caches, proseImage)
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.render.prose_frame_2x.pinned_panel_frosted",
-        2,
-        8,
-        () => assert(hasPixels(renderedFrame(withPanel, caches, panelImage)), "panel frame drew nothing"),
-        () => renderedFrame(withPanel, caches, panelImage)
+    lazy val caches     = RenderCaches.create()
+    lazy val prose      = proseState
+    lazy val withPanel  = proseWithPinnedPanelState
+    lazy val proseImage = frameImage()
+    lazy val panelImage = frameImage()
+    BenchmarkRunner.Benchmark.sharing((caches, prose, withPanel, proseImage, panelImage))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.render.prose_frame_2x",
+          2,
+          8,
+          () => assert(hasPixels(renderedFrame(prose, caches, proseImage)), "prose frame drew nothing"),
+          () => renderedFrame(prose, caches, proseImage)
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.render.prose_frame_2x.pinned_panel_frosted",
+          2,
+          8,
+          () => assert(hasPixels(renderedFrame(withPanel, caches, panelImage)), "panel frame drew nothing"),
+          () => renderedFrame(withPanel, caches, panelImage)
+        )
       )
     )
 
@@ -229,7 +231,7 @@ private[perf] object LaptopFrameBenchmarks:
       case None => state
 
   private[perf] def inputBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, proseBufferId) = proseStateManager()
+    lazy val (stateManager, proseBufferId) = proseStateManager()
     def buffer: Option[Buffer] = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId)
     def cursor: Option[CursorPosition] = buffer.flatMap(_.editing.cursorPositions.headOption)
     def length: Option[Int]            = buffer.map(_.document.content.weight)
@@ -239,61 +241,66 @@ private[perf] object LaptopFrameBenchmarks:
       buffer.zip(cursor).exists((b, c) => c.line >= b.viewport.topLine && b.viewport.visibleLines > 24)
     // A fresh letter each keystroke, so the edited line's text is new every time and never served from a cache.
     val typedLetters = Iterator.continually('a' to 'z').flatten
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.move_down_up",
-        3,
-        20,
-        () =>
-          val before = cursor
-          stateManager.applyEvent(MoveDown).unsafeRunSync()
-          val moved = cursor
-          stateManager.applyEvent(MoveUp).unsafeRunSync()
-          assert(
-            moved != before && cursor == before && cursorOnScreen,
-            s"cursor did not move down and back on screen: $before -> $moved -> $cursor, viewport ${buffer.map(_.viewport)}"
-          )
-        ,
-        () => roundTrip(MoveDown, MoveUp)
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.type_and_delete",
-        3,
-        20,
-        () =>
-          val before = length
-          roundTrip(InsertChar('x'), DeleteBackward)
-          assert(length == before, s"type-and-delete changed the document length: $before -> $length")
-        ,
-        () => roundTrip(InsertChar('x'), DeleteBackward)
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.continuous_typing",
-        3,
-        20,
-        () =>
-          val before = length
-          stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
-          assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
-        ,
-        () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync(),
-        fixedSampleCount = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.page_down_up",
-        3,
-        20,
-        () =>
-          val before = cursor.map(_.line)
-          stateManager.applyEvent(PageDown).unsafeRunSync()
-          val moved = cursor.map(_.line)
-          stateManager.applyEvent(PageUp).unsafeRunSync()
-          assert(
-            moved.exists(m => before.exists(_ < m)) && cursor.map(_.line) == before && cursorOnScreen,
-            s"cursor did not page down and back on screen: $before -> $moved -> $cursor"
-          )
-        ,
-        () => roundTrip(PageDown, PageUp)
+    BenchmarkRunner.Benchmark.sharing((stateManager, proseBufferId))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.move_down_up",
+          3,
+          20,
+          () =>
+            val before = cursor
+            stateManager.applyEvent(MoveDown).unsafeRunSync()
+            val moved = cursor
+            stateManager.applyEvent(MoveUp).unsafeRunSync()
+            assert(
+              moved != before && cursor == before && cursorOnScreen,
+              s"cursor did not move down and back on screen: $before -> $moved -> $cursor, viewport ${buffer.map(_.viewport)}"
+            )
+          ,
+          () => roundTrip(MoveDown, MoveUp)
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.type_and_delete",
+          3,
+          20,
+          () =>
+            val before = length
+            roundTrip(InsertChar('x'), DeleteBackward)
+            assert(length == before, s"type-and-delete changed the document length: $before -> $length")
+          ,
+          () => roundTrip(InsertChar('x'), DeleteBackward)
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.continuous_typing",
+          3,
+          20,
+          () =>
+            val before = length
+            stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync()
+            assert(
+              length == before.map(_ + 1) && cursorOnScreen,
+              s"typing did not grow the document: $before -> $length"
+            )
+          ,
+          () => stateManager.applyEvent(InsertChar(typedLetters.next())).unsafeRunSync(),
+          fixedSampleCount = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.page_down_up",
+          3,
+          20,
+          () =>
+            val before = cursor.map(_.line)
+            stateManager.applyEvent(PageDown).unsafeRunSync()
+            val moved = cursor.map(_.line)
+            stateManager.applyEvent(PageUp).unsafeRunSync()
+            assert(
+              moved.exists(m => before.exists(_ < m)) && cursor.map(_.line) == before && cursorOnScreen,
+              s"cursor did not page down and back on screen: $before -> $moved -> $cursor"
+            )
+          ,
+          () => roundTrip(PageDown, PageUp)
+        )
       )
     ) ++ typewriterBenchmarks ++ goToLineBenchmarks
 
@@ -315,28 +322,30 @@ private[perf] object LaptopFrameBenchmarks:
 
   private val LongParagraphChars = 4_000
 
-  private def typingBenchmark(name: String, session: (StateManager, BufferId))(using
+  private def typingBenchmark(name: String, session: => (StateManager, BufferId))(using
     IORuntime
   ): BenchmarkRunner.Benchmark =
-    val (stateManager, bufferId) = session
-    def buffer: Option[Buffer]   = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId)
-    def length: Option[Int]      = buffer.map(_.document.content.weight)
+    lazy val (stateManager, bufferId) = session
+    def buffer: Option[Buffer]        = stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(bufferId)
+    def length: Option[Int]           = buffer.map(_.document.content.weight)
     def cursorOnScreen: Boolean =
       buffer
         .flatMap(b => b.editing.cursorPositions.headOption.map(b -> _))
         .exists((b, c) => c.line >= b.viewport.topLine && b.viewport.visibleLines > 24)
     val letters = BenchmarkFixtures.randomLetters(seed = 42L)
-    BenchmarkRunner.Benchmark(
-      name,
-      3,
-      BenchmarkIterationCounts.RandomTyping,
-      () =>
-        val before = length
-        stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
-        assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
-      ,
-      () => stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync(),
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building((stateManager, bufferId))(
+      BenchmarkRunner.Benchmark(
+        name,
+        3,
+        BenchmarkIterationCounts.RandomTyping,
+        () =>
+          val before = length
+          stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
+          assert(length == before.map(_ + 1) && cursorOnScreen, s"typing did not grow the document: $before -> $length")
+        ,
+        () => stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync(),
+        fixedSampleCount = true
+      )
     )
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
@@ -344,28 +353,30 @@ private[perf] object LaptopFrameBenchmarks:
       AppConfig.conventional.copy(surfaceConfig =
         AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
       )
-    val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
+    lazy val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
     def keystroke(): Unit = (stateManager.applyEvent(InsertChar('x')) >> stateManager.applyEvent(DeleteBackward))
       .unsafeRunSync()
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.typewriter_keystroke",
-        3,
-        20,
-        () =>
-          val before = length
-          keystroke()
-          assert(length == before, s"typewriter keystroke changed the document length: $before -> $length")
-        ,
-        () => keystroke()
+    BenchmarkRunner.Benchmark.sharing((stateManager, proseBufferId))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.typewriter_keystroke",
+          3,
+          20,
+          () =>
+            val before = length
+            keystroke()
+            assert(length == before, s"typewriter keystroke changed the document length: $before -> $length")
+          ,
+          () => keystroke()
+        )
       )
     )
 
   /** Go to Line through its prompt, jumping between the start and the end of a 3000-paragraph document. */
   private[perf] def goToLineBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, proseBufferId) = proseStateManager(paragraphs = 3000, cursorLine = 100)
+    lazy val (stateManager, proseBufferId) = proseStateManager(paragraphs = 3000, cursorLine = 100)
     def cursorLine: Option[Int] = stateManager.getCurrentState
       .unsafeRunSync()
       .persisted
@@ -379,19 +390,21 @@ private[perf] object LaptopFrameBenchmarks:
     def jumpAndBack(): Unit =
       goTo(2900)
       goTo(100)
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.go_to_line_3000_paragraphs",
-        BenchmarkIterationCounts.GoToLineWarmups,
-        BenchmarkIterationCounts.GoToLine,
-        () =>
-          goTo(2900)
-          val jumped = cursorLine
-          goTo(100)
-          assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
-        ,
-        () => jumpAndBack(),
-        minBatch = BenchmarkIterationCounts.GoToLineBatch
+    BenchmarkRunner.Benchmark.sharing((stateManager, proseBufferId))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.input.state_manager.go_to_line_3000_paragraphs",
+          BenchmarkIterationCounts.GoToLineWarmups,
+          BenchmarkIterationCounts.GoToLine,
+          () =>
+            goTo(2900)
+            val jumped = cursorLine
+            goTo(100)
+            assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
+          ,
+          () => jumpAndBack(),
+          minBatch = BenchmarkIterationCounts.GoToLineBatch
+        )
       )
     )
 
@@ -502,41 +515,45 @@ private[perf] object LaptopFrameBenchmarks:
     * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
     */
   private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, _)           = proseStateManager()
-    def current: AppState           = stateManager.getCurrentState.unsafeRunSync()
-    val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
-    stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
-    val afterScroll = current
-    val typing      = AlternatingTransition(beforeTyping, afterTyping)
-    val scroll      = AlternatingTransition(afterTyping, afterScroll)
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.render.typing_frame_2x",
-        2,
-        12,
-        () =>
-          assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          typing.verify("typing", MaxTypingRowsDrawn)
-        ,
-        () => typing.nextFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.render.scroll_frame_2x",
-        2,
-        12,
-        () =>
-          assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          scroll.verify("scroll", MaxScrollRowsDrawn)
-        ,
-        () => scroll.nextFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.damage.typing_transition",
-        3,
-        20,
-        () =>
-          assert(DamageProducer.forTransition(beforeTyping, afterTyping) != Damage.Nothing, "typing damaged nothing"),
-        () => DamageProducer.forTransition(beforeTyping, afterTyping)
+    lazy val (stateManager, _)           = proseStateManager()
+    def current: AppState                = stateManager.getCurrentState.unsafeRunSync()
+    lazy val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
+    lazy val afterScroll =
+      val _ = afterTyping
+      stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
+      current
+    lazy val typing = AlternatingTransition(beforeTyping, afterTyping)
+    lazy val scroll = AlternatingTransition(afterTyping, afterScroll)
+    BenchmarkRunner.Benchmark.sharing((stateManager, beforeTyping, afterTyping, afterScroll, typing, scroll))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.render.typing_frame_2x",
+          2,
+          12,
+          () =>
+            assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
+            typing.verify("typing", MaxTypingRowsDrawn)
+          ,
+          () => typing.nextFrame()
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.render.scroll_frame_2x",
+          2,
+          12,
+          () =>
+            assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
+            scroll.verify("scroll", MaxScrollRowsDrawn)
+          ,
+          () => scroll.nextFrame()
+        ),
+        BenchmarkRunner.Benchmark(
+          "laptop.damage.typing_transition",
+          3,
+          20,
+          () =>
+            assert(DamageProducer.forTransition(beforeTyping, afterTyping) != Damage.Nothing, "typing damaged nothing"),
+          () => DamageProducer.forTransition(beforeTyping, afterTyping)
+        )
       )
     )
 
@@ -546,22 +563,28 @@ private[perf] object LaptopFrameBenchmarks:
     * the time is however far ahead of the server the client happened to run, which is what made the previous
     * `swing_paint_window` bimodal.
     */
-  private def presentBenchmark(presentWindow: SwingWindow): BenchmarkRunner.Benchmark =
-    val canvas = presentWindow.canvas
-    val frames = PresentedFrames.forWindow(presentWindow)
-    BenchmarkRunner.Benchmark(
-      "laptop.present.swing_fresh_frame_synced_1500x1000",
-      2,
-      BenchmarkIterationCounts.Present,
-      () =>
-        assert(canvas.isShowing && canvas.getWidth > 0, s"canvas not showing: ${canvas.getWidth}x${canvas.getHeight}"),
-      () =>
-        val frame = frames.next()
-        SwingUtilities.invokeAndWait { () =>
-          presentWindow.onBaseImageReady(frame)
-          canvas.paintImmediately(0, 0, canvas.getWidth, canvas.getHeight)
-          Toolkit.getDefaultToolkit.sync()
-        }
+  private def presentBenchmark(presentWindow: => SwingWindow): BenchmarkRunner.Benchmark =
+    lazy val window = presentWindow
+    lazy val canvas = window.canvas
+    lazy val frames = PresentedFrames.forWindow(window)
+    BenchmarkRunner.Benchmark.building((window, canvas, frames))(
+      BenchmarkRunner.Benchmark(
+        "laptop.present.swing_fresh_frame_synced_1500x1000",
+        2,
+        BenchmarkIterationCounts.Present,
+        () =>
+          assert(
+            canvas.isShowing && canvas.getWidth > 0,
+            s"canvas not showing: ${canvas.getWidth}x${canvas.getHeight}"
+          ),
+        () =>
+          val frame = frames.next()
+          SwingUtilities.invokeAndWait { () =>
+            window.onBaseImageReady(frame)
+            canvas.paintImmediately(0, 0, canvas.getWidth, canvas.getHeight)
+            Toolkit.getDefaultToolkit.sync()
+          }
+      )
     )
 
   /** A caret blink tick as the app runs one: the caret is published from off the EDT and the window's own pending
@@ -570,21 +593,24 @@ private[perf] object LaptopFrameBenchmarks:
     * Unlike [[presentBenchmark]] it does not `Toolkit.sync`: the X server's share of a 2x18 rect is negligible, and the
     * extra round trip only made the time track how promptly the scheduler woke Xvfb.
     */
-  private def presentCaretBenchmark(presentWindow: SwingWindow): BenchmarkRunner.Benchmark =
-    val caret = SwingWindow.CaretPaint(new Rectangle(700, 500, 2, 18), Color.WHITE)
-    val ticks = new AtomicInteger(0)
+  private def presentCaretBenchmark(presentWindow: => SwingWindow): BenchmarkRunner.Benchmark =
+    lazy val window = presentWindow
+    val caret       = SwingWindow.CaretPaint(new Rectangle(700, 500, 2, 18), Color.WHITE)
+    val ticks       = new AtomicInteger(0)
     def blink(): Boolean =
-      presentWindow.onCursorOverlayReady(Some(Nil))(if ticks.incrementAndGet() % 2 == 0 then List(caret) else Nil)
-    BenchmarkRunner.Benchmark(
-      "laptop.present.swing_paint_caret_1500x1000",
-      2,
-      BenchmarkIterationCounts.Present,
-      () =>
-        val frame = PresentedFrames.forWindow(presentWindow).next()
-        SwingUtilities.invokeAndWait(() => presentWindow.onBaseImageReady(frame))
-        assert(blink(), "no base frame to blink the caret over")
-      ,
-      () =>
-        val _ = blink()
-        SwingUtilities.invokeAndWait(() => ())
+      window.onCursorOverlayReady(Some(Nil))(if ticks.incrementAndGet() % 2 == 0 then List(caret) else Nil)
+    BenchmarkRunner.Benchmark.building(window)(
+      BenchmarkRunner.Benchmark(
+        "laptop.present.swing_paint_caret_1500x1000",
+        2,
+        BenchmarkIterationCounts.Present,
+        () =>
+          val frame = PresentedFrames.forWindow(window).next()
+          SwingUtilities.invokeAndWait(() => window.onBaseImageReady(frame))
+          assert(blink(), "no base frame to blink the caret over")
+        ,
+        () =>
+          val _ = blink()
+          SwingUtilities.invokeAndWait(() => ())
+      )
     )

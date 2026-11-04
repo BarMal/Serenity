@@ -61,80 +61,97 @@ private[perf] object RenderBenchmarks:
       renderCaches.wrappedLines.layoutMemos
     )
 
-  def frameBenchmarks(cursorWindow: SwingWindow): List[BenchmarkRunner.Benchmark] =
-    val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
-    val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)
-    val commentsState    = withDocumentComments(multilineState)
-    val diagnosticsState = withBenchmarkDiagnostics(commentsState)
-    val plainScrollState = scrolledToDeepViewport(multilineState)
-    val layoutSnapshot   = visibleViewportLayout(plainScrollState)
-    val unremembered     = WrappedLineCache.measuring(renderCaches.shapedText, renderCaches.wrappedLines.layoutMemos)
-    prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
-    val fullFrame              = renderedFrame(richState, deviceScale = 1.0, renderCaches)
-    val diagnosticsAndComments = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
-    val hidpiFrame             = renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
-    val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
+  def frameBenchmarks(cursorWindow: => SwingWindow): List[BenchmarkRunner.Benchmark] =
+    lazy val richState        = editorStateForRichDocument(largeRichTextDocument(lines = 6_000))
+    lazy val multilineState   = editorState(largeMultilineDocument(lines = 15_000), None)
+    lazy val commentsState    = withDocumentComments(multilineState)
+    lazy val diagnosticsState = withBenchmarkDiagnostics(commentsState)
+    lazy val plainScrollState = scrolledToDeepViewport(multilineState)
+    lazy val layoutSnapshot   = visibleViewportLayout(plainScrollState)
+    lazy val unremembered = WrappedLineCache.measuring(renderCaches.shapedText, renderCaches.wrappedLines.layoutMemos)
+    lazy val cursorBaseFrame        = prepareCursorBaseFrame(plainScrollState, cursorWindow, renderCaches)
+    lazy val fullFrame              = renderedFrame(richState, deviceScale = 1.0, renderCaches)
+    lazy val diagnosticsAndComments = renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
+    lazy val hidpiFrame             = renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
+    lazy val longMeasuredLineFrame  = renderedLongMeasuredLine(longMeasuredLine)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "layout.large_multiline.visible_viewport",
-        3,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
-        () =>
-          plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
-            val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-              buffer,
-              panelWidthPx = frameWidthPx,
-              monoFont,
-              wordWrapEnabled = false,
-              wrapCache = unremembered
-            )
-          }
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.full_frame.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(fullFrame)),
-        () => renderedFrame(richState, deviceScale = 1.0, renderCaches)
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.long_measured_line.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
-        () =>
-          val _ = renderedLongMeasuredLine(longMeasuredLine)
-          ()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.cursor_only.scene_reuse.java2d_overlay",
-        2,
-        8,
-        () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),
-        () =>
-          val _ = renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)
-          ()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.diagnostics_and_comments.java2d",
-        2,
-        8,
-        () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
-        () => renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.hidpi_frame.java2d",
-        2,
-        8,
-        () =>
-          assert(
-            hidpiFrame.getWidth == frameWidthPx * 2 &&
-              hidpiFrame.getHeight == frameHeightPx * 2 &&
-              renderedFrameHasPixels(hidpiFrame)
-          ),
-        () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
+    BenchmarkRunner.Benchmark.sharing(
+      (
+        richState,
+        multilineState,
+        commentsState,
+        diagnosticsState,
+        plainScrollState,
+        layoutSnapshot,
+        unremembered,
+        cursorBaseFrame,
+        fullFrame,
+        diagnosticsAndComments,
+        hidpiFrame,
+        longMeasuredLineFrame
+      )
+    )(
+      List(
+        BenchmarkRunner.Benchmark(
+          "layout.large_multiline.visible_viewport",
+          3,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
+          () =>
+            plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
+              val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
+                buffer,
+                panelWidthPx = frameWidthPx,
+                monoFont,
+                wordWrapEnabled = false,
+                wrapCache = unremembered
+              )
+            }
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.full_frame.java2d",
+          2,
+          8,
+          () => assert(renderedFrameHasPixels(fullFrame)),
+          () => renderedFrame(richState, deviceScale = 1.0, renderCaches)
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.long_measured_line.java2d",
+          2,
+          8,
+          () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
+          () =>
+            val _ = renderedLongMeasuredLine(longMeasuredLine)
+            ()
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.cursor_only.scene_reuse.java2d_overlay",
+          2,
+          8,
+          () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),
+          () =>
+            val _ = renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)
+            ()
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.diagnostics_and_comments.java2d",
+          2,
+          8,
+          () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
+          () => renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.hidpi_frame.java2d",
+          2,
+          8,
+          () =>
+            assert(
+              hidpiFrame.getWidth == frameWidthPx * 2 &&
+                hidpiFrame.getHeight == frameHeightPx * 2 &&
+                renderedFrameHasPixels(hidpiFrame)
+            ),
+          () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
+        )
       )
     )
 
@@ -162,12 +179,12 @@ private[perf] object RenderBenchmarks:
       )
 
   def markdownBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val markdownLines  = largeMarkdownDocument(sections = 800)
-    val markdownSource = markdownLines.mkString("\n")
+    lazy val markdownLines  = largeMarkdownDocument(sections = 800)
+    lazy val markdownSource = markdownLines.mkString("\n")
     // Shared across every markdown benchmark below, matching a real render's cache reuse across calls (#1677).
-    val markdownPreviewCache = MarkdownPreviewCache()
-    val markdownStateBase    = editorState(markdownSource, Some(LanguageId.Markdown))
-    val markdownState = markdownStateBase.copy(persisted =
+    lazy val markdownPreviewCache = MarkdownPreviewCache()
+    lazy val markdownStateBase    = editorState(markdownSource, Some(LanguageId.Markdown))
+    lazy val markdownState = markdownStateBase.copy(persisted =
       markdownStateBase.persisted.copy(config =
         AppConfig.conventional
           .withLineNumbers(false)
@@ -176,24 +193,37 @@ private[perf] object RenderBenchmarks:
           .withMarkdownViewMode(MarkdownViewMode.LivePreview)
       )
     )
-    val markdownHtmlFragment =
+    lazy val markdownHtmlFragment =
       MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-    val markdownLiveFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+    lazy val markdownLiveFrame = renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "markdown.preview.html_fragment",
-        2,
-        8,
-        () => assert(markdownHtmlFragment.contains("<h2>")),
-        () => MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.markdown.live_preview",
-        2,
-        BenchmarkIterationCounts.RenderMarkdown,
-        () => assert(renderedFrameHasPixels(markdownLiveFrame)),
-        () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+    BenchmarkRunner.Benchmark.sharing(
+      (
+        markdownLines,
+        markdownSource,
+        markdownPreviewCache,
+        markdownStateBase,
+        markdownState,
+        markdownHtmlFragment,
+        markdownLiveFrame
+      )
+    )(
+      List(
+        BenchmarkRunner.Benchmark(
+          "markdown.preview.html_fragment",
+          2,
+          8,
+          () => assert(markdownHtmlFragment.contains("<h2>")),
+          () =>
+            MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.markdown.live_preview",
+          2,
+          BenchmarkIterationCounts.RenderMarkdown,
+          () => assert(renderedFrameHasPixels(markdownLiveFrame)),
+          () => renderedFrame(markdownState, deviceScale = 1.0, renderCaches)
+        )
       )
     )
 
