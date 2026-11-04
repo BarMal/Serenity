@@ -6,7 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.all.*
-import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{AutoSaveMode, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.Trace
 import com.serenity.document.CommentRendering
@@ -73,29 +72,7 @@ final private[manager] class StateManagerOperationBoundary private (
     */
   def dispatch[A](request: IO[A]): IO[A] = dispatcher.submit(request)
 
-  def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry = CommandRegistry.default
-    val activatedRunner =
-      CommandRunner.empty.activate(
-        registry,
-        state.persisted.config,
-        state.runtime.capabilities,
-        state.commandRunnerContext
-      )
-    val runner = activatedRunner
-    val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.CommandPalette(runner),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    stateWithId
-      .copy(runtime =
-        stateWithId.runtime
-          .copy(uiSurfaces = stateWithId.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(surface))
-      )
-      .pushFocus(Focus.Surface(surfaceId))
+  def ensureCommandRunnerSurface(state: AppState): AppState = CommandRunnerSurfaceEnsuring.ensured(state)
 
   private def currentModalId(state: AppState): Option[SurfaceId] =
     state.topModal.map(_.id).orElse(state.modalSurface.map(_.id))
