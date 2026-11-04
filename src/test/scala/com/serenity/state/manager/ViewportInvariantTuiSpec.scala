@@ -69,7 +69,7 @@ class ViewportInvariantTuiSpec extends TuiSpec:
       screen  <- settledScreen
       current <- state
     yield
-      val caret = if key == wheelDown || key == wheelUp then None else caretProblem(screen)
+      val caret  = if key == wheelDown || key == wheelUp then None else caretProblem(screen)
       val cursor = focusedBuffer(current).map(buffer => (buffer.editing.cursorPositions.headOption, buffer.viewport))
       (viewportProblem(current).toList ++ caret.toList).map(problem => s"step $index (${key.name}) $cursor: $problem")
 

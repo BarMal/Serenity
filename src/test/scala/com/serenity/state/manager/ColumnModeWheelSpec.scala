@@ -64,8 +64,8 @@ class ColumnModeWheelSpec extends AnyFlatSpec with Matchers:
   }
 
   "Every wheel step in column mode" should "land on a page the caret could anchor to" in {
-    val tops   = fixture.pages.map(page => (page.viewport.topLine, page.viewport.topVisualLine)).toSet
-    val events = List(ScrollDown(3), ScrollDown(1), ScrollUp(3), ScrollDown(5), ScrollDown(3), ScrollUp(1))
+    val tops    = fixture.pages.map(page => (page.viewport.topLine, page.viewport.topVisualLine)).toSet
+    val events  = List(ScrollDown(3), ScrollDown(1), ScrollUp(3), ScrollDown(5), ScrollDown(3), ScrollUp(1))
     val visited = events.scanLeft(fixture.state)(wheel).map(top)
 
     visited.filterNot(tops.contains) shouldBe Nil

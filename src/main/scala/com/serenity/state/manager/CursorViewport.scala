@@ -272,13 +272,13 @@ object CursorViewport:
     * page turns both read pages from here, so each lands on a page the painter draws from its first column.
     */
   final private[manager] case class ColumnPages(
-    pager: ColumnPager,
-    columnCount: Int,
-    lineCount: Int,
-    font: java.awt.Font,
-    wrapWidthPx: Int,
-    cellMetricsOverride: Option[CellMetrics],
-    forceCellLayout: Boolean
+      pager: ColumnPager,
+      columnCount: Int,
+      lineCount: Int,
+      font: java.awt.Font,
+      wrapWidthPx: Int,
+      cellMetricsOverride: Option[CellMetrics],
+      forceCellLayout: Boolean
   ):
 
     def pageHolding(target: ColumnPaging.ColumnStart): ColumnPaging.ColumnStart =
@@ -296,8 +296,8 @@ object CursorViewport:
     def previousPage(pageStart: ColumnPaging.ColumnStart): ColumnPaging.ColumnStart =
       if lineCount <= 0 then ColumnPaging.ColumnStart.Origin
       else
-        val starts    = pager.startsThrough(pageStart)
-        val thisPage  = (starts.length - 1) / columnCount
+        val starts   = pager.startsThrough(pageStart)
+        val thisPage = (starts.length - 1) / columnCount
         starts(math.max(0, thisPage - 1) * columnCount)
 
   private[manager] object ColumnPages:

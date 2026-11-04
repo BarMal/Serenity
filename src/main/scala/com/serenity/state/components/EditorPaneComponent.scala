@@ -47,7 +47,7 @@ class EditorPaneComponent(
         rowScrolled(currentState, -lines)
       case _: ScrollDown => pageTurned(currentState, direction = 1)
       case _: ScrollUp   => pageTurned(currentState, direction = -1)
-      case _ =>
+      case _             =>
         // Measured once here, at the effect boundary, rather than by the reducer reaching for
         // `EditorGeometryProducer` itself (#1676) -- `reduce` stays a pure function of state and this geometry.
         val geometry     = EditorGeometryProducer.forEvent(event, currentState, paneId, wrapCache)
