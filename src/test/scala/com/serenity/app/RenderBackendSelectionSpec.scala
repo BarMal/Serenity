@@ -101,7 +101,10 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
 
   it should "carry the wrapped causes with the failure, and keep them out of the reason and the log line" in {
     val decision = RenderBackendSelection.choose(
-      healthyLinux.copy(setting = RenderBackendSetting.Auto, probe = Probe.Failed("Wrapper: failed", Some("Inner: libGL.so.1")))
+      healthyLinux.copy(
+        setting = RenderBackendSetting.Auto,
+        probe = Probe.Failed("Wrapper: failed", Some("Inner: libGL.so.1"))
+      )
     )
     decision.skiaFailure shouldBe Some("Wrapper: failed (Inner: libGL.so.1)")
     decision.reason shouldBe "native probe failed: Wrapper: failed"

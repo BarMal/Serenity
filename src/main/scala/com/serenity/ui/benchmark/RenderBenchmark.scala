@@ -43,9 +43,9 @@ object RenderBenchmark:
 
   private def skiaProbe(probe: Probe): Either[String, Unit] =
     probe match
-      case Probe.Loaded        => Right(())
+      case Probe.Loaded           => Right(())
       case Probe.Failed(cause, _) => Left(cause)
-      case Probe.NotRun        => Left("the native library was not loaded")
+      case Probe.NotRun           => Left("the native library was not loaded")
 
   private def keep(report: BenchmarkReport, directory: Path, out: PrintStream): Unit =
     val stem = s"render-benchmark-${LocalDateTime.now().format(Stamp)}"
