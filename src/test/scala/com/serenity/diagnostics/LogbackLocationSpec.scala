@@ -2,8 +2,8 @@ package com.serenity.diagnostics
 
 import java.nio.file.Path
 
-import ch.qos.logback.classic.{Level, LoggerContext}
 import ch.qos.logback.classic.joran.JoranConfigurator
+import ch.qos.logback.classic.{Level, LoggerContext}
 import ch.qos.logback.core.FileAppender
 import com.serenity.TestTemp
 import org.scalatest.flatspec.AnyFlatSpec
