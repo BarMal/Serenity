@@ -485,7 +485,9 @@ object Main extends IOApp:
                   )
                 ),
               frameTimings = frameTimings,
-              menus = host.menus(actualAppConfig.menuBarMode).map(open => menuHost => ShutdownTrace.traced("menu bar")(open(menuHost))),
+              menus = host
+                .menus(actualAppConfig.menuBarMode)
+                .map(open => menuHost => ShutdownTrace.traced("menu bar")(open(menuHost))),
               offscreenFrames = Some(
                 OffscreenWarmUpFrames.forTarget(
                   host.target,
