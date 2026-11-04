@@ -40,6 +40,29 @@ class LaunchOpensSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  "LaunchOpens.startupPlan" should "be the start page when nothing was named" in {
+    planned().startupPlan shouldBe LaunchOpens.StartupPlan.StartPage
+  }
+
+  it should "open the first file during startup and the rest after it, when no folder was named" in {
+    planned("a.md", "b.md", "c.md").startupPlan shouldBe
+      LaunchOpens.StartupPlan.File(path("a.md"), List(path("b.md"), path("c.md")))
+  }
+
+  it should "make a lone folder the project, with no file to open" in {
+    planned("src").startupPlan shouldBe LaunchOpens.StartupPlan.Folder(path("src"), None, Nil)
+  }
+
+  it should "make the folder the project and open the first file with it, the rest after, in order" in {
+    planned("a.md", "src", "b.md", "c.md").startupPlan shouldBe
+      LaunchOpens.StartupPlan.Folder(path("src"), Some(path("a.md")), List(path("b.md"), path("c.md")))
+  }
+
+  it should "not open a folder that was set aside, which only the notice mentions" in {
+    planned("docs", "src", "a.md").startupPlan shouldBe
+      LaunchOpens.StartupPlan.Folder(path("docs"), Some(path("a.md")), Nil)
+  }
+
   "LaunchOpens.resolve" should "ask the filesystem which paths are folders" in {
     import cats.effect.unsafe.implicits.global
     val dir  = TestTemp.directory("launch-opens")

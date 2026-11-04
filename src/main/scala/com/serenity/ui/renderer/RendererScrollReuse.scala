@@ -129,9 +129,10 @@ private[renderer] object RendererScrollReuse:
     val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
     def widened(bands: Vector[PixelRect]): Vector[PixelRect] =
       bands.map(band => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach))
+    val bleed = RendererChromePlan.withBleedOutsideShared(context, SharedSides.of(paneId, renderPlan.paneLayouts))
     RowBands(
-      RendererPaneSetup.paneRowRects(contentRect, context, previous).map(RendererChromePlan.withBleed(context)),
-      RendererPaneSetup.paneRowRects(contentRect, context, current).map(RendererChromePlan.withBleed(context))
+      RendererPaneSetup.paneRowRects(contentRect, context, previous).map(bleed),
+      RendererPaneSetup.paneRowRects(contentRect, context, current).map(bleed)
     ) :: numbers.map { rect =>
       RowBands(
         widened(RendererGutter.counterRowBands(state, context, previous, rect)),

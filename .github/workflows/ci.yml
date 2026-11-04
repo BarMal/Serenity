@@ -1,7 +1,9 @@
 name: CI
 
 on:
+  # ready_for_review re-runs CI when a draft is marked ready, which is what starts Auto Squash Merge.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
@@ -139,6 +141,18 @@ jobs:
       - name: Check third-party notices cover every runtime dependency
         run: sbt -v checkThirdPartyNotices
 
+  scripts:
+    name: Script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # Stdlib `unittest`, no Python dependency. scripts.test_ci_workflow fails if a test module is left out here.
+      - name: Test the scripts
+        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_run_perf_benchmark scripts.test_perf_matrix scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_startup_rows scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary scripts.test_bench_laptop scripts.test_cross_os_workflow scripts.test_hyprland_float scripts.test_footprint_parse scripts.test_ci_workflow -v
+
   test:
     name: Test
     runs-on: ubuntu-latest
@@ -239,6 +253,8 @@ jobs:
     # The timeout is a bound on a stuck job, not a budget. The unsharded 1x job took 57.3 and 58.3 minutes on runs
     # 41350271015 and 41350357868 (the benchmark warm-up on both sides, and a confirmation run of 4 minutes when a row is
     # flagged), against the previous limit of 60; 75 is the limit the owner chose for the sharded jobs (#2464).
+    # Drafts skip the benchmark shards; marking a pull request ready runs them (owner decision, #2484).
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -288,10 +304,6 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
-      # Stdlib `unittest`, no Python dependency to install.
-      - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_run_perf_benchmark scripts.test_perf_matrix scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary scripts.test_bench_laptop scripts.test_cross_os_workflow -v
-
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
       # `HeadlessException` constructing it, so this job needs a virtual one.
@@ -322,6 +334,11 @@ jobs:
             for side in "$first" "$second"; do
               if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
               bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/$side-$pair.csv"
+              if [ "$side" = head ] && [ ! -s "perf-runs/head-$pair.csv" ]; then
+                echo "::error::No benchmark output from the head commit's run $pair -- it did not build or the suite failed; stopping before the remaining passes. Raw output:"
+                tail -n 60 "perf-runs/head-$pair.csv.raw"
+                exit 1
+              fi
             done
           done
 
