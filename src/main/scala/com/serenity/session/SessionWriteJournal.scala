@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, StandardCopyOption}
 
 import cats.effect.std.Mutex
-import cats.effect.{IO, SyncIO}
+import cats.effect.{IO, Ref}
 import cats.syntax.all.*
 import com.serenity.io.AtomicFileWriter
 import org.typelevel.log4cats.Logger
@@ -29,10 +29,22 @@ final private[session] class SessionWriteJournal(
 
   // Saves can overlap (after a file save, on edit-idle, on an interval), and they all stage beside the same session
   // file; interleaved, one renames the other's staged file away and the loser fails with NoSuchFileException.
-  private val exclusive: Mutex[IO] = Mutex.in[SyncIO, IO].unsafeRunSync()
+  private val mutex: Ref[IO, Option[Mutex[IO]]] = Ref.unsafe(None)
+
+  private def exclusive: IO[Mutex[IO]] =
+    mutex.get.flatMap {
+      case Some(existing) => IO.pure(existing)
+      case None =>
+        Mutex[IO].flatMap { fresh =>
+          mutex.modify {
+            case Some(winner) => (Some(winner), winner)
+            case None         => (Some(fresh), fresh)
+          }
+        }
+    }
 
   def commit(writes: Map[String, String], deletes: List[String], indexJson: String): IO[Unit] =
-    exclusive.lock.surround(commitExclusively(writes, deletes, indexJson))
+    exclusive.flatMap(_.lock.surround(commitExclusively(writes, deletes, indexJson)))
 
   private def commitExclusively(writes: Map[String, String], deletes: List[String], indexJson: String): IO[Unit] =
     for
@@ -51,7 +63,7 @@ final private[session] class SessionWriteJournal(
     * every future session operation.
     */
   def recover: IO[Unit] =
-    exclusive.lock.surround(recoverExclusively)
+    exclusive.flatMap(_.lock.surround(recoverExclusively))
 
   private def recoverExclusively: IO[Unit] =
     IO.blocking(Files.exists(pendingFile)).flatMap {
