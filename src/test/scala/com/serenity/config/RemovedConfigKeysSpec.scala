@@ -260,7 +260,10 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString), ConfigManagerTestSupport.linuxPlan)
 
-    result.config shouldBe linuxWrittenDefault.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
+    // The old default names `editor.column_target_width = 80`, which is now an opt-in target, not the default.
+    result.config shouldBe linuxWrittenDefault
+      .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
+      .withColumnTargetWidth(80)
     result.report.unknownKeys shouldBe Nil
     result.report.invalidEntries shouldBe Nil
     result.report.deprecatedEntries shouldBe Nil
@@ -283,10 +286,12 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
     val hotkeysOfThisPlatform = AppConfig.default.inputConfig.hotkeyConfig
+    // The stored session names `columnTargetWidthCells: 80`, which is now an opt-in target, not the default.
     decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default.withOlderBuildsChrome
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
       .withWordWrap(false)
       .withLineNumbers(false)
+      .withColumnTargetWidth(80)
     decoded.config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.Save) shouldBe
       HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Save)
   }
