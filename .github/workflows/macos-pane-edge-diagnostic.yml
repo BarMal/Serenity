@@ -5,7 +5,7 @@ name: macOS pane-edge diagnostic
 on:
   push:
     branches:
-      - claude/macos-diag-e-2481
+      - claude/macos-diag-f-2481
 
 permissions:
   contents: read
