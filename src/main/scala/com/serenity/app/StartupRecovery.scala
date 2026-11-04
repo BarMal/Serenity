@@ -54,6 +54,9 @@ object StartupRecovery:
     def windowTitle: String =
       if safeMode then SafeMode.windowTitle(AppName) else AppName
 
+    def withSkiaFallback(render: RenderBackendSelection.Decision): Plan =
+      copy(notices = notices ++ SkiaFallback.notice(render))
+
     def noticeWith(configNotice: Option[String]): Option[String] =
       Option(notices ++ configNotice).filter(_.nonEmpty).map(_.mkString(" "))
 

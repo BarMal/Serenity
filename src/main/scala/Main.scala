@@ -189,7 +189,7 @@ object Main extends IOApp:
             requestRestart,
             hooks,
             graphics.surfaces,
-            graphics.backend.backend.configKey
+            graphics.backend
           )
       }
     yield ExitCode.Success
@@ -215,7 +215,7 @@ object Main extends IOApp:
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
     surfaces: FrameSurfaceFactory,
-    backend: String
+    render: RenderBackendSelection.Decision
   )(using
     logger: Logger[IO]
   ): IO[Unit] =
@@ -224,9 +224,9 @@ object Main extends IOApp:
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, render, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, backend, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, render, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -242,7 +242,7 @@ object Main extends IOApp:
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
     surfaces: FrameSurfaceFactory,
-    backend: String,
+    render: RenderBackendSelection.Decision,
     store: CrashRecord,
     previousRun: PreviousRun
   )(using logger: Logger[IO]): IO[Unit] =
@@ -265,6 +265,7 @@ object Main extends IOApp:
           previousRun
         )
         .copy(crashRecorder = StartupRecovery.crashRecorderFor(store))
+        .withSkiaFallback(render)
       // Safe mode never reads the user's config, so a file it cannot parse is not even set aside.
       configResult <-
         if plan.safeMode then IO.pure(Right(ConfigLoadResult(SafeMode.config, ConfigMigrationReport.empty)))
@@ -295,7 +296,7 @@ object Main extends IOApp:
         requestRestart,
         StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker),
         surfaces,
-        backend
+        render.backend.configKey
       )
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
       instanceNotice = Option.unless(plan.safeMode)(role.notice).flatten
