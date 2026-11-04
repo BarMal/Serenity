@@ -183,7 +183,8 @@ private[renderer] object OverlayRowPainter:
           rowBackground,
           font,
           cellMetrics.charWidth,
-          Some(advances)
+          Some(advances),
+          Some(cellMetrics)
         )
       case OverlayRowLayout.Split =>
         OverlaySegmentRowRenderer.renderSplitRow(

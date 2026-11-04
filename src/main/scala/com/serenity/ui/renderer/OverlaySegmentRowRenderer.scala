@@ -37,7 +37,8 @@ object OverlaySegmentRowRenderer:
     defaultBackground: RenderColor,
     font: Font,
     cellWidthPx: Int = 0,
-    advances: Option[MeasuredTextAdvances] = None
+    advances: Option[MeasuredTextAdvances] = None,
+    cellMetrics: Option[CellMetrics] = None
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -53,7 +54,8 @@ object OverlaySegmentRowRenderer:
         defaultBackground,
         font,
         cellWidthPx,
-        advances
+        advances,
+        cellMetrics
       )
     else
       val baseCellWidth = width / segments.length
@@ -88,7 +90,8 @@ object OverlaySegmentRowRenderer:
     defaultBackground: RenderColor,
     font: Font,
     cellWidthPx: Int = 0,
-    advances: Option[MeasuredTextAdvances] = None
+    advances: Option[MeasuredTextAdvances] = None,
+    cellMetrics: Option[CellMetrics] = None
   ): Unit =
     val segments = row.segments
     if segments.isEmpty then CharacterRenderer.renderStringPlain(surface, x, y, row.plainText.take(width))
@@ -116,15 +119,41 @@ object OverlaySegmentRowRenderer:
           val afterCell = cursorX + cellWidth
           val afterSeparator =
             if segment.trailingSeparator && afterCell < x + width then
-              surface.setForegroundColor(defaultForeground)
-              surface.setBackgroundColor(defaultBackground)
-              CharacterRenderer.renderChar(surface, afterCell, y, '│')
+              renderSeparator(surface, afterCell, y, defaultForeground, defaultBackground, cellMetrics)
               afterCell + 1
             else afterCell
           if index < segments.length - 1 && afterSeparator < x + width then afterSeparator + 1
           else afterSeparator
       }
       ()
+
+  /** The separator between two tabs. On a pixel surface it is a bar drawn as pixels, so it is the same on every
+    * renderer: the glyph `│` came out as a missing-glyph box on Java2D wherever the UI font has no U+2502, and as a
+    * thinner bar on Skia, which falls back to another font. A cell grid has only the glyph.
+    */
+  private def renderSeparator(
+    surface: RenderSurface,
+    x: Int,
+    y: Int,
+    foreground: RenderColor,
+    background: RenderColor,
+    cellMetrics: Option[CellMetrics]
+  ): Unit =
+    surface.setForegroundColor(foreground)
+    surface.setBackgroundColor(background)
+    cellMetrics.filter(_ => surface.addressesPixels) match
+      case Some(metrics) =>
+        surface.fillRect(x, y, 1, 1, ' ')
+        val thicknessPx = math.max(1, metrics.lineHeight / 16)
+        val heightPx    = metrics.lineHeight * 4 / 5
+        surface.pixels.fillPixelRect(
+          metrics.toPixelX(x) + (metrics.charWidth - thicknessPx) / 2,
+          metrics.toPixelY(y) + (metrics.lineHeight - heightPx) / 2,
+          thicknessPx,
+          heightPx,
+          foreground
+        )
+      case None => CharacterRenderer.renderChar(surface, x, y, '│')
 
   def renderSplitRow(
     surface: RenderSurface,
