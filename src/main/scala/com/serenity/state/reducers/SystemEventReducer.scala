@@ -1,10 +1,10 @@
 package com.serenity.state.reducers
 
 import com.serenity.keystroke.events.*
+import com.serenity.lsp.LspEffect
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.LspProgressTask
-import com.serenity.lsp.LspEffect
 import com.serenity.state.models.{AppState, LanguageServiceState, LanguageToolingDocuments}
 import com.serenity.ui.layout.*
 
