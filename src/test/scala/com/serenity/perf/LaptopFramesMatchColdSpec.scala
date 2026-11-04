@@ -73,6 +73,7 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
       y <- 0 until drawn.getHeight
       if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
     yield (x, y)
+    if diffs.nonEmpty then println(FrameDifferencePicture.of("damaged frame vs cold", drawn, cold, diffs))
     diffs
 
   private def summary(differences: Seq[(Int, Int)]): String =
