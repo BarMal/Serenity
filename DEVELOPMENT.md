@@ -327,6 +327,33 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
 
+#### Skia on NixOS
+
+Skiko's native library links against system libraries (`libGL.so.1` first among them). NixOS has no global library
+directory, so the dynamic loader cannot find them and the native probe fails with an `UnsatisfiedLinkError`. The window
+then paints with Java2D. The start page says so, naming the missing library, and the log carries the same cause:
+`[RENDER] backend=java2d reason=native probe failed: UnsatisfiedLinkError: ...libskiko-linux-x64.so: libGL.so.1: cannot open shared object file...`.
+Setting `ui.render.backend = java2d` ends the notice.
+
+The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
+set it for itself. From a `nix-shell`:
+
+```bash
+nix-shell -p libGL xorg.libX11 xorg.libXext xorg.libXrender xorg.libXtst xorg.libXi fontconfig freetype \
+  --run 'export LD_LIBRARY_PATH="$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
+```
+
+To see what is still missing on a given machine, list the unresolved libraries of the extracted native (Skiko unpacks it
+into `~/.skiko/` on first load) and add each one's package:
+
+```bash
+ldd ~/.skiko/*/libskiko-linux-x64.so | grep 'not found'
+```
+
+Caution, here be imagine dragons: the package list above is to be confirmed from the laptop diagnostic. Only `libGL.so.1`
+is recorded as missing (#2465, with "libGL/libX11/etc." added to `LD_LIBRARY_PATH`), and the command has not been run on
+NixOS. On Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the same path (#2479).
+
 #### Comparing the renderers
 
 `serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
