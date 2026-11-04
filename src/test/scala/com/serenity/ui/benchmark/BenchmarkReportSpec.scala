@@ -40,6 +40,67 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("power").as[String] shouldBe Right("battery")
   }
 
+  it should "say the window was drawn at the size asked for, when it was" in {
+    val drawn =
+      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1600, 1000), "Skia layer" -> WindowPx(1600, 1000)))
+    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+
+    text should include("Window drawn at 1600x1000, as asked.")
+    text should not include "Window asked for"
+  }
+
+  it should "name both sizes, per backend, when the window was drawn at another size" in {
+    val drawn =
+      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1920, 1060), "Skia layer" -> WindowPx(1920, 1028)))
+    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+
+    text should include("Window asked for 1600x1000 and drawn at 1920x1060 (Java2D), 1920x1028 (Skia layer).")
+    text should include("the window manager decided the size")
+    val json = parse(BenchmarkReport(drawn, results, Verdict.SkiaWins).json).toOption.get.hcursor
+      .downField("environment")
+      .downField("drawn")
+    json.downField("Java2D").downField("width").as[Int] shouldBe Right(1920)
+    json.downField("Skia layer").downField("height").as[Int] shouldBe Right(1028)
+  }
+
+  it should "name the canvas size in device pixels the frames were drawn at, per backend" in {
+    val drawn = environment.copy(
+      drawnWindows = List("Java2D" -> WindowPx(735, 458), "Skia layer" -> WindowPx(735, 458)),
+      drawnCanvases = List("Java2D" -> WindowPx(1470, 832), "Skia layer" -> WindowPx(1470, 832))
+    )
+    val rendered = BenchmarkReport(drawn, results, Verdict.SkiaWins)
+
+    rendered.markdown should include(
+      "Canvas drawn at 1470x832 device pixels (Java2D), 1470x832 device pixels (Skia layer)."
+    )
+    val json = parse(rendered.json).toOption.get.hcursor.downField("environment").downField("drawnCanvas")
+    json.downField("Skia layer").downField("width").as[Int] shouldBe Right(1470)
+  }
+
+  it should "say nothing of a canvas size that was not recorded" in {
+    report.markdown should not include "Canvas drawn at"
+  }
+
+  it should "say nothing of a drawn size that was not recorded" in {
+    report.markdown should not include "Window drawn at"
+    report.markdown should not include "Window asked for"
+  }
+
+  it should "list a scenario that was not timed with its reason, leave it out of the tables, and keep it in the JSON" in {
+    val reason   = "the window manager kept the window at 1920x1060 when it was asked for 1200x750"
+    val untimed  = environment.copy(notTimed = Map(Scenario.ResizeWindow -> reason))
+    val timed    = results.filterNot(_.scenario == Scenario.ResizeWindow)
+    val rendered = BenchmarkReport(untimed, timed, Verdict.SkiaWins)
+
+    rendered.markdown should include(s"Not timed: ${Scenario.ResizeWindow.label} ($reason).")
+    rendered.markdown should not include s"| ${Scenario.ResizeWindow.label} |"
+    parse(rendered.json).toOption.get.hcursor
+      .downField("environment")
+      .downField("notTimed")
+      .downField(Scenario.ResizeWindow.label)
+      .as[String] shouldBe Right(reason)
+  }
+
   it should "say whether the scenes were built as the app builds them, in the text and the JSON" in {
     val like = BenchmarkReport(environment.copy(scenesLikeTheApp = true), results, Verdict.SkiaWins)
 

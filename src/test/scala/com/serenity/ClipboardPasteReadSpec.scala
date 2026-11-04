@@ -1,7 +1,5 @@
 package com.serenity
 
-import scala.concurrent.duration.*
-
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
@@ -16,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, Focus}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{HangBound, SharedDictionary}
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -86,17 +84,17 @@ class ClipboardPasteReadSpec extends AnyFlatSpec with Matchers:
         inputs <- Queue.unbounded[IO, Option[Chunk[PendingInput]]]
         loop   <- inputLoop(stateManager, clipboard, inputs).start
         _      <- inputs.offer(Some(Chunk(key('a'), PendingInput.Ready(Paste), key('b'))))
-        _      <- readStarted.get.timeout(10.seconds)
-        _ <- stateManager
-          .updateStateValidated(state =>
+        _      <- HangBound.within(readStarted.get)
+        _ <- HangBound.within(
+          stateManager.updateStateValidated(state =>
             state.copy(runtime = state.runtime.copy(chapterGhostsVisible = !state.runtime.chapterGhostsVisible))
           )
-          .timeout(10.seconds)
+        )
         _          <- inputs.offer(Some(Chunk(key('c'))))
         duringRead <- stateManager.getCurrentState.map(focusedText)
         _          <- answer.complete(Some("X"))
         _          <- inputs.offer(None)
-        _          <- loop.joinWithNever.timeout(10.seconds)
+        _          <- HangBound.within(loop.joinWithNever)
         afterRead  <- stateManager.getCurrentState.map(focusedText)
       yield (duringRead, afterRead)
 
