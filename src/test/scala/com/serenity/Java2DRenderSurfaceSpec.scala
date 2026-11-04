@@ -11,6 +11,7 @@ import com.serenity.state.models.AppState
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints, SurfaceTextCaches}
+import com.serenity.ui.terminal.SwingCanvasGeometry
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,6 +56,28 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(5, 5), true) shouldBe Color.WHITE
     new Color(image.getRGB(15, 15), true) shouldBe Color.BLACK
     new Color(image.getRGB(35, 35), true) shouldBe Color.WHITE
+  }
+
+  "Java2DRenderSurface.withPixelClip" should "confine drawing to the pixel rectangle, between cells" in {
+    val image   = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
+    surface.withPixelClip(xPx = 13, yPx = 5, widthPx = 20, heightPx = 10) {
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
+    }
+    surface.flush()
+
+    new Color(image.getRGB(12, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(13, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(32, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(33, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 4), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 5), true) shouldBe Color.BLACK
+    new Color(image.getRGB(20, 14), true) shouldBe Color.BLACK
+    new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
   }
 
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
@@ -177,7 +200,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val surface = Java2DRenderSurface.forFrame(
       metrics,
       font,
-      canvas,
+      SwingCanvasGeometry.of(canvas),
       _ => (),
       (width, height, imageType) =>
         val image = new BufferedImage(width, height, imageType)

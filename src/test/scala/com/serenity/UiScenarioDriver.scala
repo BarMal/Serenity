@@ -329,6 +329,9 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
 
       def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
         delegateOutlines.withRectClip(x, y, width, height)(render)
+
+      override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
+        delegateOutlines.withPixelClip(xPx, yPx, widthPx, heightPx)(render)
   }
 
   def hideCursor(): Unit  = delegate.hideCursor()

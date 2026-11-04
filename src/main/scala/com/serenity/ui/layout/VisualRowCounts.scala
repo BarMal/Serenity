@@ -102,6 +102,7 @@ object VisualRowCounts:
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     known: Int => Option[Int] = _ => None,
+    painted: Map[Int, Int] = Map.empty,
     headings: HeadingSettings = HeadingSettings.default,
     openings: OpeningSettings = OpeningSettings.default,
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
@@ -124,14 +125,25 @@ object VisualRowCounts:
         dropCapGapEm,
         fallback
       )
+    val certificateKey = NominalAdvances.Key(font, frc)
+    val certificates   = wrapCache.layoutMemos.rowCertificates
     // A plain line set on its own fractional advances is one row when those advances say so; the wrap decides the rest.
-    lazy val nominalAdvances: Option[NominalAdvances] =
+    lazy val certified: Option[NominalAdvances] =
       Option
         .when(
           richText.document.isEmpty && !richText.markdown.isActive && richText.virtualDropCaps.isEmpty &&
             LineLayout.measuredLayoutFor(font, frc, forceCellLayout, richText, wrapCache.shapedText.probes)
-        )(wrapCache.layoutMemos.nominalAdvances(NominalAdvances.Key(font, frc)))
+        )(certificates.of(certificateKey))
         .flatten
+    def callsOneRow(table: NominalAdvances, line: Int): Boolean =
+      table.fitsOneRow(content.getLine(line).getOrElse(""), math.max(1, panelWidthPx))
+    // A row the layout painted is the truth the certificate answers to: a line it calls one row that was painted as
+    // more means it is wrong for this font, so it goes and every line it counted is counted again.
+    val contradicted =
+      painted.exists((line, rows) => rows != 1 && certified.exists(callsOneRow(_, line)))
+    if contradicted then
+      val _ = certificates.revoke(certificateKey)
+    lazy val nominalAdvances: Option[NominalAdvances] = if contradicted then None else certified
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))
     def wrap(line: Int): Int =
@@ -154,6 +166,7 @@ object VisualRowCounts:
           .max(1)
     val key =
       VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
+    if contradicted then wrapCache.dropVisualRowCounts(key)
     val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
     wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision))
 

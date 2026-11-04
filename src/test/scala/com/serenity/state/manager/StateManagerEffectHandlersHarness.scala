@@ -148,8 +148,10 @@ private[manager] trait StateManagerEffectHandlersHarness:
       def reloadBuffer(id: BufferId): IO[Unit]             = callsVar.update(_ :+ s"reloadBuffer:$id")
       def forceSaveExistingBuffer(id: BufferId): IO[Unit]  = callsVar.update(_ :+ s"forceSaveExistingBuffer:$id")
       def loadFile(path: Path): IO[Unit]                   = filePersistence.loadFile(path)
-      def openFile(path: Path): IO[Unit]                   = filePersistence.openFile(path)
-      def openFromDialog(dialog: FileDialog): IO[Unit]     = filePersistence.openFromDialog(dialog)
+      def openFromExplorer(path: Path, preview: Boolean): IO[Unit] =
+        filePersistence.openFromExplorer(path, preview)
+      def openFile(path: Path): IO[Unit]               = filePersistence.openFile(path)
+      def openFromDialog(dialog: FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
       def openFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
         filePersistence.openFolderFromDialog(dialog, openFolder)
       def openFileOrFolderFromDialog(dialog: FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
