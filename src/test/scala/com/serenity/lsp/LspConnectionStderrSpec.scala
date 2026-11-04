@@ -24,7 +24,11 @@ class LspConnectionStderrSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
   private val logger      = LoggerFactory[IO].getLogger(using LoggerName("LspConnectionStderrSpec"))
 
-  private val requestTimeout = 20.seconds
+  // A server blocked on its stderr never answers, so the handshake fails at this timeout however long it is. It is a
+  // hang detector only: the specs below assert that the handshake completes, not how quickly (a loaded runner took
+  // 21 s to start the server's JVM and compile its source, #2559), so it is long enough that slowness is not mistaken
+  // for a hang.
+  private val requestTimeout = 120.seconds
   private val maxLogBytes    = 64L * 1024
 
   private val javaExecutable: String =
@@ -56,20 +60,18 @@ class LspConnectionStderrSpec extends AnyFlatSpec with Matchers:
       stderrLogMaxBytes = maxLogBytes
     )
 
-  private def handshakeMillis(directory: Path): Long =
-    val started = System.nanoTime()
+  private def handshake(directory: Path): Unit =
     connect(directory).use(_ => IO.unit).unsafeRunSync()
-    (System.nanoTime() - started) / 1_000_000L
 
   private def logSizes(directory: Path): List[Long] =
     Files.list(directory).iterator().asScala.toList.map(Files.size)
 
   "LspConnection" should "complete the handshake with a server that writes a megabyte to stderr first" in
-    withLogDirectory(directory => handshakeMillis(directory) should be < requestTimeout.toMillis)
+    withLogDirectory(directory => noException should be thrownBy handshake(directory))
 
   it should "keep the server's stderr in a log file the user can read, capped in size" in
     withLogDirectory { directory =>
-      handshakeMillis(directory)
+      handshake(directory)
 
       val log = LspStderrLog.pathFor(directory, LanguageId.Scala)
       Files.exists(log) shouldBe true

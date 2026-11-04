@@ -279,7 +279,8 @@ exited, the JVM's default toolkit is used instead, even with `SERENITY_TOOLKIT=w
 `[TOOLKIT] PlatformDefault (WAYLAND_DISPLAY is set, but the socket does not connect (/run/user/1000/wayland-1: Connection refused))`.
 Without the check the JetBrains Runtime would try `WLToolkit` anyway and end up headless.
 
-Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
+Passing `-Dawt.toolkit.name=...` yourself always wins over both. Only a flag on the JVM's command line counts: the
+JetBrains Runtime presets the property to `XToolkit` itself, and that preset is ignored. The choice has to be made before any AWT class loads,
 which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`
 uses the compositor's decorations, since Wayland does not let an application move its own window from a custom title bar.
 

@@ -35,7 +35,7 @@ private[manager] object PanelContentSync:
 
   /** The directories docked explorers show a listing of, to watch for changes made outside the editor. */
   def explorerWatchDirectories(state: AppState): Set[Path] =
-    dockedTrees(state).flatMap((_, tree) => tree.entries.keySet.intersect(tree.expandedPaths + tree.rootPath)).toSet
+    dockedTrees(state).flatMap((_, tree) => tree.entries.keySet.intersect(tree.shownExpanded)).toSet
 
   /** Marks each of `directories` a docked explorer has listed as stale, so it is listed again. */
   def withStaleDirectories(state: AppState, directories: Set[Path]): AppState =
