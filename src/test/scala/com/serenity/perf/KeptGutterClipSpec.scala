@@ -27,10 +27,9 @@ class KeptGutterClipSpec extends AnyFlatSpec with Matchers:
     kept.set(Nil)
     val _ = frames.render(after, DamageProducer.forTransition(before, after))
 
-    val counterX = 21
-    val keptRowY = 48
-    kept.get.filter(rect => rect.xPx <= counterX && counterX < rect.xPx + rect.widthPx) should not be empty
-    kept.get.exists(rect =>
-      rect.xPx <= counterX && counterX < rect.xPx + rect.widthPx && rect.yPx <= keptRowY && keptRowY < rect.yPx + rect.heightPx
-    ) shouldBe true
+    val rects    = kept.get
+    val textLeft = rects.filter(_.widthPx > 200).map(_.xPx).min
+    val guards   = rects.filter(rect => rect.heightPx <= 2 && rect.xPx < textLeft)
+
+    guards should not be empty
   }
