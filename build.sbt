@@ -408,7 +408,10 @@ realBoundaryTest := (Test / testOnly)
 lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
 
 heapMeasurementTest := (Test / testOnly)
-  .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
+  .toTask(
+    " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
+      " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
+  )
   .value
 
 libraryDependencies ++= Seq(
