@@ -158,17 +158,26 @@ object CursorViewport:
     val ordering  = summon[Ordering[PaneRowBands.Row]]
     val gridRowPx = paneHeightPx / math.max(1, viewport.visibleLines)
     def centred   = bands.topPainting(caret, gridRowPx, viewport.visibleLines / 2)
-    val shown = !ordering.gt(current, caret) && !ordering.lt(current, bands.topAbove(caret, paneHeightPx - caretBoxPx))
-    val placedTop =
-      if typewriterScrollingEnabled || !shown then centred
-      else
-        val margin   = math.max(0, math.min(MarginRows * bands.lineHeightPx, (paneHeightPx - caretBoxPx) / 2))
-        val roomLow  = paneHeightPx - caretBoxPx - math.min(margin, bands.belowPx(caret, margin))
-        val earliest = bands.topAbove(caret, roomLow)
-        val latest   = bands.topAbove(caret, margin)
-        if ordering.lt(current, earliest) then earliest
-        else if ordering.gt(current, latest) then latest
-        else current
+    val walk      = bands.tops(caret)
+    // How far below the current top the caret's text sits, when the pane shows it: read off the walk up from the caret,
+    // which stops at the current top, so a caret moving within the pane costs only the rows between the two.
+    val shownAtPx =
+      if typewriterScrollingEnabled || ordering.gt(current, caret) then None
+      else walk.takeWhile(_._2 <= paneHeightPx - caretBoxPx).find(_._1 == current).map(_._2)
+    val placedTop = shownAtPx match
+      case None => centred
+      case Some(offsetPx) =>
+        val margin = math.max(0, math.min(MarginRows * bands.lineHeightPx, (paneHeightPx - caretBoxPx) / 2))
+        if offsetPx >= margin && offsetPx <= paneHeightPx - caretBoxPx - margin then current
+        else
+          // The rows below the caret are counted only when it nears the bottom, where the document's end can lift
+          // the bottom margin.
+          val roomLow  = paneHeightPx - caretBoxPx - math.min(margin, bands.belowPx(caret, margin))
+          val earliest = bands.topWithin(walk, caret, roomLow)
+          val latest   = bands.topWithin(walk, caret, margin)
+          if ordering.lt(current, earliest) then earliest
+          else if ordering.gt(current, latest) then latest
+          else current
 
     // Bottom clamp: the latest start that still fills the pane with real content, so a view left past the end of a
     // shortened document comes back. Typewriter scrolling pads instead. Every line is at least one row, so a top above
@@ -183,7 +192,7 @@ object CursorViewport:
           .clamp(placedTop.line, placedTop.row)
         // Rows counted at the buffer font's height can call a top the last screen that leaves the caret below the
         // pane when its rows paint taller; the caret stays shown.
-        val earliest = bands.topAbove(caret, paneHeightPx - caretBoxPx)
+        val earliest = bands.topWithin(walk, caret, paneHeightPx - caretBoxPx)
         if ordering.lt(PaneRowBands.Row(line, row), earliest) then (earliest.line, earliest.row)
         else (line, row)
     val clampedLeftColumn =

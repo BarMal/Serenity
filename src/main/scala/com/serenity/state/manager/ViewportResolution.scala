@@ -8,7 +8,8 @@ import com.serenity.ui.layout.WrappedLineCache
   *
   * Placing a run once at its end gives the answer placing after each move would only where placement reads the caret,
   * the content, the viewport size and the config alone -- typewriter centring and column paging. Without typewriter
-  * scrolling the view keeps where it was until the caret nears an edge, so [[placedPerKey]] places those after each key.
+  * scrolling the view keeps where it was until the caret nears an edge, so [[placedPerKey]] places those after each
+  * key.
   */
 object ViewportResolution:
 
@@ -35,9 +36,9 @@ object ViewportResolution:
     }
 
   /** `state` with its waiting viewports placed now when placement depends on where the view already is: with typewriter
-    * scrolling off, a caret on screen moves the view only past the edge margins, so a run of keys placed once from where
-    * it started can rest elsewhere than the same keys placed one at a time (#2570). Centring and column paging place
-    * from the caret alone, so a run of them is still placed once, at its end.
+    * scrolling off, a caret on screen moves the view only past the edge margins, so a run of keys placed once from
+    * where it started can rest elsewhere than the same keys placed one at a time (#2570). Centring and column paging
+    * place from the caret alone, so a run of them is still placed once, at its end.
     */
   def placedPerKey(state: AppState, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
     val surfaceConfig = state.persisted.config.surfaceConfig

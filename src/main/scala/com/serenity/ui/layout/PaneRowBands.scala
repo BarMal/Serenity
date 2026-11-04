@@ -29,8 +29,11 @@ final class PaneRowBands private (
   /** The top that leaves `abovePx` of rows between the pane's top and the top of `caret`'s text box, as near as whole
     * rows allow without exceeding it; the document's first row once there is not that much above the caret.
     */
-  def topAbove(caret: Row, abovePx: Int): Row =
-    tops(caret).takeWhile(_._2 <= math.max(0, abovePx)).lastOption.fold(caret)(_._1)
+  def topAbove(caret: Row, abovePx: Int): Row = topWithin(tops(caret), caret, abovePx)
+
+  /** [[topAbove]] read off a walk of [[tops]] already under way, so several limits share one walk. */
+  def topWithin(walk: LazyList[(Row, Int)], caret: Row, abovePx: Int): Row =
+    walk.takeWhile(_._2 <= math.max(0, abovePx)).lastOption.fold(caret)(_._1)
 
   /** The top that paints `caret` on grid row `targetRow` of the pane, or the nearest row to it whole rows allow: a
     * heading's space can make the next row up a long step. The painter puts a caret on the grid row its text box's top
@@ -44,8 +47,10 @@ final class PaneRowBands private (
       .minByOption((_, textTopPx) => (math.abs(textTopPx / rowPx - targetRow), math.abs(textTopPx - targetPx)))
       .fold(caret)(_._1)
 
-  /** Every top from `caret` itself upward, each with how far below the pane's top it paints `caret`'s text box. */
-  private def tops(caret: Row): LazyList[(Row, Int)] =
+  /** Every top from `caret` itself upward, each with how far below the pane's top it paints `caret`'s text box. Lazy
+    * and memoised: a caller reading several limits off one walk places each row once.
+    */
+  def tops(caret: Row): LazyList[(Row, Int)] =
     // A top moving up a row draws its own space above, and the row above it becomes the one whose space is dropped.
     def from(line: Int, rows: Vector[TextVisualLine], index: Int, textTopPx: Int): LazyList[(Row, Int)] =
       val earlier =
