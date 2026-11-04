@@ -348,6 +348,8 @@ enum SpellingIntent:
 /** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
+  // Picked from a settings hit in the command picker: the settings view, searched for `query`, drilled to the hit.
+  case OpenSettingsAt(groupId: String, itemId: Option[String], query: String)
   case SaveConfig
   // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
   case ResetSettings
