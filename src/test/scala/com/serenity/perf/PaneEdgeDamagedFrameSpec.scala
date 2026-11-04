@@ -107,6 +107,42 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
         cursorVisible = false
       )
 
+      if sys.props.contains("serenity.diag") then
+        val beforeCold = LaptopFrameBenchmarks.renderedFrame(
+          before,
+          RenderCaches.create(),
+          LaptopFrameBenchmarks.frameImage(),
+          cursorVisible = false
+        )
+        println(s"DIAG scenario ${scenario.name}")
+        def unscrolled(d: Damage): Damage = d match
+          case Damage.BufferScrolled(id) => Damage.BufferAll(id)
+          case Damage.Combined(items)    => Damage.Combined(items.map(unscrolled))
+          case other                     => other
+        def variant(name: String)(render: => BufferedImage): Unit =
+          val image = render
+          val diff  = differingPixels(image, cold)
+          println(s"DIAG variant $name differs=${diff.size} rows=${diff.map(_._2).distinct.sorted.take(12).mkString(",")} seam42=${(92 to 96).map(row => argb(image, 42, row)).mkString(" ")}")
+        variant("scrolled (as the failing frame)") { drawn }
+        variant("all rows of the buffer redrawn, no pixel copy") {
+          val f = LaptopFrameBenchmarks.PersistingFrames()
+          val _ = f.render(before, Damage.Everything)
+          f.render(after, unscrolled(damage))
+        }
+        variant("everything, over the persisted frame") {
+          val f = LaptopFrameBenchmarks.PersistingFrames()
+          val _ = f.render(before, Damage.Everything)
+          f.render(after, Damage.Everything)
+        }
+        variant("everything, first frame") {
+          LaptopFrameBenchmarks.PersistingFrames().render(after, Damage.Everything)
+        }
+        variant("cold, again") {
+          LaptopFrameBenchmarks.renderedFrame(after, RenderCaches.create(), LaptopFrameBenchmarks.frameImage(), cursorVisible = false)
+        }
+        (60 to 130).foreach { row =>
+          println(f"DIAG col42 y=$row%3d before=${argb(beforeCold, 42, row)} cold=${argb(cold, 42, row)} drawn=${argb(drawn, 42, row)}")
+        }
       val differing = differingPixels(drawn, cold)
       val clue      = if differing.isEmpty then "" else diagnosis(drawn, cold, differing, damage)
       withClue(clue)(differing shouldBe empty)
