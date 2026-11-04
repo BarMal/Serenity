@@ -5,6 +5,8 @@ name: Cross-OS Tests
 # runners (owner decision, #2484). Each OS runs its tests as two parallel shards (cross-os-test-shards.yml, #2484); the
 # "Test (windows)" and "Test (macos)" jobs below wait for their shards and are what branch protection lists as required
 # checks: renaming one un-requires it, so change them only together with the repository's required-check settings (#2016).
+# Once the merge train is live (repository variable MERGE_TRAIN_MODE=live) pull requests skip it too: the train runs it
+# once per batch on its train/* branch, before anything merges (#2553 item 3).
 # Auto Squash Merge waits for these checks before merging, as for every other check on the pull request.
 on:
   pull_request:
@@ -34,7 +36,7 @@ concurrency:
 
 jobs:
   shards-windows:
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
     uses: ./.github/workflows/cross-os-test-shards.yml
     with:
       os: windows-latest
@@ -42,7 +44,7 @@ jobs:
       jvm_opts: ${{ inputs.jvm_opts }}
 
   shards-macos:
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
     uses: ./.github/workflows/cross-os-test-shards.yml
     with:
       os: macos-latest
@@ -54,7 +56,7 @@ jobs:
   test-windows:
     name: Test (windows)
     needs: shards-windows
-    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    if: always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -66,7 +68,7 @@ jobs:
   test-macos:
     name: Test (macos)
     needs: shards-macos
-    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    if: always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

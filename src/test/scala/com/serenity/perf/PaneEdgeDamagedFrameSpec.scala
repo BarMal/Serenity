@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.{PageDown, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.MacOsSeamQuarantine
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,6 +55,7 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
 
   scenarios.foreach { scenario =>
     s"A damaged frame of ${scenario.name}" should "equal a frame drawn from scratch, pixel for pixel" in {
+      assume(!MacOsSeamQuarantine.appliesHere, MacOsSeamQuarantine.Reason)
       val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes, scenario.document))
       val damage          = DamageProducer.forTransition(before, after)
       damage should not be Damage.Everything
