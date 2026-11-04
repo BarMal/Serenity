@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.config.OffscreenCursorSurfaces
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LaidOutPanes, LayoutEngine}
+import com.serenity.ui.layout.{LaidOutPanes, LayoutEngine, WrappedLineCache}
 
 /** A surface anchored to the caret that opens with the caret scrolled out of its pane brings the two back together, as
   * `editor.cursor.offscreen_surfaces` says (#2570): the view to the caret, or the caret to the middle of the view.
@@ -11,7 +11,7 @@ import com.serenity.ui.layout.{LaidOutPanes, LayoutEngine}
   */
 private[manager] object OffscreenCursorSurfacesPolicy:
 
-  def settled(previous: AppState, next: AppState): AppState =
+  def settled(previous: AppState, next: AppState, wrapCache: WrappedLineCache): AppState =
     next.persisted.config.surfaceConfig.offscreenCursorSurfaces match
       case OffscreenCursorSurfaces.Clamp => next
       case choice if opensCursorSurface(previous, next) =>
@@ -27,7 +27,7 @@ private[manager] object OffscreenCursorSurfacesPolicy:
           if panes.screenPosition(paneId, cursor).isEmpty
         yield choice match
           case OffscreenCursorSurfaces.SummonCursor => summoned(next, paneId, buffer, panes)
-          case _                                    => revealed(next, buffer, cursor)
+          case _                                    => revealed(next, buffer, cursor, wrapCache)
         ).getOrElse(next)
       case _ => next
 
@@ -40,12 +40,12 @@ private[manager] object OffscreenCursorSurfacesPolicy:
       case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor | SurfacePlacement.AboveCursor) => true
       case _                                                                                            => false
 
-  private def revealed(state: AppState, buffer: Buffer, cursor: CursorPosition): AppState =
+  private def revealed(state: AppState, buffer: Buffer, cursor: CursorPosition, wrapCache: WrappedLineCache): AppState =
     val surfaceConfig = state.persisted.config.surfaceConfig
     val viewport =
       if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
-        CursorViewport.adjustForCursorColumnMode(buffer, state, cursor)
-      else CursorViewport.adjustForCursor(buffer, state, cursor)
+        CursorViewport.adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
+      else CursorViewport.adjustForCursor(buffer, state, cursor, wrapCache)
     withBuffer(state, buffer.copy(viewport = viewport))
 
   private def summoned(state: AppState, paneId: PaneId, buffer: Buffer, panes: LaidOutPanes): AppState =

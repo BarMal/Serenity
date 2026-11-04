@@ -71,7 +71,8 @@ final private[manager] class ModelCommit(
       else
         val next = ModelCommit.settled(
           current.app,
-          ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects)
+          ModelCommit.applyModelEffects(current.copy(app = reduced.state), reduced.effects),
+          wrapCache
         )
         StateManagerOperationBoundary.prepareCommit(next.app, current.app) match
           case Right(committed) =>
@@ -98,7 +99,7 @@ final private[manager] class ModelCommit(
         case None                                       => (current, IO.pure(false))
         case Some((next, _)) if next.app eq current.app => (next, IO.pure(true))
         case Some((transitioned, fallbackState)) =>
-          val next = ModelCommit.settled(current.app, transitioned)
+          val next = ModelCommit.settled(current.app, transitioned, wrapCache)
           StateManagerOperationBoundary.prepareCommit(next.app, fallbackState) match
             case Right(committedState) =>
               (
@@ -115,11 +116,11 @@ private[manager] object ModelCommit:
   /** What every commit lets go of in the state itself: the buffers it closes, and the code tooling a mode change
     * leaves.
     */
-  def settled(previous: AppState, next: Model): Model =
+  def settled(previous: AppState, next: Model, wrapCache: WrappedLineCache): Model =
     val retained = ClosedBufferRetention.forgetting(previous, next)
     ModeTransition.settled(
       previous,
-      retained.copy(app = OffscreenCursorSurfacesPolicy.settled(previous, retained.app))
+      retained.copy(app = OffscreenCursorSurfacesPolicy.settled(previous, retained.app, wrapCache))
     )
 
   /** Folds the reducer effects that only change the model itself -- undo bookkeeping -- into `model`, so they commit in
