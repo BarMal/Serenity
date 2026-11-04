@@ -152,6 +152,18 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.allKeys.should(contain("window.viewport.height_max"))
   }
 
+  it should "read the column target width as a cell count or unlimited, and write unlimited by default" in {
+    val field = ConfigRegistry.find("editor.column_target_width").getOrElse(fail("missing editor.column_target_width"))
+
+    field.read(AppConfig.default.withColumnTargetWidth(60), "unlimited").map(field.setting(_)._2.config.unwrapped) shouldBe
+      Some("unlimited")
+    field.read(AppConfig.default, " Unlimited ").map(field.setting(_)._2.config.unwrapped) shouldBe Some("unlimited")
+    field.read(AppConfig.default, "60").map(field.setting(_)._2.config.unwrapped) shouldBe Some(60)
+    field.read(AppConfig.default, "0") shouldBe None
+    field.read(AppConfig.default, "wide") shouldBe None
+    field.setting(AppConfig.default)._2.config.unwrapped shouldBe "unlimited"
+  }
+
   it should "group appearance and text display settings under AppConfig" in {
     val config = AppConfig.conventional
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
