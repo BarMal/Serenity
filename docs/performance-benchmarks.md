@@ -47,6 +47,17 @@ Scenarios cover:
 - `laptop.input.state_manager.typing_long_paragraph`: the same typing into one 4000-character paragraph with no
   newlines, to show per-keystroke cost against paragraph length.
 
+- `skia.compare.{skia_raster,java2d}.{system_monospace,bundled_ligature_font}.*` (#2575): the typing frame, the
+  3-line scroll frame and a random-letter typing frame, each drawn by Skia's CPU raster surface
+  (`Surface.makeRasterN32Premul`, no window, no GL) and by Java2D into the same 1500x1000 logical window at 2x, with
+  every frame told its damage and the surface caches kept from frame to frame (`SkiaFrameBenchmarks`). Skia is the
+  default renderer, so these are the only rows that time it. They say what the surface's CPU-side work costs, not what
+  a GL frame costs, and a standard runner has no GPU to time that. The prefix `skia` is in
+  `scripts/perf-gate-excluded-rows.txt`: the per-PR gate measures and prints the rows, marked as excluded, and never
+  fails on them; the nightly ABBA (#2572, `.github/workflows/perf-nightly-abba.yml`, which turns that file into the prefixes it
+  runs) judges them. Run them alone with `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks skia."`,
+  or the same rows without the rest of the suite via `Test/runMain com.serenity.perf.SkiaFrameBenchmarks`.
+
 Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
 
 ## Memory metrics: footprint and allocation

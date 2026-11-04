@@ -20,3 +20,7 @@ laptop.input.state_manager.typing_long_paragraph
 
 # 31-37% of sides over 1.5x spread, the row and its .chapter_ghosts, .diagnostics_gutter_*, .ereader_railed*, .ligature_font variants.
 laptop.render.typing_frame_2x
+
+# Skia's CPU raster surface and the Java2D frames beside it (#2575): new rows with no flag history, timed on a shared
+# runner, judged by the nightly ABBA. "skia" covers every "skia.<...>" row.
+skia
