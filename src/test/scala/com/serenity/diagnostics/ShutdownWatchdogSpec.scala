@@ -2,8 +2,8 @@ package com.serenity.diagnostics
 
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
-import scala.annotation.tailrec
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -17,16 +17,6 @@ class ShutdownWatchdogSpec extends AnyFlatSpec with Matchers:
   )
 
   private val mainSource: String = Files.readString(Paths.get("src", "main", "scala", "Main.scala"))
-
-  private def awaitTrue(within: FiniteDuration)(condition: => Boolean): Boolean =
-    val deadline = System.nanoTime() + within.toNanos
-    @tailrec def poll(): Boolean =
-      if condition then true
-      else if System.nanoTime() >= deadline then condition
-      else
-        Thread.sleep(20)
-        poll()
-    poll()
 
   "The shutdown bounds" should "be the owner's: 10 s for the hook, with the dump 2 s before it, at 8 s" in {
     ShutdownWatchdog.HookTimeout shouldBe 10.seconds
@@ -76,26 +66,45 @@ class ShutdownWatchdogSpec extends AnyFlatSpec with Matchers:
   }
 
   "ShutdownWatchdog.armHalt" should "report and halt with the given exit code once the bound has passed" in {
-    val halted   = new AtomicReference[Option[Int]](None)
-    val reported = new AtomicReference[String]("")
+    val halted     = new AtomicReference[Option[Int]](None)
+    val reported   = new AtomicReference[String]("")
+    val haltedHere = new CountDownLatch(1)
 
     watchdog()
-      .armHalt(200.millis, exitCode = 70, report = text => reported.set(text), halt = code => halted.set(Some(code)))
+      .armHalt(
+        200.millis,
+        exitCode = 70,
+        report = text => reported.set(text),
+        halt = code =>
+          halted.set(Some(code))
+          haltedHere.countDown()
+      )
       .unsafeRunSync()
 
-    awaitTrue(5.seconds)(halted.get.isDefined) shouldBe true
+    haltedHere.await(5, TimeUnit.SECONDS) shouldBe true
     halted.get shouldBe Some(70)
     reported.get should include("[SHUTDOWN]")
   }
 
   it should "name the steps its own ledger has open" in {
-    val ledger   = ShutdownLedger.recording()
-    val reported = new AtomicReference[String]("")
+    val ledger     = ShutdownLedger.recording()
+    val reported   = new AtomicReference[String]("")
+    val reportedIn = new CountDownLatch(1)
     ledger.started("window")
 
-    watchdog(ledger).armHalt(100.millis, 70, text => reported.set(text), _ => ()).unsafeRunSync()
+    watchdog(ledger)
+      .armHalt(
+        100.millis,
+        70,
+        text =>
+          reported.set(text)
+          reportedIn.countDown()
+        ,
+        _ => ()
+      )
+      .unsafeRunSync()
 
-    awaitTrue(5.seconds)(reported.get.nonEmpty) shouldBe true
+    reportedIn.await(5, TimeUnit.SECONDS) shouldBe true
     reported.get should include("steps that started releasing and have not finished: window")
   }
 
