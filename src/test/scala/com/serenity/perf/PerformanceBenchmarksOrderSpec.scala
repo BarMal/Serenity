@@ -12,6 +12,12 @@ import org.scalatest.matchers.should.Matchers
   */
 class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
 
+  // Building the suite is the cost (fixtures, frames rendered into real windows), and no accessor lists the names
+  // without it, so both tests read one build.
+  private lazy val suiteNames: List[String] =
+    // The suite is built inside two real windows, which other specs' screen captures and window checks must not see.
+    DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name)))
+
   private val firstRows = List(
     "rope.large_json.search",
     "rope.large_json.cursor_offset",
@@ -57,12 +63,10 @@ class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
 
   "The performance suite" should "start with the rows the warm-up budget is spent on, in this order" in {
     assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
-    // The suite is built inside two real windows, which other specs' screen captures and window checks must not see.
-    DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name).take(firstRows.length))) shouldBe firstRows
+    suiteNames.take(firstRows.length) shouldBe firstRows
   }
 
   it should "have no two benchmarks with the same name" in {
     assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
-    val names = DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name)))
-    names.distinct shouldBe names
+    suiteNames.distinct shouldBe suiteNames
   }
