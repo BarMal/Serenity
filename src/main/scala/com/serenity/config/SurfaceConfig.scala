@@ -29,8 +29,8 @@ final case class SurfaceConfig(
     // back to ordinary vertical scrolling.
     columnModeEnabled: Boolean = false,
     // Target column width in cells; used only in Auto mode (`columnCount = None`), where the count is however many of
-    // this width (plus `columnGap`) fit the pane.
-    columnTargetWidthCells: Int = 80,
+    // this width (plus `columnGap`) fit the pane. `None` is unlimited: one column fills the pane.
+    columnTargetWidthCells: Option[Int] = None,
     columnGap: Int = 2,
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven mode. `None` is Auto -- the
     // width-driven "as many columns of `columnTargetWidthCells` as fit" behaviour above, unchanged. `Some(n)` pins
@@ -95,7 +95,7 @@ final case class SurfaceConfig(
     copy(
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       columnGap = columnGap.max(0),
-      columnTargetWidthCells = columnTargetWidthCells.max(1),
+      columnTargetWidthCells = columnTargetWidthCells.map(_.max(1)),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = commandRunnerItemGapRows.map(AppConfig.clampCommandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
