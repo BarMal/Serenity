@@ -25,9 +25,10 @@ permissions:
   issues: write
 
 # One step at a time, and a step is never cancelled: one stopped half-way through merging would leave master with part
-# of a batch.
+# of a batch. GitHub keeps one pending run per group, so a workflow_run event for a non-train branch (which the job
+# below skips) gets a group of its own: in the shared group it would replace the pending step that has real work.
 concurrency:
-  group: merge-train
+  group: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'train/')) && format('merge-train-noop-{0}', github.run_id) || 'merge-train' }}
   cancel-in-progress: false
 
 jobs:
