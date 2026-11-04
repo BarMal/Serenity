@@ -7,6 +7,9 @@ on:
   push:
     branches:
       - master
+  # Nightly on master, so the benchmarks still see master when no pull request carries the `perf` label (#2553).
+  schedule:
+    - cron: '23 2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -253,8 +256,10 @@ jobs:
     # The timeout is a bound on a stuck job, not a budget. The unsharded 1x job took 57.3 and 58.3 minutes on runs
     # 41350271015 and 41350357868 (the benchmark warm-up on both sides, and a confirmation run of 4 minutes when a row is
     # flagged), against the previous limit of 60; 75 is the limit the owner chose for the sharded jobs (#2464).
-    # Drafts skip the benchmark shards; marking a pull request ready runs them (owner decision, #2484).
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    # Drafts skip the benchmark shards; marking a pull request ready runs them (owner decision, #2484). Once the merge
+    # train is live it benchmarks each batch instead, so a pull request runs them only with the `perf` label, read at
+    # its next push (#2553 item 2).
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live') || contains(github.event.pull_request.labels.*.name, 'perf'))
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 75

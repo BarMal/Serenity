@@ -16,6 +16,12 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parent.parent
 _CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+# Once the merge train is live it runs the benchmarks once per batch (#2553 item 2), so a pull request runs them only when
+# it carries the `perf` label.
+_PERF_GATE = (
+    "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live')"
+    " || contains(github.event.pull_request.labels.*.name, 'perf'))"
+)
 
 
 def _job(name: str) -> str:
@@ -26,8 +32,11 @@ def _job(name: str) -> str:
 
 
 class PerfDraftGateTests(unittest.TestCase):
-    def test_the_perf_shards_skip_drafts(self) -> None:
-        self.assertIn(f"    if: {_DRAFT_GATE}\n", _job("perf") + "\n")
+    def test_the_perf_shards_skip_drafts_and_once_the_train_is_live_skip_unlabelled_pull_requests(self) -> None:
+        self.assertIn(f"    if: {_PERF_GATE}\n", _job("perf") + "\n")
+
+    def test_master_is_benchmarked_nightly(self) -> None:
+        self.assertRegex(_CI, r"\n  schedule:\n    - cron: '[^']+'\n")
 
     def test_the_perf_job_no_longer_carries_the_script_tests(self) -> None:
         self.assertNotIn("python3 -m unittest", _job("perf"))
