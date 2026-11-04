@@ -1,41 +1,27 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, CommentsIntent}
-import com.serenity.config.CommentDisplayMode
+import com.serenity.config.{AppConfig, CommentDisplayMode}
 import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** #1550: the floating comment lens (#1222) only ever opened from a mouse click, and a click's cursor move never
   * dismissed a lens once one was open. Both directions should behave identically for a keyboard-driven cursor move:
   * moving the cursor into a commented range opens the same read-only lens a click does, and moving it back out (by any
   * further interaction, not just a click) dismisses it.
   */
-class CommentCursorLensSpec extends AnyFlatSpec with Matchers:
+class CommentCursorLensSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  given Balance = Balance.default
-
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
+  private def makeStateManager(): StateManager =
+    createStateManager("CommentCursorLensSpec", initialConfig = AppConfig.default)
 
   private val comment = DocumentComment(CursorPosition(0, 0), CursorPosition(0, 5), "A note about hello")
 

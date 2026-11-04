@@ -5,30 +5,19 @@ import scala.concurrent.duration.*
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.Quit
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers:
+class GracefulWindowCloseSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  given Balance         = Balance.default
   private val ciTimeout = 15.seconds
 
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
+  private def makeStateManager(): StateManager =
+    createStateManager("GracefulWindowCloseSpec", initialConfig = AppConfig.default)
 
   "Window close" should "trigger the quit path and signal awaitQuit" in {
     val sm = makeStateManager()
