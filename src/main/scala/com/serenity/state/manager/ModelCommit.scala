@@ -116,7 +116,11 @@ private[manager] object ModelCommit:
     * leaves.
     */
   def settled(previous: AppState, next: Model): Model =
-    ModeTransition.settled(previous, ClosedBufferRetention.forgetting(previous, next))
+    val retained = ClosedBufferRetention.forgetting(previous, next)
+    ModeTransition.settled(
+      previous,
+      retained.copy(app = OffscreenCursorSurfacesPolicy.settled(previous, retained.app))
+    )
 
   /** Folds the reducer effects that only change the model itself -- undo bookkeeping -- into `model`, so they commit in
     * the same write as the state they came with. Every other effect is left to the effect interpreter, in order.

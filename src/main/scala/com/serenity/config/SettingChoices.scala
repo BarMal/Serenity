@@ -6,6 +6,7 @@ object SettingChoices:
   val RenderBackendKeys: List[String]    = RenderBackendSetting.values.toList.map(_.configKey)
   val WaylandRenderKeys: List[String]    = WaylandRender.values.toList.map(_.configKey)
   val ExplorerOpenModeKeys: List[String] = ExplorerOpenMode.values.toList.map(_.configKey)
+  val OffscreenCursorSurfacesKeys: List[String] = OffscreenCursorSurfaces.values.toList.map(_.configKey)
 
   /** "a, b or c". */
   def phrase(choices: List[String]): String =
@@ -20,5 +21,6 @@ object SettingChoices:
       case "ui.render.backend"  => s"expected ${phrase(RenderBackendKeys)}"
       case "ui.render.wayland"  => s"expected ${phrase(WaylandRenderKeys)}"
       case "explorer.open_mode" => s"expected ${phrase(ExplorerOpenModeKeys)}"
+      case "editor.cursor.offscreen_surfaces" => s"expected ${phrase(OffscreenCursorSurfacesKeys)}"
       case _                    => "not a value this setting accepts"
     s"$why, using its default ($default)"

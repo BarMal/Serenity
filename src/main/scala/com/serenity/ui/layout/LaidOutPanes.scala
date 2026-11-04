@@ -56,6 +56,41 @@ final class LaidOutPanes(
       if rowMetrics.lineFits(visualRow)
     yield ScreenPosition(text.gridMetrics.toCol(caret.xPx), text.gridMetrics.toRow(caret.yPx))
 
+  /** Where a surface hangs off `position` in pane `paneId`: the cell it is painted on, or -- when the pane does not draw
+    * it -- the middle of the pane's top row for a position before what the pane shows and of its bottom row for one
+    * after, so a surface is always laid out inside the pane (#2570).
+    */
+  def anchorPosition(paneId: PaneId, position: CursorPosition): Option[ScreenPosition] =
+    screenPosition(paneId, position).orElse {
+      for
+        contentRect <- layouts.get(paneId).map(_.contentRect)
+        first       <- firstShown(paneId)
+      yield
+        val x       = contentRect.x + contentRect.width / 2
+        val isAbove = position.line < first.line || (position.line == first.line && position.column < first.column)
+        ScreenPosition(x, if isAbove then contentRect.y else math.max(contentRect.y, contentRect.bottom - 1))
+    }
+
+  /** The start of the text pane `paneId` paints on grid row `screenRow`, or on the nearest row it paints text on. */
+  def cursorOnRow(paneId: PaneId, screenRow: Int): Option[CursorPosition] =
+    for
+      contentRect <- layouts.get(paneId).map(_.contentRect)
+      text        <- textLayouts.get(paneId).flatMap(_.value)
+      (snapshot, rect) <-
+        if text.columns.isEmpty then Some(text.snapshot -> contentRect)
+        else text.columns.headOption.map(first => first.snapshot -> RendererPaneContent.columnRect(contentRect, first))
+      rowMetrics = TextRowMetrics.forSnapshot(rect, text.gridMetrics, snapshot, snapshot.usesMeasuredLayout)
+      row <- snapshot.visualLines.lift(
+        math.min(rowMetrics.visualRowAtScreenRow(screenRow), math.max(0, snapshot.visualLines.length - 1))
+      )
+    yield CursorPosition(row.bufferLine, row.startColumn)
+
+  private def firstShown(paneId: PaneId): Option[CursorPosition] =
+    textLayouts.get(paneId).flatMap(_.value).flatMap { text =>
+      val snapshot = text.columns.headOption.fold(text.snapshot)(_.snapshot)
+      snapshot.visualLines.headOption.map(row => CursorPosition(row.bufferLine, row.startColumn))
+    }
+
 object LaidOutPanes:
 
   final private class Once[A](compute: => A):
