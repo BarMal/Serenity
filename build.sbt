@@ -387,7 +387,8 @@ lazy val root = (project in file("."))
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeadlessAwtTest")
     )
   )
 
@@ -409,6 +410,14 @@ lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs exc
 
 heapMeasurementTest := (Test / testOnly)
   .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
+  .value
+
+// Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
+// of it has a display. Start sbt with -Djava.awt.headless=true; the tests fail, not cancel, on a JVM that is not.
+lazy val headlessAwtTest = taskKey[Unit]("Run the headless-AWT specs excluded from `sbt test`")
+
+headlessAwtTest := (Test / testOnly)
+  .toTask(" com.serenity.ui.display.DisplayScaleSpec -- -n com.serenity.testkit.HeadlessAwtTest")
   .value
 
 libraryDependencies ++= Seq(
