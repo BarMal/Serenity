@@ -14,12 +14,15 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
-import com.serenity.input.ImeRequestsHost
+import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
+import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.renderer.{CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
 import com.serenity.ui.theme.Theme
+import org.typelevel.log4cats.Logger
 
 class SwingWindow(
     initialPixelSize: Dimension,
@@ -29,7 +32,8 @@ class SwingWindow(
     frameTimings: FrameTimings = FrameTimings(),
     env: Map[String, String] = sys.env,
     windowTitle: String = SwingWindow.WindowTitle
-):
+) extends RenderTarget
+    with WindowControl:
 
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
@@ -64,7 +68,7 @@ class SwingWindow(
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
   private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
-  private val publishedCaretsRef       = new AtomicReference[scala.List[SwingWindow.CaretPaint]](Nil)
+  private val publishedCaretsRef       = new AtomicReference[scala.List[CaretPaint]](Nil)
   // Kept through the caret's blink-off phases, so the input method's candidate window has somewhere to be.
   private val lastCaretRef           = new AtomicReference[Option[Rectangle]](None)
   private val previousCursorRectsRef = new AtomicReference[scala.List[Rectangle]](Nil)
@@ -196,7 +200,7 @@ class SwingWindow(
     * or the whole canvas whenever `baseDirtyRects` itself is `None`.
     */
   def onCursorOverlayReady(baseDirtyRects: Option[scala.List[Rectangle]])(
-    paintCarets: => scala.List[SwingWindow.CaretPaint]
+    paintCarets: => scala.List[CaretPaint]
   ): Boolean =
     val presenter = layerPresenterRef.get()
     if baseImageRef.get().isDefined || presenter.exists(_.baseAvailable) then
@@ -214,7 +218,7 @@ class SwingWindow(
   /** From now on a GPU layer shows the base frame: it is handed the carets and the pointer cursor, and disposed when
     * the window stops.
     */
-  private[serenity] def attachLayerPresenter(presenter: LayerPresenter): Unit =
+  override def attachLayerPresenter(presenter: LayerPresenter): Unit =
     layerPresenterRef.getAndSet(Some(presenter)).filterNot(_ eq presenter).foreach(_.dispose())
     val stamps = new LayerPresentStamps(frameTimings)
     presenter.onPublished(() => stamps.published())
@@ -238,7 +242,7 @@ class SwingWindow(
     */
   private[serenity] def setOnFramePresented(callback: () => Unit): Unit = framePresentedRef.set(Some(callback))
 
-  private[serenity] def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
+  def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage =
     baseImagePool.acquire(width, height, imageType)
 
   private def toggleMaximize(): Unit =
@@ -262,10 +266,10 @@ class SwingWindow(
     chromePaletteRef,
     maximizedRef,
     () => frame,
-    () => chromeControlFont,
-    () => chromeButtonSize,
-    () => chromeSpacerSize,
-    () => chromeTitleBarSize,
+    () => chromeMetricsRef.get().controlFont,
+    () => chromeMetricsRef.get().buttonSize,
+    () => chromeMetricsRef.get().spacerSize,
+    () => chromeMetricsRef.get().titleBarSize,
     () => toggleMaximize(),
     activateChromeControl,
     windowTitle
@@ -390,6 +394,10 @@ class SwingWindow(
       val _ = canvas.requestFocusInWindow()
     }
 
+  /** Makes the window take file drops: the drop target covers the content pane and the canvas. */
+  override def installFileDrop(handler: FileDropHandler): Unit =
+    SwingUtilities.invokeLater(() => FileDropTarget.install(Seq(frame.getContentPane, canvas), handler))
+
   def start(): Unit =
     val showWindow: Runnable = () =>
       frame.setVisible(true)
@@ -411,11 +419,22 @@ class SwingWindow(
     val d = pixelSize.get()
     metrics.viewportSize(d.width, d.height)
 
+  /** What the canvas is drawn at, in device pixels: its size in Swing units times the screen's scale. */
+  def canvasDevicePixels: (Int, Int) =
+    val size  = canvas.getSize
+    val scale = DisplayScale.forComponent(canvas)
+    (Math.round(size.width * scale.x).toInt, Math.round(size.height * scale.y).toInt)
+
   def currentPreferredWindowSize: PreferredWindowSize =
     val d = frame.getSize
     PreferredWindowSize(d.width, d.height).normalized
 
-  def resizeToPreferred(size: PreferredWindowSize): Unit =
+  override def resizeToPreferred(size: PreferredWindowSize): Unit = resizeToPreferred(size, recentre = true)
+
+  /** `recentre` puts the window back in the middle of the screen, as a change of the preferred size always has; a
+    * caller that resizes the window again and again, as the render benchmark does, asks for it to stay where it is.
+    */
+  def resizeToPreferred(size: PreferredWindowSize, recentre: Boolean): Unit =
     val normalized = size.normalized
     SwingUtilities.invokeLater { () =>
       val dimension = new Dimension(normalized.width, normalized.height)
@@ -426,7 +445,7 @@ class SwingWindow(
       canvas.setPreferredSize(canvasFallback)
       frame.setSize(dimension)
       frame.validate()
-      frame.setLocationRelativeTo(null)
+      if recentre then frame.setLocationRelativeTo(null)
       publishCanvasResize(canvas.getSize(), canvasFallback)
       val _ = canvas.requestFocusInWindow()
     }
@@ -483,29 +502,20 @@ class SwingWindow(
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
 
-  private def chromeControlFont: Font =
-    new Font(Font.SANS_SERIF, Font.PLAIN, chromeMetricsRef.get().titleFontSize)
+  def geometry: SurfaceGeometry = SwingCanvasGeometry.of(canvas)
 
-  private def chromeButtonSize: Dimension =
-    val chrome = chromeMetricsRef.get()
-    new Dimension(chrome.buttonWidth, chrome.titleBarHeight)
+  override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
 
-  private def chromeSpacerSize: Dimension =
-    val chrome = chromeMetricsRef.get()
-    new Dimension(3 * chrome.buttonWidth, chrome.titleBarHeight)
-
-  private def chromeTitleBarSize: Dimension =
-    new Dimension(0, chromeMetricsRef.get().titleBarHeight)
+  override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 
   private def applyChromeMetrics(metrics: CellMetrics): Unit =
     if usesCustomChrome then
       val chrome = SwingWindow.ChromeMetrics.fromCellMetrics(metrics)
       chromeMetricsRef.set(chrome)
-      val controlFont = chromeControlFont
-      controlButtonsRef.get().foreach(button => button.setPreferredSize(chromeButtonSize))
-      titleLabelRef.get().foreach(_.setFont(controlFont))
-      titleSpacerRef.get().foreach(_.setPreferredSize(chromeSpacerSize))
-      titleBarRef.get().foreach(_.setPreferredSize(chromeTitleBarSize))
+      controlButtonsRef.get().foreach(button => button.setPreferredSize(chrome.buttonSize))
+      titleLabelRef.get().foreach(_.setFont(chrome.controlFont))
+      titleSpacerRef.get().foreach(_.setPreferredSize(chrome.spacerSize))
+      titleBarRef.get().foreach(_.setPreferredSize(chrome.titleBarSize))
       frame.setMinimumSize(new Dimension(chrome.minWidth, chrome.minHeight))
       frame.revalidate()
     else frame.setMinimumSize(new Dimension(SwingWindow.BaseMinWidth, SwingWindow.BaseMinHeight))

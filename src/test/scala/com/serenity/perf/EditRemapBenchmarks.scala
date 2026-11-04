@@ -27,7 +27,8 @@ private[perf] object EditRemapBenchmarks:
     List(multiCursorTyping(), typingWithAnnotations(), findWithManyMatches(), offsetConversions())
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   private def document: AppState = editorState(largeMultilineDocument(Lines), None)
 
