@@ -148,6 +148,22 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
   "A session saved with window translucency" should "still decode, ignoring it" in
     assertSessionIgnores("window.translucent" -> Json.False)
 
+  "A config file naming the removed viewport width and height caps" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "window.viewport.width_max"  -> "120",
+      "window.viewport.height_max" -> "50"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "viewportWidthMax"    -> "120",
+      "viewport.width.max"  -> "120",
+      "viewport_width_max"  -> "120",
+      "viewportHeightMax"   -> "50",
+      "viewport.height.max" -> "50",
+      "viewport_height_max" -> "50"
+    )
+
   // ---- the motion and animation settings -------------------------------------------------------------------------
 
   private val motionFamilies = List(
