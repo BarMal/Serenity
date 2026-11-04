@@ -2,8 +2,8 @@ package com.serenity
 
 import java.nio.file.Files
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, Event, InsertChar, ModalCreateDirectory, SaveAsFile, SaveFile, TabKey}
 import com.serenity.richtext.{
   DocumentFeature,
@@ -16,30 +16,23 @@ import com.serenity.richtext.{
   RichTextStyle,
   Treatment
 }
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.concurrent.Eventually
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventually:
+class FileWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with Eventually with StateManagerTestSupport:
 
   // Saves run on a file lane and land after `applyEvent(SaveFile)` returns (#1671).
   override given patienceConfig: PatienceConfig =
     PatienceConfig(timeout = org.scalatest.time.Span(20, org.scalatest.time.Seconds))
 
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
-
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowStateManagerSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("FileWorkflowStateManagerSpec", initialConfig = AppConfig.default)
 
   /** Applies `event` and waits for the directory listings, target checks and file loads it started. */
   private def settled(stateManager: StateManager, event: Event): Unit =

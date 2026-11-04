@@ -1,30 +1,21 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.*
-import com.serenity.rope.Balance
+import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.IndentationSettings
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The indentation settings: where they sit in the settings tree, how their rows parse, and how they reach the config
   * (#1996).
   */
-class IndentationSettingsTreeSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class IndentationSettingsTreeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("IndentationSettingsTreeSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("IndentationSettingsTreeSpec", initialConfig = AppConfig.default)
 
   private def dispatch(stateManager: StateManager, intent: TextDisplayIntent): Unit =
     stateManager
