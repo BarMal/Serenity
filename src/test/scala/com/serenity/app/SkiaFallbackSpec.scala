@@ -1,6 +1,7 @@
 package com.serenity.app
 
-import com.serenity.app.RenderBackendSelection.Decision
+import com.serenity.app.RenderBackendSelection.{Decision, Inputs, Probe}
+import com.serenity.config.{RenderBackendSetting, WaylandRender}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -9,6 +10,18 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
   private val missingLibGl =
     "UnsatisfiedLinkError: /home/me/.skiko/abc/libskiko-linux-x64.so: libGL.so.1: " +
       "cannot open shared object file: No such file or directory"
+
+  private def failedInputs(probe: Probe): Inputs =
+    Inputs(
+      osName = "Linux",
+      toolkit = ToolkitSelection.Choice.PlatformDefault,
+      x11Display = true,
+      probe = probe,
+      setting = RenderBackendSetting.Auto,
+      skiaSurfaceAvailable = true,
+      waylandRender = WaylandRender.SkiaRaster,
+      rasterSurfaceAvailable = true
+    )
 
   private def failed(cause: String): Decision =
     Decision(RenderBackend.Java2D, s"native probe failed: $cause", skiaFailure = Some(cause))
@@ -26,6 +39,46 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
   it should "find nothing in a failure that is not a missing library" in {
     SkiaFallback.missingLibrary("no raster surface") shouldBe None
     SkiaFallback.missingLibrary("NoClassDefFoundError: org/jetbrains/skia/Surface") shouldBe None
+  }
+
+  // What Skiko throws on the laptop (NixOS, no LD_LIBRARY_PATH): the wrapper's message names only the Skiko library;
+  // the missing system library is in the UnsatisfiedLinkError it wraps.
+  private def skikoLoadFailure: Throwable =
+    new RuntimeException(
+      "Failed to loade library /home/me/.skiko/abc/libskiko-linux-x64.so",
+      new UnsatisfiedLinkError(
+        "/home/me/.skiko/abc/libskiko-linux-x64.so: libGL.so.1: cannot open shared object file: " +
+          "No such file or directory"
+      )
+    )
+
+  "SkiaFallback.failure" should "keep the top-level description and add the causes it wraps" in {
+    SkiaFallback.failure(skikoLoadFailure) shouldBe Probe.Failed(
+      "RuntimeException: Failed to loade library /home/me/.skiko/abc/libskiko-linux-x64.so",
+      Some(
+        "UnsatisfiedLinkError: /home/me/.skiko/abc/libskiko-linux-x64.so: libGL.so.1: " +
+          "cannot open shared object file: No such file or directory"
+      )
+    )
+  }
+
+  it should "add no detail to a failure that wraps nothing, and say when there is no message" in {
+    SkiaFallback.failure(new IllegalStateException()) shouldBe
+      Probe.Failed("IllegalStateException: no message", None)
+  }
+
+  it should "stop at a cause chain that loops" in {
+    val looping = new RuntimeException("a"):
+      override def getCause: Throwable = this
+    SkiaFallback.failure(looping).detail shouldBe None
+  }
+
+  it should "give a notice that names the library the loader could not find" in {
+    val text = SkiaFallback
+      .notice(RenderBackendSelection.choose(failedInputs(SkiaFallback.failure(skikoLoadFailure))))
+      .getOrElse(fail("a failed probe must produce a notice"))
+    text should include("libGL.so.1")
+    text should include("LD_LIBRARY_PATH")
   }
 
   "SkiaFallback.notice" should "stay silent when Skia was never expected to run" in {

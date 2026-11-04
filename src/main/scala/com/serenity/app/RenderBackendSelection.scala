@@ -18,7 +18,7 @@ object RenderBackendSelection:
   enum Probe:
     case NotRun
     case Loaded
-    case Failed(cause: String)
+    case Failed(cause: String, detail: Option[String] = None)
 
   final case class Inputs(
       osName: String,
@@ -86,11 +86,11 @@ object RenderBackendSelection:
   private def afterProbe(inputs: Inputs, backend: RenderBackend, loadedReason: String): Decision =
     val explicit = inputs.setting == RenderBackendSetting.Skia
     inputs.probe match
-      case Probe.Failed(cause) =>
+      case Probe.Failed(cause, detail) =>
         Decision(
           RenderBackend.Java2D,
           if explicit then s"ui.render.backend=skia could not load: $cause" else s"native probe failed: $cause",
-          Some(cause)
+          Some(detail.fold(cause)(causes => s"$cause ($causes)"))
         )
       case Probe.NotRun => java2d("native probe not run")
       case Probe.Loaded =>
