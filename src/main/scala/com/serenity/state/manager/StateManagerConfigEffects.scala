@@ -254,26 +254,22 @@ final private[manager] class StateManagerConfigEffects(
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void
 
   private def interpretInterfaceChromeIntent(intent: InterfaceChromeIntent): IO[Unit] =
-    import InterfaceChromeIntent.{SetDockedCornerStyle, SetPaneHeaderCorners, SetTabMaxWidth, SetUiCornerRadiusPx}
+    import InterfaceChromeIntent as Chrome
     intent match
-      case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
+      case Chrome.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
-      case InterfaceChromeIntent.SetUiElementGap(gap) =>
-        updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
-      case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
+      case Chrome.SetUiElementGap(gap) => updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
+      case Chrome.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
-      case SetUiCornerRadiusPx(radius)   => updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
-      case SetDockedCornerStyle(style)   => updateAppearanceConfig(_.withDockedCornerStyle(style)).void
-      case SetPaneHeaderCorners(corners) => updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
-      case SetTabMaxWidth(width)         => updateAppearanceConfig(_.withTabMaxWidth(width)).void
-      case InterfaceChromeIntent.SetInterfaceDensity(density) =>
-        updateAppearanceConfig(_.withInterfaceDensity(density)).void
-      case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
-        updateAppearanceConfig(_.withWindowChromeMode(mode)).void
-      case InterfaceChromeIntent.SetMenuBarMode(mode) =>
-        updateAppearanceConfig(_.withMenuBarMode(mode)).void
-      case InterfaceChromeIntent.SetUiLayout(layout) => switchLayout(layout)
-      case InterfaceChromeIntent.ToggleUiLayout =>
+      case Chrome.SetUiCornerRadiusPx(radius)   => updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case Chrome.SetDockedCornerStyle(style)   => updateAppearanceConfig(_.withDockedCornerStyle(style)).void
+      case Chrome.SetPaneHeaderCorners(corners) => updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
+      case Chrome.SetTabMaxWidth(width)         => updateAppearanceConfig(_.withTabMaxWidth(width)).void
+      case Chrome.SetInterfaceDensity(density)  => updateAppearanceConfig(_.withInterfaceDensity(density)).void
+      case Chrome.SetWindowChromeMode(mode)     => updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case Chrome.SetMenuBarMode(mode)          => updateAppearanceConfig(_.withMenuBarMode(mode)).void
+      case Chrome.SetUiLayout(layout)           => switchLayout(layout)
+      case Chrome.ToggleUiLayout =>
         currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
       case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>
         changeSummon(config => config.summon.withModifiersChecked(modifiers, hotkeysOf(config), keymapsOf(config)))
