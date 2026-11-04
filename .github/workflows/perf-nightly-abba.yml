@@ -7,7 +7,8 @@ name: Perf Nightly ABBA
 # scripts/perf_nightly.py.
 on:
   schedule:
-    - cron: '17 3 * * *'
+    # Off the 03:17 Cross-OS nightly so the two do not compete for the shared runners.
+    - cron: '29 5 * * *'
   workflow_dispatch:
     inputs:
       previous_ref:
