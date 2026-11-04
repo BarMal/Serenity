@@ -2,19 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{
-  CellMetrics,
-  ColumnPager,
-  ColumnPaging,
-  LayoutEngine,
-  RichTextContext,
-  PaneRowBands,
-  ScrollLimits,
-  TextLayoutSnapshot,
-  TextLayoutSnapshotColumnMode,
-  VisualRowCounts,
-  WrappedLineCache
-}
+import com.serenity.ui.layout.{CellMetrics, ColumnPager, ColumnPaging, LayoutEngine, PaneRowBands, RichTextContext, ScrollLimits, TextLayoutSnapshot, TextLayoutSnapshotColumnMode, VisualRowCounts, WrappedLineCache}
 import com.serenity.ui.theme.RichTextStyling
 
 /** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
