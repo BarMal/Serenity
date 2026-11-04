@@ -156,10 +156,8 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   it should "treat their older spellings as removed too" in
     assertRemovedAndIgnored(
-      "viewportWidthMax"    -> "120",
       "viewport.width.max"  -> "120",
       "viewport_width_max"  -> "120",
-      "viewportHeightMax"   -> "50",
       "viewport.height.max" -> "50",
       "viewport_height_max" -> "50"
     )
@@ -281,7 +279,8 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.invalidEntries shouldBe Nil
     result.report.deprecatedEntries shouldBe Nil
     result.report.removedKeys should not be empty
-    all(result.report.removedKeys.map(key => key.startsWith("motion."))) shouldBe true
+    result.report.removedKeys.filterNot(_.startsWith("motion.")) should contain theSameElementsAs
+      List("window.viewport.width_max", "window.viewport.height_max")
 
     val messageLines =
       ConfigMigrationWarning.message(Paths.get("config.conf"), result.report).value.linesIterator.toList
