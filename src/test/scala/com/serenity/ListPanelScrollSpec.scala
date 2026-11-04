@@ -2,29 +2,23 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Direction, MouseClick, MouseWheel, PanelInputEvent, ResizeEvent}
-import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{PinnedPanelViewModel, TextPanelRow}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** List panels -- explorer, outline, comments, diagnostics -- keep a scroll position of their own (#1953, #1955): the
   * keyboard scrolls only as far as it must to keep the highlight in view, the wheel over a panel scrolls that panel and
   * leaves the highlight where it is, and the position survives the panel's content being refreshed.
   */
-class ListPanelScrollSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class ListPanelScrollSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val viewport  = ViewportSize(100, 30)
   private val paneId    = PaneId(0)
@@ -126,9 +120,7 @@ class ListPanelScrollSpec extends AnyFlatSpec with Matchers:
   }
 
   private def makeStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("ListPanelScrollSpec"))
-    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("ListPanelScrollSpec", initialConfig = AppConfig.default)
 
   private def managerWith(content: SurfaceContent): StateManager =
     val sm = makeStateManager()
