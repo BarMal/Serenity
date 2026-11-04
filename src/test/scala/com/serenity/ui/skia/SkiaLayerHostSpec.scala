@@ -142,6 +142,24 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       showsExactly(window, raster, marker = 0x203040)
     }
 
+  it should "show a published image exactly as the raster rasteriser draws it, and close the ones it replaced" in
+    withWindow { window =>
+      def painted: org.jetbrains.skia.Image =
+        val surface = Surface.Companion.makeRasterN32Premul(width, height)
+        scene(surface.getCanvas)
+        val image = surface.makeImageSnapshot()
+        surface.close()
+        image
+      window.host.publishImage(painted)
+      window.host.publishImage(painted)
+      eventually("the first frame")(window.host.renderCount > 0)
+      val expected = Surface.Companion.makeRasterN32Premul(width, height)
+      scene(expected.getCanvas)
+      showsExactly(window, SkiaPixels.read(expected), marker = 0x203040)
+      window.host.publishedFrames shouldBe 2
+      eventually("the replaced image to be closed")(window.host.closedPictures >= 1)
+    }
+
   it should "report the render API once, on its first draw, and leave what it draws alone" in {
     val lines = new java.util.concurrent.ConcurrentLinkedQueue[String]()
     withReportingWindow(line => lines.add(line)) { window =>
