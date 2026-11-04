@@ -42,7 +42,9 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
   "The invalid-entry warning" should "reach the log text with the key, the value and the choices" in {
     val result  = loaded("ui.render.backend = vulkan\n")
     val message = ConfigMigrationWarning.message(TestTemp.file("serenity-render-warning", ".conf"), result.report)
-    message.getOrElse("") should (include("ui.render.backend = vulkan") and include("auto, skia, skia-raster or java2d"))
+    message.getOrElse("") should (include("ui.render.backend = vulkan") and include(
+      "auto, skia, skia-raster or java2d"
+    ))
   }
 
   "A valid render setting" should "be reported as nothing" in {

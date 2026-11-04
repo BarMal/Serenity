@@ -243,7 +243,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
   it should "choose the raster backend only on Linux, with a raster factory, for WLToolkit or no X11 display" in
     forAll(inputsGen) { inputs =>
       if inputs.setting != RenderBackendSetting.SkiaRaster &&
-        RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster
+          RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster
       then
         val wayland = inputs.toolkit == ToolkitSelection.Choice.Wayland
         (inputs.osName, inputs.rasterSurfaceAvailable, wayland || !inputs.x11Display) shouldBe ("Linux", true, true)
