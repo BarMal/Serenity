@@ -30,7 +30,6 @@ private[presets] object BuiltInUiPresets:
         .withPaneHeaders(false)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
         .withInterfaceDensity(InterfaceDensity.Spacious)
-        .withProseMeasure(Some(ProseMeasure.Default))
         .withSmartPunctuation(true)
         .withSpellCheck(AppConfig.conventional.languageToolsConfig.spellCheck.copy(enabled = true))
         .withTypewriterScrolling(true)
