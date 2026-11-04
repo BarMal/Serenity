@@ -1,5 +1,7 @@
 package com.serenity.ui.renderer
 
+import java.nio.file.Path
+
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
@@ -9,7 +11,6 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, TestWorkspaceTrees}
-import java.nio.file.Path
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
