@@ -123,8 +123,7 @@ object FieldCodec:
       given Encoder[Option[A]] = Encoder.encodeOption(using codec.encoder)
       given Decoder[Option[A]] = Decoder.decodeOption(using codec.decoder)
       of(
-        text =>
-          if text.trim.equalsIgnoreCase("unlimited") then Some(None) else codec.parse(text).map(Some.apply),
+        text => if text.trim.equalsIgnoreCase("unlimited") then Some(None) else codec.parse(text).map(Some.apply),
         value => value.fold(HoconValue.string("unlimited"))(codec.render)
       )
 

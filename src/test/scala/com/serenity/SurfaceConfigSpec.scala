@@ -156,7 +156,9 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   it should "read the column target width as a cell count or unlimited, and write unlimited by default" in {
     val field = ConfigRegistry.find("editor.column_target_width").getOrElse(fail("missing editor.column_target_width"))
 
-    field.read(AppConfig.default.withColumnTargetWidth(60), "unlimited").map(field.setting(_)._2.config.unwrapped) shouldBe
+    field
+      .read(AppConfig.default.withColumnTargetWidth(60), "unlimited")
+      .map(field.setting(_)._2.config.unwrapped) shouldBe
       Some("unlimited")
     field.read(AppConfig.default, " Unlimited ").map(field.setting(_)._2.config.unwrapped) shouldBe Some("unlimited")
     field.read(AppConfig.default, "60").map(field.setting(_)._2.config.unwrapped) shouldBe Some(60)
