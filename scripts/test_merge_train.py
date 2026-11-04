@@ -471,6 +471,11 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("startsWith(github.event.workflow_run.head_branch, 'train/')", self.train)
         self.assertRegex(self.train, r"schedule:\n    - cron: '[^']+'")
 
+    def test_master_advancing_wakes_the_train_so_the_next_batch_starts_without_waiting_for_a_tick(self) -> None:
+        # Scheduled ticks were not firing (none after 18:32Z on 2026-11-04), and nothing else wakes the train between
+        # trains: a batch merging moves master, which is the moment the next one can start.
+        self.assertRegex(self.train, r"\n  push:\n    branches: \[master\]\n")
+
     def test_it_holds_the_permissions_its_steps_use(self) -> None:
         for permission in ("actions: write", "contents: write", "pull-requests: write", "issues: write"):
             self.assertIn(f"  {permission}\n", self.train)
