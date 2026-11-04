@@ -3,7 +3,8 @@ package com.serenity.session
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, StandardCopyOption}
 
-import cats.effect.IO
+import cats.effect.{IO, SyncIO}
+import cats.effect.std.Mutex
 import cats.syntax.all.*
 import com.serenity.io.AtomicFileWriter
 import org.typelevel.log4cats.Logger
@@ -26,7 +27,14 @@ final private[session] class SessionWriteJournal(
     logger: Logger[IO]
 ):
 
+  // Saves can overlap (after a file save, on edit-idle, on an interval), and they all stage beside the same session
+  // file; interleaved, one renames the other's staged file away and the loser fails with NoSuchFileException.
+  private val exclusive: Mutex[IO] = Mutex.in[SyncIO, IO].unsafeRunSync()
+
   def commit(writes: Map[String, String], deletes: List[String], indexJson: String): IO[Unit] =
+    exclusive.lock.surround(commitExclusively(writes, deletes, indexJson))
+
+  private def commitExclusively(writes: Map[String, String], deletes: List[String], indexJson: String): IO[Unit] =
     for
       staged          <- resolveStagedWrites(writes)
       resolvedDeletes <- resolveSafePaths(deletes)
@@ -43,6 +51,9 @@ final private[session] class SessionWriteJournal(
     * every future session operation.
     */
   def recover: IO[Unit] =
+    exclusive.lock.surround(recoverExclusively)
+
+  private def recoverExclusively: IO[Unit] =
     IO.blocking(Files.exists(pendingFile)).flatMap {
       case false => IO.unit
       case true =>
