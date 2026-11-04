@@ -10,7 +10,9 @@ The injected-slowdown cases are the red tests of issue #1731: the head is the ba
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -134,107 +136,6 @@ class PairedGateTests(unittest.TestCase):
         self.assertAlmostEqual(verdicts[0].ratio, 2.2)
 
 
-class RecordOnlyTests(unittest.TestCase):
-    """Rows named in the record-only list are measured and printed, but never fail the build (issue #2478): a new row
-    has no baseline, so it records first and is gated only once the owner has read its numbers."""
-
-    HEADER = (
-        "Serenity performance benchmarks\n"
-        "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
-    )
-
-    def setUp(self) -> None:
-        self._tmpdir = tempfile.TemporaryDirectory()
-        self.addCleanup(self._tmpdir.cleanup)
-
-    def _write(self, name: str, rows: dict[str, tuple[float, int | None]]) -> str:
-        path = os.path.join(self._tmpdir.name, name)
-        with open(path, "w") as handle:
-            handle.write(self.HEADER)
-            for row, (p50, retained) in rows.items():
-                handle.write(f"{row},1,1,1,0,{p50},{p50 * 1.2},0,,,{'' if retained is None else retained}\n")
-        return path
-
-    def _list(self, *lines: str) -> str:
-        path = os.path.join(self._tmpdir.name, "record_only.txt")
-        with open(path, "w") as handle:
-            handle.write("\n".join(lines) + "\n")
-        return path
-
-    def _gate(self, base_rows, head_rows, record_only: str | None, *extra: str) -> int:
-        base = [self._write(f"b{i}.csv", base_rows) for i in range(3)]
-        head = [self._write(f"h{i}.csv", head_rows) for i in range(3)]
-        arguments = ["--base", *base, "--head", *head, *extra]
-        if record_only is not None:
-            arguments += ["--record-only", record_only]
-        return compare_perf_runs.main_with_args(arguments)
-
-    def test_a_listed_row_three_times_slower_does_not_fail(self) -> None:
-        listed = self._list("panes.")
-        self.assertEqual(
-            self._gate({"panes.split2.typing_frame": (1.0, None), "other": (1.0, None)},
-                       {"panes.split2.typing_frame": (3.0, None), "other": (1.0, None)}, listed),
-            0,
-        )
-
-    def test_an_unlisted_row_three_times_slower_still_fails(self) -> None:
-        listed = self._list("panes.")
-        self.assertEqual(
-            self._gate({"panes.split2.typing_frame": (1.0, None), "other": (1.0, None)},
-                       {"panes.split2.typing_frame": (1.0, None), "other": (3.0, None)}, listed),
-            1,
-        )
-
-    def test_the_list_matches_by_prefix_and_ignores_comments_and_blank_lines(self) -> None:
-        listed = self._list("# new rows record first", "", "scrollbar.four_panes", "buffers.")
-        self.assertEqual(
-            self._gate({"scrollbar.four_panes.all_bars": (2.0, None), "buffers.switch_cold_frame.open_20.prose": (2.0, None)},
-                       {"scrollbar.four_panes.all_bars": (9.0, None), "buffers.switch_cold_frame.open_20.prose": (9.0, None)}, listed),
-            0,
-        )
-
-    def test_a_listed_rows_retained_heap_growth_does_not_fail_either(self) -> None:
-        mib = 1024 * 1024
-        listed = self._list("footprint.buffers_")
-        self.assertEqual(
-            self._gate({"footprint.buffers_20_shown": (1.0, 10 * mib)}, {"footprint.buffers_20_shown": (1.0, 40 * mib)}, listed), 0
-        )
-
-    def test_an_unlisted_rows_retained_heap_growth_still_fails(self) -> None:
-        mib = 1024 * 1024
-        listed = self._list("footprint.buffers_")
-        self.assertEqual(
-            self._gate({"footprint.other": (1.0, 10 * mib)}, {"footprint.other": (1.0, 40 * mib)}, listed), 1
-        )
-
-    def test_a_listed_row_is_still_printed_and_marked(self) -> None:
-        import contextlib
-        import io
-
-        listed = self._list("panes.")
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self._gate({"panes.split2.typing_frame": (1.0, None)}, {"panes.split2.typing_frame": (3.0, None)}, listed)
-        line = next(l for l in out.getvalue().splitlines() if l.startswith("panes.split2.typing_frame"))
-        self.assertIn("recorded, not gated", line)
-        self.assertIn("3.00x", line)
-
-    def test_a_run_with_only_listed_rows_still_compares_something(self) -> None:
-        listed = self._list("panes.")
-        self.assertEqual(self._gate({"panes.a": (1.0, None)}, {"panes.a": (1.0, None)}, listed), 0)
-
-    def test_the_default_list_is_the_one_in_the_repo_and_names_the_new_scaling_rows(self) -> None:
-        self.assertTrue(compare_perf_runs.DEFAULT_RECORD_ONLY.exists())
-        prefixes = compare_perf_runs.load_record_only(compare_perf_runs.DEFAULT_RECORD_ONLY)
-        for expected in ("buffers.", "panes.", "scrollbar.", "footprint.buffers_"):
-            self.assertIn(expected, prefixes)
-
-    def test_without_the_option_the_repo_list_applies(self) -> None:
-        self.assertEqual(
-            self._gate({"panes.split2.typing_frame": (1.0, None)}, {"panes.split2.typing_frame": (3.0, None)}, None), 0
-        )
-
-
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
 
@@ -332,6 +233,96 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
             ["--base", *with_heap("h", "base", 10 * mib), "--head", *with_heap("h", "head", 20 * mib), "--write-flagged", self.flagged]
         )
         self.assertEqual(code, 1)
+
+
+class ExcludedRowTests(unittest.TestCase):
+    """Rows listed in the exclusion file are measured and printed but neither fail the gate nor reach confirmation."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.flagged = os.path.join(self._tmpdir.name, "flagged.txt")
+
+    def _file(self, name: str, text: str) -> str:
+        path = os.path.join(self._tmpdir.name, name)
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+
+    def _runs(self, side: str, p50s: dict[str, float], count: int = 3) -> list[str]:
+        body = "".join(f"{name},1,1,1,0,{p50},{p50 * 1.2},0,,,\n" for name, p50 in p50s.items())
+        header = "Serenity performance benchmarks\nname,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
+        return [self._file(f"{side}-{i}.csv", header + body) for i in range(count)]
+
+    def _gate(self, base: dict[str, float], head: dict[str, float], excluded: str, *extra: str) -> tuple[int, str]:
+        excluded_path = self._file("excluded.txt", excluded)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = compare_perf_runs.main_with_args(
+                [
+                    "--base", *self._runs("base", base), "--head", *self._runs("head", head),
+                    "--exclude-file", excluded_path, "--write-flagged", self.flagged, *extra,
+                ]
+            )
+        return code, out.getvalue()
+
+    def test_an_excluded_row_that_doubles_does_not_fail_or_get_flagged(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.exists(self.flagged))
+
+    def test_the_same_row_unlisted_is_still_flagged(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "# nothing excluded\n")
+        self.assertEqual(code, 2)
+
+    def test_an_excluded_row_is_still_printed_and_marked(self) -> None:
+        _, out = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        line = next(l for l in out.splitlines() if l.startswith("noisy"))
+        self.assertIn("excluded from the gate (nightly ABBA)", line)
+
+    def test_an_excluded_regression_is_reported_without_an_error_annotation(self) -> None:
+        _, out = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        self.assertNotIn("::error::", out)
+        self.assertNotIn("::warning::", out)
+
+    def test_a_listed_name_excludes_its_dotted_variants_only(self) -> None:
+        names = {"typing_frame": 5.0, "typing_frame.variant": 5.0, "typing_frame_other": 5.0}
+        code, _ = self._gate(names, {n: 10.0 for n in names}, "typing_frame\n")
+        self.assertEqual(code, 2)
+        with open(self.flagged) as handle:
+            self.assertEqual(handle.read().split(), ["typing_frame_other"])
+
+    def test_other_rows_still_gate_beside_an_excluded_one(self) -> None:
+        code, _ = self._gate({"noisy": 5.0, "steady": 5.0}, {"noisy": 10.0, "steady": 10.0}, "noisy\n")
+        self.assertEqual(code, 2)
+        with open(self.flagged) as handle:
+            self.assertEqual(handle.read().split(), ["steady"])
+
+    def test_comments_and_blank_lines_in_the_file_are_ignored(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "# why: 77 flags, 0 confirmed\n\nnoisy  # trailing\n")
+        self.assertEqual(code, 0)
+
+    def test_a_run_with_only_excluded_rows_is_still_compared(self) -> None:
+        code, out = self._gate({"noisy": 5.0}, {"noisy": 5.0}, "noisy\n")
+        self.assertEqual(code, 0)
+        self.assertNotIn("nothing was compared", out)
+
+    def test_the_checked_in_list_names_the_never_confirmed_rows(self) -> None:
+        listed = compare_perf_runs.load_excluded(str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
+        for row in (
+            "rope.large_json.cursor_offset",
+            "render.markdown.live_preview",
+            "laptop.input.state_manager.go_to_line_3000_paragraphs",
+            "laptop.input.state_manager.typing_random_letters",
+            "laptop.input.state_manager.typing_long_paragraph",
+            "laptop.render.typing_frame_2x",
+        ):
+            self.assertTrue(compare_perf_runs.is_excluded(row, listed), row)
+        self.assertTrue(compare_perf_runs.is_excluded("laptop.render.typing_frame_2x.ligature_font", listed))
+        self.assertFalse(compare_perf_runs.is_excluded("render.markdown.inline_lens", listed))
+
+    def test_the_default_exclusion_file_is_the_checked_in_one(self) -> None:
+        self.assertEqual(compare_perf_runs.DEFAULT_EXCLUDE_FILE, str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
 
 
 if __name__ == "__main__":

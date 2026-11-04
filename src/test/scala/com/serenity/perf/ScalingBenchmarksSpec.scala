@@ -1,9 +1,5 @@
 package com.serenity.perf
 
-import java.nio.file.{Files, Paths}
-
-import scala.jdk.CollectionConverters.*
-
 import cats.effect.unsafe.implicits.global
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,14 +25,8 @@ class ScalingBenchmarksSpec extends AnyFlatSpec with Matchers:
     rows.map(_.name).distinct should have size rows.size
   }
 
-  it should "all be on the record-only list, so none gates a build before the owner has read its numbers" in {
-    val prefixes = Files
-      .readAllLines(Paths.get("scripts", "perf_record_only.txt"))
-      .asScala
-      .map(_.split("#", 2).head.trim)
-      .filter(_.nonEmpty)
-
-    rows.map(_.name).filterNot(name => prefixes.exists(name.startsWith)) shouldBe Nil
+  it should "all be excluded from the perf gate, so none gates a build before the owner has read its numbers" in {
+    rows.map(_.name).filterNot(PerfGateExclusions.covers) shouldBe Nil
   }
 
   it should "verify, and then run once, without failing" in

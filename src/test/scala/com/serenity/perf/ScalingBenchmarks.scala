@@ -10,7 +10,8 @@ import com.serenity.state.models.{AppState, BufferId}
 import com.serenity.ui.layout.LayoutEngine
 
 /** Rows for how performance scales with many open buffers and with split panes (#2478), each with a hypothesis it can
-  * refute. They only record: `scripts/perf_record_only.txt` keeps the gate off them until the numbers have been read.
+  * refute. They only record: the #2478 section of `scripts/perf-gate-excluded-rows.txt` keeps the gate off them until
+  * the numbers have been read.
   *
   *   - `buffers.switch_cold_frame.open_N.<kind>`: the cold frame after a tab switch, with `N` buffers open and the same
   *     content on screen, so the difference between `open_1` and `open_20` is the cost of the buffers that are not

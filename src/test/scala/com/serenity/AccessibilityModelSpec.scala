@@ -116,9 +116,11 @@ class AccessibilityModelSpec extends AnyFlatSpec with Matchers:
     val controls =
       AccessibilitySnapshot.from(state, ViewportSize(40, 10)).nodes.filter(_.id.startsWith("surface:menu/item:"))
 
-    controls.map(_.name) shouldBe List("Save", "Save As")
+    // A context menu item's target is its own one row at the default density (#2389), so the slots are adjacent.
+    controls.map(_.name) shouldBe List("Save", "Save As", "Close")
     controls.map(_.bounds.y).distinct.size shouldBe controls.size
-    controls.map(_.bounds.height).distinct shouldBe List(2)
+    controls.map(_.bounds.height).distinct shouldBe List(1)
+    controls.map(_.bounds.y).sliding(2).collect { case Seq(a, b) => b - a }.toList.distinct shouldBe List(1)
     controls.find(_.name == "Save As").exists(_.focused) shouldBe true
   }
 

@@ -1,9 +1,5 @@
 package com.serenity.perf
 
-import java.nio.file.{Files, Paths}
-
-import scala.jdk.CollectionConverters.*
-
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.WrappedLineCache
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,14 +21,8 @@ class ScalingFootprintSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "all be on the record-only list" in {
-    val prefixes = Files
-      .readAllLines(Paths.get("scripts", "perf_record_only.txt"))
-      .asScala
-      .map(_.split("#", 2).head.trim)
-      .filter(_.nonEmpty)
-
-    ScalingFootprint.scenarios.map(_.name).filterNot(name => prefixes.exists(name.startsWith)) shouldBe Nil
+  it should "all be excluded from the perf gate" in {
+    ScalingFootprint.scenarios.map(_.name).filterNot(PerfGateExclusions.covers) shouldBe Nil
   }
 
   it should "keep the state and the caches the drawn buffers filled, which is what a session leaves resident" in {
