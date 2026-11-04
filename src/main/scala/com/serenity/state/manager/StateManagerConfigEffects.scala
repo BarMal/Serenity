@@ -422,24 +422,17 @@ final private[manager] class StateManagerConfigEffects(
       ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
     }
 
+  private def commitRunnerChange(change: AppState => AppState): IO[Unit] =
+    currentState.flatMap(current => editor.commitState(change(current), current))
+
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        currentState.flatMap { current =>
-          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)
-          editor.commitState(newState, current)
-        }
+        commitRunnerChange(CommandRunnerReducer.openSettings(_, CommandRegistry.withToggleUI))
       case GeneralSettingsIntent.OpenSettingsAt(groupId, itemId, query) =>
-        currentState.flatMap { current =>
-          val newState = CommandRunnerReducer.openSettingsAt(
-            current,
-            CommandRegistry.withToggleUI,
-            groupId,
-            itemId,
-            query
-          )
-          editor.commitState(newState, current)
-        }
+        commitRunnerChange(
+          CommandRunnerReducer.openSettingsAt(_, CommandRegistry.withToggleUI, groupId, itemId, query)
+        )
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>
