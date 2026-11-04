@@ -2,7 +2,17 @@ package com.serenity.state.manager
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.events.{DeleteBackward, Enter, ImeCancelled, ImeCommit, ImeComposing, InsertChar, InsertText, NextTab, ResizeEvent}
+import com.serenity.keystroke.events.{
+  DeleteBackward,
+  Enter,
+  ImeCancelled,
+  ImeCommit,
+  ImeComposing,
+  InsertChar,
+  InsertText,
+  NextTab,
+  ResizeEvent
+}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, ReducerResult, SurfaceEffect}
