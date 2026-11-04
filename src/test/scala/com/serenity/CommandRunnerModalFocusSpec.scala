@@ -25,7 +25,7 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
     val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     sm.applyEvent(InsertChar('x')).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    val runnerId = sm.getCurrentState.unsafeRunSync().commandRunnerSurface.map(_.id).getOrElse(fail("no runner"))
+    val runnerId = sm.getCurrentState.unsafeRunSync().commandPickerSurface.map(_.id).getOrElse(fail("no runner"))
     (sm, runnerId)
 
   "A close confirmation raised over the open command runner" should "keep focus until answered" in {
@@ -41,7 +41,7 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
     val answered = sm.getCurrentState.unsafeRunSync()
     answered.topModal shouldBe None
-    answered.commandRunnerSurface.map(_.id) shouldBe Some(runnerId)
+    answered.commandPickerSurface.map(_.id) shouldBe Some(runnerId)
     answered.persisted.focus shouldBe Focus.Surface(runnerId)
   }
 
@@ -60,6 +60,6 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
     val dismissed = sm.getCurrentState.unsafeRunSync()
     dismissed.modalSurface shouldBe None
-    dismissed.commandRunnerSurface.map(_.id) shouldBe Some(runnerId)
+    dismissed.commandPickerSurface.map(_.id) shouldBe Some(runnerId)
     dismissed.persisted.focus shouldBe Focus.Surface(runnerId)
   }

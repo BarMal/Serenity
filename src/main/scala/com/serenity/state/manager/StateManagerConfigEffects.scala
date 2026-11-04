@@ -48,7 +48,7 @@ final private[manager] class StateManagerConfigEffects(
     configOnDisk: Option[AppConfig] = None,
     loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad,
     followSystemAppearance: IO[Unit] = IO.unit
-)(using balance: com.serenity.rope.Balance):
+):
 
   private val writes = WriteCoalescer.unsafe
 
@@ -426,7 +426,7 @@ final private[manager] class StateManagerConfigEffects(
     intent match
       case GeneralSettingsIntent.OpenSettings =>
         currentState.flatMap { current =>
-          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
+          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)
           editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.OpenSettingsAt(groupId, itemId, query) =>
@@ -437,7 +437,7 @@ final private[manager] class StateManagerConfigEffects(
             groupId,
             itemId,
             query
-          )(using balance)
+          )
           editor.commitState(newState, current)
         }
       case GeneralSettingsIntent.SaveConfig =>

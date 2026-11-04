@@ -293,8 +293,9 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     ))
   }
 
+  // Ctrl+P opens the command picker now (#2577); the runner surface these hit-test is the Settings surface's.
   private def openCommandRunner: AppState =
-    AppEventReducer.reduce(ToggleCommandRunner, editorState("text", ViewportSize(100, 30)), registry).state
+    CommandRunnerReducer.openSettings(editorState("text", ViewportSize(100, 30)), registry)
 
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface.map(_.content) match

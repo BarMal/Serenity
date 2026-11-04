@@ -2,21 +2,10 @@ package com.serenity.state.manager
 
 import com.serenity.command.CommandRegistry
 import com.serenity.config.AppConfig
-import com.serenity.keystroke.events.{
-  DeleteBackward,
-  Enter,
-  ImeCancelled,
-  ImeCommit,
-  ImeComposing,
-  InsertChar,
-  InsertText,
-  NextTab,
-  ResizeEvent,
-  ToggleCommandRunner
-}
+import com.serenity.keystroke.events.{DeleteBackward, Enter, ImeCancelled, ImeCommit, ImeComposing, InsertChar, InsertText, NextTab, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, ReducerResult, SurfaceEffect}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, ReducerResult, SurfaceEffect}
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.layout.{SplitAxis, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -100,9 +89,9 @@ class EventPipelineTransitionsSpec extends AnyFlatSpec with Matchers:
     next.undo shouldBe model.undo
   }
 
-  "commandRunnerFocusNormalized" should "hand focus back to an open command runner that lost it" in {
+  "commandRunnerFocusNormalized" should "hand focus back to an open settings runner that lost it" in {
     val opened =
-      AppEventReducer.reduce(ToggleCommandRunner, twoPanes(), CommandRegistry.withToggleUI).state
+      CommandRunnerReducer.openSettings(twoPanes(), CommandRegistry.withToggleUI)
     val runnerFocus = opened.persisted.focus
     val unfocused   = opened.copy(persisted = opened.persisted.copy(focus = Focus.EditorPane(PaneId(0))))
 

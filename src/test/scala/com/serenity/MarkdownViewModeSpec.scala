@@ -33,20 +33,12 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface
-          .flatMap {
-            _.content match
-              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-              case _                                     => None
-          }
-          .getOrElse(false) == false
+    if !CommandPaletteProbe.isOpen(beforeOpen)
     then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
-        case _                                     => None
-    } shouldBe Some(expectedCommandName)
+    CommandPaletteProbe.selectedCommandName(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(
+      expectedCommandName
+    )
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   private def markdownEditorState(mode: MarkdownViewMode): AppState =

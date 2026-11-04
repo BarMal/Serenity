@@ -52,7 +52,8 @@ final private[manager] class StateManagerOperationBoundary private (
     announceClosedDocuments: (AppState, AppState) => IO[Unit],
     forgetClosedBuffers: (AppState, AppState) => IO[Unit],
     announceModeChange: (AppState, AppState) => IO[Unit],
-    autoSave: Ref[IO, BufferId => IO[Unit]]
+    autoSave: Ref[IO, BufferId => IO[Unit]],
+    runnerOpened: Ref[IO, (SurfaceId, AppState) => IO[Unit]]
 ):
   private val ShutdownGracePeriod = 5.seconds
 
@@ -108,6 +109,9 @@ final private[manager] class StateManagerOperationBoundary private (
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
       scheduleAutoSaveIfDue(fallbackState, committedState) >>
+      CommandRunnerOpening
+        .openedBy(fallbackState, committedState)
+        .traverse_(surfaceId => runnerOpened.get.flatMap(_(surfaceId, fallbackState))) >>
       announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
@@ -352,6 +356,12 @@ final private[manager] class StateManagerOperationBoundary private (
   def installAutoSave(save: BufferId => IO[Unit]): IO[Unit] =
     autoSave.set(save)
 
+  /** Installs what reads the preset list and probes the project for a command picker or settings view a commit has just
+    * opened, however it was opened (#1911, #2577): built with the event pipeline, which is made after this boundary.
+    */
+  def installRunnerOpenedLoads(load: (SurfaceId, AppState) => IO[Unit]): IO[Unit] =
+    runnerOpened.set(load)
+
   private def scheduleAutoSaveIfDue(before: AppState, after: AppState): IO[Unit] =
     val config = after.persisted.config.autoSaveConfig
     config.mode match
@@ -569,6 +579,7 @@ private[manager] object StateManagerOperationBoundary:
       commitObserver    <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
       commitsUnobserved <- Ref.of[IO, Boolean](false)
       autoSave          <- Ref.of[IO, BufferId => IO[Unit]](_ => IO.unit)
+      runnerOpened      <- Ref.of[IO, (SurfaceId, AppState) => IO[Unit]]((_, _) => IO.unit)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       modelRef,
@@ -596,5 +607,6 @@ private[manager] object StateManagerOperationBoundary:
       announceClosedDocuments,
       forgetClosedBuffers,
       announceModeChange,
-      autoSave
+      autoSave,
+      runnerOpened
     )
