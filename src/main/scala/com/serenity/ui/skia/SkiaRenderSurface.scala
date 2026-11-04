@@ -155,6 +155,8 @@ final class SkiaRenderSurface(
     val scale = alphaRef.get()
     if scale == OpaqueAlpha then argb else (((argb >>> 24) * scale / OpaqueAlpha) << 24) | (argb & 0x00ffffff)
 
+  private def argbOf(color: RenderColor): Int = blended(paintColor(color).getRGB)
+
   private def filled(color: Color): Paint =
     fill.setBlendMode(BlendMode.SRC_OVER)
     fill.setColor(blended(color.getRGB))
@@ -179,14 +181,8 @@ final class SkiaRenderSurface(
   private def recordText(xPx: Double, yPx: Double, widthPx: Double, lineHeightPx: Int): Unit =
     recordPaint(xPx - lineHeightPx, yPx - lineHeightPx / 4.0, widthPx + 2.0 * lineHeightPx, lineHeightPx * 1.5)
 
-  private lazy val roundedOutlines = SkiaRoundedOutlines(
-    this,
-    canvas,
-    metrics,
-    color => blended(paintColor(color).getRGB),
-    recordPaint(_, _, _, _, _),
-    userClipDepth
-  )
+  private lazy val roundedOutlines =
+    SkiaRoundedOutlines(this, canvas, metrics, argbOf, recordPaint(_, _, _, _, _), userClipDepth)
 
   private def restoreTo(saveCount: Int): Unit =
     val _ = canvas.restoreToCount(saveCount)
@@ -418,7 +414,7 @@ final class SkiaRenderSurface(
     val inset = math.ceil(strokeWidth / 2).toInt
     painted.touched(px, py, pw, ph)
     stroke.setBlendMode(BlendMode.SRC_OVER)
-    stroke.setColor(blended(paintColor(color).getRGB))
+    stroke.setColor(argbOf(color))
     stroke.setStrokeWidth(strokeWidth)
     paintRect(
       rect((px + inset).toFloat, (py + inset).toFloat, (pw - 2 * inset).toFloat, (ph - 2 * inset).toFloat),
