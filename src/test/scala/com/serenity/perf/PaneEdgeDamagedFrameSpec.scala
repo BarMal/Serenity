@@ -107,6 +107,17 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
         cursorVisible = false
       )
 
+      if sys.props.contains("serenity.diag") then
+        val beforeCold = LaptopFrameBenchmarks.renderedFrame(
+          before,
+          RenderCaches.create(),
+          LaptopFrameBenchmarks.frameImage(),
+          cursorVisible = false
+        )
+        println(s"DIAG scenario ${scenario.name}")
+        (60 to 130).foreach { row =>
+          println(f"DIAG col42 y=$row%3d before=${argb(beforeCold, 42, row)} cold=${argb(cold, 42, row)} drawn=${argb(drawn, 42, row)}")
+        }
       val differing = differingPixels(drawn, cold)
       val clue      = if differing.isEmpty then "" else diagnosis(drawn, cold, differing, damage)
       withClue(clue)(differing shouldBe empty)

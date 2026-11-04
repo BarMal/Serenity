@@ -186,6 +186,10 @@ object RendererFramePlanner:
     PanelLayers.forgetStale(state, panels, context.surface, context.caches)
     val chrome     = framePlan.map(_.chrome).getOrElse(ChromeRepaint.Whole)
     val keptOff    = PreservedPixels.of(context, framePlan)
+    if sys.props.contains("serenity.diag") then
+      framePlan.foreach { plan =>
+        System.err.println(s"DIAG plan blits=${plan.blits} keptRows=${plan.keptRows} dirty=${plan.dirtyRowsByPane} preserved=${plan.preserved}")
+      }
     val dirtyByRow = keptOff.rowsToPaint(framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty))
     val paintByLayer: Map[LayerId, () => Unit] = Map(
       ChromeLayerId -> { () => keptOff(RendererChromePlan.paint(state, context, editorRenderPlan, chrome)) },
