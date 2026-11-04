@@ -448,7 +448,18 @@ class WorkflowTests(unittest.TestCase):
         self.train = _workflow("merge-train.yml")
 
     def test_steps_are_never_cancelled_so_a_merge_cannot_be_cut_off_half_way(self) -> None:
-        self.assertIn("concurrency:\n  group: merge-train\n  cancel-in-progress: false\n", self.train)
+        self.assertIn("  cancel-in-progress: false\n", self.train)
+        self.assertNotIn("cancel-in-progress: true", self.train)
+
+    def test_runs_the_job_would_skip_do_not_queue_in_the_trains_concurrency_group(self) -> None:
+        # GitHub keeps one pending run per group, so a skipped workflow_run event for a non-train branch would cancel
+        # the pending step that has real work (27 dry-run steps were starved this way).
+        not_a_train = "github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'train/')"
+        self.assertIn(
+            f"group: ${{{{ ({not_a_train}) && format('merge-train-noop-{{0}}', github.run_id) || 'merge-train' }}}}",
+            self.train,
+        )
+        self.assertIn("(github.event_name != 'workflow_run' || startsWith(github.event.workflow_run.head_branch, 'train/'))", self.train)
 
     def test_nothing_runs_unless_the_owner_set_the_mode_variable(self) -> None:
         self.assertIn("vars.MERGE_TRAIN_MODE == 'dry-run' || vars.MERGE_TRAIN_MODE == 'live'", self.train)
