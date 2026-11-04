@@ -62,8 +62,13 @@ final case class DirectoryTreeData(
     entries: Map[Path, List[DirEntry]] = Map.empty,
     loading: Set[Path] = Set.empty,
     stale: Set[Path] = Set.empty,
-    failed: Map[Path, String] = Map.empty
+    failed: Map[Path, String] = Map.empty,
+    rootCollapsed: Boolean = false
 ):
+
+  /** The folders shown open: the expanded ones, and the root unless it was folded away. */
+  def shownExpanded: Set[Path] =
+    if rootCollapsed then expandedPaths - rootPath else expandedPaths + rootPath
 
   /** Built and flattened once per tree value. Moving the selection or repainting reuses the same tree, so only what
     * makes a new one -- expanding, collapsing or a new listing -- pays for flattening again.
@@ -71,11 +76,11 @@ final case class DirectoryTreeData(
   private lazy val nodes: Vector[TreeNode[Path, DirectoryTreeNode]] =
     Vector(DirectoryTreeData.node(this, rootPath, DirectoryTreeData.nameOf(rootPath), isDirectory = true))
   private lazy val treeRows: Vector[TreeRow[Path, DirectoryTreeNode]] =
-    TreeView.flatten(nodes, expandedPaths + rootPath)
+    TreeView.flatten(nodes, shownExpanded)
   private lazy val flattenedRows: Vector[DirectoryTreeRow] = treeRows.map(DirectoryTreeData.rowOf(this, _))
 
   def awaitingListing: Set[Path] =
-    (expandedPaths + rootPath).filter(path =>
+    shownExpanded.filter(path =>
       (!entries.contains(path) || stale.contains(path)) && !loading.contains(path) && !failed.contains(path)
     )
 
@@ -153,7 +158,7 @@ object DirectoryTreeData:
     val selected = selectedPath.map(path => rows.indexWhere(_.node.key == path)).filter(_ >= 0)
     TreeView(
       tree.nodes,
-      tree.expandedPaths + tree.rootPath,
+      tree.shownExpanded,
       SelectableList(
         rows,
         selected,

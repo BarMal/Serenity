@@ -15,7 +15,8 @@ private[perf] object FindReplaceBenchmarks:
 
   /** Runs just these benchmarks, which need no window: `sbt "Test/runMain com.serenity.perf.FindReplaceBenchmarks"`. */
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   private def resultSetBenchmarks(): List[BenchmarkRunner.Benchmark] =
     val frequentTermDocument = Rope("the " * 500_000)
