@@ -162,6 +162,20 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "viewport_height_max" -> "50"
     )
 
+  "A config file naming the removed viewport width and height shares" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "window.viewport.width_percent"  -> "80",
+      "window.viewport.height_percent" -> "90"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "viewport.width.percent"  -> "80",
+      "viewport_width_percent"  -> "80",
+      "viewport.height.percent" -> "90",
+      "viewport_height_percent" -> "90"
+    )
+
   // ---- the motion and animation settings -------------------------------------------------------------------------
 
   private val motionFamilies = List(
