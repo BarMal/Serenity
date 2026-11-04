@@ -334,6 +334,11 @@ jobs:
             for side in "$first" "$second"; do
               if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
               bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/$side-$pair.csv"
+              if [ "$side" = head ] && [ ! -s "perf-runs/head-$pair.csv" ]; then
+                echo "::error::No benchmark output from the head commit's run $pair -- it did not build or the suite failed; stopping before the remaining passes. Raw output:"
+                tail -n 60 "perf-runs/head-$pair.csv.raw"
+                exit 1
+              fi
             done
           done
 
