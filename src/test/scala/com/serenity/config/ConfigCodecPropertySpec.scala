@@ -5,7 +5,6 @@ import java.nio.file.Files
 import com.serenity.TestTemp
 import com.serenity.testkit.ConfigGenerators
 import com.typesafe.config.ConfigFactory
-import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatestplus.scalacheck.ScalaCheckPropertyChecks
@@ -104,8 +103,20 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
         case other => List(path -> other)
     walk("", config).toMap
 
+  /** `count` generated configs. The generator discards some draws, so each is retried; a draw that never comes fails
+    * the test, because an empty sample would pass the check below without examining a single field.
+    */
+  private def sampledConfigs(count: Int, attemptsPerConfig: Int = 50): List[AppConfig] =
+    List.fill(count) {
+      Iterator
+        .continually(ConfigGenerators.genAppConfig.sample)
+        .take(attemptsPerConfig)
+        .collectFirst { case Some(config) => config }
+        .getOrElse(fail(s"the configuration generator gave nothing in $attemptsPerConfig attempts"))
+    }
+
   "the configuration generator" should "vary every field, so the properties below cover all of them" in {
-    val samples = Gen.listOfN(40, ConfigGenerators.genAppConfig).sample.getOrElse(Nil).map(leafValues)
+    val samples = sampledConfigs(40).map(leafValues)
     val paths   = samples.flatMap(_.keySet).distinct
     val constant = paths
       .filterNot(notVaried.contains)
