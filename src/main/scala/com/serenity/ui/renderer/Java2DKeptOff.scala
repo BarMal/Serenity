@@ -29,6 +29,8 @@ private[renderer] trait Java2DKeptOff extends PanelOutlineDrawing:
   protected def awayFromKept(left: Int, top: Int, right: Int, bottom: Int)(draw: => Unit): Unit =
     val margin = (bottom - top).max(1) / 2
     val near   = PreservedPixels.near(keptRects.get, left, top, right, bottom, margin)
+    if sys.props.contains("serenity.diag") && top <= 47 && bottom >= 46 && left <= 22 && right >= 20 then
+      System.err.println(s"DIAG draw box=($left,$top,$right,$bottom) margin=$margin kept=${keptRects.get.size} near=$near clip=${clipGraphics.getClip} transform=${clipGraphics.getTransform}")
     if near.isEmpty then draw
     else
       val reach = PixelRect(left - margin, top - margin, right - left + 2 * margin, bottom - top + 2 * margin)
