@@ -429,6 +429,17 @@ final private[manager] class StateManagerConfigEffects(
           val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
           editor.commitState(newState, current)
         }
+      case GeneralSettingsIntent.OpenSettingsAt(groupId, itemId, query) =>
+        currentState.flatMap { current =>
+          val newState = CommandRunnerReducer.openSettingsAt(
+            current,
+            CommandRegistry.withToggleUI,
+            groupId,
+            itemId,
+            query
+          )(using balance)
+          editor.commitState(newState, current)
+        }
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>
