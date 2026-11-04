@@ -104,10 +104,9 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
     run.commits shouldBe 1
   }
 
-  /** The placements of the viewports in the snapshots a run of `keys` records mid-run, and the buffer's after it. */
-  private def snapshotPlacements(config: AppConfig): (Vector[ViewportPlacement], Option[ViewportPlacement]) =
+  it should "leave the snapshot such a key records holding a viewport that waits for the caret" in {
     val program = for
-      (stateManager, bufferId) <- editor(config)
+      (stateManager, bufferId) <- editor
       before                   <- stateManager.getModel
       run                      <- typedAsOneBatch(stateManager)
       model                    <- stateManager.getModel
@@ -120,21 +119,8 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
       .filterNot(alreadyRecorded.contains)
       .collect { case edit: HistoryEntry.BufferEdit => edit }
     recordedMidRun should not be empty
-    (
-      recordedMidRun.map(_.snapshot.viewport.placement).distinct,
-      model.app.persisted.buffers.get(bufferId).map(_.viewport.placement)
-    )
-
-  // #2570: a run is placed once at its end only where placement reads the caret alone, as typewriter centring does;
-  // without typewriter scrolling each key is placed as it lands (`ViewportResolution.placedPerKey`), so its snapshots
-  // hold a placed viewport rather than one waiting for the caret. Neither holds the run's stale, unplaced one.
-  it should "leave the snapshot such a key records holding a viewport that waits for the caret" in {
-    snapshotPlacements(smartPunctuation.withTypewriterScrolling(true)) shouldBe
-      ((Vector(ViewportPlacement.FollowCaret), Some(ViewportPlacement.Placed)))
-  }
-
-  it should "leave the snapshot holding a placed viewport where each key is placed as it lands" in {
-    snapshotPlacements(smartPunctuation) shouldBe ((Vector(ViewportPlacement.Placed), Some(ViewportPlacement.Placed)))
+    recordedMidRun.map(_.snapshot.viewport.placement).distinct shouldBe Vector(ViewportPlacement.FollowCaret)
+    model.app.persisted.buffers.get(bufferId).map(_.viewport.placement) shouldBe Some(ViewportPlacement.Placed)
   }
 
   it should "commit a centred, placed viewport once it settles" in {

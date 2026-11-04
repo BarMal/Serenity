@@ -6,10 +6,10 @@ import com.serenity.ui.layout.WrappedLineCache
 /** Splits `CursorViewport.ensureVisibleCursors` into the cheap half that records a caret move and the measuring half
   * that places the viewport against it, so a run of moves can be recorded one at a time and placed once.
   *
-  * Placing a run once at its end gives the answer placing after each move would only where placement reads the caret,
-  * the content, the viewport size and the config alone -- typewriter centring and column paging. Without typewriter
-  * scrolling the view keeps where it was until the caret nears an edge, so [[placedPerKey]] places those after each
-  * key.
+  * A run placed once at its end rests where placing after each move would only where placement reads the caret, the
+  * content, the viewport size and the config alone -- typewriter centring and column paging. Without typewriter
+  * scrolling the view keeps where it was until the caret nears an edge, so a run can rest a little differently from the
+  * same keys placed one at a time; placing each key would re-wrap the edited paragraph once per key (#1879).
   */
 object ViewportResolution:
 
@@ -34,16 +34,6 @@ object ViewportResolution:
     replacingBuffers(state) { (_, buffer) =>
       Option.when(buffer.viewport.placement == ViewportPlacement.FollowCaret)(placed(state, buffer, wrapCache))
     }
-
-  /** `state` with its waiting viewports placed now when placement depends on where the view already is: with typewriter
-    * scrolling off, a caret on screen moves the view only past the edge margins, so a run of keys placed once from
-    * where it started can rest elsewhere than the same keys placed one at a time (#2570). Centring and column paging
-    * place from the caret alone, so a run of them is still placed once, at its end.
-    */
-  def placedPerKey(state: AppState, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
-    val surfaceConfig = state.persisted.config.surfaceConfig
-    val columnMode    = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-    if surfaceConfig.typewriterScrollingEnabled || columnMode then state else resolve(state, wrapCache)
 
   private def placed(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): Buffer =
     val viewport = buffer.editing.cursorPositions.headOption.fold(buffer.viewport) { cursor =>
