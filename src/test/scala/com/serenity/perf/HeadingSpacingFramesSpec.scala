@@ -11,6 +11,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
@@ -143,11 +144,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
   private def differing(window: Window, drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages) { frames =>
       val cold = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
-      for
-        x <- 0 until drawn.getWidth
-        y <- 0 until drawn.getHeight
-        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-      yield (x, y)
+      FrameDiff.differing(drawn, cold)
     }
 
   private def summary(d: Seq[(Int, Int)]): String =
