@@ -209,7 +209,9 @@ object ConfigFileFormat:
         "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
     ),
     field("typography.fallback.families"),
-    comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or unlimited (off means the same)"),
+    comment(
+      "Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or unlimited (off means the same)"
+    ),
     field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
