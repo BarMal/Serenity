@@ -66,6 +66,8 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
   private val bothRenderers: Set[String] = Set(
     "FrameBackend.scala",
+    "perf/LaptopFrameBenchmarks.scala",
+    "perf/PersistingFramesBackendSpec.scala",
     "perf/SkiaFrameBenchmarks.scala",
     "ui/renderer/Java2DRunPaintSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",

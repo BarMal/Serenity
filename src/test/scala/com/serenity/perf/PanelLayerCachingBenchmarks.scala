@@ -1,9 +1,7 @@
 package com.serenity.perf
 
-import java.awt.image.BufferedImage
-
 import cats.effect.unsafe.IORuntime
-import com.serenity.DockedPanelFixtures
+import com.serenity.{DockedPanelFixtures, FramePixels}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.manager.StateManagerTestFacade.updateState
@@ -63,6 +61,6 @@ private[perf] object PanelLayerCachingBenchmarks:
     private val remaining = Iterator.continually(steps).flatten
     private val _         = steps.headOption.foreach((state, _) => frames.render(state, Damage.Everything))
 
-    def next(): BufferedImage =
+    def next(): FramePixels =
       val (state, damage) = remaining.next()
       frames.render(state, damage)

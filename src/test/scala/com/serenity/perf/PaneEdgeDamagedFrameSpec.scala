@@ -68,7 +68,7 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
         cursorVisible = false
       )
 
-      val differing = differingPixels(drawn, cold)
+      val differing = differingPixels(drawn.toImage, cold)
       withClue(s"${differing.size} pixels differ, in device columns ${differing.map(_._1).distinct.sorted}: ")(
         differing shouldBe empty
       )

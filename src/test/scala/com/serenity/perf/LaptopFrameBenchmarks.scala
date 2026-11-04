@@ -38,7 +38,16 @@ import com.serenity.ui.renderer.{
   ScreenIdentity
 }
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{DockedPanelFixtures, TestTemp, setBufferForPane, setCursorPosition}
+import com.serenity.{
+  DockedPanelFixtures,
+  FrameBackend,
+  FramePixels,
+  Java2DFrames,
+  SkiaFrames,
+  TestTemp,
+  setBufferForPane,
+  setCursorPosition
+}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
 
@@ -128,6 +137,10 @@ private[perf] object LaptopFrameBenchmarks:
     val row = image.getHeight / 2
     (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
+  private[perf] def hasPixels(frame: FramePixels): Boolean =
+    val row = frame.heightPx / 2
+    (0 until frame.widthPx).exists(x => frame.rgbAt(x, row) != frame.rgbAt(0, row))
+
   /** The laptop-sized window [[presentBenchmark]] paints into. */
   def presentWindowResource(metrics: CellMetrics, chromeMetrics: CellMetrics): Resource[IO, SwingWindow] =
     SwingWindow.resource(
@@ -137,8 +150,13 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   def benchmarks(presentWindow: SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    renderBenchmarks ++ interactionBenchmarks ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
-      List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
+    val rendering   = renderBenchmarks
+    val transitions = interactionTransitions
+    rendering ++ interactionBenchmarks(
+      transitions
+    ) ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+      List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow)) ++
+      skiaInteractionBenchmarks(transitions)
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
     val caches     = RenderCaches.create()
@@ -398,17 +416,19 @@ private[perf] object LaptopFrameBenchmarks:
   private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
   private val uiMetrics = CellMetrics.fromFont(uiFont)
 
-  /** A window's frame loop over one persisting image: one screen, and every frame told what the transition into it
-    * damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept. Like the
-    * app's base frames it leaves the caret out; the window fills carets over the presented frame.
+  /** A window's frame loop over one persisting image of `backend`: one screen, and every frame told what the transition
+    * into it damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept.
+    * Like the app's base frames it leaves the caret out; the window fills carets over the presented frame.
     */
   final private[perf] class PersistingFrames(
       codeFont: Font = LaptopFrameBenchmarks.codeFont,
       textFont: Font = LaptopFrameBenchmarks.textFont,
       cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
-      viewport: ViewportSize = LaptopFrameBenchmarks.viewport
+      viewport: ViewportSize = LaptopFrameBenchmarks.viewport,
+      backend: FrameBackend = Java2DFrames
   ):
-    private val image  = frameImage()
+    private val frame =
+      backend.newFrame(math.ceil(LogicalWidthPx * DeviceScale).toInt, math.ceil(LogicalHeightPx * DeviceScale).toInt)
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
@@ -421,19 +441,17 @@ private[perf] object LaptopFrameBenchmarks:
       try work
       finally caches.frameCounters.setEnabled(false)
 
-    def render(state: AppState, damage: Damage): BufferedImage =
-      val surface = new Java2DRenderSurface(
-        image,
+    def render(state: AppState, damage: Damage): FramePixels =
+      val surface = backend.surfaceOver(
+        frame,
         cellMetrics,
         codeFont,
-        _ => (),
-        logicalWidthPx = LogicalWidthPx,
-        logicalHeightPx = LogicalHeightPx,
-        deviceScaleX = DeviceScale,
-        deviceScaleY = DeviceScale,
-        contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
+        LogicalWidthPx,
+        LogicalHeightPx,
+        DeviceScale,
+        persists = true,
+        caches,
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -451,21 +469,27 @@ private[perf] object LaptopFrameBenchmarks:
         damage,
         caches = caches
       )
-      image
+      frame
 
-  /** One step of a transition and back again, each frame carrying the damage `DamageProducer` reports for its step --
-    * computed once up front, so the benchmark times the frame alone.
+  /** One step of a transition and back again, each frame carrying the damage `damageOf` reports for its step --
+    * computed once up front, so the benchmark times the frame alone. `damageOf` is `DamageProducer.forTransition`
+    * except where a spec shows that [[verify]] catches damage that is wrong.
     */
-  final private class AlternatingTransition(before: AppState, after: AppState):
-    private val frames   = PersistingFrames()
-    private val forward  = DamageProducer.forTransition(before, after)
-    private val backward = DamageProducer.forTransition(after, before)
+  final private[perf] class AlternatingTransition(
+      backend: FrameBackend,
+      before: AppState,
+      after: AppState,
+      damageOf: (AppState, AppState) => Damage = DamageProducer.forTransition
+  ):
+    private val frames   = PersistingFrames(backend = backend)
+    private val forward  = damageOf(before, after)
+    private val backward = damageOf(after, before)
     private val steps    = Iterator.continually(List(after -> forward, before -> backward)).flatten
     val _                = frames.render(before, Damage.Everything)
 
     def forwardDamage: Damage = forward
 
-    def nextFrame(): BufferedImage =
+    def nextFrame(): FramePixels =
       val (state, damage) = steps.next()
       frames.render(state, damage)
 
@@ -478,7 +502,7 @@ private[perf] object LaptopFrameBenchmarks:
       List(after, before).foreach { expected =>
         val (drawn, counts) = frames.counting((nextFrame(), frames.lastFrame))
         val diff =
-          differingPixels(drawn, renderedFrame(expected, RenderCaches.create(), frameImage(), cursorVisible = false))
+          differingPixels(drawn, LaptopColdFrames.of(backend, expected, RenderCaches.create(), cursorVisible = false))
         assert(
           diff.isEmpty,
           s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
@@ -491,45 +515,80 @@ private[perf] object LaptopFrameBenchmarks:
       }
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
-  private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
-    val width   = a.getWidth
-    val pixelsA = a.getRGB(0, 0, width, a.getHeight, null, 0, width)
-    val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
+  private def differingPixels(a: FramePixels, b: FramePixels): IndexedSeq[(Int, Int)] =
+    val width   = a.widthPx
+    val pixelsA = a.rgbPixels
+    val pixelsB = b.rgbPixels
     pixelsA.indices.filter(index => pixelsA(index) != pixelsB(index)).map(index => (index % width, index / width))
 
   /** Typing and wheel-scrolling as a session at this size meets them. The states come from a live `StateManager` (see
     * [[proseStateManager]]), so the damage is what the app itself reports for the step. Typing alternates one inserted
     * letter with its removal, so the edited row's wrapped layout is served from cache, unlike a real new keystroke.
     */
-  private def interactionBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
+  final private[perf] case class InteractionTransitions(
+      beforeTyping: AppState,
+      afterTyping: AppState,
+      afterScroll: AppState
+  )
+
+  private def interactionTransitions(using IORuntime): InteractionTransitions =
     val (stateManager, _)           = proseStateManager()
-    def current: AppState           = stateManager.getCurrentState.unsafeRunSync()
     val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
     stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
-    val afterScroll = current
-    val typing      = AlternatingTransition(beforeTyping, afterTyping)
-    val scroll      = AlternatingTransition(afterTyping, afterScroll)
+    InteractionTransitions(beforeTyping, afterTyping, stateManager.getCurrentState.unsafeRunSync())
+
+  private def typingFrameRow(name: String, transition: => AlternatingTransition): BenchmarkRunner.Benchmark =
+    lazy val typing = transition
+    BenchmarkRunner.Benchmark(
+      name,
+      2,
+      12,
+      () =>
+        assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
+        typing.verify("typing", MaxTypingRowsDrawn)
+      ,
+      () => typing.nextFrame()
+    )
+
+  private def scrollFrameRow(name: String, transition: => AlternatingTransition): BenchmarkRunner.Benchmark =
+    lazy val scroll = transition
+    BenchmarkRunner.Benchmark(
+      name,
+      2,
+      12,
+      () =>
+        assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
+        scroll.verify("scroll", MaxScrollRowsDrawn)
+      ,
+      () => scroll.nextFrame()
+    )
+
+  /** The two frames above on Skia's CPU raster surface, with the same states, the same damage and the same check before
+    * timing (the row caps and pixel equality with a frame drawn from scratch, here by Skia). They are named under
+    * `skia.`, which `scripts/perf-gate-excluded-rows.txt` keeps off the per-PR gate: Skia is the default renderer, and
+    * the nightly ABBA judges these rows. The other `laptop.render.*` rows differ from these only in their fixtures (a
+    * panel, columns, a gutter, a ligature font), so they have no Skia twin here.
+    *
+    * Each draws its first frame, and so first uses Skia, when its check runs rather than when the suite is built, so
+    * the Java2D rows are timed in a JVM that has not drawn with Skia.
+    */
+  private[perf] def skiaInteractionBenchmarks(
+    transitions: InteractionTransitions,
+    backend: FrameBackend = SkiaFrames
+  ): List[BenchmarkRunner.Benchmark] =
+    val InteractionTransitions(beforeTyping, afterTyping, afterScroll) = transitions
     List(
-      BenchmarkRunner.Benchmark(
-        "laptop.render.typing_frame_2x",
-        2,
-        12,
-        () =>
-          assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          typing.verify("typing", MaxTypingRowsDrawn)
-        ,
-        () => typing.nextFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "laptop.render.scroll_frame_2x",
-        2,
-        12,
-        () =>
-          assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          scroll.verify("scroll", MaxScrollRowsDrawn)
-        ,
-        () => scroll.nextFrame()
-      ),
+      typingFrameRow("skia.laptop.render.typing_frame_2x", AlternatingTransition(backend, beforeTyping, afterTyping)),
+      scrollFrameRow("skia.laptop.render.scroll_frame_2x", AlternatingTransition(backend, afterTyping, afterScroll))
+    )
+
+  private[perf] def interactionBenchmarks(transitions: InteractionTransitions): List[BenchmarkRunner.Benchmark] =
+    val InteractionTransitions(beforeTyping, afterTyping, afterScroll) = transitions
+    val typing = AlternatingTransition(Java2DFrames, beforeTyping, afterTyping)
+    val scroll = AlternatingTransition(Java2DFrames, afterTyping, afterScroll)
+    List(
+      typingFrameRow("laptop.render.typing_frame_2x", typing),
+      scrollFrameRow("laptop.render.scroll_frame_2x", scroll),
       BenchmarkRunner.Benchmark(
         "laptop.damage.typing_transition",
         3,
