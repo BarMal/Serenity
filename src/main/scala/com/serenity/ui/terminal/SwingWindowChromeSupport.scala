@@ -21,7 +21,11 @@ private[terminal] trait SwingWindowChromeSupport:
       minWidth: Int,
       minHeight: Int,
       titleFontSize: Int
-  )
+  ):
+    def controlFont: Font       = new Font(Font.SANS_SERIF, Font.PLAIN, titleFontSize)
+    def buttonSize: Dimension   = new Dimension(buttonWidth, titleBarHeight)
+    def spacerSize: Dimension   = new Dimension(3 * buttonWidth, titleBarHeight)
+    def titleBarSize: Dimension = new Dimension(0, titleBarHeight)
 
   object ChromeMetrics:
     private val BaseTitleBarHeight = 32
