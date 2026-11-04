@@ -2,6 +2,9 @@ package com.serenity.perf
 
 import java.awt.image.BufferedImage
 
+import com.serenity.ui.layout.{CellMetrics, LayoutRect}
+import com.serenity.ui.renderer.EditorPaneRenderPlan
+
 /** What a failing pixel comparison saw around its first differing pixel: each frame's brightness there (0 dark to 9
   * light), side by side, so a log says whether the damaged frame is missing ink or keeps stale ink.
   */
@@ -25,4 +28,32 @@ private[perf] object FrameDifferencePicture:
         f"$y%5d  $left  $right  $marks"
       }
       s"$label: first difference at ($cx,$cy); drawn | cold | differing\n${rows.mkString("\n")}"
+    }
+
+  /** Every rect of the plan's layout contract and pane layouts, in device pixels, that touches the first differing
+    * pixel: which element of the frame the difference belongs to.
+    */
+  def elementsAt(
+    plan: Option[EditorPaneRenderPlan],
+    cells: CellMetrics,
+    deviceScale: Double,
+    differences: Seq[(Int, Int)]
+  ): String =
+    (for
+      (cx, cy)  <- differences.headOption.toList
+      framePlan <- plan.toList
+      (name, rect) <- namedRects("contract", framePlan.layoutContract) ++
+        framePlan.paneLayouts.toList.flatMap((id, layout) => namedRects(s"pane ${id.value}", layout))
+      left   = (rect.x * cells.charWidth * deviceScale).toInt
+      top    = (rect.y * cells.lineHeight * deviceScale).toInt
+      right  = ((rect.x + rect.width) * cells.charWidth * deviceScale).toInt
+      bottom = ((rect.y + rect.height) * cells.lineHeight * deviceScale).toInt
+      if cx >= left - Reach && cx < right + Reach && cy >= top - Reach && cy < bottom + Reach
+    yield s"  $name: x $left-$right, y $top-$bottom").mkString("\nelements around the first difference:\n", "\n", "")
+
+  private def namedRects(prefix: String, owner: Product): List[(String, LayoutRect)] =
+    owner.productElementNames.zip(owner.productIterator).toList.flatMap {
+      case (name, rect: LayoutRect)       => List(s"$prefix.$name" -> rect)
+      case (name, Some(rect: LayoutRect)) => List(s"$prefix.$name" -> rect)
+      case _                              => Nil
     }

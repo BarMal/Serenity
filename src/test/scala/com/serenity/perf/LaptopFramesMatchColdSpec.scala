@@ -10,7 +10,7 @@ import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -36,6 +36,8 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     private val caches = RenderCaches.create()
     private val screen = ScreenIdentity(this)
 
+    val lastPlan = new AtomicReference[Option[EditorPaneRenderPlan]](None)
+
     def render(state: AppState, damage: Damage): BufferedImage =
       val surface = SkiaFrames.surfaceOver(
         frame,
@@ -48,32 +50,46 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
         caches,
         Some(screen)
       )
-      val _ = RendererFramePlanner.renderFrame(
-        state,
-        cursorVisible = false,
-        surface,
-        viewport,
-        caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
-        codeFont,
-        textFont,
-        uiFont,
-        cellMetrics,
-        uiMetrics,
-        None,
-        Some(FrameOutput(screen, new AtomicReference(None))),
-        damage,
-        caches = caches
+      lastPlan.set(
+        RendererFramePlanner.renderFrame(
+          state,
+          cursorVisible = false,
+          surface,
+          viewport,
+          caches.authoritativeScene.forState(state, viewport, codeFont, textFont),
+          codeFont,
+          textFont,
+          uiFont,
+          cellMetrics,
+          uiMetrics,
+          None,
+          Some(FrameOutput(screen, new AtomicReference(None))),
+          damage,
+          caches = caches
+        )
       )
       frame.toImage
 
-  private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
+  private def differing(
+    drawn: BufferedImage,
+    state: AppState,
+    plan: Option[EditorPaneRenderPlan]
+  ): Seq[(Int, Int)] =
     val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
     val diffs = for
       x <- 0 until drawn.getWidth
       y <- 0 until drawn.getHeight
       if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
     yield (x, y)
-    if diffs.nonEmpty then println(FrameDifferencePicture.of("damaged frame vs cold", drawn, cold, diffs))
+    if diffs.nonEmpty then
+      println(
+        FrameDifferencePicture.of("damaged frame vs cold", drawn, cold, diffs) + FrameDifferencePicture.elementsAt(
+          plan,
+          cellMetrics,
+          LaptopFrameBenchmarks.DeviceScale,
+          diffs
+        )
+      )
     diffs
 
   private def summary(differences: Seq[(Int, Int)]): String =
@@ -97,8 +113,9 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
   private def differencesThrough(before: AppState, after: AppState): (Seq[(Int, Int)], Seq[(Int, Int)]) =
     val frames = PersistingImage()
     val _      = frames.render(before, Damage.Everything)
-    val there  = differing(frames.render(after, DamageProducer.forTransition(before, after)), after)
-    val back   = differing(frames.render(before, DamageProducer.forTransition(after, before)), before)
+    val there = differing(frames.render(after, DamageProducer.forTransition(before, after)), after, frames.lastPlan.get)
+    val back =
+      differing(frames.render(before, DamageProducer.forTransition(after, before)), before, frames.lastPlan.get)
     (there, back)
 
   "A typing frame at the laptop's size" should "equal a frame drawn from scratch, there and back" in {
