@@ -22,6 +22,8 @@ cd bench-<sha> && cat MANIFEST.txt
 
 `ref` may be any branch, tag or SHA, including commits from before the workflow existed: the Test-jar settings live in `bench/ci/perf-assembly.sbt` and are copied into the checkout only for that run. Artifact zips lose the executable bit, so call scripts through `bash` (or `chmod +x bench/*.sh`). Run every command below from the unpacked directory. `<sha>` in the artifact name is the first 7 characters of the commit; the run uploads only this artifact, so `gh run download <run-id>` without `-n` fetches it too.
 
+`bench-artifacts.yml` also runs nightly on master. `bench/pull_nightly.py` downloads the newest of those bundles on a timer, runs the machine's benchmarks and compares with the previous night: see `docs/nightly-bench-pull.md`.
+
 ## Running the laptop benchmark
 
 It launches the jar with an isolated `-Duser.home`, so your real `~/.serenity` is never touched, then drives a fixed xdotool input script against a 300-paragraph lorem document. Segments: settle 10s, 400 characters at 10/s, a 200-character burst, 20x PageDown and PageUp, 30 wheel steps, 50x Down and Up. It collects the `[FRAME]` timing lines (`ui.render.frame_timing`) and reports the median p50 and p95 per phase over 3 runs.
