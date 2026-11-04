@@ -29,8 +29,8 @@ class AppModeSwitchCommandsSpec extends AnyFlatSpec with Matchers:
 
   "Mode switch commands" should "be registered in every registry, labelled and set to the mode they name" in {
     for
-      (registryName, registry)  <- registries
-      (id, label, mode)         <- modes
+      (registryName, registry) <- registries
+      (id, label, mode)        <- modes
     do
       withClue(s"$registryName / $id: ") {
         val command = registry.findCommand(id)
@@ -51,7 +51,7 @@ class AppModeSwitchCommandsSpec extends AnyFlatSpec with Matchers:
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager        = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     def appMode             = stateManager.getCurrentState.unsafeRunSync().persisted.config.appMode
-    def run(id: String)     =
+    def run(id: String) =
       stateManager.executeCommand(CommandRegistry.withToggleUI.findCommand(id).get).unsafeRunSync()
 
     run("switch-to-prose-mode")
