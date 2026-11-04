@@ -241,8 +241,17 @@ private[manager] object MouseHitTesting:
     */
   def editorClick(click: MouseClick, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
     target.fold(EditorContextMenuHitTesting.dismissIfOpen) { (paneId, buffer, clickedCursor) =>
-      Transition.modify(applyEditorClick(_, click, paneId, buffer.id, clickedCursor))
+      Transition.modify(state =>
+        typewriterCentred(applyEditorClick(state, click, paneId, buffer.id, clickedCursor), buffer.id)
+      )
     }
+
+  /** Typewriter scrolling brings a clicked line to the pane's middle (#2570). Only the click does: a press or a drag
+    * moving the view would slide the text out from under the pointer mid-selection.
+    */
+  private def typewriterCentred(state: AppState, bufferId: BufferId): AppState =
+    if state.persisted.config.surfaceConfig.typewriterScrollingEnabled then CursorViewport.placed(state, bufferId)
+    else state
 
   /** A press moves the cursor (a shift-press extends the selection), so a following drag selects from there. */
   def editorPress(press: MousePress, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
