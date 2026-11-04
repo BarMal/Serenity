@@ -189,7 +189,8 @@ final private[manager] class StateManagerEventPipeline(
     MouseHitTestingPort(
       currentState = modelCommit.currentState,
       applyReducerResult = applyReducerResult,
-      authoritativeScene = state.authoritativeScene
+      authoritativeScene = state.authoritativeScene,
+      wrapCache = wrappedLines
     ),
     editorMouseTargeting,
     editorContextMenuHitTesting,

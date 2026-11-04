@@ -6,6 +6,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{HiddenMarkerCaret, ReducerResult, Transition}
+import com.serenity.ui.layout.WrappedLineCache
 
 /** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
@@ -14,7 +15,8 @@ import com.serenity.state.reducers.{HiddenMarkerCaret, ReducerResult, Transition
 final private[manager] case class MouseHitTestingPort(
     currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit],
-    authoritativeScene: AuthoritativeUiScene
+    authoritativeScene: AuthoritativeUiScene,
+    wrapCache: WrappedLineCache
 )
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
@@ -74,7 +76,9 @@ final private[manager] class MouseHitTesting(
                                         case false =>
                                           editorTargeting
                                             .resolveMouseTarget(click, state)
-                                            .flatMap(target => commit(MouseHitTesting.editorClick(click, target)))
+                                            .flatMap(target =>
+                                              commit(MouseHitTesting.editorClick(click, target, port.wrapCache))
+                                            )
                                       }
                                   }
                             }
@@ -239,18 +243,23 @@ private[manager] object MouseHitTesting:
   /** A click on an editor target moves the cursor there (a double/triple click selects the word/line, a shift-click
     * extends the selection) and dismisses any open context menu; a click on no editor target only dismisses the menu.
     */
-  def editorClick(click: MouseClick, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+  def editorClick(
+    click: MouseClick,
+    target: Option[(PaneId, Buffer, CursorPosition)],
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): Transition[Unit] =
     target.fold(EditorContextMenuHitTesting.dismissIfOpen) { (paneId, buffer, clickedCursor) =>
       Transition.modify(state =>
-        typewriterCentred(applyEditorClick(state, click, paneId, buffer.id, clickedCursor), buffer.id)
+        typewriterCentred(applyEditorClick(state, click, paneId, buffer.id, clickedCursor), buffer.id, wrapCache)
       )
     }
 
   /** Typewriter scrolling brings a clicked line to the pane's middle (#2570). Only the click does: a press or a drag
     * moving the view would slide the text out from under the pointer mid-selection.
     */
-  private def typewriterCentred(state: AppState, bufferId: BufferId): AppState =
-    if state.persisted.config.surfaceConfig.typewriterScrollingEnabled then CursorViewport.placed(state, bufferId)
+  private def typewriterCentred(state: AppState, bufferId: BufferId, wrapCache: WrappedLineCache): AppState =
+    if state.persisted.config.surfaceConfig.typewriterScrollingEnabled then
+      CursorViewport.placed(state, bufferId, wrapCache)
     else state
 
   /** A press moves the cursor (a shift-press extends the selection), so a following drag selects from there. */
