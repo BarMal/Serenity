@@ -26,20 +26,30 @@ object CommandRunnerReducer:
     * that state is otherwise owned.
     */
   def openSettings(state: AppState, registry: CommandRegistry)(using com.serenity.rope.Balance): AppState =
-    val opened = AppEventReducer.reduce(com.serenity.keystroke.events.ToggleCommandRunner, state, registry).state
-    opened.commandRunnerSurface match
-      case Some(surface) =>
-        surface.content match
-          case SurfaceContent.CommandPalette(runner) =>
-            opened.copy(runtime =
-              opened.runtime.copy(uiSurfaces =
-                opened.runtime.uiSurfaces.replacedWhere(_.id == surface.id)(
-                  _.copy(content = SurfaceContent.CommandPalette(runner.openSettings))
-                )
-              )
-            )
-          case _ => opened
-      case None => opened
+    withRunnerOpen(state, registry)(_.openSettings)
+
+  /** Opens the settings view drilled to `groupId` (and `itemId` in it) as found by searching `query` -- where picking
+    * that settings hit from the command picker lands (#2577).
+    */
+  def openSettingsAt(
+    state: AppState,
+    registry: CommandRegistry,
+    groupId: String,
+    itemId: Option[String],
+    query: String
+  )(using
+    com.serenity.rope.Balance
+  ): AppState =
+    withRunnerOpen(state, registry)(_.openSettingsAt(groupId, itemId, query)(using registry))
+
+  /** An already active runner is reused: toggling it would close it. */
+  private def withRunnerOpen(state: AppState, registry: CommandRegistry)(update: CommandRunner => CommandRunner)(using
+    com.serenity.rope.Balance
+  ): AppState =
+    val opened =
+      if currentRunner(state).exists(_.isActive) then state
+      else AppEventReducer.reduce(com.serenity.keystroke.events.ToggleCommandRunner, state, registry).state
+    replaceRunner(opened, update)
 
   private def reduceActive(event: CommandRunnerEvent, state: AppState, registry: CommandRegistry): ReducerResult =
     event match

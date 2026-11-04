@@ -26,7 +26,8 @@ trait StateManagerTestSupport:
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
-    fileDialog: Option[FileDialog] = None
+    fileDialog: Option[FileDialog] = None,
+    initialConfig: AppConfig = ChromeOn.config
   ): IO[StateManager] =
     IO.blocking(TestTemp.directory(s"${loggerName.toLowerCase}-state-manager"))
       .flatMap(root =>
@@ -35,7 +36,7 @@ trait StateManagerTestSupport:
           onFontConfigChanged = onFontConfigChanged,
           deviceTextScaleProvider = deviceTextScaleProvider,
           sessionRootOverride = Some(root),
-          initialConfig = ChromeOn.config,
+          initialConfig = initialConfig,
           fileDialog = fileDialog,
           dictionaryCache = SharedDictionary.default
         )
@@ -45,9 +46,11 @@ trait StateManagerTestSupport:
     loggerName: String,
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
-    fileDialog: Option[FileDialog] = None
+    fileDialog: Option[FileDialog] = None,
+    initialConfig: AppConfig = ChromeOn.config
   ): StateManager =
-    createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog).unsafeRunSync()
+    createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog, initialConfig)
+      .unsafeRunSync()
 
   /** A state manager in prose mode, for specs exercising prose-only tooling (rich text, the formatting toolbar). */
   protected def createProseStateManager(loggerName: String): StateManager =
