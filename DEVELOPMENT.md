@@ -329,30 +329,45 @@ The renderer and the toolkit are settled together before any AWT class loads, so
 
 #### Skia on NixOS
 
-Skiko's native library links against system libraries (`libGL.so.1` first among them). NixOS has no global library
-directory, so the dynamic loader cannot find them and the native probe fails with an `UnsatisfiedLinkError`. The window
-then paints with Java2D. The start page says so, naming the missing library, and the log carries the same cause:
-`[RENDER] backend=java2d reason=native probe failed: UnsatisfiedLinkError: ...libskiko-linux-x64.so: libGL.so.1: cannot open shared object file...`.
-Setting `ui.render.backend = java2d` ends the notice.
+Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
+cannot find them. The native probe then fails and the window paints with Java2D. The start page says so, naming the
+missing library, and the log carries the failure:
+`[RENDER] backend=java2d reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
+(Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
+`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads. Setting `ui.render.backend = java2d` ends the
+notice.
 
 The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
-set it for itself. From a `nix-shell`:
-
-```bash
-nix-shell -p libGL xorg.libX11 xorg.libXext xorg.libXrender xorg.libXtst xorg.libXi fontconfig freetype \
-  --run 'export LD_LIBRARY_PATH="$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
-```
-
-To see what is still missing on a given machine, list the unresolved libraries of the extracted native (Skiko unpacks it
-into `~/.skiko/` on first load) and add each one's package:
+set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:
 
 ```bash
 ldd ~/.skiko/*/libskiko-linux-x64.so | grep 'not found'
 ```
 
-Caution, here be imagine dragons: the package list above is to be confirmed from the laptop diagnostic. Only `libGL.so.1`
-is recorded as missing (#2465, with "libGL/libX11/etc." added to `LD_LIBRARY_PATH`), and the command has not been run on
-NixOS. On Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the same path (#2479).
+On the Intel laptop (NixOS, Hyprland, Wayland session, Java 21.0.12 from nixpkgs, #2570) it listed `libGL.so.1`,
+`libX11.so.6`, `libfontconfig.so.1` and `libstdc++.so.6`. With these directories on `LD_LIBRARY_PATH` the same jar chose
+Skia and the layer reported `renderApi=OPENGL`:
+
+| Directory | Package (nixpkgs) | Provides |
+| --- | --- | --- |
+| `/run/opengl-driver/lib` | the system graphics driver (`hardware.graphics`) | `libGL.so.1` |
+| `libx11`, `libxext`, `libxrender`, `libxtst`, `libxi` | same names | `libX11.so.6` and the X11 libraries |
+| `libglvnd` | `libglvnd` | the GL dispatch libraries |
+| `fontconfig.lib` | `fontconfig` (`lib` output) | `libfontconfig.so.1` |
+| `gcc.cc.lib` | `gcc` (`lib` output) | `libstdc++.so.6` |
+
+Caution, here be imagine dragons: that set is confirmed to work together, but `ldd` flagged only the four libraries
+above. Which of `libxext`, `libxrender`, `libxtst`, `libxi` and `libglvnd` are needed on their own was not tested. The
+`nix-shell` line below is assembled from that set and has not been run as written:
+
+```bash
+nix-shell -p libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib gcc.cc.lib \
+  --run 'export LD_LIBRARY_PATH="/run/opengl-driver/lib:$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
+```
+
+This section describes the JDK the laptop happened to run (21.0.12). The JDK this document expects is Temurin 25 (see
+"Java version and launch options"); the diagnostic did not test Skia on 25. On Wayland, the JetBrains Runtime's native
+toolkit needs its own libraries on the same path (#2479).
 
 #### Comparing the renderers
 
