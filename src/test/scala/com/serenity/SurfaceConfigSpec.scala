@@ -149,7 +149,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceConfig" should "leave every surface setting's key to ConfigRegistry" in {
     ConfigRegistry.allKeys.should(contain("editor.contextual_toolbar_mode"))
-    ConfigRegistry.allKeys.should(contain("window.viewport.height_max"))
+    ConfigRegistry.allKeys.should(contain("window.viewport.height_percent"))
   }
 
   it should "group appearance and text display settings under AppConfig" in {

@@ -56,31 +56,24 @@ object TextAreaInsets:
   def clamp(value: Double): Double =
     value.max(0.0).min(MaxInset)
 
-/** Relative plus optional bounded sizing for one viewport axis. */
-final case class ViewportAxisSizing(
-    percent: Double = 1.0,
-    maxCells: Option[Int] = None
-):
+/** Relative sizing for one viewport axis. */
+final case class ViewportAxisSizing(percent: Double = 1.0):
 
   def normalized: ViewportAxisSizing =
-    copy(
-      percent = ViewportAxisSizing.clampPercent(percent),
-      maxCells = maxCells.map(_.max(1))
-    )
+    copy(percent = ViewportAxisSizing.clampPercent(percent))
 
   def percentValue: Double =
     normalized.percent * 100.0
 
   def resolve(availableCells: Int): Int =
-    val relativeCells = math.max(1, (availableCells.max(1) * normalized.percent).toInt)
-    normalized.maxCells.fold(relativeCells)(maxCells => math.min(relativeCells, maxCells))
+    math.max(1, (availableCells.max(1) * normalized.percent).toInt)
 
 object ViewportAxisSizing:
   val MinPercent: Double = 0.01
   val MaxPercent: Double = 1.0
 
-  def fromPercent(percent: Double, maxCells: Option[Int] = None): ViewportAxisSizing =
-    ViewportAxisSizing(percent / 100.0, maxCells).normalized
+  def fromPercent(percent: Double): ViewportAxisSizing =
+    ViewportAxisSizing(percent / 100.0).normalized
 
   def clampPercent(value: Double): Double =
     value.max(MinPercent).min(MaxPercent)

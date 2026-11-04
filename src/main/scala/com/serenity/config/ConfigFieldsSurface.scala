@@ -78,13 +78,6 @@ private[config] object ConfigFieldsSurface:
           config.surfaceConfig.viewportSizing.width.copy(percent = fractionOfPercent(value))
         )
     ),
-    named("window.viewport.width_max", "viewportWidthMax", "viewport.width.max", "viewport_width_max")(
-      int.filtered(_ >= 1).orEmpty
-    )(
-      _.surfaceConfig.viewportSizing.width.maxCells,
-      (config, value) =>
-        config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = value))
-    ),
     named(
       "window.viewport.height_percent",
       "viewportHeightPercent",
@@ -96,12 +89,5 @@ private[config] object ConfigFieldsSurface:
         config.withViewportHeightSizing(
           config.surfaceConfig.viewportSizing.height.copy(percent = fractionOfPercent(value))
         )
-    ),
-    named("window.viewport.height_max", "viewportHeightMax", "viewport.height.max", "viewport_height_max")(
-      int.filtered(_ >= 1).orEmpty
-    )(
-      _.surfaceConfig.viewportSizing.height.maxCells,
-      (config, value) =>
-        config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(maxCells = value))
     )
   )

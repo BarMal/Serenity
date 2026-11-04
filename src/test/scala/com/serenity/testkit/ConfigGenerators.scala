@@ -331,10 +331,7 @@ object ConfigGenerators:
     yield LineNumberLayout(side, marginLeft, marginRight, padding)
 
   val genViewportAxisSizing: Gen[ViewportAxisSizing] =
-    for
-      percent <- double(ViewportAxisSizing.MinPercent, ViewportAxisSizing.MaxPercent)
-      max     <- Gen.option(Gen.choose(1, 500))
-    yield ViewportAxisSizing(percent, max)
+    double(ViewportAxisSizing.MinPercent, ViewportAxisSizing.MaxPercent).map(ViewportAxisSizing(_))
 
   /** Surface settings that are independent of one another, constructed directly. */
   val genSurfaceConfig: Gen[SurfaceConfig] =

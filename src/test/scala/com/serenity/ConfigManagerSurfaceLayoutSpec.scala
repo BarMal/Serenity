@@ -381,7 +381,6 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
       configFile,
       """editor.text_area.left = 60
         |window.viewport.width_percent = 0
-        |window.viewport.height_max = 0
         |""".stripMargin
     )
 
@@ -389,7 +388,6 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     result.report.invalidEntries.map(_.key) should contain("editor.text_area.left")
     result.report.invalidEntries.map(_.key) should contain("window.viewport.width_percent")
-    result.report.invalidEntries.map(_.key) should contain("window.viewport.height_max")
   }
 
   it should "load and write viewport sizing policy" in {
@@ -397,20 +395,14 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     Files.writeString(
       configFile,
       """window.viewport.width_percent = 80
-        |window.viewport.width_max =
         |window.viewport.height_percent = 100
-        |window.viewport.height_max = 50
         |""".stripMargin
     )
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
     config.surfaceConfig.viewportSizing.width.percent shouldBe 0.8
-    config.surfaceConfig.viewportSizing.width.maxCells shouldBe None
     config.surfaceConfig.viewportSizing.height.percent shouldBe 1.0
-    config.surfaceConfig.viewportSizing.height.maxCells shouldBe Some(50)
     ConfigManager.configToString(config) should include("window.viewport.width_percent = 80.0")
-    ConfigManager.configToString(config) should include("window.viewport.width_max = ")
     ConfigManager.configToString(config) should include("window.viewport.height_percent = 100.0")
-    ConfigManager.configToString(config) should include("window.viewport.height_max = 50")
   }

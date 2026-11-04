@@ -159,8 +159,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
 
   it should "keep editor viewport dimensions matched to the available pane area" in {
     val viewportSizing = ViewportSizing(
-      width = ViewportAxisSizing(percent = 0.8, maxCells = None),
-      height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
+      width = ViewportAxisSizing(percent = 0.8),
+      height = ViewportAxisSizing(percent = 1.0)
     )
     val initialState = com.serenity.state.models.AppState
       .initial(AppConfig.conventional)

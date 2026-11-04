@@ -367,8 +367,8 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
       .withViewportSizing(
         ViewportSizing(
-          width = ViewportAxisSizing.fromPercent(80.0, Some(120)),
-          height = ViewportAxisSizing.fromPercent(90.0, Some(40))
+          width = ViewportAxisSizing.fromPercent(80.0),
+          height = ViewportAxisSizing.fromPercent(90.0)
         )
       )
 
