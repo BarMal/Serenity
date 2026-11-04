@@ -40,3 +40,16 @@ private[renderer] trait Java2DKeptOff extends PanelOutlineDrawing:
           clipGraphics.setClip(saved)
         }
       finally clipGraphics.setClip(saved)
+
+  /** The sprite is blitted through a graphics context of its own, which the surface's clip does not reach: the clip
+    * that keeps a draw off kept pixels is a rectangle, and it is handed on in device pixels.
+    */
+  protected def clippedLikeSurface(device: Graphics2D): Unit =
+    Option(clipGraphics.getClipBounds).foreach { bounds =>
+      val transform = clipGraphics.getTransform
+      val left      = math.floor(bounds.x * transform.getScaleX + transform.getTranslateX).toInt
+      val top       = math.floor(bounds.y * transform.getScaleY + transform.getTranslateY).toInt
+      val right     = math.ceil((bounds.x + bounds.width) * transform.getScaleX + transform.getTranslateX).toInt
+      val bottom    = math.ceil((bounds.y + bounds.height) * transform.getScaleY + transform.getTranslateY).toInt
+      device.clipRect(left, top, right - left, bottom - top)
+    }

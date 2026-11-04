@@ -309,6 +309,23 @@ private[renderer] object RendererChromePlan:
       band <- RendererGutter.keptRowBands(state, context, record.snapshot, rect, rows)
     yield band
 
+  /** The counter pixels a repainted line number must not paint on: the top of each kept row below a repainted one. */
+  def guardedGutterBands(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord],
+    repaint: ChromeRepaint
+  ): List[PixelRect] =
+    val contract = renderPlan.layoutContract
+    for
+      paneId <- state.persisted.layout.activeEditorPaneId.toList
+      record <- panes.get(paneId).toList
+      if state.chrome.lineNumbers
+      rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
+      band <- RendererGutter.spillGuardBands(state, context, record.snapshot, rect, repaint.lineNumberRows)
+    yield band
+
   def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
     val leftPx = cellMetrics.toPixelX(rect.x)
     val topPx  = cellMetrics.toPixelY(rect.y)

@@ -12,7 +12,7 @@ final case class FramePlan(
     preserved: List[PixelRect],
     repaintRegion: Option[List[PixelRect]],
     keptPanels: Set[SurfaceId] = Set.empty,
-    keptRows: List[PixelRect] = Nil
+    keptBands: List[PixelRect] = Nil
 )
 
 /** Decides what a frame actually has to (re)draw and paints the resulting layer stack: the row-level reuse plan
@@ -397,6 +397,7 @@ object RendererFramePlanner:
               .map(RendererChromePlan.withBleed(context))
         }
         val preserved = keptRows ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome)
+        val keptBands = keptRows ++ RendererChromePlan.guardedGutterBands(state, context, renderPlan, panes, chrome)
 
         val blits = redraws.values.flatMap(_.blits).toList
         val keptPanels =
@@ -452,7 +453,7 @@ object RendererFramePlanner:
           chrome = chrome,
           blits = blits,
           preserved = preserved ++ keptPanels.toList.flatMap(panels.sites.get).map(_.painted),
-          keptRows = keptRows,
+          keptBands = keptBands,
           repaintRegion = repaintRegion,
           keptPanels = keptPanels
         )

@@ -29,7 +29,7 @@ object PreservedPixels:
   def of(context: RenderContext, framePlan: Option[FramePlan]): PreservedPixels =
     new PreservedPixels(
       context,
-      joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptRows)),
+      joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptBands)),
       framePlan.exists(_.blits.nonEmpty)
     )
 

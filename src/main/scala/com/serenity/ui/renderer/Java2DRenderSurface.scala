@@ -245,6 +245,7 @@ class Java2DRenderSurface(
     try
       device.setComposite(g.getComposite)
       device.clipRect(0, 0, cellGridWidthPx * anchor.scaleX, cellGridHeightPx * anchor.scaleY)
+      clippedLikeSurface(device)
       val _ = device.drawImage(
         sprite.image,
         anchor.deviceX - sprite.originX,
