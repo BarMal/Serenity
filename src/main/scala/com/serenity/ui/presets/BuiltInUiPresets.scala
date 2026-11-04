@@ -25,7 +25,10 @@ private[presets] object BuiltInUiPresets:
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
         .withStatusLine(
-          StatusLineConfig(List(StatusSegment.WordCount, StatusSegment.WordGoal), StatusLinePlacement.Floating)
+          StatusLineConfig(
+            List(StatusSegment.WordCount, StatusSegment.WordGoal, StatusSegment.Mode),
+            StatusLinePlacement.Floating
+          )
         )
         .withPaneHeaders(false)
         .withDefaultDocumentMode(DefaultDocumentMode.RichText)
