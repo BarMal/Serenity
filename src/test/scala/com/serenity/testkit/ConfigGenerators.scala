@@ -306,10 +306,12 @@ object ConfigGenerators:
       codeEscape  <- oneOfEnum(PanelEscapeTarget.values)
       proseEscape <- oneOfEnum(PanelEscapeTarget.values)
       summon      <- genSummonConfig
+      explorer    <- oneOfEnum(ExplorerOpenMode.values)
     yield InputConfig(
       wheelScrollLines = lines,
       panelEscapeReturnsTo = PerMode(codeEscape, proseEscape),
-      summon = summon
+      summon = summon,
+      explorerOpenMode = explorer
     )
 
   val genTextAreaInsets: Gen[TextAreaInsets] =
