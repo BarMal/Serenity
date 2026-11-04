@@ -3,6 +3,7 @@ package com.serenity.diagnostics
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicReference
 
+import scala.annotation.tailrec
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -19,8 +20,13 @@ class ShutdownWatchdogSpec extends AnyFlatSpec with Matchers:
 
   private def awaitTrue(within: FiniteDuration)(condition: => Boolean): Boolean =
     val deadline = System.nanoTime() + within.toNanos
-    while !condition && System.nanoTime() < deadline do Thread.sleep(20)
-    condition
+    @tailrec def poll(): Boolean =
+      if condition then true
+      else if System.nanoTime() >= deadline then condition
+      else
+        Thread.sleep(20)
+        poll()
+    poll()
 
   "The shutdown bounds" should "be the owner's: 10 s for the hook, with the dump 2 s before it, at 8 s" in {
     ShutdownWatchdog.HookTimeout shouldBe 10.seconds

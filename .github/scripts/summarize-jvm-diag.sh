@@ -43,6 +43,45 @@ if [ -f "$pause_log" ]; then
   echo "|---:|---|---|---|"
   head -n 10 "$pauses" | awk -F '\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }'
   rm -f "$pauses"
+
+  echo
+  # Heap sizes in the "before->after(capacity)" token of each collection, in MB. A collection that leaves most of the
+  # capacity occupied is what makes the next one a Full GC.
+  awk '
+    function mb(text,   value, unit) {
+      value = text + 0
+      unit = substr(text, length(text), 1)
+      if (unit == "K") return value / 1024
+      if (unit == "G") return value * 1024
+      return value
+    }
+    /\[gc *\]/ && / Pause / && $NF ~ /ms$/ {
+      full = index($0, " Pause Full") > 0
+      ms = $NF
+      sub(/ms$/, "", ms)
+      if (full) { fulls++; fullMs += ms }
+      for (i = 1; i <= NF; i++) if (index($i, "->") > 0 && index($i, "(") > 0) {
+        token = $i
+        arrow = index(token, "->")
+        open = index(token, "(")
+        after = mb(substr(token, arrow + 2, open - arrow - 2))
+        capacity = mb(substr(token, open + 1, length(token) - open - 1))
+        seen++
+        if (seen == 1 || after < smallest) smallest = after
+        if (seen == 1 || after > largest) largest = after
+        if (capacity > top) top = capacity
+        if (full && (fullAfter == "" || after > fullAfter)) fullAfter = after
+        break
+      }
+    }
+    END {
+      printf "Full GCs: %d, %.3f ms in total.\n", fulls, fullMs
+      if (seen > 0) printf "Heap after a collection: smallest %d MB, largest %d MB, capacity %d MB.\n", smallest, largest, top
+      else print "Heap after a collection: none logged."
+      if (fulls > 0 && fullAfter != "") printf "Heap after a Full GC: %d MB.\n", fullAfter
+      else print "Heap after a Full GC: none logged."
+    }
+  ' "$pause_log"
 else
   echo "No $pause_log."
 fi

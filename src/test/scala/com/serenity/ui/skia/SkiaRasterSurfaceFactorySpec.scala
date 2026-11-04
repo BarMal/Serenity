@@ -10,6 +10,7 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FrameSurfaceRequest, RenderSurface}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
+import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,7 +40,8 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
       FrameSurfaceRequest(
         CellMetrics(8, 16, 12),
         new Font(Font.MONOSPACED, Font.PLAIN, 12),
-        canvas,
+        SwingCanvasGeometry.of(canvas),
+        SwingPresentationSite(canvas),
         image =>
           pool.publish(image)
           shown.set(Some(image))

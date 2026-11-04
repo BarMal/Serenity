@@ -41,7 +41,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/GuiCellGridColdFrameSpec.scala",
     "perf/GuiCellGridSelectionSpec.scala",
     "perf/LaptopFrameBenchmarks.scala",
-    "perf/NullRenderSurface.scala",
     "perf/OracleImages.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
     "perf/PanelLayerGeometrySpec.scala",
@@ -60,6 +59,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/StyledFontCacheSpec.scala",
     "ui/renderer/SurfaceActivitySpec.scala",
+    "ui/skia/LayerSurfaceFactorySiteSpec.scala",
     "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
   )
 

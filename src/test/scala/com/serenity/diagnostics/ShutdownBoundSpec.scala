@@ -63,7 +63,9 @@ class ShutdownBoundSpec extends AnyFlatSpec with Matchers:
 
   "A JVM told to terminate while a release hangs" should "dump the threads and exit within the hook bound" in {
     assume(posix, "Process.destroy ends a Windows process without running its shutdown hooks")
-    val run = runChild("signal", _.destroy())
+    // `Process.destroy` sends SIGTERM and then closes this side of the child's pipes, which loses the dump the child
+    // prints a second later. The handle's `destroy` sends the same signal and leaves the pipes open.
+    val run = runChild("signal", _.toHandle.destroy())
 
     withClue(run.output.mkString("\n")) {
       run.exitCode should not be empty

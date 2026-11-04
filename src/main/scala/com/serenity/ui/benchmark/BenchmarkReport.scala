@@ -31,7 +31,7 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       s"Frames to present: each time rounded up to whole refreshes; missed is the samples that took more than one. $refreshLine",
       "",
       framesHeader
-    ) ++ results.map(framesRow) ++ List("", verdictText))
+    ) ++ results.map(framesRow) ++ shapingLines ++ List("", verdictText))
       .mkString("\n") + "\n"
 
   def json: String =
@@ -71,13 +71,77 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
       (arm, split) => split.map(coldSplitLine(arm, _))
     }
     val agreement = environment.fallbackAgreement.map(agreementLine)
-    val sync      = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
+    val notTimed = environment.notTimed.toList
+      .sortBy(_._1.ordinal)
+      .map((scenario, reason) => s"Not timed: ${scenario.label} ($reason).")
+    val sync = environment.skiaDraws.map(stats => s"Skia layer: GPU sync: ${stats.gpuSyncNote}.")
     val pictures = environment.skiaDraws.map { stats =>
       f"Skia layer pictures: ${stats.pictureOpsMean}%.0f ops, ${stats.pictureBytesMean / 1024}%.1f KB on average."
     }
-    (List(startup).flatten ++ List(sceneBuildLine) ++ List(skiaScale, layers, draws, carets, cold).flatten ++ splits ++
+    (List(startup).flatten ++ List(sceneBuildLine) ++
+      List(drawnLine, canvasLine, skiaScale, layers, draws, carets, cold).flatten ++ splits ++ notTimed ++
       List(agreement, sync, pictures).flatten)
       .map(line => s"\n$line")
+
+  private def drawnLine: Option[String] =
+    Option.when(environment.drawnWindows.nonEmpty) {
+      val asked = WindowPx(environment.widthPx, environment.heightPx)
+      if environment.drawnWindows.forall(_._2 == asked) then s"Window drawn at ${size(asked)}, as asked."
+      else
+        val drawn = environment.drawnWindows.map((arm, drawnSize) => s"${size(drawnSize)} ($arm)").mkString(", ")
+        s"Window asked for ${size(asked)} and drawn at $drawn. Every row below was drawn at that size, since the window manager decided the size."
+    }
+
+  private def canvasLine: Option[String] =
+    Option.when(environment.drawnCanvases.nonEmpty) {
+      val canvases = environment.drawnCanvases.map((arm, px) => s"${size(px)} device pixels ($arm)").mkString(", ")
+      s"Canvas drawn at $canvases."
+    }
+
+  private def size(window: WindowPx): String = s"${window.width}x${window.height}"
+
+  private def hasShapeTraffic: Boolean =
+    environment.java2dShapeTraffic.nonEmpty || environment.skiaShapeTraffic.nonEmpty
+
+  private def shapingLines: List[String] =
+    if !hasShapeTraffic then Nil
+    else
+      List(
+        "",
+        "Shaping per frame: the stretches a frame had to shape as it drew, and those it found in the older generation of " +
+          "the shaped-text cache (a promotion). Counted on each backend's draw path, in the frames timed above.",
+        "",
+        "| Scenario | Java2D shapings avg | max | Skia shapings avg | max | Skia promotions avg | max |",
+        "|---|---:|---:|---:|---:|---:|---:|"
+      ) ++ results.map(_.scenario).flatMap(shapingRow)
+
+  private def shapingRow(scenario: Scenario): Option[String] =
+    val java2d = environment.java2dShapeTraffic.get(scenario)
+    val skia   = environment.skiaShapeTraffic.get(scenario)
+    Option.when(java2d.isDefined || skia.isDefined) {
+      val java2dCells = java2d.fold("| - | -")(t => f"| ${t.shapingsMean}%.2f | ${t.shapingsMax}")
+      val skiaCells =
+        skia.fold("| - | - | - | -")(t =>
+          f"| ${t.shapingsMean}%.2f | ${t.shapingsMax} | ${t.promotionsMean}%.2f | ${t.promotionsMax}"
+        )
+      s"| ${scenario.label} $java2dCells $skiaCells |"
+    }
+
+  private def shapeTrafficJson: Option[Json] =
+    Option.when(hasShapeTraffic) {
+      def arm(traffic: Map[Scenario, ShapingTraffic]): Json =
+        Json.obj(traffic.toList.sortBy(_._1.ordinal).map((scenario, t) => scenario.label -> trafficJson(t))*)
+      Json.obj("java2d" -> arm(environment.java2dShapeTraffic), "skia" -> arm(environment.skiaShapeTraffic))
+    }
+
+  private def trafficJson(traffic: ShapingTraffic): Json =
+    Json.obj(
+      "frames"         -> traffic.frames.asJson,
+      "shapingsMean"   -> traffic.shapingsMean.asJson,
+      "shapingsMax"    -> traffic.shapingsMax.asJson,
+      "promotionsMean" -> traffic.promotionsMean.asJson,
+      "promotionsMax"  -> traffic.promotionsMax.asJson
+    )
 
   private def sceneBuildLine: String =
     if environment.scenesLikeTheApp then
@@ -199,8 +263,29 @@ final case class BenchmarkReport(environment: BenchmarkEnvironment, results: Vec
         environment.skiaDraws.map(stats => "skiaDraws" -> drawsJson(stats)).toList ++
         environment.coldPhases.map(phases => "coldPhases" -> coldPhasesJson(phases)).toList ++
         coldSplitJson.map("coldSplit" -> _).toList ++
+        Option
+          .when(environment.drawnWindows.nonEmpty)(
+            "drawn" -> Json.obj(environment.drawnWindows.map((arm, window) => arm -> windowJson(window))*)
+          )
+          .toList ++
+        Option
+          .when(environment.drawnCanvases.nonEmpty)(
+            "drawnCanvas" -> Json.obj(environment.drawnCanvases.map((arm, window) => arm -> windowJson(window))*)
+          )
+          .toList ++
+        Option
+          .when(environment.notTimed.nonEmpty)(
+            "notTimed" -> Json.obj(
+              environment.notTimed.toList.sortBy(_._1.ordinal).map((s, reason) => s.label -> reason.asJson)*
+            )
+          )
+          .toList ++
+        shapeTrafficJson.map("shapeTraffic" -> _).toList ++
         environment.fallbackAgreement.map(agreement => "fallbackAgreement" -> agreementJson(agreement)).toList*
     )
+
+  private def windowJson(window: WindowPx): Json =
+    Json.obj("width" -> window.width.asJson, "height" -> window.height.asJson)
 
   private def agreementJson(agreement: FallbackAgreement): Json =
     Json.obj(
