@@ -41,11 +41,11 @@ class SessionConcurrentSaveSpec extends AnyFlatSpec with Matchers:
   "Concurrent session saves" should "all succeed rather than losing one to a vanished staged file" in {
     val manager = newManager(TestTemp.directory("session-concurrent-save"))
 
-    val outcomes = (0 until Rounds).toList.flatTraverse { round =>
-      (0 until Writers).toList.parTraverse(writer =>
-        manager.saveSession(stateRecalling(s"r$round-w$writer")).attempt
-      )
-    }.unsafeRunSync()
+    val outcomes = (0 until Rounds).toList
+      .flatTraverse { round =>
+        (0 until Writers).toList.parTraverse(writer => manager.saveSession(stateRecalling(s"r$round-w$writer")).attempt)
+      }
+      .unsafeRunSync()
 
     outcomes.collect { case Left(error) => error.toString } shouldBe Nil
   }
