@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import cats.effect.IO
 import cats.syntax.all.*
 import com.serenity.command.RichTextIntent
+import com.serenity.richtext.HeadingReformat
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalStateReducer, ReducerResult, RichTextReducer, RichTextRoute}
 import com.serenity.ui.layout.PeekContent
@@ -24,13 +25,25 @@ final private[manager] class StateManagerRichTextEffects(
         case RichTextRoute.Apply =>
           val result = RichTextReducer.reduce(intent, current)
           updateModelValidated(withResult(result)) >>
-            result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect)
+            result.effects.filterNot(ModelCommit.isModelEffect).traverse_(interpretEffect) >>
+            reportReformat(intent, current)
         case RichTextRoute.AskToConvert(prompt) =>
           val asked = ModalStateReducer.show(Modal.Confirm(prompt), current).state
           updateModelValidated(model => Some(model.copy(app = asked)))
         case RichTextRoute.Refuse(reason) =>
           showNotice(PeekContent.QuickInfo(reason), current.activeCursorPosition.getOrElse(CursorPosition(0, 0)))
     }
+
+  private def reportReformat(intent: RichTextIntent, before: AppState): IO[Unit] =
+    if intent != RichTextIntent.ReformatHeadings then IO.unit
+    else
+      val report  = RichTextReducer.headingReformatReport(before)
+      val message = if report.isEmpty then "No heading has formatting of its own to remove." else reformatted(report)
+      showNotice(PeekContent.QuickInfo(message), before.activeCursorPosition.getOrElse(CursorPosition(0, 0)))
+
+  private def reformatted(report: HeadingReformat.Report): String =
+    val noun = if report.headings == 1 then "heading" else "headings"
+    s"Reformatted ${report.headings} $noun to the current styles."
 
   private def withResult(result: ReducerResult)(model: Model): Option[Model] =
     Some(ModelCommit.applyModelEffects(model.copy(app = result.state), result.effects))

@@ -80,6 +80,77 @@ class RichTextReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
   }
 
+  private val boldStyle = RichTextStyle(marks = Set(InlineMark.Bold))
+
+  private def importedHeadings: Buffer =
+    val document = RichTextDocument(
+      List(
+        RichTextParagraph(List(RichTextRun("One", boldStyle)), role = ParagraphRole.Heading(1)),
+        RichTextParagraph(List(RichTextRun("Between")), role = ParagraphRole.Body),
+        RichTextParagraph(List(RichTextRun("Two", boldStyle)), role = ParagraphRole.Heading(2))
+      )
+    )
+    val plain = Buffer.fromString(bufferId, document.plainText)
+    plain.copy(richText = plain.richText.withSyncedDocument(Some(document), plain.document.contentVersion))
+
+  private def headingRuns(buffer: Buffer, index: Int): List[RichTextRun] =
+    documentOf(buffer).paragraphAt(index).getOrElse(fail(s"no paragraph $index")).runs
+
+  "Reformatting headings" should "reformat every heading when nothing is selected, as one undo step" in {
+    val state  = stateWith(importedHeadings)
+    val result = RichTextReducer.reduce(RichTextIntent.ReformatHeadings, state)
+    val after  = result.state.persisted.buffers.getOrElse(bufferId, fail("expected the buffer"))
+
+    AppStateValidation.validationErrors(result.state) shouldBe Nil
+    headingRuns(after, 0) shouldBe List(RichTextRun("One"))
+    headingRuns(after, 2) shouldBe List(RichTextRun("Two"))
+    after.document.isDirty shouldBe true
+    val entry = HistoryEntry.BufferEdit(bufferId, paneId, BufferSnapshot.fromBuffer(state.persisted.buffers(bufferId)))
+    result.effects shouldBe List(AppEffect.Undo(UndoEffect.RecordBoundary(entry, EditGrouping.Standalone)))
+  }
+
+  it should "reformat only the headings the selection touches" in {
+    val buffer = importedHeadings.copy(editing =
+      EditingStateFixtures(
+        cursors = List(CursorPosition(0, 3)),
+        selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 3)))
+      )
+    )
+    val after = validReduce(RichTextIntent.ReformatHeadings, stateWith(buffer))
+
+    headingRuns(after, 0) shouldBe List(RichTextRun("One"))
+    headingRuns(after, 2) shouldBe List(RichTextRun("Two", boldStyle))
+  }
+
+  it should "leave the state and the undo history alone when no heading has anything to remove" in {
+    val reformatted = validReduce(RichTextIntent.ReformatHeadings, stateWith(importedHeadings))
+    val state       = stateWith(reformatted)
+    val result      = RichTextReducer.reduce(RichTextIntent.ReformatHeadings, state)
+
+    result.state shouldBe state
+    result.effects shouldBe Nil
+  }
+
+  it should "not be offered in a Markdown file, whose headings take the heading styles already" in {
+    val markdown = Buffer
+      .fromString(bufferId, "# Title")
+      .copy(document = Buffer.fromString(bufferId, "# Title").document.copy(filePath = Some(Paths.get("notes.md"))))
+
+    RichTextReducer.route(RichTextIntent.ReformatHeadings, stateWith(markdown)) should matchPattern {
+      case RichTextRoute.Refuse(_) =>
+    }
+  }
+
+  it should "not be offered in a plain-text file, which has no headings" in {
+    val plainFile = Buffer
+      .fromString(bufferId, "text")
+      .copy(document = Buffer.fromString(bufferId, "text").document.copy(filePath = Some(Paths.get("notes.txt"))))
+
+    RichTextReducer.route(RichTextIntent.ReformatHeadings, stateWith(plainFile)) should matchPattern {
+      case RichTextRoute.Refuse(_) =>
+    }
+  }
+
   it should "not record an undo step when only the pending insertion style changes" in {
     val plain   = Buffer.fromString(bufferId, "hello world")
     val synced  = RichTextDocument.fromPlainText("hello world")

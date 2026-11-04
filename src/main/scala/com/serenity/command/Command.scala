@@ -63,6 +63,9 @@ enum RichTextIntent:
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ConvertToRichText(andThen: Option[RichTextIntent])
 
+  /** Removes the direct formatting headings carry as a whole, so the heading styles show (#2628). */
+  case ReformatHeadings
+
 enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
