@@ -49,6 +49,8 @@ class OffscreenCursorSurfacesConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   "OffscreenCursorSurfaces.fromConfigKey" should "name each choice by its settingKey" in {
-    OffscreenCursorSurfaces.values.toList.map(choice => OffscreenCursorSurfaces.fromConfigKey(choice.configKey)) shouldBe
+    OffscreenCursorSurfaces.values.toList.map(choice =>
+      OffscreenCursorSurfaces.fromConfigKey(choice.configKey)
+    ) shouldBe
       OffscreenCursorSurfaces.values.toList.map(Some(_))
   }

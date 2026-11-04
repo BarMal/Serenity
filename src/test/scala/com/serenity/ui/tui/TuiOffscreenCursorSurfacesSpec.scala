@@ -38,7 +38,7 @@ class TuiOffscreenCursorSurfacesSpec extends TuiSpec:
       .flatMap(_.bufferId)
       .flatMap(current.persisted.buffers.get)
 
-  private def top(current: AppState): Option[Int]                = editorBuffer(current).map(_.viewport.topLine)
+  private def top(current: AppState): Option[Int] = editorBuffer(current).map(_.viewport.topLine)
   private def caret(current: AppState): Option[CursorPosition] =
     editorBuffer(current).flatMap(_.editing.cursorPositions.headOption)
 
@@ -67,7 +67,9 @@ class TuiOffscreenCursorSurfacesSpec extends TuiSpec:
 
   private def shownInside(after: AppState): Unit =
     val (rects, pane) = laidOut(after)
-    after.runtime.uiSurfaces.map(_.presentation).collect { case floating: SurfacePresentation.Floating => floating } should
+    after.runtime.uiSurfaces.map(_.presentation).collect {
+      case floating: SurfacePresentation.Floating => floating
+    } should
       not be empty
     rects should not be empty
     pane.foreach(p => rects.filterNot(inside(_, p)) shouldBe Nil)

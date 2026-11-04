@@ -12,7 +12,11 @@ class GuiOffscreenCursorSurfaceLayoutSpec extends AnyFlatSpec with Matchers with
 
   private def withSurface(state: AppState, placement: SurfacePlacement): AppState =
     val surface =
-      UiSurface(SurfaceId("hover"), SurfaceContent.QuickInfo("hover text"), SurfacePresentation.Floating(None, placement))
+      UiSurface(
+        SurfaceId("hover"),
+        SurfaceContent.QuickInfo("hover text"),
+        SurfacePresentation.Floating(None, placement)
+      )
     state.copy(runtime = state.runtime.copy(uiSurfaces = List(surface), viewportSize = Some(viewport)))
 
   private def laidOut(state: AppState): (List[LayoutRect], LayoutRect) =
@@ -26,7 +30,8 @@ class GuiOffscreenCursorSurfaceLayoutSpec extends AnyFlatSpec with Matchers with
   private val text = codeLines.mkString("\n")
 
   "A below-cursor surface with the caret above the view" should "be laid out at the pane's top, inside it" in {
-    val (rects, pane) = laidOut(withSurface(stateOf(text, CursorPosition(0, 0), topLine = 60), SurfacePlacement.BelowCursor))
+    val (rects, pane) =
+      laidOut(withSurface(stateOf(text, CursorPosition(0, 0), topLine = 60), SurfacePlacement.BelowCursor))
 
     rects should have length 1
     rects.filterNot(inside(_, pane)) shouldBe Nil

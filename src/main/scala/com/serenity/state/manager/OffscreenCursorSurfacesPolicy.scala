@@ -6,8 +6,8 @@ import com.serenity.ui.layout.{LaidOutPanes, LayoutEngine}
 
 /** A surface anchored to the caret that opens with the caret scrolled out of its pane brings the two back together, as
   * `editor.cursor.offscreen_surfaces` says (#2570): the view to the caret, or the caret to the middle of the view.
-  * Applied once, when the surface opens; a surface already open stays clamped inside the pane while the wheel moves
-  * the view, since snapping back on every notch would leave the wheel nothing to do.
+  * Applied once, when the surface opens; a surface already open stays clamped inside the pane while the wheel moves the
+  * view, since snapping back on every notch would leave the wheel nothing to do.
   */
 private[manager] object OffscreenCursorSurfacesPolicy:
 
@@ -18,7 +18,10 @@ private[manager] object OffscreenCursorSurfacesPolicy:
         (for
           size   <- next.runtime.viewportSize
           paneId <- next.persisted.layout.activeEditorPaneId
-          buffer <- next.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId).flatMap(next.persisted.buffers.get)
+          buffer <- next.persisted.layout.editorPanes
+            .get(paneId)
+            .flatMap(_.bufferId)
+            .flatMap(next.persisted.buffers.get)
           cursor <- buffer.editing.cursorPositions.headOption
           panes = LayoutEngine.laidOutPanes(next, LayoutEngine.calculateLayoutWithUI(next, size))
           if panes.screenPosition(paneId, cursor).isEmpty
@@ -35,7 +38,7 @@ private[manager] object OffscreenCursorSurfacesPolicy:
   private def anchoredToCaret(surface: UiSurface): Boolean =
     surface.presentation match
       case SurfacePresentation.Floating(_, SurfacePlacement.BelowCursor | SurfacePlacement.AboveCursor) => true
-      case _                                                                                          => false
+      case _                                                                                            => false
 
   private def revealed(state: AppState, buffer: Buffer, cursor: CursorPosition): AppState =
     val surfaceConfig = state.persisted.config.surfaceConfig

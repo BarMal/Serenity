@@ -56,9 +56,9 @@ final class LaidOutPanes(
       if rowMetrics.lineFits(visualRow)
     yield ScreenPosition(text.gridMetrics.toCol(caret.xPx), text.gridMetrics.toRow(caret.yPx))
 
-  /** Where a surface hangs off `position` in pane `paneId`: the cell it is painted on, or -- when the pane does not draw
-    * it -- the middle of the pane's top row for a position before what the pane shows and of its bottom row for one
-    * after, so a surface is always laid out inside the pane (#2570).
+  /** Where a surface hangs off `position` in pane `paneId`: the cell it is painted on, or -- when the pane does not
+    * draw it -- the middle of the pane's top row for a position before what the pane shows and of its bottom row for
+    * one after, so a surface is always laid out inside the pane (#2570).
     */
   def anchorPosition(paneId: PaneId, position: CursorPosition): Option[ScreenPosition] =
     screenPosition(paneId, position).orElse {
