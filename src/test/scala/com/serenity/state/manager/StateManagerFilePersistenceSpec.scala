@@ -27,6 +27,8 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private val LspHangBound = 20.seconds
+
   final private class RecordingSessionPersistence(triggers: Ref[IO, List[SessionSaveTrigger]], root: Path)
       extends SessionPersistence(
         SessionManager.create(root, AppThemeManager.create, NoOpLogger.impl[IO], SessionManager.SessionPolicy()),
@@ -43,11 +45,18 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
   ):
     def currentState: AppState = stateRef.get.unsafeRunSync()
 
-    /** Drains at most one queued LSP effect, or `None` if nothing arrives within the window -- used both to assert an
-      * expected enqueue and to assert the queue stays empty.
+    /** The next queued LSP effect, waiting for it as long as the hang bound; a save has finished enqueuing before it
+      * returns, so on a working build this does not wait at all.
       */
-    def nextLspEffect(within: FiniteDuration = 500.millis): Option[LspEffect] =
-      lspQueue.stream.take(1).compile.last.timeout(within).handleError(_ => None).unsafeRunSync()
+    def nextLspEffect(): LspEffect =
+      lspQueue.stream.take(1).compile.lastOrError.timeout(LspHangBound).unsafeRunSync()
+
+    /** Everything queued so far, found by queueing [[LspEffect.ReleaseAll]] behind it: the queue is FIFO, so the
+      * sentinel arriving says nothing else is ahead of it, with no window to guess at.
+      */
+    def queuedLspEffects(): List[LspEffect] =
+      (lspQueue.enqueue(LspEffect.ReleaseAll) >>
+        lspQueue.stream.takeWhile(_ != LspEffect.ReleaseAll).compile.toList.timeout(LspHangBound)).unsafeRunSync()
 
   private def harness(initialState: AppState): Harness =
     val modelRefVar        = ModelViews.modelOf(initialState).unsafeRunSync()
@@ -239,8 +248,8 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
     h.persistence.saveBufferAs(bufferId, newPath).unsafeRunSync()
 
     h.nextLspEffect() match
-      case Some(LspEffect.FileOpened(uri, LanguageId.Rust, _)) => uri should include(newPath.getFileName.toString)
-      case other                                               => fail(s"expected a FileOpened effect, got $other")
+      case LspEffect.FileOpened(uri, LanguageId.Rust, _) => uri should include(newPath.getFileName.toString)
+      case other                                         => fail(s"expected a FileOpened effect, got $other")
   }
 
   it should "enqueue nothing when the app is not in Code mode" in {
@@ -256,5 +265,5 @@ class StateManagerFilePersistenceSpec extends AnyFlatSpec with Matchers:
 
     h.persistence.saveBufferAs(bufferId, newPath).unsafeRunSync()
 
-    h.nextLspEffect() shouldBe None
+    h.queuedLspEffects() shouldBe Nil
   }

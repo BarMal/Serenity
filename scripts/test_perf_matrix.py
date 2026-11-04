@@ -85,5 +85,27 @@ class PerfMatrixTests(unittest.TestCase):
         self.assertGreaterEqual(int(match.group(1)), 75)
 
 
+class PerfRunStepTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        job = _perf_job(_CI.read_text())
+        start = job.index("- name: Run performance benchmarks on base and head")
+        end = job.index("- name: Check for a performance regression")
+        cls.run_step = job[start:end]
+
+    def test_a_head_run_with_no_rows_stops_the_job_before_the_next_pass(self) -> None:
+        loop_end = self.run_step.index("\n            done\n          done")
+        check = self.run_step.index('[ ! -s "perf-runs/head-$pair.csv" ]')
+        self.assertLess(self.run_step.index("run-perf-benchmark.sh"), check)
+        self.assertLess(check, loop_end)
+
+    def test_the_stop_is_a_red_error_that_shows_the_raw_output(self) -> None:
+        check = self.run_step[self.run_step.index('[ ! -s "perf-runs/head-$pair.csv" ]'):]
+        block = check[: check.index("fi")]
+        self.assertIn("::error::", block)
+        self.assertIn('tail -n 60 "perf-runs/head-$pair.csv.raw"', block)
+        self.assertIn("exit 1", block)
+
+
 if __name__ == "__main__":
     unittest.main()
