@@ -294,6 +294,21 @@ final case class CommandRunner(
   def updateSettingsSearch(term: String)(using registry: CommandRegistry): CommandRunner =
     updateSearchTerm(term)
 
+  /** The settings view searched for `query`, drilled into the hit for `groupId` (and `itemId` in it) the way picking
+    * that hit does; just the searched root when the query no longer finds it.
+    */
+  def openSettingsAt(groupId: String, itemId: Option[String], query: String)(using CommandRegistry): CommandRunner =
+    val searched = openSettings.updateSettingsSearch(query)
+    val isTarget: CommandSurfaceItem => Boolean = {
+      case setting: CommandSurfaceItem.SettingSearchItem =>
+        setting.targetGroupId == groupId && itemId.contains(setting.targetItemId)
+      case group: CommandSurfaceItem.GroupItem => group.id == groupId && itemId.isEmpty
+      case _                                   => false
+    }
+    searched.visibleItems.indexWhere(isTarget) match
+      case -1    => searched
+      case index => searched.withRootSelectedIndex(index).enterSelectedGroup
+
   def enterSelectedGroup: CommandRunner =
     selectedItem match
       case Some(setting: CommandSurfaceItem.SettingSearchItem) =>

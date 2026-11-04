@@ -18,10 +18,6 @@ _JOB_HEADER = re.compile(r"^  ([A-Za-z0-9_-]+):\s*$")
 _TIMEOUT = re.compile(r"^    timeout-minutes: [1-9][0-9]*\s*$")
 _REUSABLE_CALL = re.compile(r"^    uses: ")
 
-# PR #2555 folds these three into one `checks` job and gives it the timeout, so adding limits here would only conflict.
-# Delete this set once #2555 has merged.
-_HANDLED_BY_PR_2555 = {("ci.yml", "style"), ("ci.yml", "architecture"), ("ci.yml", "third-party-notices")}
-
 
 def _jobs(text: str) -> dict[str, list[str]]:
     """Maps each job id to its lines, found between the top-level `jobs:` key and the next top-level key."""
@@ -69,7 +65,7 @@ class WorkflowTimeoutTests(unittest.TestCase):
             f"{path.name}:{job}"
             for path in files
             for job, body in _jobs(path.read_text()).items()
-            if (path.name, job) not in _HANDLED_BY_PR_2555 and _lacks_timeout(body)
+            if _lacks_timeout(body)
         ]
         self.assertEqual([], missing, "jobs without a job-level timeout-minutes")
 
