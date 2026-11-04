@@ -174,9 +174,30 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The desktop packages pass the same flags through jpackage's `--java-options`, with the archive next to the jar in the
-app image (`$APPDIR/serenity.jsa`), and build their runtime with `--generate-cds-archive` because a dynamic archive
-needs the runtime's own base archive. macOS is left out: writing into a signed `.app` would break its signature.
+The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
+the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
+a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
+its signature.
+
+The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
+(`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
+and the JVM then logs `Mismatched values for property jdk.module.enable.native.access` (an error line from the second
+start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
+on that line.
+
+The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
+instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+#2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
+(`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
+before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
+one or the other. The cache records the jar's size and modification time. If the jar no longer matches (a hand-patched
+image), the JVM rejects the cache for good, prints `[error][aot]` lines and starts about 1.5 s slower than AppCDS would;
+it does not regenerate. `scripts/check-aot-cache.sh` runs in the package workflows and proves that a valid cache is
+opened, and that a missing or stale one still leaves an app that starts. To time start-up on a machine with a display:
+
+```bash
+python3 bench/ttfw.py dist/Serenity/bin/Serenity 10 aot
+```
 
 ### Heap flags in the desktop packages
 
@@ -195,6 +216,18 @@ At startup, unless `performance.memory.compact = false`, Serenity sets `MinHeapF
 modes. The packaged `-XX:G1PeriodicGCInterval=60000` is therefore replaced by 30 s once the app is up. With the setting
 off the JVM keeps its launch values. A measured idle footprint dropped from about 520 MiB to about 317 MiB
 (`docs/memory-footprint.md`, PR #2266). The log records what was applied on a `[MEMORY]` line.
+
+### Skia natives per OS
+
+Skiko ships one native library per OS and architecture, so each build carries only its own. `build.sbt` picks the
+`skiko-awt-runtime-<os>-<arch>` artifact from the build host; set `SERENITY_SKIKO_TARGET` (or `-Dserenity.skiko.target`) to
+one of `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64` or `windows-arm64` to build another target. The
+runnable jar keeps its natives. The app image does not: `scripts/SkikoNatives.java` moves them into `app/natives` (with
+`icudtl.dat` on Windows), the image's jar is left without them, and the launcher passes
+`-Dskiko.library.path=$APPDIR/natives`, so Skiko never unpacks anything into `~/.skiko` and macOS signs the dylib as part
+of the bundle (`scripts/sign-macos-app.sh`, entitlements in `ci/macos.entitlements`). `scripts/SkikoProbe.java` loads the
+library from that layout and renders a 1x1 raster surface; the Skia Natives Probe workflow runs it on Windows and on Linux
+under Xvfb.
 
 ### Startup warm-up
 
@@ -273,12 +306,90 @@ exited, the JVM's default toolkit is used instead, even with `SERENITY_TOOLKIT=w
 `[TOOLKIT] PlatformDefault (WAYLAND_DISPLAY is set, but the socket does not connect (/run/user/1000/wayland-1: Connection refused))`.
 Without the check the JetBrains Runtime would try `WLToolkit` anyway and end up headless.
 
-Passing `-Dawt.toolkit.name=...` yourself always wins over both. The choice has to be made before any AWT class loads,
+Passing `-Dawt.toolkit.name=...` yourself always wins over both. Only a flag on the JVM's command line counts: the
+JetBrains Runtime presets the property to `XToolkit` itself, and that preset is ignored. The choice has to be made before any AWT class loads,
 which is why it is an environment variable rather than a config setting. Under the native toolkit, `window.chrome = auto`
 uses the compositor's decorations, since Wayland does not let an application move its own window from a custom title bar.
 
 JBR's Vulkan renderer is opt-in and experimental; try it with `-Dsun.java2d.vulkan=true`. The AppCDS flags above work
 on JBR too, but keep a separate archive per runtime or each switch will rewrite it.
+
+### Renderer selection and Wayland
+
+Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
+an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
+default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
+`SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
+config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
+its default.
+
+| Config key | Values | Default | Environment variable | Flag |
+| --- | --- | --- | --- | --- |
+| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
+
+`ui.render.skia_vsync` makes Skia's GPU layer wait for the display's vertical blank before presenting. It is off by default: on
+Hyprland the owner saw no tearing with it off and a frame is 4-8 ms quicker, and compositors on Windows, macOS and most
+Linux desktops do not tear either. Turn it on if you see tearing, for example on X11 without a compositor. Serenity sets
+Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a restart, and `SKIKO_VSYNC_ENABLED` or
+`-Dskiko.vsync.enabled`, when given, win. The Skia CPU raster and Java2D ignore it.
+
+`auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
+an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
+itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
+Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
+windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
+used, or where there is no X11 display, `ui.render.wayland` decides what happens:
+
+| Value | Effect |
+| --- | --- |
+| `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+| `java2d` | Keep `WLToolkit` and use Java2D |
+| `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
+
+The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+#### Comparing the renderers
+
+`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
+raster, which paints with Skia and presents through Java2D), draws the same built-in document through the same scripted
+actions on each, prints the tables and saves them as
+`render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
+scenarios are a cold full frame, a warm full frame (the same state redrawn whole with warm caches), typing one
+character, scrolling one line, scrolling five lines, a page down, a caret blink and the first frame after a window resize
+(the window alternates between its size and three quarters of it; the toolkit's own resize is outside the timing). The
+warm frame and the resize are reported but take no part in the verdict. The report also gives the scale the Skia layer
+drew at beside Java2D's. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
+or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
+its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
+Skiko's frame pacing (with vsync on, which is now opt-in, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
+`1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
+(untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
+
+The benchmark settles the toolkit and renderer like an editor launch does, so `SERENITY_TOOLKIT` and `-Dawt.toolkit.name`
+apply to it too (on a runtime without `WLToolkit`, `SERENITY_TOOLKIT=wayland` falls back to the default toolkit). The report
+records the toolkit class that drew and the launch's choice, how many Skia layers the window ended with, and what the
+layer's draws cost: draws against published frames, the mean wait from publishing a frame to its first draw, the mean
+time per draw adding the picture and filling the carets, whether a GPU wait was possible, and the size of the published
+pictures. Besides the p50, p95 and max of each scenario the report has a tail table (p75, p90, p99, the frames over 33 ms
+and the samples that ended before the render call returned) and a frames-to-present table: each time rounded up to whole
+display refreshes, using the rate Java reports for the screen or an assumed 60 Hz that the report says it assumed, with
+the samples that took more than one refresh. A window that ends with more than one layer gets no verdict, since each
+frame would have waited behind the others' draws. The raster arm does not take part in the verdict.
+
+The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
+not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a
+GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario
+except the cold full frame and its p95 is better when scrolling and on a page down. The verdict is information about this machine: `auto` no longer depends on it.
+
+The header also records the CPU model, the CPU frequency governor and whether the machine was on AC or battery (`unknown`
+where the platform does not say: Linux reads `/proc/cpuinfo`, cpufreq and `/sys/class/power_supply`; Windows gives only the CPU
+model, macOS the CPU model), so a shift between days can be told from a code change.
 
 ## Codex CLI
 
@@ -306,7 +417,7 @@ To cut a release:
 2. Tag the merge commit and push the tag: `git tag -a vX.Y.Z -m "Serenity X.Y.Z" && git push origin vX.Y.Z`.
 
 Pushing the tag runs the full three-OS build and test, then publishes a release named `Serenity X.Y.Z` carrying
-`Serenity.jar`, the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
+the three per-OS jars (`Serenity-<os>-<arch>.jar`), the three app-image zips, `Serenity.cdx.json` (the SBOM, below) and `SHA256SUMS`, with that version's CHANGELOG section as the notes. A plain
 `X.Y.Z` is published as the latest release; `X.Y.Z-rc.N` is published as a pre-release. The run fails, and publishes
 nothing, if the tag is not `vX.Y.Z[-pre]`, is not on `master`, has no non-empty CHANGELOG section, the release already
 exists, or the tag, jpackage version and `--version` output disagree. Releases are never rewritten; fix forward with a

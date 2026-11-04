@@ -1,7 +1,5 @@
 package com.serenity
 
-import java.awt.image.BufferedImage
-
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
@@ -18,27 +16,27 @@ import org.scalatest.matchers.should.Matchers
   * pooled image the next frame draws into. A row that was drawn again is cleared first, so it loses its stamp; a row
   * that was copied carries it to where the row now sits.
   */
-class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
+abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
   private val sentinel = 0xff00ff
 
   final private case class Column(x: Int, fromY: Int, toY: Int)
 
-  private def stampColumn(image: BufferedImage, plan: EditorPaneRenderPlan, scale: Double): Column =
+  private def stampColumn(image: FramePixels, plan: EditorPaneRenderPlan, scale: Double): Column =
     val content = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
     val column = Column(
       x = math.round(ScrollbarLayout.strip(content, cellMetrics).xPx * scale).toInt - 3,
       fromY = math.round(cellMetrics.toPixelY(content.y) * scale).toInt,
       toY = math.round(cellMetrics.toPixelY(content.bottom) * scale).toInt
     )
-    (column.fromY until column.toY).foreach(y => image.setRGB(column.x, y, sentinel))
+    (column.fromY until column.toY).foreach(y => image.stamp(column.x, y, sentinel))
     column
 
   /** The share of `column`, between `from` and `to` as fractions of its height, that still carries a stamp. */
-  private def stamped(image: BufferedImage, column: Column, from: Double = 0.0, to: Double = 1.0): Double =
+  private def stamped(image: FramePixels, column: Column, from: Double = 0.0, to: Double = 1.0): Double =
     val height = column.toY - column.fromY
     val ys     = (column.fromY + (height * from).toInt) until (column.fromY + (height * to).toInt)
-    ys.count(y => (image.getRGB(column.x, y) & 0xffffff) == sentinel).toDouble / ys.size
+    ys.count(y => (image.rgbAt(column.x, y) & 0xffffff) == sentinel).toDouble / ys.size
 
   private def copiedShare(before: AppState, after: AppState, scale: Double = 2.0): Double =
     val session    = Session(scale)
@@ -67,7 +65,7 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
       share should be >= leastShare
     )
 
-  private def drawnFrom(before: AppState, after: AppState): BufferedImage =
+  private def drawnFrom(before: AppState, after: AppState): FramePixels =
     val session = Session()
     val _       = session.settle(before)
     session.draw(after, DamageProducer.forTransition(before, after))._1
@@ -83,15 +81,15 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
   private val EdgeChannelTolerance    = 0x18
   private val MostEdgePixelsDiffering = 2
 
-  private def isEdgeCoverage(a: BufferedImage, b: BufferedImage, x: Int, y: Int): Boolean =
-    def channels(image: BufferedImage, px: Int): Seq[Int] =
-      val rgb = image.getRGB(px, y)
+  private def isEdgeCoverage(a: FramePixels, b: FramePixels, x: Int, y: Int): Boolean =
+    def channels(frame: FramePixels, px: Int): Seq[Int] =
+      val rgb = frame.rgbAt(px, y)
       Seq((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff)
-    def between(image: BufferedImage): Boolean =
-      channels(image, x - 1).zip(channels(image, x)).zip(channels(image, x + 1)).forall {
+    def between(frame: FramePixels): Boolean =
+      channels(frame, x - 1).zip(channels(frame, x)).zip(channels(frame, x + 1)).forall {
         case ((left, here), right) => here >= math.min(left, right) && here <= math.max(left, right)
       }
-    x > 0 && x < a.getWidth - 1 &&
+    x > 0 && x < a.widthPx - 1 &&
     channels(a, x).zip(channels(b, x)).forall((first, second) => math.abs(first - second) <= EdgeChannelTolerance) &&
     between(a) && between(b)
 
@@ -166,10 +164,10 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
     copiedShare(before, after, scale = 1.5) should be < 0.02
   }
 
-  private def strip(values: Int*): BufferedImage =
-    val image = new BufferedImage(values.size, 1, BufferedImage.TYPE_INT_RGB)
-    values.zipWithIndex.foreach((value, x) => image.setRGB(x, 0, value * 0x010101))
-    image
+  private def strip(values: Int*): FramePixels =
+    val frame = Java2DFrames.newFrame(values.size, 1)
+    values.zipWithIndex.foreach((value, x) => frame.stamp(x, 0, value * 0x010101))
+    frame
 
   "The boundary tolerance" should "forgive a pixel between its neighbours that differs a little" in {
     isEdgeCoverage(strip(0xf3, 0xb7, 0x95), strip(0xf3, 0xc8, 0x95), 1, 0) shouldBe true
@@ -182,3 +180,13 @@ class ScrollReusePixelsSpec extends AnyFlatSpec with Matchers with PersistedFram
   it should "not forgive a pixel outside the colours around it" in {
     isEdgeCoverage(strip(0xf3, 0x20, 0x95), strip(0xf3, 0x30, 0x95), 1, 0) shouldBe false
   }
+
+class ScrollReusePixelsSpec extends ScrollReusePixelsBehaviour
+
+/** The same assertions with Skia painting into off-screen raster surfaces. Whether a row was repainted or copied is
+  * read from sentinel pixels and whether a frame equals a cold one is compared against Skia's own cold frame, so none
+  * of it depends on how Skia and Java2D rasterise a glyph differently: the tolerance is zero because both sides of
+  * every comparison come from the same rasteriser.
+  */
+class SkiaScrollReusePixelsSpec extends ScrollReusePixelsBehaviour:
+  override protected def frames: FrameBackend = SkiaFrames

@@ -14,6 +14,9 @@ object ConfigRestart:
     "window.preferred.width/height"  -> (_.preferredWindowSize),
     "lsp.* language server settings" -> (_.languageToolsConfig.lspUserConfig),
     "startup.warm_up"                -> (_.surfaceConfig.startupWarmUpEnabled),
+    "ui.render.backend"              -> (_.surfaceConfig.renderBackend),
+    "ui.render.wayland"              -> (_.surfaceConfig.renderWayland),
+    "ui.render.skia_vsync"           -> (_.surfaceConfig.renderSkiaVsync),
     "performance.memory.compact"     -> (_.surfaceConfig.memoryCompactionEnabled)
   )
 

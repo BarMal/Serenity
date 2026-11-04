@@ -138,11 +138,12 @@ private[perf] object RopeEditBenchmarks:
     }
 
   def main(args: Array[String]): Unit =
-    val passes = args.headOption.flatMap(_.toIntOption).getOrElse(2)
-    val names  = args.toList.drop(1).toSet
-    println(
-      s"rope $DocumentChars chars, $Edits edits per scenario, max heap ${Runtime.getRuntime.maxMemory() >> 20} MB"
-    )
-    (1 to passes).foreach(runPass(_, names))
+    BenchmarkMain.run:
+      val passes = args.headOption.flatMap(_.toIntOption).getOrElse(2)
+      val names  = args.toList.drop(1).toSet
+      println(
+        s"rope $DocumentChars chars, $Edits edits per scenario, max heap ${Runtime.getRuntime.maxMemory() >> 20} MB"
+      )
+      (1 to passes).foreach(runPass(_, names))
 
 end RopeEditBenchmarks

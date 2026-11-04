@@ -1,6 +1,7 @@
 import sbtassembly.AssemblyPlugin.autoImport.*
 import sbtassembly.MergeStrategy
 import com.serenity.release.PackageVersion
+import com.serenity.build.TestShards
 
 ThisBuild / scalaVersion := "3.9.0"
 
@@ -67,6 +68,14 @@ lazy val checkThirdPartyNotices =
 // The version comes from the annotated vX.Y.Z tag via sbt-dynver, and the numeric form a packager needs from
 // PackageVersion (project/PackageVersion.scala). Both read git, so a source tarball or a shallow clone with no tag
 // degrades to dynver's untagged version and to 1.0.0/dev rather than failing the build.
+// `sbt test` is split into this many CI jobs per OS (#2484); a job picks its share with SERENITY_TEST_SHARD=index/of. The
+// split follows project/test-shards.tsv (project/TestShards.scala).
+lazy val checkTestShards =
+  taskKey[Unit]("Fail if project/test-shards.tsv lists a suite that no longer exists or the shards do not cover every suite")
+lazy val generateTestShards =
+  taskKey[Unit]("Rewrite project/test-shards.tsv from the JUnit reports of the last full test run")
+val TestShardCount = 2
+
 lazy val gitDescribe = taskKey[String]("git describe over vX.Y.Z tags; the bare sha, or empty, when none is reachable")
 lazy val packageVersion =
   taskKey[Either[String, PackageVersion.Result]]("Numeric package version and channel for this checkout")
@@ -82,7 +91,36 @@ def gitOutput(root: File, args: String*): Option[String] =
 lazy val root = (project in file("."))
   .settings(
     // The package version module is build code under project/; compile it into the tests too so a spec can reach it.
-    Test / unmanagedSources += baseDirectory.value / "project" / "PackageVersion.scala",
+    Test / unmanagedSources ++= Seq(
+      baseDirectory.value / "project" / "PackageVersion.scala",
+      baseDirectory.value / "project" / "TestShards.scala"
+    ),
+    checkTestShards := {
+      val table = TestShards.parseTable(IO.readLines(baseDirectory.value / "project" / "test-shards.tsv")).fold(sys.error, identity)
+      TestShards.check(table, (Test / definedTestNames).value, TestShardCount) match {
+        case Left(errors) => sys.error(errors.mkString("\n"))
+        case Right(summary) =>
+          streams.value.log.info(
+            "checkTestShards: " + (1 to TestShardCount).map(s => s"shard $s has ${summary.suites(s)} suites, ${summary.seconds(s).round} s listed").mkString("; ")
+          )
+      }
+    },
+    generateTestShards := {
+      val reports = IO.listFiles(baseDirectory.value / "target" / "test-reports").toList.filter(_.getName.endsWith(".xml"))
+      val defined = (Test / definedTestNames).value.toSet
+      val seconds = TestShards.secondsFromReports(reports.map(IO.read(_))).filter { case (suite, _) => defined.contains(suite) }
+      val assigned = TestShards.balance(seconds, TestShardCount)
+      IO.write(
+        baseDirectory.value / "project" / "test-shards.tsv",
+        "# Suite, shard, seconds: regenerate with `sbt generateTestShards` after a full `sbt test` (#2484).\n" +
+          TestShards.render(seconds.map { case (suite, t) => suite -> TestShards.Entry(assigned(suite), t) })
+      )
+    },
+    Test / testOptions ++= sys.env.get("SERENITY_TEST_SHARD").filter(_.nonEmpty).toList.map { spec =>
+      val shard = TestShards.parseShard(spec).fold(sys.error, identity)
+      val table = TestShards.parseTable(IO.readLines(file("project") / "test-shards.tsv")).fold(sys.error, identity)
+      Tests.Filter(TestShards.select(table, shard, _))
+    },
     gitDescribe := gitOutput(
       baseDirectory.value,
       "describe",
@@ -302,7 +340,11 @@ lazy val root = (project in file("."))
           case _ => (assembly / assemblyMergeStrategy).value(x)
         }
       case PathList("module-info.class") => MergeStrategy.discard
-      case x                             => (assembly / assemblyMergeStrategy).value(x)
+      // Skiko natives sit at the root of their runtime jar; a build that puts two runtime jars on the classpath
+      // (the macOS jars both carry the same two dylibs) would otherwise fail on the duplicate entries.
+      case PathList(name) if name == "icudtl.dat" || name.matches("(lib)?skiko-.*\\.(so|dylib|dll)(\\.sha256)?") =>
+        MergeStrategy.first
+      case x => (assembly / assemblyMergeStrategy).value(x)
     },
     Test / testOptions ++= Seq(
       // One folder per test run holds everything the suites create (`TestTemp`, and the session folder of every
@@ -435,6 +477,59 @@ libraryDependencies ++= Seq(
 // xercesImpl is excluded because it takes over the JVM's default XML parser and then rejects the hardening flags
 // RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
 libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl")
+
+// Skia render backend (#2028). Each OS build ships only its own Skiko natives, so the runtime artifact is picked per
+// target: detected from the build host, or forced with -Dserenity.skiko.target / SERENITY_SKIKO_TARGET so CI can
+// assemble any target from any host. The Skiko API jar and its Kotlin dependencies are not loaded on the TUI and
+// headless paths; that is enforced at runtime, not here.
+val skikoVersion = "0.153.0"
+
+// The runtime natives are not JetBrains' jars: those carry the Adobe DNG SDK, whose licence conflicts with this project's
+// GPL. CI rebuilds them without it from the pinned upstream sources (.github/workflows/skiko-natives.yml, ci/skiko) and
+// publishes them as a Maven repository, which is why the version here is its own. Another repository, such as a local
+// mirror, can stand in with -Dserenity.skiko.natives.repo or SERENITY_SKIKO_NATIVES_REPO.
+val skikoNativesVersion = "0.153.0-dngfree.2"
+
+val skikoNativesRepository: String = sys.props
+  .get("serenity.skiko.natives.repo")
+  .orElse(sys.env.get("SERENITY_SKIKO_NATIVES_REPO"))
+  .map(_.trim)
+  .filter(_.nonEmpty)
+  .getOrElse("https://barmal.github.io/Serenity/")
+
+val skikoTargets = Set("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
+
+val skikoTarget: String = {
+  def hostOs: String =
+    sys.props.getOrElse("os.name", "").toLowerCase match {
+      case name if name.contains("win")                            => "windows"
+      case name if name.contains("mac") || name.contains("darwin") => "macos"
+      case _                                                       => "linux"
+    }
+  def hostArch: String =
+    sys.props.getOrElse("os.arch", "").toLowerCase match {
+      case "aarch64" | "arm64" => "arm64"
+      case _                   => "x64"
+    }
+  val target = sys.props
+    .get("serenity.skiko.target")
+    .orElse(sys.env.get("SERENITY_SKIKO_TARGET"))
+    .map(_.trim)
+    .filter(_.nonEmpty)
+    .getOrElse(s"$hostOs-$hostArch")
+  if (!skikoTargets.contains(target))
+    sys.error(s"Unknown Skiko target '$target'; expected one of ${skikoTargets.toList.sorted.mkString(", ")}")
+  target
+}
+
+// Last in the list, so only what Maven Central lacks, these natives, is ever asked of it. The POM Skiko generates for a
+// runtime jar depends on skiko-awt at the jar's own version, which is not published, hence intransitive.
+externalResolvers += "Serenity Skiko natives" at skikoNativesRepository
+
+libraryDependencies ++= Seq(
+  "org.jetbrains.skiko" % "skiko-awt" % skikoVersion,
+  ("io.github.barmal" % s"skiko-awt-runtime-$skikoTarget" % skikoNativesVersion).intransitive()
+)
 
 val jlineVersion = "3.30.16"
 

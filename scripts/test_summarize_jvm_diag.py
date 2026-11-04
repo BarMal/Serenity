@@ -39,9 +39,26 @@ class SummarizeJvmDiagTest(unittest.TestCase):
         self.assertNotIn("G1 Evacuation Pause)\n", self.output)
         self.assertNotIn("Version", self.output)
 
+    def test_counts_full_gcs_and_their_total_time(self) -> None:
+        self.assertIn("Full GCs: 1, 1500.250 ms in total.", self.output)
+
+    def test_reports_the_heap_left_after_each_collection(self) -> None:
+        self.assertIn("Heap after a collection: smallest 3 MB, largest 7 MB, capacity 64 MB.", self.output)
+
+    def test_reports_the_heap_after_full_gcs_alone(self) -> None:
+        self.assertIn("Heap after a Full GC: 3 MB.", self.output)
+
     def test_lists_longest_stall_first(self) -> None:
         self.assertLess(self.output.index("| 2400 |"), self.output.index("| 900 |"))
         self.assertIn("| 2400 | 2026-10-10T12:00:05.100Z | 5100ms |", self.output)
+
+    def test_no_pauses_means_no_heap_figures(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "gc-safepoint.log").write_text("[2026-10-10T12:00:01.100+0000][1.100s][info ][gc,init] Version: 21\n")
+            output = _summarize(Path(directory))
+        self.assertIn("Full GCs: 0, 0.000 ms in total.", output)
+        self.assertIn("Heap after a collection: none logged.", output)
+        self.assertIn("Heap after a Full GC: none logged.", output)
 
     def test_missing_logs_are_reported_not_fatal(self) -> None:
         with tempfile.TemporaryDirectory() as empty:

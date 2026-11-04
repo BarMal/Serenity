@@ -59,6 +59,15 @@ object AppConfigOps:
     def withRenderDamageGranularity(granularity: RenderDamageGranularity): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderDamageGranularity = granularity))
 
+    def withRenderBackend(backend: RenderBackendSetting): AppConfig =
+      appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderBackend = backend))
+
+    def withRenderWayland(mode: WaylandRender): AppConfig =
+      appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderWayland = mode))
+
+    def withExplorerOpenMode(mode: ExplorerOpenMode): AppConfig =
+      appConfig.withInputConfig(appConfig.inputConfig.copy(explorerOpenMode = mode))
+
     /** One line is the least a notch can usefully move; the upper bound keeps a mis-typed value from turning a notch
       * into a jump across the document.
       */

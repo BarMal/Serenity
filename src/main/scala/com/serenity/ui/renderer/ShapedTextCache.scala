@@ -5,7 +5,7 @@ import java.awt.font.{FontRenderContext, GlyphVector}
 import java.awt.geom.Point2D
 import java.text.Bidi
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.atomic.{AtomicLong, AtomicReference, LongAdder}
 
 /** Text shaped once and kept: the glyphs a stretch of text paints with, found by text, font and render context.
   *
@@ -15,12 +15,13 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
   * newer, and when the newer fills, the older is dropped, so what the last frames painted survives and the cache holds
   * at most twice `capacityPerGeneration` stretches.
   */
-final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity):
+final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity) extends ShapeTraffic:
   import ShapedTextCache.*
 
   private val generations = AtomicReference(Generations(newMap(), newMap()))
   private val shapedN     = AtomicLong(0)
   private val exactN      = AtomicLong(0)
+  private val promotedN   = LongAdder()
 
   /** What the owner of this cache has read off the fonts it shapes: probed once per font, by whatever shapes for it. */
   val probes: FontProbes = FontProbes()
@@ -30,6 +31,8 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
 
   /** How many stretches were shaped, as opposed to served from the cache. */
   def shapings: Long = shapedN.get()
+
+  def promotions: Long = promotedN.sum()
 
   /** How many exact measurements (one `TextLayout` or one shaped stretch of a row or candidate) caret and fit
     * measurement built through this cache: the cost wrapping pays when summed glyph advances cannot answer, which the
@@ -49,12 +52,16 @@ final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.Default
     val key  = Key(text, font, fontRenderContext)
     val held = generations.get()
     Option(held.current.get(key)).getOrElse {
-      Option(held.previous.get(key)).fold(shapeAndRemember(key))(remember(key, _))
+      Option(held.previous.get(key)).fold(shapeAndRemember(key))(promote(key, _))
     }
 
   private def shapeAndRemember(key: Key): ShapedStretch =
     val _ = shapedN.incrementAndGet()
     remember(key, ShapedStretch.shape(key.text, key.font, key.fontRenderContext, glyphAdvances))
+
+  private def promote(key: Key, stretch: ShapedStretch): ShapedStretch =
+    promotedN.increment()
+    remember(key, stretch)
 
   private def remember(key: Key, stretch: ShapedStretch): ShapedStretch =
     val held = generations.get()

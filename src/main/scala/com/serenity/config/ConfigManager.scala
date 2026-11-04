@@ -493,7 +493,7 @@ object ConfigManager:
           )
         case Some(field) =>
           Option.when(field.codec.parse(value).isEmpty)(
-            s"not a value this setting accepts, using its default (${field.setting(AppConfig.default)._2.rendered})"
+            SettingChoices.rejection(field.key, field.setting(AppConfig.default)._2.rendered)
           )
         case None =>
           key match
