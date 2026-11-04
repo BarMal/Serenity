@@ -1,7 +1,5 @@
 package com.serenity.notices
 
-import scala.concurrent.duration.*
-
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
