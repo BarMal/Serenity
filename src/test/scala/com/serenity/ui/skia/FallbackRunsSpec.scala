@@ -3,8 +3,9 @@ package com.serenity.ui.skia
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Callable, Executors}
 
+import com.serenity.SkiaPixels
 import com.serenity.ui.fonts.FontLoader
-import org.jetbrains.skia.{EncodedImageFormat, Font, Paint, Surface, Typeface}
+import org.jetbrains.skia.{Font, Paint, Surface, Typeface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -56,14 +57,14 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       (font.getTypeface.getFamilyName, font.getTypeface.isBold, font.getTypeface.isItalic, font.getSize)
     )
 
-  private def pixels(stretch: SkiaShapedStretch, from: Int, until: Int): Vector[Byte] =
+  private def pixels(stretch: SkiaShapedStretch, from: Int, until: Int): Array[Int] =
     val surface = Surface.Companion.makeRasterN32Premul(260, 44)
     val canvas  = surface.getCanvas
     val _       = canvas.clear(0xffffffff)
     val paint   = new Paint()
     paint.setColor(0xff000000)
     stretch.draw(canvas, from, until, 12f, 30f, paint)
-    surface.makeImageSnapshot().encodeToData(EncodedImageFormat.PNG, 100, 0).getBytes.toVector
+    SkiaPixels.read(surface)
 
   private def ranges(length: Int): Vector[(Int, Int)] =
     (Vector((0, length)) ++ (0 until length).map(i => (i, i + 1)) ++ Vector((1, length - 1)))
@@ -74,7 +75,9 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
     val edges =
       (-1 to length + 1).filter(i => routed.leftEdgeOf(i) != reference.leftEdgeOf(i)).map(i => s"leftEdgeOf($i)")
     val draws =
-      ranges(length).filter((a, b) => pixels(routed, a, b) != pixels(reference, a, b)).map((a, b) => s"pixels[$a,$b)")
+      ranges(length)
+        .filter((a, b) => !java.util.Arrays.equals(pixels(routed, a, b), pixels(reference, a, b)))
+        .map((a, b) => s"pixels[$a,$b)")
     (edges ++ draws).toVector
 
   /** Four workers: each font's comparisons are independent, and the reference side, `TextLine`, is the slow part. */
