@@ -23,7 +23,8 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
       name: String,
       panes: Int,
       step: SplitPaneFixture => (AppState, AppState),
-      document: Int => String = SplitPaneFixture.prose
+      document: Int => String = SplitPaneFixture.prose,
+      quarantinedOnMacOs: Boolean = false
   )
 
   private val scenarios = List(
@@ -43,13 +44,15 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
       "four panes of box-drawing lines, a one-line scroll",
       4,
       _.transition(ScrollDown(1)),
-      SplitPaneFixture.boxDrawingLines
+      SplitPaneFixture.boxDrawingLines,
+      quarantinedOnMacOs = true
     ),
     Scenario(
       "two panes of box-drawing lines, a one-line scroll",
       2,
       _.transition(ScrollDown(1)),
-      SplitPaneFixture.boxDrawingLines
+      SplitPaneFixture.boxDrawingLines,
+      quarantinedOnMacOs = true
     ),
     Scenario(
       "two panes whose lines overhang the left edge, a one-line scroll",
@@ -92,9 +95,16 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
        |  ${around(cold)}
        |""".stripMargin
 
+  "The macOS quarantine" should "cover only the two box-drawing scenarios, whatever the platform" in {
+    scenarios.filter(_.quarantinedOnMacOs).map(_.name) shouldBe List(
+      "four panes of box-drawing lines, a one-line scroll",
+      "two panes of box-drawing lines, a one-line scroll"
+    )
+  }
+
   scenarios.foreach { scenario =>
     s"A damaged frame of ${scenario.name}" should "equal a frame drawn from scratch, pixel for pixel" in {
-      assume(!MacOsSeamQuarantine.appliesHere, MacOsSeamQuarantine.Reason)
+      if scenario.quarantinedOnMacOs then assume(!MacOsSeamQuarantine.appliesHere, MacOsSeamQuarantine.Reason)
       val (before, after) = scenario.step(SplitPaneFixture.open(scenario.panes, scenario.document))
       val damage          = DamageProducer.forTransition(before, after)
       damage should not be Damage.Everything
