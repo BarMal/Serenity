@@ -199,6 +199,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
+    .withExplorerOpenMode(ExplorerOpenMode.Preview)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
     .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))

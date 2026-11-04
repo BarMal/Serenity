@@ -311,7 +311,8 @@ object TabBarSurfaceComposition:
             selected = allocation.active,
             trailingSeparator = index < allocations.size - 1 || overflowing,
             allocatedWidth = Some(allocation.allocatedWidth),
-            titleFit = Some(SegmentTitleFit(PaddingCells, room, settings.measure.ellipsis))
+            titleFit = Some(SegmentTitleFit(PaddingCells, room, settings.measure.ellipsis)),
+            italic = allocation.entry.isPreview
           )
       }
       val overflowSegment =

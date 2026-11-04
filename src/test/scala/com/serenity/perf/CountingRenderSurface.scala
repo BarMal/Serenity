@@ -215,6 +215,11 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
     try inner.panelOutlines.fold(render)(_.withRoundRectClip(x, y, width, height, corners, radiusPx)(render))
     finally counts.increment(DrawKind.ClipPop)
 
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
+    counts.increment(DrawKind.ClipPush)
+    try inner.panelOutlines.fold(render)(_.withPixelClip(xPx, yPx, widthPx, heightPx)(render))
+    finally counts.increment(DrawKind.ClipPop)
+
 final private class CountingCopying(inner: PixelCopying, counts: DrawCounts) extends PixelCopying:
 
   def copyPixels(from: PixelRect, dyPx: Int): Unit =

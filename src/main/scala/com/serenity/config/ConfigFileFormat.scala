@@ -149,6 +149,10 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
+    comment(
+      "Opening a file from the explorer: double-click, single-click, or preview (a single click opens a temporary tab the next one replaces)"
+    ),
+    field("explorer.open_mode"),
     comment("Cursor: blink or steady; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),

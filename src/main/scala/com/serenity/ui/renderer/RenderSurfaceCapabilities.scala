@@ -288,3 +288,14 @@ trait PanelOutlineDrawing:
     @unused radiusPx: Int
   )(render: => Unit): Unit =
     render
+
+  /** Restrict drawing performed by `render` to a rectangle in logical pixels, which can reach between cells. A surface
+    * that does not address pixels has nothing finer than a cell to bound, so by default `render` runs unclipped;
+    * callers only ask where [[RenderSurface.addressesPixels]].
+    */
+  def withPixelClip(
+    @unused xPx: Int,
+    @unused yPx: Int,
+    @unused widthPx: Int,
+    @unused heightPx: Int
+  )(render: => Unit): Unit = render

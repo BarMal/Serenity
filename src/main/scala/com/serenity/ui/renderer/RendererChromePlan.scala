@@ -170,6 +170,14 @@ private[renderer] object RendererChromePlan:
       val room       = DescenderBleedPx.min((gridBottom - band.yPx - band.heightPx).max(0))
       band.copy(heightPx = band.heightPx + room)
 
+  /** [[withBleed]] without the margin on a side another pane abuts, where it would be that pane's pixels. */
+  def withBleedOutsideShared(context: RenderContext, shared: SharedSides)(band: PixelRect): PixelRect =
+    if context.surface.addressesPixels then
+      val leftPx  = if shared.left then 0 else BleedPx
+      val rightPx = if shared.right then 0 else BleedPx
+      band.copy(xPx = band.xPx - leftPx, widthPx = band.widthPx + leftPx + rightPx)
+    else band
+
   /** Every place chrome is painted. */
   private[renderer] def regions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
     chromeRegions(context, renderPlan)

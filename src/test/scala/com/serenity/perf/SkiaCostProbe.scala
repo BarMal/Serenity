@@ -183,10 +183,11 @@ private[perf] object SkiaCostProbe:
     println(s"text loop: $calls lines of ${line.length} characters at $size px in $seconds s")
 
   def main(args: Array[String]): Unit =
-    if args.headOption.contains("text-loop") then
-      textLoop(args.lift(1).fold(20)(_.toInt), args.lift(2).fold(24f)(_.toFloat))
-    else if args.headOption.contains("paint-variants") then paintVariants()
-    else probe(args)
+    BenchmarkMain.run:
+      if args.headOption.contains("text-loop") then
+        textLoop(args.lift(1).fold(20)(_.toInt), args.lift(2).fold(24f)(_.toFloat))
+      else if args.headOption.contains("paint-variants") then paintVariants()
+      else probe(args)
 
   /** What a paint can change about the mask blit Skia picks for anti-aliased text on a raster surface. */
   private def paintVariants(): Unit =

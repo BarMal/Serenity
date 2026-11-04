@@ -371,13 +371,14 @@ object OverlaySegmentRowRenderer:
       }
       val iconWidth = inlineIcon.map(_.length.min(width)).getOrElse(0)
       val iconGap   = if iconWidth > 0 && width > iconWidth && segmentText.nonEmpty then 1 else 0
-      segment.fontFamily.foreach(family =>
-        surface.text.setFont(FontSpec.fromAwt(Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D)))
-      )
+      val familyFont =
+        segment.fontFamily.fold(font)(family => Font(family, font.getStyle, font.getSize).deriveFont(font.getSize2D))
+      val textFont = if segment.italic then familyFont.deriveFont(familyFont.getStyle | Font.ITALIC) else familyFont
+      if textFont ne font then surface.text.setFont(FontSpec.fromAwt(textFont))
       CharacterRenderer.renderStringPlain(
         surface,
         x + iconWidth + iconGap,
         y,
         segmentText.take(math.max(0, width - iconWidth - iconGap))
       )
-      if segment.fontFamily.nonEmpty then surface.text.setFont(FontSpec.fromAwt(font))
+      if textFont ne font then surface.text.setFont(FontSpec.fromAwt(font))

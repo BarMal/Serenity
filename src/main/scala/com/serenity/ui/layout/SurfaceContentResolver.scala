@@ -42,7 +42,8 @@ final case class OverlaySegment(
     inlineIconFontFamily: Option[String] = None,
     trailingSeparator: Boolean = false,
     allocatedWidth: Option[Int] = None,
-    titleFit: Option[SegmentTitleFit] = None
+    titleFit: Option[SegmentTitleFit] = None,
+    italic: Boolean = false
 )
 
 final case class OverlayRow(

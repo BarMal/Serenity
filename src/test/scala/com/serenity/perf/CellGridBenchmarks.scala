@@ -1,8 +1,6 @@
 package com.serenity.perf
 
-import java.awt.Font
 import java.awt.image.BufferedImage
-import java.nio.file.Paths
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.ChromeOn
@@ -24,16 +22,10 @@ private[perf] object CellGridBenchmarks:
   private val Lines    = 40
   private val width    = 1200
   private val height   = 800
-  private val codeFont = loadFont().deriveFont(10.0f)
+  private val codeFont = BenchmarkFonts.courierPrimeRegular().deriveFont(10.0f)
   private val cells    = CellMetrics.fromFont(codeFont)
   private val viewport = ViewportSize(width / cells.charWidth, height / cells.lineHeight)
   private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
-
-  private def loadFont(): Font =
-    Font.createFont(
-      Font.TRUETYPE_FONT,
-      Paths.get("src/main/resources/fonts/CourierPrime-Regular.ttf").toFile
-    )
 
   private def asciiLine(index: Int): String =
     s"val value$index = compute(input, $index) // plain ASCII code line, no wide characters at all"

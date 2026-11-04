@@ -28,6 +28,9 @@ final private[renderer] class Java2DRoundedOutlines(
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     flat.withRectClip(x, y, width, height)(render)
 
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
+    flat.withPixelClip(xPx, yPx, widthPx, heightPx)(render)
+
   override def fillRoundRect(
     x: Int,
     y: Int,

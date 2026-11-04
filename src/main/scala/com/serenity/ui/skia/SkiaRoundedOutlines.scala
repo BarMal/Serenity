@@ -35,6 +35,9 @@ final private[skia] class SkiaRoundedOutlines(
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     flat.withRectClip(x, y, width, height)(render)
 
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
+    flat.withPixelClip(xPx, yPx, widthPx, heightPx)(render)
+
   /** Skia's per-corner radii run top-left, top-right, bottom-right, bottom-left. */
   private def roundedRect(
     x: Float,
