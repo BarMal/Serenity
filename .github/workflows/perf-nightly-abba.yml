@@ -6,8 +6,8 @@ name: Perf Nightly ABBA
 # here as serenity-perf.jar, so nothing is stored between nights except the run history. The logic is in
 # scripts/perf_nightly.py.
 on:
+  # Off the 03:17 Cross-OS nightly so the two do not compete for the shared runners.
   schedule:
-    # Off the 03:17 Cross-OS nightly so the two do not compete for the shared runners.
     - cron: '29 5 * * *'
   workflow_dispatch:
     inputs:
