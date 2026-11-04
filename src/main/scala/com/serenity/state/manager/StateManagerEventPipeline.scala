@@ -273,14 +273,21 @@ final private[manager] class StateManagerEventPipeline(
                         .map(committed =>
                           EventPipelineTransitions
                             .committed(model, result)
-                            .copy(app = ViewportResolution.markFollow(model.app, committed))
+                            .copy(app =
+                              ViewportResolution.placedPerKey(
+                                ViewportResolution.markFollow(model.app, committed),
+                                wrappedLines
+                              )
+                            )
                         )
                     )
                 case _ => None
             case FocusScopes.PeekKeyOutcome.Consumed(_) => None
       case _ => None
 
-  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
+  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor placed once for all of its keys -- or already
+    * placed after each, where placement depends on where the view was ([[ViewportResolution.placedPerKey]]).
+    */
   private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
     val centred =
       typed.copy(app = ViewportResolution.resolve(ViewportResolution.markFollow(start.app, typed.app), wrappedLines))
