@@ -167,6 +167,38 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       RenderBackendSelection.choose(windows.copy(waylandRender = mode)).backend shouldBe RenderBackend.Skia
   }
 
+  private val explicitRaster = healthyLinux.copy(setting = RenderBackendSetting.SkiaRaster)
+
+  it should "paint with the Skia raster wherever it can, when skia-raster is requested" in {
+    val reason = "ui.render.backend=skia-raster"
+    RenderBackendSelection.choose(explicitRaster) shouldBe Decision(RenderBackend.SkiaRaster, reason)
+    RenderBackendSelection.choose(explicitRaster.copy(toolkit = ToolkitSelection.Choice.Wayland)) shouldBe
+      Decision(RenderBackend.SkiaRaster, reason)
+    RenderBackendSelection.choose(explicitRaster.copy(x11Display = false)) shouldBe
+      Decision(RenderBackend.SkiaRaster, reason)
+    RenderBackendSelection.choose(explicitRaster.copy(osName = "Windows 11")) shouldBe
+      Decision(RenderBackend.SkiaRaster, reason)
+    for mode <- WaylandRender.values do
+      RenderBackendSelection.choose(explicitRaster.copy(waylandRender = mode)).backend shouldBe
+        RenderBackend.SkiaRaster
+  }
+
+  it should "fall back to Java2D, saying so, when skia-raster is requested and there is no raster surface" in {
+    RenderBackendSelection.choose(explicitRaster.copy(rasterSurfaceAvailable = false)) shouldBe
+      Decision(RenderBackend.Java2D, "skia raster surface unavailable")
+  }
+
+  it should "name skia-raster and the cause when its native library will not load" in {
+    val decision = RenderBackendSelection.choose(explicitRaster.copy(probe = Probe.Failed("no libGL")))
+    decision.backend shouldBe RenderBackend.Java2D
+    decision.reason should (include("ui.render.backend=skia-raster") and include("no libGL"))
+  }
+
+  it should "need the native probe for skia-raster, and never choose the raster unless the probe loaded" in {
+    RenderBackendSelection.probeNeeded(explicitRaster.copy(probe = Probe.NotRun)) shouldBe true
+    RenderBackendSelection.choose(explicitRaster.copy(probe = Probe.NotRun)).backend shouldBe RenderBackend.Java2D
+  }
+
   private val inputsGen: Gen[Inputs] =
     for
       os      <- Gen.oneOf("Linux", "Windows 11", "Mac OS X")
@@ -185,7 +217,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       mode    <- WaylandRender.values.toList
       toolkit <- ToolkitSelection.Choice.values.toList
     yield RenderBackendSelection.choose(healthyLinux.copy(setting = setting, waylandRender = mode, toolkit = toolkit))
-    combinations should have size 27
+    combinations should have size 36
     combinations.foreach(_.reason should not be empty)
   }
 
@@ -210,7 +242,9 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
 
   it should "choose the raster backend only on Linux, with a raster factory, for WLToolkit or no X11 display" in
     forAll(inputsGen) { inputs =>
-      if RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster then
+      if inputs.setting != RenderBackendSetting.SkiaRaster &&
+        RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster
+      then
         val wayland = inputs.toolkit == ToolkitSelection.Choice.Wayland
         (inputs.osName, inputs.rasterSurfaceAvailable, wayland || !inputs.x11Display) shouldBe ("Linux", true, true)
         if wayland then inputs.waylandRender should not be WaylandRender.Java2D

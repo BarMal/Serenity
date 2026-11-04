@@ -56,6 +56,8 @@ object RenderBackendSelection:
   def choose(inputs: Inputs): Decision =
     val linux = inputs.osName.toLowerCase(Locale.ROOT).contains("linux")
     if inputs.setting == RenderBackendSetting.Java2D then java2d("ui.render.backend=java2d")
+    else if inputs.setting == RenderBackendSetting.SkiaRaster then
+      raster(inputs, "ui.render.backend=skia-raster", "skia raster surface unavailable")
     else if linux && inputs.toolkit == ToolkitSelection.Choice.Wayland then onWayland(inputs)
     else if !inputs.skiaSurfaceAvailable then java2d("skia surface unavailable")
     else if linux && !inputs.x11Display then
@@ -81,13 +83,18 @@ object RenderBackendSelection:
     else java2d(noRasterReason)
 
   private def afterProbe(inputs: Inputs, backend: RenderBackend, loadedReason: String): Decision =
-    val explicit = inputs.setting == RenderBackendSetting.Skia
+    val explicit = inputs.setting == RenderBackendSetting.Skia || inputs.setting == RenderBackendSetting.SkiaRaster
     inputs.probe match
       case Probe.Failed(cause) =>
-        java2d(if explicit then s"ui.render.backend=skia could not load: $cause" else s"native probe failed: $cause")
+        java2d(
+          if explicit then s"ui.render.backend=${inputs.setting.configKey} could not load: $cause"
+          else s"native probe failed: $cause"
+        )
       case Probe.NotRun => java2d("native probe not run")
       case Probe.Loaded =>
-        val reason = if explicit && backend == RenderBackend.Skia then "ui.render.backend=skia" else loadedReason
+        val reason =
+          if inputs.setting == RenderBackendSetting.Skia && backend == RenderBackend.Skia then "ui.render.backend=skia"
+          else loadedReason
         Decision(backend, reason)
 
   /** Whether loading the native library can change the outcome: only when a passing probe would choose Skia. */

@@ -1,7 +1,7 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p xdotool wmctrl python3 xorg.xwininfo coreutils procps
 
-# bench-laptop.sh <jar> <label> [java2d|skia]
+# bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]
 #
 # With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
 # the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
@@ -26,11 +26,11 @@
 set -euo pipefail
 
 JAR="${1:?Usage: bench-laptop.sh <jar> <label>}"
-LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia]}"
+LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]}"
 BACKEND="${3:-}"
 case "$BACKEND" in
-  ""|java2d|skia) ;;
-  *) echo "ERROR: backend must be java2d or skia, not: $BACKEND" >&2; exit 1 ;;
+  ""|java2d|skia|skia-raster) ;;
+  *) echo "ERROR: backend must be java2d, skia or skia-raster, not: $BACKEND" >&2; exit 1 ;;
 esac
 RENDERER_FLAG=()
 if [[ -n "$BACKEND" ]]; then RENDERER_FLAG=("--renderer=$BACKEND"); fi
