@@ -68,26 +68,5 @@ private[config] object ConfigFieldsSurface:
     )(
       _.surfaceConfig.textAreaInsets.bottomPercent,
       (config, value) => config.withTextAreaBottomInset(fractionOfPercent(value))
-    ),
-    named("window.viewport.width_percent", "viewportWidthPercent", "viewport.width.percent", "viewport_width_percent")(
-      viewportPercent
-    )(
-      _.surfaceConfig.viewportSizing.width.percentValue,
-      (config, value) =>
-        config.withViewportWidthSizing(
-          config.surfaceConfig.viewportSizing.width.copy(percent = fractionOfPercent(value))
-        )
-    ),
-    named(
-      "window.viewport.height_percent",
-      "viewportHeightPercent",
-      "viewport.height.percent",
-      "viewport_height_percent"
-    )(viewportPercent)(
-      _.surfaceConfig.viewportSizing.height.percentValue,
-      (config, value) =>
-        config.withViewportHeightSizing(
-          config.surfaceConfig.viewportSizing.height.copy(percent = fractionOfPercent(value))
-        )
     )
   )

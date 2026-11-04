@@ -294,7 +294,12 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     result.report.deprecatedEntries shouldBe Nil
     result.report.removedKeys should not be empty
     result.report.removedKeys.filterNot(_.startsWith("motion.")) should contain theSameElementsAs
-      List("window.viewport.width_max", "window.viewport.height_max")
+      List(
+        "window.viewport.width_percent",
+        "window.viewport.width_max",
+        "window.viewport.height_percent",
+        "window.viewport.height_max"
+      )
 
     val messageLines =
       ConfigMigrationWarning.message(Paths.get("config.conf"), result.report).value.linesIterator.toList

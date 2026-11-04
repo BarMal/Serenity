@@ -55,34 +55,3 @@ object TextAreaInsets:
 
   def clamp(value: Double): Double =
     value.max(0.0).min(MaxInset)
-
-/** Relative sizing for one viewport axis. */
-final case class ViewportAxisSizing(percent: Double = 1.0):
-
-  def normalized: ViewportAxisSizing =
-    copy(percent = ViewportAxisSizing.clampPercent(percent))
-
-  def percentValue: Double =
-    normalized.percent * 100.0
-
-  def resolve(availableCells: Int): Int =
-    math.max(1, (availableCells.max(1) * normalized.percent).toInt)
-
-object ViewportAxisSizing:
-  val MinPercent: Double = 0.01
-  val MaxPercent: Double = 1.0
-
-  def fromPercent(percent: Double): ViewportAxisSizing =
-    ViewportAxisSizing(percent / 100.0).normalized
-
-  def clampPercent(value: Double): Double =
-    value.max(MinPercent).min(MaxPercent)
-
-/** Configurable editor viewport sizing within each pane's available text area. */
-final case class ViewportSizing(
-    width: ViewportAxisSizing = ViewportAxisSizing(),
-    height: ViewportAxisSizing = ViewportAxisSizing()
-):
-
-  def normalized: ViewportSizing =
-    copy(width = width.normalized, height = height.normalized)

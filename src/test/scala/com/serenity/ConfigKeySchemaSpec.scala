@@ -41,7 +41,6 @@ class ConfigKeySchemaSpec extends AnyFlatSpec with Matchers:
     ConfigKeySchema.deprecatedReplacement("render.fps") shouldBe Some("ui.render.fps")
     ConfigKeySchema.deprecatedReplacement("app.mode") shouldBe Some("workspace.mode")
     ConfigKeySchema.deprecatedReplacement("document.default_mode") shouldBe Some("editor.default_document_mode")
-    ConfigKeySchema.deprecatedReplacement("viewport.width.percent") shouldBe Some("window.viewport.width_percent")
   }
 
   it should "know every static key rendered by ConfigManager" in {

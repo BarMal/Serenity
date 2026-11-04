@@ -330,9 +330,6 @@ object ConfigGenerators:
       padding     <- Gen.option(Gen.choose(0, LineNumberLayout.MaxCells))
     yield LineNumberLayout(side, marginLeft, marginRight, padding)
 
-  val genViewportAxisSizing: Gen[ViewportAxisSizing] =
-    double(ViewportAxisSizing.MinPercent, ViewportAxisSizing.MaxPercent).map(ViewportAxisSizing(_))
-
   /** Surface settings that are independent of one another, constructed directly. */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
@@ -371,8 +368,6 @@ object ConfigGenerators:
       skiaVsync        <- Gen.oneOf(true, false)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
-      width            <- genViewportAxisSizing
-      height           <- genViewportAxisSizing
       frameStateCacheCapacity <- Gen.choose(
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
@@ -418,7 +413,6 @@ object ConfigGenerators:
       renderSkiaVsync = skiaVsync,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
-      viewportSizing = ViewportSizing(width, height),
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
       layerCachingEnabled = layerCaching,
       frameTimingEnabled = frameTiming,

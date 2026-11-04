@@ -149,29 +149,17 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceConfig" should "leave every surface setting's key to ConfigRegistry" in {
     ConfigRegistry.allKeys.should(contain("editor.contextual_toolbar_mode"))
-    ConfigRegistry.allKeys.should(contain("window.viewport.height_percent"))
+    ConfigRegistry.allKeys.should(contain("editor.text_area.bottom"))
   }
 
   it should "group appearance and text display settings under AppConfig" in {
     val config = AppConfig.conventional
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
-      .withViewportSizing(
-        ViewportSizing(
-          width = ViewportAxisSizing.fromPercent(80.0),
-          height = ViewportAxisSizing.fromPercent(90.0)
-        )
-      )
       .withWordWrap(false)
       .withFocusedTextBody(true)
       .withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
 
     config.surfaceConfig.textAreaInsets.shouldBe(TextAreaInsets.fromPercent(20.0, 10.0))
-    config.surfaceConfig.viewportSizing.shouldBe(
-      ViewportSizing(
-        width = ViewportAxisSizing.fromPercent(80.0),
-        height = ViewportAxisSizing.fromPercent(90.0)
-      )
-    )
     config.surfaceConfig.wordWrapEnabled.shouldBe(false)
     config.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)

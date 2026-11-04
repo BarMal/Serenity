@@ -2,7 +2,7 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, ViewportAxisSizing, ViewportSizing}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -158,20 +158,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep editor viewport dimensions matched to the available pane area" in {
-    val viewportSizing = ViewportSizing(
-      width = ViewportAxisSizing(percent = 0.8),
-      height = ViewportAxisSizing(percent = 1.0)
-    )
-    val initialState = com.serenity.state.models.AppState
-      .initial(AppConfig.conventional)
-      .copy(
-        persisted = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
-          .persisted
-          .copy(
-            config = AppConfig.conventional.withViewportSizing(viewportSizing)
-          )
-      )
+    val initialState = com.serenity.state.models.AppState.initial(AppConfig.conventional)
     val newSize = ViewportSize(120, 40)
 
     val resizedState = com.serenity.state.reducers.SystemEventReducer

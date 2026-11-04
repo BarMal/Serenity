@@ -365,12 +365,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .withoutStatusLine
       .withWordWrap(false)
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
-      .withViewportSizing(
-        ViewportSizing(
-          width = ViewportAxisSizing.fromPercent(80.0),
-          height = ViewportAxisSizing.fromPercent(90.0)
-        )
-      )
 
     val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
 
@@ -378,7 +372,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.statusLine.isPinned shouldBe false
     patched.config.surfaceConfig.wordWrapEnabled shouldBe false
     patched.config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
-    patched.config.surfaceConfig.viewportSizing shouldBe sourceConfig.surfaceConfig.viewportSizing
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }
