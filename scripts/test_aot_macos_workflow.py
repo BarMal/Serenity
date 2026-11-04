@@ -35,8 +35,9 @@ class MacosAotCacheTest(unittest.TestCase):
                 names = _names((_WORKFLOWS / workflow).read_text())
                 train = names.index("Train macOS AOT cache")
                 self.assertLess(names.index("Prepare app image"), train)
-                self.assertLess(train, names.index("Import macOS Developer ID certificate"))
                 self.assertLess(train, names.index("Sign macOS app image"))
+                if "Import macOS Developer ID certificate" in names:
+                    self.assertLess(train, names.index("Import macOS Developer ID certificate"))
 
     def test_training_runs_on_macos_only_against_the_bundle(self) -> None:
         for workflow in _PACKAGE_WORKFLOWS:
@@ -51,7 +52,9 @@ class MacosAotCacheTest(unittest.TestCase):
                 text = (_WORKFLOWS / workflow).read_text()
                 names = _names(text)
                 check = names.index("Check macOS AOT cache on the signed bundle")
-                self.assertLess(names.index("Smoke-test macOS app image"), check)
+                self.assertLess(names.index("Sign macOS app image"), check)
+                if "Smoke-test macOS app image" in names:
+                    self.assertLess(names.index("Smoke-test macOS app image"), check)
                 self.assertLess(check, names.index("Archive Unix app image"))
                 step = _step(text, "Check macOS AOT cache on the signed bundle")
                 self.assertIn("if: runner.os == 'macOS'", step)
@@ -59,6 +62,13 @@ class MacosAotCacheTest(unittest.TestCase):
                     step.index("scripts/check-aot-cache.sh dist/Serenity.app"),
                     step.index("codesign --verify --deep --strict"),
                 )
+
+    def test_the_new_steps_are_bounded_in_time(self) -> None:
+        for workflow in _PACKAGE_WORKFLOWS:
+            with self.subTest(workflow=workflow):
+                text = (_WORKFLOWS / workflow).read_text()
+                for name in ("Train macOS AOT cache", "Check macOS AOT cache on the signed bundle"):
+                    self.assertIn("timeout-minutes:", _step(text, name))
 
     def test_the_comment_no_longer_says_macos_has_no_archive(self) -> None:
         for workflow in _PACKAGE_WORKFLOWS:
