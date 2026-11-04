@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -34,6 +34,10 @@ class CellMetricsSpec extends AnyFlatSpec with Matchers:
 
   it should "return false when lineHeight is zero" in {
     CellMetrics(8, 0, 13).isValid shouldBe false
+  }
+
+  "CellMetrics.pixelRect" should "place a cell rectangle on the pixel grid" in {
+    CellMetrics(7, 13, 10).pixelRect(1, 2, 3, 4) shouldBe PixelRect(7, 26, 21, 52)
   }
 
   "CellMetrics.toCol" should "not throw ArithmeticException when charWidth is zero" in {

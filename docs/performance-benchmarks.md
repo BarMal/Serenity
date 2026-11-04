@@ -549,6 +549,14 @@ flagged, and about 5 minutes a run for six runs of a handful of benchmarks when 
 forgiven. By construction the confirmation can only turn failures into passes; the table below measures both passes
 (first pass, and after the confirmation on fresh pairs) rather than assuming them independent.
 
+**Excluded rows (#2557).** Rows listed in `scripts/perf-gate-excluded-rows.txt` (`rope.large_json.cursor_offset`,
+`render.markdown.live_preview`, `go_to_line_3000_paragraphs`, `typing_random_letters`, `typing_long_paragraph` and
+`laptop.render.typing_frame_2x` with its variants) were flagged on the first pass 77, 35 and 29 times (the first three)
+and never confirmed, or spread over 1.5x between runs on 31-37% of sides. They are still measured and printed, marked
+"excluded from the gate (nightly ABBA)", but cannot fail the job or reach the confirmation runs. A head commit that
+produces no rows stops the run step after its first head pass (a red `::error::` with the raw output's tail) instead of
+after all six.
+
 **Injecting a slowdown.** `-Dserenity.bench.slowdown=2` makes every timed call take twice as long (it spins for the
 extra time), so a gate can be shown a regression it must catch. `scripts/test_compare_perf_runs.py` carries the same
 case as a red test: the old rule passes base `[5, 30, 6]` ms against head `[10, 60, 12]`, the new one fails it.

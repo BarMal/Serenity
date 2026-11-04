@@ -1,8 +1,13 @@
 package com.serenity.app
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay, RendererEntryPoints}
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.renderer.{
+  FontSpec,
+  FrameSurfaceFactory,
+  RenderTarget,
+  RendererCursorOverlay,
+  RendererEntryPoints
+}
 
 object GuiFramePainting:
 
@@ -16,7 +21,7 @@ object GuiFramePainting:
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
     cursorColor: Option[RenderColor],
-    window: SwingWindow,
+    target: RenderTarget,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
     caches: com.serenity.state.manager.RenderCaches,
@@ -25,7 +30,7 @@ object GuiFramePainting:
     if cursorVisible then
       val _ = RendererCursorOverlay.renderWithCursorOverlay(
         state,
-        window,
+        target,
         FontSpec.fromAwt(display.codeFont),
         FontSpec.fromAwt(display.textFont),
         FontSpec.fromAwt(display.uiFont),
@@ -40,13 +45,13 @@ object GuiFramePainting:
       RendererEntryPoints.render(
         state,
         cursorVisible = false,
-        window,
+        target,
         FontSpec.fromAwt(display.codeFont),
         FontSpec.fromAwt(display.textFont),
         FontSpec.fromAwt(display.uiFont),
         display.uiMetrics,
         None,
-        repaintOnFlush = SwingWindow.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
+        repaintOnFlush = RenderTarget.shouldRepaintBaseFrameBeforeCursorOverlay(cursorVisible),
         damage = damage,
         caches = caches,
         surfaces = surfaces
@@ -57,7 +62,7 @@ object GuiFramePainting:
     state: com.serenity.state.models.AppState,
     cursorVisible: Boolean,
     cursorColor: Option[RenderColor],
-    window: SwingWindow,
+    target: RenderTarget,
     display: RuntimeDisplayState.Snapshot,
     damage: com.serenity.state.models.Damage,
     caches: com.serenity.state.manager.RenderCaches,
@@ -66,7 +71,7 @@ object GuiFramePainting:
     val rendered = RendererCursorOverlay.renderCursorOnly(
       state,
       cursorVisible,
-      window,
+      target,
       FontSpec.fromAwt(display.codeFont),
       FontSpec.fromAwt(display.textFont),
       FontSpec.fromAwt(display.uiFont),
@@ -78,7 +83,7 @@ object GuiFramePainting:
       RendererEntryPoints.render(
         state,
         cursorVisible,
-        window,
+        target,
         FontSpec.fromAwt(display.codeFont),
         FontSpec.fromAwt(display.textFont),
         FontSpec.fromAwt(display.uiFont),
