@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
 
-  private def entry(id: Int, title: String, dirty: Boolean = false): TabListEntry =
-    TabListEntry(BufferId(id), title, isDirty = dirty)
+  private def entry(id: Int, title: String, dirty: Boolean = false, preview: Boolean = false): TabListEntry =
+    TabListEntry(BufferId(id), title, isDirty = dirty, isPreview = preview)
 
   "allocate" should "return no allocations for an empty tab list" in {
     TabBarSurfaceComposition.allocate(Nil, availableWidth = 40) shouldBe Nil
@@ -59,7 +59,14 @@ class TabBarSurfaceCompositionSpec extends AnyFlatSpec with Matchers:
     allocations.foreach(_.allocatedWidth should be >= 1)
   }
 
-  "forTabBar" should "map each tab to one segment of a single Distributed paint box" in {
+  "forTabBar" should "draw a preview tab's label in italics and no other" in {
+    val entries  = List(entry(0, "kept"), entry(1, "peeked", preview = true))
+    val resolved = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(0)), LayoutRect(0, 0, 30, 1))
+
+    resolved.paintBoxes.head.segments.take(2).map(_.italic) shouldBe List(false, true)
+  }
+
+  it should "map each tab to one segment of a single Distributed paint box" in {
     val entries  = List(entry(0, "one"), entry(1, "two"), entry(2, "three"))
     val resolved = TabBarSurfaceComposition.forTabBar(entries, Some(BufferId(1)), LayoutRect(0, 0, 30, 1))
 

@@ -136,3 +136,11 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
 
     SkiaTextCaches.heldBy(bench.cold(bench.shared()).backendCaches) shouldBe false
   }
+
+  "Both kinds of caches" should "count what each frame drew, so a scenario can report its shapings" in {
+    val bench  = new BenchmarkCaches(new ByHand)
+    val shared = bench.shared()
+
+    shared.frameCounters.isEnabled shouldBe true
+    bench.cold(shared).frameCounters.isEnabled shouldBe true
+  }

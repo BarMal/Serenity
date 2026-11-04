@@ -35,6 +35,7 @@ object RendererPaneContent:
             renderEditorPane(
               pane,
               paneLayout,
+              SharedSides.of(paneId, renderPlan.paneLayouts),
               state,
               context,
               renderPlan.snapshots.get(paneId),
@@ -48,15 +49,40 @@ object RendererPaneContent:
         case None => ()
     }
 
+  private val UnboundedPx = 1 << 20
+
   /** A last row that starts inside the pane but ends past it is cut off at the pane's bottom edge. Left unclipped its
     * glyphs land on the status row, which a frame that repaints chrome clears and one that does not leaves covered, so
-    * the same document drew two ways depending on the frame before. Only the bottom is bounded: glyph overscan to the
-    * sides is deliberate.
+    * the same document drew two ways depending on the frame before. Only the bottom is bounded here; the sides of what
+    * a pane paints inside its content are [[withinColumns]]'s.
     */
   private def aboveBottomOf(contentRect: LayoutRect, context: RenderContext)(paint: => Unit): Unit =
     context.surface.panelOutlines match
       case Some(clipping) if contentRect.bottom < context.surface.viewportHeight =>
         clipping.withRectClip(0, 0, context.surface.viewportWidth, contentRect.bottom)(paint)
+      case _ => paint
+
+  /** Bounds the sides of what a pane paints inside its content (#2481). A frame that redraws only some rows keeps each
+    * kept row's band, which reaches [[RendererChromePlan.BleedPx]] past the content on a side nothing abuts and not at
+    * all on a side another pane abuts; ink beyond that is cleared and not redrawn, where a frame from scratch would
+    * show it, and on a shared side it lands on the neighbour's pixels, which that frame paints over. So the content
+    * paints no further than what is kept, on a surface that can clip between cells; one that cannot has no such margin.
+    * The chrome around the content, which the insets can make wider, is not bounded.
+    */
+  private def withinColumns(contentRect: LayoutRect, shared: SharedSides, context: RenderContext)(
+    paint: => Unit
+  ): Unit =
+    val surface = context.surface
+    surface.panelOutlines match
+      case Some(clipping) if surface.addressesPixels =>
+        val metrics = context.cellMetrics
+        val leftPx  = metrics.toPixelX(contentRect.x) - (if shared.left then 0 else RendererChromePlan.BleedPx)
+        val rightPx = metrics.toPixelX(contentRect.right) + (if shared.right then 0 else RendererChromePlan.BleedPx)
+        clipping.withPixelClip(leftPx, 0, rightPx - leftPx, UnboundedPx)(paint)
+      case Some(clipping) if shared.left || shared.right =>
+        val left  = if shared.left then contentRect.x else 0
+        val right = if shared.right then contentRect.right else surface.viewportWidth
+        clipping.withRectClip(left, 0, right - left, surface.viewportHeight)(paint)
       case _ => paint
 
   /** Paint every pane's visible cursors and report the union of pixel rects painted across all of them. */
@@ -112,6 +138,7 @@ object RendererPaneContent:
   private def renderEditorPane(
     pane: EditorPane,
     paneLayout: EditorPaneLayout,
+    shared: SharedSides,
     state: AppState,
     context: RenderContext,
     preparedSnapshot: Option[TextLayoutSnapshot],
@@ -132,77 +159,79 @@ object RendererPaneContent:
 
     val contentRect = paneLayout.contentRect
 
-    val bufferSnapshot =
-      preparedSnapshot.orElse(buffer.map(RendererPaneSetup.snapshotForBuffer(_, contentRect, state, context)))
-    // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
-    // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
-    // side. `dirtyRows` numbers the rows across the columns ([[ColumnPaneRows]]); each column draws its share.
-    val paintsColumns =
-      columnPlacements.nonEmpty && buffer.exists(_.document.content.weight > 0)
+    withinColumns(contentRect, shared, context) {
+      val bufferSnapshot =
+        preparedSnapshot.orElse(buffer.map(RendererPaneSetup.snapshotForBuffer(_, contentRect, state, context)))
+      // Multi-column e-reader layout (issue #1338, Phase 2 / slice 1): a column-mode pane paints each column's own
+      // snapshot at its own x-origin (`contentRect.x + placement.xOffsetCells`), so the page reads as columns side by
+      // side. `dirtyRows` numbers the rows across the columns ([[ColumnPaneRows]]); each column draws its share.
+      val paintsColumns =
+        columnPlacements.nonEmpty && buffer.exists(_.document.content.weight > 0)
 
-    buffer match
-      case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
-        RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context, state.persisted.config)
-      case Some(buf) if buf.document.content.weight == 0 =>
-        RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
-      case Some(buf) if paintsColumns =>
-        val bufferAnnotations =
-          annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending))
-        columnPlacements.zip(ColumnPaneRows.localRows(columnPlacements, dirtyRows)).foreach {
-          (placement, columnDirtyRows) =>
+      buffer match
+        case Some(buf) if buf.document.content.weight == 0 && buf.document.isNewEmpty =>
+          RendererStartPage.renderWelcomeText(contentRect, state.persisted.theme, context, state.persisted.config)
+        case Some(buf) if buf.document.content.weight == 0 =>
+          RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
+        case Some(buf) if paintsColumns =>
+          val bufferAnnotations =
+            annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending))
+          columnPlacements.zip(ColumnPaneRows.localRows(columnPlacements, dirtyRows)).foreach {
+            (placement, columnDirtyRows) =>
+              renderBufferContent(
+                buf,
+                columnRect(contentRect, placement),
+                state,
+                context,
+                placement.snapshot,
+                bufferAnnotations,
+                columnDirtyRows
+              )
+          }
+        case Some(buf) =>
+          bufferSnapshot.fold(RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
             renderBufferContent(
               buf,
-              columnRect(contentRect, placement),
+              contentRect,
               state,
               context,
-              placement.snapshot,
-              bufferAnnotations,
-              columnDirtyRows
+              snap,
+              annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
+              dirtyRows
             )
-        }
-      case Some(buf) =>
-        bufferSnapshot.fold(RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)) { snap =>
-          renderBufferContent(
-            buf,
-            contentRect,
-            state,
-            context,
-            snap,
-            annotations.getOrElse(BufferRenderAnnotations(Map.empty, Map.empty, SemanticTokensAvailability.Pending)),
-            dirtyRows
-          )
-        }
-      case None =>
-        RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
+          }
+        case None =>
+          RendererStartPage.renderEmptyPane(contentRect, state.persisted.theme, context)
 
-    val cursorContext =
-      if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
-      else context
-    (buffer, bufferSnapshot) match
-      case (Some(buf), _) if paintsColumns =>
-        // Each column paints only the cursors whose buffer position falls on one of its own visual rows; the others
-        // resolve to no visual row in that column's snapshot and paint nothing. So the caret lands in whichever page
-        // column actually holds it.
-        columnPlacements.foreach { placement =>
+      val cursorContext =
+        if state.hasCommandRunnerDomain then context.copy(cursorVisible = true)
+        else context
+      (buffer, bufferSnapshot) match
+        case (Some(buf), _) if paintsColumns =>
+          // Each column paints only the cursors whose buffer position falls on one of its own visual rows; the others
+          // resolve to no visual row in that column's snapshot and paint nothing. So the caret lands in whichever page
+          // column actually holds it.
+          columnPlacements.foreach { placement =>
+            val _ = RendererCursorGlyphs.renderCursors(
+              buf,
+              columnRect(contentRect, placement),
+              state.persisted.theme,
+              state.persisted.config,
+              cursorContext,
+              placement.snapshot
+            )
+          }
+        case (Some(buf), Some(snap)) =>
           val _ = RendererCursorGlyphs.renderCursors(
             buf,
-            columnRect(contentRect, placement),
+            contentRect,
             state.persisted.theme,
             state.persisted.config,
             cursorContext,
-            placement.snapshot
+            snap
           )
-        }
-      case (Some(buf), Some(snap)) =>
-        val _ = RendererCursorGlyphs.renderCursors(
-          buf,
-          contentRect,
-          state.persisted.theme,
-          state.persisted.config,
-          cursorContext,
-          snap
-        )
-      case _ => ()
+        case _ => ()
+    }
 
   /** The x-shifted content rect a single page column's TEXT paints into: the pane's content rect moved right by the
     * column's own cell offset, past its line-number rail (`gutterWidthCells`, slice 2), and narrowed to the remaining

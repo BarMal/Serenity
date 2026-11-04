@@ -35,6 +35,11 @@ enum FileEffect:
   case SaveBufferAs(bufferId: BufferId, path: Path)
   case DirectLoadFile(path: Path)
 
+  /** An open from the explorer: switches to the file's tab when it is already open, else opens it (as a preview tab
+    * that the next preview replaces, or to keep). Nothing else opens files this way.
+    */
+  case OpenFromExplorer(path: Path, preview: Boolean)
+
   /** Opens the files a rename's edits name that no buffer holds, then applies the edits to them (#1965). */
   case OpenForRenameEdit(pending: PendingRename)
 

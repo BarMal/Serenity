@@ -9,9 +9,7 @@ import com.serenity.ui.renderer.{
   FontSpec,
   FrameSurfaceFactory,
   FrameSurfaceRequest,
-  Java2DRenderSurface,
-  RenderSurface,
-  ScreenIdentity
+  RenderSurface
 }
 import org.jetbrains.skia.Surface
 
@@ -26,12 +24,12 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
   private val FramesKey = BackendCacheKey(classOf[RasterFrames])
 
   def create(request: FrameSurfaceRequest): RenderSurface =
-    val canvas        = request.canvas
-    val logicalWidth  = Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-    val logicalHeight = Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-    val scale         = Java2DRenderSurface.deviceScaleFor(canvas)
-    val widthPx       = Java2DRenderSurface.deviceImageDimension(logicalWidth, scale.x)
-    val heightPx      = Java2DRenderSurface.deviceImageDimension(logicalHeight, scale.y)
+    val geometry      = request.geometry
+    val logicalWidth  = geometry.logicalWidthPx
+    val logicalHeight = geometry.logicalHeightPx
+    val scale         = geometry.deviceScale
+    val widthPx       = geometry.deviceWidthPx
+    val heightPx      = geometry.deviceHeightPx
     val image         = request.acquireImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
     val frames        = request.backendCaches.getOrCreate(FramesKey)(new RasterFrames)
     val surface =
@@ -59,7 +57,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
           surface.close()
         request.onFlush(image)
       ,
-      layerCacheOwner = Some(ScreenIdentity(canvas)),
+      layerCacheOwner = Some(geometry.identity),
       changes = changes
     )
 

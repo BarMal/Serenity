@@ -12,9 +12,13 @@ object PanelInputEvent:
   case object Dismiss extends PanelInputEvent
 
   case object Activate extends PanelInputEvent
-  case object NoOp     extends PanelInputEvent
-  case object First    extends PanelInputEvent
-  case object Last     extends PanelInputEvent
+
+  /** Like [[Activate]], but a file opens as a preview tab; only the mouse sends it, in `explorer.open_mode = preview`.
+    */
+  case object Preview extends PanelInputEvent
+  case object NoOp    extends PanelInputEvent
+  case object First   extends PanelInputEvent
+  case object Last    extends PanelInputEvent
 
   /** A page down (positive `delta`) or up (negative). */
   final case class Page(delta: Int) extends PanelInputEvent

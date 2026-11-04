@@ -99,7 +99,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
         fail(s"Expected StateChange, got $other")
   }
 
-  it should "emit a direct-load effect when activating a selected file in the explorer panel" in {
+  it should "emit an open-from-explorer effect when activating a selected file in the explorer panel" in {
     val root         = Paths.get("/repo")
     val selectedFile = root.resolve("build.sbt")
     val state = dockedState(
@@ -116,7 +116,7 @@ class PinnedPanelComponentSpec extends AnyFlatSpec with Matchers:
 
     component.processEvent(PanelInputEvent.Activate, state) shouldBe
       ComponentResult.ReducerUpdate(
-        ReducerResult.withEffect(state, AppEffect.File(FileEffect.DirectLoadFile(selectedFile)))
+        ReducerResult.withEffect(state, AppEffect.File(FileEffect.OpenFromExplorer(selectedFile, preview = false)))
       )
   }
 
