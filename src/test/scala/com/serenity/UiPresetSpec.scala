@@ -112,6 +112,13 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.targetEditorPaneCount shouldBe Some(2)
   }
 
+  it should "show the workspace mode in the status line of every built-in preset that shows one (#2570)" in {
+    val shown = UiPreset.builtInNames.flatMap(name => UiPreset.builtIn(name).map(name -> _)).filter(_._2.config.statusLine.isShown)
+
+    shown should not be empty
+    shown.filterNot(_._2.config.statusLine.segments.contains(StatusSegment.Mode)).map(_._1) shouldBe Nil
+  }
+
   it should "provide peer prose, code, and compact workflow presets" in {
     UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Compact", "Review")
 
