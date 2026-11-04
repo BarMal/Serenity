@@ -123,7 +123,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = true,
       columnModeEnabled = true,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 
@@ -138,7 +138,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = false,
       columnModeEnabled = true,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 
@@ -153,7 +153,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = true,
       columnModeEnabled = false,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 

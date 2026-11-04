@@ -45,7 +45,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   "SurfaceConfig" should "default column mode off, with a sensible target width and gap" in {
     val default = SurfaceConfig()
     default.columnModeEnabled.shouldBe(false)
-    default.columnTargetWidthCells.shouldBe(80)
+    default.columnTargetWidthCells.shouldBe(None)
     default.columnGap.shouldBe(2)
   }
 
@@ -76,9 +76,10 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clamp columnTargetWidthCells to at least 1" in {
-    SurfaceConfig(columnTargetWidthCells = -5).normalized.columnTargetWidthCells.shouldBe(1)
-    SurfaceConfig(columnTargetWidthCells = 0).normalized.columnTargetWidthCells.shouldBe(1)
-    SurfaceConfig(columnTargetWidthCells = 100).normalized.columnTargetWidthCells.shouldBe(100)
+    SurfaceConfig(columnTargetWidthCells = Some(-5)).normalized.columnTargetWidthCells.shouldBe(Some(1))
+    SurfaceConfig(columnTargetWidthCells = Some(0)).normalized.columnTargetWidthCells.shouldBe(Some(1))
+    SurfaceConfig(columnTargetWidthCells = Some(100)).normalized.columnTargetWidthCells.shouldBe(Some(100))
+    SurfaceConfig(columnTargetWidthCells = None).normalized.columnTargetWidthCells.shouldBe(None)
   }
 
   "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
