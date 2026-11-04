@@ -1,7 +1,7 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{CommandRunner, CommandSurfaceItem, SettingsSurfaceState}
+import com.serenity.command.{CommandRunner, CommandSurfaceItem}
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
@@ -26,8 +26,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     // footer feature, and every row math below assumes the pre-Stage-3 window size.
     disableCommandRunnerKeyHints(stateManager)
 
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = settingsGroupPoint(before, 2)
+    val point = settingsGroupPoint(stateManager.getCurrentState.unsafeRunSync(), 2)
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
@@ -121,8 +120,8 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
     stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
 
+    val point  = settingsGroupPoint(stateManager.getCurrentState.unsafeRunSync(), 1)
     val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = settingsGroupPoint(before, 1)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
@@ -187,15 +186,32 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
   final private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
 
-  /** The Settings root lists the selected group's children under it, so a group below the selection is displayed
-    * that many rows further down than its index.
+  /** Where the renderer's own composition puts the settings group at `index`: the Settings root pushes every row below
+    * the selected group down by its preview and scrolls to keep the selection visible, so a displayed row number is not
+    * the group's index.
     */
   private def settingsGroupPoint(state: AppState, index: Int): Point =
-    val runner   = runnerFrom(state)
-    val selected = runner.settingsSurfaceSelectedIndex
-    val preview  = SettingsSurfaceState.previewRows(runner.settingsSurfaceItems, selected)
-    val shift    = if index > selected then preview.rows.size + (if preview.overflowCount > 0 then 1 else 0) else 0
-    commandRunnerItemPoint(state, index + shift)
+    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
+    val frame = UiSceneSnapshot
+      .from(state, viewport)
+      .nodesInPaintOrder
+      .find(_.id == SceneNodeId.Surface(surface.id))
+      .getOrElse(fail("Expected the command runner scene node"))
+      .frameRect
+    val config = state.persisted.config
+    val region = CommandRunnerSurfaceComposition
+      .forRunner(
+        runnerFrom(state),
+        frame,
+        config.effectiveCommandRunnerItemGapRows,
+        SurfaceFrameLayout.itemTargetRowsFor(surface.content, config.interfaceDensity),
+        showKeyHints = config.surfaceConfig.commandRunnerShowKeyHints
+      )
+      .hitRegions
+      .find(region => CommandRunnerSurfaceComposition.absoluteIndexOf(region.focusId).contains(index))
+      .getOrElse(fail(s"Expected a painted row for settings group $index"))
+    Point(region.rect.x.toInt, region.rect.y.toInt)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))

@@ -9,7 +9,6 @@ import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{InputKey, KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceContent, SurfaceId, UiSurface}
-import com.serenity.ui.layout.{ModalSurfaceComposition, SurfaceFrameLayout, UiSceneSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -26,25 +25,10 @@ class CommandRunnerUiScenarioSpec extends AnyFlatSpec with Matchers:
 
     val beforeClick = driver.state.unsafeRunSync()
     CommandPaletteProbe.selectedCommandName(beforeClick) shouldBe Some("toggle-line-numbers")
-    val modal = UiSceneSnapshot
-      .from(beforeClick, driver.environment.viewport)
-      .modal
-      .lastOption
-      .getOrElse(fail("Expected the command picker"))
-    val target = ModalSurfaceComposition
-      .forModal(
-        beforeClick.topModal.map(_.modal).getOrElse(fail("Expected the command picker modal")),
-        modal.frameRect,
-        SurfaceFrameLayout.itemTargetRowsFor(
-          SurfaceContent.CommandPalette(CommandRunner()),
-          beforeClick.persisted.config.interfaceDensity
-        )
-      )
-      .getOrElse(fail("Expected the picker composition"))
-      .hitRegions
-      .find(_.actionId.nonEmpty)
-      .getOrElse(fail("Expected a clickable picker row"))
-    driver.dispatch(MouseClick(target.rect.x.toInt + 1, target.rect.y.toInt)).unsafeRunSync()
+    val row = searched.evidence.drawnText
+      .find(_.text.contains("Toggle Line"))
+      .getOrElse(fail("Expected the matching row to be drawn"))
+    driver.dispatch(MouseClick(row.bounds.x + 1, row.bounds.y)).unsafeRunSync()
     driver.state.unsafeRunSync().persisted.config.surfaceConfig.showLineNumbers shouldBe
       !beforeClick.persisted.config.surfaceConfig.showLineNumbers
     driver.dispatch(Escape).unsafeRunSync()
