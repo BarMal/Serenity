@@ -47,6 +47,16 @@ given Decoder[Symbol] = deriveDecoder
 given Encoder[Diagnostic] = deriveEncoder
 given Decoder[Diagnostic] = deriveDecoder
 
+/** Snapshots written before the root could collapse carry no `rootCollapsed`; derived decoders ignore defaults. */
+given Decoder[SessionPanelContent.DirectoryTree] = Decoder.instance { cursor =>
+  for
+    rootPath      <- cursor.get[String]("rootPath")
+    selectedPath  <- cursor.get[Option[String]]("selectedPath")
+    expandedPaths <- cursor.get[List[String]]("expandedPaths")
+    rootCollapsed <- cursor.getOrElse[Boolean]("rootCollapsed")(false)
+  yield SessionPanelContent.DirectoryTree(rootPath, selectedPath, expandedPaths, rootCollapsed)
+}
+
 given Encoder[SessionPanelContent] = deriveEncoder
 given Decoder[SessionPanelContent] = deriveDecoder
 
