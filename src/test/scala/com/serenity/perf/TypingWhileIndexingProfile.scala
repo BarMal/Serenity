@@ -70,10 +70,11 @@ object TypingWhileIndexingProfile:
   final case class Outcome(idle: Summary, loaded: Summary, walksCompleted: Int)
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
 
-    val options = optionsFrom(args.toList)
-    report(run(options), options).foreach(println)
+      val options = optionsFrom(args.toList)
+      report(run(options), options).foreach(println)
 
   private def flagsOf(args: List[String]): Map[String, String] =
     args.map(_.stripPrefix("--").split("=", 2).toList).collect { case key :: value :: Nil => key -> value }.toMap
