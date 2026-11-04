@@ -27,7 +27,7 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
       .shouldBe(LayoutRect(11, 5, 38, 6))
   }
 
-  it should "reserve two rows for contextual menus and toolbars outside compact density" in {
+  it should "reserve two rows for contextual toolbars outside compact density, and for context menus only at spacious" in {
     val command = com.serenity.command.Command.typed(
       "new-file",
       "New file",
@@ -41,9 +41,11 @@ class SurfaceFrameLayoutSpec extends AnyFlatSpec with Matchers:
 
     List(menu, toolbar).foreach { content =>
       SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Compact) shouldBe 1
-      SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Comfortable) shouldBe 2
       SurfaceFrameLayout.itemTargetRowsFor(content, InterfaceDensity.Spacious) shouldBe 2
     }
+    SurfaceFrameLayout.itemTargetRowsFor(toolbar, InterfaceDensity.Comfortable) shouldBe 2
+    // #2389 (owner decision): a context menu item is its own one-row target at Comfortable.
+    SurfaceFrameLayout.itemTargetRowsFor(menu, InterfaceDensity.Comfortable) shouldBe 1
   }
 
   it should "calculate visible item rows after header, footer, and reserved detail rows" in {
