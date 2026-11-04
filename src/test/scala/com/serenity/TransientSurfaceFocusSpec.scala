@@ -1,33 +1,25 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.model.LspPosition
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.ViewportSize
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** #1940: a peek (LSP hover, definition, references) is shown without taking focus, so the key that dismisses it still
   * reaches the editor instead of being swallowed.
   */
-class TransientSurfaceFocusSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class TransientSurfaceFocusSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val paneId = PaneId(0)
 
   private def makeStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("TransientSurfaceFocusSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("TransientSurfaceFocusSpec", initialConfig = AppConfig.default)
 
   private def withBuffer(sm: StateManager): BufferId =
     val bufferId = sm.createBuffer("hello\nworld", None).unsafeRunSync()

@@ -7,33 +7,27 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.StateManagerTestSupport
 import com.serenity.TestTemp
 import com.serenity.command.*
-import com.serenity.config.AppMode
+import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.BufferId
 import com.serenity.testkit.VirtualTime.runVirtual
-import com.serenity.testkit.{RopeText, SharedDictionary}
+import com.serenity.testkit.RopeText
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Prose-mode workspaces have no code to analyse, so switching a buffer's language must not spawn an LSP connection
   * (issue #1296) -- even though the same buffer would happily get one in code mode.
   */
-class LspAppModeGatingSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class LspAppModeGatingSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("LspAppModeGatingSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("LspAppModeGatingSpec", initialConfig = AppConfig.default)
 
   private def setBufferPath(stateManager: StateManager, file: java.nio.file.Path): Unit =
     stateManager

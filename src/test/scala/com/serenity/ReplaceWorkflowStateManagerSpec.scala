@@ -1,26 +1,19 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class ReplaceWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("ReplaceWorkflowStateManagerSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("ReplaceWorkflowStateManagerSpec", initialConfig = AppConfig.default)
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,

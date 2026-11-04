@@ -6,22 +6,19 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.StateManagerTestSupport
 import com.serenity.TestTemp
 import com.serenity.command.*
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.{RopeText, SharedDictionary}
+import com.serenity.testkit.RopeText
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class LspQueueSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class LspQueueSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   /** The delta says how the edit changed the text; these specs are about which text and version reach the lane. */
   private def withoutDelta(effect: LspEffect): LspEffect =
@@ -29,11 +26,8 @@ class LspQueueSpec extends AnyFlatSpec with Matchers:
       case changed: LspEffect.FileChanged => changed.copy(delta = None)
       case other                          => other
 
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
-
   private def makeStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("LspQueueSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("LspQueueSpec", initialConfig = AppConfig.default)
 
   private def setBufferLanguage(stateManager: StateManager, language: LanguageId): Unit =
     stateManager
