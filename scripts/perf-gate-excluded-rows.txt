@@ -1,0 +1,22 @@
+# Benchmark rows that scripts/compare_perf_runs.py measures and prints but does not gate on (issue #2557, item 10).
+# An entry is a benchmark name; it also covers that name followed by ".<variant>". One entry per line, a comment above
+# each citing why. Blank lines and "#" comments are ignored. These rows are checked by the nightly ABBA instead.
+# Evidence: the perf audit's rowstats.csv, 86 (1x) and 108 (2x) paired comparisons per row.
+
+# 77 first-pass flags (1x and 2x together), 0 confirmed; median spread 2.0x between runs of one commit, 62-64% of sides over 1.5x.
+rope.large_json.cursor_offset
+
+# 35 first-pass flags, 0 confirmed.
+render.markdown.live_preview
+
+# 29 first-pass flags, 0 confirmed; 44-50% of sides over 1.5x spread.
+laptop.input.state_manager.go_to_line_3000_paragraphs
+
+# 52% (1x) and 39% (2x) of sides over 1.5x spread.
+laptop.input.state_manager.typing_random_letters
+
+# 38% (1x) and 32% (2x) of sides over 1.5x spread.
+laptop.input.state_manager.typing_long_paragraph
+
+# 31-37% of sides over 1.5x spread, the row and its .chapter_ghosts, .diagnostics_gutter_*, .ereader_railed*, .ligature_font variants.
+laptop.render.typing_frame_2x

@@ -17,7 +17,21 @@ final case class LaunchOpens(root: Option[Path], files: List[Path], ignoredFolde
       s"Only one folder can be the project root. Opened $kept; did not open ${ignoredFolders.mkString(", ")}."
     }
 
+  /** What startup opens before its first frame, and what follows it. A folder becomes the project before the first
+    * frame, so the window opens on it rather than on a start page it would replace at once (#2522 item 2).
+    */
+  def startupPlan: LaunchOpens.StartupPlan =
+    (root, files) match
+      case (Some(folder), _)     => LaunchOpens.StartupPlan.Folder(folder, files.headOption, files.drop(1))
+      case (None, first :: rest) => LaunchOpens.StartupPlan.File(first, rest)
+      case (None, Nil)           => LaunchOpens.StartupPlan.StartPage
+
 object LaunchOpens:
+
+  enum StartupPlan:
+    case StartPage
+    case File(path: Path, later: List[Path])
+    case Folder(root: Path, firstFile: Option[Path], later: List[Path])
 
   def plan(paths: List[Path], isDirectory: Path => Boolean): LaunchOpens =
     val (folders, files) = paths.partition(isDirectory)
