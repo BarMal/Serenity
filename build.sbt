@@ -411,6 +411,10 @@ heapMeasurementTest := (Test / testOnly)
   .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
   .value
 
+// Rewrites src/test/resources/perf/frame-counts.tsv, the counts FrameCountRatchetSpec compares every run with. The spec
+// never writes the file; changing a count is this explicit command, committed with the change that moved it.
+addCommandAlias("writeFrameCountBaseline", "Test/runMain com.serenity.perf.FrameCountBaseline")
+
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-effect" % "3.7.1",
   "co.fs2"        %% "fs2-core"    % "3.13.0",
