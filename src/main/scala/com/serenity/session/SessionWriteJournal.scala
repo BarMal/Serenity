@@ -3,8 +3,8 @@ package com.serenity.session
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, StandardCopyOption}
 
-import cats.effect.{IO, SyncIO}
 import cats.effect.std.Mutex
+import cats.effect.{IO, SyncIO}
 import cats.syntax.all.*
 import com.serenity.io.AtomicFileWriter
 import org.typelevel.log4cats.Logger
