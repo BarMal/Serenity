@@ -24,11 +24,13 @@ on:
 permissions:
   contents: read
 
-# Only the newest commit of a branch or pull request matters here; a newer push cancels the older run so runs don't queue
-# behind each other (macOS runners especially).
+# On a pull request only the newest commit matters, so a newer push cancels the older run (macOS runners especially).
+# Master, nightly and dispatched runs are never cancelled: cancelling them left master with no completed Windows or macOS
+# result after the 11-02 nightly (#2557). GitHub still keeps one waiting run per group and replaces it with a newer one,
+# so the nightly has its own group, or a merge would replace it while it waits.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'schedule' && '-nightly' || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   shards-windows:

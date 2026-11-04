@@ -1,6 +1,5 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
@@ -10,22 +9,15 @@ import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, PinnedPanelViewModel, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class MarkdownViewModeSpec extends AnyFlatSpec with Matchers:
-
-  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("MarkdownViewModeSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("MarkdownViewModeSpec", initialConfig = AppConfig.default)
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,
