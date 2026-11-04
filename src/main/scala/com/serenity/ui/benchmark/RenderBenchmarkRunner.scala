@@ -60,6 +60,10 @@ object RenderBenchmarkRunner:
   )
 
   final private case class Measured(
+      name: String,
+      drawn: WindowPx,
+      drawnCanvas: WindowPx,
+      notTimed: Map[Scenario, String],
       stats: Map[Scenario, FrameStats],
       deviceScale: Double,
       renderApi: Option[String],
@@ -94,14 +98,18 @@ object RenderBenchmarkRunner:
       _.renderApi.toRight("the layer could not be made, so the window painted with its fallback surface")
     )
     val measuredSkia = skia.toOption.filter(_ => api.isRight)
-    val results = Scenario.values.toVector.map(scenario =>
-      ScenarioResult(
-        scenario,
-        java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0, refreshNanos = refresh.nanos)),
-        measuredSkia.flatMap(_.stats.get(scenario)),
-        raster.toOption.flatMap(_.stats.get(scenario))
+    val arms         = List(Some(java2d), measuredSkia, raster.toOption).flatten
+    val notTimed = arms.flatMap(_.notTimed.toList).groupMap(_._1)(_._2).view.mapValues(_.distinct.mkString("; ")).toMap
+    val results = Scenario.values.toVector
+      .filterNot(notTimed.contains)
+      .map(scenario =>
+        ScenarioResult(
+          scenario,
+          java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0, refreshNanos = refresh.nanos)),
+          measuredSkia.flatMap(_.stats.get(scenario)),
+          raster.toOption.flatMap(_.stats.get(scenario))
+        )
       )
-    )
     val environment = BenchmarkEnvironment(
       s"${System.getProperty("os.name", "?")} ${System.getProperty("os.version", "")}".trim,
       s"Java ${System.getProperty("java.version", "?")}",
@@ -121,6 +129,9 @@ object RenderBenchmarkRunner:
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
       skiaDeviceScale = measuredSkia.map(_.deviceScale),
+      drawnWindows = arms.map(arm => arm.name -> arm.drawn),
+      drawnCanvases = arms.map(arm => arm.name -> arm.drawnCanvas),
+      notTimed = notTimed,
       scenesLikeTheApp = true,
       java2dShapeTraffic = java2d.shapeTraffic,
       skiaShapeTraffic = measuredSkia.fold(Map.empty[Scenario, ShapingTraffic])(_.shapeTraffic)
@@ -162,21 +173,28 @@ object RenderBenchmarkRunner:
     settle()
     try
       val viewportLines = window.viewportSize.height
-      val startSize     = window.currentPreferredWindowSize
-      val timed = Scenario.values.toList.map { scenario =>
-        scenario -> timeScenario(
-          window,
-          fonts,
-          factory,
-          scenario,
-          options,
-          viewportLines,
-          WindowPx(startSize.width, startSize.height),
-          refresh
-        )
-      }.toMap
-      val stats = timed.view.mapValues(_.stats).toMap
+      val asked         = WindowPx(options.widthPx, options.heightPx)
+      // The first scenario draws for seconds, by which time the window manager has had its say; the size the window
+      // reports before then can still be the one it was made with.
+      val (results, drawn) = Scenario.values.toList match
+        case first :: rest =>
+          val firstResult = timeScenario(window, fonts, factory, first, options, viewportLines, asked, refresh)
+          val kept        = currentSize(window)
+          (
+            (first -> firstResult) :: rest.map(scenario =>
+              scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, kept, refresh)
+            ),
+            kept
+          )
+        case Nil => (Nil, asked)
+      val timed    = results.collect { case (scenario, Right(result)) => scenario -> result }.toMap
+      val notTimed = results.collect { case (scenario, Left(reason)) => scenario -> reason }.toMap
+      val stats    = timed.view.mapValues(_.stats).toMap
       Measured(
+        name,
+        drawn,
+        canvasPixels(window),
+        notTimed,
         stats,
         SwingCanvasGeometry.deviceScaleOf(window.canvas).x,
         window.layerPresenter.map(_.renderApi),
@@ -191,6 +209,40 @@ object RenderBenchmarkRunner:
       settle()
 
   private def timeScenario(
+    window: SwingWindow,
+    fonts: Fonts,
+    factory: FrameSurfaceFactory,
+    scenario: Scenario,
+    options: RenderBenchmarkOptions,
+    viewportLines: Int,
+    startSize: WindowPx,
+    refresh: RefreshRate
+  )(using Balance): Either[String, Timed] =
+    probeResize(window, scenario, startSize).map(_ =>
+      timeFrames(window, fonts, factory, scenario, options, viewportLines, startSize, refresh)
+    )
+
+  private def canvasPixels(window: SwingWindow): WindowPx =
+    val (width, height) = window.canvasDevicePixels
+    WindowPx(width, height)
+
+  private def currentSize(window: SwingWindow): WindowPx =
+    val size = window.currentPreferredWindowSize
+    WindowPx(size.width, size.height)
+
+  /** The resize scenario asks once, before any frame is timed, for the smaller size: a window the manager keeps at its
+    * size is not asked again and its frames are not timed as a resize that never happened (#2480).
+    */
+  private def probeResize(window: SwingWindow, scenario: Scenario, startSize: WindowPx): Either[String, Unit] =
+    if scenario != Scenario.ResizeWindow then Right(())
+    else
+      val wanted = startSize.smaller
+      window.resizeToPreferred(PreferredWindowSize(wanted.width, wanted.height), recentre = false)
+      WindowSizing.await(() => currentSize(window), wanted) match
+        case WindowSizing.Outcome.Applied(_) => Right(())
+        case WindowSizing.Outcome.Kept(kept) => Left(WindowSizing.keptReason(wanted, kept))
+
+  private def timeFrames(
     window: SwingWindow,
     fonts: Fonts,
     factory: FrameSurfaceFactory,
@@ -304,7 +356,8 @@ object RenderBenchmarkRunner:
       case _                                       => ()
 
   private def resize(window: SwingWindow, size: WindowPx): Unit =
-    window.resizeToPreferred(PreferredWindowSize(size.width, size.height))
+    window.resizeToPreferred(PreferredWindowSize(size.width, size.height), recentre = false)
+    val _ = WindowSizing.await(() => currentSize(window), size)
     settle()
 
   /** The nanoseconds from calling `render` to the last presentation of what it published, or `None` if there was none.
