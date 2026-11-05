@@ -1,7 +1,7 @@
 package com.serenity
 
 import com.serenity.command.*
-import com.serenity.config.AppMode
+import com.serenity.config.{AppMode, HotkeyConfig}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -71,18 +71,32 @@ class CommandPickerSpec extends AnyFlatSpec with Matchers:
     picker(AppEventReducer.reduce(ToggleCommandRunner, opened(), registry).state) shouldBe None
   }
 
+  private def openedOn(osName: String): AppState =
+    val state = AppState.initial
+    opened(
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withHotkeyConfig(HotkeyConfig.forOs(osName)))
+      )
+    )
+
   "A command choice" should "carry its description and key, and run its command on Enter" in {
     val searched = typed(opened(), "save")
     val save     = choices(searched).headOption.getOrElse(fail("no choices"))
 
     save.label shouldBe "Save"
     save.detail shouldBe Some("Save the current file.")
-    save.hint.map(_.toLowerCase) shouldBe Some("ctrl+s")
 
     val picked = ModalEventReducer.reduce(ModalType.ListPicker, Enter, searched)
     picked.effects shouldBe List(AppEffect.ExecuteCommand(save.action))
     picker(picked.state) shouldBe None
   }
+
+  it should "show the platform's primary modifier as its key" in
+    List("Linux" -> "ctrl+s", "Mac OS X" -> "meta+s").foreach { (osName, expected) =>
+      val save = choices(typed(openedOn(osName), "save")).headOption.getOrElse(fail(s"no choices on $osName"))
+
+      save.hint.map(_.toLowerCase) shouldBe Some(expected)
+    }
 
   it should "show why it can't run, and refuse it" in {
     val prose = AppState.initial.copy(persisted =
