@@ -144,7 +144,9 @@ jobs:
             scripts.test_collapsed_top_frames \
             scripts.test_combine_perf_runs \
             scripts.test_compare_perf_runs \
+            scripts.test_cross_os_nightly_gate \
             scripts.test_cross_os_workflow \
+            scripts.test_desktop_publish_workflow \
             scripts.test_footprint_parse \
             scripts.test_hang_dump_script \
             scripts.test_hyprland_float \
