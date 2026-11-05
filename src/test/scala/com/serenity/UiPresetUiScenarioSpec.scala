@@ -14,7 +14,6 @@ import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.SurfaceContent
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -149,11 +148,8 @@ class UiPresetUiScenarioSpec extends AnyFlatSpec with Matchers:
     (restarted.dispatch(ToggleCommandRunner) >> restarted.stateManager.runtimeLifecycle.awaitEffects).unsafeRunSync()
     val reopened      = restarted.state.unsafeRunSync()
     val reopenedFrame = restarted.renderFrame("changed-after-restart").unsafeRunSync()
-    val runner = reopened.commandRunnerSurface
-      .flatMap(_.content match
-        case SurfaceContent.CommandPalette(current) => Some(current)
-        case _                                      => None)
-      .getOrElse(fail("command runner should reopen after session restore"))
+    val runner =
+      CommandPaletteProbe.runner(reopened).getOrElse(fail("command runner should reopen after session restore"))
 
     reopened.persisted.config.interfaceDensity shouldBe InterfaceDensity.Compact
     store.find("Restart Draft").unsafeRunSync() shouldBe None

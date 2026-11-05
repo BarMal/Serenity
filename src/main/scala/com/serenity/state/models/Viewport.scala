@@ -18,6 +18,11 @@ final case class Viewport(
       placement = ViewportPlacement.Placed
     )
 
+  /** A scroll that leaves the caret where it was, wherever that is now on screen (see [[ViewportPlacement.Scrolled]]).
+    */
+  def scrolledAwayTo(topLine: Int, leftColumn: Int, topVisualLine: Int): Viewport =
+    scrolledTo(topLine, leftColumn, topVisualLine).copy(placement = ViewportPlacement.Scrolled)
+
 object Viewport:
 
   def default: Viewport =

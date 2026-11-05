@@ -14,16 +14,28 @@ object ViewportResolution:
   /** Marks every buffer whose primary cursor moved from `before` to `after` as `FollowCaret`, by the same test
     * `CursorViewport.ensureVisibleCursors` uses. A buffer already following the caret stays so.
     */
-  def markFollow(before: AppState, after: AppState): AppState =
+  def markFollow(before: AppState, after: AppState, keyedIn: Option[BufferId] = None): AppState =
     replacingBuffers(after) { (bufferId, buffer) =>
-      val headMoved =
-        before.persisted.buffers
-          .get(bufferId)
-          .exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
-      Option.when(headMoved && buffer.viewport.placement != ViewportPlacement.FollowCaret)(
-        buffer.copy(viewport = buffer.viewport.copy(placement = ViewportPlacement.FollowCaret))
-      )
+      Option.when(
+        needsPlacing(before, bufferId, buffer, keyedIn) && buffer.viewport.placement != ViewportPlacement.FollowCaret
+      )(buffer.copy(viewport = buffer.viewport.copy(placement = ViewportPlacement.FollowCaret)))
     }
+
+  /** Whether `buffer` has to be placed against its caret: its primary cursor moved from `before`, or a key went to it
+    * (`keyedIn`) while the wheel had its view scrolled away from the caret.
+    */
+  def needsPlacing(before: AppState, bufferId: BufferId, buffer: Buffer, keyedIn: Option[BufferId]): Boolean =
+    val headMoved =
+      before.persisted.buffers
+        .get(bufferId)
+        .exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
+    headMoved || (keyedIn.contains(bufferId) && buffer.viewport.placement == ViewportPlacement.Scrolled)
+
+  /** The buffer the focused editor pane shows, which a caret or edit key goes to. */
+  def focusedEditorBuffer(state: AppState): Option[BufferId] =
+    state.persisted.focus match
+      case Focus.EditorPane(paneId) => state.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+      case _                        => None
 
   /** Places every buffer marked `FollowCaret` against its primary cursor and marks it `Placed`; the very same state if
     * none is.
