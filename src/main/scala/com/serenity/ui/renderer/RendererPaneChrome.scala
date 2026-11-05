@@ -68,7 +68,8 @@ private[renderer] object RendererPaneChrome:
           headerRect.height,
           corners,
           state.persisted.config.scaledUiCornerRadiusPx,
-          headerFill
+          headerFill,
+          CornerUnderlay.over(headerRect, corners, contract, state.persisted.theme)
         )
       )
       if !roundedFill then fillHeader()

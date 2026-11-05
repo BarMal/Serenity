@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{PixelRect, RoundedCorners}
 import com.serenity.ui.renderer.{
+  CornerUnderlay,
   Effects,
   FontSpec,
   FrameSurfaceFactory,
@@ -189,9 +190,10 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
     height: Int,
     corners: RoundedCorners,
     radiusPx: Int,
-    color: RenderColor
+    color: RenderColor,
+    underlay: CornerUnderlay
   ): Boolean =
-    val drew = inner.panelOutlines.exists(_.fillRoundRect(x, y, width, height, corners, radiusPx, color))
+    val drew = inner.panelOutlines.exists(_.fillRoundRect(x, y, width, height, corners, radiusPx, color, underlay))
     if drew then counts.increment(DrawKind.FillRect)
     drew
 

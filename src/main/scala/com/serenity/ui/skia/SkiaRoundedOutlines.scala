@@ -4,8 +4,8 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, CornerRounding, PixelRect, RoundedCorners}
-import com.serenity.ui.renderer.PanelOutlineDrawing
-import org.jetbrains.skia.{BlendMode, Canvas, ClipMode, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, RRect}
+import com.serenity.ui.renderer.{CornerUnderlay, PanelOutlineDrawing}
+import org.jetbrains.skia.{BlendMode, Canvas, ClipMode, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, RRect, Rect}
 
 /** [[PanelOutlineDrawing]] for [[SkiaRenderSurface]]: the square outline and clip come from the surface itself, the
   * rounded ones are drawn here on its canvas.
@@ -28,6 +28,9 @@ final private[skia] class SkiaRoundedOutlines(
 
   private val roundedFill = Paint()
   roundedFill.setAntiAlias(true)
+
+  private val underlayFill = Paint()
+  underlayFill.setAntiAlias(false)
 
   def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     flat.strokeRect(x, y, width, height, color, strokeWidth)
@@ -67,7 +70,8 @@ final private[skia] class SkiaRoundedOutlines(
     height: Int,
     corners: RoundedCorners,
     radiusPx: Int,
-    color: RenderColor
+    color: RenderColor,
+    underlay: CornerUnderlay
   ): Boolean =
     val pw     = width * metrics.charWidth
     val ph     = height * metrics.lineHeight
@@ -77,6 +81,7 @@ final private[skia] class SkiaRoundedOutlines(
       val px = metrics.toPixelX(x)
       val py = metrics.toPixelY(y)
       recordPaint(px.toDouble, py.toDouble, pw.toDouble, ph.toDouble, 1.0)
+      restoreUnderlay(px, py, pw, ph, radius, corners, underlay)
       roundedFill.setBlendMode(BlendMode.SRC_OVER)
       roundedFill.setColor(argbOf(color))
       val _ = canvas.drawRRect(
@@ -84,6 +89,28 @@ final private[skia] class SkiaRoundedOutlines(
         roundedFill
       )
     rounds
+
+  /** Each rounded corner's square, painted with what a cold frame has there, before the fill's fringe goes over it. */
+  private def restoreUnderlay(
+    px: Int,
+    py: Int,
+    pw: Int,
+    ph: Int,
+    radius: Int,
+    corners: RoundedCorners,
+    underlay: CornerUnderlay
+  ): Unit =
+    def restore(rounded: Boolean, under: Option[RenderColor], x: Int, y: Int): Unit =
+      for color <- under if rounded do
+        underlayFill.setColor(argbOf(color))
+        val _ = canvas.drawRect(
+          Rect.Companion.makeLTRB(x.toFloat, y.toFloat, (x + radius).toFloat, (y + radius).toFloat),
+          underlayFill
+        )
+    restore(corners.topLeft, underlay.topLeft, px, py)
+    restore(corners.topRight, underlay.topRight, px + pw - radius, py)
+    restore(corners.bottomRight, underlay.bottomRight, px + pw - radius, py + ph - radius)
+    restore(corners.bottomLeft, underlay.bottomLeft, px, py + ph - radius)
 
   override def strokeRoundRect(
     x: Int,

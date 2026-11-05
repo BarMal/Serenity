@@ -35,7 +35,8 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
       height: Int,
       corners: RoundedCorners,
       radiusPx: Int,
-      color: RenderColor
+      color: RenderColor,
+      underlay: CornerUnderlay
     ): Boolean =
       roundedFills.incrementAndGet(): Unit
       true

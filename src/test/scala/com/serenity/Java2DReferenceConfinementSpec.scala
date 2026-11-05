@@ -73,6 +73,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/PanelTextSpacingRenderSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",
     "ui/renderer/RoundedChromeRenderSpec.scala",
+    "ui/renderer/RoundedFillRepaintSpec.scala",
     "ui/renderer/RoundedPanelDrawingSpec.scala",
     "ui/renderer/RoundedTabStripRenderSpec.scala",
     "ui/renderer/TabSeparatorRenderSpec.scala",

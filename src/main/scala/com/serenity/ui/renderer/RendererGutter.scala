@@ -524,7 +524,8 @@ object RendererGutter:
           gutterRect.height,
           corners,
           state.persisted.config.scaledUiCornerRadiusPx,
-          background
+          background,
+          CornerUnderlay.over(gutterRect, corners, contract, state.persisted.theme)
         )
       )
       if !roundedFill then fillGutter()

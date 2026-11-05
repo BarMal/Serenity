@@ -42,7 +42,8 @@ final private[renderer] class Java2DRoundedOutlines(
     height: Int,
     corners: RoundedCorners,
     radiusPx: Int,
-    color: RenderColor
+    color: RenderColor,
+    underlay: CornerUnderlay
   ): Boolean =
     val pw     = width * metrics.charWidth
     val ph     = height * metrics.lineHeight

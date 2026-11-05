@@ -272,7 +272,8 @@ trait PanelOutlineDrawing:
     @unused height: Int,
     @unused corners: RoundedCorners,
     @unused radiusPx: Int,
-    @unused color: RenderColor
+    @unused color: RenderColor,
+    @unused underlay: CornerUnderlay = CornerUnderlay.absent
   ): Boolean = false
 
   /** Restricts `render` to the rectangle with the `corners` rounded to `radiusPx` device pixels, so a panel's fill
