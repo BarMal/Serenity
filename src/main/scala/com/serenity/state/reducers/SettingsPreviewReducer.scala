@@ -80,7 +80,8 @@ object SettingsPreviewReducer:
           GeneralSettingsIntent.SetCommandRunnerVisibleRows(_) | GeneralSettingsIntent.SetCommandRunnerItemGapRows(_) |
           GeneralSettingsIntent.SetCommandRunnerCursorGapRows(_) =>
         true
-      case GeneralSettingsIntent.OpenSettings | GeneralSettingsIntent.SaveConfig | GeneralSettingsIntent.ResetSettings |
+      case GeneralSettingsIntent.OpenSettings | GeneralSettingsIntent.OpenSettingsAt(_, _, _) |
+          GeneralSettingsIntent.SaveConfig | GeneralSettingsIntent.ResetSettings |
           GeneralSettingsIntent.SetRenderBackend(_) | GeneralSettingsIntent.SetRenderWayland(_) |
           GeneralSettingsIntent.SetAutoSaveMode(_) | GeneralSettingsIntent.SetAutoSaveDelayMillis(_) =>
         false
