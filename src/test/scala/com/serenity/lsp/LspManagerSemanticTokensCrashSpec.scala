@@ -9,7 +9,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.lsp.client.{DocumentUri, LspConnection, WorkspaceRootUri}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.Diagnostic
-import com.serenity.testkit.RopeText
+import com.serenity.testkit.{HangBound, RopeText}
 import fs2.Stream
 import io.circe.Json
 import org.scalatest.flatspec.AnyFlatSpec
@@ -74,5 +74,7 @@ class LspManagerSemanticTokensCrashSpec extends AnyFlatSpec with Matchers with L
             yield second.isLeft
           }
       yield result
-    program.timeout(60.seconds).unsafeRunSync() shouldBe true
+    // The test is 2.3 s of fixed real sleeps (the 4 s backoff window is never waited out), which a slow runner does not
+    // stretch; only the startup around them does.
+    HangBound.within(program, 20.seconds).unsafeRunSync() shouldBe true
   }

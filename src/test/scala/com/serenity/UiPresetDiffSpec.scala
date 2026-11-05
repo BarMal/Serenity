@@ -124,9 +124,10 @@ class UiPresetDiffSpec extends AnyFlatSpec with Matchers:
     keys(changes) should contain allOf (
       "editor.smart_punctuation",
       "editor.typewriter_scrolling",
-      "editor.focused_text_body",
-      "typography.prose.measure"
+      "editor.focused_text_body"
     )
+    // A line-length measure is opt-in: the Writing workflow leaves the text column unlimited (#2570).
+    keys(changes) should not contain "typography.prose.measure"
     // Spell check is on by default now, so there is nothing for the Writing workflow to turn on.
     keys(changes) should not contain "spellcheck.enabled"
   }

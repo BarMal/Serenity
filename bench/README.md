@@ -50,13 +50,23 @@ leaves a stack instead of blocking the batch. The conditions file also records e
 
 `bench-laptop.sh` sources `bench/bench-lib.sh` (keep the two together). It finds the app's log under either `$HOME/.local/state/serenity/` or `$HOME/.serenity/`, reads AC power from whichever `AC*` supply reports it, and exits non-zero when no run produced a `[FRAME]` timing line, so a batch of failed launches is not mistaken for a result. `scripts/test_bench_laptop.py` covers these.
 
+The run's output records how the quit key was sent and how many `[STATE MODAL]` lines the app logged; the run types text first, so a `ctrl+q` that reaches the app raises the unsaved-changes modal instead of quitting, and it is the `SIGTERM` in `stop_app` that ends it. A JVM still alive after `SIGTERM` is reported as `HUNG:` in the run's output, and its `stdout.log` and app log are copied beside the thread dump as `<label>-run<N>-hang.stdout.log` and `-hang.app.log` (#2507).
+
 ## Time to first frame of a packaged image
 
 `bench/ttfw.py <launcher> <runs> <label> [warm-up-runs]` launches a packaged app image with `--smoke-test --safe-mode` and reports the median wall time to the first painted frame (the `SERENITY_SMOKE_READY` line) and to exit. It needs a display and the image from a `desktop-release.yml` run (artifact `Serenity-linux-x64`, the zip of `dist/Serenity`); the laptop does not build. The warm-up run is discarded, which lets an AppCDS image write its archive.
 
+### Start-up as benchmark rows (#2420)
+
+`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
+
 ### How much start-up varies (#2420)
 
 `bench/startup-variance.sh <app-image> <runs-per-round> <out-dir>` runs `ttfw.py` in six rounds ordered warm, cold, cold, warm, warm, cold, so drift falls on both modes alike. "Cold" means the image's AOT cache is moved aside (the OS file cache stays warm). `bench/startup-spread.py` pools the rounds into n, median, coefficient of variation and max/min per mode. The manual `startup-variance.yml` workflow runs it on a GitHub runner against the Linux image of a Desktop Package Check run (`image_run_id`), to decide whether start-up rows can gate in CI or only track a trend.
+
+### ABBA over two images (#2420)
+
+`bench/abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]` is `abba.sh` for start-up: it runs `startup.py` against the two images' launchers in the order A B B A A B B A, writes `a-1..4.csv` and `b-1..4.csv`, and applies the protocol's blocking rule with `scripts/abba_compare.py`. The time floor is 100 ms (`ABBA_STARTUP_MIN_DELTA_MS`; `abba_compare.py --time-delta-ms`), not the 0.03 ms of the in-process rows, which would block on noise at a start-up scale. The 100 ms is a guess, not a measurement: two runs of one commit on a GitHub runner differed by 77 ms (warm) and 114 ms (cold), and nothing has been measured on the laptop, so run an A/A there before trusting it. Set `ABBA_STARTUP_REPORT_ONLY=1` for a CI job: findings become `::warning::` lines and the script exits 0 whatever happens, because start-up is tracked as a trend on CI and only the laptop run gates. Both images need a trained AOT cache. Build the two images from the merge base and the candidate with `desktop-release.yml`.
 
 ## Per-keystroke latency trace
 
@@ -64,10 +74,10 @@ leaves a stack instead of blocking the batch. The conditions file also records e
 
 ```
 [LATENCY] seq=41 when_to_edt=3 edt_to_enqueue=0.01 queue=0.21 dispatch=0.08 apply=4.90 damage=0.31 frame_wait=0.00 pacing_wait=7.95 pre_render=0.05 render=14.80 publish_to_paint=12.40 paint=2.90 total=43.61 ms
-[LATENCY] summary window=5.0s keys=48 unpainted=0 | when_to_edt p50=... p95=... | ... | total p50=... p95=... ms
+[LATENCY] summary window=5.0s keys=48 unpainted=0 | when_to_edt p50=... p95=... | ... | total p50=... p95=... | key_to_screen p50=... p95=... ms
 ```
 
-The stages run back to back, so they add up to `total`: the event thread receiving the key to queueing it (`edt_to_enqueue`), waiting for the input loop (`queue`), the batch's earlier work before its dispatch (`dispatch`), applying it (`apply`), diffing and emitting damage (`damage`), waiting for the render loop to start a fast frame, including a frame already under way (`frame_wait`), the frame deadline (`pacing_wait`), the resize check before the frame reads the model (`pre_render`), drawing until the image is published (`render`), waiting for Swing to start painting it (`publish_to_paint`) and the paint itself (`paint`). `when_to_edt` is the wall-clock gap from the OS event time (`KeyEvent.getWhen`) to the event thread, outside `total`. Nothing after `paintComponent` returns (Swing's back-buffer blit, the compositor) is visible to the app. `unpainted` counts keystrokes whose frame changed nothing on screen. The per-keystroke lines are written in a batch with each summary.
+The stages run back to back, so they add up to `total`: the event thread receiving the key to queueing it (`edt_to_enqueue`), waiting for the input loop (`queue`), the batch's earlier work before its dispatch (`dispatch`), applying it (`apply`), diffing and emitting damage (`damage`), waiting for the render loop to start a fast frame, including a frame already under way (`frame_wait`), the frame deadline (`pacing_wait`), the resize check before the frame reads the model (`pre_render`), drawing until the image is published (`render`), waiting for Swing to start painting it (`publish_to_paint`) and the paint itself (`paint`). `when_to_edt` is the wall-clock gap from the OS event time (`KeyEvent.getWhen`) to the event thread, outside `total`; `key_to_screen` adds it to each keystroke's `total` before taking the percentiles, which is what the user waited (a percentile of sums, not the sum of percentiles). Nothing after `paintComponent` returns (Swing's back-buffer blit, the compositor) is visible to the app. `unpainted` counts keystrokes whose frame changed nothing on screen. The per-keystroke lines are written in a batch with each summary.
 
 To trace a bench run, add `ui.render.latency_trace = true` to the config `bench-laptop.sh`'s `run_once` seeds (next to `ui.render.frame_timing = true`), and keep the lines before the script deletes its isolated home, for example by adding `grep "\[LATENCY\]" "$log_file" >> "$out" || true` beside its `[FRAME]` grep. Outside the script, set it in the `config.conf` the jar reads and use `~/.serenity/serenity.log`. Then summarise:
 
@@ -105,4 +115,18 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
 ```
 
-The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's render callback, **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`. The OS input path and the display's scan-out are outside these figures.
+The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's render callback, **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
+
+## Scaling with many open files and split panes (#2478)
+
+`bench/bench-scaling.sh <jar> <label> <a|b|c|d> [java2d|skia]` is the laptop side of the harness rows that ask how
+performance scales: `a` ctrl+Tab through 1 and through 20 open files, `b` typing, PageDown and the wheel with 1, 2 and 4
+panes (a different file in each), `c` the heap in use after a GC with 1 file and with 20, `d` the time to the last of four
+scrollbars, which the app's logs cannot show (the harness row `scrollbar.four_panes.all_bars` measures it). The documents
+come from `bench/gen-scaling-docs.py` (distinct lines per file, prose or code with `BENCH_FILE_KIND`), so the app's text
+caches cannot share entries between files. `--dry-run` prints what each mode would do without a jar or a display.
+
+It was written where xdotool and a desktop session are not available: the documents, the pane key plans and the argument
+handling are tested (`scripts/test_bench_scaling.py`), the driving of the app is not. Read the first result file before
+trusting a table. The shape cache's lookups, misses and evictions are not in the app's logs: run
+`java -cp serenity-perf.jar com.serenity.perf.ScalingShapeCacheBenchmarks`.

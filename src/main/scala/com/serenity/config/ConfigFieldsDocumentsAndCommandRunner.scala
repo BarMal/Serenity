@@ -98,6 +98,9 @@ private[config] object ConfigFieldsDocumentsAndCommandRunner:
       _.inputConfig.wheelScrollLines,
       (config, value) => config.withWheelScrollLines(value)
     ),
+    field("explorer.open_mode")(
+      enumerated(ExplorerOpenMode.fromConfigKey, _.configKey, text => ExplorerOpenMode.values.find(_.toString == text))
+    )(_.inputConfig.explorerOpenMode, (config, value) => config.withExplorerOpenMode(value)),
 
     // -- Command runner --------------------------------------------------------------------------------------------------
     field(

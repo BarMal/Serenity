@@ -17,7 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.{SharedDictionary, StateDifference}
+import com.serenity.testkit.{SharedDictionary, StateDifference, VirtualTime}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,6 +33,11 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = NoOpFactory[IO]
+
+  // The editors are compared by their undo history, and undo grouping ends an edit run after a pause of over a second
+  // between keys (`EditClock.Pause`). On the real clock a stall that long between the one-at-a-time editor's keys leaves
+  // it a step ahead of the batched one (#2484); the programs that build editors run on `VirtualTime`, where no time
+  // passes between keys (see UndoGroupingClockSpec).
 
   private val words =
     "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore".split(" ")
@@ -133,7 +138,7 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
         )
       }
     yield (differ ++ afterDiffer).flatten
-    program.unsafeRunSync() shouldBe empty
+    VirtualTime.runVirtual(program) shouldBe empty
 
   private val wrapped    = AppConfig.default.withWordWrap(true)
   private val typewriter = wrapped.withSurfaceConfig(wrapped.surfaceConfig.copy(typewriterScrollingEnabled = true))
@@ -152,18 +157,18 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
       )
 
   "A batch of deletions" should "settle as one run" in {
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, heldBackspace)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 1, folded = heldBackspace.size)
   }
 
   "A batch mixing typed keys, deletions, line breaks and caret steps" should "settle as one run" in {
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, editing)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 1, folded = editing.size)
   }
 
@@ -171,10 +176,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
     val events = typed(10, 4L) ++ List[Event](PageDown) ++ List.fill[Event](10)(DeleteBackward) ++ List[Event](
       MoveToEnd
     ) ++ typed(5, 5L)
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, events)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 3, folded = events.size - 2)
   }
 

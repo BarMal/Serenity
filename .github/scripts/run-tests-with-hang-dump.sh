@@ -20,7 +20,9 @@ descendants() {
 test_pid=$!
 
 (
-  sleep "$limit_seconds"
+  # Killing the watchdog below does not kill this sleep, so it must not hold the step's output: a step that pipes this
+  # script into `tee` would otherwise wait out the whole limit after the command finished.
+  sleep "$limit_seconds" >/dev/null 2>&1 </dev/null
   if kill -0 "$test_pid" 2>/dev/null; then
     touch "$hang_marker"
     echo "::error::Tests still running after ${limit_seconds}s; dumping thread stacks and stopping."

@@ -122,6 +122,10 @@ object ConfigFileFormat:
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),
     comment(
+      "A popup opened with the cursor scrolled out of view: reveal-cursor scrolls back to it, summon-cursor moves it to the middle of the view, clamp leaves both and pins the popup to the view's edge"
+    ),
+    field("editor.cursor.offscreen_surfaces"),
+    comment(
       "E-reader-style column layout: as many columns as fit the target width (in cells) plus the gap between " +
         "them. Only takes effect while word wrap is also on"
     ),
@@ -146,6 +150,10 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
+    comment(
+      "Opening a file from the explorer: double-click, single-click, or preview (a single click opens a temporary tab the next one replaces)"
+    ),
+    field("explorer.open_mode"),
     comment("Cursor: blink or steady; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),
@@ -205,7 +213,9 @@ object ConfigFileFormat:
         "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
     ),
     field("typography.fallback.families"),
-    comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
+    comment(
+      "Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or unlimited (off means the same)"
+    ),
     field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
