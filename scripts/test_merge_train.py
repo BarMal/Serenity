@@ -1024,6 +1024,68 @@ class RestFailedSuiteTests(unittest.TestCase):
         self.assertEqual(2, len(rest.paths))
 
 
+class WakeFailureTests(TrainRig):
+    """The wake job only dispatches the next step. A failure of that job (a GitHub API error) turns its whole run red
+    though every test passed, and the train must not read that as a failing batch (#2618)."""
+
+    _WAKE = "Wake the merge train"
+
+    def _built(self, numbers: tuple[int, ...] = (1,)) -> str:
+        for number in numbers:
+            self.github.add_pr(number, f"file{number}.txt", f"{number}\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        return branch
+
+    def test_a_run_whose_only_failed_job_is_the_wake_job_counts_as_passed_and_the_train_merges(self) -> None:
+        branch = self._built()
+        self._finish(branch, ci="failure", attempt=2)
+        self.github.failed_jobs[10] = [self._WAKE]
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+        self.assertEqual([], self.github.reruns)
+
+    def test_it_counts_on_a_first_attempt_too_without_a_re_run(self) -> None:
+        branch = self._built()
+        self._finish(branch, xos="failure")
+        self.github.failed_jobs[11] = [self._WAKE]
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+        self.assertEqual([], self.github.reruns)
+
+    def test_the_override_is_logged_so_the_step_summary_shows_why_a_red_run_merged(self) -> None:
+        branch = self._built()
+        self._finish(branch, ci="failure", attempt=2)
+        self.github.failed_jobs[10] = [self._WAKE]
+        self._train().tick()
+        self.assertTrue(any("wake" in line.lower() and "10" in line for line in self.log))
+
+    def test_a_real_failure_beside_the_wake_failure_is_still_a_failure(self) -> None:
+        branch = self._built((1, 2))
+        self._finish(branch, ci="failure", attempt=2)
+        self.github.failed_jobs[10] = [self._WAKE, "Test"]
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        self.assertEqual([], self.github.merged)
+        self.assertEqual([1], self._train_numbers())
+
+    def test_a_red_run_whose_failed_jobs_cannot_be_read_is_still_a_failure(self) -> None:
+        branch = self._built((1, 2))
+        self._finish(branch, ci="failure")
+        self._train().tick()
+        self.assertEqual([10], self.github.reruns)
+        self.assertEqual([], self.github.merged)
+
+    def test_a_green_run_looks_up_no_jobs(self) -> None:
+        branch = self._built()
+        self._finish(branch)
+        self.github.failed_jobs[10] = [self._WAKE]
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+        self.assertEqual([], [line for line in self.log if "wake" in line.lower()])
+
+
 class _StubRest(mt.RestGitHub):
     """RestGitHub over a canned pulls payload: no network, CI green, no markers."""
 

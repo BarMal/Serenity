@@ -24,6 +24,9 @@ A red suite that exactly one pull request of the batch adds or changes is that p
 once, with no re-run and no bisect, and the batch is rebuilt without it. The failed suites are read from the failing jobs'
 logs (the `Failed tests:` block sbt prints). A suite no pull request, or more than one, touches, a failure outside the
 test run, and a log that cannot be read all fall back to the re-run and the bisect.
+
+The last job of a train's runs (`Wake the merge train`) only dispatches the next step. If it alone fails (a GitHub API
+error), its run turns red though every test passed, so a run whose only failed job is that one counts as passed.
 """
 
 from __future__ import annotations
@@ -37,7 +40,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
@@ -47,6 +50,7 @@ REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/ci.yml", ".github/work
 MAX_TRAIN_AGE = timedelta(hours=6)
 HAND_MERGE_LABEL = "hand-merge-next"
 DEFAULT_HOLD_MINUTES = 20
+WAKE_JOB_NAME = "Wake the merge train"
 _MANIFEST_KEY = "Merge-Train-Manifest: "
 _BRANCH_PREFIX = "train/"
 _BOT = ("-c", "user.name=merge-train", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com")
@@ -437,7 +441,7 @@ class Train:
         manifest = Manifest.from_commit_message(self.git.message(tip))
         if manifest is None:
             raise TrainError(f"{branch} has no manifest at its tip {tip[:8]}")
-        runs = self.github.runs_for(branch)
+        runs = self._not_failed_by_the_wake_job(self.github.runs_for(branch))
         heads = {p.number: self.github.head_of(p.number) for p in manifest.prs}
         action = decide(manifest, runs, heads=heads, master=self.git.master(), now=self.now())
         self.log(f"{branch} ({_numbers(manifest.prs)}): {action}")
@@ -472,6 +476,22 @@ class Train:
         elif isinstance(action, Bisect):
             self.git.delete_remote_branch(branch)
             self._start(only=action.numbers)
+
+    def _not_failed_by_the_wake_job(self, runs: list[Run]) -> list[Run]:
+        latest = {
+            path: max(of_path, key=lambda r: r.id)
+            for path in REQUIRED_WORKFLOWS
+            if (of_path := [r for r in runs if r.path == path])
+        }
+        passed: list[Run] = []
+        for run in latest.values():
+            if run.status != "completed" or run.conclusion in (None, "success"):
+                continue
+            failed = self.github.failed_job_names(run.id, run.attempt)
+            if failed and set(failed) <= {WAKE_JOB_NAME}:
+                self.log(f"Run {run.id} failed only in the wake job ({WAKE_JOB_NAME}); counting it as passed.")
+                passed.append(run)
+        return [replace(r, conclusion="success") if r in passed else r for r in runs]
 
     def _owners_of_failures(self, manifest: Manifest, runs: list[Run]) -> dict[int, list[OwnedFailure]]:
         latest = [
