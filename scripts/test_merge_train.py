@@ -177,6 +177,7 @@ class Origin:
     def open_pr(self, number: int, path: str, text: str) -> str:
         _git(self.work, "fetch", "origin", "master")
         _git(self.work, "checkout", "-q", "-B", f"pr{number}", "origin/master")
+        (self.work / path).parent.mkdir(parents=True, exist_ok=True)
         (self.work / path).write_text(text)
         _git(self.work, "add", ".")
         _git(self.work, "commit", "-m", f"PR {number}")
@@ -345,6 +346,34 @@ class TrainTests(unittest.TestCase):
         self.github.add_pr(2, "same.txt", "two\n")
         self._train(batch=3).tick()
         self.assertEqual([1], self._train_numbers())
+
+    def test_a_pull_request_that_changes_a_workflow_file_is_held_back_because_the_workflow_token_cannot_push_it(self) -> None:
+        # GITHUB_TOKEN may not push a commit that changes .github/workflows/*; the first such train failed at its push.
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.github.add_pr(3, "b.txt", "b\n")
+        self._train(batch=2).tick()
+        self.assertEqual([2, 3], self._train_numbers())
+        self.assertIn("Held back (changes .github/workflows, which the train's token cannot push): #1", self.log)
+
+    def test_a_workflow_change_is_held_back_even_when_it_is_deeper_than_the_top_level(self) -> None:
+        self.github.add_pr(1, ".github/workflows/nested/other.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self._train().tick()
+        self.assertEqual([2], self._train_numbers())
+
+    def test_no_train_is_pushed_when_every_pull_request_changes_a_workflow_file(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self.assertIsNone(self._live_branch())
+        self.assertEqual([], self.github.dispatched)
+        self.assertIn("Held back (changes .github/workflows, which the train's token cannot push): #1", self.log)
+
+    def test_files_outside_the_workflows_directory_are_not_held_back(self) -> None:
+        self.github.add_pr(1, ".github/CODEOWNERS", "* @owner\n")
+        self.github.add_pr(2, "scripts/x.txt", "x\n")
+        self._train().tick()
+        self.assertEqual([1, 2], self._train_numbers())
 
     def test_a_green_train_merges_its_pull_requests_in_order_and_master_gets_exactly_the_tested_tree(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
