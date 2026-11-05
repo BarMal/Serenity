@@ -45,8 +45,11 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
     answered.persisted.focus shouldBe Focus.Surface(runnerId)
   }
 
-  "The Go to File finder opened over the command runner" should "take focus and keystrokes until dismissed" in {
-    val (sm, runnerId) = withRunnerOpen()
+  // #2577 P1c-2: the command picker is a modeless modal like the finder, and only one modeless modal is open at a
+  // time (`ModalStateReducer.show`), so the finder replaces the picker rather than stacking over it as the old
+  // floating palette allowed. Escape therefore closes to the editor, not back to the picker.
+  "The Go to File finder opened over the command picker" should "replace it, take focus and keystrokes until dismissed" in {
+    val (sm, _) = withRunnerOpen()
 
     sm.applyEvent(GoToFile).unsafeRunSync()
 
@@ -60,6 +63,6 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
     val dismissed = sm.getCurrentState.unsafeRunSync()
     dismissed.modalSurface shouldBe None
-    dismissed.commandPickerSurface.map(_.id) shouldBe Some(runnerId)
-    dismissed.persisted.focus shouldBe Focus.Surface(runnerId)
+    dismissed.commandPickerSurface shouldBe None
+    dismissed.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
