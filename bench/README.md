@@ -109,7 +109,7 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 
 ## Key to screen, per backend
 
-`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as java2d, skia, skia, java2d (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
+`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as java2d, skia, skia, java2d (`bench-laptop.sh <jar> <label> skia-raster` runs the Skia CPU raster the same way) (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
 
 ```bash
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
