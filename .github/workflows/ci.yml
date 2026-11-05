@@ -131,6 +131,7 @@ jobs:
         run: |
           python3 -m unittest \
             scripts.test_abba_compare \
+            scripts.test_abba_startup \
             scripts.test_aot_cache_scripts \
             scripts.test_aot_workflow \
             scripts.test_bench_laptop \
