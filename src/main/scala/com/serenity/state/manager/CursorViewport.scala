@@ -24,17 +24,19 @@ import com.serenity.ui.theme.RichTextStyling
   */
 object CursorViewport:
 
+  /** `keyedIn` is the buffer a caret or edit key just went to: a view the wheel scrolled away from its caret is placed
+    * again there even when the key left the caret where it was.
+    */
   def ensureVisibleCursors(
     before: AppState,
     after: AppState,
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
+    keyedIn: Option[BufferId] = None
   ): AppState =
     after.persisted.buffers.foldLeft(after) {
       case (state, (bufferId, buffer)) =>
-        val beforeBuffer = before.persisted.buffers.get(bufferId)
-        val headMoved =
-          beforeBuffer.exists(_.editing.cursorPositions.headOption != buffer.editing.cursorPositions.headOption)
-        if headMoved then placeCursor(state, buffer, wrapCache) else state
+        if ViewportResolution.needsPlacing(before, bufferId, buffer, keyedIn) then placeCursor(state, buffer, wrapCache)
+        else state
     }
 
   /** Places every buffer an editor pane shows, for a change of pane geometry: a resize re-wraps the text, so the
@@ -69,8 +71,9 @@ object CursorViewport:
     buffer.editing.cursorPositions.headOption match
       case Some(cursor) =>
         val placement = placementFor(buffer, state, cursor, wrapCache)
+        val placed    = placement.copy(placement = ViewportPlacement.Placed)
         state.copy(persisted =
-          state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer.copy(viewport = placement)))
+          state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer.copy(viewport = placed)))
         )
       case None => state
 
@@ -307,58 +310,84 @@ object CursorViewport:
     cursor: CursorPosition,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): Viewport =
-    val isTui      = currentState.runtime.capabilities.isCellGrid
-    val viewport   = buffer.viewport
-    val fontConfig = currentState.persisted.config.editorConfig.fontConfig
-    val font       = previewFontForBuffer(buffer, fontConfig)
-    // Each column's text wraps inside its band minus the line-number rail, exactly as `RendererPaneSetup` and
-    // `EditorGeometryProducer` wrap it; measuring the full band folds fewer rows than are drawn, and the page anchor
-    // drifts away from what is on screen.
-    val textColumns         = math.max(1, viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(currentState))
-    val gridWidthPx         = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
-    val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
-    val forceCellLayout     = isTui
-    val wrapWidthPx         = if isTui then textColumns * CellMetrics.cellUnit.charWidth else gridWidthPx
-    val lineCount           = buffer.document.content.lineCount
-    val visibleLines        = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui))
-
-    val pager = columnPagerFor(
-      buffer,
-      currentState,
-      wrapWidthPx,
-      font,
-      visibleLines,
-      cellMetricsOverride,
-      forceCellLayout,
-      wrapCache
-    )
-
+    val paging   = ColumnPages.of(buffer, currentState, wrapCache)
     val lineText = buffer.document.content.getLine(cursor.line).getOrElse("")
     val cursorVisualRowInLine =
       TextLayoutSnapshot.visualLineIndexForCursor(
         lineText,
         cursor.column,
-        wrapWidthPx,
-        font,
+        paging.wrapWidthPx,
+        paging.font,
         wordWrapEnabled = true,
-        cellMetricsOverride = cellMetricsOverride,
-        forceCellLayout = forceCellLayout,
+        cellMetricsOverride = paging.cellMetricsOverride,
+        forceCellLayout = paging.forceCellLayout,
         rowAffinity = cursor.rowAffinity,
         wrapCache = wrapCache,
         bufferLine = cursor.line,
-        richText = pager.richText
+        richText = paging.pager.richText
       )
 
-    // A page is `columnCount` consecutive columns, and columns break where their rows stop fitting the column's pixel
-    // height (`ColumnPager`), so the page is the one holding the cursor's column, from that page's first column.
-    val columnCount = columnCountForBuffer(buffer, currentState)
-    val pageStart =
+    val pageStart = paging.pageHolding(ColumnPaging.ColumnStart(cursor.line, cursorVisualRowInLine))
+    buffer.viewport.copy(topLine = pageStart.line, leftColumn = 0, topVisualLine = pageStart.row)
+
+  /** The pages `buffer`'s pane shows in column mode: a page is `columnCount` consecutive columns, and columns break
+    * where their rows stop fitting the column's pixel height ([[ColumnPager]]). The caret's placement and the wheel's
+    * page turns both read pages from here, so each lands on a page the painter draws from its first column.
+    */
+  final private[manager] case class ColumnPages(
+      pager: ColumnPager,
+      columnCount: Int,
+      lineCount: Int,
+      font: java.awt.Font,
+      wrapWidthPx: Int,
+      cellMetricsOverride: Option[CellMetrics],
+      forceCellLayout: Boolean
+  ):
+
+    def pageHolding(target: ColumnPaging.ColumnStart): ColumnPaging.ColumnStart =
       if lineCount <= 0 then ColumnPaging.ColumnStart.Origin
       else
-        val starts = pager.startsThrough(ColumnPaging.ColumnStart(cursor.line, cursorVisualRowInLine))
+        val starts = pager.startsThrough(target)
         starts((starts.length - 1) / columnCount * columnCount)
 
-    viewport.copy(topLine = pageStart.line, leftColumn = 0, topVisualLine = pageStart.row)
+    /** The start of the page after the one starting at `pageStart`, or `pageStart` itself on the last page. */
+    def nextPage(pageStart: ColumnPaging.ColumnStart): ColumnPaging.ColumnStart =
+      val afterPage = (1 to columnCount).foldLeft(Option(pageStart))((start, _) => start.flatMap(pager.nextStart))
+      afterPage.getOrElse(pageStart)
+
+    /** The start of the page before the one holding `pageStart`, or the first page's start. */
+    def previousPage(pageStart: ColumnPaging.ColumnStart): ColumnPaging.ColumnStart =
+      if lineCount <= 0 then ColumnPaging.ColumnStart.Origin
+      else
+        val starts   = pager.startsThrough(pageStart)
+        val thisPage = (starts.length - 1) / columnCount
+        starts(math.max(0, thisPage - 1) * columnCount)
+
+  private[manager] object ColumnPages:
+
+    def of(buffer: Buffer, state: AppState, wrapCache: WrappedLineCache): ColumnPages =
+      val isTui      = state.runtime.capabilities.isCellGrid
+      val viewport   = buffer.viewport
+      val fontConfig = state.persisted.config.editorConfig.fontConfig
+      val font       = previewFontForBuffer(buffer, fontConfig)
+      // Each column's text wraps inside its band minus the line-number rail, exactly as `RendererPaneSetup` and
+      // `EditorGeometryProducer` wrap it; measuring the full band folds fewer rows than are drawn, and the page anchor
+      // drifts away from what is on screen.
+      val textColumns         = math.max(1, viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(state))
+      val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
+      val wrapWidthPx =
+        if isTui then textColumns * CellMetrics.cellUnit.charWidth
+        else TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
+      val visibleLines = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui))
+      ColumnPages(
+        columnPagerFor(buffer, state, wrapWidthPx, font, visibleLines, cellMetricsOverride, isTui, wrapCache),
+        columnCountForBuffer(buffer, state),
+        buffer.document.content.lineCount,
+        font,
+        wrapWidthPx,
+        cellMetricsOverride,
+        forceCellLayout = isTui
+      )
 
   /** The pager that decides where `buffer`'s columns break, built from the same inputs the painter uses
     * (`RendererPaneSetup`, `UiSceneBuilder`) so anchoring and painting agree on every column.
