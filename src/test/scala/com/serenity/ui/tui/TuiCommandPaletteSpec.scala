@@ -1,6 +1,7 @@
 package com.serenity.ui.tui
 
-import com.serenity.state.models.SurfaceContent
+import com.serenity.CommandPaletteProbe
+import com.serenity.command.CommandPicker
 
 import TuiScenarios.*
 
@@ -11,30 +12,31 @@ import TuiScenarios.*
 class TuiCommandPaletteSpec extends TuiSpec:
 
   private def selectedIndex(screenState: com.serenity.state.models.AppState): Option[Int] =
-    screenState.commandRunnerSurface.map(_.content).collect {
-      case SurfaceContent.CommandPalette(runner) =>
-        runner.selectedIndex
-    }
+    CommandPaletteProbe.picker(screenState).flatMap(_.items.toOption).flatMap(_.selected)
 
   private def selectedItemIsCommand(screenState: com.serenity.state.models.AppState): Option[Boolean] =
-    screenState.commandRunnerSurface.map(_.content).collect {
-      case SurfaceContent.CommandPalette(runner) =>
-        runner.selectedItem.exists {
-          case _: com.serenity.command.CommandSurfaceItem.CommandItem => true
-          case _                                                      => false
-        }
-    }
+    CommandPaletteProbe
+      .picker(screenState)
+      .flatMap(_.selectedChoice)
+      .map(!_.action.name.startsWith("open-settings-at:"))
+
+  /** The picker's query field: the row under its "Commands" title. */
+  private def queryRow(screen: TuiScreen): Option[String] =
+    screen.rowOf(CommandPicker.Title).map(row => screen.rowText(row + 1))
+
+  private def showsQuery(screen: TuiScreen, query: String): Boolean =
+    queryRow(screen).exists(_.contains(query))
 
   "Ctrl+P" should "open the palette over the document, with its search field and key hints" in runTui() {
     for
       _ <- openCommandPalette
       _ <- verify("palette") { screen =>
-        screen.containsText("search:") shouldBe true
+        queryRow(screen).map(_.trim.stripPrefix("│").stripSuffix("│").trim) shouldBe Some("")
         screen.containsText("↑↓ move • Enter run • Esc close") shouldBe true
         // The document underneath is still drawn: the palette is an overlay, not a screen replacement.
         screen.statusBar should include("scratch.md")
       }
-      _ <- verifyState("surface")(current => current.commandRunnerSurface should not be empty)
+      _ <- verifyState("surface")(current => CommandPaletteProbe.isOpen(current) shouldBe true)
     yield ()
   }
 
@@ -45,7 +47,7 @@ class TuiCommandPaletteSpec extends TuiSpec:
       _    <- typeSlowly("line")
       some <- screen
       _ <- verify("filtered") { screen =>
-        screen.containsText("search: line") shouldBe true
+        showsQuery(screen, "line") shouldBe true
         // issue #1048: direct command matches ("Go to Line", "Toggle Line ...") now rank above settings-group
         // breadcrumb matches, so a line-related command is what actually shows for this query.
         screen.containsText("Toggle Line") shouldBe true
@@ -108,10 +110,10 @@ class TuiCommandPaletteSpec extends TuiSpec:
         opened <- screen
         _      <- escape
         after  <- settledScreen
-        _      <- verifyState("closed")(current => current.commandRunnerSurface shouldBe empty)
+        _      <- verifyState("closed")(current => CommandPaletteProbe.isOpen(current) shouldBe false)
       yield
-        opened.containsText("search:") shouldBe true
-        after.containsText("search:") shouldBe false
+        opened.containsText(CommandPicker.Title) shouldBe true
+        after.containsText(CommandPicker.Title) shouldBe false
         after.changedCells(before) shouldBe empty
     }
 
@@ -140,8 +142,8 @@ class TuiCommandPaletteSpec extends TuiSpec:
       _ <- escape
       _ <- openCommandPalette
       _ <- verify("clean search") { screen =>
-        screen.containsText("search: line") shouldBe false
-        screen.containsText("search:") shouldBe true
+        queryRow(screen) should not be empty
+        showsQuery(screen, "line") shouldBe false
       }
     yield ()
   }
@@ -150,12 +152,12 @@ class TuiCommandPaletteSpec extends TuiSpec:
     for
       _ <- searchCommands("zzzznotacommand")
       _ <- verify("no matches") { screen =>
-        screen.containsText("search: zzzznotacommand") shouldBe true
+        showsQuery(screen, "zzzznotacommand") shouldBe true
         // No matches means no rows to navigate, so the list and its key hints are gone rather than shown empty.
         screen.containsText("Enter run") shouldBe false
         screen.statusBar should include("scratch.md")
       }
-      _ <- verifyState("still open")(current => current.commandRunnerSurface should not be empty)
+      _ <- verifyState("still open")(current => CommandPaletteProbe.isOpen(current) shouldBe true)
     yield ()
   }
 end TuiCommandPaletteSpec

@@ -74,7 +74,14 @@ object ListPickerComposition:
         tone = OverlayTone.Muted
       )
     )
-    ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows ++ messageRow)
+    val footerRow = shownFooter(picker).map(text =>
+      ModalSurfaceComposition.textBox(
+        text,
+        ModalSurfaceComposition.rowRect(bounds, firstChoiceRow + rows.size + messageRow.size),
+        tone = OverlayTone.Muted
+      )
+    )
+    ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows ++ messageRow ++ footerRow)
 
   def frameHeight(picker: ListPicker, wrap: ModalWrap): Int =
     val rows = picker.items match
@@ -82,7 +89,11 @@ object ListPickerComposition:
       case Loadable.Loading(_)     => 1
       case Loadable.Empty(text)    => wrap.lines(text).size
       case Loadable.Failed(text)   => wrap.lines(text).size
-    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows + picker.message.size
+    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows + picker.message.size +
+      shownFooter(picker).size
+
+  private def shownFooter(picker: ListPicker): Option[String] =
+    picker.footer.filter(_ => picker.items.toOption.exists(_.items.nonEmpty))
 
   /** Label-less, and outside the hit regions: a click anywhere in the picker already leaves typing going here. */
   private def queryBox(field: TextField, rect: LogicalPixelRect): SurfacePaintBox =
@@ -102,7 +113,7 @@ object ListPickerComposition:
 
   /** Only choices with a hint or a refusal reason are laid out in columns; a plain choice keeps its one-line row. */
   private def isColumned(choice: ListChoice): Boolean =
-    choice.hint.isDefined || choice.disabledReason.isDefined
+    choice.columns || choice.hint.isDefined || choice.disabledReason.isDefined
 
   /** The same columns the command palette's rows use: label, muted detail, then the hint on the right. */
   private def columnSegments(choice: ListChoice): List[OverlaySegment] =
