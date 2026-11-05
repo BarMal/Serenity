@@ -30,13 +30,20 @@ object ModuleGraph {
 
   /** Bottom to top. The last layer, `app`, takes every file no earlier layer claims. */
   val Layers: Seq[(String, Seq[String])] = Seq(
-    "core-text"    -> Seq("rope/", "text/", "io/AtomicFileWriter.scala"),
+    "core-text"    -> Seq("rope/", "text/", "io/AtomicFileWriter.scala", "io/RenameRetryPolicy.scala"),
     "lsp-protocol" -> Seq("lsp/config/", "lsp/model/", "lsp/client/"),
     "richtext"     -> Seq("richtext/"),
     "manuscript"   -> Seq("manuscript/", "exporting/", "publish/"),
-    "theme"        -> Seq("ui/color/", "ui/theme/", "ui/fonts/", "ui/display/", "ui/openings/"),
+    "theme"        -> Seq("ui/color/", "ui/theme/", "ui/display/"),
     "markdown"     -> Seq("markdown/"),
     "app"          -> Nil
+  )
+
+  /** Files assigned one by one because their package spans more than one layer. Checked before [[Layers]]. */
+  private val Overrides: Map[String, String] = Map(
+    "ui/theme/MarkdownInlineStyling.scala"  -> "markdown",
+    "ui/theme/config/AppThemeManager.scala" -> "app",
+    "publish/ManuscriptExport.scala"        -> "app"
   )
 
   private val ModuleOrder: Map[String, Int] = Layers.map(_._1).zipWithIndex.toMap
@@ -47,8 +54,9 @@ object ModuleGraph {
     if (at < 0) Layers.last._1
     else {
       val relative = uri.substring(at + Marker.length)
-      Layers
-        .collectFirst { case (name, prefixes) if prefixes.exists(relative.startsWith) => name }
+      Overrides
+        .get(relative)
+        .orElse(Layers.collectFirst { case (name, prefixes) if prefixes.exists(relative.startsWith) => name })
         .getOrElse(Layers.last._1)
     }
   }
