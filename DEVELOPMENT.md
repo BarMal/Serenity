@@ -174,10 +174,9 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
-the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
-a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
-its signature.
+The Linux and Windows runtimes are built with `--generate-cds-archive`, which gives the JVM its base archive. macOS
+has no archive: writing into a signed `.app` would break its signature. The packages ship the JDK 25 AOT cache
+described below instead of a dynamic AppCDS archive.
 
 The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
 (`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
@@ -185,8 +184,11 @@ and the JVM then logs `Mismatched values for property jdk.module.enable.native.a
 start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
 on that line.
 
-The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
-instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+The **Linux and Windows packages ship a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB
+compressed on Linux) instead of the AppCDS flags. Windows used to write an AppCDS archive on its first exit, so its first
+run was the slow one (3.38 s against 1.99 s, #2407); the cache is written at build time, so every run is a warm one.
+The scripts take both layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they run
+under Git Bash). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
 (`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
 before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
