@@ -1,0 +1,110 @@
+name: Cross-OS Test Shards
+
+# One operating system's share of `sbt test`, split into shards that run in parallel (#2484). Called by Cross-OS Tests,
+# whose "Test (windows)" and "Test (macos)" jobs wait for these and keep the check names branch protection lists (#2016).
+# A shard runs the suites project/test-shards.tsv gives it (project/TestShards.scala); a suite the table does not list is
+# placed by a hash of its name, so every suite runs in exactly one shard.
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: Runner label, for example macos-latest
+        required: true
+        type: string
+      label:
+        description: Short OS name used in job and artifact names
+        required: true
+        type: string
+      jvm_opts:
+        description: Extra JVM options appended to SBT_OPTS, for example -Xmx5g, to compare GC behaviour
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  test-shard:
+    name: Test (${{ inputs.label }}, shard ${{ matrix.shard }}/2)
+    runs-on: ${{ inputs.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # Tests run inside sbt's own JVM (no `fork`), so SBT_OPTS reaches them. GC and safepoint logs plus the stall
+      # sampler's file (StallSampler) let a test that overshot its budget (#2016) be matched to a whole-JVM stall by
+      # wall-clock time. Written outside target/ because `clean` deletes that directory.
+      - name: Enable JVM stall diagnostics
+        shell: bash
+        # The extra options come last, so an -Xmx there wins over the one in .jvmopts.
+        env:
+          EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}
+        run: |
+          mkdir -p jvm-diag
+          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log $EXTRA_JVM_OPTS" >> "$GITHUB_ENV"
+          echo "SERENITY_TEST_SHARD=${{ matrix.shard }}/2" >> "$GITHUB_ENV"
+
+      - name: Run tests
+        shell: bash
+        # Fails with a thread dump after HANG_MINUTES instead of holding the runner for 6 hours on a hang. The script's
+        # default of 40 stops a run that takes 39 minutes, so the limit is raised to sit inside the job's 60.
+        env:
+          HANG_MINUTES: '52'
+        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
+
+      # The console log names only the failing suites (see build.sbt's Test/testOptions), so the failing tests, their
+      # messages and the cancelled ones go into the step summary and one annotation each (#2557). The reports are
+      # uploaded below. `python3` is not on every Windows image's PATH, hence the fallback.
+      - name: Summarise test failures
+        if: always()
+        shell: bash
+        run: |
+          PYTHON="$(command -v python3 || command -v python)"
+          "$PYTHON" scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ inputs.label }}-${{ matrix.shard }}
+          path: target/test-reports/**
+          if-no-files-found: ignore
+          retention-days: 14
+
+      # The reports above cannot be read from every environment either, so the slowest suites go into the log.
+      - name: Summarise slowest test suites
+        if: always()
+        shell: bash
+        run: bash .github/scripts/summarize-test-durations.sh target/test-reports 30 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # The artifact below cannot be read from every environment, so the headline numbers go into the log as well.
+      - name: Summarise JVM stall diagnostics
+        if: always()
+        shell: bash
+        run: bash .github/scripts/summarize-jvm-diag.sh jvm-diag | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload JVM stall diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-diag-${{ inputs.label }}-${{ matrix.shard }}
+          path: jvm-diag/**
+          if-no-files-found: ignore
+          retention-days: 7

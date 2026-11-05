@@ -1,10 +1,15 @@
 name: CI
 
 on:
+  # ready_for_review re-runs CI when a draft is marked ready, which is what starts Auto Squash Merge.
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
+  # Nightly on master, so the benchmarks still see master when no pull request carries the `perf` label (#2553).
+  schedule:
+    - cron: '23 2 * * *'
   workflow_dispatch:
 
 permissions:
@@ -17,9 +22,13 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  style:
-    name: Scalafmt and Scalafix
+  # The source checks share one job: each is cheap, and a job slot is what the shared runner cap rations (#2553 item 6).
+  # Every check after the first runs even when an earlier one failed, so one red check never hides another.
+  checks:
+    name: Style, architecture and notices
     runs-on: ubuntu-latest
+    # The folded style job alone ran 8.7 min median, 15.4 p90 (#2553); this bounds a hang, not a normal run.
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -38,7 +47,14 @@ jobs:
       - name: Apply scalafmt and scalafix
         run: sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 
+      # Every test suite must run in exactly one Windows/macOS shard, and the shard table must not list a suite that no
+      # longer exists (#2484).
+      - name: Check the test shard table
+        if: ${{ !cancelled() }}
+        run: sbt -v checkTestShards
+
       - name: Check style tasks did not change files
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           if ! git diff --exit-code; then
@@ -46,33 +62,17 @@ jobs:
             exit 1
           fi
 
-  architecture:
-    name: Architecture ratchet
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: sbt
-
-      - name: Set up sbt launcher
-        uses: sbt/setup-sbt@v1
-
-      # Reads sources directly rather than compiling, so this is the cheapest job here. It failed
-      # silently for many commits because nothing ran it -- that is the reason it is a job now.
+      # Reads sources directly rather than compiling. It failed silently for many commits because nothing ran it --
+      # that is the reason CI runs it.
       - name: Check file and method size ratchet
+        if: ${{ !cancelled() }}
         run: sbt -v architectureCheck
 
       # The ratchet above stops individual entries regressing, but a deliberate `writeArchitectureBaseline`
       # re-run can still grow the file (new entry, or a worsened one) without anyone having to justify it --
       # see issue #1413. This makes that growth visible and requires a same-diff justification for it.
       - name: Report architecture baseline size
+        if: ${{ !cancelled() }}
         shell: bash
         run: |
           set -euo pipefail
@@ -85,7 +85,7 @@ jobs:
           echo "Architecture baseline: $COUNT entries, $SUM total lines/hits over target." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Require justification for baseline growth
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && !cancelled()
         shell: bash
         run: |
           set -euo pipefail
@@ -112,27 +112,58 @@ jobs:
             fi
           fi
 
-  third-party-notices:
-    name: Third-party notices
-    runs-on: ubuntu-latest
+      # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
+      - name: Check third-party notices cover every runtime dependency
+        if: ${{ !cancelled() }}
+        run: sbt -v checkThirdPartyNotices
 
+  scripts:
+    name: Script tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: sbt
-
-      - name: Set up sbt launcher
-        uses: sbt/setup-sbt@v1
-
-      # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
-      - name: Check third-party notices cover every runtime dependency
-        run: sbt -v checkThirdPartyNotices
+      # Stdlib `unittest`, no Python dependency. One module per line, sorted, so pull requests adding one merge cleanly;
+      # scripts.test_ci_workflow fails if a test module is left out, listed twice or out of order.
+      - name: Test the scripts
+        run: |
+          python3 -m unittest \
+            scripts.test_abba_compare \
+            scripts.test_abba_startup \
+            scripts.test_aot_cache_scripts \
+            scripts.test_aot_workflow \
+            scripts.test_bench_laptop \
+            scripts.test_bench_scaling \
+            scripts.test_check_no_dng \
+            scripts.test_check_perf_regression \
+            scripts.test_ci_jobs_workflow \
+            scripts.test_ci_log_is_quiet \
+            scripts.test_ci_workflow \
+            scripts.test_collapsed_top_frames \
+            scripts.test_combine_perf_runs \
+            scripts.test_compare_perf_runs \
+            scripts.test_cross_os_workflow \
+            scripts.test_footprint_parse \
+            scripts.test_hang_dump_script \
+            scripts.test_hyprland_float \
+            scripts.test_key_to_screen_summary \
+            scripts.test_merge_train \
+            scripts.test_perf_matrix \
+            scripts.test_present_abba_summary \
+            scripts.test_regenerate_base_cds_archive \
+            scripts.test_run_perf_benchmark \
+            scripts.test_smoke_test_app_image \
+            scripts.test_startup_rows \
+            scripts.test_startup_spread \
+            scripts.test_startup_variance \
+            scripts.test_study_perf_gate \
+            scripts.test_summarize_jvm_diag \
+            scripts.test_summarize_test_durations \
+            scripts.test_summarize_test_failures \
+            scripts.test_ttfw \
+            -v
 
   test:
     name: Test
@@ -172,8 +203,13 @@ jobs:
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
         run: xvfb-run -a -s "-screen 0 1920x1200x24" bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
-      # The console log of a failed run drops per-test detail (see the -u note in build.sbt), so the JUnit XML is the
-      # only place a property failure's name, shrunk arguments and Init Seed survive.
+      # The console log names only the failing suites (see the -u note in build.sbt), so the failing tests and their
+      # messages go into the step summary and one annotation each (#2557).
+      - name: Summarise test failures
+        if: always()
+        run: python3 scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"
+
+      # The JUnit XML is the only place a property failure's shrunk arguments and Init Seed survive in full.
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -198,32 +234,16 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  real-boundary:
-    name: Real-OS-boundary specs
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: sbt
-
-      - name: Set up sbt launcher
-        uses: sbt/setup-sbt@v1
-
-      # `sbt test` excludes these specs (a real loopback socket, a real OS signal); nothing else runs them (#2030).
+      # `sbt test` excludes these specs (a real loopback socket, a real OS signal; #2030) and the heap-measurement ones
+      # (they read the JVM-wide heap and force collections, which stalls and skews any suite beside them). Each runs in
+      # its own sbt after the suite, on the classes it compiled, and after the suite's GC log is uploaded: a new sbt
+      # JVM rewrites that file.
       - name: Run real-OS-boundary specs
+        if: ${{ !cancelled() }}
         run: sbt -v realBoundaryTest
 
-      # `sbt test` excludes these specs: they read the JVM-wide heap and force collections, which stalls and skews any
-      # suite running beside them.
       - name: Run heap-measurement specs
+        if: ${{ !cancelled() }}
         run: sbt -v heapMeasurementTest
 
   perf:
@@ -234,6 +254,10 @@ jobs:
     # The timeout is a bound on a stuck job, not a budget. The unsharded 1x job took 57.3 and 58.3 minutes on runs
     # 41350271015 and 41350357868 (the benchmark warm-up on both sides, and a confirmation run of 4 minutes when a row is
     # flagged), against the previous limit of 60; 75 is the limit the owner chose for the sharded jobs (#2464).
+    # Drafts skip the benchmark shards; marking a pull request ready runs them (owner decision, #2484). Once the merge
+    # train is live it benchmarks each batch instead, so a pull request runs them only with the `perf` label, read at
+    # its next push (#2553 item 2).
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live') || contains(github.event.pull_request.labels.*.name, 'perf'))
     name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -283,10 +307,6 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
-      # Stdlib `unittest`, no Python dependency to install.
-      - name: Test the benchmark comparison scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_run_perf_benchmark scripts.test_perf_matrix scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary scripts.test_bench_laptop -v
-
       # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
       # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
       # `HeadlessException` constructing it, so this job needs a virtual one.
@@ -297,8 +317,33 @@ jobs:
       # on one runner and checked on another fails or passes by which runner each got. Instead the base commit and this
       # commit are benchmarked here, on one runner, in three back-to-back pairs that alternate which side goes first
       # (B H, H B, B H), so a slow spell on the runner or a warm cache falls on both sides alike.
+      # A merge train's tip names the master commit it was built on, which is what its batch is measured against (#2553).
       - name: Check out the base commit
-        run: git worktree add --detach "$RUNNER_TEMP/base" HEAD^1
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(python3 scripts/merge_train.py perf-base)"
+          if [ "$base" != "HEAD^1" ]; then git fetch --depth=1 origin "$base"; fi
+          git worktree add --detach "$RUNNER_TEMP/base" "$base"
+
+      # The first benchmark run on each side compiles the whole project, about 400 s apiece (#2618). Both compiles run
+      # here at once, which costs about one of them; no benchmark starts until both are done, so no measurement shares
+      # the runner with a compile. A failed compile is only logged: the run below fails the way it always did, with the
+      # head's raw output shown.
+      - name: Compile base and head side by side
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/base" && sbt -v Test/compile) > "$RUNNER_TEMP/compile-base.log" 2>&1 &
+          base_compile=$!
+          sbt -v Test/compile > "$RUNNER_TEMP/compile-head.log" 2>&1 &
+          head_compile=$!
+          wait "$base_compile" || echo "::warning::The base compile failed; its log tail follows."
+          wait "$head_compile" || echo "::warning::The head compile failed; its log tail follows."
+          for side in base head; do
+            echo "::group::Compile of the $side, last lines"
+            tail -n 5 "$RUNNER_TEMP/compile-$side.log"
+            echo "::endgroup::"
+          done
 
       # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
       # suite -- `sbt test` never touches it.
@@ -317,6 +362,11 @@ jobs:
             for side in "$first" "$second"; do
               if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
               bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/$side-$pair.csv"
+              if [ "$side" = head ] && [ ! -s "perf-runs/head-$pair.csv" ]; then
+                echo "::error::No benchmark output from the head commit's run $pair -- it did not build or the suite failed; stopping before the remaining passes. Raw output:"
+                tail -n 60 "perf-runs/head-$pair.csv.raw"
+                exit 1
+              fi
             done
           done
 
@@ -369,3 +419,20 @@ jobs:
           name: ${{ matrix.results }}
           path: perf-runs/
           retention-days: 90
+
+  # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
+  # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
+  wake-train:
+    name: Wake the merge train
+    needs: [checks, scripts, test, perf]
+    if: always() && startsWith(github.ref, 'refs/heads/train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start a merge train step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run merge-train.yml --ref master

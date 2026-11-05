@@ -114,7 +114,9 @@ private[renderer] object RendererChromePlan:
       ChromeRepaint(
         spacers = signals.rowsOverflow,
         statusRow = Damage.touchesChrome(damage),
-        headers = Repaint.only(Damage.paneChromeIds(damage)),
+        headers = Repaint.only(Damage.paneChromeIds(damage) ++ dirtyRowsByPane.collect {
+          case (id, rows) if rows.contains(0) => id
+        }),
         lineNumberRows =
           if signals.rowsOverflow && contract.rightLineNumberRect.isDefined then Repaint.all[Int]
           else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved),
@@ -149,6 +151,14 @@ private[renderer] object RendererChromePlan:
 
   def withBleed(context: RenderContext)(band: PixelRect): PixelRect =
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
+    else band
+
+  /** [[withBleed]] without the margin on a side another pane abuts, where it would be that pane's pixels. */
+  def withBleedOutsideShared(context: RenderContext, shared: SharedSides)(band: PixelRect): PixelRect =
+    if context.surface.addressesPixels then
+      val leftPx  = if shared.left then 0 else BleedPx
+      val rightPx = if shared.right then 0 else BleedPx
+      band.copy(xPx = band.xPx - leftPx, widthPx = band.widthPx + leftPx + rightPx)
     else band
 
   /** Every place chrome is painted. */
@@ -297,6 +307,23 @@ private[renderer] object RendererChromePlan:
       if state.chrome.lineNumbers
       rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
       band <- RendererGutter.keptRowBands(state, context, record.snapshot, rect, rows)
+    yield band
+
+  /** The counter pixels a repainted line number must not paint on: the top of each kept row below a repainted one. */
+  def guardedGutterBands(
+    state: AppState,
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord],
+    repaint: ChromeRepaint
+  ): List[PixelRect] =
+    val contract = renderPlan.layoutContract
+    for
+      paneId <- state.persisted.layout.activeEditorPaneId.toList
+      record <- panes.get(paneId).toList
+      if state.chrome.lineNumbers
+      rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
+      band <- RendererGutter.spillGuardBands(state, context, record.snapshot, rect, repaint.lineNumberRows)
     yield band
 
   def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =
