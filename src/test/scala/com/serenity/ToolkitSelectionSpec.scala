@@ -48,6 +48,57 @@ class ToolkitSelectionSpec extends AnyFlatSpec with Matchers:
     ToolkitSelection.choose(explicit).reason should include("awt.toolkit.name")
   }
 
+  "ToolkitSelection.userToolkit" should "see nothing when the JVM was started without the flag" in {
+    ToolkitSelection.userToolkit(Nil) shouldBe None
+    ToolkitSelection.userToolkit(List("-Xmx2g", "-Dfoo=bar")) shouldBe None
+  }
+
+  it should "read the toolkit named by -Dawt.toolkit.name" in {
+    ToolkitSelection.userToolkit(List("-Dawt.toolkit.name=WLToolkit")) shouldBe Some("WLToolkit")
+  }
+
+  it should "take the last of several flags, as the JVM does" in {
+    val flags = List("-Dawt.toolkit.name=XToolkit", "-Dawt.toolkit.name=WLToolkit")
+    ToolkitSelection.userToolkit(flags) shouldBe Some("WLToolkit")
+  }
+
+  it should "ignore an empty value and a property that only starts with the same name" in {
+    ToolkitSelection.userToolkit(List("-Dawt.toolkit.name=")) shouldBe None
+    ToolkitSelection.userToolkit(List("-Dawt.toolkit.name.other=WLToolkit")) shouldBe None
+  }
+
+  "ToolkitSelection.userProperties" should "drop a toolkit the runtime set itself" in {
+    val preset = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
+    ToolkitSelection.userProperties(preset, Nil) shouldBe jbrProperties
+  }
+
+  it should "keep the toolkit the user passed, with the user's value" in {
+    val preset = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
+    ToolkitSelection.userProperties(preset, List("-Dawt.toolkit.name=WLToolkit")) shouldBe
+      jbrProperties + ("awt.toolkit.name" -> "WLToolkit")
+  }
+
+  "A JetBrains Runtime that presets awt.toolkit.name=XToolkit" should "obey SERENITY_TOOLKIT=wayland" in {
+    val preset      = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
+    val environment = jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland"), ToolkitSelection.userProperties(preset, Nil))
+    ToolkitSelection.choose(environment).choice shouldBe Choice.Wayland
+  }
+
+  it should "pick the native Wayland toolkit in a Wayland session with nothing set" in {
+    val preset = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
+    ToolkitSelection.choose(jbr(wayland, ToolkitSelection.userProperties(preset, Nil))).choice shouldBe Choice.Wayland
+  }
+
+  it should "still lose to an explicit -Dawt.toolkit.name=XToolkit" in {
+    val preset = jbrProperties + ("awt.toolkit.name" -> "XToolkit")
+    val flags  = List("-Dawt.toolkit.name=XToolkit")
+    val chosen = ToolkitSelection.choose(
+      jbr(wayland + ("SERENITY_TOOLKIT" -> "wayland"), ToolkitSelection.userProperties(preset, flags))
+    )
+    chosen.choice shouldBe Choice.PlatformDefault
+    chosen.reason should include("awt.toolkit.name")
+  }
+
   private val staleSocket = Some("/run/user/1000/wayland-1: Connection refused")
 
   it should "fall back to the platform default when the Wayland socket does not connect" in {

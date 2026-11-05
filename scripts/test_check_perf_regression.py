@@ -19,6 +19,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from captured_stdout import capture_stdout  # noqa: E402
+
 _MODULE_PATH = Path(__file__).resolve().parent / "check_perf_regression.py"
 _spec = importlib.util.spec_from_file_location("check_perf_regression", _MODULE_PATH)
 assert _spec is not None and _spec.loader is not None
@@ -38,6 +41,7 @@ class CheckPerfRegressionTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
         self.baseline_path = os.path.join(self._tmpdir.name, "baseline.csv")
         self.current_path = os.path.join(self._tmpdir.name, "current.csv")
 
@@ -61,6 +65,7 @@ class CheckPerfRegressionTests(unittest.TestCase):
         _write_csv(self.baseline_path, [("rope.search", 10.0, 12.0)])
         _write_csv(self.current_path, [("rope.search", 25.0, 27.0)])  # 2.5x, over 2.0x
         self.assertEqual(self._run([]), 1)
+        self.assertIn("::error::1 benchmark(s) regressed past 2.0x baseline p50", self.stdout.getvalue())
 
     def test_regression_that_would_have_passed_old_threshold_now_fails(self) -> None:
         # The exact gap the audit flagged: a 2x regression used to pass the 3x gate silently.
@@ -75,6 +80,7 @@ class CheckPerfRegressionTests(unittest.TestCase):
         _write_csv(self.current_path, [("rope.search", 10.0, 12.0)])
         self.assertFalse(os.path.exists(self.baseline_path))
         self.assertEqual(self._run([]), 1)
+        self.assertIn("::error::No baseline found at", self.stdout.getvalue())
 
     def test_missing_baseline_with_allow_flag_establishes_baseline_and_passes(self) -> None:
         _write_csv(self.current_path, [("rope.search", 10.0, 12.0)])
@@ -154,6 +160,7 @@ class MemoryMetricTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
         self.baseline_path = os.path.join(self._tmpdir.name, "baseline.csv")
         self.current_path = os.path.join(self._tmpdir.name, "current.csv")
 
@@ -182,6 +189,7 @@ class MemoryMetricTests(unittest.TestCase):
 
     def test_retained_growth_past_ratio_and_one_mib_fails(self) -> None:
         self.assertEqual(self._retained(10 * MIB, 14 * MIB), 1)
+        self.assertIn("::error::footprint.doc: retained heap", self.stdout.getvalue())
 
     def test_retained_growth_exactly_at_the_ratio_passes(self) -> None:
         self.assertEqual(self._retained(8 * MIB, 10 * MIB), 0)

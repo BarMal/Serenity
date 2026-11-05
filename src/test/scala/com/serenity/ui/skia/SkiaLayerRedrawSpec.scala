@@ -12,7 +12,7 @@ import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.FrameSurfaceRequest
-import com.serenity.ui.terminal.{LayerPresenter, SwingWindow}
+import com.serenity.ui.terminal.{LayerPresenter, SwingCanvasGeometry, SwingPresentationSite, SwingWindow}
 import org.jetbrains.skiko.SkiaLayer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -71,7 +71,8 @@ class SkiaLayerRedrawSpec extends AnyFlatSpec with Matchers:
       val request = FrameSurfaceRequest(
         CellMetrics(8, 16, 12),
         new Font(Font.MONOSPACED, Font.PLAIN, 12),
-        canvas,
+        SwingCanvasGeometry.of(canvas),
+        SwingPresentationSite(canvas),
         _ => (),
         (w, h, t) => new BufferedImage(w, h, t),
         caches.surfaceText,

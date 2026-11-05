@@ -102,7 +102,8 @@ final case class InputConfig(
     // unit-scroll default, and what most terminals send per notch), but it is a matter of taste and pointing device.
     wheelScrollLines: Int = 3,
     panelEscapeReturnsTo: PerMode[PanelEscapeTarget] = PerMode.both(PanelEscapeTarget.Editor),
-    summon: SummonConfig = SummonConfig()
+    summon: SummonConfig = SummonConfig(),
+    explorerOpenMode: ExplorerOpenMode = ExplorerOpenMode.SingleClick
 ):
 
   def normalized: InputConfig =

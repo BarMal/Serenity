@@ -147,7 +147,7 @@ private[manager] object ScrollbarHitTesting:
       state.persisted.copy(buffers =
         state.persisted.buffers.updated(
           bufferId,
-          buffer.copy(viewport = viewport.scrolledTo(topLine, viewport.leftColumn, topVisualLine))
+          buffer.copy(viewport = viewport.scrolledAwayTo(topLine, viewport.leftColumn, topVisualLine))
         )
       )
     )

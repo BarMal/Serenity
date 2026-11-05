@@ -10,11 +10,12 @@ sys.path.insert(0, HERE)
 import key_to_screen_summary as summary  # noqa: E402
 
 
-def latency_line(backend, keys, p50, p95, unpainted=0, presented=None):
+def latency_line(backend, keys, p50, p95, unpainted=0, presented=None, key_to_screen=None):
     presented = presented or ("render-callback-end" if backend == "skia" else "paint-end")
+    tail = "" if key_to_screen is None else f" | key_to_screen p50={key_to_screen[0]:.2f} p95={key_to_screen[1]:.2f}"
     return (
         f"[LATENCY] summary backend={backend} presented={presented} window=5.0s keys={keys} unpainted={unpainted} | "
-        f"when_to_edt p50=1.00 p95=2.00 | total p50={p50:.2f} p95={p95:.2f} ms"
+        f"when_to_edt p50=1.00 p95=2.00 | total p50={p50:.2f} p95={p95:.2f}{tail} ms"
     )
 
 
@@ -32,6 +33,16 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(window.presented, "render-callback-end")
         self.assertEqual((window.keys, window.unpainted), (12, 2))
         self.assertEqual((window.p50, window.p95), (8.5, 14.25))
+
+    def test_reads_key_to_screen_when_the_summary_has_it(self):
+        window = summary.parse_latency(latency_line("skia", 12, 8.5, 14.25, key_to_screen=(20.0, 50.0)))
+        self.assertEqual((window.p50, window.p95), (8.5, 14.25))
+        self.assertEqual((window.key_to_screen_p50, window.key_to_screen_p95), (20.0, 50.0))
+
+    def test_an_older_summary_without_key_to_screen_is_still_read(self):
+        window = summary.parse_latency(latency_line("skia", 12, 8.5, 14.25))
+        self.assertEqual((window.p50, window.p95), (8.5, 14.25))
+        self.assertEqual((window.key_to_screen_p50, window.key_to_screen_p95), (None, None))
 
     def test_ignores_a_window_without_keystrokes(self):
         line = "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
@@ -71,6 +82,31 @@ class SummaryTests(unittest.TestCase):
     def test_a_backend_with_no_keystroke_windows_is_not_reported(self):
         empty = "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
         self.assertEqual(summary.summarise({"r": [empty]}), {})
+
+    def test_takes_key_to_screen_the_same_way_and_leaves_it_empty_for_runs_that_lack_it(self):
+        with_gap = [
+            latency_line("skia", 10, 4.0, 6.0, key_to_screen=(30.0, 60.0)),
+            latency_line("skia", 10, 4.0, 6.0, key_to_screen=(40.0, 70.0)),
+        ]
+        result = summary.summarise({"a": with_gap, "b": [latency_line("java2d", 10, 6.0, 9.0)]})
+        self.assertEqual((result["skia"].key_to_screen_p50, result["skia"].key_to_screen_p95), (35.0, 65.0))
+        self.assertEqual((result["java2d"].key_to_screen_p50, result["java2d"].key_to_screen_p95), (None, None))
+
+    def test_the_table_shows_key_to_screen_beside_the_total_and_dashes_where_it_is_missing(self):
+        result = summary.summarise(
+            {
+                "a": [latency_line("skia", 10, 4.0, 6.0, key_to_screen=(30.0, 60.0))],
+                "b": [latency_line("java2d", 10, 6.0, 9.0)],
+            }
+        )
+        table = summary.table(result)
+        self.assertIn("key-to-screen p50", table)
+        skia_row = next(line for line in table.splitlines() if line.startswith("skia"))
+        java2d_row = next(line for line in table.splitlines() if line.startswith("java2d"))
+        self.assertIn("30.00", skia_row)
+        self.assertIn("60.00", skia_row)
+        self.assertNotIn("30.00", java2d_row)
+        self.assertIn("-", java2d_row)
 
     def test_the_table_names_what_presented_means_for_each_backend(self):
         result = summary.summarise({"a": [latency_line("java2d", 10, 6.0, 9.0)], "b": [latency_line("skia", 10, 4.0, 6.0)]})

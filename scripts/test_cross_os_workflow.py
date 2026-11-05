@@ -35,7 +35,7 @@ class AggregateJobTests(unittest.TestCase):
                 job = _job(_CALLER, f"test-{label}")
                 self.assertIn(f"    name: Test ({label})\n", job + "\n")
                 self.assertIn(f"    needs: shards-{label}\n", job + "\n")
-                self.assertIn("    if: always()\n", job + "\n")
+                self.assertIn("    if: always() && ", job + "\n")
 
     def test_a_shard_that_did_not_succeed_fails_the_check(self) -> None:
         for label in ("windows", "macos"):
@@ -54,7 +54,104 @@ class AggregateJobTests(unittest.TestCase):
 
     def test_there_are_no_other_jobs_to_claim_the_required_names(self) -> None:
         jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", _CALLER.split("\njobs:\n", 1)[1], re.M)
-        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos"], jobs)
+        # wake-train only dispatches the next merge train step on a train branch; its name is not a required check.
+        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos", "wake-train"], jobs)
+        self.assertIn("    name: Wake the merge train\n", _job(_CALLER, "wake-train"))
+
+
+_DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+# Once the merge train is live it runs Windows and macOS once per batch instead (#2553 item 3).
+_TRAIN_GATE = (
+    "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))"
+)
+_CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
+_PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()
+
+
+def _pull_request_types(text: str) -> list[str]:
+    match = re.search(r"^  pull_request:\n(?:    #[^\n]*\n)*    types: \[([a-z_, ]+)\]\n", text, re.M)
+    return [] if match is None else [t.strip() for t in match.group(1).split(",")]
+
+
+class DraftGateTests(unittest.TestCase):
+    """Draft pull requests run Linux CI only; Windows and macOS start when the pull request is marked ready (owner
+    decision on #2484, 2026-11-03, while shared runners were starved)."""
+
+    def test_marking_ready_starts_cross_os_ci_and_the_package_check(self) -> None:
+        for name, text in (("cross-os", _CALLER), ("ci", _CI), ("package", _PACKAGE)):
+            with self.subTest(workflow=name):
+                self.assertEqual(
+                    ["opened", "synchronize", "reopened", "ready_for_review"], _pull_request_types(text)
+                )
+
+    def test_shards_and_their_checks_skip_drafts_and_live_train_pull_requests_together(self) -> None:
+        for label in ("windows", "macos"):
+            with self.subTest(label=label):
+                self.assertIn(f"    if: {_TRAIN_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
+                self.assertIn(f"    if: always() && {_TRAIN_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
+
+    def test_the_three_os_package_build_skips_drafts(self) -> None:
+        self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
+
+
+class FailureSummaryTests(unittest.TestCase):
+    """A failing test's name and message go in the step summary and one annotation per failure, instead of ~380 lines
+    of raw JUnit XML on Windows and macOS and nothing at all on Linux (#2557)."""
+
+    _COMMAND = 'scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"'
+
+    def _step(self, job: str) -> str:
+        return next(step for step in re.split(r"\n      - ", job) if "summarize_test_failures.py" in step)
+
+    def test_the_linux_test_job_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_CI, "test")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_each_shard_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_the_raw_xml_dump_is_gone_but_the_reports_are_still_uploaded(self) -> None:
+        self.assertNotIn("Print test failure detail", _SHARDS)
+        self.assertNotIn('cat "$report"', _SHARDS)
+        self.assertIn("path: target/test-reports/**", _SHARDS)
+
+    def test_a_failed_aggregate_says_which_result_it_saw_and_where_the_shards_are(self) -> None:
+        for label in ("windows", "macos"):
+            with self.subTest(label=label):
+                job = _job(_CALLER, f"test-{label}")
+                self.assertIn("RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", job)
+                self.assertIn('"$RESULT"', job.split("::error", 1)[1])
+                self.assertIn("$RUN_URL", job.split("::error", 1)[1])
+                self.assertIn(f"Test ({label}, shard", job)
+
+
+def _concurrency(text: str) -> dict[str, str]:
+    block = re.search(r"^concurrency:\n((?:  [^\n]*\n)+)", text, re.M).group(1)
+    return dict(re.findall(r"^  ([a-z-]+): ([^\n]+)$", block, re.M))
+
+
+class ConcurrencyTests(unittest.TestCase):
+    """A newer push may cancel a pull request's older run, but never a master, nightly or dispatched run: one shared,
+    cancelling group left master with no completed Windows or macOS result after the 11-02 nightly (#2557)."""
+
+    def test_only_pull_request_runs_cancel_an_older_run(self) -> None:
+        self.assertEqual("${{ github.event_name == 'pull_request' }}", _concurrency(_CALLER)["cancel-in-progress"])
+
+    def test_the_nightly_has_its_own_group_so_a_master_push_cannot_replace_it_while_it_waits(self) -> None:
+        self.assertEqual(
+            "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+            "${{ github.event_name == 'schedule' && '-nightly' || '' }}",
+            _concurrency(_CALLER)["group"],
+        )
 
 
 class ShardCountTests(unittest.TestCase):

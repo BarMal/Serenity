@@ -146,6 +146,21 @@ final private[manager] class StateManagerFilePersistence(
       loadJob(path).flatMap(_.fold(IO.unit)(result => lanes.post(commitLoad(result))))
     )
 
+  /** The explorer's open: the file's tab when it is already open, else a new one, a preview or to keep. */
+  def openFromExplorer(path: Path, preview: Boolean): IO[Unit] =
+    val intent = if preview then OpenIntent.Preview else OpenIntent.Keep
+    currentState.flatMap { state =>
+      if FileResults.openBufferFor(state, path).isDefined then
+        commitState(FileResults.surfaced(state, path, intent), state)
+      else
+        submitIgnoringShutdown(
+          fileLane(path),
+          loadJob(path).flatMap(
+            _.fold(IO.unit)(result => lanes.post(commitLoad(EffectResult.withIntent(result, intent))))
+          )
+        )
+    }
+
   /** Opens `path` and waits until the buffer is in the state -- for callers off the dispatcher, such as startup. */
   def openFile(path: Path): IO[Unit] =
     awaitLane(fileLane(path), loadJob(path)).flatMap(
@@ -267,7 +282,7 @@ final private[manager] class StateManagerFilePersistence(
 
   private def commitLoad(result: EffectResult): IO[Unit] =
     result match
-      case loaded @ EffectResult.FileLoaded(path, buffer) =>
+      case loaded @ EffectResult.FileLoaded(path, buffer, _) =>
         commit(loaded) >> announceOpenedToLsp(path, buffer) >> warnIfLarge(path, buffer)
       case EffectResult.FileLoadFailed(path, error) =>
         logger.error(error)(s"[FILE] Failed to load file at $path") >> showNotice(

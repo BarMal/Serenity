@@ -1,6 +1,9 @@
 package com.serenity.app
 
+import java.lang.management.ManagementFactory
 import java.util.Locale
+
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 
@@ -28,6 +31,7 @@ object ToolkitSelection:
 
   final case class Decision(choice: Choice, reason: String)
 
+  /** `properties` carries `awt.toolkit.name` only when the user passed it; see [[userProperties]]. */
   final case class Environment(
       osName: String,
       properties: Map[String, String],
@@ -82,14 +86,32 @@ object ToolkitSelection:
   private def vendor(environment: Environment): String =
     environment.properties.get("java.vm.vendor").orElse(environment.properties.get("java.vendor")).getOrElse("this JVM")
 
-  /** Reads the running JVM. The class file is looked up as a resource so that nothing in `java.awt` gets loaded. The
-    * socket is probed only where its answer can matter: a Linux runtime with `WLToolkit`, in a session that names a
-    * Wayland socket or is asked for one.
+  /** The toolkit the user named with `-Dawt.toolkit.name=...`. A JetBrains Runtime presets the property itself, so the
+    * property alone cannot say who chose it; the JVM's input arguments can. As in the JVM, the last flag wins.
+    */
+  def userToolkit(inputArguments: List[String]): Option[String] =
+    inputArguments.reverse
+      .collectFirst { case flag if flag.startsWith(ToolkitFlag) => flag.stripPrefix(ToolkitFlag) }
+      .filter(_.nonEmpty)
+
+  /** `systemProperties` with the toolkit property kept only when the user passed it, and then with the user's value. */
+  def userProperties(systemProperties: Map[String, String], inputArguments: List[String]): Map[String, String] =
+    val withoutToolkit = systemProperties - ToolkitProperty
+    userToolkit(inputArguments).fold(withoutToolkit)(toolkit => withoutToolkit + (ToolkitProperty -> toolkit))
+
+  private val ToolkitFlag = s"-D$ToolkitProperty="
+
+  /** Reads the running JVM, without loading `java.awt` (the arguments come from `java.management`). The class file is
+    * looked up as a resource so that nothing in `java.awt` gets loaded. The socket is probed only where its answer can
+    * matter: a Linux runtime with `WLToolkit`, in a session that names a Wayland socket or is asked for one.
     */
   def currentEnvironment: IO[Environment] =
     IO {
-      val properties = List(ToolkitProperty, "java.vendor", "java.vm.vendor", "java.runtime.name").flatMap(key =>
-        Option(System.getProperty(key)).map(key -> _)
+      val properties = userProperties(
+        List(ToolkitProperty, "java.vendor", "java.vm.vendor", "java.runtime.name")
+          .flatMap(key => Option(System.getProperty(key)).map(key -> _))
+          .toMap,
+        ManagementFactory.getRuntimeMXBean.getInputArguments.asScala.toList
       )
       val osName                  = System.getProperty("os.name", "")
       val waylandToolkitAvailable = Option(ClassLoader.getSystemResource(WaylandToolkitClassFile)).nonEmpty
@@ -98,7 +120,7 @@ object ToolkitSelection:
           sys.env.get(OverrideVariable).exists(_.trim.equalsIgnoreCase("wayland"))
       Environment(
         osName = osName,
-        properties = properties.toMap,
+        properties = properties,
         env = sys.env,
         waylandToolkitAvailable = waylandToolkitAvailable,
         waylandSocketProblem =

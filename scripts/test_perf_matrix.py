@@ -85,5 +85,65 @@ class PerfMatrixTests(unittest.TestCase):
         self.assertGreaterEqual(int(match.group(1)), 75)
 
 
+class PerfCompileStepTests(unittest.TestCase):
+    """The first benchmark run on each side compiles the whole project, about 400 s (#2618). Compiling both sides in one
+    step, side by side, costs about one of them; the benchmarks themselves still run one at a time."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        job = _perf_job(_CI.read_text())
+        cls.job = job
+        start = job.index("- name: Compile base and head side by side")
+        end = job.index("- name: Run performance benchmarks on base and head")
+        cls.compile_step = job[start:end]
+
+    def test_it_runs_after_the_base_is_checked_out_and_before_the_first_benchmark(self) -> None:
+        self.assertLess(self.job.index("- name: Check out the base commit"), self.job.index("- name: Compile base and head side by side"))
+        self.assertLess(self.job.index("- name: Compile base and head side by side"), self.job.index("- name: Run performance benchmarks on base and head"))
+
+    def test_it_compiles_the_base_checkout_and_the_head_checkout(self) -> None:
+        self.assertEqual(2, self.compile_step.count("sbt -v Test/compile"))
+        self.assertIn('cd "$RUNNER_TEMP/base"', self.compile_step)
+
+    def test_the_two_compiles_run_at_the_same_time_and_both_are_waited_for(self) -> None:
+        self.assertEqual(2, len(re.findall(r"Test/compile[^\n]*&\n", self.compile_step)))
+        self.assertEqual(2, len(re.findall(r'^\s+wait "\$\w+"', self.compile_step, re.MULTILINE)))
+
+    def test_a_failed_compile_does_not_fail_the_step(self) -> None:
+        # The run that follows fails the way it always did, with the head's raw output shown (see PerfRunStepTests).
+        for wait in re.findall(r'^\s+wait "\$\w+".*$', self.compile_step, re.MULTILINE):
+            with self.subTest(wait=wait):
+                self.assertIn("||", wait)
+
+    def test_each_sides_output_is_kept_for_a_reader(self) -> None:
+        self.assertIn("compile-base.log", self.compile_step)
+        self.assertIn("compile-head.log", self.compile_step)
+
+    def test_it_is_a_bash_step_so_background_jobs_and_wait_exist(self) -> None:
+        self.assertIn("shell: bash", self.compile_step)
+
+
+class PerfRunStepTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        job = _perf_job(_CI.read_text())
+        start = job.index("- name: Run performance benchmarks on base and head")
+        end = job.index("- name: Check for a performance regression")
+        cls.run_step = job[start:end]
+
+    def test_a_head_run_with_no_rows_stops_the_job_before_the_next_pass(self) -> None:
+        loop_end = self.run_step.index("\n            done\n          done")
+        check = self.run_step.index('[ ! -s "perf-runs/head-$pair.csv" ]')
+        self.assertLess(self.run_step.index("run-perf-benchmark.sh"), check)
+        self.assertLess(check, loop_end)
+
+    def test_the_stop_is_a_red_error_that_shows_the_raw_output(self) -> None:
+        check = self.run_step[self.run_step.index('[ ! -s "perf-runs/head-$pair.csv" ]'):]
+        block = check[: check.index("fi")]
+        self.assertIn("::error::", block)
+        self.assertIn('tail -n 60 "perf-runs/head-$pair.csv.raw"', block)
+        self.assertIn("exit 1", block)
+
+
 if __name__ == "__main__":
     unittest.main()

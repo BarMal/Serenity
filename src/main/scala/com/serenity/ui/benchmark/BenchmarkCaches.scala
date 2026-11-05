@@ -18,10 +18,15 @@ final class BenchmarkCaches(executor: Executor = ScrollCountExecutor.shared):
   private val counting = ScrollCounting.deferred(executor, _ => ())
 
   /** The caches of frames that follow one another: typing, scrolling, a caret blinking. */
-  def shared(): RenderCaches = RenderCaches.create(scrollCounting = counting)
+  def shared(): RenderCaches = counted(RenderCaches.create(scrollCounting = counting))
 
   /** The caches of a document opened after `shared` has drawn: its font sets, and nothing else. */
   def cold(shared: RenderCaches): RenderCaches =
     val fresh = RenderCaches.create(scrollCounting = counting, styledFonts = shared.styledFonts)
     SkiaTextCaches.keepingFonts(shared.backendCaches, fresh.backendCaches)
-    fresh
+    counted(fresh)
+
+  /** Counting is on so a scenario can report how many shapings its frames made; it is a few atomic adds per frame. */
+  private def counted(caches: RenderCaches): RenderCaches =
+    caches.frameCounters.setEnabled(true)
+    caches
