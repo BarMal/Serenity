@@ -219,6 +219,12 @@ Set `ui.render.frame_timing = true` in `~/.serenity/config.conf` and the app log
 from an input arriving to the end of the first paint that shows it. The `laptop.*` benchmarks measure the same stages,
 so a laptop log and a CI run can be compared stage by stage.
 
+In a window launch the line also carries `edt-lag`: every 50 ms the app posts a no-op to the AWT event thread and
+records how long it waited there before it ran, then reports p50/p95/max and the sample count `n` (about 100 per
+window). That is the wait a key event would see if it arrived at a random moment, which none of the stages above show
+when the event thread is busy elsewhere, for example in the Skia layer's native flush (#2489). A terminal launch has no
+event thread and omits it.
+
 The same line carries what each frame drew, as `avg` and `max` per frame over the window: `rows-drawn` and
 `rows-preserved` (document rows redrawn against rows kept from the frame before, copied scroll rows included), `runs`
 (text runs painted), `shapings` (strings shaped rather than served from the shaping cache), `layer-composites`,
