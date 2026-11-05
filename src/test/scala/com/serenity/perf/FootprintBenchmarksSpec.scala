@@ -20,7 +20,11 @@ class FootprintBenchmarksSpec extends AnyFlatSpec with Matchers:
       "footprint.ten_buffers",
       "footprint.prose_frame.stable_text",
       "footprint.prose_frame.fresh_text",
-      "footprint.two_runtimes.prose_frame.stable_text"
+      "footprint.two_runtimes.prose_frame.stable_text",
+      "footprint.buffers_1_shown.code",
+      "footprint.buffers_1_shown.prose",
+      "footprint.buffers_20_shown.code",
+      "footprint.buffers_20_shown.prose"
     )
   }
 

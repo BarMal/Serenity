@@ -53,6 +53,14 @@ lazy val architectureBaselineFile = settingKey[File]("Baseline of known architec
 lazy val architectureCheck        = taskKey[Unit]("Fail if any file or method grew past target, or a layer was crossed")
 lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-check baseline from the current tree")
 
+lazy val moduleGraphBaselineFile = settingKey[File]("Baseline of known upward module edges (#2502)")
+lazy val moduleGraphSelfTest =
+  taskKey[Unit]("Regression guard for ModuleGraph itself: decoder, graph, cycles and ratchet")
+lazy val moduleGraph = taskKey[Unit]("Report the semanticdb file and module dependency graph (read-only)")
+lazy val moduleGraphCheck =
+  taskKey[Unit]("Fail if a module depends upward on a layer above it and the edge is not baselined")
+lazy val writeModuleGraphBaseline = taskKey[Unit]("Regenerate the module-graph baseline from the current tree")
+
 lazy val architectureChecksSelfTest = taskKey[Unit](
   "Regression guard for ArchitectureChecks itself: confirms forbidden fully-qualified references are still caught (#1676)"
 )
@@ -228,6 +236,45 @@ lazy val root = (project in file("."))
       ArchitectureChecks.writeBaseline(architectureBaselineFile.value, violations)
       streams.value.log.info(
         s"architecture baseline written: ${violations.size} entries at ${architectureBaselineFile.value}"
+      )
+    },
+    moduleGraphBaselineFile := baseDirectory.value / "project" / "module-graph-baseline.tsv",
+    moduleGraphSelfTest := {
+      ModuleGraphSelfTest.run()
+      streams.value.log.info("moduleGraphSelfTest: decoder, graph, cycles and ratchet behave")
+    },
+    moduleGraph := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val report    = ModuleGraph.report(documents)
+      IO.write(target.value / "module-graph.txt", report)
+      streams.value.log.info(report)
+    },
+    moduleGraphCheck := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      ModuleGraph.check(documents, ModuleGraph.readBaseline(moduleGraphBaselineFile.value)) match {
+        case None => streams.value.log.info("moduleGraphCheck: no new upward module edges")
+        case Some(report) =>
+          sys.error(
+            s"""moduleGraphCheck failed.
+               |
+               |$report
+               |
+               |Break the edge, or if you deliberately accept it, run `sbt writeModuleGraphBaseline`
+               |and explain the new entry in review.""".stripMargin
+          )
+      }
+    },
+    writeModuleGraphBaseline := {
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val edges     = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(documents))
+      ModuleGraph.writeBaseline(moduleGraphBaselineFile.value, edges)
+      streams.value.log.info(
+        s"module-graph baseline written: ${edges.size} entries at ${moduleGraphBaselineFile.value}"
       )
     },
     // Build identity, generated into a source file so anything that reports it -- `--version`, an about surface --
