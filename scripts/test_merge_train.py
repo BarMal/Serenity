@@ -10,6 +10,7 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 import unittest
@@ -266,11 +267,11 @@ class TrainTests(unittest.TestCase):
         self.log: list[str] = []
         self.clock = _NOW
 
-    def _train(self, dry_run: bool = False, flake_issue: int | None = 99) -> mt.Train:
+    def _train(self, dry_run: bool = False, flake_issue: int | None = 99, batch: int = 6) -> mt.Train:
         return mt.Train(
             github=self.github,
             git=mt.Git(self.clone),
-            batch=6,
+            batch=batch,
             dry_run=dry_run,
             flake_issue=flake_issue,
             now=lambda: self.clock,
@@ -307,6 +308,43 @@ class TrainTests(unittest.TestCase):
         manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
         assert manifest is not None
         self.assertEqual([1], [p.number for p in manifest.prs])
+
+    def _train_numbers(self) -> list[int]:
+        branch = self._live_branch()
+        assert branch is not None
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
+        assert manifest is not None
+        return [p.number for p in manifest.prs]
+
+    def test_a_conflicting_pull_request_is_replaced_by_the_next_eligible_one(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self.github.add_pr(3, "c.txt", "c\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 3], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2", self.log)
+
+    def test_a_backfilled_pull_request_is_applied_on_top_of_the_batch_built_so_far(self) -> None:
+        self.github.add_pr(1, "x.txt", "one\n")
+        self.github.add_pr(2, "x.txt", "two\n")
+        self.github.add_pr(3, "x.txt", "three\n")
+        self.github.add_pr(4, "y.txt", "y\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 4], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2 #3", self.log)
+
+    def test_backfilling_never_takes_the_train_past_the_batch_size(self) -> None:
+        for n in (1, 2, 3):
+            self.github.add_pr(n, f"f{n}.txt", f"{n}\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 2], self._train_numbers())
+        self.assertFalse(any("Left out" in line for line in self.log))
+
+    def test_when_the_batch_cannot_be_filled_it_takes_every_pull_request_that_applies(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self._train(batch=3).tick()
+        self.assertEqual([1], self._train_numbers())
 
     def test_a_green_train_merges_its_pull_requests_in_order_and_master_gets_exactly_the_tested_tree(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
@@ -441,6 +479,17 @@ def _workflow(name: str) -> str:
     return (_WORKFLOWS / name).read_text()
 
 
+def _job_ids(workflow: str) -> list[str]:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    return [m.group(1) for m in re.finditer(r"^  ([A-Za-z0-9_-]+):\s*$", jobs, re.MULTILINE)]
+
+
+def _job_text(workflow: str, job: str) -> str:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    found = re.search(rf"^  {re.escape(job)}:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", jobs, re.MULTILINE | re.DOTALL)
+    return found.group(1) if found else ""
+
+
 class WorkflowTests(unittest.TestCase):
     """How .github/workflows/merge-train.yml drives the script, and how the existing workflows make room for it."""
 
@@ -475,6 +524,22 @@ class WorkflowTests(unittest.TestCase):
         # Scheduled ticks were not firing (none after 18:32Z on 2026-11-04), and nothing else wakes the train between
         # trains: a batch merging moves master, which is the moment the next one can start.
         self.assertRegex(self.train, r"\n  push:\n    branches: \[master\]\n")
+
+    def test_a_train_branchs_runs_wake_the_train_themselves_because_workflow_token_runs_raise_no_workflow_run(self) -> None:
+        # GITHUB_TOKEN-created runs do not trigger workflow_run (observed on the first live train), so the last job of
+        # each workflow dispatches the next merge train step. workflow_dispatch via the token is allowed.
+        for name in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=name):
+                text = _workflow(name)
+                job = _job_text(text, "wake-train")
+                self.assertIn("    if: always() && startsWith(github.ref, 'refs/heads/train/')\n", job)
+                self.assertIn("    permissions:\n      actions: write\n", job)
+                self.assertIn("    timeout-minutes: 5\n", job)
+                self.assertIn("GH_REPO: ${{ github.repository }}", job)
+                self.assertIn("GH_TOKEN: ${{ github.token }}", job)
+                self.assertIn("run: gh workflow run merge-train.yml --ref master\n", job)
+                others = [j for j in _job_ids(text) if j != "wake-train"]
+                self.assertEqual(f"    needs: [{', '.join(others)}]\n", next(l + "\n" for l in job.splitlines() if l.startswith("    needs:")))
 
     def test_it_holds_the_permissions_its_steps_use(self) -> None:
         for permission in ("actions: write", "contents: write", "pull-requests: write", "issues: write"):
