@@ -331,10 +331,7 @@ class ModelAtomicitySpec extends AnyFlatSpec with Matchers:
   }
 
   private def runnerPresetPreviews(model: Model): Option[List[UiPreset.Preview]] =
-    model.app.commandRunnerSurface.map(_.content).collect {
-      case SurfaceContent.CommandPalette(runner) =>
-        runner.uiPresetPreviews
-    }
+    com.serenity.CommandPaletteProbe.runner(model.app).map(_.uiPresetPreviews)
 
   "Opening the command runner" should "commit the runner at once and its UI preset previews in a write of their own" in {
     val program =

@@ -6,7 +6,10 @@ import com.serenity.ui.fonts.FontLoader.TextScaleMode
 
 object CommandRunnerOptionSelections:
 
-  def default(config: AppConfig): Map[String, Int] =
+  def default(
+    config: AppConfig,
+    fontFamilies: FontLoader.FontFamilyCatalog = FontLoader.FontFamilyCatalog.system
+  ): Map[String, Int] =
     val editorConfig        = config.editorConfig
     val surfaceConfig       = config.surfaceConfig
     val cursorConfig        = config.cursorConfig
@@ -55,9 +58,9 @@ object CommandRunnerOptionSelections:
       "contextual-toolbar"         -> enabledIndex(surfaceConfig.contextualToolbarEnabled),
       "contextual-toolbar-display" -> contextualToolbarDisplayModeIndex(surfaceConfig.contextualToolbarDisplayMode),
       "command-runner-key-hints"   -> enabledIndex(surfaceConfig.commandRunnerShowKeyHints),
-      "code-font"                  -> codeFontIndex(editorConfig.fontConfig.codeFontFamily),
-      "text-font"                  -> textFontIndex(editorConfig.fontConfig.textFontFamily),
-      "ui-font"                    -> uiFontIndex(editorConfig.fontConfig.uiFontFamily),
+      "code-font"                  -> codeFontIndex(editorConfig.fontConfig.codeFontFamily, fontFamilies),
+      "text-font"                  -> textFontIndex(editorConfig.fontConfig.textFontFamily, fontFamilies),
+      "ui-font"                    -> uiFontIndex(editorConfig.fontConfig.uiFontFamily, fontFamilies),
       "text-scale-mode"            -> textScaleModeIndex(editorConfig.fontConfig.textScaleMode),
       "code-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.codeLigatures),
       "text-ligatures"             -> ligaturesIndex(editorConfig.fontConfig.textLigatures),
@@ -169,18 +172,18 @@ object CommandRunnerOptionSelections:
       case ToolbarDisplayMode.TextOnly    => 1
       case ToolbarDisplayMode.IconAndText => 2
 
-  private def codeFontIndex(family: String): Int =
-    FontLoader.availableMonospaceFamilies.indexOf(family) match
+  private def codeFontIndex(family: String, fontFamilies: FontLoader.FontFamilyCatalog): Int =
+    fontFamilies.monospace.indexOf(family) match
       case -1    => 0
       case index => index
 
-  private def textFontIndex(family: String): Int =
-    FontLoader.availableTextFamilies.indexOf(family) match
+  private def textFontIndex(family: String, fontFamilies: FontLoader.FontFamilyCatalog): Int =
+    fontFamilies.text.indexOf(family) match
       case -1    => 0
       case index => index
 
-  private def uiFontIndex(family: String): Int =
-    FontLoader.availableUiFamilies.indexOf(family) match
+  private def uiFontIndex(family: String, fontFamilies: FontLoader.FontFamilyCatalog): Int =
+    fontFamilies.ui.indexOf(family) match
       case -1    => 0
       case index => index
 

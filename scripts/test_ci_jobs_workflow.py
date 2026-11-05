@@ -42,7 +42,7 @@ class JobLayoutTests(unittest.TestCase):
     def test_the_sbt_check_jobs_are_folded_into_one(self) -> None:
         # wake-train is not a check: it only dispatches the next merge train step on a train branch. sdl-native is the
         # SDL3 binding's own job (a built libSDL3 and the specs tagged SdlNativeTest), kept apart from Test.
-        self.assertEqual(["checks", "scripts", "test", "sdl-native", "perf", "wake-train"], _jobs())
+        self.assertEqual(["checks", "scripts", "test", "sdl-native", "perf", "perf-2x", "wake-train"], _jobs())
 
     def test_every_job_has_a_time_limit_so_a_hang_cannot_hold_a_runner_for_six_hours(self) -> None:
         for name in _jobs():
