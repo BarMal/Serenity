@@ -31,6 +31,16 @@ def _job(name: str) -> str:
     return "\n".join(lines[start:end])
 
 
+def _unittest_command() -> str:
+    step = re.search(r"- name: Test the scripts\n\s+run: \|\n((?:\s{10}.*\n?)+)", _job("scripts"))
+    assert step is not None, "the scripts job has no multi-line `run: |` step"
+    return step.group(1)
+
+
+def _listed_modules() -> list[str]:
+    return re.findall(r"scripts\.test_\w+", _unittest_command())
+
+
 class PerfDraftGateTests(unittest.TestCase):
     def test_the_perf_shards_skip_drafts_and_once_the_train_is_live_skip_unlabelled_pull_requests(self) -> None:
         self.assertIn(f"    if: {_PERF_GATE}\n", _job("perf") + "\n")
@@ -49,11 +59,21 @@ class ScriptTestsJobTests(unittest.TestCase):
         self.assertNotIn("    if:", job)
 
     def test_every_script_test_module_is_run(self) -> None:
-        run = re.search(r"python3 -m unittest ([^\n]+) -v", _job("scripts"))
-        self.assertIsNotNone(run)
-        listed = set(run.group(1).split())
+        listed = set(_listed_modules())
         on_disk = {f"scripts.{p.stem}" for p in (_ROOT / "scripts").glob("test_*.py")}
         self.assertEqual(set(), on_disk - listed, "test modules on disk that CI never runs")
+
+    def test_the_modules_are_listed_one_per_line_in_sorted_order_so_pull_requests_adding_one_merge_cleanly(self) -> None:
+        # A single long line made every pull request that adds a module conflict with the one merged before it.
+        command = _unittest_command()
+        lines = [line.strip() for line in command.splitlines()]
+        self.assertEqual("python3 -m unittest \\", lines[0])
+        self.assertEqual("-v", lines[-1], "-v closes the list, so appending a module never edits a neighbouring line")
+        module_lines = lines[1:-1]
+        self.assertTrue(all(re.fullmatch(r"scripts\.test_\w+ \\", line) for line in module_lines), module_lines)
+        modules = [line.removesuffix(" \\") for line in module_lines]
+        self.assertEqual(sorted(modules), modules)
+        self.assertEqual(len(modules), len(set(modules)), "a module is listed twice")
 
 
 if __name__ == "__main__":

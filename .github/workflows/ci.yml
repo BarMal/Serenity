@@ -125,9 +125,40 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      # Stdlib `unittest`, no Python dependency. scripts.test_ci_workflow fails if a test module is left out here.
+      # Stdlib `unittest`, no Python dependency. One module per line, sorted, so pull requests adding one merge cleanly;
+      # scripts.test_ci_workflow fails if a test module is left out, listed twice or out of order.
       - name: Test the scripts
-        run: python3 -m unittest scripts.test_check_perf_regression scripts.test_combine_perf_runs scripts.test_compare_perf_runs scripts.test_study_perf_gate scripts.test_run_perf_benchmark scripts.test_perf_matrix scripts.test_abba_compare scripts.test_present_abba_summary scripts.test_summarize_jvm_diag scripts.test_summarize_test_durations scripts.test_check_no_dng scripts.test_smoke_test_app_image scripts.test_aot_cache_scripts scripts.test_ttfw scripts.test_startup_spread scripts.test_startup_variance scripts.test_startup_rows scripts.test_regenerate_base_cds_archive scripts.test_collapsed_top_frames scripts.test_key_to_screen_summary scripts.test_bench_laptop scripts.test_cross_os_workflow scripts.test_hyprland_float scripts.test_footprint_parse scripts.test_ci_workflow scripts.test_merge_train scripts.test_ci_jobs_workflow -v
+        run: |
+          python3 -m unittest \
+            scripts.test_abba_compare \
+            scripts.test_aot_cache_scripts \
+            scripts.test_bench_laptop \
+            scripts.test_bench_scaling \
+            scripts.test_check_no_dng \
+            scripts.test_check_perf_regression \
+            scripts.test_ci_jobs_workflow \
+            scripts.test_ci_workflow \
+            scripts.test_collapsed_top_frames \
+            scripts.test_combine_perf_runs \
+            scripts.test_compare_perf_runs \
+            scripts.test_cross_os_workflow \
+            scripts.test_footprint_parse \
+            scripts.test_hyprland_float \
+            scripts.test_key_to_screen_summary \
+            scripts.test_merge_train \
+            scripts.test_perf_matrix \
+            scripts.test_present_abba_summary \
+            scripts.test_regenerate_base_cds_archive \
+            scripts.test_run_perf_benchmark \
+            scripts.test_smoke_test_app_image \
+            scripts.test_startup_rows \
+            scripts.test_startup_spread \
+            scripts.test_startup_variance \
+            scripts.test_study_perf_gate \
+            scripts.test_summarize_jvm_diag \
+            scripts.test_summarize_test_durations \
+            scripts.test_ttfw \
+            -v
 
   test:
     name: Test
@@ -359,3 +390,20 @@ jobs:
           name: ${{ matrix.results }}
           path: perf-runs/
           retention-days: 90
+
+  # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
+  # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
+  wake-train:
+    name: Wake the merge train
+    needs: [checks, scripts, test, perf]
+    if: always() && startsWith(github.ref, 'refs/heads/train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start a merge train step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run merge-train.yml --ref master

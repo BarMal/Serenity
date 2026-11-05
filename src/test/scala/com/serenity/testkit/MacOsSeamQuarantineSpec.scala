@@ -19,5 +19,5 @@ class MacOsSeamQuarantineSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "say where it is tracked, so a skipped run explains itself" in {
-    MacOsSeamQuarantine.Reason should include("issues/2481")
+    MacOsSeamQuarantine.Reason should include("issues/2634")
   }

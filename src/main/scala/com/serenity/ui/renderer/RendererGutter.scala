@@ -191,6 +191,31 @@ object RendererGutter:
         case (band, row) if !rows.includes(row) => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach)
       }
 
+  /** The top [[InkSpillPx]] of each band of `lineRect` that `rows` keeps directly below a band it repaints: the ink a
+    * repainted number spills downward reaches only there, and a frame drawn from scratch paints the row below over it.
+    * The bands are as wide as [[keptRowBands]].
+    */
+  private[renderer] def spillGuardBands(
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lineRect: LayoutRect,
+    rows: Repaint[Int]
+  ): List[PixelRect] =
+    if rows.everything then Nil
+    else
+      val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
+      val bands = counterRowBands(state, context, snapshot, lineRect)
+      bands.indices.toList.collect {
+        case row if row > 0 && !rows.includes(row) && rows.includes(row - 1) =>
+          val band = bands(row)
+          band.copy(
+            xPx = band.xPx - reach,
+            widthPx = band.widthPx + 2 * reach,
+            heightPx = band.heightPx.min(InkSpillPx)
+          )
+      }
+
   /** The pixels each of `snapshot`'s rows owns in the counter: from where its number is drawn to where the next row's
     * is, so the ink a label spills into the gap beside it stays with it. The first row owns the counter above it, the
     * last the counter below.

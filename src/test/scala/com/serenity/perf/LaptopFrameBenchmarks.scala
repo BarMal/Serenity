@@ -28,7 +28,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   FontSpec,
   FrameOutput,
@@ -216,7 +216,7 @@ private[perf] object LaptopFrameBenchmarks:
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
 
-  private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
+  private[perf] def scrolledToCursor(id: BufferId)(state: AppState): AppState =
     state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
       case Some((buffer, cursor)) =>
         val surface = state.persisted.config.surfaceConfig
@@ -404,7 +404,8 @@ private[perf] object LaptopFrameBenchmarks:
       codeFont: Font = LaptopFrameBenchmarks.codeFont,
       textFont: Font = LaptopFrameBenchmarks.textFont,
       cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
-      viewport: ViewportSize = LaptopFrameBenchmarks.viewport
+      viewport: ViewportSize = LaptopFrameBenchmarks.viewport,
+      onKeptOff: List[PixelRect] => Unit = _ => ()
   ):
     private val image  = frameImage()
     private val caches = RenderCaches.create()
@@ -420,8 +421,12 @@ private[perf] object LaptopFrameBenchmarks:
       finally caches.frameCounters.setEnabled(false)
 
     def render(state: AppState, damage: Damage): BufferedImage =
+      val target     = image
+      val owner      = Some(screen)
+      val textCaches = caches.surfaceText
+      val keptOff    = onKeptOff
       val surface = new Java2DRenderSurface(
-        image,
+        target,
         cellMetrics,
         codeFont,
         _ => (),
@@ -430,9 +435,12 @@ private[perf] object LaptopFrameBenchmarks:
         deviceScaleX = DeviceScale,
         deviceScaleY = DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
-      )
+        layerCacheOwnerOverride = owner,
+        textCaches = textCaches
+      ):
+        override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
+          keptOff(kept)
+          super.withoutPixels(kept)(render)
       val _ = RendererFramePlanner.renderFrame(
         state,
         cursorVisible = false,
@@ -454,7 +462,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** One step of a transition and back again, each frame carrying the damage `DamageProducer` reports for its step --
     * computed once up front, so the benchmark times the frame alone.
     */
-  final private class AlternatingTransition(before: AppState, after: AppState):
+  final private[perf] class AlternatingTransition(before: AppState, after: AppState):
     private val frames   = PersistingFrames()
     private val forward  = DamageProducer.forTransition(before, after)
     private val backward = DamageProducer.forTransition(after, before)
@@ -489,7 +497,7 @@ private[perf] object LaptopFrameBenchmarks:
       }
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
-  private def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
+  private[perf] def differingPixels(a: BufferedImage, b: BufferedImage): IndexedSeq[(Int, Int)] =
     val width   = a.getWidth
     val pixelsA = a.getRGB(0, 0, width, a.getHeight, null, 0, width)
     val pixelsB = b.getRGB(0, 0, width, b.getHeight, null, 0, width)
