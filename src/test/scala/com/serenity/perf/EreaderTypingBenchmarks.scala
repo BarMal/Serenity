@@ -72,15 +72,15 @@ private[perf] object EreaderTypingBenchmarks:
       typingBenchmark("laptop.render.typing_frame_2x.ereader_railed_ghosts", ghostedStateManager(config)) ::
       typingBenchmark("laptop.render.typing_frame_2x.chapter_ghosts", ghostedStateManager(singleColumnConfig)) :: Nil
 
-  private[perf] def typingBenchmark(name: String, stateManager: StateManager)(using
+  private[perf] def typingBenchmark(name: String, stateManager: => StateManager)(using
     IORuntime
   ): BenchmarkRunner.Benchmark =
-    val (before, after) = TypingTransition.of(stateManager)
-    val forward         = DamageProducer.forTransition(before, after)
-    val backward        = DamageProducer.forTransition(after, before)
-    val frames          = LaptopFrameBenchmarks.PersistingFrames()
-    val steps           = Iterator.continually(List(after -> forward, before -> backward)).flatten
-    val _               = frames.render(before, Damage.Everything)
+    lazy val (before, after) = TypingTransition.of(stateManager)
+    lazy val forward         = DamageProducer.forTransition(before, after)
+    lazy val backward        = DamageProducer.forTransition(after, before)
+    lazy val frames          = LaptopFrameBenchmarks.PersistingFrames()
+    lazy val steps           = Iterator.continually(List(after -> forward, before -> backward)).flatten
+    lazy val firstFrame      = frames.render(before, Damage.Everything)
 
     def next(): FramePixels =
       val (state, damage) = steps.next()
@@ -92,15 +92,17 @@ private[perf] object EreaderTypingBenchmarks:
         frames.lastFrame(FrameCounter.RowsDrawn)
       }
 
-    BenchmarkRunner.Benchmark(
-      name,
-      2,
-      12,
-      () =>
-        assert(forward != Damage.Everything, "typing damaged the whole frame")
-        assert(LaptopFrameBenchmarks.hasPixels(next()), "typing frame drew nothing")
-        val drawn = rowsDrawn()
-        assert(drawn <= MaxRowsDrawn, s"the typing frame redrew $drawn rows, more than the $MaxRowsDrawn allowed")
-      ,
-      () => next()
+    BenchmarkRunner.Benchmark.building((before, after, forward, backward, frames, steps, firstFrame))(
+      BenchmarkRunner.Benchmark(
+        name,
+        2,
+        12,
+        () =>
+          assert(forward != Damage.Everything, "typing damaged the whole frame")
+          assert(LaptopFrameBenchmarks.hasPixels(next()), "typing frame drew nothing")
+          val drawn = rowsDrawn()
+          assert(drawn <= MaxRowsDrawn, s"the typing frame redrew $drawn rows, more than the $MaxRowsDrawn allowed")
+        ,
+        () => next()
+      )
     )

@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandKeyBindings, CommandRegistry, CommandRunner, FileFinderCommands}
+import com.serenity.command.{CommandKeyBindings, CommandPicker, CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
@@ -150,50 +150,61 @@ object AppEventReducer:
       case Some(dismissed) => dismissed.copy(state = navigate(dismissed.state))
       case None            => ReducerResult.noEffects(navigate(state))
 
+  /** Ctrl+P closes the command picker or an open settings view, and otherwise opens the command picker (#2577). */
   private def toggleCommandRunner(state: AppState, registry: CommandRegistry): AppState =
-    state.commandRunnerSurface.flatMap(asCommandRunner) match
-      case Some((surface, runner)) if runner.isActive =>
-        state
-          .copy(
-            runtime = state.runtime.copy(
-              uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)
-            )
-          )
-          .popFocus
-      case _ =>
-        openCommandRunner(state, registry)
+    state.commandPickerSurface match
+      case Some(_) => state.dismissTopModal
+      case None =>
+        state.commandRunnerSurface.flatMap(asCommandRunner) match
+          case Some((surface, runner)) if runner.isActive =>
+            state
+              .copy(
+                runtime = state.runtime.copy(
+                  uiSurfaces = state.runtime.uiSurfaces.filterNot(_.id == surface.id)
+                )
+              )
+              .popFocus
+          case _ =>
+            openCommandRunner(state, registry)
 
-  private def openCommandRunner(state: AppState, registry: CommandRegistry): AppState =
-    val activatedRunner = CommandRunner.empty.activate(
-      registry,
-      state.persisted.config,
-      state.runtime.capabilities,
-      state.commandRunnerContext
-    )
-    val runnerWithUsage = activatedRunner.copy(
-      // issue #1048: `CommandRunner.empty` is reconstructed fresh on every open, so MRU ranking has to be seeded
-      // back in from the one place it survives a close -- `state.persisted.commandUsage`.
-      commandUsage = state.persisted.commandUsage
-    )
+  /** Opens the command runner surface below the cursor -- what the settings view lives on -- in place of any modal
+    * workflow, the command picker included. Abandons a settings preview in progress, as Ctrl+P does.
+    */
+  private[reducers] def openRunnerSurface(state: AppState, registry: CommandRegistry): AppState =
+    val reverted = SettingsPreviewReducer.revert(state).state
+    val runner = CommandRunner.empty
+      .activate(registry, reverted.persisted.config, reverted.runtime.capabilities, reverted.commandRunnerContext)
+      .copy(commandUsage = reverted.persisted.commandUsage)
     val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
+      reverted.commandRunnerSurface.map(surface => (reverted, surface.id)).getOrElse(reverted.allocateSurfaceId)
     val surface = UiSurface(
       id = surfaceId,
-      content = SurfaceContent.CommandPalette(runnerWithUsage),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
+      content = SurfaceContent.CommandPalette(runner),
+      presentation = SurfacePresentation.Floating(reverted.activeCursorPosition, SurfacePlacement.BelowCursor)
     )
-    val clearedSurfaces =
-      stateWithId.runtime.uiSurfaces.filterNot(current => isModalWorkflow(current.content))
+    val clearedSurfaces = stateWithId.runtime.uiSurfaces.filterNot(current => isModalWorkflow(current.content))
     stateWithId
-      .copy(
-        runtime = stateWithId.runtime.copy(
-          uiSurfaces = upsertSurface(clearedSurfaces, surface),
-          // A blocking dialog (#814) is content-modal in the same sense isModalWorkflow's uiSurfaces filter already
-          // was -- the command runner takes over the screen, so nothing it replaces should keep competing for it.
-          modalStack = Nil
-        )
-      )
+      .copy(runtime = stateWithId.runtime.copy(uiSurfaces = upsertSurface(clearedSurfaces, surface), modalStack = Nil))
       .pushFocus(Focus.Surface(surfaceId))
+
+  /** Opens the command picker below the cursor, in place of any other modal workflow or inactive runner surface. */
+  private def openCommandRunner(state: AppState, registry: CommandRegistry): AppState =
+    val runner = CommandRunner.empty
+      .activate(registry, state.persisted.config, state.runtime.capabilities, state.commandRunnerContext)
+      // issue #1048: `CommandRunner.empty` is reconstructed fresh on every open, so MRU ranking has to be seeded
+      // back in from the one place it survives a close -- `state.persisted.commandUsage`.
+      .copy(commandUsage = state.persisted.commandUsage)
+    val cleared = state.copy(runtime =
+      state.runtime.copy(
+        uiSurfaces = state.runtime.uiSurfaces.filterNot(current =>
+          isModalWorkflow(current.content) || asCommandRunner(current).isDefined
+        ),
+        // A blocking dialog (#814) is content-modal in the same sense isModalWorkflow's uiSurfaces filter already
+        // was -- the command picker takes over the screen, so nothing it replaces should keep competing for it.
+        modalStack = Nil
+      )
+    )
+    ModalStateReducer.show(Modal.ListPicker(CommandPicker.opened(runner, registry)), cleared).state
 
   // --- Cursor-peek prototype (issue: command-runner-cursor-peek-prototype) -----------------------------------
   //
@@ -316,9 +327,11 @@ object AppEventReducer:
     * close.
     */
   private def openCommandRunnerFully(state: AppState, registry: CommandRegistry): AppState =
-    state.commandRunnerSurface.flatMap(asCommandRunner) match
-      case Some((_, runner)) if runner.isActive => state
-      case _                                    => openCommandRunner(state, registry)
+    if state.commandPickerSurface.isDefined then state
+    else
+      state.commandRunnerSurface.flatMap(asCommandRunner) match
+        case Some((_, runner)) if runner.isActive => state
+        case _                                    => openCommandRunner(state, registry)
 
   private def toggleContextualToolbar(state: AppState): AppState =
     if !state.persisted.config.surfaceConfig.contextualToolbarEnabled then state

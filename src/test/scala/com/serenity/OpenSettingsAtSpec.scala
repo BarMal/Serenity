@@ -4,7 +4,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner, CommandSurfaceItem}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEventReducer, CommandRunnerReducer}
+import com.serenity.state.reducers.CommandRunnerReducer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,8 +21,8 @@ class OpenSettingsAtSpec extends AnyFlatSpec with Matchers:
 
   /** What the palette does today for `query`: type it, highlight the hit for `groupId`/`itemId`, press Enter. */
   private def paletteDrillIn(query: String, groupId: String, itemId: Option[String]): CommandRunner =
-    val searched = runnerIn(AppEventReducer.reduce(ToggleCommandRunner, AppState.initial, registry).state)
-      .getOrElse(fail("palette did not open"))
+    val searched = CommandRunner.empty
+      .activate(registry, AppState.initial.persisted.config, context = AppState.initial.commandRunnerContext)
       .openSettings
       .updateSettingsSearch(query)
     val index = searched.visibleItems.indexWhere(isTarget(groupId, itemId))

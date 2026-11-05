@@ -25,25 +25,30 @@ private[perf] object PanelLayerCachingBenchmarks:
     List(false, true).flatMap(variant)
 
   private def variant(layerCaching: Boolean)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val prefix            = s"laptop.render.pinned_panel.layer_cache_${if layerCaching then "on" else "off"}"
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
-    val _ = stateManager
-      .updateState(DockedPanelFixtures.dock(_, outlineId, SurfaceContent.Outline(Nil), PanelPosition.Right, 40))
-      .unsafeRunSync()
-    val (before, after) = TypingTransition.of(stateManager)
-    val typingBefore    = withCaching(before, layerCaching)
-    val typingAfter     = withCaching(after, layerCaching)
-    val forward         = DamageProducer.forTransition(typingBefore, typingAfter)
-    val backward        = DamageProducer.forTransition(typingAfter, typingBefore)
+    val prefix                 = s"laptop.render.pinned_panel.layer_cache_${if layerCaching then "on" else "off"}"
+    lazy val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
+    lazy val docked =
+      stateManager
+        .updateState(DockedPanelFixtures.dock(_, outlineId, SurfaceContent.Outline(Nil), PanelPosition.Right, 40))
+        .unsafeRunSync()
+    lazy val (before, after) =
+      val _ = docked
+      TypingTransition.of(stateManager)
+    lazy val typingBefore = withCaching(before, layerCaching)
+    lazy val typingAfter  = withCaching(after, layerCaching)
+    lazy val forward      = DamageProducer.forTransition(typingBefore, typingAfter)
+    lazy val backward     = DamageProducer.forTransition(typingAfter, typingBefore)
 
-    def benchmark(name: String, steps: List[(AppState, Damage)]): BenchmarkRunner.Benchmark =
-      val frames = Alternating(steps)
-      BenchmarkRunner.Benchmark(
-        s"$prefix.$name",
-        2,
-        12,
-        () => assert(LaptopFrameBenchmarks.hasPixels(frames.next()), s"$name drew nothing"),
-        () => frames.next()
+    def benchmark(name: String, steps: => List[(AppState, Damage)]): BenchmarkRunner.Benchmark =
+      lazy val frames = Alternating(steps)
+      BenchmarkRunner.Benchmark.building(frames)(
+        BenchmarkRunner.Benchmark(
+          s"$prefix.$name",
+          2,
+          12,
+          () => assert(LaptopFrameBenchmarks.hasPixels(frames.next()), s"$name drew nothing"),
+          () => frames.next()
+        )
       )
 
     List(

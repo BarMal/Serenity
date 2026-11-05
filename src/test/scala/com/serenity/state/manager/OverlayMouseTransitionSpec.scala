@@ -293,8 +293,9 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     ))
   }
 
+  // Ctrl+P opens the command picker now (#2577); the runner surface these hit-test is the Settings surface's.
   private def openCommandRunner: AppState =
-    AppEventReducer.reduce(ToggleCommandRunner, editorState("text", ViewportSize(100, 30)), registry).state
+    CommandRunnerReducer.openSettings(editorState("text", ViewportSize(100, 30)), registry)
 
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface.map(_.content) match
@@ -329,18 +330,20 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     runnerFrom(result.state).selectedIndex shouldBe 2
   }
 
-  "CommandRunnerMouseHitTesting.click" should "select the clicked row and emit its command, as Enter would" in {
+  "CommandRunnerMouseHitTesting.click" should "select the clicked row and submit it, as Enter would" in {
     val state = openCommandRunner
     val row   = commandRunnerRow(state, 2)
     val hovered = run(state)(
       CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state, AuthoritativeUiScene())
     )
-    val expected = runnerFrom(hovered._1.state).selectedCommand.getOrElse(fail("Expected a selected command"))
+    val enterOnHovered = CommandRunnerReducer.reduce(RunnerSubmit, hovered._1.state, CommandRegistry.withToggleUI)
 
     val (result, claimed) = run(state)(CommandRunnerMouseHitTesting.click(clickAt(row), state, AuthoritativeUiScene()))
 
     claimed shouldBe true
-    result.effects shouldBe List(AppEffect.ExecuteCommand(expected))
+    runnerFrom(result.state).activeSettingsSurface.map(_.current.groupId) shouldBe
+      runnerFrom(enterOnHovered.state).activeSettingsSurface.map(_.current.groupId)
+    runnerFrom(result.state).activeSettingsSurface should not be empty
   }
 
   "ModalMouseHitTesting.input" should "pick the clicked close-prompt choice and submit it in one transition" in {
