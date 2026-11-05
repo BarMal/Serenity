@@ -90,6 +90,20 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
   }
 
+  it should "recognise --startup-probe and leave it off by default" in {
+    parsed(List("--startup-probe")).startupProbe shouldBe true
+    parsed(List("notes.md")).startupProbe shouldBe false
+  }
+
+  it should "use the window for --startup-probe even where the terminal would be chosen" in {
+    val options = parsed(List("--startup-probe"))
+    LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
+  }
+
+  it should "keep --startup-probe out of --help, as it is a benchmark hook and not a feature" in {
+    LaunchOptions.command.showHelp.toString should not include "startup-probe"
+  }
+
   it should "start normally, without safe mode or any reset, when none is asked for" in {
     val options = parsed(List("notes.md"))
     (options.safeMode, options.resetConfig, options.resetSession) shouldBe (false, false, false)
