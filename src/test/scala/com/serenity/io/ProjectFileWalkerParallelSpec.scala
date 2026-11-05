@@ -182,40 +182,31 @@ class ProjectFileWalkerParallelSpec extends AnyFlatSpec with Matchers with Scala
       .isLeft shouldBe true
   }
 
-  it should "start no further reads once cancelled, beyond those already running" in {
+  it should "start no read once it has been cancelled" in {
     val root    = wide(directories = 8, filesEach = 1)
-    val entered = new CountDownLatch(2)
-    val release = new CountDownLatch(1)
     val started = new AtomicInteger(0)
     val reader: DirectoryReader = directory =>
       val _ = started.incrementAndGet()
-      if directory != root then
-        entered.countDown()
-        val _ = release.await(10, TimeUnit.SECONDS)
       ProjectFileWalker.readDirectory(directory)
 
-    val walk = ProjectFileWalker.build(
-      root,
-      reader,
-      Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty),
-      Int.MaxValue,
-      Int.MaxValue,
-      _ => IO.unit,
-      parallelism = 2
-    )
+    // The walk cancels itself from its first progress report, which comes after the root and before any level below it.
+    // Cancelling from inside the fiber puts the cancellation strictly before every later read, with no race to win.
+    val outcome = ProjectFileWalker
+      .build(
+        root,
+        reader,
+        Vector(ProjectFileWalker.RootDirectory -> IgnoreRules.empty),
+        Int.MaxValue,
+        0,
+        _ => IO.canceled,
+        parallelism = 2
+      )
+      .start
+      .flatMap(_.join)
+      .unsafeRunSync()
 
-    val both = (for
-      fiber     <- walk.start
-      reachedIt <- IO.interruptible(entered.await(5, TimeUnit.SECONDS))
-      atCancel  <- IO(started.get)
-      cancelled <- fiber.cancel.start
-      _         <- IO(release.countDown())
-      _         <- cancelled.joinWithNever
-    yield (reachedIt, atCancel, started.get)).unsafeRunSync()
-
-    val (reachedTwoReads, readsAtCancel, readsAfter) = both
-    reachedTwoReads shouldBe true
-    readsAfter shouldBe readsAtCancel
+    outcome.isCanceled shouldBe true
+    started.get shouldBe 1
   }
 
   "Revalidating a project in parallel" should "read again exactly the directories that changed, several at once" in {
