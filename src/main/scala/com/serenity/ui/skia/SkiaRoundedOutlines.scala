@@ -19,17 +19,15 @@ final private[skia] class SkiaRoundedOutlines(
     userClipDepth: AtomicInteger
 ) extends PanelOutlineDrawing:
 
-  // The surface's other shapes are not anti-aliased; the rounded stroke is, so it gets a paint of its own.
+  // The surface's other shapes are not anti-aliased; rounded outlines are, so they get a paint of their own.
   private val roundedStroke = Paint()
   roundedStroke.setAntiAlias(true)
   roundedStroke.setMode(PaintMode.STROKE)
   roundedStroke.setStrokeCap(PaintStrokeCap.SQUARE)
   roundedStroke.setStrokeJoin(PaintStrokeJoin.MITER)
 
-  // Hard-edged, like Java2D's: a pixel is wholly the fill or left as it was, so painting the same shape again gives the
-  // same pixels. An anti-aliased fringe is composited twice when a frame repaints a header beside a redrawn row.
   private val roundedFill = Paint()
-  roundedFill.setAntiAlias(false)
+  roundedFill.setAntiAlias(true)
 
   def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     flat.strokeRect(x, y, width, height, color, strokeWidth)
