@@ -322,6 +322,11 @@ the window, as Java2D does, so it is the way to compare against the GPU layer wh
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
 
+The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
+`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
+draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
+hardware says which should be the default.
+
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:
 
