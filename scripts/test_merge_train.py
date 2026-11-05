@@ -29,8 +29,8 @@ def _pr(number: int, head: str | None = None) -> mt.TrainPr:
     return mt.TrainPr(number=number, head=head or f"{number:040x}", title=f"Change {number}")
 
 
-def _manifest(*numbers: int, base: str = "b" * 40, created: datetime = _NOW) -> mt.Manifest:
-    return mt.Manifest(base=base, prs=tuple(_pr(n) for n in numbers), created=created)
+def _manifest(*numbers: int, base: str = "b" * 40, created: datetime = _NOW, bisected: bool = False) -> mt.Manifest:
+    return mt.Manifest(base=base, prs=tuple(_pr(n) for n in numbers), created=created, bisected=bisected)
 
 
 def _run(path: str, conclusion: str | None = "success", attempt: int = 1, run_id: int = 1) -> mt.Run:
@@ -124,6 +124,27 @@ class DecisionTests(unittest.TestCase):
     def test_a_batch_still_red_after_the_re_run_is_halved_oldest_half_first(self) -> None:
         runs = [_run(_CI, "failure", attempt=2, run_id=1), _run(_XOS, run_id=2)]
         self.assertEqual(mt.Bisect(numbers=(1, 2, 3)), self._decide(_manifest(1, 2, 3, 4, 5), runs))
+
+    def test_a_bisected_train_is_not_re_run_because_the_top_of_the_bisect_already_ruled_out_a_flake(self) -> None:
+        runs = [_run(_CI, "failure", run_id=1), _run(_XOS, run_id=2)]
+        self.assertEqual(mt.Bisect(numbers=(1, 2, 3)), self._decide(_manifest(1, 2, 3, 4, 5, bisected=True), runs))
+
+    def test_a_lone_pull_request_of_a_bisected_train_is_ejected_on_its_first_red_run(self) -> None:
+        failed = _run(_XOS, "failure", run_id=2)
+        action = self._decide(_manifest(7, bisected=True), [_run(_CI, run_id=1), failed])
+        self.assertEqual(mt.Eject(number=7, failed_runs=(failed,)), action)
+
+    def test_a_bisected_train_that_passes_merges(self) -> None:
+        action = self._decide(_manifest(1, 2, bisected=True), [_run(_CI, run_id=1), _run(_XOS, run_id=2)])
+        self.assertEqual(mt.Merge(flaky_runs=()), action)
+
+    def test_the_bisected_flag_survives_the_commit_message_and_older_manifests_read_as_not_bisected(self) -> None:
+        marked = _manifest(1, 2, bisected=True)
+        self.assertTrue(mt.Manifest.from_commit_message(marked.commit_message()).bisected)  # type: ignore[union-attr]
+        plain = mt.Manifest.from_commit_message(_manifest(1, 2).commit_message())
+        assert plain is not None
+        self.assertFalse(plain.bisected)
+        self.assertNotIn("bisected", _manifest(1, 2).commit_message())
 
     def test_a_single_pull_request_still_red_after_the_re_run_is_ejected(self) -> None:
         failed = _run(_XOS, "failure", attempt=2, run_id=2)
@@ -478,6 +499,47 @@ class TrainTests(unittest.TestCase):
         assert manifest is not None
         self.assertEqual([1, 2], [p.number for p in manifest.prs])
         self.assertEqual([], self.github.merged)
+
+    def _bisect_once(self, count: int) -> str:
+        for n in range(1, count + 1):
+            self.github.add_pr(n, f"f{n}.txt", f"{n}\n")
+        self._train().tick()
+        top = self._live_branch()
+        assert top is not None
+        self._finish(top, ci="failure", attempt=2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        half = self._live_branch()
+        assert half is not None and half != top
+        return half
+
+    def test_the_train_a_bisect_builds_is_marked_as_bisected(self) -> None:
+        half = self._bisect_once(4)
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", half))
+        assert manifest is not None
+        self.assertEqual([1, 2], [p.number for p in manifest.prs])
+        self.assertTrue(manifest.bisected)
+
+    def test_a_red_half_is_bisected_again_without_a_re_run(self) -> None:
+        half = self._bisect_once(4)
+        reruns_before = list(self.github.reruns)
+        self._finish(half, ci="failure", attempt=1)
+        self.clock = _NOW + timedelta(minutes=2)
+        self._train().tick()
+        self.assertEqual(reruns_before, self.github.reruns)
+        quarter = self._live_branch()
+        assert quarter is not None and quarter != half
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", quarter))
+        assert manifest is not None
+        self.assertEqual([1], [p.number for p in manifest.prs])
+
+    def test_a_green_half_merges_at_once_and_the_other_half_starts_the_next_train_in_the_same_step(self) -> None:
+        half = self._bisect_once(4)
+        self._finish(half)
+        self.clock = _NOW + timedelta(minutes=2)
+        self._train().tick()
+        self.assertEqual([1, 2], self.github.merged)
+        self.assertEqual([3, 4], self._train_numbers())
 
     def test_a_lone_red_pull_request_is_ejected_with_a_marker_for_its_head(self) -> None:
         self.github.add_pr(4, "a.txt", "a\n")

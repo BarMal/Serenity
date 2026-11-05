@@ -10,9 +10,10 @@ commit carrying the manifest (base, pull requests and their heads). The tip bein
 the tree master gets once the batch is merged, which is checked after every merge.
 
 A step looks at the live train and either waits, re-runs its failed jobs once (the owner's flake rule), merges it,
-ejects its only pull request, or replaces it with its oldest half (bisecting a red batch). Halving oldest-first and then
-re-queueing the rest also finds a failure that only two pull requests cause together: the first half merges, and the
-second is then tested on top of it.
+ejects its only pull request, or replaces it with its oldest half (bisecting a red batch). The re-run is for a full
+batch only: a train a bisect built is marked `bisected`, because the batch above it already failed twice, and a red half
+is red at once. Halving oldest-first and then re-queueing the rest also finds a failure that only two pull requests
+cause together: the first half merges, and the second is then tested on top of it.
 """
 
 from __future__ import annotations
@@ -59,13 +60,18 @@ class Manifest:
     base: str
     prs: tuple[TrainPr, ...]
     created: datetime
+    # A train built by a bisect: the full batch already failed its re-run, so a flake is ruled out and a red half is
+    # red at once instead of being re-run again.
+    bisected: bool = False
 
     def commit_message(self) -> str:
-        payload = {
+        payload: dict[str, object] = {
             "base": self.base,
             "created": self.created.isoformat(),
             "prs": [{"number": p.number, "head": p.head, "title": p.title, "head_ref": p.head_ref} for p in self.prs],
         }
+        if self.bisected:
+            payload["bisected"] = True
         numbers = " ".join(f"#{p.number}" for p in self.prs)
         return f"Merge train: {numbers}\n\n{_MANIFEST_KEY}{json.dumps(payload, sort_keys=True)}\n"
 
@@ -79,6 +85,7 @@ class Manifest:
             base=payload["base"],
             prs=tuple(TrainPr(p["number"], p["head"], p["title"], p.get("head_ref", "")) for p in payload["prs"]),
             created=datetime.fromisoformat(payload["created"]),
+            bisected=bool(payload.get("bisected", False)),
         )
 
 
@@ -214,7 +221,7 @@ def decide(
     failed = [r for r in latest if r.conclusion != "success"]
     if not failed:
         return Merge(flaky_runs=tuple(r for r in latest if r.attempt > 1))
-    first_attempts = [r for r in failed if r.attempt < 2]
+    first_attempts = [] if manifest.bisected else [r for r in failed if r.attempt < 2]
     if first_attempts:
         return Rerun(run_ids=tuple(r.id for r in first_attempts))
     if len(manifest.prs) == 1:
@@ -406,7 +413,7 @@ class Train:
 
         def manifest_of(included: list[Candidate]) -> Manifest:
             prs = tuple(TrainPr(c.number, c.head, c.title, c.head_ref) for c in included)
-            return Manifest(base=base, prs=prs, created=created)
+            return Manifest(base=base, prs=prs, created=created, bisected=only is not None)
 
         built = self.git.build(base, manifest_of, eligible, self.batch)
         if built.left_out:
