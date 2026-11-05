@@ -7,7 +7,6 @@ import com.serenity.config.{StatusLinePlacement, ToolbarDisplayMode}
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.SurfaceContent
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -37,20 +36,12 @@ class ToggleUICommandsSpec extends AnyFlatSpec with Matchers:
     expectedCommandName: String
   ): Unit =
     val beforeOpen = stateManager.getCurrentState.unsafeRunSync()
-    if beforeOpen.commandRunnerSurface
-          .flatMap {
-            _.content match
-              case SurfaceContent.CommandPalette(runner) => Some(runner.isActive)
-              case _                                     => None
-          }
-          .getOrElse(false) == false
+    if !CommandPaletteProbe.isOpen(beforeOpen)
     then stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     searchTerm.foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
-        case _                                     => None
-    } shouldBe Some(expectedCommandName)
+    CommandPaletteProbe.selectedCommandName(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(
+      expectedCommandName
+    )
     stateManager.applyEvent(Enter).unsafeRunSync()
 
   behavior of "Toggle Line Numbers Command"
