@@ -41,6 +41,19 @@ Run formatting and Scalafix before committing when changing Scala code:
 sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ```
 
+### Build layout
+
+The build has an aggregate `root` project with no sources and an `app` project that holds the whole application (#2502).
+Its sources are still under `src/`; they move into `modules/<name>/` in a later step. Every output keeps its path:
+`target/scala-*/Serenity.jar`, `serenity-perf.jar`, `target/test-reports`, `target/Serenity.cdx.json`.
+
+- Tasks (`test`, `compile`, `clean`, `assembly`, `makeBom`, `architectureCheck`, `moduleGraphCheck`, ...) run from `root`
+  and reach `app` through aggregation.
+- Input tasks do not aggregate, so name the project: `sbt app/run`, `sbt "app/testOnly com.serenity.SomeSpec"`,
+  `sbt "app/Test/runMain ..."`, `sbt "export app/Test/fullClasspath"`. Run unqualified from `root`, they run nothing.
+- A checkout from before the split has one root project; scripts that must handle both (`run-perf-benchmark.sh`,
+  `bench-artifacts.yml`) look for `lazy val app` in `build.sbt`.
+
 ### Licence notices
 
 `sbt generateThirdPartyNotices` rewrites `THIRD-PARTY-NOTICES.md` from the resolved runtime classpath and the registry in
@@ -85,8 +98,8 @@ release workflow publishes the matching section as the release notes and fails i
 a version, or for the unreleased section, to a file (the release workflow publishes that file):
 
 ```bash
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
+sbt "app/Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
+sbt "app/Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
 ```
 
 ## Automated standards
@@ -204,7 +217,7 @@ python3 bench/ttfw.py dist/Serenity/bin/Serenity 10 aot
 The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicGCInterval=60000` on every OS. The heap
 is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
 a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
-`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
+`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt app/run` is unaffected.
 
 What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
 `scripts/measure-footprint.sh` reproduces it against an assembled jar.

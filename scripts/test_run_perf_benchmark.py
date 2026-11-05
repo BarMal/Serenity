@@ -51,5 +51,31 @@ class ShardOptionTests(unittest.TestCase):
         self.assertEqual(self._option(self._checkout(True), None), "")
 
 
+class SbtProjectPrefixTests(unittest.TestCase):
+    """A ref from before the module split has one root project; one after it has `app` and an aggregate root (#2502).
+    The benchmark runs on both in the same job, so the sbt project to address is read from each checkout's build."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
+    def _prefix(self, build_sbt: str) -> str:
+        checkout = Path(self._tmp.name)
+        (checkout / "build.sbt").write_text(build_sbt)
+        result = subprocess.run(
+            ["bash", str(_SCRIPT), "--sbt-project-prefix", str(checkout)], capture_output=True, text=True, check=True
+        )
+        return result.stdout.strip()
+
+    def test_a_build_with_an_app_project_is_addressed_through_it(self) -> None:
+        self.assertEqual(self._prefix('lazy val app = (project in file("modules/app"))\n'), "app/")
+
+    def test_a_build_with_only_a_root_project_is_addressed_unqualified(self) -> None:
+        self.assertEqual(self._prefix('lazy val root = (project in file("."))\n'), "")
+
+    def test_a_comment_mentioning_app_does_not_count(self) -> None:
+        self.assertEqual(self._prefix('// lazy val app = (project in file("x"))\nlazy val root = (project in file("."))\n'), "")
+
+
 if __name__ == "__main__":
     unittest.main()
