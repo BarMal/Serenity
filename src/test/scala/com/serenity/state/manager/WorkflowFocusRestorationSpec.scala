@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.nio.file.{Files, Path, Paths}
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.StateManagerTestSupport
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, Event, ModalDismiss, ModalSubmit, PeekInputEvent}
 import com.serenity.session.{SessionId, SessionMetadata}
@@ -11,7 +10,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer, PeekStateReducer}
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
-import com.serenity.{DockedPanelFixtures, TestTemp}
+import com.serenity.{DockedPanelFixtures, StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
