@@ -10,7 +10,7 @@ import com.serenity.perf.LaptopFrameBenchmarks.{MaxScrollRowsDrawn, MaxTypingRow
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, BufferId, Damage}
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{RenderSurface, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -101,7 +101,8 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
         scale: Double,
         persists: Boolean,
         caches: RenderCaches,
-        screen: Option[ScreenIdentity]
+        screen: Option[ScreenIdentity],
+        onKeptOff: List[PixelRect] => Unit
       ): RenderSurface =
         SkiaFrames.surfaceOver(
           frame,
@@ -112,7 +113,8 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
           scale,
           persists,
           caches,
-          screen
+          screen,
+          onKeptOff
         )
     val rows = LaptopFrameBenchmarks.skiaInteractionBenchmarks(transitions, counting)
     created.get shouldBe 0
