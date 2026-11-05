@@ -1,23 +1,16 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRunner
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   /** Read-only conveniences mirroring the old flat `CommandRunnerSubmenuState`'s accessors, on top of the page-stack
     * `activeSettingsSurface` that replaced it (issue #1059).
@@ -30,8 +23,7 @@ class CommandRunnerFocusSpec extends AnyFlatSpec with Matchers:
       runner.activeSettingsSurface.flatMap(_.ancestors.headOption.map(_.groupId))
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerFocusSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("CommandRunnerFocusSpec", initialConfig = AppConfig.default)
 
   private def currentRunner(stateManager: StateManager) =
     stateManager.getCurrentState
