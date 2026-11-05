@@ -123,9 +123,10 @@ object CommandRunnerOptionSelections:
 
   private def renderBackendIndex(backend: RenderBackendSetting): Int =
     backend match
-      case RenderBackendSetting.Auto   => 0
-      case RenderBackendSetting.Skia   => 1
-      case RenderBackendSetting.Java2D => 2
+      case RenderBackendSetting.Auto       => 0
+      case RenderBackendSetting.Skia       => 1
+      case RenderBackendSetting.Java2D     => 2
+      case RenderBackendSetting.SkiaRaster => 3
 
   private def renderWaylandIndex(mode: WaylandRender): Int =
     mode match
