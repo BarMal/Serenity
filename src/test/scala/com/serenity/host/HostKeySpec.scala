@@ -23,6 +23,12 @@ class HostKeySpec extends AnyFlatSpec with Matchers:
     HostKey(Paths.get("/work/a")).id should not be HostKey(Paths.get("/work/b")).id
   }
 
-  it should "keep the root it was made from" in {
-    HostKey(Paths.get("/work/./serenity")).root shouldBe Paths.get("/work/serenity")
+  it should "keep the root it was made from, made absolute and normalised" in {
+    // On Windows "/work/serenity" has no drive, so making it absolute adds the current one: compare to that, not to
+    // the literal path.
+    HostKey(Paths.get("/work/./serenity")).root shouldBe Paths.get("/work/serenity").toAbsolutePath
+  }
+
+  it should "make a relative root absolute" in {
+    HostKey(Paths.get("serenity")).root.isAbsolute shouldBe true
   }
