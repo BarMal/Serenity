@@ -21,7 +21,9 @@ concurrency:
 jobs:
   auto-squash-merge:
     name: Auto squash merge
+    # Once the merge train is live it is the only thing that merges (#2553).
     if: >
+      vars.MERGE_TRAIN_MODE != 'live' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository

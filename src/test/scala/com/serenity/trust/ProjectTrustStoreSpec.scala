@@ -14,6 +14,12 @@ class ProjectTrustStoreSpec extends AnyFlatSpec with Matchers:
 
   private val at = Instant.parse("2026-11-03T09:00:00Z")
 
+  private val onWindows = System.getProperty("os.name", "").startsWith("Windows")
+
+  // Windows forbids a double quote in a file name; every other character here is legal on all three OSes.
+  private val awkwardDirectoryName =
+    if onWindows then "app #one = {1} $x 'q'" else "app \"one\" #one = {1} $x 'q'"
+
   "ProjectTrustStore" should "read a missing file as no trust at all" in withTempDirectory { directory =>
     ProjectTrustStore.load(directory.resolve("trust.conf")).unsafeRunSync() shouldBe Right(ProjectTrust.empty)
   }
@@ -21,7 +27,7 @@ class ProjectTrustStoreSpec extends AnyFlatSpec with Matchers:
   it should "round-trip trusted roots and approvals, including paths that need quoting" in withTempDirectory {
     directory =>
       val file                          = directory.resolve("trust.conf")
-      val rootA                         = ProjectKey.of(directory.resolve("app \"one\""))
+      val rootA                         = ProjectKey.of(directory.resolve(awkwardDirectoryName))
       val rootB                         = ProjectKey.of(directory.resolve("lib"))
       val source: CommandSource.Project = CommandSource.Project(directory.resolve("lib/.bsp/sbt.json"), sha256 = "abc")
       val trust = ProjectTrust.empty
