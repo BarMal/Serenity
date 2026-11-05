@@ -14,6 +14,11 @@ ejects its only pull request, or replaces it with its oldest half (bisecting a r
 batch only: a train a bisect built is marked `bisected`, because the batch above it already failed twice, and a red half
 is red at once. Halving oldest-first and then re-queueing the rest also finds a failure that only two pull requests
 cause together: the first half merges, and the second is then tested on top of it.
+
+Pull requests that change workflow files are merged by hand, and a hand merge moves master and so abandons the batch just
+built. So when a pull request carrying the `hand-merge-next` label is waiting to be merged by hand, the next batch is
+held back until 20 minutes (MERGE_TRAIN_HOLD_MINUTES) after master last moved: each hand merge restarts the window, and
+the hold ends as soon as no labelled pull request is waiting.
 """
 
 from __future__ import annotations
@@ -34,6 +39,8 @@ from typing import Callable, Iterable, Protocol, Sequence
 
 REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/ci.yml", ".github/workflows/cross-os-tests.yml")
 MAX_TRAIN_AGE = timedelta(hours=6)
+HAND_MERGE_LABEL = "hand-merge-next"
+DEFAULT_HOLD_MINUTES = 20
 _MANIFEST_KEY = "Merge-Train-Manifest: "
 _BRANCH_PREFIX = "train/"
 _BOT = ("-c", "user.name=merge-train", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com")
@@ -101,6 +108,7 @@ class Candidate:
     ci_green: bool
     ejected_heads: frozenset[str] = field(default_factory=frozenset)
     held_heads: frozenset[str] = field(default_factory=frozenset)
+    labels: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -283,6 +291,9 @@ class Git:
         self._run("fetch", "-q", "origin", "+refs/heads/master:refs/remotes/origin/master")
         return self._out("rev-parse", "refs/remotes/origin/master")
 
+    def master_time(self) -> datetime:
+        return datetime.fromtimestamp(int(self._out("show", "-s", "--format=%ct", self.master())), timezone.utc)
+
     def live_trains(self) -> list[str]:
         lines = self._out("ls-remote", "--heads", "origin", f"refs/heads/{_BRANCH_PREFIX}*").splitlines()
         return sorted(line.split("\trefs/heads/", 1)[1] for line in lines if "\trefs/heads/" in line)
@@ -354,9 +365,12 @@ class Train:
         flake_issue: int | None,
         now: Callable[[], datetime],
         log: Callable[[str], None],
+        hold_minutes: int = DEFAULT_HOLD_MINUTES,
+        summary: Callable[[str], None] = lambda _text: None,
     ) -> None:
         self.github, self.git, self.batch, self.dry_run = github, git, batch, dry_run
         self.flake_issue, self.now, self.log = flake_issue, now, log
+        self.hold, self.summary = timedelta(minutes=hold_minutes), summary
 
     def tick(self) -> None:
         live = self.git.live_trains()
@@ -423,6 +437,8 @@ class Train:
             for pr in built.held_back:
                 if pr.head not in pr.held_heads:
                     self.github.comment(pr.number, _held_comment(pr))
+            if self._holding_for_hand_merges([pr for pr in built.held_back if HAND_MERGE_LABEL in pr.labels]):
+                return
         if not built.included:
             return
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
@@ -430,6 +446,20 @@ class Train:
         for path in REQUIRED_WORKFLOWS:
             self.github.dispatch(Path(path).name, branch)
         self.log(f"Started {branch}: {_numbers(built.included)} on master {base[:8]}.")
+
+    def _holding_for_hand_merges(self, waiting: list[Candidate]) -> bool:
+        """A hand merge moves master, which abandons a batch that was just built; so the batch waits for the pull
+        requests that are about to be merged by hand. Master's last commit marks the window, so every hand merge
+        restarts it without any stored state."""
+        if not waiting:
+            return False
+        until = self.git.master_time() + self.hold
+        if self.now() >= until:
+            return False
+        text = f"Holding the next train until {until:%H:%M}Z for hand merges: {_numbers(waiting)}."
+        self.log(text)
+        self.summary(text)
+        return True
 
     def _merge(self, manifest: Manifest, tip: str) -> None:
         for pr in manifest.prs:
@@ -525,6 +555,7 @@ class RestGitHub:
                     ci_green=plausible and self._ci_green(head),
                     ejected_heads=ejected,
                     held_heads=held,
+                    labels=frozenset(label["name"] for label in p.get("labels", [])),
                 )
             )
         return candidates
@@ -581,6 +612,13 @@ class RestGitHub:
         self._call("POST", f"issues/{number}/comments", {"body": body})
 
 
+def _step_summary(text: str) -> None:
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path:
+        with open(path, "a", encoding="utf-8") as summary:
+            summary.write(text + "\n")
+
+
 def main(argv: Sequence[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("command", choices=("tick", "perf-base"))
@@ -603,6 +641,8 @@ def main(argv: Sequence[str]) -> int:
         flake_issue=int(flake_issue) if flake_issue else None,
         now=lambda: datetime.now(timezone.utc),
         log=print,
+        hold_minutes=int(os.environ.get("MERGE_TRAIN_HOLD_MINUTES") or DEFAULT_HOLD_MINUTES),
+        summary=_step_summary,
     )
     try:
         train.tick()
