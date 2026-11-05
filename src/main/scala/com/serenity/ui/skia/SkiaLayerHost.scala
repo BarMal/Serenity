@@ -10,9 +10,11 @@ import javax.swing.{JPanel, SwingUtilities}
 import scala.util.Try
 
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
-import org.jetbrains.skia.{Canvas, Paint, Picture, PixelGeometry, Rect}
+import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry, Rect}
 import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
 import org.slf4j.LoggerFactory
+
+import SkiaLayerHost.LayerFrame
 
 /** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
   * renders frames records each as a `Picture` and publishes it. Skiko hands `onRender` a canvas that records into its
@@ -31,7 +33,7 @@ final class SkiaLayerHost private (
     report: String => Unit
 ) extends LayerHost:
 
-  private val slot         = new PictureSlot[Picture](_.close())
+  private val slot         = new PictureSlot[LayerFrame](_.close())
   private val carets       = new AtomicReference(List.empty[SwingWindow.CaretPaint])
   private val published    = new AtomicBoolean(false)
   private val renders      = new AtomicInteger(0)
@@ -87,7 +89,10 @@ final class SkiaLayerHost private (
     surface.clear(0xff000000)
     val version    = publishes.get()
     val hasContext = Option(surface.getRecordingContext).isDefined
-    val drawn      = slot.drawLatest(picture => SkiaLayerHost.addPicture(surface, picture))
+    val drawn = slot.drawLatest {
+      case LayerFrame.Recorded(picture) => SkiaLayerHost.addPicture(surface, picture)
+      case LayerFrame.Rasterized(image) => val _ = surface.drawImage(image, 0f, 0f)
+    }
     if drawn then shown.set(version)
     val replayedAt = System.nanoTime()
     val scale      = layer.getContentScale
@@ -151,10 +156,15 @@ final class SkiaLayerHost private (
       .copy(pictureOpsMean = mean(pictureOps.get()), pictureBytesMean = mean(pictureBytes.get()))
 
   def publish(picture: Picture): Unit =
-    val _ = awaiting.compareAndSet(0L, System.nanoTime())
     val _ = pictureOps.addAndGet(picture.getApproximateOpCount.toLong)
     val _ = pictureBytes.addAndGet(picture.getApproximateBytesUsed.toLong)
-    slot.publish(picture)
+    offer(LayerFrame.Recorded(picture))
+
+  def publishImage(image: Image): Unit = offer(LayerFrame.Rasterized(image))
+
+  private def offer(frame: LayerFrame): Unit =
+    val _ = awaiting.compareAndSet(0L, System.nanoTime())
+    slot.publish(frame)
     published.set(true)
     val _ = publishes.incrementAndGet()
     onPublish.get().foreach(_.apply())
@@ -184,6 +194,14 @@ final class SkiaLayerHost private (
   private[skia] def layerCursorType: Int              = layer.getCursor.getType
 
 object SkiaLayerHost:
+
+  private enum LayerFrame:
+    case Recorded(picture: Picture)
+    case Rasterized(image: Image)
+
+    def close(): Unit = this match
+      case Recorded(picture) => picture.close()
+      case Rasterized(image) => image.close()
 
   /** The totals of a layer's draws, in nanoseconds. */
   final private case class Draws(

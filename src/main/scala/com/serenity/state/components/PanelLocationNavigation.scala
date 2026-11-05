@@ -24,7 +24,7 @@ object PanelLocationNavigation:
             val column =
               math.max(0, math.min(location.column, buffer.document.content.getLine(line).getOrElse("").length))
             val cursor   = CursorPosition(line, column)
-            val viewport = CursorViewport.adjustForCursor(buffer, state, cursor, wrapCache)
+            val viewport = CursorViewport.placementFor(buffer, state, cursor, wrapCache)
             val updatedBuffer = buffer.copy(
               editing = EditingState(List(cursor)),
               viewport = viewport

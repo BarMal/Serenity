@@ -247,7 +247,7 @@ private[manager] object NavigationTransitions:
   ): AppState =
     (state.persisted.layout.editorPanes.get(point.paneId), state.persisted.buffers.get(point.bufferId)) match
       case (Some(pane), Some(buffer)) =>
-        val viewport = CursorViewport.adjustForCursor(buffer, state, point.cursor, wrapCache = wrapCache)
+        val viewport = CursorViewport.placementFor(buffer, state, point.cursor, wrapCache = wrapCache)
         val updatedBuffer = buffer.copy(
           editing = EditingState(List(point.cursor)),
           viewport = viewport

@@ -20,8 +20,15 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
     val result = loaded("ui.render.backend = vulkan\n")
     val entry  = result.report.invalidEntries.find(_.key == "ui.render.backend")
     entry.map(_.value) shouldBe Some("vulkan")
-    entry.map(_.reason).getOrElse("") should include("auto, skia or java2d")
+    entry.map(_.reason).getOrElse("") should include("auto, skia, skia-raster or java2d")
     result.config.surfaceConfig.renderBackend shouldBe RenderBackendSetting.Auto
+  }
+
+  "ui.render.backend" should "accept skia-raster, and its spellings" in {
+    for spelling <- List("skia-raster", "skia_raster", "raster") do
+      val result = loaded(s"ui.render.backend = $spelling\n")
+      result.report.invalidEntries.find(_.key == "ui.render.backend") shouldBe None
+      result.config.surfaceConfig.renderBackend shouldBe RenderBackendSetting.SkiaRaster
   }
 
   "An invalid ui.render.wayland" should "be reported with the value and the accepted choices, and use the default" in {
@@ -35,7 +42,9 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
   "The invalid-entry warning" should "reach the log text with the key, the value and the choices" in {
     val result  = loaded("ui.render.backend = vulkan\n")
     val message = ConfigMigrationWarning.message(TestTemp.file("serenity-render-warning", ".conf"), result.report)
-    message.getOrElse("") should (include("ui.render.backend = vulkan") and include("auto, skia or java2d"))
+    message.getOrElse("") should (include("ui.render.backend = vulkan") and include(
+      "auto, skia, skia-raster or java2d"
+    ))
   }
 
   "A valid render setting" should "be reported as nothing" in {

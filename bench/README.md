@@ -41,7 +41,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 `BENCH_JAVA_OPTS` passes JVM options to every launch and is recorded in the conditions file, for example
 `BENCH_JAVA_OPTS="-Xlog:gc:file=$PWD/gc-%p.log:uptime -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"`
-(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). Each run's whole app log and stdout are
+(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). `-Dserenity.skia.layerFrames=image` makes the Skia layer draw CPU-painted images instead of replaying recorded pictures on the event thread; compare it with the default by the `edt-lag` and `key_to_screen` figures. Each run's whole app log and stdout are
 kept beside its run file as `<label>-run<N>.applog` and `.stdout`, so the per-key `[LATENCY]` lines and anything Skiko
 prints are there afterwards. A JVM that is still alive after the quit key (it has been seen to log `Quitting` and then never exit) is thread-dumped to
 `<label>-run<N>.threads`, sent SIGTERM and, after `BENCH_QUIT_GRACE` seconds (15), killed, so one hang costs seconds and
@@ -125,7 +125,7 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 
 ## Key to screen, per backend
 
-`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as java2d, skia, skia, java2d (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
+`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as java2d, skia, skia, java2d (`bench-laptop.sh <jar> <label> skia-raster` runs the Skia CPU raster the same way) (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
 
 ```bash
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
