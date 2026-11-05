@@ -34,6 +34,7 @@ jobs:
   gate:
     name: Require green Cross-OS nightly
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       sha: ${{ steps.nightly.outputs.sha }}
     steps:
