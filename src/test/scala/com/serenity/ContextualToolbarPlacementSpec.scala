@@ -265,7 +265,10 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
     toolbarRect(state).y should be >= contentRect.y + 6
   }
 
-  it should "not leave a detached toolbar visible when its anchor scrolls out of view" in {
+  // #2570 item 3 (owner decision D2): a toolbar opened with its caret scrolled out of view is never left hidden. Under
+  // the default `editor.cursor.offscreen_surfaces = reveal-cursor` the view comes back to the caret and the toolbar
+  // hangs beside it, inside the pane.
+  it should "bring the view back to its caret when it opens with the caret scrolled out of view" in {
     val stateManager = createProseStateManager("ContextualToolbarSpec-offscreen-anchor")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(120, 20))).unsafeRunSync()
@@ -290,7 +293,16 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
     val state    = stateManager.getCurrentState.unsafeRunSync()
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
-    val contract = EditorLayoutContract.from(state, viewport, LayoutEngine.calculateLayoutWithUI(state, viewport))
+    val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
+    val contract = EditorLayoutContract.from(state, viewport, layout)
+    val pane = LayoutEngine
+      .calculateEditorWorkspaceLayout(state, layout)
+      .activeContentRect(state)
+      .getOrElse(fail("Expected active content rect"))
+    val shown = state.persisted.buffers(activeBufferId(state)).viewport
 
-    contract.overlayRect(surface.id) shouldBe None
+    CursorPosition(30, 4).line should (be >= shown.topLine and be < shown.topLine + shown.visibleLines)
+    val rect = contract.overlayRect(surface.id).getOrElse(fail("Expected the toolbar to be laid out"))
+    rect.y should be >= pane.y
+    rect.bottom should be <= pane.bottom
   }
