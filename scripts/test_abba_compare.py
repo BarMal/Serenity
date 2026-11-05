@@ -14,6 +14,7 @@ from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(_SCRIPTS))
+from captured_stdout import capture_stdout  # noqa: E402
 
 
 def _load(name: str):
@@ -90,6 +91,9 @@ class RetainedThresholdTest(unittest.TestCase):
 
 
 class CommandLineTest(unittest.TestCase):
+    def setUp(self):
+        self.stdout = capture_stdout(self)
+
     def _csv(self, directory: str, name: str, p50: float) -> str:
         path = Path(directory) / name
         path.write_text(
@@ -104,8 +108,10 @@ class CommandLineTest(unittest.TestCase):
             slower = [self._csv(directory, f"b{i}.csv", 1.5 + i * 0.01) for i in range(4)]
             same = [self._csv(directory, f"c{i}.csv", 1.0 + i * 0.01) for i in range(4)]
             self.assertEqual(abba.main_with_args(["--a", *a, "--b", *slower]), 1)
+            self.assertIn("::error::x ", self.stdout.getvalue())
             self.assertEqual(abba.main_with_args(["--a", *a, "--b", *same]), 0)
             self.assertEqual(abba.main_with_args(["--a", *a, "--b", str(Path(directory) / "missing.csv")]), 2)
+            self.assertIn("::error::A side of the comparison has no benchmark rows.", self.stdout.getvalue())
 
 
 if __name__ == "__main__":

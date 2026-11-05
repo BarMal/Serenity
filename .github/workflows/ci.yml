@@ -138,6 +138,7 @@ jobs:
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_jobs_workflow \
+            scripts.test_ci_log_is_quiet \
             scripts.test_ci_workflow \
             scripts.test_collapsed_top_frames \
             scripts.test_combine_perf_runs \
@@ -159,6 +160,7 @@ jobs:
             scripts.test_study_perf_gate \
             scripts.test_summarize_jvm_diag \
             scripts.test_summarize_test_durations \
+            scripts.test_summarize_test_failures \
             scripts.test_ttfw \
             -v
 
@@ -200,8 +202,13 @@ jobs:
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
         run: xvfb-run -a -s "-screen 0 1920x1200x24" bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
 
-      # The console log of a failed run drops per-test detail (see the -u note in build.sbt), so the JUnit XML is the
-      # only place a property failure's name, shrunk arguments and Init Seed survive.
+      # The console log names only the failing suites (see the -u note in build.sbt), so the failing tests and their
+      # messages go into the step summary and one annotation each (#2557).
+      - name: Summarise test failures
+        if: always()
+        run: python3 scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"
+
+      # The JUnit XML is the only place a property failure's shrunk arguments and Init Seed survive in full.
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
