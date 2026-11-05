@@ -25,7 +25,7 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
     val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
     sm.applyEvent(InsertChar('x')).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    val runnerId = sm.getCurrentState.unsafeRunSync().commandRunnerSurface.map(_.id).getOrElse(fail("no runner"))
+    val runnerId = sm.getCurrentState.unsafeRunSync().commandPickerSurface.map(_.id).getOrElse(fail("no runner"))
     (sm, runnerId)
 
   "A close confirmation raised over the open command runner" should "keep focus until answered" in {
@@ -41,12 +41,15 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
     val answered = sm.getCurrentState.unsafeRunSync()
     answered.topModal shouldBe None
-    answered.commandRunnerSurface.map(_.id) shouldBe Some(runnerId)
+    answered.commandPickerSurface.map(_.id) shouldBe Some(runnerId)
     answered.persisted.focus shouldBe Focus.Surface(runnerId)
   }
 
-  "The Go to File finder opened over the command runner" should "take focus and keystrokes until dismissed" in {
-    val (sm, runnerId) = withRunnerOpen()
+  // #2577 P1c-2: the command picker is a modeless modal like the finder, and only one modeless modal is open at a
+  // time (`ModalStateReducer.show`), so the finder replaces the picker rather than stacking over it as the old
+  // floating palette allowed. Escape therefore closes to the editor, not back to the picker.
+  "The Go to File finder opened over the command picker" should "replace it, take focus and keystrokes until dismissed" in {
+    val (sm, _) = withRunnerOpen()
 
     sm.applyEvent(GoToFile).unsafeRunSync()
 
@@ -60,6 +63,6 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
     val dismissed = sm.getCurrentState.unsafeRunSync()
     dismissed.modalSurface shouldBe None
-    dismissed.commandRunnerSurface.map(_.id) shouldBe Some(runnerId)
-    dismissed.persisted.focus shouldBe Focus.Surface(runnerId)
+    dismissed.commandPickerSurface shouldBe None
+    dismissed.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
   }
