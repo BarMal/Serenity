@@ -3,34 +3,25 @@ package com.serenity
 import java.awt.Color
 
 import _root_.io.circe.syntax.*
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class CursorModeSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class CursorModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def makeStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("CursorModeSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("CursorModeSpec", initialConfig = AppConfig.default)
 
   private def settingsItems(runner: CommandRunner): List[CommandSurfaceItem] =
     def descendants(group: CommandSurfaceItem.GroupItem): List[CommandSurfaceItem] =
