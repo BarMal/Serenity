@@ -152,7 +152,7 @@ def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
     return frozenset(found)
 
 
-def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int] | None = None) -> list[Candidate]:
+def eligible_candidates(candidates: Iterable[Candidate], only: Sequence[int] | None = None) -> list[Candidate]:
     eligible = [
         c
         for c in candidates
@@ -163,7 +163,11 @@ def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int
         and c.head not in c.ejected_heads
         and (only is None or c.number in only)
     ]
-    return sorted(eligible, key=lambda c: c.number)[:limit]
+    return sorted(eligible, key=lambda c: c.number)
+
+
+def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int] | None = None) -> list[Candidate]:
+    return eligible_candidates(candidates, only)[:limit]
 
 
 def decide(
@@ -254,22 +258,34 @@ class Git:
     def tree(self, ref: str) -> str:
         return self._out("rev-parse", f"{ref}^{{tree}}")
 
-    def build(self, base: str, manifest_of: Callable[[list[Candidate]], Manifest], prs: list[Candidate]) -> tuple[str, list[Candidate]]:
+    def build(
+        self, base: str, manifest_of: Callable[[list[Candidate]], Manifest], prs: list[Candidate], limit: int
+    ) -> tuple[str, list[Candidate], list[Candidate]]:
+        """Squash-applies `prs` in order until `limit` have applied, so a pull request that conflicts or has moved is
+        replaced by the next one. Each is applied on top of those already included, so a later pull request is checked
+        against the batch built so far. Returns the tip, the included pull requests and those tried and left out."""
         self._run("checkout", "-q", "--detach", base)
         included: list[Candidate] = []
+        left_out: list[Candidate] = []
         for pr in prs:
-            self._run("fetch", "-q", "origin", f"refs/pull/{pr.number}/head")
-            if self._out("rev-parse", "FETCH_HEAD") != pr.head:
-                continue
-            if self._run("merge", "--squash", "FETCH_HEAD", check=False).returncode != 0:
-                self._run("reset", "-q", "--hard", "HEAD")
-                continue
-            if self._run("diff", "--cached", "--quiet", check=False).returncode == 0:
-                continue
-            self._run("commit", "-q", "-m", f"{pr.title} (#{pr.number})")
-            included.append(pr)
+            if len(included) == limit:
+                break
+            if self._applies(pr):
+                self._run("commit", "-q", "-m", f"{pr.title} (#{pr.number})")
+                included.append(pr)
+            else:
+                left_out.append(pr)
         self._run("commit", "-q", "--allow-empty", "-m", manifest_of(included).commit_message())
-        return self._out("rev-parse", "HEAD"), included
+        return self._out("rev-parse", "HEAD"), included, left_out
+
+    def _applies(self, pr: Candidate) -> bool:
+        self._run("fetch", "-q", "origin", f"refs/pull/{pr.number}/head")
+        if self._out("rev-parse", "FETCH_HEAD") != pr.head:
+            return False
+        if self._run("merge", "--squash", "FETCH_HEAD", check=False).returncode != 0:
+            self._run("reset", "-q", "--hard", "HEAD")
+            return False
+        return self._run("diff", "--cached", "--quiet", check=False).returncode != 0
 
     def push(self, sha: str, branch: str) -> None:
         self._run("push", "-q", "origin", f"{sha}:refs/heads/{branch}")
@@ -336,13 +352,13 @@ class Train:
             self._start(only=action.numbers)
 
     def _start(self, only: Sequence[int] | None = None) -> None:
-        batch = select_batch(self.github.open_candidates(), self.batch, only)
-        if not batch:
+        eligible = eligible_candidates(self.github.open_candidates(), only)
+        if not eligible:
             self.log("No pull request is ready for a train.")
             return
         base = self.git.master()
         if self.dry_run:
-            self.log(f"Would build a train of {_numbers(batch)} on master {base[:8]}.")
+            self.log(f"Would build a train of {_numbers(eligible[: self.batch])} on master {base[:8]}.")
             return
         created = self.now()
 
@@ -350,8 +366,7 @@ class Train:
             prs = tuple(TrainPr(c.number, c.head, c.title, c.head_ref) for c in included)
             return Manifest(base=base, prs=prs, created=created)
 
-        tip, included = self.git.build(base, manifest_of, batch)
-        left_out = [c for c in batch if c not in included]
+        tip, included, left_out = self.git.build(base, manifest_of, eligible, self.batch)
         if left_out:
             self.log(f"Left out (conflict, no change or moved head): {_numbers(left_out)}")
         if not included:
