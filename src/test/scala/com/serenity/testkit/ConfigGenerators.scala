@@ -348,6 +348,7 @@ object ConfigGenerators:
       wordWrap            <- Gen.oneOf(true, false)
       visualLineNav       <- Gen.oneOf(true, false)
       typewriterScrolling <- Gen.oneOf(true, false)
+      offscreenSurfaces   <- oneOfEnum(OffscreenCursorSurfaces.values)
       focusedTextBody     <- Gen.oneOf(true, false)
       toolbar             <- Gen.oneOf(true, false)
       toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
@@ -407,6 +408,7 @@ object ConfigGenerators:
       wordWrapEnabled = wordWrap,
       visualLineCursorNavigation = visualLineNav,
       typewriterScrollingEnabled = typewriterScrolling,
+      offscreenCursorSurfaces = offscreenSurfaces,
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,

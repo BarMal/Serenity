@@ -27,6 +27,7 @@ import com.serenity.diagnostics.{
   LogMigration,
   PreviousRun,
   RuntimeIdentity,
+  ShutdownTrace,
   Trace,
   TuiConsoleLogFilter
 }
@@ -177,8 +178,8 @@ object Main extends IOApp:
       // the claim so an open that launched this process is not lost. A terminal launch never touches the desktop.
       gui = !LaunchOptions.resolveTuiMode(launchOptionsForLogging)
       _ <- (for
-        hooks <- DesktopHooks.install(desktop, gui)
-        role  <- SingleInstance.claim(instances, requested, logger)
+        hooks <- ShutdownTrace.traced("desktop hooks")(DesktopHooks.install(desktop, gui))
+        role  <- ShutdownTrace.traced("instance claim")(SingleInstance.claim(instances, requested, logger))
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
@@ -353,7 +354,7 @@ object Main extends IOApp:
     // bypasses the logging framework (CE3 stall checker, JVM internals). Crash info is preserved by CrashReporter.
     IO(System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()))) >>
       TuiRuntime.run(
-        shell = TerminalShell.resource,
+        shell = ShutdownTrace.traced("terminal")(TerminalShell.resource),
         appConfig = appConfig,
         openPath = launchOptions.openPath,
         configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
@@ -385,16 +386,18 @@ object Main extends IOApp:
       initialDisplay = displayState.snapshot
       frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (
-        SwingWindowHost
-          .resource(
-            initialDisplay.codeMetrics,
-            initialDisplay.uiMetrics,
-            appConfig.windowChromeMode,
-            appConfig.preferredWindowSize,
-            frameTimings,
-            startup.plan.windowTitle
-          ),
-        PaintExecutionContext.resource,
+        ShutdownTrace.traced("window")(
+          SwingWindowHost
+            .resource(
+              initialDisplay.codeMetrics,
+              initialDisplay.uiMetrics,
+              appConfig.windowChromeMode,
+              appConfig.preferredWindowSize,
+              frameTimings,
+              startup.plan.windowTitle
+            )
+        ),
+        ShutdownTrace.traced("paint executor")(PaintExecutionContext.resource),
         FileDrops.create(description => logger.info(s"[DROP] $description"))
       ).tupled
         .use { (host, paintEc, drops) =>
@@ -482,7 +485,9 @@ object Main extends IOApp:
                   )
                 ),
               frameTimings = frameTimings,
-              menus = host.menus(actualAppConfig.menuBarMode),
+              menus = host
+                .menus(actualAppConfig.menuBarMode)
+                .map(open => menuHost => ShutdownTrace.traced("menu bar")(open(menuHost))),
               offscreenFrames = Some(
                 OffscreenWarmUpFrames.forTarget(
                   host.target,

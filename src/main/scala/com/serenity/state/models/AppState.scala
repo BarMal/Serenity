@@ -294,6 +294,13 @@ final case class AppState(
       case _                                => false
     }
 
+  /** The open command picker (#2577): what Ctrl+P opens. */
+  def commandPickerSurface: Option[UiSurface] =
+    findSurface {
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) => picker.isCommandPicker
+      case _                                                      => false
+    }
+
   // `commandRunnerSubmenuSurface` (the second floating UiSurface for a settings group's ghost preview) is gone
   // (issue #1059) -- a settings group drilled into from either entry point now renders on `commandRunnerSurface`
   // itself, so this domain is always just that one surface.

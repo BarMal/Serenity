@@ -64,6 +64,10 @@ The run's output records how the quit key was sent and how many `[STATE MODAL]` 
 
 `bench/startup-variance.sh <app-image> <runs-per-round> <out-dir>` runs `ttfw.py` in six rounds ordered warm, cold, cold, warm, warm, cold, so drift falls on both modes alike. "Cold" means the image's AOT cache is moved aside (the OS file cache stays warm). `bench/startup-spread.py` pools the rounds into n, median, coefficient of variation and max/min per mode. The manual `startup-variance.yml` workflow runs it on a GitHub runner against the Linux image of a Desktop Package Check run (`image_run_id`), to decide whether start-up rows can gate in CI or only track a trend.
 
+### ABBA over two images (#2420)
+
+`bench/abba-startup.sh <A-launcher> <B-launcher> <out-dir> [runs]` is `abba.sh` for start-up: it runs `startup.py` against the two images' launchers in the order A B B A A B B A, writes `a-1..4.csv` and `b-1..4.csv`, and applies the protocol's blocking rule with `scripts/abba_compare.py`. The time floor is 100 ms (`ABBA_STARTUP_MIN_DELTA_MS`; `abba_compare.py --time-delta-ms`), not the 0.03 ms of the in-process rows, which would block on noise at a start-up scale. The 100 ms is a guess, not a measurement: two runs of one commit on a GitHub runner differed by 77 ms (warm) and 114 ms (cold), and nothing has been measured on the laptop, so run an A/A there before trusting it. Set `ABBA_STARTUP_REPORT_ONLY=1` for a CI job: findings become `::warning::` lines and the script exits 0 whatever happens, because start-up is tracked as a trend on CI and only the laptop run gates. Both images need a trained AOT cache. Build the two images from the merge base and the candidate with `desktop-release.yml`.
+
 ## Per-keystroke latency trace
 
 `[FRAME]` reports each phase's percentiles over its own population (every frame, every input chain), so its p50s do not add up to `input-to-paint`. `ui.render.latency_trace = true` (default off) follows each keystroke instead and logs one line per painted keystroke, then a summary every 5 seconds:

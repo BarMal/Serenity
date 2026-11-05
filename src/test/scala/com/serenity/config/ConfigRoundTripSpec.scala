@@ -86,6 +86,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withWordWrap(false)
     .withVisualLineCursorNavigation(false)
     .withTypewriterScrolling(true)
+    .withOffscreenCursorSurfaces(OffscreenCursorSurfaces.SummonCursor)
     .withColumnMode(true)
     .withColumnTargetWidth(60)
     .withColumnGap(4)

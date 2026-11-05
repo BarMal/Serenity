@@ -30,6 +30,9 @@ private[layout] object FloatingSurfaceSizing:
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ShortcutsHelp(_) |
           SurfaceContent.ModalWorkflow(Modal.FileWorkflow(_)) =>
         capWidth(contentRect.width)
+      // The command picker is the palette (#2577), so it keeps the palette's width.
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) if picker.isCommandPicker =>
+        capWidth(contentRect.width)
       // A quiet single row: as wide as its text (plus a cell of padding each side), never the whole pane.
       case SurfaceContent.StatusLine(text) =>
         math.min(contentRect.width, text.length + 2)
