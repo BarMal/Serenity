@@ -19,6 +19,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.{SessionManager, UnreadableSession}
 import com.serenity.state.manager.HotExitRecovery
 import com.serenity.state.models.{AppState, Buffer, BufferId}
+import com.serenity.testkit.HangBound
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -194,7 +195,7 @@ class KillRecoverySpec extends AnyFlatSpec with Matchers with OptionValues:
         _      <- sessions.saveSession(loaded.getOrElse(AppState.initial))
         reload <- sessions.loadSession()
       yield Startup(setAside, loaded, offered.getOrElse(false), reload.isDefined)
-    program.timeout(60.seconds).unsafeRunSync()
+    HangBound.within(program, 30.seconds).unsafeRunSync()
 
   private def attempt[A](body: => A): Either[Throwable, A] = Try(body).toEither
 

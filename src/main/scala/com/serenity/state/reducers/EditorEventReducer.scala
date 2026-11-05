@@ -66,14 +66,10 @@ object EditorEventReducer:
         pane.bufferId.flatMap(currentState.persisted.buffers.get) match
           case Some(buffer) =>
             val totalLines = countLines(buffer.document.content)
-            // Column mode pages by column and keeps the logical limit. Anywhere else the end of the document is where
-            // the last row fits the pane, which only the effect boundary can measure ([[ScrollBoundary]]), so the
-            // reducer lets the position run to the last line and no further.
-            val surfaceConfig = currentState.persisted.config.surfaceConfig
-            val maxTopLine =
-              if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
-                math.max(0, totalLines - buffer.viewport.visibleLines)
-              else math.max(0, totalLines - 1)
+            // The end of the document is where the last row fits the pane, which only the effect boundary can measure
+            // ([[ScrollBoundary]], which also turns column mode's pages), so the reducer lets the position run to the
+            // last line and no further.
+            val maxTopLine    = math.max(0, totalLines - 1)
             val newTopLine    = math.min(buffer.viewport.topLine + lines, maxTopLine)
             val newViewport   = buffer.viewport.scrolledTo(newTopLine, buffer.viewport.leftColumn, 0)
             val updatedBuffer = buffer.copy(viewport = newViewport)

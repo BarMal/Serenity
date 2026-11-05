@@ -2,31 +2,23 @@ package com.serenity
 
 import java.nio.file.Files
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, InsertChar, OpenFile, TabKey}
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** StateManager-level coverage for the open dialog's unified directory browser (#1289) -- kept separate from
   * `FileWorkflowStateManagerSpec` so neither spec crosses the architecture-check file-length target.
   */
-class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class FileWorkflowOpenDialogStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowOpenDialogStateManagerSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("FileWorkflowOpenDialogStateManagerSpec", initialConfig = AppConfig.default)
 
   private def currentWorkflow(stateManager: StateManager): FileWorkflowState =
     stateManager.getCurrentState

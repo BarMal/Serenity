@@ -1,18 +1,15 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.DeleteWordBackward
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Regression coverage for the drift `#1072` flagged: `applyMergedDeletionEdits` (reached from a multi-cursor
   * `DeleteWordBackward`/`DeleteWordForward`/`DeleteBackward`/`DeleteForward` with no active selection) silently kept
@@ -21,14 +18,10 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
   * longer matched -- `RichTextDocument.matchesPlainText` -- and every subsequent rich-text edit at that buffer would
   * silently stop applying (`richTextDocumentAfterEdit` no-ops whenever the plain text has drifted).
   */
-class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class MultiCursorWordDeletionRichTextSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger       = LoggerFactory[IO].getLogger(using LoggerName("MultiCursorWordDeletionRichTextSpec"))
-    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val stateManager = createStateManager("MultiCursorWordDeletionRichTextSpec", initialConfig = AppConfig.default)
     // Rich-text formatting belongs to prose mode.
     stateManager.updateState(TestAppModes.prose).unsafeRunSync()
     stateManager
