@@ -22,11 +22,47 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
+  # A master build (the nightly, or a manual dispatch on master) does not re-run the suite: the Cross-OS Tests nightly
+  # already runs it on Windows and macOS, and the Linux job in ci.yml covers Linux (#2557). Instead it takes the newest
+  # completed scheduled Cross-OS run on master, fails unless that run is green, and outputs the commit it tested; the
+  # build and publish jobs check out exactly that commit. It is the nightly's commit rather than master's head because
+  # GitHub can delay a scheduled run by hours while master moves on, so requiring the two to match would rarely publish.
+  # Tag builds and dispatches from other branches have no nightly to lean on, so they run the suite themselves.
+  gate:
+    name: Require green Cross-OS nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.nightly.outputs.sha }}
+    steps:
+      - name: Check out the gate script
+        if: github.ref == 'refs/heads/master'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          sparse-checkout: scripts
+
+      - name: Require a green Cross-OS nightly
+        id: nightly
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-os-tests.yml/runs?branch=master&event=schedule&per_page=20" \
+            | python3 scripts/cross_os_nightly_gate.py)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.artifact_suffix }}
+    needs: gate
     runs-on: ${{ matrix.os }}
+    # p90 36.9 min (macos-arm64) over 10 successful runs per OS (longest 40675248593, 40862800896); limit is 2x, rounded up.
+    timeout-minutes: 74
     # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
     env:
       SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
@@ -45,7 +81,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.gate.outputs.sha || github.ref }}
           fetch-depth: 0
 
       # A release tag must name a plain X.Y.Z[-pre] version and sit on master, so a stray tag on a side branch cannot
@@ -76,12 +112,31 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
+      - name: Build runnable JAR
+        if: github.ref == 'refs/heads/master'
+        shell: bash
+        env:
+          SERENITY_NIGHTLY: 'true'
+        run: sbt -v clean assembly writePackageVersion
+
+      # Tag builds and other-branch dispatches run the suite here. NullRenderSurfaceSpec builds a benchmark window whose
+      # scaled GraphicsConfiguration reads the default screen device, which throws HeadlessException without a display,
+      # so the Linux leg runs under Xvfb as the ci.yml Test job does.
       - name: Test and build runnable JAR
+        if: github.ref != 'refs/heads/master'
         shell: bash
         env:
           # Branch builds are the nightly channel; a tag build leaves this off so PackageVersion reports release.
           SERENITY_NIGHTLY: ${{ github.ref_type == 'tag' && 'false' || 'true' }}
-        run: sbt -v clean test assembly writePackageVersion
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+            xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v clean test assembly writePackageVersion
+          else
+            sbt -v clean test assembly writePackageVersion
+          fi
 
       - name: Verify tag, package version and BuildInfo agree
         if: github.ref_type == 'tag'
@@ -496,14 +551,16 @@ jobs:
 
   publish:
     name: Publish ${{ github.ref_type == 'tag' && 'versioned release' || 'nightly desktop build' }}
-    needs: build
+    needs: [gate, build]
     runs-on: ubuntu-latest
+    # p90 0.7 min over 10 successful runs (39757060632, 40180584764); the 10 min floor applies.
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.gate.outputs.sha || github.ref }}
           fetch-depth: 0
 
       - name: Download build artifacts

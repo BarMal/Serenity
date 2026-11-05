@@ -112,6 +112,13 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.typewriterScrollingEnabled,
       (config, value) => config.withTypewriterScrolling(value)
     ),
+    named("editor.cursor.offscreen_surfaces", "offscreenCursorSurfaces")(
+      enumerated(
+        OffscreenCursorSurfaces.fromConfigKey,
+        _.configKey,
+        text => OffscreenCursorSurfaces.values.find(_.toString == text)
+      )
+    )(_.surfaceConfig.offscreenCursorSurfaces, (config, value) => config.withOffscreenCursorSurfaces(value)),
     // Column-based document layout (issue #1338, Phase 1): global toggle, only takes effect while word wrap is also
     // on. `columnTargetWidthCells`/`columnGap` are clamped by `SurfaceConfig.normalized`, not filtered here.
     named(

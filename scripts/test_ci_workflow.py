@@ -52,6 +52,70 @@ class PerfDraftGateTests(unittest.TestCase):
         self.assertNotIn("python3 -m unittest", _job("perf"))
 
 
+# The 2x HiDPI shards cost two jobs and about 40 minutes per batch, so they run nightly on master and on pull requests
+# that carry the `perf` label, and not on merge trains, on master pushes or on unlabelled pull requests (owner decision,
+# #2618, 2026-11-05).
+_PERF_2X_GATE = (
+    "(github.event_name == 'schedule'"
+    " || (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/heads/train/'))"
+    " || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'perf')))"
+)
+_NIGHTLY_REPORT_STEP = "      - name: Report a failed nightly 2x run\n"
+
+
+def _steps_of(job: str) -> str:
+    return job.split("\n    steps:\n", 1)[1].rstrip()
+
+
+class Perf2xGateTests(unittest.TestCase):
+    def test_the_2x_shards_are_their_own_job_with_their_own_gate(self) -> None:
+        self.assertIn(f"    if: {_PERF_2X_GATE}\n", _job("perf-2x") + "\n")
+
+    def test_a_job_gate_cannot_read_the_matrix_so_each_scale_is_its_own_job(self) -> None:
+        self.assertNotIn("scale: 2", _job("perf"))
+        self.assertNotIn("scale: 1", _job("perf-2x"))
+
+    def test_the_2x_job_runs_the_same_steps_as_the_1x_job_and_one_more(self) -> None:
+        one_x, two_x = _steps_of(_job("perf")), _steps_of(_job("perf-2x"))
+        self.assertTrue(two_x.startswith(one_x), "the two jobs' steps have drifted apart; edit both")
+        extra = two_x[len(one_x):]
+        self.assertEqual(1, extra.count("      - name: "), extra)
+        self.assertIn(_NIGHTLY_REPORT_STEP, extra)
+
+    def test_the_2x_job_has_the_same_timeout_and_runner_as_the_1x_job(self) -> None:
+        for line in ("    runs-on: ubuntu-latest\n", "    timeout-minutes: 75\n"):
+            with self.subTest(line=line):
+                self.assertIn(line, _job("perf-2x") + "\n")
+
+
+class Nightly2xReportTests(unittest.TestCase):
+    """A red nightly run is one scheduled run nobody opens, so a failed 2x shard comments on a ledger issue."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        job = _job("perf-2x")
+        cls.job = job
+        cls.step = job[job.index(_NIGHTLY_REPORT_STEP):]
+
+    def test_it_is_the_last_step_and_runs_only_when_a_nightly_run_failed(self) -> None:
+        self.assertEqual(1, self.job.count(_NIGHTLY_REPORT_STEP))
+        self.assertIn("        if: failure() && github.event_name == 'schedule'\n", self.step)
+
+    def test_it_comments_on_the_ledger_issue_with_the_shard_the_run_and_the_commit(self) -> None:
+        self.assertIn("gh issue comment 2643", self.step)
+        for needle in ("matrix.label", "github.server_url", "github.run_id", "github.sha"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, self.step)
+
+    def test_the_job_may_write_issues_and_nothing_else_beyond_reading_the_repository(self) -> None:
+        self.assertIn("    permissions:\n      contents: read\n      issues: write\n", self.job)
+
+    def test_the_1x_job_does_not_carry_the_report_step_or_the_permission(self) -> None:
+        one_x = _job("perf")
+        self.assertNotIn(_NIGHTLY_REPORT_STEP, one_x)
+        self.assertNotIn("issues: write", one_x)
+
+
 class ScriptTestsJobTests(unittest.TestCase):
     def test_script_tests_run_on_every_pull_request_including_drafts(self) -> None:
         job = _job("scripts")

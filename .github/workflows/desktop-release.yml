@@ -29,6 +29,8 @@ jobs:
     name: Build ${{ matrix.artifact_suffix }}
     if: "!startsWith(github.head_ref, 'claude/') && (github.event_name != 'pull_request' || !github.event.pull_request.draft)"
     runs-on: ${{ matrix.os }}
+    # Guess: one successful run (41626282949, 4.7 min on linux-x64) is too few for a p90, so the 10 min floor stands in for 2x.
+    timeout-minutes: 10
     # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
     env:
       SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}

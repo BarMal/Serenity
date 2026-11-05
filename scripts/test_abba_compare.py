@@ -107,6 +107,7 @@ class TimeDeltaOptionTest(unittest.TestCase):
         self.assertEqual(len(abba.compare(self.a, slower, time_delta_ms=100.0)), 1)
 
     def test_command_line_option_sets_the_floor(self):
+        capture_stdout(self)
         with tempfile.TemporaryDirectory() as directory:
             paths = {}
             for side, base in (("a", 1000.0), ("b", 1060.0)):
