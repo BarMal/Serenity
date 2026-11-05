@@ -47,6 +47,21 @@ class FrameTimingReportSpec extends AnyFlatSpec with Matchers:
     timings.drain().frames shouldBe empty
   }
 
+  it should "take the event-thread lag into the logged line and start the next window from nothing" in {
+    val edtLag = EdtLagTrace()
+    edtLag.setEnabled(true)
+    edtLag.record(12 * 1_000_000L)
+
+    val logged = (for
+      lines <- Ref.of[IO, List[String]](Nil)
+      _     <- FrameTimingReport.tick(withOneFrame(), IO.pure(true), line => lines.update(_ :+ line), edtLag = edtLag)
+      out   <- lines.get
+    yield out).unsafeRunSync()
+
+    logged.headOption.exists(_.contains("edt-lag p50=12.00 p95=12.00 max=12.00 n=1 ms")) shouldBe true
+    edtLag.drain().count shouldBe 0
+  }
+
   "FrameTimingReport.stream" should "switch recording with the setting" in {
     val timings = FrameTimings()
     val program = for
@@ -70,6 +85,63 @@ class FrameTimingReportSpec extends AnyFlatSpec with Matchers:
     val program = for
       enabled <- SignallingRef.of[IO, Boolean](false)
       _       <- FrameTimingReport.stream(FrameTimings(), enabled.discrete, _ => IO.unit).compile.drain
+    yield ()
+
+    val parked = (for
+      control  <- TestControl.execute(program)
+      _        <- control.tickFor(1.minute)
+      finished <- control.results
+      idle     <- control.isDeadlocked
+    yield (finished, idle)).unsafeRunSync()
+
+    parked shouldBe ((None, true))
+  }
+
+  it should "probe the event thread about twenty times a second while on, and report the lag in its line" in {
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](true)
+      lines   <- Ref.of[IO, List[String]](Nil)
+      report = FrameTimingReport.stream(
+        withOneFrame(),
+        enabled.discrete,
+        line => lines.update(_ :+ line),
+        edtLag = EdtLagTrace(),
+        eventThread = Some(task => task.run())
+      )
+      fiber <- report.compile.drain.start
+      _     <- IO.sleep(FrameTimingReport.Interval + 100.millis)
+      out   <- lines.get
+      _     <- fiber.cancel
+    yield out
+
+    val samples = """edt-lag [^|]* n=(\d+) ms""".r.findFirstMatchIn(runVirtual(program).mkString).map(_.group(1).toInt)
+    samples.exists(n => n >= 90 && n <= 101) shouldBe true
+  }
+
+  it should "report no event-thread lag when the frontend has no event thread" in {
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](true)
+      lines   <- Ref.of[IO, List[String]](Nil)
+      fiber <- FrameTimingReport
+        .stream(withOneFrame(), enabled.discrete, line => lines.update(_ :+ line), eventThread = None)
+        .compile
+        .drain
+        .start
+      _   <- IO.sleep(FrameTimingReport.Interval + 100.millis)
+      out <- lines.get
+      _   <- fiber.cancel
+    yield out
+
+    runVirtual(program).mkString should not include "edt-lag"
+  }
+
+  it should "schedule no probe wakeups either while frame timing is off" in {
+    val program = for
+      enabled <- SignallingRef.of[IO, Boolean](false)
+      _ <- FrameTimingReport
+        .stream(FrameTimings(), enabled.discrete, _ => IO.unit, eventThread = Some(task => task.run()))
+        .compile
+        .drain
     yield ()
 
     val parked = (for
