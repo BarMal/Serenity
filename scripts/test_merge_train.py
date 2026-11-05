@@ -11,16 +11,20 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 from __future__ import annotations
 
 import dataclasses
+import os
 import re
 import subprocess
 import tempfile
 import unittest
+import urllib.error
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from scripts import merge_train as mt
 
 _NOW = datetime(2026, 11, 3, 16, 0, tzinfo=timezone.utc)
+_MOVED = datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc)  # when master last moved, in the hold tests
+_HAND_MERGE = frozenset({"hand-merge-next"})
 _CI = ".github/workflows/ci.yml"
 _XOS = ".github/workflows/cross-os-tests.yml"
 
@@ -171,13 +175,14 @@ class DecisionTests(unittest.TestCase):
 # whose merges are real squash merges into that origin, so the tested tree and the merged tree can be compared.
 
 
-def _git(cwd: Path, *args: str) -> str:
+def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     result = subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=master", *args],
         cwd=cwd,
         capture_output=True,
         text=True,
         check=True,
+        env=None if env is None else {**os.environ, **env},
     )
     return result.stdout.strip()
 
@@ -214,12 +219,13 @@ class Origin:
         _git(self.work, "push", "origin", "HEAD:refs/heads/master")
 
 
-    def commit_to_master(self, path: str, text: str) -> None:
+    def commit_to_master(self, path: str, text: str, when: datetime | None = None) -> None:
         _git(self.work, "fetch", "origin", "master")
         _git(self.work, "checkout", "-q", "-B", "direct", "origin/master")
         (self.work / path).write_text(text)
         _git(self.work, "add", ".")
-        _git(self.work, "commit", "-m", "Direct")
+        dated = {} if when is None else {"GIT_COMMITTER_DATE": when.isoformat(), "GIT_AUTHOR_DATE": when.isoformat()}
+        _git(self.work, "commit", "-m", "Direct", env=dated)
         _git(self.work, "push", "origin", "HEAD:refs/heads/master")
 
 
@@ -235,12 +241,23 @@ class FakeGitHub:
         self.deleted_branches: list[str] = []
         self.comments: list[tuple[int, str]] = []
         self.failed_jobs: dict[int, list[str]] = {}
+        self.failed_suites_of_run: dict[int, list[mt.FailedSuite]] = {}
+        self.suites_read: list[tuple[int, int]] = []
+        self.changed: dict[int, list[str]] = {}
         self.merge_fails_for: set[int] = set()
         self.extra_on_merge: tuple[str, str] | None = None
 
     def add_pr(self, number: int, path: str, text: str, **overrides: object) -> None:
         head = self.origin.open_pr(number, path, text)
         self.candidates[number] = _candidate(number, head=head, **overrides)
+        self.changed[number] = [path]
+
+    def changed_files(self, number: int) -> list[str]:
+        return self.changed[number]
+
+    def failed_suites(self, run_id: int, attempt: int) -> list[mt.FailedSuite]:
+        self.suites_read.append((run_id, attempt))
+        return self.failed_suites_of_run.get(run_id, [])
 
     def open_candidates(self) -> list[mt.Candidate]:
         return [c for n, c in sorted(self.candidates.items()) if n not in self.merged]
@@ -277,12 +294,17 @@ class FakeGitHub:
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
         held = mt.held_heads_in([body])
-        if held and number in self.candidates:
+        ejected = mt.ejected_heads_in([body])
+        if (held or ejected) and number in self.candidates:
             current = self.candidates[number]
-            self.candidates[number] = dataclasses.replace(current, held_heads=current.held_heads | held)
+            self.candidates[number] = dataclasses.replace(
+                current, held_heads=current.held_heads | held, ejected_heads=current.ejected_heads | ejected
+            )
 
 
-class TrainTests(unittest.TestCase):
+class TrainRig(unittest.TestCase):
+    """A train over a real git origin and a fake GitHub; the test classes below add the scenarios."""
+
     def setUp(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -292,6 +314,7 @@ class TrainTests(unittest.TestCase):
         self.clone = self.root / "runner"
         _git(self.root, "clone", "-q", str(self.origin.bare), str(self.clone))
         self.log: list[str] = []
+        self.summary: list[str] = []
         self.clock = _NOW
 
     def _train(self, dry_run: bool = False, flake_issue: int | None = 99, batch: int = 6) -> mt.Train:
@@ -312,6 +335,15 @@ class TrainTests(unittest.TestCase):
     def _finish(self, branch: str, ci: str = "success", xos: str = "success", attempt: int = 1) -> None:
         self.github.runs[branch] = [_run(_CI, ci, attempt, run_id=10), _run(_XOS, xos, attempt, run_id=11)]
 
+    def _train_numbers(self) -> list[int]:
+        branch = self._live_branch()
+        assert branch is not None
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
+        assert manifest is not None
+        return [p.number for p in manifest.prs]
+
+
+class TrainTests(TrainRig):
     def test_starts_one_train_with_every_eligible_pull_request_and_dispatches_the_full_tier(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
         self.github.add_pr(2, "b.txt", "b\n")
@@ -335,13 +367,6 @@ class TrainTests(unittest.TestCase):
         manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
         assert manifest is not None
         self.assertEqual([1], [p.number for p in manifest.prs])
-
-    def _train_numbers(self) -> list[int]:
-        branch = self._live_branch()
-        assert branch is not None
-        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
-        assert manifest is not None
-        return [p.number for p in manifest.prs]
 
     def test_a_conflicting_pull_request_is_replaced_by_the_next_eligible_one(self) -> None:
         self.github.add_pr(1, "same.txt", "one\n")
@@ -416,6 +441,109 @@ class TrainTests(unittest.TestCase):
         bodies = ["unrelated", f"text\n{mt.held_marker('a' * 40)}\nmore", mt.ejection_marker("b" * 40)]
         self.assertEqual(frozenset({"a" * 40}), mt.held_heads_in(bodies))
         self.assertEqual(frozenset({"b" * 40}), mt.ejected_heads_in(bodies))
+
+    # -- holding the next batch for hand merges (#2618) ----------------------------------------------------------------
+
+    def _hold_train(self, **kwargs: object) -> mt.Train:
+        return mt.Train(
+            github=self.github,
+            git=mt.Git(self.clone),
+            batch=6,
+            dry_run=False,
+            flake_issue=99,
+            now=lambda: self.clock,
+            log=self.log.append,
+            summary=self.summary.append,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def _master_moved_at(self, when: datetime) -> None:
+        self.origin.commit_to_master(f"m{when:%H%M}.txt", "m\n", when=when)
+
+    def test_the_next_train_waits_for_a_labelled_workflow_pull_request_right_after_master_moves(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.assertEqual([], self.github.dispatched)
+        self.assertTrue(any("Holding the next train until 12:20" in line and "#1" in line for line in self.log), self.log)
+
+    def test_the_held_numbers_go_in_the_step_summary_so_the_hold_can_be_seen(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual(1, len(self.summary))
+        self.assertIn("#1", self.summary[0])
+        self.assertIn("12:20", self.summary[0])
+
+    def test_twenty_minutes_is_the_default_hold(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=19)
+        self._hold_train().tick()
+        self.assertIsNone(self._live_branch())
+
+    def test_the_train_is_built_once_the_hold_has_run_out(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=20)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_hand_merge_inside_the_hold_starts_the_window_again_from_the_new_master_commit(self) -> None:
+        self._master_moved_at(_MOVED)
+        self._master_moved_at(_MOVED + timedelta(minutes=15))
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=30)  # 30 min after the first commit, 15 after the last
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.assertTrue(any("Holding the next train until 12:35" in line for line in self.log), self.log)
+
+    def test_the_train_is_built_as_soon_as_the_labelled_pull_requests_are_merged(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.github.merged.append(1)
+        self._master_moved_at(_MOVED + timedelta(minutes=6))
+        self.clock = _MOVED + timedelta(minutes=7)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+
+    def test_a_workflow_pull_request_without_the_label_never_holds_the_train(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+        self.assertEqual([], self.summary)
+
+    def test_the_label_on_a_pull_request_that_is_not_held_back_holds_nothing(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, "a.txt", "a\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([1], self._train_numbers())
+
+    def test_a_dry_run_does_not_report_a_hold(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        train = mt.Train(
+            github=self.github, git=mt.Git(self.clone), batch=6, dry_run=True, flake_issue=99,
+            now=lambda: self.clock, log=self.log.append, summary=self.summary.append, hold_minutes=20,
+        )
+        train.tick()
+        self.assertFalse(any("Holding" in line for line in self.log), self.log)
+        self.assertEqual([], self.summary)
 
     def test_files_outside_the_workflows_directory_are_not_held_back(self) -> None:
         self.github.add_pr(1, ".github/CODEOWNERS", "* @owner\n")
@@ -579,6 +707,354 @@ class TrainTests(unittest.TestCase):
         self._train().tick()
         self.assertIsNone(self._live_branch())
         self.assertEqual([], self.github.dispatched)
+
+
+_MAC_JOB = "shards-macos / Test (macos, shard 2/2)"
+_LINUX_JOB = "Test"
+_PICKER_SPEC = "src/test/scala/com/serenity/CommandPickerSpec.scala"
+_WALKER_SPEC = "src/test/scala/com/serenity/io/ProjectFileWalkerParallelSpec.scala"
+_HOST_KEY_SPEC = "src/test/scala/com/serenity/host/HostKeySpec.scala"
+_GOLDEN_SPEC = "src/test/scala/com/serenity/command/CommandPaletteGoldenRankingSpec.scala"
+
+
+class AutoEjectTests(TrainRig):
+    """A red suite that exactly one pull request of the batch adds or changes is that pull request's to fix: it is
+    ejected on the spot, with no re-run and no bisect (owner's decision, #2618)."""
+
+    def _red_batch(self, numbers: tuple[int, ...] = (1, 2, 3), spec_of: dict[int, str] | None = None) -> str:
+        for number in numbers:
+            path = (spec_of or {}).get(number, f"file{number}.txt")
+            self.github.add_pr(number, path, f"{number}\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        return branch
+
+    def _fail(self, branch: str, *suites: str, job: str = _MAC_JOB, run_id: int = 11, attempt: int = 1) -> None:
+        if run_id == 11:
+            self._finish(branch, xos="failure", attempt=attempt)
+        else:
+            self._finish(branch, ci="failure", attempt=attempt)
+        self.github.failed_suites_of_run[run_id] = [mt.FailedSuite(job, suite) for suite in suites]
+
+    def _comments_on(self, number: int) -> list[str]:
+        return [body for n, body in self.github.comments if n == number]
+
+    def _assert_owner_ejected(self, owner: int, suite: str, path: str) -> None:
+        branch = self._red_batch(spec_of={owner: path})
+        self._fail(branch, suite)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+
+        self.assertEqual([], self.github.reruns)
+        (comment,) = self._comments_on(owner)
+        self.assertIn(mt.ejection_marker(self.github.candidates[owner].head), comment)
+        self.assertIn(suite, comment)
+        self.assertIn(_MAC_JOB, comment)
+        self.assertIn("https://x/11", comment)
+        self.assertIn(path, comment)
+        rebuilt = self._live_branch()
+        self.assertNotEqual(branch, rebuilt)
+        self.assertEqual([n for n in (1, 2, 3) if n != owner], self._train_numbers())
+        self.assertIn(("ci.yml", rebuilt), self.github.dispatched)
+
+    def test_2640_which_adds_the_command_picker_spec_is_ejected_when_that_suite_fails_on_macos(self) -> None:
+        self._assert_owner_ejected(3, "com.serenity.CommandPickerSpec", _PICKER_SPEC)
+
+    def test_2527_which_adds_the_walker_spec_is_ejected_when_that_suite_fails(self) -> None:
+        self._assert_owner_ejected(2, "com.serenity.io.ProjectFileWalkerParallelSpec", _WALKER_SPEC)
+
+    def test_2541_which_adds_the_host_key_spec_is_ejected_when_that_suite_fails(self) -> None:
+        self._assert_owner_ejected(1, "com.serenity.host.HostKeySpec", _HOST_KEY_SPEC)
+
+    def test_2611_which_breaks_a_golden_spec_it_does_not_touch_still_takes_the_re_run_path(self) -> None:
+        # #2611 changed AppModeCommands and CommandRegistry, not CommandPaletteGoldenRankingSpec, so no pull request
+        # of the batch owns that suite and the rule does not apply.
+        branch = self._red_batch(spec_of={2: "src/main/scala/com/serenity/command/AppModeCommands.scala"})
+        self._fail(branch, "com.serenity.command.CommandPaletteGoldenRankingSpec", job=_LINUX_JOB, run_id=10)
+        self._train().tick()
+
+        self.assertEqual([10], self.github.reruns)
+        self.assertEqual([], self.github.comments)
+        self.assertEqual(branch, self._live_branch())
+
+    def test_two_pull_requests_touching_the_failing_spec_leave_it_to_the_re_run(self) -> None:
+        branch = self._red_batch(spec_of={2: _PICKER_SPEC})
+        self.github.changed[3] = [_PICKER_SPEC]
+        self._fail(branch, "com.serenity.CommandPickerSpec")
+        self._train().tick()
+
+        self.assertEqual([11], self.github.reruns)
+        self.assertEqual([], self.github.comments)
+        self.assertEqual(branch, self._live_branch())
+
+    def test_a_failing_suite_no_pull_request_touches_takes_the_re_run(self) -> None:
+        branch = self._red_batch()
+        self._fail(branch, "com.serenity.ui.terminal.SwingWindowResizeSpec", job=_LINUX_JOB, run_id=10)
+        self._train().tick()
+
+        self.assertEqual([10], self.github.reruns)
+        self.assertEqual([], self.github.comments)
+
+    def test_a_package_that_only_looks_alike_is_not_an_owner(self) -> None:
+        branch = self._red_batch(spec_of={2: "src/test/scala/com/serenity/ui/CommandPickerSpec.scala"})
+        self._fail(branch, "com.serenity.CommandPickerSpec")
+        self._train().tick()
+
+        self.assertEqual([11], self.github.reruns)
+        self.assertEqual([], self.github.comments)
+
+    def test_a_red_run_whose_failed_suites_cannot_be_read_takes_the_re_run(self) -> None:
+        branch = self._red_batch(spec_of={2: _PICKER_SPEC})
+        self._finish(branch, xos="failure")
+        self._train().tick()
+
+        self.assertEqual([11], self.github.reruns)
+        self.assertEqual([], self.github.comments)
+
+    def test_every_owner_of_a_failing_suite_is_ejected_in_the_same_step(self) -> None:
+        branch = self._red_batch(spec_of={1: _HOST_KEY_SPEC, 3: _PICKER_SPEC})
+        self._fail(branch, "com.serenity.host.HostKeySpec", "com.serenity.CommandPickerSpec")
+        self._train().tick()
+
+        self.assertEqual([], self.github.reruns)
+        self.assertEqual(1, len(self._comments_on(1)))
+        self.assertEqual(1, len(self._comments_on(3)))
+        self.assertEqual([2], self._train_numbers())
+
+    def test_one_pull_request_owning_two_failing_suites_gets_one_comment_naming_both(self) -> None:
+        branch = self._red_batch(spec_of={2: _PICKER_SPEC})
+        self.github.changed[2] = [_PICKER_SPEC, _HOST_KEY_SPEC]
+        self._fail(branch, "com.serenity.CommandPickerSpec", "com.serenity.host.HostKeySpec")
+        self._train().tick()
+
+        (comment,) = self._comments_on(2)
+        self.assertIn("com.serenity.CommandPickerSpec", comment)
+        self.assertIn("com.serenity.host.HostKeySpec", comment)
+
+    def test_an_owned_failure_beside_an_unowned_one_ejects_the_owner_and_rebuilds_without_a_re_run(self) -> None:
+        branch = self._red_batch(spec_of={3: _PICKER_SPEC})
+        self._fail(branch, "com.serenity.CommandPickerSpec", "com.serenity.ui.terminal.SwingWindowResizeSpec")
+        self._train().tick()
+
+        self.assertEqual([], self.github.reruns)
+        self.assertEqual(1, len(self._comments_on(3)))
+        self.assertEqual([1, 2], self._train_numbers())
+
+    def test_the_failed_suites_are_read_from_the_attempt_that_failed(self) -> None:
+        branch = self._red_batch(spec_of={3: _PICKER_SPEC})
+        self._fail(branch, "com.serenity.CommandPickerSpec", attempt=2)
+        self._train().tick()
+
+        self.assertEqual([(11, 2)], self.github.suites_read)
+        self.assertEqual(1, len(self._comments_on(3)))
+
+    def test_a_lone_pull_request_that_owns_its_failing_suite_is_ejected_without_a_re_run(self) -> None:
+        branch = self._red_batch(numbers=(3,), spec_of={3: _PICKER_SPEC})
+        self._fail(branch, "com.serenity.CommandPickerSpec")
+        self._train().tick()
+
+        self.assertEqual([], self.github.reruns)
+        self.assertEqual(1, len(self._comments_on(3)))
+
+    def test_a_train_still_red_after_its_re_run_ejects_an_owner_too(self) -> None:
+        for number in (1, 2, 3, 4):
+            self.github.add_pr(number, _PICKER_SPEC if number == 2 else f"file{number}.txt", f"{number}\n")
+        self._train().tick()
+        first = self._live_branch()
+        assert first is not None
+        self._fail(first, "com.serenity.CommandPickerSpec")
+        self.github.runs[first] = [_run(_CI, run_id=10), _run(_XOS, "failure", attempt=2, run_id=11)]
+        self._train().tick()
+
+        self.assertEqual([], self.github.reruns)
+        self.assertEqual(1, len(self._comments_on(2)))
+        self.assertEqual([1, 3, 4], self._train_numbers())
+
+    def test_a_dry_run_names_the_owner_and_changes_nothing(self) -> None:
+        branch = self._red_batch(spec_of={3: _PICKER_SPEC})
+        self._fail(branch, "com.serenity.CommandPickerSpec")
+        self._train(dry_run=True).tick()
+
+        self.assertEqual([], self.github.comments)
+        self.assertEqual([], self.github.reruns)
+        self.assertEqual(branch, self._live_branch())
+        self.assertTrue(any("#3" in line and "CommandPickerSpec" in line for line in self.log))
+
+    def test_a_green_train_reads_no_logs(self) -> None:
+        branch = self._red_batch()
+        self._finish(branch)
+        self._train().tick()
+
+        self.assertEqual([], self.github.suites_read)
+        self.assertEqual([1, 2, 3], self.github.merged)
+
+
+class FailedSuiteLogTests(unittest.TestCase):
+    """sbt ends a red run with `Failed tests:` and one indented suite per line; the runner's log wraps each line in a
+    timestamp and colour codes."""
+
+    @staticmethod
+    def _line(text: str) -> str:
+        return f"2026-11-05T14:26:31.3698371Z \x1b[0m[\x1b[0m\x1b[31merror\x1b[0m] \x1b[0m\x1b[0m{text}\x1b[0m"
+
+    def test_the_suites_under_failed_tests_are_read_from_a_coloured_timestamped_log(self) -> None:
+        log = "\n".join(
+            [
+                self._line("Failed tests:"),
+                self._line("\tcom.serenity.ui.terminal.SwingWindowResizeSpec"),
+                self._line("(Test / test) sbt.TestsFailedException: Tests unsuccessful"),
+            ]
+        )
+        self.assertEqual(["com.serenity.ui.terminal.SwingWindowResizeSpec"], mt.failed_suites_in_log(log))
+
+    def test_several_suites_come_back_in_log_order_without_repeats(self) -> None:
+        log = "\n".join(
+            [
+                "[error] Failed tests:",
+                "[error] \tcom.serenity.B",
+                "[error] \tcom.serenity.A",
+                "[error] \tcom.serenity.B",
+                "[error] (Test / test) sbt.TestsFailedException: Tests unsuccessful",
+            ]
+        )
+        self.assertEqual(["com.serenity.B", "com.serenity.A"], mt.failed_suites_in_log(log))
+
+    def test_suites_that_aborted_are_listed_under_error_during_tests(self) -> None:
+        log = "[error] Error during tests:\n[error] \tcom.serenity.Aborted\n[error] (Test / test) sbt.TestsFailedException"
+        self.assertEqual(["com.serenity.Aborted"], mt.failed_suites_in_log(log))
+
+    def test_both_blocks_are_read_when_a_run_has_failures_and_aborts(self) -> None:
+        log = "\n".join(
+            [
+                "[error] Failed tests:",
+                "[error] \tcom.serenity.Failed",
+                "[error] Error during tests:",
+                "[error] \tcom.serenity.Aborted",
+            ]
+        )
+        self.assertEqual(["com.serenity.Failed", "com.serenity.Aborted"], mt.failed_suites_in_log(log))
+
+    def test_a_log_without_either_block_names_no_suite(self) -> None:
+        self.assertEqual([], mt.failed_suites_in_log("[info] Tests: succeeded 5, failed 0\n[error] something else"))
+
+    def test_the_block_ends_at_the_first_line_that_is_not_an_indented_suite(self) -> None:
+        log = "[error] Failed tests:\n[error] \tcom.serenity.A\n[error] Total time: 3 s\n[error] \tnot.a.Suite"
+        self.assertEqual(["com.serenity.A"], mt.failed_suites_in_log(log))
+
+
+class SpecOwnerTests(unittest.TestCase):
+    _CHANGES = {
+        1: ["src/main/scala/com/serenity/Foo.scala", "src/test/scala/com/serenity/CommandPickerSpec.scala"],
+        2: ["src/test/scala/com/serenity/host/HostKeySpec.scala"],
+        3: ["src/test/scala/com/serenity/ui/CommandPickerSpec.scala"],
+    }
+
+    def test_the_one_pull_request_whose_files_include_the_spec_owns_it(self) -> None:
+        self.assertEqual(
+            (2, "src/test/scala/com/serenity/host/HostKeySpec.scala"),
+            mt.spec_owner("com.serenity.host.HostKeySpec", self._CHANGES),
+        )
+
+    def test_the_package_is_part_of_the_match(self) -> None:
+        owner = mt.spec_owner("com.serenity.CommandPickerSpec", self._CHANGES)
+        self.assertEqual((1, "src/test/scala/com/serenity/CommandPickerSpec.scala"), owner)
+
+    def test_two_pull_requests_touching_the_spec_leave_it_unowned(self) -> None:
+        changes = {**self._CHANGES, 4: ["src/test/scala/com/serenity/host/HostKeySpec.scala"]}
+        self.assertIsNone(mt.spec_owner("com.serenity.host.HostKeySpec", changes))
+
+    def test_a_spec_nobody_touches_is_unowned(self) -> None:
+        self.assertIsNone(mt.spec_owner("com.serenity.OtherSpec", self._CHANGES))
+
+    def test_a_file_that_only_ends_with_the_same_name_is_not_the_spec(self) -> None:
+        self.assertIsNone(mt.spec_owner("com.serenity.PickerSpec", {1: ["src/test/scala/com/serenity/CommandPickerSpec.scala"]}))
+
+
+class _StubRestJobs(mt.RestGitHub):
+    """RestGitHub over canned jobs, logs and pull-request files: no network."""
+
+    def __init__(self, jobs: list[dict], logs: dict[int, str], files: list[list[dict]] | None = None) -> None:
+        super().__init__("token", "owner/repo")
+        self.jobs, self.logs, self.files = jobs, logs, files or []
+        self.paths: list[str] = []
+
+    def _get(self, path: str) -> dict | list:
+        self.paths.append(path)
+        if "/jobs" in path:
+            return {"jobs": self.jobs}
+        page = int(path.rsplit("page=", 1)[1])
+        return self.files[page - 1] if page <= len(self.files) else []
+
+    def _job_log(self, job_id: int) -> str:
+        if job_id not in self.logs:
+            raise urllib.error.HTTPError("https://x", 410, "Gone", None, None)  # type: ignore[arg-type]
+        return self.logs[job_id]
+
+
+class RestFailedSuiteTests(unittest.TestCase):
+    _RED = "[error] Failed tests:\n[error] \tcom.serenity.CommandPickerSpec\n"
+
+    def _job(self, job_id: int, name: str, conclusion: str) -> dict:
+        return {"id": job_id, "name": name, "conclusion": conclusion}
+
+    def test_each_failed_job_of_the_attempt_is_read_and_named(self) -> None:
+        rest = _StubRestJobs(
+            [self._job(1, "Test (macos)", "failure"), self._job(2, "Test (windows)", "success")],
+            {1: self._RED, 2: "[error] Failed tests:\n[error] \tcom.serenity.Wrong\n"},
+        )
+        self.assertEqual([mt.FailedSuite("Test (macos)", "com.serenity.CommandPickerSpec")], rest.failed_suites(7, 2))
+        self.assertIn("actions/runs/7/attempts/2/jobs", rest.paths[0])
+
+    def test_a_skipped_job_is_not_read(self) -> None:
+        rest = _StubRestJobs([self._job(1, "Wake", "skipped")], {1: self._RED})
+        self.assertEqual([], rest.failed_suites(7, 1))
+
+    def test_a_log_that_cannot_be_fetched_names_no_suite_and_does_not_raise(self) -> None:
+        rest = _StubRestJobs([self._job(1, "Test", "failure"), self._job(2, "Test (macos)", "failure")], {2: self._RED})
+        self.assertEqual([mt.FailedSuite("Test (macos)", "com.serenity.CommandPickerSpec")], rest.failed_suites(7, 1))
+
+    def test_a_pull_requests_files_are_read_page_by_page_until_a_short_page(self) -> None:
+        first = [{"filename": f"f{i}.txt"} for i in range(100)]
+        second = [{"filename": "last.txt"}]
+        rest = _StubRestJobs([], {}, files=[first, second])
+        names = rest.changed_files(5)
+        self.assertEqual(101, len(names))
+        self.assertEqual("last.txt", names[-1])
+        self.assertEqual(2, len(rest.paths))
+
+
+class _StubRest(mt.RestGitHub):
+    """RestGitHub over a canned pulls payload: no network, CI green, no markers."""
+
+    def __init__(self, pulls: list[dict]) -> None:
+        super().__init__("token", "owner/repo")
+        self.pulls = pulls
+
+    def _get(self, path: str) -> dict | list:
+        return self.pulls
+
+    def _ci_green(self, head: str) -> bool:
+        return True
+
+    def _marked_heads(self, number: int) -> tuple[frozenset[str], frozenset[str]]:
+        return frozenset(), frozenset()
+
+
+class LabelTests(unittest.TestCase):
+    def _pull(self, labels: list[str]) -> dict:
+        return {
+            "number": 7, "title": "T", "draft": False, "base": {"ref": "master"},
+            "head": {"sha": "a" * 40, "ref": "b", "repo": {"full_name": "owner/repo"}},
+            "labels": [{"name": name} for name in labels],
+        }
+
+    def test_a_candidate_carries_the_names_of_its_labels(self) -> None:
+        candidates = _StubRest([self._pull(["hand-merge-next", "perf"])]).open_candidates()
+        self.assertEqual(frozenset({"hand-merge-next", "perf"}), candidates[0].labels)
+
+    def test_a_pull_request_with_no_labels_has_none(self) -> None:
+        self.assertEqual(frozenset(), _StubRest([self._pull([])]).open_candidates()[0].labels)
 
 
 class PerfBaseTests(unittest.TestCase):

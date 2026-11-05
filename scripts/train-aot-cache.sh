@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes the JDK 25 AOT cache of a Linux app image and points its launcher at it: scripts/train-aot-cache.sh
+# Writes the JDK 25 AOT cache of a Linux or Windows app image and points its launcher at it: scripts/train-aot-cache.sh
 # dist/Serenity [timeout-seconds]. One --smoke-test run records what start-up loads and links, and the cache is created
 # as that run exits. The launcher option is added only afterwards because the JVM refuses -XX:AOTCache for a file that
 # does not exist yet. Run it under xvfb-run on a headless box; scripts/check-aot-cache.sh then verifies the result.
@@ -8,14 +8,17 @@ set -euo pipefail
 image="${1:?usage: $0 path/to/app-image [timeout-seconds]}"
 limit="${2:-120}"
 image="$(cd "$image" 2>/dev/null && pwd)" || { echo "No such app image: ${1}" >&2; exit 1; }
-launcher="$image/bin/Serenity"
-appdir="$image/lib/app"
+source "$(dirname "${BASH_SOURCE[0]}")/aot-image-layout.sh"
 cfg="$appdir/Serenity.cfg"
 cache="$appdir/serenity.aot"
 option='java-options=-XX:AOTCache=$APPDIR/serenity.aot'
 
-if [[ ! -x "$launcher" || ! -f "$cfg" ]]; then
-  echo "Not a Linux app image: $image" >&2
+if [[ ! -f "$cfg" ]]; then
+  echo "Not an app image: $image has no $cfg" >&2
+  exit 1
+fi
+if grep -Eq 'SharedArchiveFile|AutoCreateSharedArchive' "$cfg"; then
+  echo "$cfg still sets the AppCDS options, which the JVM refuses beside -XX:AOTCache; build the image without them." >&2
   exit 1
 fi
 if grep -q 'AOTCache' "$cfg"; then

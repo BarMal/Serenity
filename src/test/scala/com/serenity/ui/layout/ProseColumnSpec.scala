@@ -57,6 +57,10 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     field.read(AppConfig.default, "72").map(_.surfaceConfig.proseMeasure) shouldBe Some(Some(72))
     field.read(AppConfig.default.withProseMeasure(Some(66)), "off").map(_.surfaceConfig.proseMeasure) shouldBe
       Some(None)
+    field.read(AppConfig.default.withProseMeasure(Some(66)), "unlimited").map(_.surfaceConfig.proseMeasure) shouldBe
+      Some(None)
+    field.read(AppConfig.default.withProseMeasure(Some(66)), " Unlimited ").map(_.surfaceConfig.proseMeasure) shouldBe
+      Some(None)
     field.read(AppConfig.default, "wide") shouldBe None
     field.setting(AppConfig.default.withProseMeasure(Some(66)))._2.config.unwrapped shouldBe "66ch"
     field.setting(AppConfig.default)._2.config.unwrapped shouldBe "off"
