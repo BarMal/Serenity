@@ -195,18 +195,11 @@ jobs:
             --java-options '--sun-misc-unsafe-memory-access=allow'
           )
           # Class-data sharing (see DEVELOPMENT.md). The runtime always gets its base archive from jlink, and jlink needs
-          # the java launcher left in the image to generate one; a macOS runtime has neither. Windows maps an AppCDS
-          # archive kept beside the jar and written on the first exit. Linux and macOS ship a JDK 25 AOT cache instead,
-          # written by the training steps below (macOS trains before signing, so nothing writes into the signed
-          # bundle); the JVM refuses -XX:AOTCache together with the AppCDS options, so an image sets only one of them.
+          # the java launcher left in the image to generate one; a macOS runtime has neither. Every OS ships a JDK 25 AOT
+          # cache instead, written by the training steps below (macOS trains before signing, so nothing writes into the
+          # signed bundle); the JVM refuses -XX:AOTCache together with the AppCDS options, so no OS sets them.
           if [ "$(uname -s)" != "Darwin" ]; then
             APP_ARGS+=(--jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive")
-          fi
-          if [ "${RUNNER_OS:-}" = "Windows" ]; then
-            APP_ARGS+=(
-              --java-options '-XX:SharedArchiveFile=$APPDIR/serenity.jsa'
-              --java-options '-XX:+AutoCreateSharedArchive'
-            )
           fi
           jpackage "${APP_ARGS[@]}"
           # jlink dumped the base archive without --enable-native-access, which the launcher passes: the JVM would log a
@@ -242,6 +235,18 @@ jobs:
         timeout-minutes: 5
         shell: bash
         run: scripts/smoke-test-app-image.sh dist/Serenity/Serenity.exe 120
+
+      # Same contract as Linux: the cache is written from a run of the finished image, and the check proves a missing or
+      # stale one still starts the app. It replaces the AppCDS archive, whose first run was the slow one (#2407).
+      - name: Train and check Windows AOT cache
+        if: runner.os == 'Windows'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/train-aot-cache.sh dist/Serenity 120
+          scripts/check-aot-cache.sh dist/Serenity 120
+          ls -l dist/Serenity/app/serenity.aot
 
       # Launches the packaged image itself (not the jar) so a broken jlink runtime, launcher or missing resource fails
       # here rather than on a user's machine (#2030). The script starts it with --smoke-test, which prints a ready line

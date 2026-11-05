@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Writes the JDK 25 AOT cache of a Linux app image or macOS bundle and points its launcher at it: scripts/train-aot-cache.sh
+# Writes the JDK 25 AOT cache of a Linux or Windows app image or a macOS bundle and points its launcher at it: scripts/train-aot-cache.sh
 # dist/Serenity [timeout-seconds]. A --smoke-test run records what start-up loads and links, and the cache is created as
 # that run exits (-XX:AOTCacheOutput). A macOS bundle's runtime has no bin/java for that option to fork, so the bundle is
 # recorded and then assembled in two launcher runs. The launcher option is added only afterwards because the JVM refuses
@@ -18,6 +18,10 @@ option='java-options=-XX:AOTCache=$APPDIR/serenity.aot'
 
 if [[ ! -f "$cfg" ]]; then
   echo "Not an app image: $image has no $cfg" >&2
+  exit 1
+fi
+if grep -Eq 'SharedArchiveFile|AutoCreateSharedArchive' "$cfg"; then
+  echo "$cfg still sets the AppCDS options, which the JVM refuses beside -XX:AOTCache; build the image without them." >&2
   exit 1
 fi
 if grep -q 'AOTCache' "$cfg"; then

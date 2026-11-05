@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the AOT cache of a trained Linux app image or macOS bundle: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
+# Checks the AOT cache of a trained Linux or Windows app image or macOS bundle: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
 # A valid cache must be opened without an [error][aot] line. A missing or stale cache (the jar changed after training,
 # which the JVM rejects for good) must still leave an app that starts, paints and exits cleanly, because a package that
 # only starts with its cache would be a regression from the AppCDS archive it replaces. The image is put back as found.

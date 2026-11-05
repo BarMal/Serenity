@@ -1,10 +1,14 @@
 # Sourced by train-aot-cache.sh and check-aot-cache.sh. Given an app image or bundle in "$image", sets "launcher" and
-# "appdir" for the Linux layout (bin/Serenity, lib/app) or a macOS bundle (Contents/MacOS/Serenity, Contents/app), and
-# "assemble_in_two_steps" to 1 for the bundle; fails for anything else. Also defines run_limited.
+# "appdir" for the Linux layout (bin/Serenity, lib/app), the Windows layout (Serenity.exe, app) or a macOS bundle
+# (Contents/MacOS/Serenity, Contents/app), and "assemble_in_two_steps" to 1 for the bundle; fails for anything else.
+# Also defines run_limited.
 assemble_in_two_steps=0
 if [[ -x "$image/bin/Serenity" && -d "$image/lib/app" ]]; then
   launcher="$image/bin/Serenity"
   appdir="$image/lib/app"
+elif [[ -x "$image/Serenity.exe" && -d "$image/app" ]]; then
+  launcher="$image/Serenity.exe"
+  appdir="$image/app"
 elif [[ -x "$image/Contents/MacOS/Serenity" && -d "$image/Contents/app" ]]; then
   launcher="$image/Contents/MacOS/Serenity"
   appdir="$image/Contents/app"

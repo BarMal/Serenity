@@ -21,7 +21,9 @@ _SCRIPTS = Path(__file__).resolve().parent
 _LAUNCHER = """\
 #!/usr/bin/env bash
 here="$(cd "$(dirname "$0")" && pwd)"
-if [[ -d "$here/../lib/app" ]]; then appdir="$here/../lib/app"; else appdir="$here/../app"; fi
+if [[ -d "$here/app" ]]; then appdir="$here/app"
+elif [[ -d "$here/../lib/app" ]]; then appdir="$here/../lib/app"
+else appdir="$here/../app"; fi
 appdir="$(cd "$appdir" && pwd)"
 cache="$appdir/serenity.aot"
 options="${JAVA_TOOL_OPTIONS:-}"
@@ -60,12 +62,17 @@ java-options=-Djpackage.app-version=1.0.0
 """
 
 
-def _make_image(directory: str, with_cache: bool = False, macos: bool = False) -> Path:
-    """A Linux image (bin/Serenity, lib/app) or, with macos=True, a macOS bundle (Contents/MacOS/Serenity, Contents/app)."""
+def _make_image(directory: str, with_cache: bool = False, windows: bool = False, macos: bool = False) -> Path:
+    """A Linux image (bin/Serenity, lib/app), a Windows one (Serenity.exe, app) or a macOS bundle (Contents/MacOS/Serenity,
+    Contents/app)."""
     if macos:
         image = Path(directory) / "Serenity.app"
         appdir = image / "Contents" / "app"
         launcher = image / "Contents" / "MacOS" / "Serenity"
+    elif windows:
+        image = Path(directory) / "Serenity"
+        appdir = image / "app"
+        launcher = image / "Serenity.exe"
     else:
         image = Path(directory) / "Serenity"
         appdir = image / "lib" / "app"
@@ -84,7 +91,9 @@ def _make_image(directory: str, with_cache: bool = False, macos: bool = False) -
 
 
 def _appdir(image: Path) -> Path:
-    return image / "Contents" / "app" if image.suffix == ".app" else image / "lib" / "app"
+    if image.suffix == ".app":
+        return image / "Contents" / "app"
+    return image / "app" if (image / "Serenity.exe").exists() else image / "lib" / "app"
 
 
 def _run(script: str, image: Path, **fake: str) -> subprocess.CompletedProcess[str]:
@@ -142,6 +151,60 @@ class TrainAotCacheTest(unittest.TestCase):
             result = _run("train-aot-cache.sh", image)
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("already", result.stderr)
+
+
+class WindowsLayoutTest(unittest.TestCase):
+    """The Windows app image keeps its launcher at Serenity.exe and its jar and config in app/ (jpackage layout)."""
+
+    def test_trains_a_windows_image_and_points_the_launcher_at_the_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = _make_image(directory, windows=True)
+            result = _run("train-aot-cache.sh", image)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((image / "app" / "serenity.aot").is_file())
+            cfg = (image / "app" / "Serenity.cfg").read_text().splitlines()
+            self.assertEqual(cfg.count("java-options=-XX:AOTCache=$APPDIR/serenity.aot"), 1)
+
+    def test_training_a_windows_image_fails_when_no_cache_is_written(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = _make_image(directory, windows=True)
+            result = _run("train-aot-cache.sh", image, FAKE_WRITES_NO_CACHE="1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("did not write", result.stderr)
+            self.assertNotIn("AOTCache", (image / "app" / "Serenity.cfg").read_text())
+
+    def test_refuses_an_image_that_still_names_an_appcds_archive(self) -> None:
+        for option in ("-XX:SharedArchiveFile=$APPDIR/serenity.jsa", "-XX:+AutoCreateSharedArchive"):
+            with self.subTest(option=option), tempfile.TemporaryDirectory() as directory:
+                image = _make_image(directory, windows=True)
+                cfg = image / "app" / "Serenity.cfg"
+                cfg.write_text(cfg.read_text() + f"java-options={option}\n")
+                result = _run("train-aot-cache.sh", image)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("AppCDS", result.stderr)
+                self.assertNotIn("AOTCache", cfg.read_text())
+
+    def test_checks_a_windows_image_and_leaves_it_as_found(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = _make_image(directory, with_cache=True, windows=True)
+            jar = image / "app" / "Serenity.jar"
+            result = _run("check-aot-cache.sh", image)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue((image / "app" / "serenity.aot").is_file())
+            self.assertEqual(int(jar.stat().st_mtime), 1_000_000)
+
+    def test_check_fails_a_windows_image_whose_cache_is_not_opened(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            image = _make_image(directory, with_cache=True, windows=True)
+            result = _run("check-aot-cache.sh", image, FAKE_IGNORES_CACHE="1")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Opened AOT cache", result.stderr)
+
+    def test_an_image_with_no_launcher_is_not_an_app_image(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            result = _run("train-aot-cache.sh", Path(directory))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Not an app image", result.stderr)
 
 
 class MacosBundleTrainingTest(unittest.TestCase):
