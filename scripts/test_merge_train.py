@@ -10,6 +10,7 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 
 from __future__ import annotations
 
+import re
 import subprocess
 import tempfile
 import unittest
@@ -441,6 +442,17 @@ def _workflow(name: str) -> str:
     return (_WORKFLOWS / name).read_text()
 
 
+def _job_ids(workflow: str) -> list[str]:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    return [m.group(1) for m in re.finditer(r"^  ([A-Za-z0-9_-]+):\s*$", jobs, re.MULTILINE)]
+
+
+def _job_text(workflow: str, job: str) -> str:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    found = re.search(rf"^  {re.escape(job)}:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", jobs, re.MULTILINE | re.DOTALL)
+    return found.group(1) if found else ""
+
+
 class WorkflowTests(unittest.TestCase):
     """How .github/workflows/merge-train.yml drives the script, and how the existing workflows make room for it."""
 
@@ -475,6 +487,22 @@ class WorkflowTests(unittest.TestCase):
         # Scheduled ticks were not firing (none after 18:32Z on 2026-11-04), and nothing else wakes the train between
         # trains: a batch merging moves master, which is the moment the next one can start.
         self.assertRegex(self.train, r"\n  push:\n    branches: \[master\]\n")
+
+    def test_a_train_branchs_runs_wake_the_train_themselves_because_workflow_token_runs_raise_no_workflow_run(self) -> None:
+        # GITHUB_TOKEN-created runs do not trigger workflow_run (observed on the first live train), so the last job of
+        # each workflow dispatches the next merge train step. workflow_dispatch via the token is allowed.
+        for name in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=name):
+                text = _workflow(name)
+                job = _job_text(text, "wake-train")
+                self.assertIn("    if: always() && startsWith(github.ref, 'refs/heads/train/')\n", job)
+                self.assertIn("    permissions:\n      actions: write\n", job)
+                self.assertIn("    timeout-minutes: 5\n", job)
+                self.assertIn("GH_REPO: ${{ github.repository }}", job)
+                self.assertIn("GH_TOKEN: ${{ github.token }}", job)
+                self.assertIn("run: gh workflow run merge-train.yml --ref master\n", job)
+                others = [j for j in _job_ids(text) if j != "wake-train"]
+                self.assertEqual(f"    needs: [{', '.join(others)}]\n", next(l + "\n" for l in job.splitlines() if l.startswith("    needs:")))
 
     def test_it_holds_the_permissions_its_steps_use(self) -> None:
         for permission in ("actions: write", "contents: write", "pull-requests: write", "issues: write"):

@@ -359,3 +359,20 @@ jobs:
           name: ${{ matrix.results }}
           path: perf-runs/
           retention-days: 90
+
+  # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
+  # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
+  wake-train:
+    name: Wake the merge train
+    needs: [checks, scripts, test, perf]
+    if: always() && startsWith(github.ref, 'refs/heads/train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start a merge train step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run merge-train.yml --ref master
