@@ -7,7 +7,7 @@ import javax.swing.SwingUtilities
 
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
-import com.serenity.config.{AppConfig, DockedCornerStyle, PreferredWindowSize}
+import com.serenity.config.{AppConfig, PreferredWindowSize}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{
   DeleteBackward,
@@ -515,10 +515,6 @@ private[perf] object LaptopFrameBenchmarks:
     val afterScroll = current
     val typing      = AlternatingTransition(beforeTyping, afterTyping)
     val scroll      = AlternatingTransition(afterTyping, afterScroll)
-    val (floatingManager, _) =
-      proseStateManager(config = ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating))
-    val (beforeFloating, afterFloating) = TypingTransition.of(floatingManager)
-    val floatingTyping                  = AlternatingTransition(beforeFloating, afterFloating)
     List(
       BenchmarkRunner.Benchmark(
         "laptop.render.typing_frame_2x",
@@ -540,13 +536,7 @@ private[perf] object LaptopFrameBenchmarks:
         ,
         () => scroll.nextFrame()
       ),
-      BenchmarkRunner.Benchmark(
-        "laptop.render.typing_frame_floating_2x",
-        2,
-        12,
-        () => floatingTyping.verify("floating typing", MaxTypingRowsDrawn),
-        () => floatingTyping.nextFrame()
-      ),
+      FloatingTypingFrames.benchmark(),
       BenchmarkRunner.Benchmark(
         "laptop.damage.typing_transition",
         3,
