@@ -79,6 +79,7 @@ final class SkiaLayerHost private (
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
+    redraw.drawStarted()
     onDrawStart.get().foreach(_.apply())
     val _           = renders.incrementAndGet()
     val started     = System.nanoTime()

@@ -8,7 +8,7 @@ import cats.effect.*
 import cats.syntax.all.*
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{AutoSaveMode, SpellCheckConfig, SpellCheckDictionaryFingerprint}
-import com.serenity.diagnostics.Trace
+import com.serenity.diagnostics.{ShutdownTrace, Trace}
 import com.serenity.document.CommentRendering
 import com.serenity.io.{FileBrowser, FileEntry}
 import com.serenity.lsp.client.DocumentUri
@@ -54,7 +54,6 @@ final private[manager] class StateManagerOperationBoundary private (
     announceModeChange: (AppState, AppState) => IO[Unit],
     autoSave: Ref[IO, BufferId => IO[Unit]]
 ):
-  private val ShutdownGracePeriod = 5.seconds
 
   private val AutoSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.AutoSave, LanePolicy.Sequential)
 
@@ -255,9 +254,9 @@ final private[manager] class StateManagerOperationBoundary private (
 
   /** The one quit step, for both a normal and a forced quit: the `Lane.Exclusive` barrier of
     * docs/state-architecture-target.md. Queued and running Sequential work -- file saves, config and preset writes --
-    * finishes first, for at most [[ShutdownGracePeriod]] so a write that hangs cannot wedge quitting; switch-latest and
-    * drop-if-busy work is cancelled. The lanes are then released and later requests become no-ops. Runs once; every
-    * caller returns when it has finished.
+    * finishes first, for at most [[EffectsShutdown.GracePeriod]] so a write that hangs cannot wedge quitting;
+    * switch-latest and drop-if-busy work is cancelled. The lanes are then released and later requests become no-ops.
+    * Runs once; every caller returns when it has finished.
     */
   def shutdownEffects(): IO[Unit] =
     beforeEffectsShutdown >> effectsShutdownRef
@@ -265,17 +264,15 @@ final private[manager] class StateManagerOperationBoundary private (
       .flatMap(alreadyShut =>
         if alreadyShut then IO.unit
         // Started on its own fiber so a caller cancelled while waiting (a lost race on quit) cannot abandon it.
-        else (drainPersistence >> releaseEffectLanes).guarantee(effectsShutDown.complete(()).void).start.void
+        else
+          ShutdownTrace
+            .step("effects shutdown")(EffectsShutdown.drainPersistence(effectLanes, logger) >> releaseEffectLanes)(using
+              logger
+            )
+            .guarantee(effectsShutDown.complete(()).void)
+            .start
+            .void
       ) >> effectsShutDown.get
-
-  private def drainPersistence: IO[Unit] =
-    IO.deferred[Unit].flatMap { drained =>
-      effectLanes.submit(Lane.Exclusive, drained.complete(()).void) >>
-        drained.get.timeoutTo(
-          ShutdownGracePeriod,
-          logger.warn(s"[EFFECTS] Pending persistence still running after $ShutdownGracePeriod; abandoning it on quit")
-        )
-    }
 
   /** Returns once every lane job accepted so far has settled and every result it handed the dispatcher has been
     * applied, including follow-up work those results queued. Never call from code on the dispatcher.

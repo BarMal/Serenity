@@ -10,6 +10,9 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 
 from __future__ import annotations
 
+import dataclasses
+import os
+import re
 import subprocess
 import tempfile
 import unittest
@@ -19,6 +22,8 @@ from pathlib import Path
 from scripts import merge_train as mt
 
 _NOW = datetime(2026, 11, 3, 16, 0, tzinfo=timezone.utc)
+_MOVED = datetime(2026, 11, 5, 12, 0, tzinfo=timezone.utc)  # when master last moved, in the hold tests
+_HAND_MERGE = frozenset({"hand-merge-next"})
 _CI = ".github/workflows/ci.yml"
 _XOS = ".github/workflows/cross-os-tests.yml"
 
@@ -27,8 +32,8 @@ def _pr(number: int, head: str | None = None) -> mt.TrainPr:
     return mt.TrainPr(number=number, head=head or f"{number:040x}", title=f"Change {number}")
 
 
-def _manifest(*numbers: int, base: str = "b" * 40, created: datetime = _NOW) -> mt.Manifest:
-    return mt.Manifest(base=base, prs=tuple(_pr(n) for n in numbers), created=created)
+def _manifest(*numbers: int, base: str = "b" * 40, created: datetime = _NOW, bisected: bool = False) -> mt.Manifest:
+    return mt.Manifest(base=base, prs=tuple(_pr(n) for n in numbers), created=created, bisected=bisected)
 
 
 def _run(path: str, conclusion: str | None = "success", attempt: int = 1, run_id: int = 1) -> mt.Run:
@@ -123,6 +128,27 @@ class DecisionTests(unittest.TestCase):
         runs = [_run(_CI, "failure", attempt=2, run_id=1), _run(_XOS, run_id=2)]
         self.assertEqual(mt.Bisect(numbers=(1, 2, 3)), self._decide(_manifest(1, 2, 3, 4, 5), runs))
 
+    def test_a_bisected_train_is_not_re_run_because_the_top_of_the_bisect_already_ruled_out_a_flake(self) -> None:
+        runs = [_run(_CI, "failure", run_id=1), _run(_XOS, run_id=2)]
+        self.assertEqual(mt.Bisect(numbers=(1, 2, 3)), self._decide(_manifest(1, 2, 3, 4, 5, bisected=True), runs))
+
+    def test_a_lone_pull_request_of_a_bisected_train_is_ejected_on_its_first_red_run(self) -> None:
+        failed = _run(_XOS, "failure", run_id=2)
+        action = self._decide(_manifest(7, bisected=True), [_run(_CI, run_id=1), failed])
+        self.assertEqual(mt.Eject(number=7, failed_runs=(failed,)), action)
+
+    def test_a_bisected_train_that_passes_merges(self) -> None:
+        action = self._decide(_manifest(1, 2, bisected=True), [_run(_CI, run_id=1), _run(_XOS, run_id=2)])
+        self.assertEqual(mt.Merge(flaky_runs=()), action)
+
+    def test_the_bisected_flag_survives_the_commit_message_and_older_manifests_read_as_not_bisected(self) -> None:
+        marked = _manifest(1, 2, bisected=True)
+        self.assertTrue(mt.Manifest.from_commit_message(marked.commit_message()).bisected)  # type: ignore[union-attr]
+        plain = mt.Manifest.from_commit_message(_manifest(1, 2).commit_message())
+        assert plain is not None
+        self.assertFalse(plain.bisected)
+        self.assertNotIn("bisected", _manifest(1, 2).commit_message())
+
     def test_a_single_pull_request_still_red_after_the_re_run_is_ejected(self) -> None:
         failed = _run(_XOS, "failure", attempt=2, run_id=2)
         action = self._decide(_manifest(7), [_run(_CI, run_id=1), failed])
@@ -148,13 +174,14 @@ class DecisionTests(unittest.TestCase):
 # whose merges are real squash merges into that origin, so the tested tree and the merged tree can be compared.
 
 
-def _git(cwd: Path, *args: str) -> str:
+def _git(cwd: Path, *args: str, env: dict[str, str] | None = None) -> str:
     result = subprocess.run(
         ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "init.defaultBranch=master", *args],
         cwd=cwd,
         capture_output=True,
         text=True,
         check=True,
+        env=None if env is None else {**os.environ, **env},
     )
     return result.stdout.strip()
 
@@ -176,6 +203,7 @@ class Origin:
     def open_pr(self, number: int, path: str, text: str) -> str:
         _git(self.work, "fetch", "origin", "master")
         _git(self.work, "checkout", "-q", "-B", f"pr{number}", "origin/master")
+        (self.work / path).parent.mkdir(parents=True, exist_ok=True)
         (self.work / path).write_text(text)
         _git(self.work, "add", ".")
         _git(self.work, "commit", "-m", f"PR {number}")
@@ -190,12 +218,13 @@ class Origin:
         _git(self.work, "push", "origin", "HEAD:refs/heads/master")
 
 
-    def commit_to_master(self, path: str, text: str) -> None:
+    def commit_to_master(self, path: str, text: str, when: datetime | None = None) -> None:
         _git(self.work, "fetch", "origin", "master")
         _git(self.work, "checkout", "-q", "-B", "direct", "origin/master")
         (self.work / path).write_text(text)
         _git(self.work, "add", ".")
-        _git(self.work, "commit", "-m", "Direct")
+        dated = {} if when is None else {"GIT_COMMITTER_DATE": when.isoformat(), "GIT_AUTHOR_DATE": when.isoformat()}
+        _git(self.work, "commit", "-m", "Direct", env=dated)
         _git(self.work, "push", "origin", "HEAD:refs/heads/master")
 
 
@@ -252,6 +281,10 @@ class FakeGitHub:
 
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
+        held = mt.held_heads_in([body])
+        if held and number in self.candidates:
+            current = self.candidates[number]
+            self.candidates[number] = dataclasses.replace(current, held_heads=current.held_heads | held)
 
 
 class TrainTests(unittest.TestCase):
@@ -264,13 +297,14 @@ class TrainTests(unittest.TestCase):
         self.clone = self.root / "runner"
         _git(self.root, "clone", "-q", str(self.origin.bare), str(self.clone))
         self.log: list[str] = []
+        self.summary: list[str] = []
         self.clock = _NOW
 
-    def _train(self, dry_run: bool = False, flake_issue: int | None = 99) -> mt.Train:
+    def _train(self, dry_run: bool = False, flake_issue: int | None = 99, batch: int = 6) -> mt.Train:
         return mt.Train(
             github=self.github,
             git=mt.Git(self.clone),
-            batch=6,
+            batch=batch,
             dry_run=dry_run,
             flake_issue=flake_issue,
             now=lambda: self.clock,
@@ -307,6 +341,196 @@ class TrainTests(unittest.TestCase):
         manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
         assert manifest is not None
         self.assertEqual([1], [p.number for p in manifest.prs])
+
+    def _train_numbers(self) -> list[int]:
+        branch = self._live_branch()
+        assert branch is not None
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
+        assert manifest is not None
+        return [p.number for p in manifest.prs]
+
+    def test_a_conflicting_pull_request_is_replaced_by_the_next_eligible_one(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self.github.add_pr(3, "c.txt", "c\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 3], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2", self.log)
+
+    def test_a_backfilled_pull_request_is_applied_on_top_of_the_batch_built_so_far(self) -> None:
+        self.github.add_pr(1, "x.txt", "one\n")
+        self.github.add_pr(2, "x.txt", "two\n")
+        self.github.add_pr(3, "x.txt", "three\n")
+        self.github.add_pr(4, "y.txt", "y\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 4], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2 #3", self.log)
+
+    def test_backfilling_never_takes_the_train_past_the_batch_size(self) -> None:
+        for n in (1, 2, 3):
+            self.github.add_pr(n, f"f{n}.txt", f"{n}\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 2], self._train_numbers())
+        self.assertFalse(any("Left out" in line for line in self.log))
+
+    def test_when_the_batch_cannot_be_filled_it_takes_every_pull_request_that_applies(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self._train(batch=3).tick()
+        self.assertEqual([1], self._train_numbers())
+
+    def test_a_pull_request_that_changes_a_workflow_file_is_held_back_because_the_workflow_token_cannot_push_it(self) -> None:
+        # GITHUB_TOKEN may not push a commit that changes .github/workflows/*; the first such train failed at its push.
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.github.add_pr(3, "b.txt", "b\n")
+        self._train(batch=2).tick()
+        self.assertEqual([2, 3], self._train_numbers())
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_workflow_change_is_held_back_even_when_it_is_deeper_than_the_top_level(self) -> None:
+        self.github.add_pr(1, ".github/workflows/nested/other.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self._train().tick()
+        self.assertEqual([2], self._train_numbers())
+
+    def test_no_train_is_pushed_when_every_pull_request_changes_a_workflow_file(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self.assertIsNone(self._live_branch())
+        self.assertEqual([], self.github.dispatched)
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_held_back_pull_request_gets_one_comment_per_head_saying_it_is_merged_by_hand(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self._train().tick()
+        held = [body for number, body in self.github.comments if number == 1]
+        self.assertEqual(1, len(held), "a second step must not comment again on the same head")
+        self.assertIn(mt.held_marker(self.github.candidates[1].head), held[0])
+        self.assertIn(".github/workflows", held[0])
+        self.assertIn("Merge it by hand", held[0])
+
+    def test_a_new_push_to_a_held_back_pull_request_is_commented_on_again(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: one\n")
+        self._train().tick()
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: two\n")
+        self._train().tick()
+        self.assertEqual(2, len([1 for number, _ in self.github.comments if number == 1]))
+
+    def test_held_markers_are_read_back_from_comment_bodies(self) -> None:
+        bodies = ["unrelated", f"text\n{mt.held_marker('a' * 40)}\nmore", mt.ejection_marker("b" * 40)]
+        self.assertEqual(frozenset({"a" * 40}), mt.held_heads_in(bodies))
+        self.assertEqual(frozenset({"b" * 40}), mt.ejected_heads_in(bodies))
+
+    # -- holding the next batch for hand merges (#2618) ----------------------------------------------------------------
+
+    def _hold_train(self, **kwargs: object) -> mt.Train:
+        return mt.Train(
+            github=self.github,
+            git=mt.Git(self.clone),
+            batch=6,
+            dry_run=False,
+            flake_issue=99,
+            now=lambda: self.clock,
+            log=self.log.append,
+            summary=self.summary.append,
+            **kwargs,  # type: ignore[arg-type]
+        )
+
+    def _master_moved_at(self, when: datetime) -> None:
+        self.origin.commit_to_master(f"m{when:%H%M}.txt", "m\n", when=when)
+
+    def test_the_next_train_waits_for_a_labelled_workflow_pull_request_right_after_master_moves(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.assertEqual([], self.github.dispatched)
+        self.assertTrue(any("Holding the next train until 12:20" in line and "#1" in line for line in self.log), self.log)
+
+    def test_the_held_numbers_go_in_the_step_summary_so_the_hold_can_be_seen(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual(1, len(self.summary))
+        self.assertIn("#1", self.summary[0])
+        self.assertIn("12:20", self.summary[0])
+
+    def test_twenty_minutes_is_the_default_hold(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=19)
+        self._hold_train().tick()
+        self.assertIsNone(self._live_branch())
+
+    def test_the_train_is_built_once_the_hold_has_run_out(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=20)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_hand_merge_inside_the_hold_starts_the_window_again_from_the_new_master_commit(self) -> None:
+        self._master_moved_at(_MOVED)
+        self._master_moved_at(_MOVED + timedelta(minutes=15))
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=30)  # 30 min after the first commit, 15 after the last
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.assertTrue(any("Holding the next train until 12:35" in line for line in self.log), self.log)
+
+    def test_the_train_is_built_as_soon_as_the_labelled_pull_requests_are_merged(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertIsNone(self._live_branch())
+        self.github.merged.append(1)
+        self._master_moved_at(_MOVED + timedelta(minutes=6))
+        self.clock = _MOVED + timedelta(minutes=7)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+
+    def test_a_workflow_pull_request_without_the_label_never_holds_the_train(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([2], self._train_numbers())
+        self.assertEqual([], self.summary)
+
+    def test_the_label_on_a_pull_request_that_is_not_held_back_holds_nothing(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, "a.txt", "a\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        self._hold_train(hold_minutes=20).tick()
+        self.assertEqual([1], self._train_numbers())
+
+    def test_a_dry_run_does_not_report_a_hold(self) -> None:
+        self._master_moved_at(_MOVED)
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n", labels=_HAND_MERGE)
+        self.clock = _MOVED + timedelta(minutes=5)
+        train = mt.Train(
+            github=self.github, git=mt.Git(self.clone), batch=6, dry_run=True, flake_issue=99,
+            now=lambda: self.clock, log=self.log.append, summary=self.summary.append, hold_minutes=20,
+        )
+        train.tick()
+        self.assertFalse(any("Holding" in line for line in self.log), self.log)
+        self.assertEqual([], self.summary)
+
+    def test_files_outside_the_workflows_directory_are_not_held_back(self) -> None:
+        self.github.add_pr(1, ".github/CODEOWNERS", "* @owner\n")
+        self.github.add_pr(2, "scripts/x.txt", "x\n")
+        self._train().tick()
+        self.assertEqual([1, 2], self._train_numbers())
 
     def test_a_green_train_merges_its_pull_requests_in_order_and_master_gets_exactly_the_tested_tree(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
@@ -385,6 +609,47 @@ class TrainTests(unittest.TestCase):
         self.assertEqual([1, 2], [p.number for p in manifest.prs])
         self.assertEqual([], self.github.merged)
 
+    def _bisect_once(self, count: int) -> str:
+        for n in range(1, count + 1):
+            self.github.add_pr(n, f"f{n}.txt", f"{n}\n")
+        self._train().tick()
+        top = self._live_branch()
+        assert top is not None
+        self._finish(top, ci="failure", attempt=2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        half = self._live_branch()
+        assert half is not None and half != top
+        return half
+
+    def test_the_train_a_bisect_builds_is_marked_as_bisected(self) -> None:
+        half = self._bisect_once(4)
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", half))
+        assert manifest is not None
+        self.assertEqual([1, 2], [p.number for p in manifest.prs])
+        self.assertTrue(manifest.bisected)
+
+    def test_a_red_half_is_bisected_again_without_a_re_run(self) -> None:
+        half = self._bisect_once(4)
+        reruns_before = list(self.github.reruns)
+        self._finish(half, ci="failure", attempt=1)
+        self.clock = _NOW + timedelta(minutes=2)
+        self._train().tick()
+        self.assertEqual(reruns_before, self.github.reruns)
+        quarter = self._live_branch()
+        assert quarter is not None and quarter != half
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", quarter))
+        assert manifest is not None
+        self.assertEqual([1], [p.number for p in manifest.prs])
+
+    def test_a_green_half_merges_at_once_and_the_other_half_starts_the_next_train_in_the_same_step(self) -> None:
+        half = self._bisect_once(4)
+        self._finish(half)
+        self.clock = _NOW + timedelta(minutes=2)
+        self._train().tick()
+        self.assertEqual([1, 2], self.github.merged)
+        self.assertEqual([3, 4], self._train_numbers())
+
     def test_a_lone_red_pull_request_is_ejected_with_a_marker_for_its_head(self) -> None:
         self.github.add_pr(4, "a.txt", "a\n")
         self._train().tick()
@@ -425,6 +690,39 @@ class TrainTests(unittest.TestCase):
         self.assertEqual([], self.github.dispatched)
 
 
+class _StubRest(mt.RestGitHub):
+    """RestGitHub over a canned pulls payload: no network, CI green, no markers."""
+
+    def __init__(self, pulls: list[dict]) -> None:
+        super().__init__("token", "owner/repo")
+        self.pulls = pulls
+
+    def _get(self, path: str) -> dict | list:
+        return self.pulls
+
+    def _ci_green(self, head: str) -> bool:
+        return True
+
+    def _marked_heads(self, number: int) -> tuple[frozenset[str], frozenset[str]]:
+        return frozenset(), frozenset()
+
+
+class LabelTests(unittest.TestCase):
+    def _pull(self, labels: list[str]) -> dict:
+        return {
+            "number": 7, "title": "T", "draft": False, "base": {"ref": "master"},
+            "head": {"sha": "a" * 40, "ref": "b", "repo": {"full_name": "owner/repo"}},
+            "labels": [{"name": name} for name in labels],
+        }
+
+    def test_a_candidate_carries_the_names_of_its_labels(self) -> None:
+        candidates = _StubRest([self._pull(["hand-merge-next", "perf"])]).open_candidates()
+        self.assertEqual(frozenset({"hand-merge-next", "perf"}), candidates[0].labels)
+
+    def test_a_pull_request_with_no_labels_has_none(self) -> None:
+        self.assertEqual(frozenset(), _StubRest([self._pull([])]).open_candidates()[0].labels)
+
+
 class PerfBaseTests(unittest.TestCase):
     """The perf job benchmarks a commit against its base. On a train the base is the master commit the train was built
     on, named in the manifest; anywhere else it stays the first parent."""
@@ -439,6 +737,17 @@ _WORKFLOWS = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 
 def _workflow(name: str) -> str:
     return (_WORKFLOWS / name).read_text()
+
+
+def _job_ids(workflow: str) -> list[str]:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    return [m.group(1) for m in re.finditer(r"^  ([A-Za-z0-9_-]+):\s*$", jobs, re.MULTILINE)]
+
+
+def _job_text(workflow: str, job: str) -> str:
+    jobs = workflow.split("\njobs:\n", 1)[1]
+    found = re.search(rf"^  {re.escape(job)}:\s*$(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)", jobs, re.MULTILINE | re.DOTALL)
+    return found.group(1) if found else ""
 
 
 class WorkflowTests(unittest.TestCase):
@@ -470,6 +779,27 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("workflows: [CI, Cross-OS Tests]", self.train)
         self.assertIn("startsWith(github.event.workflow_run.head_branch, 'train/')", self.train)
         self.assertRegex(self.train, r"schedule:\n    - cron: '[^']+'")
+
+    def test_master_advancing_wakes_the_train_so_the_next_batch_starts_without_waiting_for_a_tick(self) -> None:
+        # Scheduled ticks were not firing (none after 18:32Z on 2026-11-04), and nothing else wakes the train between
+        # trains: a batch merging moves master, which is the moment the next one can start.
+        self.assertRegex(self.train, r"\n  push:\n    branches: \[master\]\n")
+
+    def test_a_train_branchs_runs_wake_the_train_themselves_because_workflow_token_runs_raise_no_workflow_run(self) -> None:
+        # GITHUB_TOKEN-created runs do not trigger workflow_run (observed on the first live train), so the last job of
+        # each workflow dispatches the next merge train step. workflow_dispatch via the token is allowed.
+        for name in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=name):
+                text = _workflow(name)
+                job = _job_text(text, "wake-train")
+                self.assertIn("    if: always() && startsWith(github.ref, 'refs/heads/train/')\n", job)
+                self.assertIn("    permissions:\n      actions: write\n", job)
+                self.assertIn("    timeout-minutes: 5\n", job)
+                self.assertIn("GH_REPO: ${{ github.repository }}", job)
+                self.assertIn("GH_TOKEN: ${{ github.token }}", job)
+                self.assertIn("run: gh workflow run merge-train.yml --ref master\n", job)
+                others = [j for j in _job_ids(text) if j != "wake-train"]
+                self.assertEqual(f"    needs: [{', '.join(others)}]\n", next(l + "\n" for l in job.splitlines() if l.startswith("    needs:")))
 
     def test_it_holds_the_permissions_its_steps_use(self) -> None:
         for permission in ("actions: write", "contents: write", "pull-requests: write", "issues: write"):
