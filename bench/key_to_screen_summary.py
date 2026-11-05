@@ -16,9 +16,13 @@ from typing import Dict, List, Optional
 
 LATENCY = re.compile(
     r"\[LATENCY\] summary backend=(\S+) presented=(\S+) window=\S+ keys=(\d+) unpainted=(\d+) \|.*?"
-    r"\btotal p50=([\d.]+) p95=([\d.]+)"
+    r"\btotal p50=([\d.]+) p95=([\d.]+)(?: \| key_to_screen p50=([\d.]+) p95=([\d.]+))?"
 )
 FRAME = re.compile(r"\[FRAME\] backend=(\S+) .*?\binput-to-paint p50=([\d.]+) p95=([\d.]+)")
+
+GAP_NOTE = (
+    "key-to-screen is total plus the OS-to-event-thread gap (when_to_edt), which total leaves out, added per keystroke."
+)
 
 PRESENTED_NOTE = (
     "presented: paint-end is the end of the canvas paint; render-callback-end is the end of Skiko's render callback "
@@ -34,6 +38,8 @@ class LatencyWindow:
     unpainted: int
     p50: float
     p95: float
+    key_to_screen_p50: Optional[float] = None
+    key_to_screen_p95: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -53,16 +59,27 @@ class BackendResult:
     p95: float
     input_to_paint_p50: Optional[float]
     input_to_paint_p95: Optional[float]
+    key_to_screen_p50: Optional[float] = None
+    key_to_screen_p95: Optional[float] = None
 
 
 def parse_latency(line: str) -> Optional[LatencyWindow]:
     match = LATENCY.search(line)
     if not match:
         return None
-    backend, presented, keys, unpainted, p50, p95 = match.groups()
+    backend, presented, keys, unpainted, p50, p95, gap_p50, gap_p95 = match.groups()
     if int(keys) == 0:
         return None
-    return LatencyWindow(backend, presented, int(keys), int(unpainted), float(p50), float(p95))
+    return LatencyWindow(
+        backend,
+        presented,
+        int(keys),
+        int(unpainted),
+        float(p50),
+        float(p95),
+        None if gap_p50 is None else float(gap_p50),
+        None if gap_p95 is None else float(gap_p95),
+    )
 
 
 def parse_frame(line: str) -> Optional[FrameWindow]:
@@ -71,6 +88,16 @@ def parse_frame(line: str) -> Optional[FrameWindow]:
         return None
     backend, p50, p95 = match.groups()
     return FrameWindow(backend, float(p50), float(p95))
+
+
+def run_median(per_run: Dict[str, List[LatencyWindow]], value) -> Optional[float]:
+    """Median over the runs of each run's median window, from the windows that report `value`; None if none do."""
+    medians = []
+    for run in per_run.values():
+        values = [v for v in (value(w) for w in run) if v is not None]
+        if values:
+            medians.append(median(values))
+    return median(medians) if medians else None
 
 
 def summarise(runs: Dict[str, List[str]]) -> Dict[str, BackendResult]:
@@ -101,6 +128,8 @@ def summarise(runs: Dict[str, List[str]]) -> Dict[str, BackendResult]:
             input_to_paint_p95=(
                 median(median(w.p95 for w in run) for run in frame_runs.values()) if frame_runs else None
             ),
+            key_to_screen_p50=run_median(per_run, lambda w: w.key_to_screen_p50),
+            key_to_screen_p95=run_median(per_run, lambda w: w.key_to_screen_p95),
         )
     return result
 
@@ -112,15 +141,17 @@ def table(result: Dict[str, BackendResult]) -> str:
     lines = [
         "Key to screen (ms; median of each run's windows, then median of runs)",
         f"{'backend':<12} {'presented':<20} {'runs':>4} {'keys':>6} {'unpainted':>9} "
-        f"{'total p50':>10} {'p95':>8} {'input-to-paint p50':>19} {'p95':>8}",
+        f"{'total p50':>10} {'p95':>8} {'key-to-screen p50':>18} {'p95':>8} {'input-to-paint p50':>19} {'p95':>8}",
     ]
     for backend in sorted(result):
         r = result[backend]
         lines.append(
             f"{backend:<12} {r.presented:<20} {r.runs:>4} {r.keys:>6} {r.unpainted:>9} "
-            f"{cell(r.p50):>10} {cell(r.p95):>8} {cell(r.input_to_paint_p50):>19} {cell(r.input_to_paint_p95):>8}"
+            f"{cell(r.p50):>10} {cell(r.p95):>8} {cell(r.key_to_screen_p50):>18} {cell(r.key_to_screen_p95):>8} "
+            f"{cell(r.input_to_paint_p50):>19} {cell(r.input_to_paint_p95):>8}"
         )
     lines.append(PRESENTED_NOTE)
+    lines.append(GAP_NOTE)
     return "\n".join(lines)
 
 
