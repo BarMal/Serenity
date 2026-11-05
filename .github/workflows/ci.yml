@@ -325,6 +325,25 @@ jobs:
           if [ "$base" != "HEAD^1" ]; then git fetch --depth=1 origin "$base"; fi
           git worktree add --detach "$RUNNER_TEMP/base" "$base"
 
+      # The first benchmark run on each side compiles the whole project, about 400 s apiece (#2618). Both compiles run
+      # here at once, which costs about one of them; no benchmark starts until both are done, so no measurement shares
+      # the runner with a compile. A failed compile is only logged: the run below fails the way it always did, with the
+      # head's raw output shown.
+      - name: Compile base and head side by side
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/base" && sbt -v Test/compile) > "$RUNNER_TEMP/compile-base.log" 2>&1 &
+          base_compile=$!
+          sbt -v Test/compile > "$RUNNER_TEMP/compile-head.log" 2>&1 &
+          head_compile=$!
+          wait "$base_compile" || echo "::warning::The base compile failed; its log tail follows."
+          wait "$head_compile" || echo "::warning::The head compile failed; its log tail follows."
+          for side in base head; do
+            echo "::group::Compile of the $side, last lines"
+            tail -n 5 "$RUNNER_TEMP/compile-$side.log"
+            echo "::endgroup::"
+          done
+
       # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
       # suite -- `sbt test` never touches it.
       - name: Run performance benchmarks on base and head
