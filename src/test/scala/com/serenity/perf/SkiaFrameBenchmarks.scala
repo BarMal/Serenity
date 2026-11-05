@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
+import com.serenity.diagnostics.FrameCounts
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
@@ -37,13 +38,21 @@ private[perf] object SkiaFrameBenchmarks:
   /** A window's frame loop over one persisting image of `backend`, as `LaptopFrameBenchmarks.PersistingFrames` is for
     * Java2D: every frame told what the transition into it damaged, so only damaged rows are redrawn.
     */
-  final private class Frames(backend: FrameBackend, codeFont: Font, metrics: CellMetrics, grid: ViewportSize):
+  final private[perf] class Frames(backend: FrameBackend, codeFont: Font, metrics: CellMetrics, grid: ViewportSize):
     private val frame     = backend.newFrame(deviceSize(LogicalWidthPx), deviceSize(LogicalHeightPx))
     private val caches    = RenderCaches.create()
     private val screen    = ScreenIdentity(this)
     private val uiMetrics = CellMetrics.fromFont(uiFont)
 
     private def deviceSize(logicalPx: Int): Int = math.ceil(logicalPx * DeviceScale).toInt
+
+    def lastFrame: FrameCounts = caches.frameCounters.lastFrame
+
+    /** Counts only the frames drawn in `work`, so the timed frames carry no counting at all. */
+    def counting[A](work: => A): A =
+      caches.frameCounters.setEnabled(true)
+      try work
+      finally caches.frameCounters.setEnabled(false)
 
     def render(state: AppState, damage: Damage): FramePixels =
       val surface = backend.surfaceOver(
@@ -54,7 +63,7 @@ private[perf] object SkiaFrameBenchmarks:
         LogicalHeightPx,
         DeviceScale,
         true,
-        RenderCaches.create()
+        caches
       )
       val _ = RendererFramePlanner.renderFrame(
         state,

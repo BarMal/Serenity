@@ -212,6 +212,20 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     timings.drain().frames shouldBe empty
   }
 
+  "FrameTimingSummary.logLine" should "report the event-thread lag after the phases, when it has samples" in {
+    val timings = FrameTimings()
+    timings.setEnabled(true)
+    timings.renderStarted()
+    timings.framePublished()
+    timings.renderFinished(FrameKind.Full)
+    val summary = timings.drain()
+
+    summary.withEdtLag(PhaseStats(40, 0.5, 38.0, 61.0)).logLine should
+      include(" | edt-lag p50=0.50 p95=38.00 max=61.00 n=40 ms")
+    summary.withEdtLag(PhaseStats(0, 0.0, 0.0, 0.0)).logLine should not include "edt-lag"
+    summary.logLine should not include "edt-lag"
+  }
+
   "FrameTimingSummary.logLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
     val skia = FrameTimings(() => 0L, backend = "skia")
     skia.drain().logLine should startWith("[FRAME] backend=skia presented=render-callback-end window=")
