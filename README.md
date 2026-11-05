@@ -23,8 +23,8 @@ The app images carry their own Java runtime.
 Install JDK 25 and [sbt](https://www.scala-sbt.org/), then from a checkout:
 
 ```bash
-sbt run                    # start the editor
-sbt "run notes.md"         # open a file
+sbt app/run                # start the editor
+sbt "app/run notes.md"     # open a file
 sbt assembly               # build target/scala-*/Serenity.jar
 ```
 

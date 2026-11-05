@@ -3,7 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{Command, CommandRunner, SessionIntent}
-import com.serenity.config.{AppMode, CornerPosition}
+import com.serenity.config.AppMode
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
@@ -215,16 +215,6 @@ final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntr
   * existing per-pane header title.
   */
 final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean, isPreview: Boolean = false)
-
-enum SurfacePlacement:
-  case AboveCursor
-  case BelowCursor
-
-  /** A screen corner, for a floating overlay panel assigned an edge/corner position (issue #1310, mode 3) rather than
-    * anchored to the cursor -- laid out by `LayoutEngine.calculateCornerOverlayStack`, stacking as a list when more
-    * than one surface shares the same corner.
-    */
-  case Corner(position: CornerPosition)
 
 enum SurfacePresentation:
   case Floating(anchor: Option[CursorPosition], placement: SurfacePlacement)

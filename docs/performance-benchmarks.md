@@ -3,10 +3,10 @@
 Run the local performance harness with:
 
 ```text
-sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"
+sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks"
 ```
 
-The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
+The cursor-only scenario opens a temporary Swing window so it can measure Serenity's real overlay publication path. Run it in a graphical session; a headless Linux environment can use `xvfb-run -a sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks"`.
 
 The `iterations` column is the number of samples actually taken (see "Run-to-run stability audit" below), and the millisecond columns carry seven decimals so a 10 ns benchmark is not rounded to a multiple of 10 ns.
 
@@ -28,7 +28,7 @@ Scenarios cover:
 - `render.modal_wrap.*`: the frame height plus the composition of three representative dialogs (the layout-override
   prompt, a long Confirm, a Save As file workflow) in a 72-cell frame, wrapped by cells against by the GUI font's pixels,
   with a `nowrap` baseline and `cold_*` variants whose text the pixel measurements have not seen. Run alone with
-  `xvfb-run -a sbt "Test/runMain com.serenity.perf.ModalWrapBenchmarks"`. Wrapping by cells costs the same as not
+  `xvfb-run -a sbt "app/Test/runMain com.serenity.perf.ModalWrapBenchmarks"`. Wrapping by cells costs the same as not
   wrapping; by pixels adds a few microseconds warm and about 1.7 ms on the first frame of a changed prompt, so the GUI
   wraps by cells (`TextMeasure.forState`).
 - `laptop.*`: the editor at a real laptop's size (1500x1000 logical at 2x, word-wrapped lorem ipsum, default config):
@@ -47,13 +47,13 @@ Scenarios cover:
 - `laptop.input.state_manager.typing_long_paragraph`: the same typing into one 4000-character paragraph with no
   newlines, to show per-keystroke cost against paragraph length.
 
-Pass name prefixes to run only some scenarios, e.g. `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
+Pass name prefixes to run only some scenarios, e.g. `sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
 
 ## Memory metrics: footprint and allocation
 
 The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent.
 
-**Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Because of that discard, process-wide caches never show up in a `footprint.*` figure; see [Footprint rows and static caches](#footprint-rows-and-static-caches). Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`, and the `prose_frame.*` rows that draw a frame so the caches have something to hold. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
+**Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Because of that discard, process-wide caches never show up in a `footprint.*` figure; see [Footprint rows and static caches](#footprint-rows-and-static-caches). Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`, and the `prose_frame.*` rows that draw a frame so the caches have something to hold. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "app/Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
 
 **Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
 
@@ -68,7 +68,7 @@ Thresholds are `--retained-threshold`, `--min-retained-delta-bytes`, `--allocati
 
 ## Cache-ownership scenarios
 
-These rows exist so a change that moves a process-wide cache into state a runtime owns can be measured before and after. Run them with `sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks layout.anchor_wrap. layout.cold_font. laptop.input.state_manager.two_runtimes. footprint."`.
+These rows exist so a change that moves a process-wide cache into state a runtime owns can be measured before and after. Run them with `sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks layout.anchor_wrap. layout.cold_font. laptop.input.state_manager.two_runtimes. footprint."`.
 
 | Row | What it times | What a cache move should change |
 | --- | --- | --- |
@@ -111,7 +111,7 @@ An expected rise in the `stable_text` rows is not a regression to fix; record it
 
 ## Text-boundary and rope-count scenarios
 
-These rows exist so a change to how the per-thread `BreakIterator`s are owned (the `TextEditing`, `RopeCharacterSource` and `TextCounts` entries of `PurityAllowlist`, #2350) can be measured before and after. They need no window. Run them with `sbt "Test/runMain com.serenity.perf.BoundaryCacheBenchmarks"`, or through `PerformanceBenchmarks` with the prefixes `text.boundary.` and `text.counts.`.
+These rows exist so a change to how the per-thread `BreakIterator`s are owned (the `TextEditing`, `RopeCharacterSource` and `TextCounts` entries of `PurityAllowlist`, #2350) can be measured before and after. They need no window. Run them with `sbt "app/Test/runMain com.serenity.perf.BoundaryCacheBenchmarks"`, or through `PerformanceBenchmarks` with the prefixes `text.boundary.` and `text.counts.`.
 
 The prose has a multi-char cluster (e with a combining acute, a thumbs-up with a skin tone, the Devanagari syllable ni) after every sixth word, and the probes sit next to those clusters. That is deliberate: `TextEditing.nextGraphemeBoundary` answers a plain neighbour without touching a `BreakIterator`, so a probe in ASCII text would time the fast path and not the thing being moved. Each grapheme row's `verify` asserts that the answer crosses a whole cluster.
 
@@ -452,7 +452,7 @@ Measured harness results (same WSL2 host, warmed run):
 ## `command_runner.*` baseline (#1854): 2026-10-05
 
 Captured on a 4-core x86_64 Linux container under Xvfb, OpenJDK 21.0.11, with
-`sbt "Test/runMain com.serenity.perf.PerformanceBenchmarks command_runner"`. "Before" is the same benchmark run on
+`sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks command_runner"`. "Before" is the same benchmark run on
 f79b6d17, the commit before #1970 moved the settings index and per-query results into a carried cache; "after" is
 master at dc5bfd01. Times are milliseconds.
 
