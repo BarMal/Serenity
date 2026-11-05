@@ -54,7 +54,9 @@ class AggregateJobTests(unittest.TestCase):
 
     def test_there_are_no_other_jobs_to_claim_the_required_names(self) -> None:
         jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", _CALLER.split("\njobs:\n", 1)[1], re.M)
-        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos"], jobs)
+        # wake-train only dispatches the next merge train step on a train branch; its name is not a required check.
+        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos", "wake-train"], jobs)
+        self.assertIn("    name: Wake the merge train\n", _job(_CALLER, "wake-train"))
 
 
 _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
@@ -90,6 +92,46 @@ class DraftGateTests(unittest.TestCase):
 
     def test_the_three_os_package_build_skips_drafts(self) -> None:
         self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
+
+
+class FailureSummaryTests(unittest.TestCase):
+    """A failing test's name and message go in the step summary and one annotation per failure, instead of ~380 lines
+    of raw JUnit XML on Windows and macOS and nothing at all on Linux (#2557)."""
+
+    _COMMAND = 'scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"'
+
+    def _step(self, job: str) -> str:
+        return next(step for step in re.split(r"\n      - ", job) if "summarize_test_failures.py" in step)
+
+    def test_the_linux_test_job_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_CI, "test")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_each_shard_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_the_raw_xml_dump_is_gone_but_the_reports_are_still_uploaded(self) -> None:
+        self.assertNotIn("Print test failure detail", _SHARDS)
+        self.assertNotIn('cat "$report"', _SHARDS)
+        self.assertIn("path: target/test-reports/**", _SHARDS)
+
+    def test_a_failed_aggregate_says_which_result_it_saw_and_where_the_shards_are(self) -> None:
+        for label in ("windows", "macos"):
+            with self.subTest(label=label):
+                job = _job(_CALLER, f"test-{label}")
+                self.assertIn("RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", job)
+                self.assertIn('"$RESULT"', job.split("::error", 1)[1])
+                self.assertIn("$RUN_URL", job.split("::error", 1)[1])
+                self.assertIn(f"Test ({label}, shard", job)
 
 
 def _concurrency(text: str) -> dict[str, str]:

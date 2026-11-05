@@ -8,14 +8,18 @@ import com.serenity.ui.widget.{EndBehaviour, Loadable, SelectableList, TextField
 
 /** One entry of a [[ListPicker]]: what it shows, and the command picking it runs. A choice with a `waitingLabel` starts
   * slow work: picking it keeps the picker open, showing that label, until the work lands. A `preview` runs whenever the
-  * choice becomes the highlighted one, without counting as a use of that command.
+  * choice becomes the highlighted one, without counting as a use of that command. A `hint` (such as the key that runs
+  * the command) shows on the right; a choice with a `disabledReason` shows greyed with that reason, and picking it
+  * refuses rather than runs.
   */
 final case class ListChoice(
     label: String,
     detail: Option[String],
     action: Command,
     waitingLabel: Option[String] = None,
-    preview: Option[Command] = None
+    preview: Option[Command] = None,
+    hint: Option[String] = None,
+    disabledReason: Option[String] = None
 )
 
 /** What a picker's choices are recomputed from each time its query changes -- see [[ListPickerSearch.refreshed]]. Data
@@ -58,7 +62,9 @@ final case class ListPicker(
     query: Option[TextField] = None,
     source: Option[PickerSource] = None,
     onDismiss: Option[Command] = None,
-    searchPending: Boolean = false
+    searchPending: Boolean = false,
+    // Why the last pick was refused; cleared by the next move or edit.
+    message: Option[String] = None
 ):
   def selectedChoice: Option[ListChoice] = items.toOption.flatMap(_.selectedItem)
 

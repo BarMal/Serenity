@@ -63,7 +63,13 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-windows.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (windows)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (windows, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
 
   test-macos:
     name: Test (macos)
@@ -75,4 +81,27 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-macos.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (macos)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (macos, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
+
+  # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
+  # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
+  wake-train:
+    name: Wake the merge train
+    needs: [shards-windows, shards-macos, test-windows, test-macos]
+    if: always() && startsWith(github.ref, 'refs/heads/train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start a merge train step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run merge-train.yml --ref master
