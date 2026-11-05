@@ -93,6 +93,7 @@ class Candidate:
     head_ref: str
     ci_green: bool
     ejected_heads: frozenset[str] = field(default_factory=frozenset)
+    held_heads: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -143,14 +144,26 @@ def ejection_marker(head: str) -> str:
     return f"<!-- merge-train-ejected:{head} -->"
 
 
-def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
-    prefix, suffix = "<!-- merge-train-ejected:", " -->"
+def held_marker(head: str) -> str:
+    return f"<!-- merge-train-held:{head} -->"
+
+
+def _heads_marked(comment_bodies: Iterable[str], kind: str) -> frozenset[str]:
+    prefix, suffix = f"<!-- merge-train-{kind}:", " -->"
     found = set()
     for body in comment_bodies:
         for line in body.splitlines():
             if line.startswith(prefix) and line.endswith(suffix):
                 found.add(line[len(prefix) : -len(suffix)])
     return frozenset(found)
+
+
+def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "ejected")
+
+
+def held_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "held")
 
 
 def eligible_candidates(candidates: Iterable[Candidate], only: Sequence[int] | None = None) -> list[Candidate]:
@@ -399,10 +412,10 @@ class Train:
         if built.left_out:
             self.log(f"Left out (conflict, no change or moved head): {_numbers(built.left_out)}")
         if built.held_back:
-            self.log(
-                f"Held back (changes {_WORKFLOWS_DIR.rstrip('/')}, which the train's token cannot push): "
-                f"{_numbers(built.held_back)}"
-            )
+            self.log(f"Held back (touches workflows, merged by hand): {_numbers(built.held_back)}")
+            for pr in built.held_back:
+                if pr.head not in pr.held_heads:
+                    self.github.comment(pr.number, _held_comment(pr))
         if not built.included:
             return
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
@@ -440,6 +453,14 @@ class Train:
 
 def _numbers(prs: Iterable[TrainPr | Candidate]) -> str:
     return " ".join(f"#{p.number}" for p in prs)
+
+
+def _held_comment(pr: Candidate) -> str:
+    return (
+        f"The merge train leaves this pull request out: it changes `{_WORKFLOWS_DIR.rstrip('/')}`, and the token the "
+        "train pushes with cannot push workflow files. Merge it by hand; a new push is looked at again.\n"
+        f"{held_marker(pr.head)}"
+    )
 
 
 def _ejection_comment(pr: TrainPr, base: str, failed_runs: tuple[Run, ...]) -> str:
@@ -484,6 +505,7 @@ class RestGitHub:
             same_repo = (p["head"]["repo"] or {}).get("full_name") == self.repository
             plausible = same_repo and not p["draft"]
             head = p["head"]["sha"]
+            ejected, held = self._marked_heads(p["number"]) if plausible else (frozenset(), frozenset())
             candidates.append(
                 Candidate(
                     number=p["number"],
@@ -494,7 +516,8 @@ class RestGitHub:
                     same_repo=same_repo,
                     head_ref=p["head"]["ref"],
                     ci_green=plausible and self._ci_green(head),
-                    ejected_heads=self._ejected_heads(p["number"]) if plausible else frozenset(),
+                    ejected_heads=ejected,
+                    held_heads=held,
                 )
             )
         return candidates
@@ -504,9 +527,10 @@ class RestGitHub:
         latest = max(runs, key=lambda r: r["id"], default=None)
         return latest is not None and latest["conclusion"] == "success"
 
-    def _ejected_heads(self, number: int) -> frozenset[str]:
+    def _marked_heads(self, number: int) -> tuple[frozenset[str], frozenset[str]]:
         comments = self._get(f"issues/{number}/comments?per_page=100")
-        return ejected_heads_in(c["body"] or "" for c in comments)  # type: ignore[union-attr]
+        bodies = [c["body"] or "" for c in comments]  # type: ignore[union-attr]
+        return ejected_heads_in(bodies), held_heads_in(bodies)
 
     def head_of(self, number: int) -> str | None:
         pull = self._get(f"pulls/{number}")

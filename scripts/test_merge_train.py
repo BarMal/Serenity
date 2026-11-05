@@ -10,6 +10,7 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import subprocess
 import tempfile
@@ -254,6 +255,10 @@ class FakeGitHub:
 
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
+        held = mt.held_heads_in([body])
+        if held and number in self.candidates:
+            current = self.candidates[number]
+            self.candidates[number] = dataclasses.replace(current, held_heads=current.held_heads | held)
 
 
 class TrainTests(unittest.TestCase):
@@ -354,7 +359,7 @@ class TrainTests(unittest.TestCase):
         self.github.add_pr(3, "b.txt", "b\n")
         self._train(batch=2).tick()
         self.assertEqual([2, 3], self._train_numbers())
-        self.assertIn("Held back (changes .github/workflows, which the train's token cannot push): #1", self.log)
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
 
     def test_a_workflow_change_is_held_back_even_when_it_is_deeper_than_the_top_level(self) -> None:
         self.github.add_pr(1, ".github/workflows/nested/other.yml", "name: changed\n")
@@ -367,7 +372,29 @@ class TrainTests(unittest.TestCase):
         self._train().tick()
         self.assertIsNone(self._live_branch())
         self.assertEqual([], self.github.dispatched)
-        self.assertIn("Held back (changes .github/workflows, which the train's token cannot push): #1", self.log)
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_held_back_pull_request_gets_one_comment_per_head_saying_it_is_merged_by_hand(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self._train().tick()
+        held = [body for number, body in self.github.comments if number == 1]
+        self.assertEqual(1, len(held), "a second step must not comment again on the same head")
+        self.assertIn(mt.held_marker(self.github.candidates[1].head), held[0])
+        self.assertIn(".github/workflows", held[0])
+        self.assertIn("Merge it by hand", held[0])
+
+    def test_a_new_push_to_a_held_back_pull_request_is_commented_on_again(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: one\n")
+        self._train().tick()
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: two\n")
+        self._train().tick()
+        self.assertEqual(2, len([1 for number, _ in self.github.comments if number == 1]))
+
+    def test_held_markers_are_read_back_from_comment_bodies(self) -> None:
+        bodies = ["unrelated", f"text\n{mt.held_marker('a' * 40)}\nmore", mt.ejection_marker("b" * 40)]
+        self.assertEqual(frozenset({"a" * 40}), mt.held_heads_in(bodies))
+        self.assertEqual(frozenset({"b" * 40}), mt.ejected_heads_in(bodies))
 
     def test_files_outside_the_workflows_directory_are_not_held_back(self) -> None:
         self.github.add_pr(1, ".github/CODEOWNERS", "* @owner\n")
