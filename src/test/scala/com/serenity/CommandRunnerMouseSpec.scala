@@ -14,25 +14,26 @@ import org.scalatest.matchers.should.Matchers
 
 class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  "Command runner mouse interaction" should "highlight the command row under the pointer" in {
+  // #2577: Ctrl+P opens the command picker, so the runner surface whose rows these hit-test is the Settings surface's,
+  // whose root lists the settings groups.
+  "Command runner mouse interaction" should "highlight the settings row under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
     // The persistent key-hint footer (issue #931, Stage 3) defaults on and reserves a row, shifting which absolute
     // item rows fit in the window -- disabled here since this test is about row hit-testing mechanics, not the
     // footer feature, and every row math below assumes the pre-Stage-3 window size.
     disableCommandRunnerKeyHints(stateManager)
 
-    val before = stateManager.getCurrentState.unsafeRunSync()
-    val point  = commandRunnerItemPoint(before, 2)
+    val point = settingsGroupPoint(stateManager.getCurrentState.unsafeRunSync(), 2)
 
     stateManager.applyEvent(MouseMove(point.x, point.y)).unsafeRunSync()
 
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe 2
   }
 
-  it should "ignore mouse movement over a configured blank command-item gap" in {
+  it should "ignore mouse movement over a configured blank item gap" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
@@ -47,7 +48,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         )
       )
       .unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
 
     val before         = stateManager.getCurrentState.unsafeRunSync()
     val itemPoint      = commandRunnerItemPoint(before, 0)
@@ -58,7 +59,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     runnerFrom(stateManager.getCurrentState.unsafeRunSync()).selectedIndex shouldBe selectedBefore
   }
 
-  it should "execute the row at its fractional floating pixel offset" in {
+  it should "open the settings group at its fractional floating pixel offset" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
@@ -69,23 +70,19 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         )
       )
       .unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
 
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    val point = shiftedCommandRunnerItemPoint(before, 0)
+    val point  = shiftedCommandRunnerItemPoint(before, 0)
 
     stateManager
       .applyEvent(MouseClick(point.x, point.y, pixelX = Some(point.pixelX), pixelY = Some(point.pixelY)))
       .unsafeRunSync()
 
-    val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    after.commandRunnerSurface shouldBe None
+    openedGroup(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(groupAt(before, 0))
   }
 
-  it should "ignore a pixel click in a fractional shifted command-item gap" in {
+  it should "ignore a pixel click in a fractional shifted item gap" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
@@ -100,7 +97,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
         )
       )
       .unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
     stateManager.applyEvent(MoveDown).unsafeRunSync()
 
@@ -114,25 +111,21 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
 
     val after = stateManager.getCurrentState.unsafeRunSync()
     runnerFrom(after).selectedIndex shouldBe selectedBefore
-    after.commandRunnerSurface shouldBe defined
+    openedGroup(after) shouldBe None
   }
 
-  it should "execute the command row clicked under the pointer" in {
+  it should "open the settings group clicked under the pointer" in {
     val stateManager = createStateManager("CommandRunnerMouseSpec")
 
     stateManager.applyEvent(ResizeEvent(ViewportSize(100, 30))).unsafeRunSync()
-    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    "toggle-line".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(RunCommand("open-settings")).unsafeRunSync()
 
+    val point  = settingsGroupPoint(stateManager.getCurrentState.unsafeRunSync(), 1)
     val before = stateManager.getCurrentState.unsafeRunSync()
-    before.persisted.config.surfaceConfig.showLineNumbers shouldBe true
-    val point = commandRunnerItemPoint(before, 0)
 
     stateManager.applyEvent(MouseClick(point.x, point.y)).unsafeRunSync()
 
-    val after = stateManager.getCurrentState.unsafeRunSync()
-    after.persisted.config.surfaceConfig.showLineNumbers shouldBe false
-    after.commandRunnerSurface shouldBe None
+    openedGroup(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(groupAt(before, 1))
   }
 
   // issue #931: category tabs are retired -- there is no tab row left to click, so this test (and the mouse
@@ -192,6 +185,33 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
   }
 
   final private case class Point(x: Int, y: Int, pixelX: Int = 0, pixelY: Int = 0)
+
+  /** Where the renderer's own composition puts the settings group at `index`: the Settings root pushes every row below
+    * the selected group down by its preview and scrolls to keep the selection visible, so a displayed row number is not
+    * the group's index.
+    */
+  private def settingsGroupPoint(state: AppState, index: Int): Point =
+    val surface  = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
+    val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
+    val frame = UiSceneSnapshot
+      .from(state, viewport)
+      .nodesInPaintOrder
+      .find(_.id == SceneNodeId.Surface(surface.id))
+      .getOrElse(fail("Expected the command runner scene node"))
+      .frameRect
+    val config = state.persisted.config
+    val region = CommandRunnerSurfaceComposition
+      .forRunner(
+        runnerFrom(state),
+        frame,
+        config.effectiveCommandRunnerItemGapRows,
+        SurfaceFrameLayout.itemTargetRowsFor(surface.content, config.interfaceDensity),
+        showKeyHints = config.surfaceConfig.commandRunnerShowKeyHints
+      )
+      .hitRegions
+      .find(region => CommandRunnerSurfaceComposition.absoluteIndexOf(region.focusId).contains(index))
+      .getOrElse(fail(s"Expected a painted row for settings group $index"))
+    Point(region.rect.x.toInt, region.rect.y.toInt)
 
   private def commandRunnerItemPoint(state: AppState, displayedItemRow: Int): Point =
     val surface = state.commandRunnerSurface.getOrElse(fail("Expected command runner surface"))
@@ -287,6 +307,15 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
     "ui font".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
     stateManager.applyEvent(Enter).unsafeRunSync()
+
+  private def groupAt(state: AppState, index: Int): String =
+    runnerFrom(state).visibleItems
+      .lift(index)
+      .collect { case group: CommandSurfaceItem.GroupItem => group.id }
+      .getOrElse(fail(s"Expected a settings group at row $index"))
+
+  private def openedGroup(state: AppState): Option[String] =
+    runnerFrom(state).activeSettingsSurface.map(_.current.groupId)
 
   private def runnerFrom(state: AppState): CommandRunner =
     state.commandRunnerSurface

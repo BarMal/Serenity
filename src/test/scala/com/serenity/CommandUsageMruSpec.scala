@@ -18,13 +18,9 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
     CommandRegistry.withToggleUI.findCommand(name).getOrElse(fail(s"no registry command $name"))
 
   private def runnerFrom(sm: com.serenity.state.manager.StateManager): CommandRunner =
-    sm.getCurrentState
-      .unsafeRunSync()
-      .commandRunnerSurface
-      .flatMap(_.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner)
-        case _                                     => None)
-      .getOrElse(fail("expected the command palette to be open"))
+    CommandPaletteProbe
+      .runner(sm.getCurrentState.unsafeRunSync())
+      .getOrElse(fail("expected the command picker to be open"))
 
   "executing a command" should "record its use on AppState.persisted, surviving the palette closing" in {
     val sm = createStateManager("CommandUsageMru")
@@ -61,7 +57,7 @@ class CommandUsageMruSpec extends AnyFlatSpec with Matchers with StateManagerTes
   private def runFromPalette(sm: com.serenity.state.manager.StateManager, label: String, commandName: String): Unit =
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     label.foreach(char => sm.applyEvent(InsertChar(char)).unsafeRunSync())
-    runnerFrom(sm).selectedCommand.map(_.name) shouldBe Some(commandName)
+    CommandPaletteProbe.selectedCommandName(sm.getCurrentState.unsafeRunSync()) shouldBe Some(commandName)
     sm.applyEvent(Enter).unsafeRunSync()
 
   private def mostRecentCommand(state: AppState): Option[String] =

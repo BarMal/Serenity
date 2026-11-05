@@ -24,6 +24,7 @@ final case class SurfaceConfig(
     // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
     // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
     typewriterScrollingEnabled: Boolean = false,
+    offscreenCursorSurfaces: OffscreenCursorSurfaces = OffscreenCursorSurfaces.RevealCursor,
     // E-reader-style column layout (issue #1338, Phase 1): global toggle, no per-document/per-pane settings
     // infrastructure exists today. Only takes effect while `wordWrapEnabled` is also on -- otherwise a no-op, falling
     // back to ordinary vertical scrolling.

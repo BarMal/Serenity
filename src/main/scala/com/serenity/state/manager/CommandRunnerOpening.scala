@@ -4,7 +4,15 @@ import cats.effect.IO
 import com.serenity.command.CommandRunner
 import com.serenity.project.ProjectPresence
 import com.serenity.state.effects.{Lane, LaneKey, LanePolicy}
-import com.serenity.state.models.{AppState, SurfaceContent, SurfaceId, replacedWhere}
+import com.serenity.state.models.{
+  AppState,
+  ListPickerSearch,
+  Modal,
+  PickerSource,
+  SurfaceContent,
+  SurfaceId,
+  replacedWhere
+}
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import org.typelevel.log4cats.Logger
 
@@ -29,27 +37,56 @@ private[manager] object CommandRunnerOpening:
       .map(updated => updated.copy(runtime = updated.runtime.copy(projectPresence = presence)))
       .getOrElse(state)
 
+  /** The open settings view or command picker -- each searches with a runner the reads fill in. */
   private def activePalette(state: AppState): Option[SurfaceId] =
-    state.commandRunnerSurface.flatMap(surface =>
-      surface.content match
-        case SurfaceContent.CommandPalette(runner) if runner.isActive => Some(surface.id)
-        case _                                                        => None
-    )
+    state.commandPickerSurface
+      .map(_.id)
+      .orElse(
+        state.commandRunnerSurface.flatMap(surface =>
+          surface.content match
+            case SurfaceContent.CommandPalette(runner) if runner.isActive => Some(surface.id)
+            case _                                                        => None
+        )
+      )
 
+  /** Updates the runner on `surfaceId`: the settings view's own, or the one a command picker searches with, whose
+    * choices are then recomputed for its current query with the highlight kept on the same row where it still exists.
+    */
   private def withRunnerOn(state: AppState, surfaceId: SurfaceId)(
     update: CommandRunner => CommandRunner
   ): Option[AppState] =
-    state.commandRunnerSurface
-      .filter(_.id == surfaceId)
+    state.runtime.uiSurfaces
+      .find(_.id == surfaceId)
       .flatMap(surface =>
         surface.content match
           case SurfaceContent.CommandPalette(runner) if runner.isActive =>
-            val updatedSurfaces = state.runtime.uiSurfaces.replacedWhere(_.id == surfaceId)(
-              _.copy(content = SurfaceContent.CommandPalette(update(runner)))
-            )
-            Some(state.copy(runtime = state.runtime.copy(uiSurfaces = updatedSurfaces)))
+            Some(replacedContent(state, surfaceId, SurfaceContent.CommandPalette(update(runner))))
+          case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) =>
+            picker.source.collect {
+              case PickerSource.Commands(runner, registry) =>
+                val refreshed = ListPickerSearch.refreshed(
+                  picker.copy(source = Some(PickerSource.Commands(update(runner), registry))),
+                  state
+                )
+                val highlighted = picker.selectedChoice
+                  .flatMap(choice => refreshed.items.toOption.map(_.items.indexWhere(_.label == choice.label)))
+                  .filter(_ >= 0)
+                val kept = highlighted.fold(refreshed)(index =>
+                  refreshed.copy(items =
+                    refreshed.items.map(_.select(index, com.serenity.ui.layout.ListPickerComposition.VisibleRows))
+                  )
+                )
+                replacedContent(state, surfaceId, SurfaceContent.ModalWorkflow(Modal.ListPicker(kept)))
+            }
           case _ => None
       )
+
+  private def replacedContent(state: AppState, surfaceId: SurfaceId, content: SurfaceContent): AppState =
+    state.copy(runtime =
+      state.runtime.copy(uiSurfaces =
+        state.runtime.uiSurfaces.replacedWhere(_.id == surfaceId)(_.copy(content = content))
+      )
+    )
 
 /** Starts the reads for a palette that has just opened, each on its own lane. */
 final private[manager] class CommandRunnerOpeningLoads(
