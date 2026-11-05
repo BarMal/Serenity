@@ -153,23 +153,24 @@ private[perf] object SkiaGlFrameBenchmarks:
       benchmarksFor("gl", glFrames(context, metrics, grid), before, after)
 
   def main(args: Array[String]): Unit =
-    import cats.effect.unsafe.implicits.global
-    val sdl = Sdl.load(sys.props.toMap, java.nio.file.Files.exists(_)) match
-      case Right(loaded) => loaded
-      case Left(error)   => sys.error(s"libSDL3 did not load: ${error.describe}")
-    val driver = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
-    val results = SdlGlWindow
-      .open(sdl, SdlGlWindow.Settings("skia gl frame benchmarks", 96, 64, Some(driver)))
-      .use {
-        case Right(window) =>
-          window.onSdlThread { owner =>
-            SkiaGlContext.open(owner) match
-              case Right(context) =>
-                try BenchmarkRunner.runMatching(args.toList, benchmarks(context))
-                finally context.close()
-              case Left(error) => sys.error(s"no Skia GL context: ${error.describe}")
-          }
-        case Left(error) => IO.raiseError(new IllegalStateException(s"no GL window: ${error.describe}"))
-      }
-      .unsafeRunSync()
-    BenchmarkRunner.printResults(results)
+    BenchmarkMain.run:
+      import cats.effect.unsafe.implicits.global
+      val sdl = Sdl.load(sys.props.toMap, java.nio.file.Files.exists(_)) match
+        case Right(loaded) => loaded
+        case Left(error)   => sys.error(s"libSDL3 did not load: ${error.describe}")
+      val driver = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
+      val results = SdlGlWindow
+        .open(sdl, SdlGlWindow.Settings("skia gl frame benchmarks", 96, 64, Some(driver)))
+        .use {
+          case Right(window) =>
+            window.onSdlThread { owner =>
+              SkiaGlContext.open(owner) match
+                case Right(context) =>
+                  try BenchmarkRunner.runMatching(args.toList, benchmarks(context))
+                  finally context.close()
+                case Left(error) => sys.error(s"no Skia GL context: ${error.describe}")
+            }
+          case Left(error) => IO.raiseError(new IllegalStateException(s"no GL window: ${error.describe}"))
+        }
+        .unsafeRunSync()
+      BenchmarkRunner.printResults(results)
