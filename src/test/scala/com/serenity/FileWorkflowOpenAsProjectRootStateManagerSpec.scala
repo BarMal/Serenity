@@ -2,41 +2,29 @@ package com.serenity
 
 import java.nio.file.Files
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.keystroke.events.ModalOpenAsProjectRoot
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** StateManager-level coverage for opening a directory from the Open dialog as a project root (issue #1525): wires
   * directory selection to the same `ExplorerEffect.OpenRoot` pin-panel machinery a UI preset's docked directory tree
   * already uses, rather than a parallel "open folder" path.
   */
-class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class FileWorkflowOpenAsProjectRootStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("FileWorkflowOpenAsProjectRootStateManagerSpec"))
     // Spell check off: its background analysis commits on its own and these specs compare states across a command.
-    StateManager
-      .apply(
-        logger,
-        initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false)),
-        dictionaryCache = SharedDictionary.default
-      )
-      .unsafeRunSync()
+    createStateManager(
+      "FileWorkflowOpenAsProjectRootStateManagerSpec",
+      initialConfig = AppConfig.default.withSpellCheck(SpellCheckConfig(enabled = false))
+    )
 
   private def currentWorkflow(stateManager: StateManager): Option[FileWorkflowState] =
     stateManager.getCurrentState

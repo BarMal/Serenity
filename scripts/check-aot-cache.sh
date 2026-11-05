@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the AOT cache of a trained Linux app image: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
+# Checks the AOT cache of a trained Linux or Windows app image: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
 # A valid cache must be opened without an [error][aot] line. A missing or stale cache (the jar changed after training,
 # which the JVM rejects for good) must still leave an app that starts, paints and exits cleanly, because a package that
 # only starts with its cache would be a regression from the AppCDS archive it replaces. The image is put back as found.
@@ -8,8 +8,7 @@ set -euo pipefail
 image="${1:?usage: $0 path/to/app-image [timeout-seconds]}"
 limit="${2:-120}"
 image="$(cd "$image" 2>/dev/null && pwd)" || { echo "No such app image: ${1}" >&2; exit 1; }
-launcher="$image/bin/Serenity"
-appdir="$image/lib/app"
+source "$(dirname "${BASH_SOURCE[0]}")/aot-image-layout.sh"
 cache="$appdir/serenity.aot"
 jar="$appdir/Serenity.jar"
 ready_line="SERENITY_SMOKE_READY"
