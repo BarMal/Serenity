@@ -205,7 +205,7 @@ private[renderer] object RendererChromePlan:
     (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
       .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context)) ++
-        roomsBelowRows(context, renderPlan, renderPlan.paneLayouts.keySet)
+      roomsBelowRows(context, renderPlan, renderPlan.paneLayouts.keySet)
 
   /** The room below a pane's last row, when it is less than a row: the rows are tiled from the top of the content, so
     * what is left of the content rect under the last one is too short for another. Row ink is clipped to the rows
