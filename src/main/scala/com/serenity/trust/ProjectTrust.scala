@@ -75,6 +75,10 @@ final case class ProjectTrust(
   def isTrusted(root: ProjectKey): Boolean =
     trusted.keys.exists(_.covers(root))
 
+  /** The trusted folders `root` lies in, outermost first. */
+  def covering(root: ProjectKey): List[ProjectKey] =
+    trusted.keys.filter(_.covers(root)).toList.sortBy(_.path.getNameCount)
+
   def grant(root: ProjectKey, source: CommandSource, command: List[String]): Either[TrustRefusal, TrustGrant] =
     if !isTrusted(root) then Left(TrustRefusal.ProjectUntrusted(root))
     else

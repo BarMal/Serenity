@@ -73,3 +73,11 @@ class ProjectTrustSpec extends AnyFlatSpec with Matchers:
   "ProjectKey" should "normalise a path so that `..` cannot alias a different root" in {
     ProjectKey.of(root.resolve("sub/..")) shouldBe projectKey
   }
+
+  it should "name every trusted folder that covers a root, nearest last, and nothing beside it" in {
+    val parent = ProjectKey.of(root.getParent)
+    val both   = trustedProject.trust(parent, at)
+
+    both.covering(ProjectKey.of(root.resolve("src"))) shouldBe List(parent, projectKey)
+    both.covering(ProjectKey.of(java.nio.file.Paths.get("/elsewhere").toAbsolutePath)) shouldBe empty
+  }
