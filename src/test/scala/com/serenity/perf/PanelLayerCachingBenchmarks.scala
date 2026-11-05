@@ -1,12 +1,12 @@
 package com.serenity.perf
 
 import cats.effect.unsafe.IORuntime
-import com.serenity.{DockedPanelFixtures, FramePixels}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.{AppState, Damage, SurfaceContent, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
+import com.serenity.{DockedPanelFixtures, FramePixels}
 
 /** Frames with a docked outline over the laptop prose, drawn with panel layer caching off and on (#1869). The two
   * variants are named apart so a run can take either by prefix (`laptop.render.pinned_panel.layer_cache_off`) and the
