@@ -1,9 +1,8 @@
 package com.serenity.perf
 
+import java.awt.Font
 import java.awt.image.BufferedImage
-import java.awt.{Color, Font, Rectangle, Toolkit}
-import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
-import javax.swing.SwingUtilities
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.IORuntime
 import cats.effect.{IO, Resource}
@@ -13,11 +12,8 @@ import com.serenity.keystroke.events.{
   DeleteBackward,
   Event,
   InsertChar,
-  ModalInsertChar,
-  ModalSubmit,
   MoveDown,
   MoveUp,
-  OpenGotoLine,
   PageDown,
   PageUp,
   ResizeEvent,
@@ -28,7 +24,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   FontSpec,
   FrameOutput,
@@ -141,7 +137,7 @@ private[perf] object LaptopFrameBenchmarks:
     val row = frame.heightPx / 2
     (0 until frame.widthPx).exists(x => frame.rgbAt(x, row) != frame.rgbAt(0, row))
 
-  /** The laptop-sized window [[presentBenchmark]] paints into. */
+  /** The laptop-sized window [[LaptopPresentBenchmarks]] paint into. */
   def presentWindowResource(metrics: CellMetrics, chromeMetrics: CellMetrics): Resource[IO, SwingWindow] =
     SwingWindow.resource(
       metrics = metrics,
@@ -155,7 +151,7 @@ private[perf] object LaptopFrameBenchmarks:
     rendering ++ interactionBenchmarks(
       transitions
     ) ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
-      List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow)) ++
+      LaptopPresentBenchmarks.benchmarks(presentWindow) ++
       skiaInteractionBenchmarks(transitions)
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
@@ -234,7 +230,7 @@ private[perf] object LaptopFrameBenchmarks:
     yield created).unsafeRunSync()
     (stateManager, proseBufferId)
 
-  private def scrolledToCursor(id: BufferId)(state: AppState): AppState =
+  private[perf] def scrolledToCursor(id: BufferId)(state: AppState): AppState =
     state.persisted.buffers.get(id).flatMap(buffer => buffer.editing.cursorPositions.headOption.map(buffer -> _)) match
       case Some((buffer, cursor)) =>
         val surface = state.persisted.config.surfaceConfig
@@ -313,7 +309,7 @@ private[perf] object LaptopFrameBenchmarks:
         ,
         () => roundTrip(PageDown, PageUp)
       )
-    ) ++ typewriterBenchmarks ++ goToLineBenchmarks
+    ) ++ typewriterBenchmarks ++ GoToLineBenchmarks.benchmarks
 
   /** Typing seeded-random letters, so almost every keystroke edits text the wrap cache has not seen: the cyclic a..z of
     * `continuous_typing` and the re-typed text of `type_and_delete` repeat wraps and flatter the typing path. Paragraph
@@ -381,38 +377,6 @@ private[perf] object LaptopFrameBenchmarks:
       )
     )
 
-  /** Go to Line through its prompt, jumping between the start and the end of a 3000-paragraph document. */
-  private[perf] def goToLineBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (stateManager, proseBufferId) = proseStateManager(paragraphs = 3000, cursorLine = 100)
-    def cursorLine: Option[Int] = stateManager.getCurrentState
-      .unsafeRunSync()
-      .persisted
-      .buffers
-      .get(proseBufferId)
-      .flatMap(_.editing.cursorPositions.headOption)
-      .map(_.line)
-    def goTo(line: Int): Unit =
-      val typed = line.toString.toList.map(ModalInsertChar(_))
-      (OpenGotoLine :: typed ::: List(ModalSubmit)).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
-    def jumpAndBack(): Unit =
-      goTo(2900)
-      goTo(100)
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.input.state_manager.go_to_line_3000_paragraphs",
-        BenchmarkIterationCounts.GoToLineWarmups,
-        BenchmarkIterationCounts.GoToLine,
-        () =>
-          goTo(2900)
-          val jumped = cursorLine
-          goTo(100)
-          assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
-        ,
-        () => jumpAndBack(),
-        minBatch = BenchmarkIterationCounts.GoToLineBatch
-      )
-    )
-
   private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
   private val uiMetrics = CellMetrics.fromFont(uiFont)
 
@@ -425,7 +389,8 @@ private[perf] object LaptopFrameBenchmarks:
       textFont: Font = LaptopFrameBenchmarks.textFont,
       cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
       viewport: ViewportSize = LaptopFrameBenchmarks.viewport,
-      backend: FrameBackend = Java2DFrames
+      backend: FrameBackend = Java2DFrames,
+      onKeptOff: List[PixelRect] => Unit = _ => ()
   ):
     private val frame =
       backend.newFrame(math.ceil(LogicalWidthPx * DeviceScale).toInt, math.ceil(LogicalHeightPx * DeviceScale).toInt)
@@ -451,7 +416,8 @@ private[perf] object LaptopFrameBenchmarks:
         DeviceScale,
         persists = true,
         caches,
-        Some(screen)
+        Some(screen),
+        onKeptOff
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -514,8 +480,16 @@ private[perf] object LaptopFrameBenchmarks:
         )
       }
 
+  /** An [[AlternatingTransition]] on the Java2D renderer, which the scaling rows draw their frames with. */
+  private[perf] def java2dTransition(before: AppState, after: AppState): AlternatingTransition =
+    AlternatingTransition(Java2DFrames, before, after)
+
+  /** A frame of `state` drawn from scratch on the Java2D renderer, without the caret. */
+  private[perf] def java2dColdFrame(state: AppState): FramePixels =
+    LaptopColdFrames.of(Java2DFrames, state, RenderCaches.create(), cursorVisible = false)
+
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
-  private def differingPixels(a: FramePixels, b: FramePixels): IndexedSeq[(Int, Int)] =
+  private[perf] def differingPixels(a: FramePixels, b: FramePixels): IndexedSeq[(Int, Int)] =
     val width   = a.widthPx
     val pixelsA = a.rgbPixels
     val pixelsB = b.rgbPixels
@@ -597,53 +571,4 @@ private[perf] object LaptopFrameBenchmarks:
           assert(DamageProducer.forTransition(beforeTyping, afterTyping) != Damage.Nothing, "typing damaged nothing"),
         () => DamageProducer.forTransition(beforeTyping, afterTyping)
       )
-    )
-
-  /** A full-window present of a freshly rendered frame, through to the display.
-    *
-    * `Toolkit.sync` waits for the X server to finish the image upload and composite the client only queues. Without it
-    * the time is however far ahead of the server the client happened to run, which is what made the previous
-    * `swing_paint_window` bimodal.
-    */
-  private def presentBenchmark(presentWindow: SwingWindow): BenchmarkRunner.Benchmark =
-    val canvas = presentWindow.canvas
-    val frames = PresentedFrames.forWindow(presentWindow)
-    BenchmarkRunner.Benchmark(
-      "laptop.present.swing_fresh_frame_synced_1500x1000",
-      2,
-      BenchmarkIterationCounts.Present,
-      () =>
-        assert(canvas.isShowing && canvas.getWidth > 0, s"canvas not showing: ${canvas.getWidth}x${canvas.getHeight}"),
-      () =>
-        val frame = frames.next()
-        SwingUtilities.invokeAndWait { () =>
-          presentWindow.onBaseImageReady(frame)
-          canvas.paintImmediately(0, 0, canvas.getWidth, canvas.getHeight)
-          Toolkit.getDefaultToolkit.sync()
-        }
-    )
-
-  /** A caret blink tick as the app runs one: the caret is published from off the EDT and the window's own pending
-    * repaint paints its rect over an unchanged base frame; the empty `invokeAndWait` queues behind that repaint.
-    *
-    * Unlike [[presentBenchmark]] it does not `Toolkit.sync`: the X server's share of a 2x18 rect is negligible, and the
-    * extra round trip only made the time track how promptly the scheduler woke Xvfb.
-    */
-  private def presentCaretBenchmark(presentWindow: SwingWindow): BenchmarkRunner.Benchmark =
-    val caret = SwingWindow.CaretPaint(new Rectangle(700, 500, 2, 18), Color.WHITE)
-    val ticks = new AtomicInteger(0)
-    def blink(): Boolean =
-      presentWindow.onCursorOverlayReady(Some(Nil))(if ticks.incrementAndGet() % 2 == 0 then List(caret) else Nil)
-    BenchmarkRunner.Benchmark(
-      "laptop.present.swing_paint_caret_1500x1000",
-      2,
-      BenchmarkIterationCounts.Present,
-      () =>
-        val frame = PresentedFrames.forWindow(presentWindow).next()
-        SwingUtilities.invokeAndWait(() => presentWindow.onBaseImageReady(frame))
-        assert(blink(), "no base frame to blink the caret over")
-      ,
-      () =>
-        val _ = blink()
-        SwingUtilities.invokeAndWait(() => ())
     )

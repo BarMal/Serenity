@@ -414,6 +414,29 @@ final class RichTextDocument private (
   def setParagraphAlignment(range: RichTextRange, alignment: ParagraphAlignment): RichTextDocument =
     updateParagraphs(range)(_.copy(alignment = alignment))
 
+  /** The headings in `scope`, or in the whole document without one, freed of the direct formatting their text carries
+    * as a whole (see [[HeadingReformat]]). A scope reaches from the paragraph holding its start to the one holding its
+    * end, as it does for every other paragraph edit. A document with nothing to remove is returned as it is.
+    */
+  def reformatHeadings(scope: Option[RichTextRange] = None): HeadingReformat.Result =
+    if tree.paragraphCount == 0 then HeadingReformat.Result(this, HeadingReformat.Report.none)
+    else
+      val (first, last) = scope.fold((0, tree.paragraphCount - 1))(paragraphSpan)
+      val changes = headingParagraphs
+        .filter((index, _) => index >= first && index <= last)
+        .flatMap { (index, paragraph) =>
+          val (reformatted, removed) = HeadingReformat.reformat(paragraph)
+          Option.when(removed > 0)((index, reformatted, removed))
+        }
+      if changes.isEmpty then HeadingReformat.Result(this, HeadingReformat.Report.none)
+      else
+        val reformattedAt = changes.map((index, paragraph, _) => index -> paragraph).toMap
+        val indexes       = changes.map((index, _, _) => index)
+        val updated = withUpdatedParagraphs(indexes.foldLeft(Int.MaxValue)(_ min _), indexes.foldLeft(0)(_ max _))(
+          (paragraph, index) => reformattedAt.getOrElse(index, paragraph)
+        )
+        HeadingReformat.Result(updated, HeadingReformat.Report(changes.size, changes.map(_._3).sum))
+
   /** Replace a document range while preserving inline styles for simple same-paragraph edits. */
   def replaceRange(range: RichTextRange, insertedText: String): RichTextDocument =
     val normalizedRange = range.normalized
@@ -464,13 +487,17 @@ final class RichTextDocument private (
   private def updateParagraphs(range: RichTextRange)(update: RichTextParagraph => RichTextParagraph): RichTextDocument =
     if tree.paragraphCount == 0 then this
     else
-      val normalizedRange = range.normalized
-      val lastIndex       = tree.paragraphCount - 1
-      val startIndex      = normalizedRange.start.paragraphIndex.max(0).min(lastIndex)
-      val endIndex        = normalizedRange.end.paragraphIndex.max(startIndex).min(lastIndex)
+      val (startIndex, endIndex) = paragraphSpan(range)
       withUpdatedParagraphs(startIndex, endIndex)((paragraph, _) =>
         if paragraph.isOpaqueBlock then paragraph else update(paragraph)
       )
+
+  /** The first and last paragraph `range` reaches, kept inside the document. Not for an empty document. */
+  private def paragraphSpan(range: RichTextRange): (Int, Int) =
+    val normalizedRange = range.normalized
+    val lastIndex       = tree.paragraphCount - 1
+    val startIndex      = normalizedRange.start.paragraphIndex.max(0).min(lastIndex)
+    (startIndex, normalizedRange.end.paragraphIndex.max(startIndex).min(lastIndex))
 
   private[serenity] def updateInlineStyle(range: RichTextRange)(
     transform: RichTextStyle => RichTextStyle

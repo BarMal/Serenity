@@ -53,6 +53,8 @@ object ListPickerComposition:
               rowText(choice),
               ModalSurfaceComposition.rowRect(bounds, row + firstChoiceRow),
               selected = choices.selected.contains(index),
+              segments = columnSegments(choice),
+              layout = if isColumned(choice) then SurfacePaintLayout.Columns else SurfacePaintLayout.Plain,
               focusId = Some(SurfaceFocusId(choiceActionId(index).value)),
               actionId = Some(choiceActionId(index))
             )
@@ -65,7 +67,14 @@ object ListPickerComposition:
           )
         )
         choiceRows ++ moreRow
-    ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows)
+    val messageRow = picker.message.map(text =>
+      ModalSurfaceComposition.textBox(
+        text,
+        ModalSurfaceComposition.rowRect(bounds, firstChoiceRow + rows.size),
+        tone = OverlayTone.Muted
+      )
+    )
+    ModalSurfaceComposition.plan(bounds, header :: queryRow ++ rows ++ messageRow)
 
   def frameHeight(picker: ListPicker, wrap: ModalWrap): Int =
     val rows = picker.items match
@@ -73,7 +82,7 @@ object ListPickerComposition:
       case Loadable.Loading(_)     => 1
       case Loadable.Empty(text)    => wrap.lines(text).size
       case Loadable.Failed(text)   => wrap.lines(text).size
-    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows
+    SurfaceFrameLayout.DefaultBorderCells * 2 + 1 + picker.query.size + rows + picker.message.size
 
   /** Label-less, and outside the hit regions: a click anywhere in the picker already leaves typing going here. */
   private def queryBox(field: TextField, rect: LogicalPixelRect): SurfacePaintBox =
@@ -86,4 +95,20 @@ object ListPickerComposition:
     )
 
   private def rowText(choice: ListChoice): String =
-    choice.detail.fold(choice.label)(detail => s"${choice.label}  $detail")
+    shownDetail(choice).fold(choice.label)(detail => s"${choice.label}  $detail")
+
+  private def shownDetail(choice: ListChoice): Option[String] =
+    choice.disabledReason.orElse(choice.detail)
+
+  /** Only choices with a hint or a refusal reason are laid out in columns; a plain choice keeps its one-line row. */
+  private def isColumned(choice: ListChoice): Boolean =
+    choice.hint.isDefined || choice.disabledReason.isDefined
+
+  /** The same columns the command palette's rows use: label, muted detail, then the hint on the right. */
+  private def columnSegments(choice: ListChoice): List[OverlaySegment] =
+    if !isColumned(choice) then Nil
+    else
+      val labelTone = if choice.disabledReason.isDefined then OverlayTone.Muted else OverlayTone.Normal
+      OverlaySegment(choice.label, tone = labelTone) ::
+        OverlaySegment(shownDetail(choice).getOrElse(""), tone = OverlayTone.Muted) ::
+        choice.hint.map(OverlaySegment(_, tone = labelTone)).toList
