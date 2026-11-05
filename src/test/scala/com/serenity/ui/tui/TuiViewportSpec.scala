@@ -111,7 +111,7 @@ class TuiViewportSpec extends TuiSpec:
         _ <- resize(TuiViewport.Small)
         _ <- verify("palette at the new size") { screen =>
           screen.width shouldBe 80
-          screen.containsText("search:") shouldBe true
+          screen.containsText(com.serenity.command.CommandPicker.Title) shouldBe true
           screen.paintedRows.foreach((_, line) => line.length should be <= 80)
         }
       yield ()

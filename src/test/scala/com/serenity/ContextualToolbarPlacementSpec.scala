@@ -41,7 +41,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
     layout.aboveCursorOverlayStack.map(_._1) shouldBe Nil
     layout.belowCursorOverlayStack.map(_._1) shouldBe List(
       toolbarSurface.id,
-      withRunner.commandRunnerSurface.getOrElse(fail("Expected command runner")).id
+      withRunner.commandPickerSurface.getOrElse(fail("Expected command runner")).id
     )
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
