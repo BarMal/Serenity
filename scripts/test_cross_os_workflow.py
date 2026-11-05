@@ -54,7 +54,9 @@ class AggregateJobTests(unittest.TestCase):
 
     def test_there_are_no_other_jobs_to_claim_the_required_names(self) -> None:
         jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", _CALLER.split("\njobs:\n", 1)[1], re.M)
-        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos"], jobs)
+        # wake-train only dispatches the next merge train step on a train branch; its name is not a required check.
+        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos", "wake-train"], jobs)
+        self.assertIn("    name: Wake the merge train\n", _job(_CALLER, "wake-train"))
 
 
 _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
