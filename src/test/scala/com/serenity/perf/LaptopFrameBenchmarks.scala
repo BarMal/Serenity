@@ -4,8 +4,8 @@ import java.awt.Font
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
-import cats.effect.unsafe.IORuntime
 import cats.effect.IO
+import cats.effect.unsafe.IORuntime
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{
@@ -139,7 +139,9 @@ private[perf] object LaptopFrameBenchmarks:
 
   def benchmarks(presentWindow: => SwingWindow)(using IORuntime): List[BenchmarkRunner.Benchmark] =
     lazy val transitions = interactionTransitions
-    renderBenchmarks ++ interactionBenchmarks(transitions) ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+    renderBenchmarks ++ interactionBenchmarks(
+      transitions
+    ) ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       LaptopPresentBenchmarks.benchmarks(presentWindow) ++ skiaInteractionBenchmarks(transitions)
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
@@ -590,4 +592,3 @@ private[perf] object LaptopFrameBenchmarks:
         )
       )
     )
-
