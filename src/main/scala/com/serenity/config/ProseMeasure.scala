@@ -11,6 +11,10 @@ object ProseMeasure:
   val Min: Int     = 20
   val Max: Int     = 200
 
+  /** `off` and `unlimited` both mean no measure: the text column takes the width the pane gives it. */
+  def isUnlimited(text: String): Boolean =
+    text.trim.toLowerCase(Locale.ROOT) == "unlimited"
+
   /** `66ch` or a bare `66`; a count outside [[Min]]..[[Max]] is refused rather than clamped. */
   def parse(text: String): Option[Int] =
     text.trim

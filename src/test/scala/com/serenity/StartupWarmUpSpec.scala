@@ -18,7 +18,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{HangBound, SharedDictionary}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,6 +33,12 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
 
   private val viewport  = ViewportSize(100, 30)
   private val smallPlan = StartupWarmUp.Plan(rounds = 2, paragraphs = 12)
+
+  // The whole suite takes 1.2 s on Linux CI; a warm-up that has not finished in 20 s of un-paused time is not coming.
+  private val warmUpBound = 20.seconds
+
+  // Parsing the real dictionary is the one cold, CPU-bound step here, so it gets more room than the stubbed warm-ups.
+  private val dictionaryBound = 30.seconds
 
   final private case class Drawn(full: Vector[(AppState, Damage)], cursorOnly: Int)
 
@@ -92,7 +98,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
       result  <- drawn.get
     yield (outcome, result)
 
-    val (outcome, drawn) = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+    val (outcome, drawn) = HangBound.unsafeRunTimed(program, warmUpBound).getOrElse(fail("the warm-up did not finish"))
     val steps            = StartupWarmUp.script(smallPlan).size
 
     outcome shouldBe StartupWarmUp.Outcome.Completed(steps)
@@ -113,7 +119,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
       result  <- drawn.get
     yield result.full.map((state, _) => focusedChars(state))
 
-    val lengths = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+    val lengths = HangBound.unsafeRunTimed(program, warmUpBound).getOrElse(fail("the warm-up did not finish"))
 
     burstKeys should be > 1
     val seededLength = StartupWarmUp.document(smallPlan.paragraphs).length
@@ -147,7 +153,10 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
   "StartupWarmUp.preloadSpellDictionary" should "parse the dictionary into the cache when spell check is on" in {
     val cache = DictionaryCache()
 
-    StartupWarmUp.preloadSpellDictionary(AppConfig.default, cache).unsafeRunTimed(120.seconds) shouldBe Some(())
+    HangBound.unsafeRunTimed(
+      StartupWarmUp.preloadSpellDictionary(AppConfig.default, cache),
+      dictionaryBound
+    ) shouldBe Some(())
 
     cache.size should be > 0
   }
@@ -191,7 +200,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     yield (modelBefore, modelAfter, filesBefore, sessionFiles(sessionRoot), before, warmUpDirectories(scratchRoot))
 
     val (modelBefore, modelAfter, filesBefore, filesAfter, directoriesBefore, directoriesAfter) =
-      program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+      HangBound.unsafeRunTimed(program, warmUpBound).getOrElse(fail("the warm-up did not finish"))
 
     modelAfter shouldBe modelBefore
     filesAfter shouldBe filesBefore
@@ -217,7 +226,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
       during <- seen.get
     yield during
 
-    val during = program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not finish"))
+    val during = HangBound.unsafeRunTimed(program, warmUpBound).getOrElse(fail("the warm-up did not finish"))
 
     during.size shouldBe 1
     warmUpDirectories(scratchRoot) shouldBe Set.empty
@@ -244,7 +253,7 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
     yield (outcome, atReturn.full.size, later.full.size)
 
     val (outcome, framesAtReturn, framesLater) =
-      program.unsafeRunTimed(60.seconds).getOrElse(fail("the warm-up did not stop"))
+      HangBound.unsafeRunTimed(program, warmUpBound).getOrElse(fail("the warm-up did not stop"))
 
     outcome shouldBe StartupWarmUp.Outcome.Interrupted
     framesAtReturn shouldBe 3

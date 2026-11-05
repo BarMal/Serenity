@@ -23,6 +23,8 @@ jobs:
   build:
     name: Build benchmark artifacts
     runs-on: ubuntu-latest
+    # p90 8.3 min over 26 successful runs (longest 41510368976, 41479314054); limit is 2x, rounded up.
+    timeout-minutes: 17
 
     steps:
       # The workflow's own checkout supplies the injected sbt settings in bench/ci, so any `ref` -- including commits
