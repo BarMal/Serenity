@@ -47,6 +47,12 @@ sealed abstract class VisualRowCounts:
     */
   def estimatedLineAtRow(row: Int): (Int, Int)
 
+  /** Whether every line of the document has been measured, so the answers above need measure nothing more. */
+  def allMeasured: Boolean
+
+  /** Measures each line nobody has measured yet, one at a time, and stops before the next one once `stop` says so. */
+  def measureRest(stop: () => Boolean): Unit
+
 /** What a line's visual row count depends on besides its text. The buffer's rich-text styling and the way its inline
   * Markdown is restyled are the other inputs: they change without the text changing, so they stamp the index instead
   * (see [[VisualLineIndexStore]]) -- a new document or a caret on another line would otherwise leave a new key behind
@@ -62,6 +68,14 @@ final private[layout] case class VisualRowKey(
     dropCapsEnabled: Boolean,
     fallback: FontFallback
 )
+
+private[layout] object VisualRowKey:
+
+  /** Whether `narrower`'s one-row lines are one row under `wider` too: the keys differ only in width, and a row that
+    * held a line at one width holds it at any greater one.
+    */
+  def seeds(narrower: VisualRowKey, wider: VisualRowKey): Boolean =
+    narrower.panelWidthPx < wider.panelWidthPx && narrower.copy(panelWidthPx = wider.panelWidthPx) == wider
 
 /** What the pixels a line's rows stack to depend on besides [[VisualRowKey]]: the prose zoom scales every run. */
 final private[layout] case class BandHeightKey(rows: VisualRowKey, proseScale: Float)
@@ -83,6 +97,7 @@ object VisualRowCounts:
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     known: Int => Option[Int] = _ => None,
+    painted: Map[Int, Int] = Map.empty,
     headings: HeadingSettings = HeadingSettings.default,
     openings: OpeningSettings = OpeningSettings.default,
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
@@ -105,25 +120,48 @@ object VisualRowCounts:
         dropCapGapEm,
         fallback
       )
+    val certificateKey = NominalAdvances.Key(font, frc)
+    val certificates   = wrapCache.layoutMemos.rowCertificates
+    // A plain line set on its own fractional advances is one row when those advances say so; the wrap decides the rest.
+    lazy val certified: Option[NominalAdvances] =
+      Option
+        .when(
+          richText.document.isEmpty && !richText.markdown.isActive && richText.virtualDropCaps.isEmpty &&
+            LineLayout.measuredLayoutFor(font, frc, forceCellLayout, richText, wrapCache.shapedText.probes)
+        )(certificates.of(certificateKey))
+        .flatten
+    def callsOneRow(table: NominalAdvances, line: Int): Boolean =
+      table.fitsOneRow(content.getLine(line).getOrElse(""), math.max(1, panelWidthPx))
+    // A row the layout painted is the truth the certificate answers to: a line it calls one row that was painted as
+    // more means it is wrong for this font, so it goes and every line it counted is counted again.
+    val contradicted =
+      painted.exists((line, rows) => rows != 1 && certified.exists(callsOneRow(_, line)))
+    if contradicted then
+      val _ = certificates.revoke(certificateKey)
+    lazy val nominalAdvances: Option[NominalAdvances] = if contradicted then None else certified
     def measure(line: Int): Int =
       known(line).getOrElse(wrap(line))
     def wrap(line: Int): Int =
-      TextLayoutSnapshot
-        .boundedVisualLinesForText(
-          content.getLine(line).getOrElse(""),
-          line,
-          panelWidthPx,
-          font,
-          frc,
-          cellMetricsOverride = cellMetricsOverride,
-          forceCellLayout = forceCellLayout,
-          wrapCache = wrapCache,
-          richText = richText
-        )
-        .length
-        .max(1)
+      val text = content.getLine(line).getOrElse("")
+      if nominalAdvances.exists(_.fitsOneRow(text, math.max(1, panelWidthPx))) then 1
+      else
+        TextLayoutSnapshot
+          .boundedVisualLinesForText(
+            text,
+            line,
+            panelWidthPx,
+            font,
+            frc,
+            cellMetricsOverride = cellMetricsOverride,
+            forceCellLayout = forceCellLayout,
+            wrapCache = wrapCache,
+            richText = richText
+          )
+          .length
+          .max(1)
     val key =
       VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
+    if contradicted then wrapCache.dropVisualRowCounts(key)
     val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
     wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision))
 
@@ -156,6 +194,10 @@ object VisualRowCounts:
 
     def estimatedLineAtRow(row: Int): (Int, Int) =
       rowBelow(0, row.max(0)).getOrElse(if lineCount <= 0 then (0, 0) else (lineCount - 1, measure(lineCount - 1) - 1))
+
+    def allMeasured: Boolean = true
+
+    def measureRest(stop: () => Boolean): Unit = ()
 
     @tailrec
     private def below(line: Int, consumedRows: Int, targetRow: Int): Option[(Int, Int)] =
@@ -250,6 +292,18 @@ object VisualRowCounts:
         val filled = if exact then measuredThrough(seen, 0, lineCount) else seen
         ((filled.rowOfLine(top), filled.rowOfLine(lineCount)), filled)
       }
+
+    def allMeasured: Boolean = store.indexFor(key, content, stamp, revision).firstUnmeasuredFrom(0).isEmpty
+
+    @tailrec
+    def measureRest(stop: () => Boolean): Unit =
+      if !stop() then
+        val index = store.indexFor(key, content, stamp, revision)
+        index.firstUnmeasuredFrom(0) match
+          case None => ()
+          case Some(line) =>
+            store.update(key, content, index.measured(line, measure(line)), stamp, revision)
+            measureRest(stop)
 
     def estimatedLineAtRow(row: Int): (Int, Int) =
       val index = store.indexFor(key, content, stamp, revision)

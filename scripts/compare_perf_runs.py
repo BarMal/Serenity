@@ -2,28 +2,31 @@
 """Decides whether a pull request slowed a benchmark, from `PerformanceBenchmarks` CSV runs of its base and head commits
 taken in alternation on one runner (issue #1731).
 
-The base and head runs are paired by position: `base-1` and `head-1` ran back to back, so a slow spell on the runner
-tends to hit both of a pair. For each benchmark the verdict is the median of the pairs' head/base ratios, compared with
-the threshold. A benchmark fails only when
+The base and head runs are paired by position: `base-1` and `head-1` ran back to back, so a pair counts only if both
+sides measured the benchmark. For each benchmark the verdict compares each side's fastest p50 over its usable runs. A
+benchmark fails only when
 
-  * that median ratio exceeds `--threshold`,
-  * the median head p50 exceeds the median base p50 by more than `--min-regression-delta-ms`, and
+  * the fastest head p50 exceeds the fastest base p50 by more than `--threshold` times,
+  * by more than `--min-regression-delta-ms`, and
   * the head and base runs were each measured at least `--min-pairs` times.
 
-Why the median of paired ratios, and not the earlier "head's fastest p50 against base's slowest":
+Why the fastest run of each side (issue #2443), after the median of paired ratios (issue #1731) and, before it, "head's
+fastest against base's slowest":
 
-  * It tests the quantity a regression changes, the ratio, and a run that was slow for a reason of its own (a GC pause,
-    a JIT plateau, a noisy neighbour) moves one pair, not the verdict. Using the extremes asks the fastest head run to
-    beat the slowest base run, so a base that swings 5 to 30 ms hides a 2x slowdown that lands inside the swing.
-  * A threshold below 2x still catches a 2x regression, because the verdict no longer has to clear a swing the size of
-    the regression. `scripts/study_perf_gate.py` reports the false-positive and false-negative rates of both rules on
-    recorded runs.
+  * A benchmark's p50 is bimodal from one JVM to the next: depending on how far the JIT had got when it was measured, the
+    same code reads about 1.4 ms or 3 to 7 ms. The slow mode is a state a run lands in, so it only ever makes a run
+    slower; the fastest run is the one least affected by it. The median of three paired ratios turns two runs in
+    different modes into a verdict. On 12 runs of one commit in a container, the fastest-run ratio at 1.5x failed 11%
+    of master-against-master builds after the confirmation (the median at 1.75x: 18%) and caught an injected 2x on a
+    given benchmark 89% of the time (61%); see `docs/performance-benchmarks.md`, "Paired-ratio gate".
+  * The cost is a regression hidden by one lucky-fast head run; `test_the_fastest_head_run_decides_...` states it.
+  * `scripts/study_perf_gate.py` reports the false-positive and false-negative rates of the rules on recorded runs.
 
 A benchmark whose base runs themselves disagree by more than `--unstable-spread` is reported as unstable rather than
 silently trusted either way.
 
 Usage:
-    compare_perf_runs.py --base b1.csv b2.csv b3.csv --head h1.csv h2.csv h3.csv [--threshold 1.75]
+    compare_perf_runs.py --base b1.csv b2.csv b3.csv --head h1.csv h2.csv h3.csv [--threshold 1.5]
 
 Confirming before failing (issue #1731): a benchmark that clears the threshold on three pairs may have met a slow spell
 on the runner, as `render.markdown.live_preview` did on CI (1.93x, then 1.35x on a re-run of the same commit). So the
@@ -32,6 +35,10 @@ caller re-measures just those benchmarks in fresh pairs on the same runner and r
 `--only FILE` on the new runs, which fails only if they are still past the threshold. The second judgement uses the new
 pairs alone, not the old ones with the new, so the benchmark that was picked for being the worst of ninety does not
 count its own first luck twice. Retained-heap and allocation checks are not noisy in this way and fail on the first pass.
+
+Rows named in `--exclude-file` (default `scripts/perf-gate-excluded-rows.txt`, issue #2557) are noisy enough that a
+first-pass flag almost never confirms. They are measured and printed, marked as excluded, but never fail the build, never
+reach `--write-flagged`, and are left out of the memory check; the nightly ABBA covers them.
 
 Exit codes: 0 no regression (or every flagged benchmark was forgiven), 1 a regression, a memory failure, or fewer than
 `--min-pairs` usable pairs for every benchmark, 2 timing regressions to confirm (only with `--write-flagged`).
@@ -43,14 +50,17 @@ import argparse
 import statistics
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from check_perf_regression import Row, build_parser, check_memory, parse_csv
 
-DEFAULT_THRESHOLD = 1.75
+DEFAULT_THRESHOLD = 1.5
 DEFAULT_MIN_DELTA_MS = 0.05
 DEFAULT_MIN_PAIRS = 2
 DEFAULT_UNSTABLE_SPREAD = 2.0
 MIN_BASELINE_MS = 0.001
+DEFAULT_EXCLUDE_FILE = str(Path(__file__).resolve().parent / "perf-gate-excluded-rows.txt")
+EXCLUDED_MARK = "excluded from the gate (nightly ABBA)"
 
 
 @dataclass(frozen=True)
@@ -100,10 +110,10 @@ def judge(
             continue
         bases = [b for b, _ in pairs]
         heads = [h for _, h in pairs]
-        base_ms, head_ms = statistics.median(bases), statistics.median(heads)
+        base_ms, head_ms = min(bases), min(heads)
         if base_ms < MIN_BASELINE_MS:
             continue
-        ratio = statistics.median(h / b for b, h in pairs if b > 0)
+        ratio = head_ms / base_ms
         spread = _spread(bases)
         verdicts.append(
             Verdict(
@@ -118,6 +128,16 @@ def judge(
             )
         )
     return verdicts
+
+
+def load_excluded(path: str) -> list[str]:
+    with open(path) as handle:
+        stripped = (line.split("#", 1)[0].strip() for line in handle)
+        return [entry for entry in stripped if entry]
+
+
+def is_excluded(name: str, excluded: list[str]) -> bool:
+    return any(name == entry or name.startswith(entry + ".") for entry in excluded)
 
 
 def _median_int(values: list[int | None]) -> int | None:
@@ -151,6 +171,7 @@ def main_with_args(argv: list[str]) -> int:
     parser.add_argument("--unstable-spread", type=float, default=DEFAULT_UNSTABLE_SPREAD)
     parser.add_argument("--write-flagged", metavar="FILE", help="Write the timing regressions to FILE, one name a line, and exit 2 for them")
     parser.add_argument("--only", metavar="FILE", help="Judge only the benchmarks named in FILE, from runs made to confirm them")
+    parser.add_argument("--exclude-file", metavar="FILE", default=DEFAULT_EXCLUDE_FILE, help="Rows to measure and print but not gate on")
     args = parser.parse_args(argv)
 
     if len(args.base) != len(args.head):
@@ -175,18 +196,24 @@ def main_with_args(argv: list[str]) -> int:
         print(f"::error::No benchmark has {args.min_pairs} usable base/head pairs -- nothing was compared.")
         return 1
 
+    excluded = load_excluded(args.exclude_file)
     print(f"{'benchmark':<55} {'base p50':>12} {'head p50':>12} {'ratio':>7} {'pairs':>5}")
     for v in verdicts:
+        if is_excluded(v.name, excluded):
+            past = "past the threshold, " if v.regressed else ""
+            print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5} ({past}{EXCLUDED_MARK})")
+            continue
         flag = " <-- REGRESSION" if v.regressed else (" (unstable base)" if v.unstable else "")
         print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5}{flag}")
-    regressions = [v for v in verdicts if v.regressed]
+    gated = [v for v in verdicts if not is_excluded(v.name, excluded)]
+    regressions = [v for v in gated if v.regressed]
     level = "warning" if args.write_flagged else "error"
     for v in regressions:
         print(
-            f"::{level}::{v.name}: median head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
+            f"::{level}::{v.name}: fastest-run head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
             f"({v.base_ms:.5f}ms -> {v.head_ms:.5f}ms), past {args.threshold}x."
         )
-    unstable = [v for v in verdicts if v.unstable and not v.regressed]
+    unstable = [v for v in gated if v.unstable and not v.regressed]
     if unstable:
         print(f"::notice::{len(unstable)} benchmark(s) had base runs more than {args.unstable_spread}x apart; see log.")
     if args.only:
@@ -194,7 +221,10 @@ def main_with_args(argv: list[str]) -> int:
             return 1
         print("\nEvery flagged benchmark was back under the threshold on the confirmation runs; the first reading is forgiven.")
         return 0
-    memory_failures = check_memory(median_rows(base_runs), median_rows(head_runs), build_parser().parse_args(["-", "-"]))
+    def gated_rows(runs: list[dict[str, Row]]) -> dict[str, Row]:
+        return {name: row for name, row in median_rows(runs).items() if not is_excluded(name, excluded)}
+
+    memory_failures = check_memory(gated_rows(base_runs), gated_rows(head_runs), build_parser().parse_args(["-", "-"]))
     if memory_failures:
         return 1
     if regressions and args.write_flagged:

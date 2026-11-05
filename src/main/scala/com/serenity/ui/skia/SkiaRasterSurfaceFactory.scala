@@ -9,9 +9,7 @@ import com.serenity.ui.renderer.{
   FontSpec,
   FrameSurfaceFactory,
   FrameSurfaceRequest,
-  Java2DRenderSurface,
-  RenderSurface,
-  ScreenIdentity
+  RenderSurface
 }
 import org.jetbrains.skia.Surface
 
@@ -26,18 +24,19 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
   private val FramesKey = BackendCacheKey(classOf[RasterFrames])
 
   def create(request: FrameSurfaceRequest): RenderSurface =
-    val canvas        = request.canvas
-    val logicalWidth  = Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width)
-    val logicalHeight = Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height)
-    val scale         = Java2DRenderSurface.deviceScaleFor(canvas)
-    val widthPx       = Java2DRenderSurface.deviceImageDimension(logicalWidth, scale.x)
-    val heightPx      = Java2DRenderSurface.deviceImageDimension(logicalHeight, scale.y)
+    val geometry      = request.geometry
+    val logicalWidth  = geometry.logicalWidthPx
+    val logicalHeight = geometry.logicalHeightPx
+    val scale         = geometry.deviceScale
+    val widthPx       = geometry.deviceWidthPx
+    val heightPx      = geometry.deviceHeightPx
     val image         = request.acquireImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
     val frames        = request.backendCaches.getOrCreate(FramesKey)(new RasterFrames)
     val surface =
       if request.contentPersists then frames.surfaceFor(widthPx, heightPx, scale.x)
       else Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
-    val changes = Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx))
+    val changes =
+      Option.when(request.contentPersists)(ChangeRecorder(scale.x, scale.y, widthPx, heightPx, frames.phases))
     SkiaRenderSurface.retaining(
       surface,
       request.metrics,
@@ -58,13 +57,19 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
           surface.close()
         request.onFlush(image)
       ,
-      layerCacheOwner = Some(ScreenIdentity(canvas)),
+      layerCacheOwner = Some(geometry.identity),
       changes = changes
     )
 
   /** How many device pixels the last frame `owner` presented had to copy, if it has presented one. */
   def lastCopiedPixels(owner: BackendCaches): Option[Long] =
     Option.when(owner.holds(FramesKey))(owner.getOrCreate(FramesKey)(new RasterFrames).copiedPixels)
+
+  /** What the frames `owner` presented spent in each [[PresentPhase]] since this was last asked, if it has presented
+    * any.
+    */
+  def drainPhases(owner: BackendCaches): Option[Map[PresentPhase, Long]] =
+    Option.when(owner.holds(FramesKey))(owner.getOrCreate(FramesKey)(new RasterFrames).phases.drain())
 
   /** The surface `owner`'s frames are painted on, for a test to compare with what was presented. */
   private[serenity] def retainedSurface(owner: BackendCaches): Option[org.jetbrains.skia.Surface] =

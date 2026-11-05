@@ -83,6 +83,13 @@ trait TextDrawing:
   */
 trait PixelDrawing:
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit
+
+  /** Fill each rect of `rects`, four ints (x, y, width, height) apiece, with `color`: the picture [[fillPixelRect]]
+    * makes for each in turn. A surface where every fill is a call into native code draws them as one.
+    */
+  def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
+    (0 until rects.length by 4).foreach(i => fillPixelRect(rects(i), rects(i + 1), rects(i + 2), rects(i + 3), color))
+
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
@@ -237,3 +244,14 @@ trait PanelOutlineDrawing:
 
   /** Restrict drawing performed by `render` to a rectangle in cell coordinates. */
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit
+
+  /** Restrict drawing performed by `render` to a rectangle in logical pixels, which can reach between cells. A surface
+    * that does not address pixels has nothing finer than a cell to bound, so by default `render` runs unclipped;
+    * callers only ask where [[RenderSurface.addressesPixels]].
+    */
+  def withPixelClip(
+    @unused xPx: Int,
+    @unused yPx: Int,
+    @unused widthPx: Int,
+    @unused heightPx: Int
+  )(render: => Unit): Unit = render

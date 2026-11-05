@@ -94,6 +94,8 @@ final class SkiaRenderSurface(
 
   override def pixelLifting: Option[PixelLifting] = lifting
 
+  private val phases = changes.fold(new PresentPhases)(_.phases)
+
   override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
 
   override def persistentContentKey: Option[SurfaceContentIdentity] =
@@ -238,9 +240,8 @@ final class SkiaRenderSurface(
     clipGlyphToRun: Boolean = false
   ): Unit =
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
-      val shapedBefore = shapedText.shapings
-      val shaped       = shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font)
-      activity.shaped(shapedText.shapings - shapedBefore)
+      val shaped =
+        activity.counting(shapedText)(shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font))
       shaped.draw(canvas, from, until, xPx, (yPx + ascentPx).toFloat, glyphPaint())
     }
 
@@ -258,9 +259,7 @@ final class SkiaRenderSurface(
     val face = fonts.faceFor(currentFontRef.get())
     val ink  = glyphPaint()
     if SkiaShapedTextCache.worthShaping(currentFontRef.get(), s) then
-      val before = shapedText.shapings
-      shapedText.stretchOf(s, face.font).draw(canvas, from, until, x, baseline, ink)
-      activity.shaped(shapedText.shapings - before)
+      activity.counting(shapedText)(shapedText.stretchOf(s, face.font)).draw(canvas, from, until, x, baseline, ink)
     else
       val _ = canvas.drawString(s.substring(from, until), x, baseline, face.font, ink)
 
@@ -418,10 +417,14 @@ final class SkiaRenderSurface(
     )
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
+    val area = metrics.pixelRect(x, y, width, height)
+    withPixelClip(area.xPx, area.yPx, area.widthPx, area.heightPx)(render)
+
+  override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     val saved = canvas.save()
     userClipDepth.incrementAndGet()
     try
-      clipTo(metrics.toPixelX(x), metrics.toPixelY(y), width * metrics.charWidth, height * metrics.lineHeight)
+      clipTo(xPx, yPx, widthPx, heightPx)
       render
     finally
       userClipDepth.decrementAndGet()
@@ -433,6 +436,19 @@ final class SkiaRenderSurface(
       rect(xPx.toFloat, yPx.toFloat, widthPx.max(1).toFloat, heightPx.max(1).toFloat),
       filled(paintColor(color))
     )
+
+  /** One path of all the rects and one draw into Skia, instead of a native call for each. The frame's record still gets
+    * each rect, so what a scrolled image has to copy back is unchanged.
+    */
+  override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
+    if rects.length >= 4 then
+      (0 until rects.length by 4).foreach { i =>
+        val widthPx  = rects(i + 2).max(1)
+        val heightPx = rects(i + 3).max(1)
+        painted.touched(rects(i), rects(i + 1), widthPx, heightPx)
+        recordPaint(rects(i).toDouble, rects(i + 1).toDouble, widthPx.toDouble, heightPx.toDouble)
+      }
+      RectPath.fill(canvas, rects, filled(paintColor(color)))
 
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px     = metrics.toPixelX(x)
@@ -454,7 +470,9 @@ final class SkiaRenderSurface(
   /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read
     * as it was before the copy. A clip in force (inside [[withRectClip]]) still bounds the copy, which Java2D's raw
     * graphics would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows
-    * of one.
+    * of one. A source that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs)
+    * copies only the part inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the
+    * rect's own corner would move it sideways.
     */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
@@ -465,19 +483,28 @@ final class SkiaRenderSurface(
       val height = math.round(from.heightPx * deviceScaleY).toInt
       val moved  = math.round(dyPx * deviceScaleY).toInt
       changes.foreach(_.moved(DeviceArea(left, top, width, height), moved))
-      if userClipDepth.get() == 0 then PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
+      if userClipDepth.get() == 0 then
+        phases.timed(PresentPhase.SurfaceMove)(
+          PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
+        )
       else
-        val snap  = surface.makeImageSnapshot(IRect.Companion.makeXYWH(left, top, width, height))
-        val saved = canvas.save()
-        try
-          val _ = canvas.resetMatrix()
-          fill.setBlendMode(BlendMode.SRC)
-          fill.setColor(OpaqueBlack)
-          val _ = canvas.drawImage(snap, left.toFloat, (top + moved).toFloat, fill)
-          fill.setBlendMode(BlendMode.SRC_OVER)
-        finally
-          restoreTo(saved)
-          snap.close()
+        val insideLeft   = left.max(0)
+        val insideTop    = top.max(0)
+        val insideRight  = (left + width).min(surface.getWidth)
+        val insideBottom = (top + height).min(surface.getHeight)
+        if insideRight > insideLeft && insideBottom > insideTop then
+          val snap =
+            surface.makeImageSnapshot(IRect.Companion.makeLTRB(insideLeft, insideTop, insideRight, insideBottom))
+          val saved = canvas.save()
+          try
+            val _ = canvas.resetMatrix()
+            fill.setBlendMode(BlendMode.SRC)
+            fill.setColor(OpaqueBlack)
+            val _ = canvas.drawImage(snap, insideLeft.toFloat, (insideTop + moved).toFloat, fill)
+            fill.setBlendMode(BlendMode.SRC_OVER)
+          finally
+            restoreTo(saved)
+            snap.close()
     }
 
   def hideCursor(): Unit = ()

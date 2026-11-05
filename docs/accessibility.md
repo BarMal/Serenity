@@ -14,7 +14,9 @@ screen reader:
 2. Move startup and command-runner selections. Confirm the selected action is named without cursor-position chatter.
 3. Change a validation or status message. Confirm it is announced once.
 4. Verify every mouse action can also be completed with the documented keyboard path. Compact density remains
-   keyboard-first; comfortable and spacious density use the contract's two-row minimum target expectation.
+   keyboard-first; comfortable and spacious density use the contract's two-row minimum target expectation, except for
+   context-menu items, which are one row at compact and comfortable density (a row is the whole target, with no dead
+   row between items) and keep two rows plus a gap at spacious density.
 
 ## Known limitations
 

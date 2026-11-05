@@ -1,11 +1,16 @@
 name: Cross-OS Tests
 
-# Runs the test suite on Windows and macOS for every pull request, master pushes, nightly, and on demand. The job names
-# below ("Test (windows)", "Test (macos)") are what branch protection lists as required checks: renaming a job or a
-# matrix label un-requires it, so change them only together with the repository's required-check settings (#2016).
+# Runs the test suite on Windows and macOS for every ready pull request, master pushes, nightly, and on demand. Drafts
+# skip it, required checks included, and marking a pull request ready starts it: draft pushes were starving the shared
+# runners (owner decision, #2484). Each OS runs its tests as two parallel shards (cross-os-test-shards.yml, #2484); the
+# "Test (windows)" and "Test (macos)" jobs below wait for their shards and are what branch protection lists as required
+# checks: renaming one un-requires it, so change them only together with the repository's required-check settings (#2016).
+# Once the merge train is live (repository variable MERGE_TRAIN_MODE=live) pull requests skip it too: the train runs it
+# once per batch on its train/* branch, before anything merges (#2553 item 3).
 # Auto Squash Merge waits for these checks before merging, as for every other check on the pull request.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - master
@@ -21,102 +26,70 @@ on:
 permissions:
   contents: read
 
-# Only the newest commit of a branch or pull request matters here; a newer push cancels the older run so runs don't queue
-# behind each other (macOS runners especially).
+# On a pull request only the newest commit matters, so a newer push cancels the older run (macOS runners especially).
+# Master, nightly and dispatched runs are never cancelled: cancelling them left master with no completed Windows or macOS
+# result after the 11-02 nightly (#2557). GitHub still keeps one waiting run per group and replaces it with a newer one,
+# so the nightly has its own group, or a merge would replace it while it waits.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'schedule' && '-nightly' || '' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  test-cross-os:
-    name: Test (${{ matrix.label }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            label: windows
-          - os: macos-latest
-            label: macos
+  shards-windows:
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
+    uses: ./.github/workflows/cross-os-test-shards.yml
+    with:
+      os: windows-latest
+      label: windows
+      jvm_opts: ${{ inputs.jvm_opts }}
 
+  shards-macos:
+    if: (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
+    uses: ./.github/workflows/cross-os-test-shards.yml
+    with:
+      os: macos-latest
+      label: macos
+      jvm_opts: ${{ inputs.jvm_opts }}
+
+  # Reports each OS's shards as the one required check, passing only when every shard did: a cancelled or skipped shard
+  # is not a pass.
+  test-windows:
+    name: Test (windows)
+    needs: shards-windows
+    if: always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 25
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '25'
-          cache: sbt
-
-      - name: Set up sbt launcher
-        uses: sbt/setup-sbt@v1
-
-      # Tests run inside sbt's own JVM (no `fork`), so SBT_OPTS reaches them. GC and safepoint logs plus the stall
-      # sampler's file (StallSampler) let a test that overshot its budget (#2016) be matched to a whole-JVM stall by
-      # wall-clock time. Written outside target/ because `clean` deletes that directory.
-      - name: Enable JVM stall diagnostics
-        shell: bash
-        # The extra options come last, so an -Xmx there wins over the one in .jvmopts.
+      - name: Require every shard to have passed
         env:
-          EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}
-        run: |
-          mkdir -p jvm-diag
-          echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log $EXTRA_JVM_OPTS" >> "$GITHUB_ENV"
+          RESULT: ${{ needs.shards-windows.result }}
+        run: test "$RESULT" = success
 
-      - name: Run tests
-        shell: bash
-        # Fails with a thread dump after HANG_MINUTES instead of holding the runner for 6 hours on a hang. The script's
-        # default of 40 stops a macOS run that takes 39 minutes, so the limit is raised to sit inside the job's 60.
+  test-macos:
+    name: Test (macos)
+    needs: shards-macos
+    if: always() && (github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every shard to have passed
         env:
-          HANG_MINUTES: '52'
-        run: bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
+          RESULT: ${{ needs.shards-macos.result }}
+        run: test "$RESULT" = success
 
-      # The console log of a Windows/macOS run can drop the assertion text (see build.sbt's Test/testOptions), so the
-      # JUnit XML reports are printed and uploaded as well, as Desktop Publish does.
-      - name: Print test failure detail
-        if: failure()
-        shell: bash
-        run: |
-          set -uo pipefail
-          shopt -s nullglob
-          for report in target/test-reports/*.xml; do
-            if grep -q -e '<failure' -e '<error' "$report"; then
-              echo "::group::$report"
-              cat "$report"
-              echo "::endgroup::"
-            fi
-          done
-
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports-${{ matrix.label }}
-          path: target/test-reports/**
-          if-no-files-found: ignore
-          retention-days: 14
-
-      # The reports above cannot be read from every environment either, so the slowest suites go into the log.
-      - name: Summarise slowest test suites
-        if: always()
-        shell: bash
-        run: bash .github/scripts/summarize-test-durations.sh target/test-reports 30 | tee -a "$GITHUB_STEP_SUMMARY"
-
-      # The artifact below cannot be read from every environment, so the headline numbers go into the log as well.
-      - name: Summarise JVM stall diagnostics
-        if: always()
-        shell: bash
-        run: bash .github/scripts/summarize-jvm-diag.sh jvm-diag | tee -a "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload JVM stall diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jvm-diag-${{ matrix.label }}
-          path: jvm-diag/**
-          if-no-files-found: ignore
-          retention-days: 7
+  # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
+  # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
+  wake-train:
+    name: Wake the merge train
+    needs: [shards-windows, shards-macos, test-windows, test-macos]
+    if: always() && startsWith(github.ref, 'refs/heads/train/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Start a merge train step
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh workflow run merge-train.yml --ref master

@@ -97,7 +97,17 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     val stageParts = LatencyStage.values.toList.map(stage => s"${stage.label} p50=1.00 p95=3.00")
     window.summaryLine shouldBe
       ("[LATENCY] summary window=5.0s keys=2 unpainted=1 | when_to_edt p50=2.00 p95=6.00 | " +
-        stageParts.mkString(" | ") + " | total p50=11.00 p95=33.00 ms")
+        stageParts.mkString(" | ") + " | total p50=11.00 p95=33.00 | key_to_screen p50=13.00 p95=39.00 ms")
+  }
+
+  it should "add the OS-to-EDT gap to each keystroke's total before taking percentiles, since the total leaves it out" in {
+    def key(seq: Long, whenToEdtMs: Long, totalMs: Long) =
+      KeyLatency(seq, whenToEdtMs, Vector.fill(LatencyStage.values.length)(0L), totalMs * Ms)
+    val window = LatencyWindow(5000.0, Vector(key(0, 40, 10), key(1, 0, 20)), unpainted = 0)
+
+    // 40 + 10 = 50 and 0 + 20 = 20: the median of the sums is 20, which neither median of the parts (0 and 10) gives.
+    window.summaryLine should include("when_to_edt p50=0.00 p95=40.00")
+    window.summaryLine should include("total p50=10.00 p95=20.00 | key_to_screen p50=20.00 p95=50.00 ms")
   }
 
   it should "say so when no keystroke was painted" in {
@@ -328,4 +338,23 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
 
   it should "leave the keystroke trace off unless asked" in {
     FrameTimings().keyLatency.isEnabled shouldBe false
+  }
+
+  "LatencyWindow.summaryLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
+    val skia = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "skia")
+    skia.summaryLine shouldBe
+      "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+
+    val java2d = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "java2d")
+    java2d.summaryLine shouldBe
+      "[LATENCY] summary backend=java2d presented=paint-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+  }
+
+  "KeyLatencyTrace.drain" should "carry the backend it was made for into the window" in {
+    val clock = ManualClock()
+    val trace = KeyLatencyTrace(() => clock.read(), () => WallClockMs, backend = "skia")
+    trace.setEnabled(true)
+
+    trace.drain().backend shouldBe "skia"
+    trace.drain().summaryLine should include("backend=skia presented=render-callback-end")
   }

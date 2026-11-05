@@ -11,7 +11,7 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.diagnostics.{FrameTimingReport, FrameTimings, KeyLatencyReport}
+import com.serenity.diagnostics.{EdtLagTrace, FrameTimingReport, FrameTimings, KeyLatencyReport}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -127,6 +127,14 @@ object AppRuntime:
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
 
+  /** A pane whose rows a background count has finished measuring has a bar to draw: tell the render loop. */
+  private[serenity] def damageOnScrollCounted(
+    notice: ScrollCountNotice,
+    emitDamage: Damage => IO[Unit],
+    dispatcher: Dispatcher[IO]
+  ): IO[Unit] =
+    IO(notice.listen(paneId => dispatcher.unsafeRunAndForget(emitDamage(Damage.Scrollbar(paneId)))))
+
   final private[serenity] case class RuntimeFailure(
       loopName: String,
       phase: String,
@@ -139,7 +147,7 @@ object AppRuntime:
     checkResize: IO[Option[ViewportSize]],
     runtime: FrontendRuntime,
     appConfig: AppConfig,
-    makeStateManager: Option[Logger[IO] => IO[StateManager]] = None,
+    makeStateManager: Option[(Logger[IO], ScrollCounting) => IO[StateManager]] = None,
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
@@ -157,11 +165,19 @@ object AppRuntime:
     (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
-        themeManager    = com.serenity.ui.theme.config.AppThemeManager.create
-        dictionaryCache = DictionaryCache()
-        stateManager <- makeStateManager.getOrElse(logger =>
-          StateManager.apply(logger, initialConfig = appConfig, dictionaryCache = dictionaryCache)
-        )(logger)
+        themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
+        dictionaryCache   = DictionaryCache()
+        scrollCountNotice = new ScrollCountNotice
+        scrollCounting =
+          ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
+        stateManager <- makeStateManager.getOrElse((logger, counting) =>
+          StateManager.apply(
+            logger,
+            initialConfig = appConfig,
+            dictionaryCache = dictionaryCache,
+            scrollCounting = counting
+          )
+        )(logger, scrollCounting)
         startupTheme <- AppStartup.startupTheme(stateManager.sessionStartupInfo, themeManager)
         _ <- AppStartup.initializeState(
           stateManager,
@@ -194,6 +210,7 @@ object AppRuntime:
         // The resize/idle-recovery paths don't have a before/after AppState to diff, so they report the coarsest
         // damage rather than none -- inputEventPhase is the one caller that reports real per-event damage.
         requestFastRender = emitDamage(Damage.Everything)
+        _                   <- damageOnScrollCounted(scrollCountNotice, emitDamage, resizeCallbackDispatcher)
         typingQuietTimer    <- TypingQuietTimer.create(timerSupervisor, TypingQuietTimer.expireIn(stateManager))
         frameTimingEnabled  <- SignallingRef.of[IO, Boolean](surfaceConfig.frameTimingEnabled)
         latencyTraceEnabled <- SignallingRef.of[IO, Boolean](surfaceConfig.latencyTraceEnabled)
@@ -312,6 +329,7 @@ object AppRuntime:
                       runtime.frameTimings,
                       frameTimingEnabled,
                       latencyTraceEnabled,
+                      frontend.eventThread,
                       watchInputs.discrete.as(()),
                       windowFocused,
                       forwardedOpens,
@@ -336,6 +354,7 @@ object AppRuntime:
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
     latencyTraceEnabled: SignallingRef[IO, Boolean],
+    eventThread: Option[Runnable => Unit],
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
     forwardedOpens: Stream[IO, List[Path]],
@@ -387,7 +406,9 @@ object AppRuntime:
             frameTimings,
             frameTimingEnabled.discrete,
             line => logger.info(line),
-            stateManager.renderCaches.frameCounters
+            stateManager.renderCaches.frameCounters,
+            EdtLagTrace(),
+            eventThread
           )
           .interruptWhen(quitSignal)
           .compile

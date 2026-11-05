@@ -112,3 +112,7 @@ coverage-reports/
 # Python bytecode (from the scripts/ tests)
 __pycache__/
 *.pyc
+
+# Reports written by `serenity --render-benchmark`
+render-benchmark-*.md
+render-benchmark-*.json

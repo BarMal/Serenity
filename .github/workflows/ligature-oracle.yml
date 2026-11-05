@@ -1,0 +1,61 @@
+name: Ligature Oracle
+
+# Runs the ligature row-count oracle at its full size (100,000 random lines, on top of the repository's sources and the
+# generated multi-language code) on all three operating systems, nightly and on demand. The default suite runs the same
+# spec with 10,000 random lines (SERENITY_FUZZ_LINES unset) so a macOS runner that is already near the Cross-OS Tests
+# hang limit is not asked for the other 90,000 on every pull request (#2447).
+on:
+  schedule:
+    - cron: '41 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ligature-oracle:
+    name: Ligature oracle (${{ matrix.label }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: linux
+          - os: windows-latest
+            label: windows
+          - os: macos-latest
+            label: macos
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Run the oracle at full size
+        shell: bash
+        env:
+          SERENITY_FUZZ_LINES: '100000'
+        run: sbt -v "testOnly com.serenity.ui.layout.LigatureCorpusOracleSpec"
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ligature-oracle-reports-${{ matrix.label }}
+          path: target/test-reports/**
+          if-no-files-found: ignore

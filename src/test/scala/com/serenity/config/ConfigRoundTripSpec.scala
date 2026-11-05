@@ -11,8 +11,8 @@ import com.serenity.keystroke.{InputKey, Modifier}
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.{IndentationSettings, LargeFilePolicy, SurfacePlacement}
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.fonts.{FontLoader, FontSizes}
 import com.serenity.ui.openings.{
   EpigraphRule,
   HandDropCapRule,
@@ -105,6 +105,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderDamageGranularity(RenderDamageGranularity.Cells)
     .withRenderBackend(RenderBackendSetting.Skia)
     .withRenderWayland(WaylandRender.XWayland)
+    .withRenderSkiaVsync(true)
     .withRendererFrameStateCacheCapacity(96)
     .withLayerCaching(true)
     .withFrameTiming(true)
@@ -167,7 +168,8 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
         uiLigatures = true,
         textScaleMode = FontLoader.TextScaleMode.Manual,
         textScaleMultiplier = 1.25,
-        fallbackFamilies = List("Noto Sans CJK JP", "Symbola")
+        fallbackFamilies = List("Noto Sans CJK JP", "Symbola"),
+        previousSizes = Some(FontSizes(30.0f, 15.0f, 13.0f))
       )
     )
     .withCursorColors(
@@ -193,6 +195,7 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withViewportHeightSizing(ViewportAxisSizing(percent = 0.9, maxCells = Some(60)))
     .withPreferredWindowSize(PreferredWindowSize(1280, 800))
     .withWheelScrollLines(5)
+    .withExplorerOpenMode(ExplorerOpenMode.Preview)
     .withPanelEscapeTarget(AppMode.Code, PanelEscapeTarget.Previous)
     .withPanelEscapeTarget(AppMode.Prose, PanelEscapeTarget.Previous)
     .withHotkeyConfig(HotkeyConfig().withCommandBinding("toggle-line-numbers", "ctrl+alt+l"))

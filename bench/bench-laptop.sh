@@ -1,7 +1,15 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p xdotool wmctrl python3 xorg.xwininfo coreutils procps
 
-# bench-laptop.sh <jar> <label>
+# bench-laptop.sh <jar> <label> [java2d|skia]
+#
+# With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
+# the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
+#
+# BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc-%p.log:uptime
+# -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"); it is recorded in the conditions file. Each run's
+# whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout. A JVM still alive after the
+# quit key is thread-dumped (<label>-run<N>.threads), sent SIGTERM and, after BENCH_QUIT_GRACE seconds (15), SIGKILL.
 #
 # Runs Serenity from <jar> with an isolated config, drives deterministic input,
 # collects [FRAME] timing lines, and reports p50/p95 per phase.
@@ -18,9 +26,18 @@
 set -euo pipefail
 
 JAR="${1:?Usage: bench-laptop.sh <jar> <label>}"
-LABEL="${2:?Usage: bench-laptop.sh <jar> <label>}"
+LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia]}"
+BACKEND="${3:-}"
+case "$BACKEND" in
+  ""|java2d|skia) ;;
+  *) echo "ERROR: backend must be java2d or skia, not: $BACKEND" >&2; exit 1 ;;
+esac
+RENDERER_FLAG=()
+if [[ -n "$BACKEND" ]]; then RENDERER_FLAG=("--renderer=$BACKEND"); fi
 BENCH_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RESULTS_DIR="$BENCH_DIR/bench-results"
+# shellcheck source=bench-lib.sh
+source "$BENCH_DIR/bench-lib.sh"
 LOREM_FILE="$BENCH_DIR/lorem-bench.txt"
 mkdir -p "$RESULTS_DIR"
 
@@ -44,14 +61,13 @@ record_conditions() {
   echo "" >> "$out"
   java -version 2>&1 | head -3 >> "$out"
   echo "" >> "$out"
-  echo "AC online: $(cat /sys/class/power_supply/AC/online 2>/dev/null || echo unknown)" >> "$out"
+  echo "AC online: $(ac_online)" >> "$out"
   echo "CPU governor: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)" >> "$out"
   echo "Load average: $(uptime)" >> "$out"
   echo "" >> "$out"
-  if command -v hyprctl &>/dev/null; then
-    echo "Hyprland monitors:" >> "$out"
-    hyprctl monitors 2>/dev/null | grep -E "Monitor|scale|resolution" >> "$out" || true
-  fi
+  echo "Java options: ${BENCH_JAVA_OPTS:-}" >> "$out"
+  echo "Display:" >> "$out"
+  display_conditions >> "$out"
   cat "$out"
   echo ""
 }
@@ -62,22 +78,23 @@ run_once() {
   local out="$RESULTS_DIR/${LABEL}-run${run_n}.txt"
   local bench_home
   bench_home="$(mktemp -d /tmp/serenity-bench-XXXXXX)"
-  trap "rm -rf '$bench_home'" RETURN
+  trap "keep_run_artifacts '$bench_home' '$RESULTS_DIR' '$LABEL' '$run_n'; rm -rf '$bench_home'" RETURN
 
   # Seed isolated config
   mkdir -p "$bench_home/.serenity"
   cat > "$bench_home/.serenity/config.conf" <<'CFG'
 config.version = 1
 ui.render.frame_timing = true
+ui.render.latency_trace = true
 editor.word_wrap = true
 CFG
 
-  local log_file="$bench_home/.serenity/serenity.log"
+  local log_file=""
 
   echo "--- Run $run_n: load average before: $(uptime | awk -F'load average:' '{print $2}')" | tee "$out"
 
   # Launch Serenity
-  java -Duser.home="$bench_home" -jar "$JAR" --gui "$LOREM_FILE" \
+  java ${BENCH_JAVA_OPTS:-} -Duser.home="$bench_home" -jar "$JAR" --gui "${RENDERER_FLAG[@]}" "$LOREM_FILE" \
     > "$bench_home/stdout.log" 2>&1 &
   local serenity_pid=$!
   echo "Launched PID $serenity_pid" | tee -a "$out"
@@ -88,7 +105,8 @@ CFG
   t0=$(date +%s)
   for i in $(seq 1 120); do
     sleep 0.5
-    if [[ -f "$log_file" ]] && grep -q "Initial render completed" "$log_file" 2>/dev/null; then
+    log_file="$(find_app_log "$bench_home" || true)"
+    if [[ -n "$log_file" ]] && grep -q "Initial render completed" "$log_file" 2>/dev/null; then
       local t1
       t1=$(date +%s)
       echo "Initial render completed in $(( t1 - t0 ))s" | tee -a "$out"
@@ -103,7 +121,7 @@ CFG
   done
   if ! $started; then
     echo "ERROR: timed out waiting for initial render" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
 
@@ -116,7 +134,7 @@ CFG
   done
   if [[ -z "$win_id" ]]; then
     echo "ERROR: could not find Serenity window" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
   local win_hex
@@ -177,77 +195,24 @@ CFG
   echo "[$(date +%T)] Quitting" | tee -a "$out"
   xdotool key --window "$win_id" ctrl+q 2>/dev/null || true
   sleep 2
-  kill "$serenity_pid" 2>/dev/null || true
-  wait "$serenity_pid" 2>/dev/null || true
+  stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
 
   # Collect FRAME lines
+  log_file="$(find_app_log "$bench_home" || echo /dev/null)"
   echo "" >> "$out"
   echo "=== [FRAME] lines ===" >> "$out"
   grep "\[FRAME\]" "$log_file" >> "$out" 2>/dev/null || echo "(none)" >> "$out"
+
+  echo "" >> "$out"
+  echo "=== [LATENCY] summaries ===" >> "$out"
+  grep "\[LATENCY\] summary" "$log_file" >> "$out" 2>/dev/null || echo "(none)" >> "$out"
+  grep "\[RENDER\]" "$log_file" >> "$out" 2>/dev/null || true
 
   echo "" >> "$out"
   echo "=== Startup log ===" >> "$out"
   grep -E "Initial render|ERROR|WARN|started|startup" "$log_file" 2>/dev/null | head -20 >> "$out" || true
 
   echo "Run $run_n complete -> $out"
-}
-
-# ---------- stats ----------
-compute_stats() {
-python3 - "$RESULTS_DIR" "$LABEL" <<'PYEOF'
-import sys, re, os
-from statistics import median
-
-results_dir, label = sys.argv[1], sys.argv[2]
-phases = ["input-to-paint", "render", "input-queue", "input-apply", "render-wait", "paint"]
-
-all_runs = {}
-for n in (1, 2, 3):
-    path = os.path.join(results_dir, f"{label}-run{n}.txt")
-    if not os.path.exists(path):
-        continue
-    with open(path) as f:
-        content = f.read()
-    frame_lines = [l for l in content.splitlines() if "[FRAME]" in l]
-    run_data = {}
-    for line in frame_lines:
-        for phase in phases:
-            m = re.search(rf"{phase} p50=(\d+\.\d+) p95=(\d+\.\d+)", line)
-            if m:
-                run_data.setdefault(phase, {"p50": [], "p95": []})
-                run_data[phase]["p50"].append(float(m.group(1)))
-                run_data[phase]["p95"].append(float(m.group(2)))
-        m = re.search(r"full=(\d+) \(([0-9.]+)/s\)", line)
-        if m:
-            run_data.setdefault("fps_full", []).append(float(m.group(2)))
-        m = re.search(r"cursor=(\d+) \(([0-9.]+)/s\)", line)
-        if m:
-            run_data.setdefault("fps_cursor", []).append(float(m.group(2)))
-    all_runs[n] = run_data
-    print(f"  Run {n}: {len(frame_lines)} [FRAME] windows")
-
-if not all_runs:
-    print("No run data found.")
-    sys.exit(1)
-
-out_path = os.path.join(results_dir, f"{label}-summary.txt")
-with open(out_path, "w") as f:
-    def w(s): print(s); f.write(s + "\n")
-    w(f"\n=== Benchmark summary: {label} ({len(all_runs)} runs) ===")
-    w(f"{'Phase':<20} {'p50 median':>12} {'p95 median':>12}  (ms, median of runs)")
-    w("-" * 48)
-    for phase in phases:
-        p50s = [median(all_runs[r][phase]["p50"]) for r in all_runs if phase in all_runs[r]]
-        p95s = [median(all_runs[r][phase]["p95"]) for r in all_runs if phase in all_runs[r]]
-        if p50s:
-            w(f"{phase:<20} {median(p50s):>12.2f} {median(p95s):>12.2f}")
-    w("")
-    fps_fulls = [median(all_runs[r]["fps_full"]) for r in all_runs if "fps_full" in all_runs[r]]
-    fps_cursors = [median(all_runs[r]["fps_cursor"]) for r in all_runs if "fps_cursor" in all_runs[r]]
-    if fps_fulls: w(f"full-frame fps (median): {median(fps_fulls):.1f}")
-    if fps_cursors: w(f"cursor-only fps (median): {median(fps_cursors):.1f}")
-    w(f"\nFull results: {out_path}")
-PYEOF
 }
 
 # ---------- main ----------
@@ -260,9 +225,9 @@ for run in 1 2 3; do
   echo "=== Starting run $run/3 ==="
   run_once "$run" || echo "Run $run failed, continuing..."
   # Brief pause between runs to let system settle
-  sleep 5
+  sleep "${BENCH_RUN_PAUSE:-5}"
 done
 
 echo ""
 echo "=== Computing stats ==="
-compute_stats
+compute_stats "$RESULTS_DIR" "$LABEL"

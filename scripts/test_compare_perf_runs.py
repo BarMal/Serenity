@@ -10,7 +10,9 @@ The injected-slowdown cases are the red tests of issue #1731: the head is the ba
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import sys
 import tempfile
@@ -106,6 +108,33 @@ class PairedGateTests(unittest.TestCase):
         head = [self._write(f"mh{i}.csv", 1.0, retained=20 * mib) for i in range(3)]
         self.assertEqual(compare_perf_runs.main_with_args(["--base", *base, "--head", *head]), 1)
 
+    # The verdict compares each side's fastest p50 (issue #2443): a benchmark's slow runs are a JIT or runner state that
+    # one side can land in and the other not, and the fastest run is the one least affected by it.
+
+    def test_the_default_threshold_is_one_and_a_half(self) -> None:
+        self.assertEqual(compare_perf_runs.DEFAULT_THRESHOLD, 1.5)
+
+    def test_a_slowdown_past_one_and_a_half_on_every_run_is_caught(self) -> None:
+        self.assertEqual(self._new_gate([10.0, 10.0, 10.0], [16.0, 16.0, 16.0]), 1)
+
+    def test_a_slowdown_that_a_slow_head_run_would_have_hidden_from_a_median_is_caught(self) -> None:
+        self.assertEqual(self._new_gate([5.0, 5.0, 5.0], [8.0, 8.0, 30.0]), 1)
+
+    def test_the_fastest_head_run_decides_so_one_lucky_run_clears_the_head(self) -> None:
+        self.assertEqual(self._new_gate([10.0, 10.0, 10.0], [20.0, 20.0, 9.0]), 0)
+
+    def test_the_delta_floor_is_taken_between_the_fastest_runs(self) -> None:
+        self.assertEqual(self._new_gate([0.10, 0.10, 0.10], [0.16, 0.16, 0.16]), 1)
+        self.assertEqual(self._new_gate([0.10, 0.10, 0.10], [0.14, 0.14, 0.14]), 0)
+
+    def test_the_verdict_reports_the_fastest_runs_and_their_ratio(self) -> None:
+        verdicts = compare_perf_runs.judge(
+            [{"op": check_perf_regression.Row("op", p, p)} for p in (6.0, 5.0, 30.0)],
+            [{"op": check_perf_regression.Row("op", p, p)} for p in (12.0, 11.0, 40.0)],
+        )
+        self.assertEqual((verdicts[0].base_ms, verdicts[0].head_ms), (5.0, 11.0))
+        self.assertAlmostEqual(verdicts[0].ratio, 2.2)
+
 
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
@@ -163,7 +192,7 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
 
     def test_a_one_off_spike_is_flagged_and_then_forgiven(self) -> None:
         base = self._series([5.0, 5.0, 5.0])
-        head = self._series([10.0, 10.0, 5.0])  # two spiked head runs: past 1.75x on the median
+        head = self._series([10.0, 10.0, 10.0])  # a slow spell over every head run: past 1.5x on the fastest
         self.assertEqual(self._first_pass(base, head), 2)
         self.assertEqual(self._confirm(self._series([5.0, 5.1, 5.0]), self._series([5.1, 5.0, 5.2])), 0)
 
@@ -204,6 +233,96 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
             ["--base", *with_heap("h", "base", 10 * mib), "--head", *with_heap("h", "head", 20 * mib), "--write-flagged", self.flagged]
         )
         self.assertEqual(code, 1)
+
+
+class ExcludedRowTests(unittest.TestCase):
+    """Rows listed in the exclusion file are measured and printed but neither fail the gate nor reach confirmation."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.flagged = os.path.join(self._tmpdir.name, "flagged.txt")
+
+    def _file(self, name: str, text: str) -> str:
+        path = os.path.join(self._tmpdir.name, name)
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+
+    def _runs(self, side: str, p50s: dict[str, float], count: int = 3) -> list[str]:
+        body = "".join(f"{name},1,1,1,0,{p50},{p50 * 1.2},0,,,\n" for name, p50 in p50s.items())
+        header = "Serenity performance benchmarks\nname,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
+        return [self._file(f"{side}-{i}.csv", header + body) for i in range(count)]
+
+    def _gate(self, base: dict[str, float], head: dict[str, float], excluded: str, *extra: str) -> tuple[int, str]:
+        excluded_path = self._file("excluded.txt", excluded)
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = compare_perf_runs.main_with_args(
+                [
+                    "--base", *self._runs("base", base), "--head", *self._runs("head", head),
+                    "--exclude-file", excluded_path, "--write-flagged", self.flagged, *extra,
+                ]
+            )
+        return code, out.getvalue()
+
+    def test_an_excluded_row_that_doubles_does_not_fail_or_get_flagged(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        self.assertEqual(code, 0)
+        self.assertFalse(os.path.exists(self.flagged))
+
+    def test_the_same_row_unlisted_is_still_flagged(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "# nothing excluded\n")
+        self.assertEqual(code, 2)
+
+    def test_an_excluded_row_is_still_printed_and_marked(self) -> None:
+        _, out = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        line = next(l for l in out.splitlines() if l.startswith("noisy"))
+        self.assertIn("excluded from the gate (nightly ABBA)", line)
+
+    def test_an_excluded_regression_is_reported_without_an_error_annotation(self) -> None:
+        _, out = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "noisy\n")
+        self.assertNotIn("::error::", out)
+        self.assertNotIn("::warning::", out)
+
+    def test_a_listed_name_excludes_its_dotted_variants_only(self) -> None:
+        names = {"typing_frame": 5.0, "typing_frame.variant": 5.0, "typing_frame_other": 5.0}
+        code, _ = self._gate(names, {n: 10.0 for n in names}, "typing_frame\n")
+        self.assertEqual(code, 2)
+        with open(self.flagged) as handle:
+            self.assertEqual(handle.read().split(), ["typing_frame_other"])
+
+    def test_other_rows_still_gate_beside_an_excluded_one(self) -> None:
+        code, _ = self._gate({"noisy": 5.0, "steady": 5.0}, {"noisy": 10.0, "steady": 10.0}, "noisy\n")
+        self.assertEqual(code, 2)
+        with open(self.flagged) as handle:
+            self.assertEqual(handle.read().split(), ["steady"])
+
+    def test_comments_and_blank_lines_in_the_file_are_ignored(self) -> None:
+        code, _ = self._gate({"noisy": 5.0}, {"noisy": 10.0}, "# why: 77 flags, 0 confirmed\n\nnoisy  # trailing\n")
+        self.assertEqual(code, 0)
+
+    def test_a_run_with_only_excluded_rows_is_still_compared(self) -> None:
+        code, out = self._gate({"noisy": 5.0}, {"noisy": 5.0}, "noisy\n")
+        self.assertEqual(code, 0)
+        self.assertNotIn("nothing was compared", out)
+
+    def test_the_checked_in_list_names_the_never_confirmed_rows(self) -> None:
+        listed = compare_perf_runs.load_excluded(str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
+        for row in (
+            "rope.large_json.cursor_offset",
+            "render.markdown.live_preview",
+            "laptop.input.state_manager.go_to_line_3000_paragraphs",
+            "laptop.input.state_manager.typing_random_letters",
+            "laptop.input.state_manager.typing_long_paragraph",
+            "laptop.render.typing_frame_2x",
+        ):
+            self.assertTrue(compare_perf_runs.is_excluded(row, listed), row)
+        self.assertTrue(compare_perf_runs.is_excluded("laptop.render.typing_frame_2x.ligature_font", listed))
+        self.assertFalse(compare_perf_runs.is_excluded("render.markdown.inline_lens", listed))
+
+    def test_the_default_exclusion_file_is_the_checked_in_one(self) -> None:
+        self.assertEqual(compare_perf_runs.DEFAULT_EXCLUDE_FILE, str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
 
 
 if __name__ == "__main__":

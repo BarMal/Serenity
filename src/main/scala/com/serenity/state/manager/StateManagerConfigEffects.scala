@@ -135,7 +135,19 @@ final private[manager] class StateManagerConfigEffects(
       case SettingsIntent.General(generalIntent)       => interpretGeneralSettingsIntent(generalIntent, state)
 
   private def interpretFontIntent(intent: FontIntent): IO[Unit] =
-    updateFontConfig(FontConfigEdit(intent))
+    intent match
+      case FontIntent.ConfirmSetAllFontSizes(size) => confirmSetAllFontSizes(size)
+      case _                                       => updateFontConfig(FontConfigEdit.recording(intent))
+
+  private def confirmSetAllFontSizes(size: Float): IO[Unit] =
+    editor.updateModelValidated(model =>
+      val before = model.app.persisted.config.editorConfig.fontConfig.sizes
+      Some(
+        model.copy(app =
+          ModalStateReducer.show(Modal.Confirm(ConfirmPrompt.setAllFontSizes(before, size)), model.app).state
+        )
+      )
+    )
 
   private def interpretCursorIntent(intent: CursorIntent): IO[Unit] =
     intent match
@@ -410,13 +422,17 @@ final private[manager] class StateManagerConfigEffects(
       ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
     }
 
+  private def commitRunnerChange(change: AppState => AppState): IO[Unit] =
+    currentState.flatMap(current => editor.commitState(change(current), current))
+
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        currentState.flatMap { current =>
-          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
-          editor.commitState(newState, current)
-        }
+        commitRunnerChange(CommandRunnerReducer.openSettings(_, CommandRegistry.withToggleUI)(using balance))
+      case GeneralSettingsIntent.OpenSettingsAt(groupId, itemId, query) =>
+        commitRunnerChange(
+          CommandRunnerReducer.openSettingsAt(_, CommandRegistry.withToggleUI, groupId, itemId, query)(using balance)
+        )
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>

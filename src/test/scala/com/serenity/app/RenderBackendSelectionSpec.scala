@@ -14,7 +14,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     toolkit = ToolkitSelection.Choice.X11,
     x11Display = true,
     probe = Probe.Loaded,
-    setting = RenderBackendSetting.Auto,
+    setting = RenderBackendSetting.Skia,
     skiaSurfaceAvailable = true,
     waylandRender = WaylandRender.Java2D,
     rasterSurfaceAvailable = true
@@ -25,31 +25,52 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
   private val variable        = RenderBackendSelection.OverrideVariable
   private val waylandVariable = RenderBackendSelection.WaylandOverrideVariable
 
-  "RenderBackendSelection.choose" should "pick Skia on a healthy X11 Linux under auto" in {
+  "RenderBackendSelection.choose" should "pick Skia on a healthy X11 Linux when skia is requested" in {
     RenderBackendSelection.choose(healthyLinux).backend shouldBe RenderBackend.Skia
   }
 
-  it should "pick Skia on Windows and macOS without any display or toolkit signal" in {
+  it should "pick Skia on Windows and macOS without any display or toolkit signal when skia is requested" in {
     val bare = healthyLinux.copy(toolkit = ToolkitSelection.Choice.PlatformDefault, x11Display = false)
     RenderBackendSelection.choose(bare.copy(osName = "Windows 11")).backend shouldBe RenderBackend.Skia
     RenderBackendSelection.choose(bare.copy(osName = "Mac OS X")).backend shouldBe RenderBackend.Skia
   }
 
-  it should "use Java2D under WLToolkit on Linux by default" in {
-    val decision = RenderBackendSelection.choose(onWayland)
-    decision.backend shouldBe RenderBackend.Java2D
-    decision.reason should include("WLToolkit")
+  it should "pick Skia under auto wherever an explicit skia setting would be picked" in {
+    val bare = healthyLinux.copy(toolkit = ToolkitSelection.Choice.PlatformDefault, x11Display = false)
+    for inputs <- List(healthyLinux, bare.copy(osName = "Windows 11"), bare.copy(osName = "Mac OS X")) do
+      RenderBackendSelection.choose(inputs.copy(setting = RenderBackendSetting.Auto)) shouldBe
+        Decision(RenderBackend.Skia, "native probe passed")
   }
 
-  it should "say why an explicit skia setting cannot run on Wayland" in {
-    RenderBackendSelection.choose(onWayland.copy(setting = RenderBackendSetting.Skia)) shouldBe
-      Decision(RenderBackend.Java2D, "skia needs X11; running on Wayland")
+  it should "need the native probe whenever a passing probe would choose a Skia backend" in {
+    val unprobed = healthyLinux.copy(probe = Probe.NotRun)
+    RenderBackendSelection.probeNeeded(unprobed.copy(setting = RenderBackendSetting.Auto)) shouldBe true
+    RenderBackendSelection.probeNeeded(unprobed) shouldBe true
+    RenderBackendSelection.probeNeeded(unprobed.copy(setting = RenderBackendSetting.Java2D)) shouldBe false
+    RenderBackendSelection.probeNeeded(
+      onWayland.copy(probe = Probe.NotRun, waylandRender = WaylandRender.SkiaRaster)
+    ) shouldBe true
+    RenderBackendSelection.probeNeeded(onWayland.copy(probe = Probe.NotRun)) shouldBe false
   }
 
-  it should "use Java2D on Linux without an X11 display" in {
+  it should "paint with the Skia raster under WLToolkit on Linux by default" in {
+    val decision = RenderBackendSelection.choose(onWayland.copy(waylandRender = WaylandRender.SkiaRaster))
+    decision shouldBe Decision(RenderBackend.SkiaRaster, "ui.render.wayland=skia-raster")
+  }
+
+  it should "keep Java2D under WLToolkit when ui.render.wayland asks for it, under auto and skia alike" in {
+    for setting <- List(RenderBackendSetting.Auto, RenderBackendSetting.Skia) do
+      RenderBackendSelection.choose(onWayland.copy(setting = setting)) shouldBe
+        Decision(RenderBackend.Java2D, "ui.render.wayland=java2d")
+  }
+
+  it should "use the Skia raster on Linux without an X11 display, and Java2D where there is no raster surface" in {
     val decision = RenderBackendSelection.choose(healthyLinux.copy(x11Display = false))
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.SkiaRaster
     decision.reason should include("X11 display")
+    val without = RenderBackendSelection.choose(healthyLinux.copy(x11Display = false, rasterSurfaceAvailable = false))
+    without.backend shouldBe RenderBackend.Java2D
+    without.reason should include("X11 display")
   }
 
   it should "use Java2D when the native probe failed, naming the cause" in {
@@ -123,10 +144,13 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
         .backend shouldBe RenderBackend.Java2D
   }
 
-  it should "use Java2D for xwayland when WLToolkit is still in force, because the toolkit was named explicitly" in {
+  it should "use the Skia raster for xwayland when WLToolkit is still in force, because the toolkit was named explicitly" in {
     val decision = RenderBackendSelection.choose(onWayland.copy(waylandRender = WaylandRender.XWayland))
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.SkiaRaster
     decision.reason should include("xwayland")
+    RenderBackendSelection
+      .choose(onWayland.copy(waylandRender = WaylandRender.XWayland, rasterSurfaceAvailable = false))
+      .backend shouldBe RenderBackend.Java2D
   }
 
   it should "choose Skia for xwayland once the toolkit is X11" in {
@@ -184,15 +208,12 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
         RenderBackendSelection.choose(inputs).backend should not be RenderBackend.Skia
     }
 
-  it should "choose the raster backend only under WLToolkit on Linux with skia-raster and a raster factory" in
+  it should "choose the raster backend only on Linux, with a raster factory, for WLToolkit or no X11 display" in
     forAll(inputsGen) { inputs =>
       if RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster then
-        (
-          inputs.osName,
-          inputs.toolkit,
-          inputs.waylandRender,
-          inputs.rasterSurfaceAvailable
-        ) shouldBe ("Linux", ToolkitSelection.Choice.Wayland, WaylandRender.SkiaRaster, true)
+        val wayland = inputs.toolkit == ToolkitSelection.Choice.Wayland
+        (inputs.osName, inputs.rasterSurfaceAvailable, wayland || !inputs.x11Display) shouldBe ("Linux", true, true)
+        if wayland then inputs.waylandRender should not be WaylandRender.Java2D
     }
 
   it should "always give a reason" in

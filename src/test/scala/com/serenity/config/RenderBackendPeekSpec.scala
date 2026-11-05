@@ -28,7 +28,7 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
     val missing: Path = TestTemp.file("serenity-render-backend-missing", ".conf")
     Files.delete(missing)
     RenderBackendPeek.read(missing).unsafeRunSync() shouldBe
-      RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.Java2D)
+      RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
   }
 
   it should "agree with the full config loader" in {
@@ -42,7 +42,7 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
     peekSettings("ui.render.backend = skia\nui.render.wayland = xwayland\n") shouldBe
       RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     peekSettings("ui.render.wayland = skia-raster\n").wayland shouldBe WaylandRender.SkiaRaster
-    peekSettings("ui.render.wayland = sideways\n").wayland shouldBe WaylandRender.Java2D
+    peekSettings("ui.render.wayland = sideways\n").wayland shouldBe WaylandRender.SkiaRaster
   }
 
   it should "agree with the full config loader on the wayland render" in {
@@ -52,7 +52,22 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
       RenderBackendPeek.read(file).unsafeRunSync().wayland
   }
 
+  it should "read ui.render.skia_vsync, off unless the file turns it on" in {
+    peekSettings("ui.render.skia_vsync = true\n").skiaVsync shouldBe true
+    peekSettings("ui.render.skia_vsync = false\n").skiaVsync shouldBe false
+    peekSettings("ui.render.backend = skia\n").skiaVsync shouldBe false
+    peekSettings("ui.render.skia_vsync = sometimes\n").skiaVsync shouldBe false
+  }
+
+  it should "agree with the full config loader on skia vsync" in {
+    val file = TestTemp.file("serenity-render-vsync-agree", ".conf")
+    Files.writeString(file, "ui.render.skia_vsync = true\n")
+    ConfigManagerTestSupport.loadConfig(Some(file.toString)).surfaceConfig.renderSkiaVsync shouldBe
+      RenderBackendPeek.read(file).unsafeRunSync().skiaVsync
+  }
+
   "A rendered default config" should "carry the backend setting" in {
     ConfigManager.configToString(AppConfig.default) should (include("ui.render.backend = auto") and
-      include("ui.render.wayland = java2d"))
+      include("ui.render.wayland = skia-raster") and
+      include("ui.render.skia_vsync = false"))
   }

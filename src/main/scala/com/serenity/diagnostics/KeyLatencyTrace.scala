@@ -50,6 +50,9 @@ final case class KeyLatency(seq: Long, whenToEdtMs: Long, stageNanos: Vector[Lon
 
   def stage(stage: LatencyStage): Long = stageNanos.lift(stage.ordinal).getOrElse(0L)
 
+  /** What the user waited: `total` starts when the event thread receives the key, so the gap before that is added. */
+  def keyToScreenNanos: Long = totalNanos + whenToEdtMs * 1_000_000L
+
   def logLine: String =
     val stages = LatencyStage.values.toList.map(stage => s"${stage.label}=${KeyLatency.millis(this.stage(stage))}")
     s"[LATENCY] seq=$seq when_to_edt=$whenToEdtMs ${stages.mkString(" ")} total=${KeyLatency.millis(totalNanos)} ms"
@@ -85,7 +88,7 @@ object KeyLatency:
     KeyLatency(key.seq, key.whenToEdtMs, stages, stages.sum)
 
 /** The keystrokes painted during one report window, and how many were drawn by a frame that changed nothing visible. */
-final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpainted: Int):
+final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpainted: Int, backend: String = ""):
   import LatencyWindow.NanosPerMs
 
   def stats: List[(String, PhaseStats)] =
@@ -93,7 +96,10 @@ final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpa
     else
       ("when_to_edt" -> PhaseStats.of(keys.map(_.whenToEdtMs * NanosPerMs))) ::
         LatencyStage.values.toList.map(stage => stage.label -> PhaseStats.of(keys.map(_.stage(stage)))) :::
-        List("total" -> PhaseStats.of(keys.map(_.totalNanos)))
+        List(
+          "total"         -> PhaseStats.of(keys.map(_.totalNanos)),
+          "key_to_screen" -> PhaseStats.of(keys.map(_.keyToScreenNanos))
+        )
 
   def summaryLine: String =
     val window = String.format(Locale.ROOT, "%.1f", elapsedMs / 1000.0)
@@ -102,7 +108,7 @@ final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpa
         String.format(Locale.ROOT, "%s p50=%.2f p95=%.2f", label, stats.p50Ms, stats.p95Ms)
     }
     val body = if parts.isEmpty then "no keystrokes" else s"${parts.mkString(" | ")} ms"
-    s"[LATENCY] summary window=${window}s keys=${keys.size} unpainted=$unpainted | $body"
+    s"[LATENCY] summary${PresentPoint.tag(backend)} window=${window}s keys=${keys.size} unpainted=$unpainted | $body"
 
   def logLines: Vector[String] = keys.map(_.logLine) :+ summaryLine
 
@@ -222,7 +228,8 @@ object KeyLatencyState:
   */
 final class KeyLatencyTrace(
     clock: () => Long = () => System.nanoTime(),
-    wallClock: () => Long = () => System.currentTimeMillis()
+    wallClock: () => Long = () => System.currentTimeMillis(),
+    backend: String = ""
 ):
   private val enabled = new AtomicBoolean(false)
   private val state   = new AtomicReference(KeyLatencyState.start(clock()))
@@ -263,4 +270,4 @@ final class KeyLatencyTrace(
   def drain(): LatencyWindow =
     val now      = clock()
     val previous = state.getAndUpdate(_.nextWindow(now))
-    previous.window(now)
+    previous.window(now).copy(backend = backend)
