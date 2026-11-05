@@ -9,9 +9,9 @@ class SkiaProbeSpec extends AnyFlatSpec with Matchers:
 
   "SkiaProbe.run" should "report the outcome of loading Skiko instead of throwing, whatever this machine lacks" in {
     SkiaProbe.run.unsafeRunSync() match
-      case Probe.Loaded        => succeed
-      case Probe.Failed(cause) => cause should fullyMatch regex """(\w+: .+|no raster surface)"""
-      case Probe.NotRun        => fail("the probe always runs")
+      case Probe.Loaded           => succeed
+      case Probe.Failed(cause, _) => cause should fullyMatch regex """(\w+: .+|no raster surface)"""
+      case Probe.NotRun           => fail("the probe always runs")
   }
 
   it should "give the same outcome when asked again, so the choice of backend does not depend on who asked first" in {

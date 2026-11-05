@@ -45,42 +45,44 @@ private[perf] object LayoutSnapshotBenchmarks:
     })
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val cache = WrappedLineCache.bounded()
-    val plain = buffer(document(paragraphs = 40, leadingBlankLines = 0))
-    val moved = buffer(document(paragraphs = 40, leadingBlankLines = 1))
+    lazy val cache = WrappedLineCache.bounded()
+    lazy val plain = buffer(document(paragraphs = 40, leadingBlankLines = 0))
+    lazy val moved = buffer(document(paragraphs = 40, leadingBlankLines = 1))
     def build(source: Buffer): TextLayoutSnapshot =
       TextLayoutSnapshot.fromBuffer(source, panelWidth, proseFont, wrapCache = cache)
-    val expectedRows = build(plain).visualLines.size
-    val headings     = buffer(headingDocument(paragraphs = 60))
+    lazy val expectedRows = build(plain).visualLines.size
+    lazy val headings     = buffer(headingDocument(paragraphs = 60))
     // Every wrap is measured afresh; what the owner has read off the font stays, as a process-wide cache once kept it.
-    val measuring = WrappedLineCache.measuring(ShapedTextCache(), LayoutMemos())
+    lazy val measuring = WrappedLineCache.measuring(ShapedTextCache(), LayoutMemos())
     def buildUncached(source: Buffer): TextLayoutSnapshot =
       TextLayoutSnapshot.fromBuffer(source, panelWidth, proseFont, wrapCache = measuring)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "layout.aligned_prose.cached_snapshot",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(build(plain).visualLines.size == expectedRows),
-        () => build(plain),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.aligned_prose.moved_lines",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(build(moved).visualLines.exists(_.bufferLine > 0)),
-        () => (build(plain), build(moved)),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.heading_prose.uncached_snapshot",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(buildUncached(headings).visualLines.exists(_.bufferLine == 3)),
-        () => buildUncached(headings),
-        settleJit = true
+    BenchmarkRunner.Benchmark.sharing((cache, plain, moved, expectedRows, headings, measuring))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "layout.aligned_prose.cached_snapshot",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(build(plain).visualLines.size == expectedRows),
+          () => build(plain),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.aligned_prose.moved_lines",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(build(moved).visualLines.exists(_.bufferLine > 0)),
+          () => (build(plain), build(moved)),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.heading_prose.uncached_snapshot",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(buildUncached(headings).visualLines.exists(_.bufferLine == 3)),
+          () => buildUncached(headings),
+          settleJit = true
+        )
       )
     )
 

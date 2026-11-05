@@ -210,7 +210,13 @@ object FontLoader:
     loadCodeFont(config).map(List(_))
 
   private lazy val availableSystemFontFamilies: List[String] =
-    GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.toList.sorted
+    usableFamilyNames(GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames)
+
+  /** The platform's family names, sorted. A platform may report a null name; sorting one throws, and a lazy val that
+    * throws is evaluated again at the next use, so the failure would repeat rather than settle.
+    */
+  private[serenity] def usableFamilyNames(reported: Array[String]): List[String] =
+    reported.toList.flatMap(Option(_)).sorted
 
   private def loadBundledMonospace(size: Float, resolve: String => String): IO[Font] =
     IO.pure(bundledMonospace(size).getOrElse(defaultSystemMonospace(size, resolve)))

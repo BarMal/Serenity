@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId, EditorPane, PaneId, SurfaceContent, UiSurface}
+import com.serenity.state.models.{Buffer, BufferId, EditorPane, Modal, PaneId, SurfaceContent, UiSurface}
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -71,8 +71,8 @@ class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
       (System.nanoTime() - start) / 1000000L
     }
 
-    val typed = driver.state.unsafeRunSync().commandRunnerSurface.collect {
-      case UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) => runner.searchTerm
+    val typed = driver.state.unsafeRunSync().commandPickerSurface.collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)), _, _) => picker.queryText
     }
     typed shouldBe Some("blur radius")
 
