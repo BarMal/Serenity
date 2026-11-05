@@ -8,7 +8,7 @@ object AppModeCommands:
     val name = mode.configKey.capitalize
     Command.typed(
       s"switch-to-${mode.configKey}-mode",
-      s"Switch the workspace to $name mode, which sets its typography, panels and tooling.",
+      s"Change the app mode to $name.",
       CommandIntent.View(ViewIntent.SetAppMode(mode)),
       CommandCategory.View,
       label = s"Switch to $name Mode"
