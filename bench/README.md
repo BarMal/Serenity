@@ -50,6 +50,8 @@ leaves a stack instead of blocking the batch. The conditions file also records e
 
 `bench-laptop.sh` sources `bench/bench-lib.sh` (keep the two together). It finds the app's log under either `$HOME/.local/state/serenity/` or `$HOME/.serenity/`, reads AC power from whichever `AC*` supply reports it, and exits non-zero when no run produced a `[FRAME]` timing line, so a batch of failed launches is not mistaken for a result. `scripts/test_bench_laptop.py` covers these.
 
+The run's output records how the quit key was sent and how many `[STATE MODAL]` lines the app logged; the run types text first, so a `ctrl+q` that reaches the app raises the unsaved-changes modal instead of quitting, and it is the `SIGTERM` in `stop_app` that ends it. A JVM still alive after `SIGTERM` is reported as `HUNG:` in the run's output, and its `stdout.log` and app log are copied beside the thread dump as `<label>-run<N>-hang.stdout.log` and `-hang.app.log` (#2507).
+
 ## Time to first frame of a packaged image
 
 `bench/ttfw.py <launcher> <runs> <label> [warm-up-runs]` launches a packaged app image with `--smoke-test --safe-mode` and reports the median wall time to the first painted frame (the `SERENITY_SMOKE_READY` line) and to exit. It needs a display and the image from a `desktop-release.yml` run (artifact `Serenity-linux-x64`, the zip of `dist/Serenity`); the laptop does not build. The warm-up run is discarded, which lets an AppCDS image write its archive.
