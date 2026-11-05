@@ -273,7 +273,10 @@ final private[manager] class StateManagerEventPipeline(
                         .map(committed =>
                           EventPipelineTransitions
                             .committed(model, result)
-                            .copy(app = ViewportResolution.markFollow(model.app, committed))
+                            .copy(app =
+                              ViewportResolution
+                                .markFollow(model.app, committed, ViewportResolution.focusedEditorBuffer(base))
+                            )
                         )
                     )
                 case _ => None
@@ -283,7 +286,12 @@ final private[manager] class StateManagerEventPipeline(
   /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
   private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
     val centred =
-      typed.copy(app = ViewportResolution.resolve(ViewportResolution.markFollow(start.app, typed.app), wrappedLines))
+      typed.copy(app =
+        ViewportResolution.resolve(
+          ViewportResolution.markFollow(start.app, typed.app, ViewportResolution.focusedEditorBuffer(start.app)),
+          wrappedLines
+        )
+      )
     modelCommit.commitValidated(start.app)(_ => centred) >>
       lspDocumentSync.enqueueChangedLspDocuments(start.app) >>
       scheduleMarkdownPreviewCommits(start.app)
@@ -395,7 +403,12 @@ final private[manager] class StateManagerEventPipeline(
         // only place that otherwise applies this pass -- without it, MoveUp/MoveDown/ExtendSelectionUp/
         // ExtendSelectionDown move the cursor but never scroll the viewport to follow it.
         modelCommit.commitState(
-          CursorViewport.ensureVisibleCursors(base, reducedState, wrapCache = wrappedLines),
+          CursorViewport.ensureVisibleCursors(
+            base,
+            reducedState,
+            wrapCache = wrappedLines,
+            keyedIn = base.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+          ),
           prevState
         )
       case None =>
