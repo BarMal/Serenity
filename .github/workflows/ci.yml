@@ -154,6 +154,7 @@ jobs:
             scripts.test_present_abba_summary \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
+            scripts.test_sample_os_memory \
             scripts.test_smoke_test_app_image \
             scripts.test_startup_rows \
             scripts.test_startup_spread \
