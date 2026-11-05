@@ -13,6 +13,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.HangBound
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -60,7 +61,7 @@ class AppRuntimeStartupWarmUpSpec extends AnyFlatSpec with Matchers:
         awaitExternalQuit = quitWhen(log)
       ) >> log.get
     }
-    program.unsafeRunTimed(60.seconds).getOrElse(fail("the runtime did not quit"))
+    HangBound.unsafeRunTimed(program, 20.seconds).getOrElse(fail("the runtime did not quit"))
 
   "AppRuntime.run" should "start the warm-up only after the first visible frame" in {
     val untilWarmingUp =
