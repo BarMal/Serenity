@@ -4,7 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -102,4 +102,36 @@ class LabelSpritesSpec extends AnyFlatSpec with Matchers:
 
     maxChannelDifference(run, label) shouldBe 0
     sprites.rasterised shouldBe 0L
+  }
+
+  private val keptRect = PixelRect(14, 12, 10, 6)
+
+  private def inKeptRect(x: Int, y: Int): Boolean =
+    x >= keptRect.xPx * 2 && x < (keptRect.xPx + keptRect.widthPx) * 2 && y >= keptRect.yPx * 2 &&
+      y < (keptRect.yPx + keptRect.heightPx) * 2
+
+  private def labelDrawnOffKept(kept: List[PixelRect]): BufferedImage =
+    drawn(LabelSprites(16))(surface => surface.withoutPixels(kept)(asLabel("1234", 10.5f)(surface)))
+
+  it should "leave the pixels of a kept rect as they were, as a clip on the surface does (#2481)" in {
+    val image = labelDrawnOffKept(List(keptRect))
+
+    val touched = for
+      x <- 0 until image.getWidth
+      y <- 0 until image.getHeight
+      if inKeptRect(x, y) && (image.getRGB(x, y) & 0xffffff) != 0xffffff
+    yield (x, y)
+    touched shouldBe empty
+  }
+
+  it should "paint everywhere else as a label drawn with nothing kept, once however the kept rect splits it (#2481)" in {
+    val withKept  = labelDrawnOffKept(List(keptRect))
+    val unclipped = labelDrawnOffKept(Nil)
+
+    val differing = for
+      x <- 0 until withKept.getWidth
+      y <- 0 until withKept.getHeight
+      if !inKeptRect(x, y) && withKept.getRGB(x, y) != unclipped.getRGB(x, y)
+    yield (x, y)
+    differing shouldBe empty
   }
