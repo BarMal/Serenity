@@ -225,6 +225,9 @@ final case class AppConfig(
     withSurfaceConfig(surfaceConfig.copy(columnModeEnabled = enabled))
 
   def withColumnTargetWidth(cells: Int): AppConfig =
+    withColumnTargetWidthSetting(Some(cells))
+
+  def withColumnTargetWidthSetting(cells: Option[Int]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(columnTargetWidthCells = cells))
 
   def withColumnGap(cells: Int): AppConfig =
