@@ -13,11 +13,8 @@ import com.serenity.keystroke.events.{
   DeleteBackward,
   Event,
   InsertChar,
-  ModalInsertChar,
-  ModalSubmit,
   MoveDown,
   MoveUp,
-  OpenGotoLine,
   PageDown,
   PageUp,
   ResizeEvent,
@@ -302,7 +299,7 @@ private[perf] object LaptopFrameBenchmarks:
           () => roundTrip(PageDown, PageUp)
         )
       )
-    ) ++ typewriterBenchmarks ++ goToLineBenchmarks
+    ) ++ typewriterBenchmarks ++ GoToLineBenchmarks.benchmarks
 
   /** Typing seeded-random letters, so almost every keystroke edits text the wrap cache has not seen: the cyclic a..z of
     * `continuous_typing` and the re-typed text of `type_and_delete` repeat wraps and flatter the typing path. Paragraph
@@ -370,40 +367,6 @@ private[perf] object LaptopFrameBenchmarks:
             assert(length == before, s"typewriter keystroke changed the document length: $before -> $length")
           ,
           () => keystroke()
-        )
-      )
-    )
-
-  /** Go to Line through its prompt, jumping between the start and the end of a 3000-paragraph document. */
-  private[perf] def goToLineBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    lazy val (stateManager, proseBufferId) = proseStateManager(paragraphs = 3000, cursorLine = 100)
-    def cursorLine: Option[Int] = stateManager.getCurrentState
-      .unsafeRunSync()
-      .persisted
-      .buffers
-      .get(proseBufferId)
-      .flatMap(_.editing.cursorPositions.headOption)
-      .map(_.line)
-    def goTo(line: Int): Unit =
-      val typed = line.toString.toList.map(ModalInsertChar(_))
-      (OpenGotoLine :: typed ::: List(ModalSubmit)).foreach(event => stateManager.applyEvent(event).unsafeRunSync())
-    def jumpAndBack(): Unit =
-      goTo(2900)
-      goTo(100)
-    BenchmarkRunner.Benchmark.sharing((stateManager, proseBufferId))(
-      List(
-        BenchmarkRunner.Benchmark(
-          "laptop.input.state_manager.go_to_line_3000_paragraphs",
-          BenchmarkIterationCounts.GoToLineWarmups,
-          BenchmarkIterationCounts.GoToLine,
-          () =>
-            goTo(2900)
-            val jumped = cursorLine
-            goTo(100)
-            assert(jumped.contains(2899) && cursorLine.contains(99), s"go to line landed on $jumped then $cursorLine")
-          ,
-          () => jumpAndBack(),
-          minBatch = BenchmarkIterationCounts.GoToLineBatch
         )
       )
     )

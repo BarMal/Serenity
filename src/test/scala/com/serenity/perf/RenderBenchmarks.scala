@@ -92,22 +92,7 @@ private[perf] object RenderBenchmarks:
       )
     )(
       List(
-        BenchmarkRunner.Benchmark(
-          "layout.large_multiline.visible_viewport",
-          3,
-          BenchmarkIterationCounts.LayoutVisibleViewport,
-          () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
-          () =>
-            plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
-              val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
-                buffer,
-                panelWidthPx = frameWidthPx,
-                monoFont,
-                wordWrapEnabled = false,
-                wrapCache = unremembered
-              )
-            }
-        ),
+        layoutRow(plainScrollState, layoutSnapshot, unremembered),
         BenchmarkRunner.Benchmark(
           "render.full_frame.java2d",
           2,
@@ -140,19 +125,44 @@ private[perf] object RenderBenchmarks:
           () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
           () => renderedFrame(diagnosticsState, deviceScale = 1.0, renderCaches)
         ),
-        BenchmarkRunner.Benchmark(
-          "render.hidpi_frame.java2d",
-          2,
-          8,
-          () =>
-            assert(
-              hidpiFrame.getWidth == frameWidthPx * 2 &&
-                hidpiFrame.getHeight == frameHeightPx * 2 &&
-                renderedFrameHasPixels(hidpiFrame)
-            ),
-          () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
-        )
+        hidpiRow(hidpiFrame, commentsState)
       )
+    )
+
+  private def layoutRow(
+    plainScrollState: => AppState,
+    layoutSnapshot: => Option[TextLayoutSnapshot],
+    unremembered: => WrappedLineCache.Measuring
+  ): BenchmarkRunner.Benchmark =
+    BenchmarkRunner.Benchmark(
+      "layout.large_multiline.visible_viewport",
+      3,
+      BenchmarkIterationCounts.LayoutVisibleViewport,
+      () => assert(layoutSnapshot.exists(_.visualLines.size == viewportSize.height)),
+      () =>
+        plainScrollState.persisted.buffers.get(BufferId(1)).foreach { buffer =>
+          val _ = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(
+            buffer,
+            panelWidthPx = frameWidthPx,
+            monoFont,
+            wordWrapEnabled = false,
+            wrapCache = unremembered
+          )
+        }
+    )
+
+  private def hidpiRow(hidpiFrame: => BufferedImage, commentsState: => AppState): BenchmarkRunner.Benchmark =
+    BenchmarkRunner.Benchmark(
+      "render.hidpi_frame.java2d",
+      2,
+      8,
+      () =>
+        assert(
+          hidpiFrame.getWidth == frameWidthPx * 2 &&
+            hidpiFrame.getHeight == frameHeightPx * 2 &&
+            renderedFrameHasPixels(hidpiFrame)
+        ),
+      () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
     )
 
   private def withDocumentComments(state: AppState): AppState =
