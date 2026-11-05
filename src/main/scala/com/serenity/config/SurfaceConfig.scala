@@ -72,7 +72,6 @@ final case class SurfaceConfig(
     // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
     // insets above.
     proseMeasure: Option[Int] = None,
-    viewportSizing: ViewportSizing = ViewportSizing(),
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
@@ -105,6 +104,5 @@ final case class SurfaceConfig(
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
       proseMeasure = proseMeasure.map(ProseMeasure.clamp),
-      viewportSizing = viewportSizing.normalized,
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )

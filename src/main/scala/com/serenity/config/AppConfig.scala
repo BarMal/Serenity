@@ -451,15 +451,6 @@ final case class AppConfig(
   def withTextAreaBottomInset(value: Double): AppConfig =
     withTextAreaInsets(surfaceConfig.textAreaInsets.copy(bottom = value))
 
-  def withViewportSizing(sizing: ViewportSizing): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(viewportSizing = sizing))
-
-  def withViewportWidthSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(surfaceConfig.viewportSizing.copy(width = sizing))
-
-  def withViewportHeightSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(surfaceConfig.viewportSizing.copy(height = sizing))
-
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))
 
