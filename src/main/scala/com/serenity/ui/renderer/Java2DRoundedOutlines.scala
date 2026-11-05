@@ -6,7 +6,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, CornerRounding, RoundedCorners}
+import com.serenity.ui.layout.{CellMetrics, CornerRounding, PixelRect, RoundedCorners}
 
 /** [[PanelOutlineDrawing]] for [[Java2DRenderSurface]]: the square outline and clip come from the surface itself, the
   * rounded ones are drawn here on its graphics context.
@@ -30,6 +30,10 @@ final private[renderer] class Java2DRoundedOutlines(
 
   override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     flat.withPixelClip(xPx, yPx, widthPx, heightPx)(render)
+
+  override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit = flat.withoutPixels(kept)(render)
+
+  override def keepsOffPixels: Boolean = flat.keepsOffPixels
 
   override def fillRoundRect(
     x: Int,

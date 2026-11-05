@@ -3,7 +3,7 @@ package com.serenity.ui.skia
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, CornerRounding, RoundedCorners}
+import com.serenity.ui.layout.{CellMetrics, CornerRounding, PixelRect, RoundedCorners}
 import com.serenity.ui.renderer.PanelOutlineDrawing
 import org.jetbrains.skia.{BlendMode, Canvas, ClipMode, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, RRect}
 
@@ -19,15 +19,17 @@ final private[skia] class SkiaRoundedOutlines(
     userClipDepth: AtomicInteger
 ) extends PanelOutlineDrawing:
 
-  // The surface's other shapes are not anti-aliased; rounded outlines are, so they get a paint of their own.
+  // The surface's other shapes are not anti-aliased; the rounded stroke is, so it gets a paint of its own.
   private val roundedStroke = Paint()
   roundedStroke.setAntiAlias(true)
   roundedStroke.setMode(PaintMode.STROKE)
   roundedStroke.setStrokeCap(PaintStrokeCap.SQUARE)
   roundedStroke.setStrokeJoin(PaintStrokeJoin.MITER)
 
+  // Hard-edged, like Java2D's: a pixel is wholly the fill or left as it was, so painting the same shape again gives the
+  // same pixels. An anti-aliased fringe is composited twice when a frame repaints a header beside a redrawn row.
   private val roundedFill = Paint()
-  roundedFill.setAntiAlias(true)
+  roundedFill.setAntiAlias(false)
 
   def strokeRect(x: Int, y: Int, width: Int, height: Int, color: RenderColor, strokeWidth: Float): Unit =
     flat.strokeRect(x, y, width, height, color, strokeWidth)
@@ -37,6 +39,10 @@ final private[skia] class SkiaRoundedOutlines(
 
   override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =
     flat.withPixelClip(xPx, yPx, widthPx, heightPx)(render)
+
+  override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit = flat.withoutPixels(kept)(render)
+
+  override def keepsOffPixels: Boolean = flat.keepsOffPixels
 
   /** Skia's per-corner radii run top-left, top-right, bottom-right, bottom-left. */
   private def roundedRect(
