@@ -92,11 +92,6 @@ private[config] object ConfigFieldSyntax:
   private[config] val insetPercent: FieldCodec[Double] =
     double.filtered(percent => percent >= 0.0 && percent <= TextAreaInsets.MaxInset * 100.0)
 
-  private[config] val viewportPercent: FieldCodec[Double] =
-    double.filtered(percent =>
-      percent >= ViewportAxisSizing.MinPercent * 100.0 && percent <= ViewportAxisSizing.MaxPercent * 100.0
-    )
-
   /** Characters per line, `off` or `unlimited` for none. */
   private[config] val proseMeasure: FieldCodec[Option[Int]] =
     given io.circe.Encoder[Option[Int]] = io.circe.Encoder.encodeOption(using io.circe.Encoder.encodeInt)

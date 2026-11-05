@@ -6,7 +6,6 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
-  CellMetrics,
   LayoutEngine,
   ViewportSize,
   VisualRowCounts,
@@ -51,7 +50,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     document: RichTextDocument,
     cursor: CursorPosition,
     columns: Int,
-    fonts: FontLoader.FontConfig = FontLoader.FontConfig()
+    fonts: FontLoader.FontConfig = FontLoader.FontConfig(),
+    typewriter: Boolean = false
   ): AppState =
     val buffer = Buffer
       .fromString(bufferId, document.plainText)
@@ -60,8 +60,9 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = columns, visibleLines = 24),
         editing = EditingState(List(cursor))
       )
-    val base    = AppState.initial
-    val surface = base.persisted.config.surfaceConfig.copy(wordWrapEnabled = true, typewriterScrollingEnabled = false)
+    val base = AppState.initial
+    val surface =
+      base.persisted.config.surfaceConfig.copy(wordWrapEnabled = true, typewriterScrollingEnabled = typewriter)
     base.copy(
       persisted = base.persisted.copy(
         config = withFonts(base.persisted.config.withSurfaceConfig(surface), fonts),
@@ -92,31 +93,35 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val viewport   = CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head)
     sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
 
-  /** Rows of the pane's own (document) font that fit the pane height, as `RendererPaneSetup` counts them: the
-    * viewport's `visibleLines` are code-grid rows, and a text font with a different line height fits a different number
-    * of rows into the same pixels, so the centre row depends on the fonts in use.
+  /** The cell row `cursor` is painted on, and the pane's middle row, as the painter and popups place them. */
+  private def paintedRow(state: AppState, cursor: CursorPosition): (Option[Int], Int) =
+    val size  = state.runtime.viewportSize.getOrElse(fail("no viewport size"))
+    val panes = LayoutEngine.laidOutPanes(state, LayoutEngine.calculateLayoutWithUI(state, size))
+    val rect  = panes.layouts(paneId).contentRect
+    (panes.screenPosition(paneId, cursor).map(_.y), rect.y + rect.height / 2)
+
+  /** How near the pane's middle row any top a few screens above `cursor` paints it: whole rows, some of them tall, set
+    * how near that can be.
     */
-  private def paintedRowsInPane(state: AppState): Int =
-    val config       = state.persisted.config.editorConfig.fontConfig
-    val codeHeightPx = CellMetrics.fromFont(FontLoader.previewCodeFont(config)).lineHeight
-    val textHeightPx = CellMetrics.fromFont(FontLoader.previewTextFont(config)).lineHeight
-    math.max(1, buffer(state).viewport.visibleLines * codeHeightPx / math.max(1, textHeightPx))
+  private def nearestToMiddle(state: AppState, cursor: CursorPosition, middle: Int): Int =
+    val counts = CursorViewport.visualRowsFor(buffer(state), state, WrappedLineCache.Uncached)
+    val tops = for
+      line <- math.max(0, cursor.line - 20) to cursor.line
+      row  <- 0 until counts.rowsIn(line)
+    yield (line, row)
+    tops
+      .flatMap { (line, row) =>
+        val scrolled = buffer(state).copy(viewport = buffer(state).viewport.scrolledTo(line, 0, row))
+        paintedRow(state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> scrolled))), cursor)._1
+      }
+      .map(row => math.abs(row - middle))
+      .minOption
+      .getOrElse(Int.MaxValue)
 
-  private def paintedSnapshot(state: AppState) =
-    val config = state.persisted.config.editorConfig.fontConfig
-    RenderCaches
-      .create()
-      .authoritativeScene
-      .forState(
-        state,
-        state.runtime.viewportSize.getOrElse(fail("no viewport size")),
-        FontLoader.previewCodeFont(config),
-        FontLoader.previewTextFont(config)
-      )
-      .textSnapshot(paneId)
-      .getOrElse(fail("no text snapshot"))
-
-  "A rich-text buffer" should "paint the cursor on the centre row wherever the cursor sits" in {
+  // #2570 item 2, changed with the owner's approval: centring is typewriter scrolling's alone (D3), and it is measured
+  // where the caret is painted, not as a count of rows -- tall rows above the caret put a row-count "centre" below the
+  // pane's middle. The caret is painted as near the middle as any top would paint it.
+  "A rich-text buffer with typewriter scrolling" should "paint the cursor as near the pane's middle as any top would" in {
     val document = richDocument(60)
     for
       fonts    <- List(FontLoader.FontConfig(), FontLoader.FontConfig(textFontSize = 18.0f))
@@ -124,13 +129,12 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
       line     <- List(21, 22, 23, 24, 25, 33)
       fraction <- List(0.0, 0.5, 0.95)
     do
-      val text   = document.plainText.split("\n", -1)
-      val cursor = CursorPosition(line, (text(line).length * fraction).toInt)
-      val state  = placed(stateWith(document, cursor, columns, fonts))
+      val text          = document.plainText.split("\n", -1)
+      val cursor        = CursorPosition(line, (text(line).length * fraction).toInt)
+      val state         = placed(stateWith(document, cursor, columns, fonts, typewriter = true))
+      val (row, middle) = paintedRow(state, cursor)
       withClue(s"textFontSize=${fonts.textFontSize} columns=$columns line=$line fraction=$fraction: ") {
-        paintedSnapshot(state).navigationGeometry.visualRowIndexFor(cursor) shouldBe Some(
-          paintedRowsInPane(state) / 2
-        )
+        row.map(painted => math.abs(painted - middle)) shouldBe Some(nearestToMiddle(state, cursor, middle))
       }
   }
 

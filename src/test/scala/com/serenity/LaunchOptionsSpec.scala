@@ -327,6 +327,10 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     parsed(List("--renderer=auto", "notes.md")).renderer shouldBe Some(RenderBackendSetting.Auto)
   }
 
+  it should "accept --renderer=skia-raster" in {
+    parsed(List("--renderer=skia-raster")).renderer shouldBe Some(RenderBackendSetting.SkiaRaster)
+  }
+
   it should "accept --wayland-render=<value>" in {
     parsed(List("--wayland-render=xwayland")).waylandRender shouldBe Some(WaylandRender.XWayland)
     parsed(List("--wayland-render=skia-raster")).waylandRender shouldBe Some(WaylandRender.SkiaRaster)
@@ -337,7 +341,7 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     val result = LaunchOptions.parse(List("--renderer=vulkan"))
     val errors = result.left.toOption.map(_.errors).getOrElse(Nil)
     errors should not be empty
-    errors.mkString(" ") should (include("vulkan") and include("auto") and include("skia") and include("java2d"))
+    errors.mkString(" ") should (include("vulkan") and include("auto") and include("skia-raster") and include("java2d"))
   }
 
   it should "fail fast on an invalid wayland render, naming the value and the choices" in {

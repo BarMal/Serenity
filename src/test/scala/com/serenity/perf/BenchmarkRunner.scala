@@ -71,6 +71,13 @@ object BenchmarkRunner:
       "tui.clear.preserved_rows.200x60"
     )
 
+  /** What a benchmark verifies and times. */
+  final private[perf] case class Body(verify: () => Unit, run: () => Any)
+
+  /** `prepare` builds whatever `verify` and `run` measure; see [[Benchmark.sharing]]. A benchmark made without one is
+    * built where it is declared. `strict`, when there is one, is the body the runner times instead of `verify` and
+    * `run`, which then only stand in for it; see [[Benchmark.lazily]].
+    */
   final private[perf] case class Benchmark(
       name: String,
       warmups: Int,
@@ -79,8 +86,60 @@ object BenchmarkRunner:
       run: () => Any,
       minBatch: Int = 1,
       settleJit: Boolean = false,
-      fixedSampleCount: Boolean = false
+      fixedSampleCount: Boolean = false,
+      prepare: () => Unit = () => (),
+      strict: Option[() => Body] = None
   )
+
+  private[perf] object Benchmark:
+
+    /** Declares `members` without building their fixtures. `fixtures` is evaluated once, by whichever member the runner
+      * reaches first and before that member is verified, warmed up or timed; a member the runner never reaches builds
+      * nothing. It has to name every fixture the members' `verify` and `run` use: one it leaves out is built by the
+      * first call that needs it, inside the warm-up.
+      */
+    def sharing(fixtures: => Any)(members: List[Benchmark]): List[Benchmark] =
+      lazy val built = fixtures
+      members.map(member =>
+        member.copy(prepare = () =>
+          member.prepare()
+          val _ = built)
+      )
+
+    /** [[sharing]] for a benchmark whose fixtures are its own. */
+    def building(fixtures: => Any)(member: Benchmark): Benchmark =
+      lazy val built = fixtures
+      member.copy(prepare = () =>
+        member.prepare()
+        val _ = built)
+
+    /** A benchmark whose `body` is built when the runner reaches it, before it is verified, warmed up or timed. The
+      * body's closures capture what it built directly, so a call that costs nanoseconds does not also pay to find its
+      * fixture; use this for such a benchmark, and [[sharing]] where a call costs microseconds or more.
+      */
+    def lazily(
+      name: String,
+      warmups: Int,
+      iterations: Int,
+      minBatch: Int = 1,
+      settleJit: Boolean = false,
+      fixedSampleCount: Boolean = false
+    )(body: => Body): Benchmark =
+      lazy val built = body
+      Benchmark(
+        name,
+        warmups,
+        iterations,
+        () => built.verify(),
+        () => built.run(),
+        minBatch,
+        settleJit,
+        fixedSampleCount,
+        prepare = () =>
+          val _ = built
+        ,
+        strict = Some(() => built)
+      )
 
   final private[perf] case class BenchmarkResult(
       name: String,
@@ -244,7 +303,9 @@ object BenchmarkRunner:
     declared: Benchmark,
     warmup: WarmupExtension.Session = WarmupExtension.Session.off
   ): BenchmarkResult =
-    val benchmark = declared.copy(run = slowed(declared.run))
+    declared.prepare()
+    val built = declared.strict.fold(declared)(strict => declared.copy(verify = strict().verify, run = strict().run))
+    val benchmark = built.copy(run = slowed(built.run))
     benchmark.verify()
     val (warmupInvocations, warmupAcc) =
       warmUp(benchmark.run, System.nanoTime() + WarmupBudgetNanos, 0, benchmark.warmups, 0L)
