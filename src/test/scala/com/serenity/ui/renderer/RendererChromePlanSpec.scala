@@ -39,9 +39,10 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
     geometryChanged: Boolean = false,
     rowsOverflow: Boolean = false,
     surfaceOverChrome: Boolean = false,
-    lastRowMoved: Set[Int] = Set.empty
+    lastRowMoved: Set[Int] = Set.empty,
+    staleSlack: Set[PaneId] = Set.empty
   ): RendererChromePlan.Signals =
-    RendererChromePlan.Signals(geometryChanged, rowsOverflow, surfaceOverChrome, lastRowMoved)
+    RendererChromePlan.Signals(geometryChanged, rowsOverflow, surfaceOverChrome, lastRowMoved, staleSlack)
 
   private def repaint(
     damage: Damage,
@@ -88,6 +89,22 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
       signals(surfaceOverChrome = true)
     ) shouldBe ChromeRepaint.Whole
     repaint(Damage.Nothing, geometryChanged = true) shouldBe ChromeRepaint.Whole
+  }
+
+  it should "keep the room below a pane's last row unless the pane's room is stale or the chrome repaints whole" in {
+    repaint(Damage.BufferRows(bufferId, Set(5))).slack.includes(activePane) shouldBe false
+
+    val stale = RendererChromePlan.repaintFor(
+      contract,
+      Damage.BufferRows(bufferId, Set(5)),
+      dirtyRows,
+      signals(staleSlack = Set(activePane))
+    )
+    stale.slack.includes(activePane) shouldBe true
+    stale.slack.includes(otherPane) shouldBe false
+
+    repaint(Damage.Everything).slack.includes(activePane) shouldBe true
+    repaint(Damage.Nothing, geometryChanged = true).slack.includes(activePane) shouldBe true
   }
 
   it should "repaint the last row's counter too when the pane's row count changed" in {
