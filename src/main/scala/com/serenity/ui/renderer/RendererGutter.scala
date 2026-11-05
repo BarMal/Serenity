@@ -78,6 +78,7 @@ object RendererGutter:
     val railRect = ColumnRails.railRect(contentRect, placement)
     val snapshot = placement.snapshot
     val kept     = ColumnRails.keptBands(context, railRect, snapshot, rows)
+    val cells    = context.cellMetrics
 
     surface.setBackgroundColor(gutterBackground(state))
     surface.setForegroundColor(state.persisted.theme.muted)
@@ -95,7 +96,7 @@ object RendererGutter:
           if shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
             val numberWidth = math.max(1, railRect.width - 1)
             (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-          else continuationIndicatorText(railRect.width)
+          else continuationText(context, railRect.width)
         if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
           surface.text.drawLabelPx(
             context.cellMetrics.toPixelX(railRect.x).toFloat,
@@ -106,6 +107,12 @@ object RendererGutter:
             text
           )
         else surface.putString(railRect.x, rowMetrics.screenRow(rowIndex), text)
+        if !shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
+          val measured = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+          val topPx =
+            if measured then rowMetrics.lineTopPx(rowIndex) else cells.toPixelY(rowMetrics.screenRow(rowIndex))
+          val heightPx = if measured then snapshot.lineHeightPx else cells.lineHeight
+          paintContinuationBar(context, railRect, topPx, heightPx, 0, state.persisted.theme.muted)
       case _ => ()
     }
 
@@ -318,7 +325,7 @@ object RendererGutter:
         // The single spacer cell falls on the divider's own column: trailing for a left counter, leading for a right
         // one, so digits always sit against the panel edge and the divider always against the content.
         if dividerOnLeft then " " + rightAligned else rightAligned + " "
-      else continuationIndicatorText(lineRect.width)
+      else continuationText(context, lineRect.width)
     if paintsNumber then
       measuredFont match
         case Some(measured) =>
@@ -357,6 +364,13 @@ object RendererGutter:
           }
           surface.text.setFont(FontSpec.fromAwt(context.uiFont))
         case None => surface.putString(lineRect.x, rowY, lineNumberText)
+    if paintsNumber && !rendersLineNumber then
+      val measured = measuredFont.isDefined
+      val topPx    = if measured then lineTopPx else context.cellMetrics.toPixelY(rowY)
+      val heightPx = if measured then snapshot.lineHeightPx else context.cellMetrics.lineHeight
+      val insetPx  = if measured then SurfaceTextInset.px(state.persisted.config) else 0.0
+      val shiftPx  = math.round(if dividerOnLeft then -insetPx else insetPx).toInt
+      paintContinuationBar(context, lineRect, topPx, heightPx, shiftPx, state.persisted.theme.muted)
     if rendersLineNumber then
       for
         bufferId   <- pane.bufferId.toList
@@ -425,6 +439,36 @@ object RendererGutter:
 
   private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
     !wordWrapEnabled || visualLine.startColumn == 0
+
+  /** What a wrapped row's counter says: nothing on a pixel surface, where [[paintContinuationBar]] draws the mark. */
+  private def continuationText(context: RenderContext, width: Int): String =
+    if context.surface.addressesPixels then " " * math.max(1, width) else continuationIndicatorText(width)
+
+  /** The mark of a wrapped row on a pixel surface: a bar inside the row's own band, so no pixel of it can land in a
+    * neighbouring row's, which a frame that reuses scrolled rows repaints differently from a cold one. The glyph `│`
+    * ran as tall as the face drew it, and a face whose bars join, or whose antialiasing spills a pixel row, did exactly
+    * that. The bar sits where the glyph's cell does.
+    */
+  private def paintContinuationBar(
+    context: RenderContext,
+    counter: LayoutRect,
+    topPx: Int,
+    heightPx: Int,
+    shiftPx: Int,
+    color: RenderColor
+  ): Unit =
+    if context.surface.addressesPixels then
+      val cells       = context.cellMetrics
+      val thicknessPx = math.max(1, heightPx / 16)
+      val barHeightPx = heightPx * 4 / 5
+      val cellX       = cells.toPixelX(counter.x + (math.max(1, counter.width) - 1) / 2)
+      context.surface.pixels.fillPixelRect(
+        cellX + (cells.charWidth - thicknessPx) / 2 + shiftPx,
+        topPx + (heightPx - barHeightPx) / 2,
+        thicknessPx,
+        barHeightPx,
+        color
+      )
 
   private def continuationIndicatorText(width: Int): String =
     val safeWidth = math.max(1, width)
