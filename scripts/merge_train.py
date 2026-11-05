@@ -27,6 +27,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterable, Protocol, Sequence
 
@@ -92,6 +93,7 @@ class Candidate:
     head_ref: str
     ci_green: bool
     ejected_heads: frozenset[str] = field(default_factory=frozenset)
+    held_heads: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -142,14 +144,26 @@ def ejection_marker(head: str) -> str:
     return f"<!-- merge-train-ejected:{head} -->"
 
 
-def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
-    prefix, suffix = "<!-- merge-train-ejected:", " -->"
+def held_marker(head: str) -> str:
+    return f"<!-- merge-train-held:{head} -->"
+
+
+def _heads_marked(comment_bodies: Iterable[str], kind: str) -> frozenset[str]:
+    prefix, suffix = f"<!-- merge-train-{kind}:", " -->"
     found = set()
     for body in comment_bodies:
         for line in body.splitlines():
             if line.startswith(prefix) and line.endswith(suffix):
                 found.add(line[len(prefix) : -len(suffix)])
     return frozenset(found)
+
+
+def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "ejected")
+
+
+def held_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "held")
 
 
 def eligible_candidates(candidates: Iterable[Candidate], only: Sequence[int] | None = None) -> list[Candidate]:
@@ -227,6 +241,24 @@ class GitHub(Protocol):
     def comment(self, number: int, body: str) -> None: ...
 
 
+# GITHUB_TOKEN may not push a commit that changes a workflow file, so a train never carries one.
+_WORKFLOWS_DIR = ".github/workflows/"
+
+
+class Outcome(Enum):
+    APPLIED = "applied"
+    LEFT_OUT = "left out"
+    HELD_BACK = "held back"
+
+
+@dataclass(frozen=True)
+class Built:
+    tip: str
+    included: list[Candidate]
+    left_out: list[Candidate]
+    held_back: list[Candidate]
+
+
 class Git:
     def __init__(self, workdir: Path) -> None:
         self.workdir = workdir
@@ -260,32 +292,42 @@ class Git:
 
     def build(
         self, base: str, manifest_of: Callable[[list[Candidate]], Manifest], prs: list[Candidate], limit: int
-    ) -> tuple[str, list[Candidate], list[Candidate]]:
-        """Squash-applies `prs` in order until `limit` have applied, so a pull request that conflicts or has moved is
-        replaced by the next one. Each is applied on top of those already included, so a later pull request is checked
-        against the batch built so far. Returns the tip, the included pull requests and those tried and left out."""
+    ) -> Built:
+        """Squash-applies `prs` in order until `limit` have applied, so a pull request that conflicts, has moved or is
+        held back is replaced by the next one. Each is applied on top of those already included, so a later pull
+        request is checked against the batch built so far."""
         self._run("checkout", "-q", "--detach", base)
         included: list[Candidate] = []
         left_out: list[Candidate] = []
+        held_back: list[Candidate] = []
         for pr in prs:
             if len(included) == limit:
                 break
-            if self._applies(pr):
+            outcome = self._apply(pr)
+            if outcome is Outcome.APPLIED:
                 self._run("commit", "-q", "-m", f"{pr.title} (#{pr.number})")
                 included.append(pr)
+            elif outcome is Outcome.HELD_BACK:
+                held_back.append(pr)
             else:
                 left_out.append(pr)
         self._run("commit", "-q", "--allow-empty", "-m", manifest_of(included).commit_message())
-        return self._out("rev-parse", "HEAD"), included, left_out
+        return Built(self._out("rev-parse", "HEAD"), included, left_out, held_back)
 
-    def _applies(self, pr: Candidate) -> bool:
+    def _apply(self, pr: Candidate) -> Outcome:
         self._run("fetch", "-q", "origin", f"refs/pull/{pr.number}/head")
         if self._out("rev-parse", "FETCH_HEAD") != pr.head:
-            return False
+            return Outcome.LEFT_OUT
         if self._run("merge", "--squash", "FETCH_HEAD", check=False).returncode != 0:
             self._run("reset", "-q", "--hard", "HEAD")
-            return False
-        return self._run("diff", "--cached", "--quiet", check=False).returncode != 0
+            return Outcome.LEFT_OUT
+        staged = self._out("diff", "--cached", "--name-only").splitlines()
+        if not staged:
+            return Outcome.LEFT_OUT
+        if any(path.startswith(_WORKFLOWS_DIR) for path in staged):
+            self._run("reset", "-q", "--hard", "HEAD")
+            return Outcome.HELD_BACK
+        return Outcome.APPLIED
 
     def push(self, sha: str, branch: str) -> None:
         self._run("push", "-q", "origin", f"{sha}:refs/heads/{branch}")
@@ -366,16 +408,21 @@ class Train:
             prs = tuple(TrainPr(c.number, c.head, c.title, c.head_ref) for c in included)
             return Manifest(base=base, prs=prs, created=created)
 
-        tip, included, left_out = self.git.build(base, manifest_of, eligible, self.batch)
-        if left_out:
-            self.log(f"Left out (conflict, no change or moved head): {_numbers(left_out)}")
-        if not included:
+        built = self.git.build(base, manifest_of, eligible, self.batch)
+        if built.left_out:
+            self.log(f"Left out (conflict, no change or moved head): {_numbers(built.left_out)}")
+        if built.held_back:
+            self.log(f"Held back (touches workflows, merged by hand): {_numbers(built.held_back)}")
+            for pr in built.held_back:
+                if pr.head not in pr.held_heads:
+                    self.github.comment(pr.number, _held_comment(pr))
+        if not built.included:
             return
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
-        self.git.push(tip, branch)
+        self.git.push(built.tip, branch)
         for path in REQUIRED_WORKFLOWS:
             self.github.dispatch(Path(path).name, branch)
-        self.log(f"Started {branch}: {_numbers(included)} on master {base[:8]}.")
+        self.log(f"Started {branch}: {_numbers(built.included)} on master {base[:8]}.")
 
     def _merge(self, manifest: Manifest, tip: str) -> None:
         for pr in manifest.prs:
@@ -406,6 +453,14 @@ class Train:
 
 def _numbers(prs: Iterable[TrainPr | Candidate]) -> str:
     return " ".join(f"#{p.number}" for p in prs)
+
+
+def _held_comment(pr: Candidate) -> str:
+    return (
+        f"The merge train leaves this pull request out: it changes `{_WORKFLOWS_DIR.rstrip('/')}`, and the token the "
+        "train pushes with cannot push workflow files. Merge it by hand; a new push is looked at again.\n"
+        f"{held_marker(pr.head)}"
+    )
 
 
 def _ejection_comment(pr: TrainPr, base: str, failed_runs: tuple[Run, ...]) -> str:
@@ -450,6 +505,7 @@ class RestGitHub:
             same_repo = (p["head"]["repo"] or {}).get("full_name") == self.repository
             plausible = same_repo and not p["draft"]
             head = p["head"]["sha"]
+            ejected, held = self._marked_heads(p["number"]) if plausible else (frozenset(), frozenset())
             candidates.append(
                 Candidate(
                     number=p["number"],
@@ -460,7 +516,8 @@ class RestGitHub:
                     same_repo=same_repo,
                     head_ref=p["head"]["ref"],
                     ci_green=plausible and self._ci_green(head),
-                    ejected_heads=self._ejected_heads(p["number"]) if plausible else frozenset(),
+                    ejected_heads=ejected,
+                    held_heads=held,
                 )
             )
         return candidates
@@ -470,9 +527,10 @@ class RestGitHub:
         latest = max(runs, key=lambda r: r["id"], default=None)
         return latest is not None and latest["conclusion"] == "success"
 
-    def _ejected_heads(self, number: int) -> frozenset[str]:
+    def _marked_heads(self, number: int) -> tuple[frozenset[str], frozenset[str]]:
         comments = self._get(f"issues/{number}/comments?per_page=100")
-        return ejected_heads_in(c["body"] or "" for c in comments)  # type: ignore[union-attr]
+        bodies = [c["body"] or "" for c in comments]  # type: ignore[union-attr]
+        return ejected_heads_in(bodies), held_heads_in(bodies)
 
     def head_of(self, number: int) -> str | None:
         pull = self._get(f"pulls/{number}")

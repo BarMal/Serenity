@@ -10,6 +10,7 @@ re-run once (owner's flake rule), then is halved until the culprit is found and 
 
 from __future__ import annotations
 
+import dataclasses
 import re
 import subprocess
 import tempfile
@@ -177,6 +178,7 @@ class Origin:
     def open_pr(self, number: int, path: str, text: str) -> str:
         _git(self.work, "fetch", "origin", "master")
         _git(self.work, "checkout", "-q", "-B", f"pr{number}", "origin/master")
+        (self.work / path).parent.mkdir(parents=True, exist_ok=True)
         (self.work / path).write_text(text)
         _git(self.work, "add", ".")
         _git(self.work, "commit", "-m", f"PR {number}")
@@ -253,6 +255,10 @@ class FakeGitHub:
 
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
+        held = mt.held_heads_in([body])
+        if held and number in self.candidates:
+            current = self.candidates[number]
+            self.candidates[number] = dataclasses.replace(current, held_heads=current.held_heads | held)
 
 
 class TrainTests(unittest.TestCase):
@@ -345,6 +351,56 @@ class TrainTests(unittest.TestCase):
         self.github.add_pr(2, "same.txt", "two\n")
         self._train(batch=3).tick()
         self.assertEqual([1], self._train_numbers())
+
+    def test_a_pull_request_that_changes_a_workflow_file_is_held_back_because_the_workflow_token_cannot_push_it(self) -> None:
+        # GITHUB_TOKEN may not push a commit that changes .github/workflows/*; the first such train failed at its push.
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self.github.add_pr(3, "b.txt", "b\n")
+        self._train(batch=2).tick()
+        self.assertEqual([2, 3], self._train_numbers())
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_workflow_change_is_held_back_even_when_it_is_deeper_than_the_top_level(self) -> None:
+        self.github.add_pr(1, ".github/workflows/nested/other.yml", "name: changed\n")
+        self.github.add_pr(2, "a.txt", "a\n")
+        self._train().tick()
+        self.assertEqual([2], self._train_numbers())
+
+    def test_no_train_is_pushed_when_every_pull_request_changes_a_workflow_file(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self.assertIsNone(self._live_branch())
+        self.assertEqual([], self.github.dispatched)
+        self.assertIn("Held back (touches workflows, merged by hand): #1", self.log)
+
+    def test_a_held_back_pull_request_gets_one_comment_per_head_saying_it_is_merged_by_hand(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: changed\n")
+        self._train().tick()
+        self._train().tick()
+        held = [body for number, body in self.github.comments if number == 1]
+        self.assertEqual(1, len(held), "a second step must not comment again on the same head")
+        self.assertIn(mt.held_marker(self.github.candidates[1].head), held[0])
+        self.assertIn(".github/workflows", held[0])
+        self.assertIn("Merge it by hand", held[0])
+
+    def test_a_new_push_to_a_held_back_pull_request_is_commented_on_again(self) -> None:
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: one\n")
+        self._train().tick()
+        self.github.add_pr(1, ".github/workflows/ci.yml", "name: two\n")
+        self._train().tick()
+        self.assertEqual(2, len([1 for number, _ in self.github.comments if number == 1]))
+
+    def test_held_markers_are_read_back_from_comment_bodies(self) -> None:
+        bodies = ["unrelated", f"text\n{mt.held_marker('a' * 40)}\nmore", mt.ejection_marker("b" * 40)]
+        self.assertEqual(frozenset({"a" * 40}), mt.held_heads_in(bodies))
+        self.assertEqual(frozenset({"b" * 40}), mt.ejected_heads_in(bodies))
+
+    def test_files_outside_the_workflows_directory_are_not_held_back(self) -> None:
+        self.github.add_pr(1, ".github/CODEOWNERS", "* @owner\n")
+        self.github.add_pr(2, "scripts/x.txt", "x\n")
+        self._train().tick()
+        self.assertEqual([1, 2], self._train_numbers())
 
     def test_a_green_train_merges_its_pull_requests_in_order_and_master_gets_exactly_the_tested_tree(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
