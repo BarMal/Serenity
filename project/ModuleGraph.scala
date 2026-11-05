@@ -30,25 +30,66 @@ object ModuleGraph {
 
   /** Bottom to top. The last layer, `app`, takes every file no earlier layer claims. */
   val Layers: Seq[(String, Seq[String])] = Seq(
-    "core-text"    -> Seq("rope/", "text/", "io/AtomicFileWriter.scala"),
+    "core-text"    -> Seq("rope/", "text/", "io/AtomicFileWriter.scala", "io/RenameRetryPolicy.scala"),
     "lsp-protocol" -> Seq("lsp/config/", "lsp/model/", "lsp/client/"),
     "richtext"     -> Seq("richtext/"),
     "manuscript"   -> Seq("manuscript/", "exporting/", "publish/"),
-    "theme"        -> Seq("ui/color/", "ui/theme/", "ui/fonts/", "ui/display/", "ui/openings/"),
+    "theme"        -> Seq("ui/color/", "ui/theme/", "ui/display/"),
     "markdown"     -> Seq("markdown/"),
-    "app"          -> Nil
+    // The core, bottom to top (#2502, Phase 2 v3 section 2). Package defaults; the assignment table moves single files.
+    "base"    -> Seq("keystroke/events/"),
+    "uibase"  -> Seq("ui/openings/", "ui/widget/", "ui/fonts/"),
+    "config"  -> Seq("config/"),
+    "command" -> Seq("command/"),
+    "model"   -> Seq("state/models/"),
+    "layout"  -> Seq("ui/layout/"),
+    "services" -> Seq(
+      "document/",
+      "state/undo/",
+      "lsp/",
+      "state/reducers/",
+      "session/",
+      "ui/presets/",
+      "spellcheck/",
+      "state/manager/",
+      "keystroke/translators/"
+    ),
+    "render" -> Seq("ui/renderer/"),
+    "app"    -> Nil
+  )
+
+  /** Layers whose files are held to the layering. The rest of the code (module `app`) is not yet placed, so an edge
+    * from one of these into it is not counted; an edge from a leaf module into it is.
+    */
+  private val CoreLayers: Set[String] =
+    Set("base", "uibase", "config", "command", "model", "layout", "services", "render")
+
+  /** Files assigned one by one, as `path<TAB>module`, where the package's layer is not where the file has to sit. */
+  final case class Assignment(files: Map[String, String])
+
+  object Assignment {
+    val empty: Assignment = Assignment(Map.empty)
+  }
+
+  /** Files assigned one by one because their package spans more than one layer. Checked before [[Layers]]. */
+  private val Overrides: Map[String, String] = Map(
+    "ui/theme/MarkdownInlineStyling.scala"  -> "markdown",
+    "ui/theme/config/AppThemeManager.scala" -> "app",
+    "publish/ManuscriptExport.scala"        -> "app"
   )
 
   private val ModuleOrder: Map[String, Int] = Layers.map(_._1).zipWithIndex.toMap
   private val Marker                        = "com/serenity/"
 
-  def moduleOf(uri: String): String = {
+  def moduleOf(uri: String, assignment: Assignment = Assignment.empty): String = {
     val at = uri.indexOf(Marker)
     if (at < 0) Layers.last._1
     else {
       val relative = uri.substring(at + Marker.length)
-      Layers
-        .collectFirst { case (name, prefixes) if prefixes.exists(relative.startsWith) => name }
+      assignment.files
+        .get(relative)
+        .orElse(Overrides.get(relative))
+        .orElse(Layers.collectFirst { case (name, prefixes) if prefixes.exists(relative.startsWith) => name })
         .getOrElse(Layers.last._1)
     }
   }
@@ -144,7 +185,13 @@ object ModuleGraph {
     (symbol, role)
   }
 
-  def readDocuments(root: File): Seq[Document] =
+  /** Documents under `root`. A document whose source file no longer exists under `sourceRoot` is dropped: sbt leaves
+    * the semanticdb of a deleted or renamed source behind, and it would count as a file that is not there.
+    */
+  def readDocuments(root: File, sourceRoot: File): Seq[Document] =
+    readAll(root).filter(document => new File(sourceRoot, document.uri).exists())
+
+  private def readAll(root: File): Seq[Document] =
     if (!root.exists()) Nil
     else {
       val stream = Files.walk(root.toPath)
@@ -212,14 +259,49 @@ object ModuleGraph {
     found.result().filter(_.size > 1).sortBy(c => (-c.size, c.min))
   }
 
-  def moduleEdges(graph: Map[String, Set[String]]): Seq[Edge] =
+  def moduleEdges(graph: Map[String, Set[String]], assignment: Assignment = Assignment.empty): Seq[Edge] =
     graph.toSeq.sortBy(_._1).flatMap {
       case (from, targets) =>
-        targets.toSeq.sorted.map(to => Edge(from, moduleOf(from), to, moduleOf(to)))
+        targets.toSeq.sorted.map(to => Edge(from, moduleOf(from, assignment), to, moduleOf(to, assignment)))
     }
 
-  def upwardEdges(graph: Map[String, Set[String]]): Seq[Edge] =
-    moduleEdges(graph).filter(edge => ModuleOrder(edge.fromModule) < ModuleOrder(edge.toModule))
+  def upwardEdges(graph: Map[String, Set[String]], assignment: Assignment = Assignment.empty): Seq[Edge] =
+    moduleEdges(graph, assignment).filter { edge =>
+      ModuleOrder(edge.fromModule) < ModuleOrder(edge.toModule) &&
+      !(CoreLayers.contains(edge.fromModule) && edge.toModule == Layers.last._1)
+    }
+
+  def readAssignment(file: File): Assignment =
+    if (!file.exists()) Assignment.empty
+    else {
+      val entries = Files
+        .readAllLines(file.toPath, StandardCharsets.UTF_8)
+        .asScala
+        .filter(line => line.trim.nonEmpty && !line.trim.startsWith("#"))
+        .map { line =>
+          line.split('\t') match {
+            case Array(path, module) if ModuleOrder.contains(module) => path -> module
+            case _ =>
+              throw new IllegalArgumentException(
+                s"${file.getName}: expected `path<TAB>module` with a known module, got: $line"
+              )
+          }
+        }
+      Assignment(entries.toMap)
+    }
+
+  private val AssignmentHeader = Seq(
+    "# Module assignment: files whose layer is not their package's default (see ModuleGraph.Layers).",
+    "# A file listed here takes this module; every other file takes its package's. The ratchet reads it, so a",
+    "# file moved to the right layer shows up as an upward edge that disappears from the baseline.",
+    "# Columns: path under com/serenity/ <TAB> module"
+  )
+
+  def writeAssignment(file: File, assignment: Assignment): Unit = {
+    val lines = AssignmentHeader ++ assignment.files.toSeq.sorted.map { case (path, module) => s"$path\t$module" }
+    Files.write(file.toPath, lines.mkString("", "\n", "\n").getBytes(StandardCharsets.UTF_8))
+    ()
+  }
 
   // -- ratchet ------------------------------------------------------------------------------------------------
 
@@ -247,8 +329,12 @@ object ModuleGraph {
     ()
   }
 
-  def check(documents: Seq[Document], baseline: Baseline): Option[String] = {
-    val current = upwardEdges(fileGraph(documents))
+  def check(
+    documents: Seq[Document],
+    baseline: Baseline,
+    assignment: Assignment = Assignment.empty
+  ): Option[String] = {
+    val current = upwardEdges(fileGraph(documents), assignment)
     val keys    = current.map(_.key).toSet
     val added   = current.filterNot(edge => baseline.keys.contains(edge.key))
     val gone    = baseline.keys.diff(keys).toSeq.sorted
@@ -277,12 +363,12 @@ object ModuleGraph {
     relative.split('/').dropRight(1).mkString("/")
   }
 
-  def report(documents: Seq[Document]): String = {
+  def report(documents: Seq[Document], assignment: Assignment = Assignment.empty): String = {
     val graph      = fileGraph(documents)
-    val edges      = moduleEdges(graph)
+    val edges      = moduleEdges(graph, assignment)
     val components = cycles(graph)
-    val upward     = upwardEdges(graph)
-    val perModule  = graph.keys.toSeq.groupBy(moduleOf).mapValues(_.size)
+    val upward     = upwardEdges(graph, assignment)
+    val perModule  = graph.keys.toSeq.groupBy(moduleOf(_, assignment)).mapValues(_.size)
 
     val moduleLines = Layers.map {
       case (name, _) =>

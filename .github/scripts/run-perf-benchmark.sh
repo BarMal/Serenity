@@ -17,8 +17,19 @@ shard_option_for() {
   fi
 }
 
+# `app/` when the checkout's build has an `app` project (after the module split, #2502), nothing when the root project
+# holds the sources. The benchmark runs on a base checkout and on this one, which can be on either side of the split.
+sbt_project_prefix_for() {
+  if grep -Eq '^lazy val app\b' "$1/build.sbt" 2>/dev/null; then echo "app/"; fi
+}
+
 if [ "${1:-}" = "--shard-option" ]; then
   shard_option_for "$2"
+  exit 0
+fi
+
+if [ "${1:-}" = "--sbt-project-prefix" ]; then
+  sbt_project_prefix_for "$2"
   exit 0
 fi
 
@@ -26,6 +37,7 @@ dir="$1" out="$2"
 shift 2
 names="$*"
 shard_option="$(shard_option_for "$dir")"
+project="$(sbt_project_prefix_for "$dir")"
 
 # sbt prefixes every line of runMain's stdout with "[info] " and `sbt -v` wraps it in ANSI colour escapes; strip both,
 # keeping from the suite's own title line onward so earlier sbt log noise is excluded. A run that crashes leaves an
@@ -35,8 +47,8 @@ shard_option="$(shard_option_for "$dir")"
 # slow is never retried -- the paired comparison decides that.
 for attempt in 1 2; do
   (cd "$dir" && xvfb-run -a -s "-screen 0 ${SCREEN} -dpi ${DPI}" \
-    sbt -v "set Test / run / javaOptions += \"-Dsun.java2d.uiScale=${SCALE}\"" \
-    "Test/runMain com.serenity.perf.PerformanceBenchmarks ${shard_option} ${names}") > "$out.raw" 2>&1 || true
+    sbt -v "set ${project}Test / run / javaOptions += \"-Dsun.java2d.uiScale=${SCALE}\"" \
+    "${project}Test/runMain com.serenity.perf.PerformanceBenchmarks ${shard_option} ${names}") > "$out.raw" 2>&1 || true
   sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' "$out.raw" \
     | sed -n '/^\[info\] Serenity performance benchmarks$/,$p' \
     | sed 's/^\[info\] //' > "$out"
