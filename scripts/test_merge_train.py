@@ -266,11 +266,11 @@ class TrainTests(unittest.TestCase):
         self.log: list[str] = []
         self.clock = _NOW
 
-    def _train(self, dry_run: bool = False, flake_issue: int | None = 99) -> mt.Train:
+    def _train(self, dry_run: bool = False, flake_issue: int | None = 99, batch: int = 6) -> mt.Train:
         return mt.Train(
             github=self.github,
             git=mt.Git(self.clone),
-            batch=6,
+            batch=batch,
             dry_run=dry_run,
             flake_issue=flake_issue,
             now=lambda: self.clock,
@@ -307,6 +307,43 @@ class TrainTests(unittest.TestCase):
         manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
         assert manifest is not None
         self.assertEqual([1], [p.number for p in manifest.prs])
+
+    def _train_numbers(self) -> list[int]:
+        branch = self._live_branch()
+        assert branch is not None
+        manifest = mt.Manifest.from_commit_message(_git(self.origin.bare, "log", "-1", "--format=%B", branch))
+        assert manifest is not None
+        return [p.number for p in manifest.prs]
+
+    def test_a_conflicting_pull_request_is_replaced_by_the_next_eligible_one(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self.github.add_pr(3, "c.txt", "c\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 3], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2", self.log)
+
+    def test_a_backfilled_pull_request_is_applied_on_top_of_the_batch_built_so_far(self) -> None:
+        self.github.add_pr(1, "x.txt", "one\n")
+        self.github.add_pr(2, "x.txt", "two\n")
+        self.github.add_pr(3, "x.txt", "three\n")
+        self.github.add_pr(4, "y.txt", "y\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 4], self._train_numbers())
+        self.assertIn("Left out (conflict, no change or moved head): #2 #3", self.log)
+
+    def test_backfilling_never_takes_the_train_past_the_batch_size(self) -> None:
+        for n in (1, 2, 3):
+            self.github.add_pr(n, f"f{n}.txt", f"{n}\n")
+        self._train(batch=2).tick()
+        self.assertEqual([1, 2], self._train_numbers())
+        self.assertFalse(any("Left out" in line for line in self.log))
+
+    def test_when_the_batch_cannot_be_filled_it_takes_every_pull_request_that_applies(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self._train(batch=3).tick()
+        self.assertEqual([1], self._train_numbers())
 
     def test_a_green_train_merges_its_pull_requests_in_order_and_master_gets_exactly_the_tested_tree(self) -> None:
         self.github.add_pr(1, "a.txt", "a\n")
