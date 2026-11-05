@@ -1,5 +1,7 @@
 package com.serenity.keystroke.events
 
+import java.nio.file.Path
+
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.{Diagnostic, LspPosition, LspProgress, LspTextEdit, SemanticTokenData, TextChangeDiff}
 import com.serenity.state.models.CursorPosition
@@ -26,6 +28,10 @@ enum LspEvent:
 
   /** The language's server is gone, so whatever it still reported as running is not. */
   case LspServerStopped(languageId: LanguageId)
+
+  /** The user trusted `root` (#2526), so servers refused there may now start for the documents already open under it.
+    */
+  case LspFolderTrusted(root: Path)
 
   /** A server's `workspace/applyEdit`, keyed by document uri; applied to every open buffer it names. */
   case LspWorkspaceEditRequested(edits: Map[String, List[LspTextEdit]])
