@@ -65,6 +65,9 @@ object AppConfigOps:
     def withRenderWayland(mode: WaylandRender): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderWayland = mode))
 
+    def withOffscreenCursorSurfaces(choice: OffscreenCursorSurfaces): AppConfig =
+      appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(offscreenCursorSurfaces = choice))
+
     def withExplorerOpenMode(mode: ExplorerOpenMode): AppConfig =
       appConfig.withInputConfig(appConfig.inputConfig.copy(explorerOpenMode = mode))
 

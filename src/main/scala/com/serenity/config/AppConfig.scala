@@ -225,6 +225,9 @@ final case class AppConfig(
     withSurfaceConfig(surfaceConfig.copy(columnModeEnabled = enabled))
 
   def withColumnTargetWidth(cells: Int): AppConfig =
+    withColumnTargetWidthSetting(Some(cells))
+
+  def withColumnTargetWidthSetting(cells: Option[Int]): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(columnTargetWidthCells = cells))
 
   def withColumnGap(cells: Int): AppConfig =
@@ -450,15 +453,6 @@ final case class AppConfig(
 
   def withTextAreaBottomInset(value: Double): AppConfig =
     withTextAreaInsets(surfaceConfig.textAreaInsets.copy(bottom = value))
-
-  def withViewportSizing(sizing: ViewportSizing): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(viewportSizing = sizing))
-
-  def withViewportWidthSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(surfaceConfig.viewportSizing.copy(width = sizing))
-
-  def withViewportHeightSizing(sizing: ViewportAxisSizing): AppConfig =
-    withViewportSizing(surfaceConfig.viewportSizing.copy(height = sizing))
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))

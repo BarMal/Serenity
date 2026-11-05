@@ -434,7 +434,7 @@ object LayoutEngine:
     panelRect: LayoutRect,
     wordWrapEnabled: Boolean,
     columnModeEnabled: Boolean,
-    columnTargetWidthCells: Int,
+    columnTargetWidthCells: Option[Int],
     columnGap: Int
   ): Viewport =
     updateBufferViewportDimensions(
@@ -473,14 +473,23 @@ object LayoutEngine:
     * style "as many as fit", never fewer than one.
     */
   def columnCount(contentWidthCells: Int, columnTargetWidthCells: Int, columnGap: Int): Int =
-    val gap    = columnGap.max(0)
-    val target = columnTargetWidthCells.max(1)
-    math.max(1, (contentWidthCells + gap) / (target + gap))
+    columnCount(contentWidthCells, Some(columnTargetWidthCells), columnGap)
+
+  /** No target width means unlimited: a single column fills the pane. */
+  def columnCount(contentWidthCells: Int, columnTargetWidthCells: Option[Int], columnGap: Int): Int =
+    columnTargetWidthCells.fold(1) { targetCells =>
+      val gap    = columnGap.max(0)
+      val target = targetCells.max(1)
+      math.max(1, (contentWidthCells + gap) / (target + gap))
+    }
 
   /** The width of a single column once `columnCount` columns (and the gaps between them) are fitted into
     * `contentWidthCells`.
     */
   def columnWidthCells(contentWidthCells: Int, columnTargetWidthCells: Int, columnGap: Int): Int =
+    columnWidthCells(contentWidthCells, Some(columnTargetWidthCells), columnGap)
+
+  def columnWidthCells(contentWidthCells: Int, columnTargetWidthCells: Option[Int], columnGap: Int): Int =
     val gap   = columnGap.max(0)
     val count = columnCount(contentWidthCells, columnTargetWidthCells, columnGap)
     math.max(1, (contentWidthCells - (count - 1) * gap) / count)

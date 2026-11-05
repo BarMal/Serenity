@@ -17,7 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, VirtualTime}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,6 +33,11 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
 
   given Balance           = Balance.default
   given LoggerFactory[IO] = NoOpFactory[IO]
+
+  // The editors are compared by their undo history, and undo grouping ends an edit run after a pause of over a second
+  // between keys (`EditClock.Pause`). On the real clock a stall that long between the one-at-a-time editor's keys leaves
+  // it a step ahead of the batched one (#2484); the programs that build editors run on `VirtualTime`, where no time
+  // passes between keys (see UndoGroupingClockSpec).
 
   private val words =
     "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore".split(" ")
@@ -100,6 +105,23 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
     stateManager.getModel.map(_.undo.undoStack.size)
 
   private def matchesPerEvent(config: AppConfig, slices: List[List[Event]], after: List[Event] = Nil): Unit =
+    differences(config, slices, after, exactViewport = true) shouldBe empty
+
+  /** Where the viewports of a batched and a per-event run differ, or -- when `exactViewport` is false, because the view
+    * keeps where it was until the caret nears an edge and so depends on the path taken -- where their text, cursors or
+    * undo depth differ, or the batched run leaves the caret out of the pane.
+    */
+  private def differences(
+    config: AppConfig,
+    slices: List[List[Event]],
+    after: List[Event],
+    exactViewport: Boolean
+  ): List[String] =
+    def same(actual: Shown, expected: Shown): Boolean =
+      if exactViewport then actual == expected
+      else
+        actual.map((text, editing, _) => (text, editing)) == expected.map((text, editing, _) => (text, editing)) &&
+        actual.forall((_, editing, viewport) => caretInPane(editing, viewport))
     val program = for
       (batched, bufferId) <- editor(config)
       (perEvent, _)       <- editor(config)
@@ -111,7 +133,9 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           actual        <- shown(batched, bufferId)
           batchedDepth  <- undoDepth(batched)
           perEventDepth <- undoDepth(perEvent)
-        yield Option.when(actual != expected || batchedDepth != perEventDepth)(s"slice $index (${slice.size} events)")
+        yield Option.when(!same(actual, expected) || batchedDepth != perEventDepth)(
+          s"slice $index (${slice.size} events)"
+        )
       }
       afterDiffer <- after.zipWithIndex.traverse { (event, index) =>
         for
@@ -119,10 +143,18 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           _        <- perEvent.applyEvent(event)
           expected <- shown(perEvent, bufferId)
           actual   <- shown(batched, bufferId)
-        yield Option.when(actual != expected)(s"$event #$index after the slices")
+        yield Option.when(!same(actual, expected))(s"$event #$index after the slices")
       }
     yield (differ ++ afterDiffer).flatten
-    program.unsafeRunSync() shouldBe empty
+    VirtualTime.runVirtual(program)
+
+  private type Shown = Option[(String, EditingState, Viewport)]
+
+  /** Necessary for the caret to be shown: its line lies within as many lines of the top as the pane has rows. */
+  private def caretInPane(editing: EditingState, viewport: Viewport): Boolean =
+    editing.cursorPositions.headOption.forall { cursor =>
+      cursor.line >= viewport.topLine && cursor.line < viewport.topLine + viewport.visibleLines
+    }
 
   private val wrapped    = AppConfig.default.withWordWrap(true)
   private val typewriter = wrapped.withSurfaceConfig(wrapped.surfaceConfig.copy(typewriterScrollingEnabled = true))
@@ -141,18 +173,18 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
       )
 
   "A batch of deletions" should "settle as one run" in {
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, heldBackspace)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 1, folded = heldBackspace.size)
   }
 
   "A batch mixing typed keys, deletions, line breaks and caret steps" should "settle as one run" in {
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, editing)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 1, folded = editing.size)
   }
 
@@ -160,10 +192,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
     val events = typed(10, 4L) ++ List[Event](PageDown) ++ List.fill[Event](10)(DeleteBackward) ++ List[Event](
       MoveToEnd
     ) ++ typed(5, 5L)
-    val run = (for
+    val run = VirtualTime.runVirtual(for
       (stateManager, _) <- editor(wrapped)
       run               <- settledRuns(stateManager, events)
-    yield run).unsafeRunSync()
+    yield run)
     run shouldBe Run(commits = 3, folded = events.size - 2)
   }
 
@@ -188,7 +220,15 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
       ) ++
         List.fill[Event](3)(MoveRight) ++ List[Event](MoveToEnd, MoveUp, MoveUp, MoveDown) ++ typed(4, 8L) ++
         List[Event](ColumnLeft, ColumnRight, ExtendSelectionPageDown) ++ List.fill[Event](4)(DeleteBackward)
-    List(wrapped, typewriter).foreach(matchesPerEvent(_, List(reading), after = List.fill[Event](6)(Undo)))
+    // Without typewriter scrolling the view keeps where it was until the caret nears an edge, so a run placed once at its
+    // end can rest elsewhere than the same events placed one at a time (#2570): the viewport is not compared there.
+    val undone = List.fill[Event](6)(Undo)
+    val differing =
+      List("wrapped" -> (wrapped, false), "typewriter" -> (typewriter, true)).flatMap { (name, config) =>
+        val (appConfig, exactViewport) = config
+        differences(appConfig, List(reading), undone, exactViewport).map(difference => s"$name: $difference")
+      }
+    differing shouldBe empty
   }
 
   "The language-server sync after a run" should "send one change carrying the run's final text" in {

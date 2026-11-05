@@ -174,10 +174,9 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
-the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
-a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
-its signature.
+The Linux and Windows runtimes are built with `--generate-cds-archive`, which gives the JVM its base archive. macOS
+has no archive: writing into a signed `.app` would break its signature. The packages ship the JDK 25 AOT cache
+described below instead of a dynamic AppCDS archive.
 
 The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
 (`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
@@ -185,8 +184,11 @@ and the JVM then logs `Mismatched values for property jdk.module.enable.native.a
 start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
 on that line.
 
-The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
-instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+The **Linux and Windows packages ship a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB
+compressed on Linux) instead of the AppCDS flags. Windows used to write an AppCDS archive on its first exit, so its first
+run was the slow one (3.38 s against 1.99 s, #2407); the cache is written at build time, so every run is a warm one.
+The scripts take both layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they run
+under Git Bash). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
 (`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
 before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
@@ -298,7 +300,7 @@ its default.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
@@ -312,9 +314,18 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
+the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
+the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
+(#2489); `ui.render.wayland` is then ignored. Terminal and safe-mode launches
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
+`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
+draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
+hardware says which should be the default.
 
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:

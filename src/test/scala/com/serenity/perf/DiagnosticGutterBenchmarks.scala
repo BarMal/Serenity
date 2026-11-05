@@ -61,9 +61,9 @@ private[perf] object DiagnosticGutterBenchmarks:
     stateManager
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val (prose, proseId) =
+    lazy val (prose, proseId) =
       LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withLineNumbers(true))
-    val (code, codeId) =
+    lazy val (code, codeId) =
       LaptopFrameBenchmarks.stateManagerHolding(
         BenchmarkFixtures.loremIpsumProse(300),
         AppConfig.conventional.withLineNumbers(true),
