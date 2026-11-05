@@ -133,6 +133,7 @@ jobs:
             scripts.test_abba_compare \
             scripts.test_aot_cache_scripts \
             scripts.test_bench_laptop \
+            scripts.test_bench_scaling \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_jobs_workflow \
