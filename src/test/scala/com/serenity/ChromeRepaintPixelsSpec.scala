@@ -88,7 +88,9 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
   }
 
   it should "leave the room below the last row unpainted" in {
-    val before  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
+    // Flush chrome: the room is under a row only where the pane's rows tile its height that way; floating chrome's
+    // shorter pane leaves a whole row, which is not the room this pins.
+    val before  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5), chrome = ChromeOn.config)
     val after   = typedAt(before, proseLines, line = 4, text = "x")
     val session = Session()
     val plan    = session.settle(before)
