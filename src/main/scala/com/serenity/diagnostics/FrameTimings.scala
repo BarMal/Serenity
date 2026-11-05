@@ -43,10 +43,13 @@ final case class FrameTimingSummary(
     frames: Map[FrameKind, Int],
     phases: Map[FramePhase, PhaseStats],
     counters: FrameCounterStats = FrameCounterStats.empty,
-    backend: String = ""
+    backend: String = "",
+    edtLag: Option[PhaseStats] = None
 ):
 
   def withCounters(counted: FrameCounterStats): FrameTimingSummary = copy(counters = counted)
+
+  def withEdtLag(lag: PhaseStats): FrameTimingSummary = copy(edtLag = Option.when(lag.count > 0)(lag))
 
   def logLine: String =
     val seconds = elapsedMs / 1000.0
@@ -69,7 +72,17 @@ final case class FrameTimingSummary(
       }
     }
     val window = String.format(Locale.ROOT, "%.1f", seconds)
-    val parts  = phaseParts ++ counters.logParts
+    val lagPart = edtLag.map { stats =>
+      String.format(
+        Locale.ROOT,
+        "edt-lag p50=%.2f p95=%.2f max=%.2f n=%d ms",
+        stats.p50Ms,
+        stats.p95Ms,
+        stats.maxMs,
+        stats.count
+      )
+    }
+    val parts = phaseParts ++ lagPart.toList ++ counters.logParts
     s"[FRAME]${PresentPoint.tag(backend)} window=${window}s ${frameRates.mkString(" ")} | ${if parts.isEmpty then "no samples" else parts.mkString(" | ")}"
 
 /** The timings gathered since the last summary, plus the in-flight marks that tie one input to the frame showing it.

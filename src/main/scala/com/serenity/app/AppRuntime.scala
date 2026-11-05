@@ -11,7 +11,7 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.diagnostics.{FrameTimingReport, FrameTimings, KeyLatencyReport, ShutdownTrace}
+import com.serenity.diagnostics.{EdtLagTrace, FrameTimingReport, FrameTimings, KeyLatencyReport, ShutdownTrace}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -334,6 +334,7 @@ object AppRuntime:
                         runtime.frameTimings,
                         frameTimingEnabled,
                         latencyTraceEnabled,
+                        frontend.eventThread,
                         watchInputs.discrete.as(()),
                         windowFocused,
                         forwardedOpens,
@@ -358,6 +359,7 @@ object AppRuntime:
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
     latencyTraceEnabled: SignallingRef[IO, Boolean],
+    eventThread: Option[Runnable => Unit],
     watchInputsChanges: Stream[IO, Unit],
     windowFocused: Signal[IO, Boolean],
     forwardedOpens: Stream[IO, List[Path]],
@@ -409,7 +411,9 @@ object AppRuntime:
             frameTimings,
             frameTimingEnabled.discrete,
             line => logger.info(line),
-            stateManager.renderCaches.frameCounters
+            stateManager.renderCaches.frameCounters,
+            EdtLagTrace(),
+            eventThread
           )
           .interruptWhen(quitSignal)
           .compile
