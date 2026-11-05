@@ -144,6 +144,7 @@ jobs:
             scripts.test_compare_perf_runs \
             scripts.test_cross_os_workflow \
             scripts.test_footprint_parse \
+            scripts.test_hang_dump_script \
             scripts.test_hyprland_float \
             scripts.test_key_to_screen_summary \
             scripts.test_merge_train \
