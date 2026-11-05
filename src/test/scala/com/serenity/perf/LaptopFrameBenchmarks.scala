@@ -28,7 +28,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
+import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{
   FontSpec,
   FrameOutput,
@@ -406,7 +406,8 @@ private[perf] object LaptopFrameBenchmarks:
       codeFont: Font = LaptopFrameBenchmarks.codeFont,
       textFont: Font = LaptopFrameBenchmarks.textFont,
       cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
-      viewport: ViewportSize = LaptopFrameBenchmarks.viewport
+      viewport: ViewportSize = LaptopFrameBenchmarks.viewport,
+      onKeptOff: List[PixelRect] => Unit = _ => ()
   ):
     private val image  = frameImage()
     private val caches = RenderCaches.create()
@@ -422,8 +423,12 @@ private[perf] object LaptopFrameBenchmarks:
       finally caches.frameCounters.setEnabled(false)
 
     def render(state: AppState, damage: Damage): BufferedImage =
+      val target     = image
+      val owner      = Some(screen)
+      val textCaches = caches.surfaceText
+      val keptOff    = onKeptOff
       val surface = new Java2DRenderSurface(
-        image,
+        target,
         cellMetrics,
         codeFont,
         _ => (),
@@ -432,9 +437,12 @@ private[perf] object LaptopFrameBenchmarks:
         deviceScaleX = DeviceScale,
         deviceScaleY = DeviceScale,
         contentPersists = true,
-        layerCacheOwnerOverride = Some(screen),
-        textCaches = caches.surfaceText
-      )
+        layerCacheOwnerOverride = owner,
+        textCaches = textCaches
+      ):
+        override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
+          keptOff(kept)
+          super.withoutPixels(kept)(render)
       val _ = RendererFramePlanner.renderFrame(
         state,
         cursorVisible = false,
