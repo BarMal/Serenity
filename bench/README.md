@@ -50,6 +50,8 @@ leaves a stack instead of blocking the batch. The conditions file also records e
 
 `bench-laptop.sh` sources `bench/bench-lib.sh` (keep the two together). It finds the app's log under either `$HOME/.local/state/serenity/` or `$HOME/.serenity/`, reads AC power from whichever `AC*` supply reports it, and exits non-zero when no run produced a `[FRAME]` timing line, so a batch of failed launches is not mistaken for a result. `scripts/test_bench_laptop.py` covers these.
 
+The run's output records how the quit key was sent and how many `[STATE MODAL]` lines the app logged; the run types text first, so a `ctrl+q` that reaches the app raises the unsaved-changes modal instead of quitting, and it is the `SIGTERM` in `stop_app` that ends it. A JVM still alive after `SIGTERM` is reported as `HUNG:` in the run's output, and its `stdout.log` and app log are copied beside the thread dump as `<label>-run<N>-hang.stdout.log` and `-hang.app.log` (#2507).
+
 ## Time to first frame of a packaged image
 
 `bench/ttfw.py <launcher> <runs> <label> [warm-up-runs]` launches a packaged app image with `--smoke-test --safe-mode` and reports the median wall time to the first painted frame (the `SERENITY_SMOKE_READY` line) and to exit. It needs a display and the image from a `desktop-release.yml` run (artifact `Serenity-linux-x64`, the zip of `dist/Serenity`); the laptop does not build. The warm-up run is discarded, which lets an AppCDS image write its archive.
@@ -110,3 +112,17 @@ nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-scree
 ```
 
 The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's render callback, **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
+
+## Scaling with many open files and split panes (#2478)
+
+`bench/bench-scaling.sh <jar> <label> <a|b|c|d> [java2d|skia]` is the laptop side of the harness rows that ask how
+performance scales: `a` ctrl+Tab through 1 and through 20 open files, `b` typing, PageDown and the wheel with 1, 2 and 4
+panes (a different file in each), `c` the heap in use after a GC with 1 file and with 20, `d` the time to the last of four
+scrollbars, which the app's logs cannot show (the harness row `scrollbar.four_panes.all_bars` measures it). The documents
+come from `bench/gen-scaling-docs.py` (distinct lines per file, prose or code with `BENCH_FILE_KIND`), so the app's text
+caches cannot share entries between files. `--dry-run` prints what each mode would do without a jar or a display.
+
+It was written where xdotool and a desktop session are not available: the documents, the pane key plans and the argument
+handling are tested (`scripts/test_bench_scaling.py`), the driving of the app is not. Read the first result file before
+trusting a table. The shape cache's lookups, misses and evictions are not in the app's logs: run
+`java -cp serenity-perf.jar com.serenity.perf.ScalingShapeCacheBenchmarks`.

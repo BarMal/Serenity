@@ -46,7 +46,7 @@ import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStro
   * Threading is that of the render pool: one thread draws a frame, and `onFlush` is called once when it ends.
   */
 final class SkiaRenderSurface(
-    canvas: Canvas,
+    protected val canvas: Canvas,
     metrics: CellMetrics,
     font: FontSpec,
     onFlush: () => Unit,
@@ -65,7 +65,7 @@ final class SkiaRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with PanelOutlineDrawing
+    with SkiaExcludedPixels
     with PixelCopying:
   import SkiaRenderSurface.*
   import caches.{fonts, images, inks, shapedText}
