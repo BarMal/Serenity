@@ -23,9 +23,10 @@ _ANNOTATION = re.compile(r"^::(error|warning|notice)\b")
 
 
 def _ci_modules() -> list[str]:
-    run = re.search(r"python3 -m unittest ([^\n]+) -v", _CI)
-    assert run is not None, "ci.yml has no `python3 -m unittest ... -v` line"
-    return run.group(1).split()
+    """The modules of the `Test the scripts` step, which lists one `scripts.test_<name> \\` per line."""
+    step = re.search(r"- name: Test the scripts\n\s+run: \|\n((?:\s{10}.*\n?)+)", _CI)
+    assert step is not None, "ci.yml has no multi-line `python3 -m unittest ... -v` step"
+    return re.findall(r"scripts\.test_\w+", step.group(1))
 
 
 class CiLogIsQuietTests(unittest.TestCase):
