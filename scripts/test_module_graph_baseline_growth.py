@@ -47,9 +47,10 @@ class RequiresJustificationTests(unittest.TestCase):
 
 
 class WorkflowTests(unittest.TestCase):
-    def test_ci_runs_the_module_graph_check_in_its_own_job(self) -> None:
-        self.assertIn("  module-graph:\n    name: Module graph ratchet\n", _CI)
-        self.assertIn("sbt -v moduleGraphCheck", _CI)
+    def test_ci_runs_the_module_graph_check_in_the_checks_job_even_after_an_earlier_check_failed(self) -> None:
+        job = _CI.split("\n  checks:\n", 1)[1].split("\n  scripts:\n", 1)[0]
+        step = next(s for s in job.split("\n      - ") if "sbt -v moduleGraphCheck" in s)
+        self.assertIn("if: ${{ !cancelled() }}", step)
 
     def test_ci_applies_the_growth_rule_to_the_baseline_file(self) -> None:
         self.assertIn("python3 -m scripts.module_graph_baseline_growth", _CI)
