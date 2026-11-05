@@ -165,6 +165,7 @@ jobs:
             scripts.test_summarize_test_durations \
             scripts.test_summarize_test_failures \
             scripts.test_ttfw \
+            scripts.test_workflow_timeouts \
             -v
 
   test:

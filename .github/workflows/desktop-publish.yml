@@ -34,6 +34,7 @@ jobs:
   gate:
     name: Require green Cross-OS nightly
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       sha: ${{ steps.nightly.outputs.sha }}
     steps:
@@ -60,6 +61,8 @@ jobs:
     name: Build ${{ matrix.artifact_suffix }}
     needs: gate
     runs-on: ${{ matrix.os }}
+    # p90 36.9 min (macos-arm64) over 10 successful runs per OS (longest 40675248593, 40862800896); limit is 2x, rounded up.
+    timeout-minutes: 74
     # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
     env:
       SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
@@ -550,6 +553,8 @@ jobs:
     name: Publish ${{ github.ref_type == 'tag' && 'versioned release' || 'nightly desktop build' }}
     needs: [gate, build]
     runs-on: ubuntu-latest
+    # p90 0.7 min over 10 successful runs (39757060632, 40180584764); the 10 min floor applies.
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
