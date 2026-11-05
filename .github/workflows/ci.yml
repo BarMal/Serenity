@@ -133,6 +133,7 @@ jobs:
             scripts.test_abba_compare \
             scripts.test_aot_cache_scripts \
             scripts.test_bench_laptop \
+            scripts.test_bench_scaling \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_jobs_workflow \
@@ -437,7 +438,7 @@ jobs:
   # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
   wake-train:
     name: Wake the merge train
-    needs: [checks, scripts, test, perf]
+    needs: [checks, scripts, test, sdl-native, perf]
     if: always() && startsWith(github.ref, 'refs/heads/train/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
