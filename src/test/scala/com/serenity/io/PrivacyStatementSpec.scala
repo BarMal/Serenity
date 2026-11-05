@@ -52,6 +52,8 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/markdown/MarkdownDocumentPreview.scala",
       "com/serenity/markdown/MarkdownPreviewImageResources.scala",
       "com/serenity/lsp/LspManager.scala",
+      // Reads a watcher's `file:` base URI into a path; java.net.URI is only a parser here and nothing connects.
+      "com/serenity/lsp/client/LspWatch.scala",
       "com/serenity/io/StorageLocation.scala",
       "com/serenity/app/instance/InstanceMessenger.scala",
       // A Unix domain socket to the local compositor, like InstanceMessenger's: no network is involved.
