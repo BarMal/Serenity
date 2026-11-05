@@ -223,6 +223,33 @@ class StatsTests(unittest.TestCase):
             self.assertIn("input-to-paint", result.stdout)
 
 
+class QuitSequenceTests(unittest.TestCase):
+    """What bench-laptop.sh records around the final quit, on top of stop_app's bounded stop (#2507)."""
+
+    def _quit_section(self):
+        with open(SCRIPT, encoding="utf-8") as handle:
+            text = handle.read()
+        return text[text.index('echo "[$(date +%T)] Quitting"') :]
+
+    def test_the_output_says_how_the_quit_key_was_sent_and_whether_the_modal_appeared(self):
+        section = self._quit_section()
+        self.assertIn("Quit key:", section)
+        self.assertIn("STATE MODAL", section)
+
+    def test_a_hang_is_reported_and_keeps_the_app_logs_next_to_the_dump(self):
+        section = self._quit_section()
+        self.assertIn("after SIGTERM", section)
+        self.assertIn('hang_prefix="$RESULTS_DIR/${LABEL}-run${run_n}-hang"', section)
+        self.assertIn('"$hang_prefix.stdout.log"', section)
+        self.assertIn('"$hang_prefix.app.log"', section)
+        self.assertIn("HUNG:", section)
+
+    def test_the_stop_goes_through_the_bounded_stop_app_and_never_an_unbounded_wait(self):
+        section = self._quit_section().split("# Collect FRAME lines")[0]
+        self.assertIn('stop_app "$serenity_pid"', section)
+        self.assertNotIn('wait "$serenity_pid"', section)
+
+
 class WholeScriptTests(unittest.TestCase):
     def test_exits_non_zero_when_every_launch_fails(self):
         with tempfile.TemporaryDirectory() as work:
