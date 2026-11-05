@@ -167,7 +167,7 @@ The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, s
 
 `-Dserenity.bench.warmup.rowCapSeconds=` and `runCapSeconds=` change the caps for a study, and `-Dserenity.bench.warmup=off` turns the extension off. Rows with `fixedSampleCount` (those that grow the state they time, such as `prose.markdown_enter.renumber`, which adds a line per call) are not extended: extra calls would change their p50 instead of settling it. That is why `prose.markdown_enter.renumber` read 3.97x slower in the first experiment.
 
-**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only.
+**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only. The 2x job (`perf-2x` in `ci.yml`) runs nightly on master and on pull requests that carry the `perf` label, not on merge trains or unlabelled pull requests (#2618); a failed nightly run is also written on #2643.
 
 **Measured** (12 full runs with the extension against 12 without, 4-core container; container figures):
 
@@ -232,6 +232,12 @@ Set `ui.render.frame_timing = true` in `~/.serenity/config.conf` and the app log
 `input-apply`, `render-wait`, `sync`, `render` (sync included), `paint-wait`, `paint`, and `input-to-paint`, the time
 from an input arriving to the end of the first paint that shows it. The `laptop.*` benchmarks measure the same stages,
 so a laptop log and a CI run can be compared stage by stage.
+
+In a window launch the line also carries `edt-lag`: every 50 ms the app posts a no-op to the AWT event thread and
+records how long it waited there before it ran, then reports p50/p95/max and the sample count `n` (about 100 per
+window). That is the wait a key event would see if it arrived at a random moment, which none of the stages above show
+when the event thread is busy elsewhere, for example in the Skia layer's native flush (#2489). A terminal launch has no
+event thread and omits it.
 
 The same line carries what each frame drew, as `avg` and `max` per frame over the window: `rows-drawn` and
 `rows-preserved` (document rows redrawn against rows kept from the frame before, copied scroll rows included), `runs`
@@ -612,3 +618,39 @@ I do not know why they differ: the suite has grown, and these runs are all from 
   that survives it (11% here) is the number to watch. The remaining false positives come from benchmarks whose run-to-run
   state differs, which a better warm-up in the runner (investigated in #2443, not changed) would address at the source.
 - Cost: six benchmark runs instead of four, about 50% more perf-job time; unchanged by #2443.
+
+## Scaling with many open buffers and split panes -- issue #2478
+
+All figures are **container figures** (4 vCPU Firecracker VM, xvfb, uiScale 1, three runs of the in-suite rows, p50 per run).
+They are not laptop numbers and the rows are record-only (the #2478 section of `scripts/perf-gate-excluded-rows.txt`, not covered by the
+nightly ABBA): nothing here gates a PR until laptop figures exist (`bench/bench-scaling.sh`, which has not yet been run against the app).
+
+| Row | Run 1 | Run 2 | Run 3 | Reading |
+| --- | --- | --- | --- | --- |
+| `buffers.switch_cold_frame.open_1.code` (ms) | 5.0 | 6.4 | 6.2 | |
+| `buffers.switch_cold_frame.open_20.code` (ms) | 5.3 | 5.7 | 7.5 | no clear cost from 19 more open buffers |
+| `buffers.switch_cold_frame.open_1.prose` (ms) | 61.1 | 60.3 | 45.3 | |
+| `buffers.switch_cold_frame.open_20.prose` (ms) | 43.9 | 45.3 | 44.2 | same |
+| `panes.split{1,2,4}.typing_frame` (ms) | 1.3 / 1.9 / 2.2 | 1.3 / 2.2 / 2.8 | 1.7 / 2.2 / 3.3 | grows with visible panes |
+| `panes.split{1,2,4}.scroll_line_frame` (ms) | 3.5 / 3.7 / 3.2 | 3.7 / 6.3 / 3.9 | 4.6 / 4.8 / 4.9 | flat within noise |
+| `panes.split{1,2,4}.page_down_frame` (ms) | 8.3 / 5.6 / 3.9 | 14.6 / 8.9 / 4.4 | 9.5 / 5.8 / 4.2 | shrinks (smaller panes repaint fewer lines) |
+| `scrollbar.four_panes.all_bars` (ms) | 553.7 | 571.2 | 524.3 | last of four bars |
+| `footprint.buffers_{1,20}_shown.code` (MB) | 26.89 / 59.82 | | | about 1.73 MB per extra buffer |
+| `footprint.buffers_{1,20}_shown.prose` (MB) | 28.03 / 66.20 | | | about 2.01 MB per extra buffer |
+
+Run-to-run spread (max/min of the three p50s) is up to 1.77x on single rows, so differences under about 1.5x are noise.
+
+Hypotheses from the issue:
+
+- **Per-frame cost grows with the number of open buffers:** not supported. Background tabs add nothing visible to a cold frame; memory grows linearly instead.
+- **Per-frame cost grows with visible panes:** supported for typing frames only (1.3 to 2.2-3.3 ms from one to four panes).
+- **One count thread serialises late scrollbars:** supported. `ScrollbarTimingReport` (10 runs) shows the four bars arriving
+  at medians 134, 235, 360 and 485 ms, about 115 ms apart; last minus first is about 349 ms. A single bar takes about 115-130 ms.
+- **The Skia shape cache churns at 20 buffers:** not observed on these fixtures (`ScalingShapeCacheBenchmarks`). Plain Latin
+  text bypasses the cache (`worthShaping`), so a shaped-prose variant (combining marks) was added. Break-even is inferred,
+  not measured, at roughly 93 buffers (two generations of 2,048 entries).
+
+Corrections to the Phase 2 plan found while building: documents over `PaneScroll.ExactLineLimit` (2,048 lines) are
+estimated at once and never count late, so row (d) uses `LateCountSize`, not 15,000 lines; and plain text does not touch
+the shape cache. Split-pane damaged frames differ from a cold frame by one cell at shared pane edges (#2481); the split
+rows tolerate that band until it is fixed.

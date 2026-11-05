@@ -51,7 +51,7 @@ private[perf] object FootprintBenchmarks:
       Scenario("footprint.prose_frame.stable_text", () => proseFrames(runtimes = 1, uniqueText = false)),
       Scenario("footprint.prose_frame.fresh_text", () => proseFrames(runtimes = 1, uniqueText = true)),
       Scenario("footprint.two_runtimes.prose_frame.stable_text", () => proseFrames(runtimes = 2, uniqueText = false))
-    )
+    ) ++ ScalingFootprint.scenarios
 
   /** The `prose_frame.*` rows draw one laptop-sized frame of word-wrapped prose per runtime and keep each runtime's
     * state and `RenderCaches`, which is what a drawn document leaves resident.
