@@ -149,6 +149,7 @@ jobs:
             scripts.test_aot_cache_scripts \
             scripts.test_bench_artifacts_workflow \
             scripts.test_bench_laptop \
+            scripts.test_bench_scaling \
             scripts.test_build_outputs \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
