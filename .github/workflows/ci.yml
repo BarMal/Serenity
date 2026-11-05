@@ -237,9 +237,8 @@ jobs:
         run: sbt -v heapMeasurementTest
 
   perf:
-    # Both scales run the suite as two shards (contiguous slices of the suite, each judged on its own rows, see
-    # BenchmarkShard). The 2x entries run it on a HiDPI virtual display with Java2D at 2x, matching the target laptop, so
-    # Swing's present path paints at the scale users actually see.
+    # The suite runs as two shards (contiguous slices of the suite, each judged on its own rows, see BenchmarkShard).
+    # This job is the 1x pair; the 2x HiDPI pair is perf-2x below, which is gated differently.
     #
     # The timeout is a bound on a stuck job, not a budget. The unsharded 1x job took 57.3 and 58.3 minutes on runs
     # 41350271015 and 41350357868 (the benchmark warm-up on both sides, and a confirmation run of 4 minutes when a row is
@@ -267,6 +266,142 @@ jobs:
             dpi: 96
             shard: 2/2
             results: perf-benchmark-results-shard-2
+
+    steps:
+      # Depth 2 so the base commit -- the PR merge commit's first parent, or master's previous commit -- is present.
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      # The benchmark suite builds a real `SwingWindow` (`PerformanceBenchmarks.main`'s `SwingWindow.resource`), which
+      # needs a display even though nothing is ever shown on screen -- a runner with no X server at all raises
+      # `HeadlessException` constructing it, so this job needs a virtual one.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # Absolute timings only compare on the same machine: GitHub's runners differ by about 2x, so a baseline recorded
+      # on one runner and checked on another fails or passes by which runner each got. Instead the base commit and this
+      # commit are benchmarked here, on one runner, in three back-to-back pairs that alternate which side goes first
+      # (B H, H B, B H), so a slow spell on the runner or a warm cache falls on both sides alike.
+      # A merge train's tip names the master commit it was built on, which is what its batch is measured against (#2553).
+      - name: Check out the base commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(python3 scripts/merge_train.py perf-base)"
+          if [ "$base" != "HEAD^1" ]; then git fetch --depth=1 origin "$base"; fi
+          git worktree add --detach "$RUNNER_TEMP/base" "$base"
+
+      # `PerformanceBenchmarks` (src/test/scala/com/serenity/perf) is a manual `main`-method runner, not a ScalaTest
+      # suite -- `sbt test` never touches it.
+      - name: Run performance benchmarks on base and head
+        shell: bash
+        env:
+          SCREEN: ${{ matrix.screen }}
+          DPI: ${{ matrix.dpi }}
+          SCALE: ${{ matrix.scale }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          mkdir -p perf-runs
+          for pair in 1 2 3; do
+            if [ $((pair % 2)) -eq 1 ]; then first=base; second=head; else first=head; second=base; fi
+            for side in "$first" "$second"; do
+              if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
+              bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/$side-$pair.csv"
+              if [ "$side" = head ] && [ ! -s "perf-runs/head-$pair.csv" ]; then
+                echo "::error::No benchmark output from the head commit's run $pair -- it did not build or the suite failed; stopping before the remaining passes. Raw output:"
+                tail -n 60 "perf-runs/head-$pair.csv.raw"
+                exit 1
+              fi
+            done
+          done
+
+      # A benchmark whose fastest head p50 is past 1.5x the fastest base p50 (and more than 50 us above it) is only flagged here:
+      # the same runner re-measures just those benchmarks in three fresh pairs (confirm-*), and the build fails only if
+      # they are still past the threshold on those. A retained-heap regression fails at once. See
+      # scripts/compare_perf_runs.py, and docs/performance-benchmarks.md ("Paired-ratio gate", #1731).
+      - name: Check for a performance regression
+        shell: bash
+        env:
+          SCREEN: ${{ matrix.screen }}
+          DPI: ${{ matrix.dpi }}
+          SCALE: ${{ matrix.scale }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          set -euo pipefail
+          for run in perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv; do
+            if [ ! -s "$run" ]; then
+              echo "::error::No benchmark output in $run -- the suite failed on this commit; see $run.raw:"
+              tail -n 60 "$run.raw"
+              exit 1
+            fi
+          done
+          status=0
+          python3 scripts/compare_perf_runs.py \
+            --base perf-runs/base-1.csv perf-runs/base-2.csv perf-runs/base-3.csv \
+            --head perf-runs/head-1.csv perf-runs/head-2.csv perf-runs/head-3.csv \
+            --write-flagged perf-runs/flagged.txt || status=$?
+          if [ "$status" -ne 2 ]; then exit "$status"; fi
+          echo "::group::Confirming $(wc -l < perf-runs/flagged.txt) flagged benchmark(s) on fresh pairs"
+          cat perf-runs/flagged.txt
+          mapfile -t flagged < perf-runs/flagged.txt
+          for pair in 1 2 3; do
+            if [ $((pair % 2)) -eq 1 ]; then first=base; second=head; else first=head; second=base; fi
+            for side in "$first" "$second"; do
+              if [ "$side" = base ]; then dir="$RUNNER_TEMP/base"; else dir="."; fi
+              bash .github/scripts/run-perf-benchmark.sh "$dir" "perf-runs/confirm-$side-$pair.csv" "${flagged[@]}"
+            done
+          done
+          echo "::endgroup::"
+          python3 scripts/compare_perf_runs.py \
+            --base perf-runs/confirm-base-1.csv perf-runs/confirm-base-2.csv perf-runs/confirm-base-3.csv \
+            --head perf-runs/confirm-head-1.csv perf-runs/confirm-head-2.csv perf-runs/confirm-head-3.csv \
+            --only perf-runs/flagged.txt
+
+      - name: Archive benchmark results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.results }}
+          path: perf-runs/
+          retention-days: 90
+
+  perf-2x:
+    # The same two shards at 2x: a HiDPI virtual display with Java2D at 2x, matching the target laptop, so Swing's present
+    # path paints at the scale users actually see. They cost two jobs and about 40 minutes per batch, so they run nightly
+    # on master and on pull requests that carry the `perf` label, not on merge trains, master pushes or unlabelled pull
+    # requests (owner decision, #2618). A failed nightly run is written on #2643, since nobody opens a red scheduled run.
+    # Keep the steps identical to perf's: scripts/test_ci_workflow.py fails when they drift.
+    #
+    # The timeout is a bound on a stuck job, not a budget. The unsharded 1x job took 57.3 and 58.3 minutes on runs
+    # 41350271015 and 41350357868 (the benchmark warm-up on both sides, and a confirmation run of 4 minutes when a row is
+    # flagged), against the previous limit of 60; 75 is the limit the owner chose for the sharded jobs (#2464).
+    # Drafts skip the benchmark shards; marking a pull request ready runs them (owner decision, #2484). Once the merge
+    # train is live it benchmarks each batch instead, so a pull request runs them only with the `perf` label, read at
+    # its next push (#2553 item 2).
+    if: (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && !startsWith(github.ref, 'refs/heads/train/')) || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'perf')))
+    name: ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      issues: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
           - label: Performance benchmarks (2x HiDPI, shard 1/2)
             scale: 2
             screen: 3840x2400x24
@@ -391,11 +526,24 @@ jobs:
           path: perf-runs/
           retention-days: 90
 
+      # A red scheduled run is one nobody opens, so a failed nightly 2x shard also lands on the ledger issue (#2643).
+      - name: Report a failed nightly 2x run
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHARD: ${{ matrix.label }}
+          RESULTS: ${{ matrix.results }}
+          COMMIT: ${{ github.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh issue comment 2643 --body "$SHARD failed on the nightly run of $COMMIT: $RUN_URL . The flagged rows are in that step's log and in the $RESULTS artifact."
+
   # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
   # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
   wake-train:
     name: Wake the merge train
-    needs: [checks, scripts, test, perf]
+    needs: [checks, scripts, test, perf, perf-2x]
     if: always() && startsWith(github.ref, 'refs/heads/train/')
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -18,9 +18,9 @@ from pathlib import Path
 _CI = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "ci.yml"
 
 
-def _perf_job(text: str) -> str:
+def _perf_job(text: str, name: str = "perf") -> str:
     lines = text.splitlines()
-    start = next(i for i, line in enumerate(lines) if line == "  perf:")
+    start = next(i for i, line in enumerate(lines) if line == f"  {name}:")
     end = next((i for i in range(start + 1, len(lines)) if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[i])), len(lines))
     return "\n".join(lines[start:end])
 
@@ -41,7 +41,15 @@ class PerfMatrixTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.job = _perf_job(_CI.read_text())
-        cls.entries = _matrix_entries(cls.job)
+        cls.job_2x = _perf_job(_CI.read_text(), "perf-2x")
+        cls.entries_1x = _matrix_entries(cls.job)
+        cls.entries_2x = _matrix_entries(cls.job_2x)
+        cls.entries = cls.entries_1x + cls.entries_2x
+
+    def test_each_scale_has_its_own_job(self) -> None:
+        # The 2x shards run nightly and on labelled pull requests only, which a job-level `if` cannot say per matrix entry.
+        self.assertEqual({"1"}, {entry["scale"] for entry in self.entries_1x})
+        self.assertEqual({"2"}, {entry["scale"] for entry in self.entries_2x})
 
     def test_the_matrix_is_read(self) -> None:
         self.assertGreaterEqual(len(self.entries), 2)
@@ -78,11 +86,13 @@ class PerfMatrixTests(unittest.TestCase):
             if count != "1":
                 self.assertIn(f"shard {index}/{count}", entry["label"])
 
-    def test_the_job_has_an_explicit_timeout_above_the_measured_longest_run(self) -> None:
-        match = re.search(r"^    timeout-minutes: (\d+)$", self.job, re.MULTILINE)
-        self.assertIsNotNone(match, "perf job has no timeout-minutes")
-        # The longest 1x run seen was 58.3 minutes (run 41350357868), a bound that then has to clear.
-        self.assertGreaterEqual(int(match.group(1)), 75)
+    def test_each_job_has_an_explicit_timeout_above_the_measured_longest_run(self) -> None:
+        for name, job in (("perf", self.job), ("perf-2x", self.job_2x)):
+            with self.subTest(job=name):
+                match = re.search(r"^    timeout-minutes: (\d+)$", job, re.MULTILINE)
+                self.assertIsNotNone(match, f"{name} has no timeout-minutes")
+                # The longest 1x run seen was 58.3 minutes (run 41350357868), a bound that then has to clear.
+                self.assertGreaterEqual(int(match.group(1)), 75)
 
 
 class PerfRunStepTests(unittest.TestCase):
