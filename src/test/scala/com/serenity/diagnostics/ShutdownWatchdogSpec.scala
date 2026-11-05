@@ -1,5 +1,7 @@
 package com.serenity.diagnostics
 
+import java.lang.management.{ThreadInfo, ThreadMXBean}
+import java.lang.reflect.Proxy
 import java.nio.file.{Files, Paths}
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -63,6 +65,24 @@ class ShutdownWatchdogSpec extends AnyFlatSpec with Matchers:
     val mine = ShutdownWatchdog.captureThreads().find(_.name == Thread.currentThread().getName)
 
     mine.map(_.stack.exists(_.contains("ShutdownWatchdogSpec"))) shouldBe Some(true)
+  }
+
+  it should "ask the JVM for stacks only, as asking for lock information makes it walk the heap" in {
+    val asked = new AtomicReference[Option[(Boolean, Boolean)]](None)
+    val threads = Proxy
+      .newProxyInstance(
+        getClass.getClassLoader,
+        Array(classOf[ThreadMXBean]),
+        (_, method, args) =>
+          if method.getName == "dumpAllThreads" then
+            asked.set(Some((args(0) == java.lang.Boolean.TRUE, args(1) == java.lang.Boolean.TRUE)))
+            Array.empty[ThreadInfo]
+          else null
+      )
+      .asInstanceOf[ThreadMXBean]
+
+    ShutdownWatchdog.captureThreads(threads) shouldBe Nil
+    asked.get shouldBe Some((false, false))
   }
 
   "ShutdownWatchdog.armHalt" should "report and halt with the given exit code once the bound has passed" in {

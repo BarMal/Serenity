@@ -1,6 +1,6 @@
 package com.serenity.diagnostics
 
-import java.lang.management.ManagementFactory
+import java.lang.management.{ManagementFactory, ThreadMXBean}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 
@@ -94,9 +94,12 @@ object ShutdownWatchdog:
   def withHookTimeout(config: IORuntimeConfig, timeout: FiniteDuration = HookTimeout): IORuntimeConfig =
     config.copy(shutdownHookTimeout = timeout)
 
-  def captureThreads(): List[ThreadSnapshot] =
-    ManagementFactory.getThreadMXBean
-      .dumpAllThreads(true, true)
+  /** Stacks only: asking for locked synchronizers makes the JVM walk the heap at a safepoint, which took about nine
+    * seconds on a CI Mac, longer than the margin before the halt, and the snapshot holds no lock information anyway.
+    */
+  def captureThreads(threads: ThreadMXBean = ManagementFactory.getThreadMXBean): List[ThreadSnapshot] =
+    threads
+      .dumpAllThreads(false, false)
       .toList
       .map(info =>
         ThreadSnapshot(
