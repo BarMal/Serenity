@@ -112,6 +112,21 @@ jobs:
             fi
           fi
 
+      # Reads the compiler's semanticdb output, so it reuses the classes the style step compiled. It fails on an edge from a
+      # lower layer to a higher one that project/module-graph-baseline.tsv does not list (#2502).
+      - name: Check module-graph ratchet
+        if: ${{ !cancelled() }}
+        run: sbt -v moduleGraphCheck
+
+      - name: Require justification for module-graph baseline growth
+        if: github.event_name == 'pull_request' && !cancelled()
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --depth=1 origin "$BASE_SHA"
+          python3 -m scripts.module_graph_baseline_growth "$BASE_SHA"
+
       # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
       - name: Check third-party notices cover every runtime dependency
         if: ${{ !cancelled() }}
@@ -146,6 +161,7 @@ jobs:
             scripts.test_hyprland_float \
             scripts.test_key_to_screen_summary \
             scripts.test_merge_train \
+            scripts.test_module_graph_baseline_growth \
             scripts.test_perf_matrix \
             scripts.test_present_abba_summary \
             scripts.test_regenerate_base_cds_archive \
