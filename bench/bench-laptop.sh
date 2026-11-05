@@ -193,12 +193,25 @@ CFG
   sleep 8
 
   echo "[$(date +%T)] Quitting" | tee -a "$out"
+  # XSendEvent, which a Java window may ignore. The run types text first, so a quit that does arrive raises the
+  # unsaved-changes modal rather than quitting, and it is the SIGTERM below that ends the app (#2507).
+  echo "Quit key: xdotool key --window $win_id ctrl+q (sent as an X event to the window)" | tee -a "$out"
   xdotool key --window "$win_id" ctrl+q 2>/dev/null || true
   sleep 2
   stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
 
-  # Collect FRAME lines
   log_file="$(find_app_log "$bench_home" || echo /dev/null)"
+  echo "Unsaved-changes modal lines ([STATE MODAL]) in the app log: $(grep -c 'STATE MODAL' "$log_file" 2>/dev/null || true)" |
+    tee -a "$out"
+  hang_prefix="$RESULTS_DIR/${LABEL}-run${run_n}-hang"
+  if grep -q "after SIGTERM" "$RESULTS_DIR/${LABEL}-run${run_n}.threads" 2>/dev/null; then
+    cp "$bench_home/stdout.log" "$hang_prefix.stdout.log" 2>/dev/null || true
+    cp "$log_file" "$hang_prefix.app.log" 2>/dev/null || true
+    echo "HUNG: still alive after SIGTERM; killed. Threads: $RESULTS_DIR/${LABEL}-run${run_n}.threads, logs: $hang_prefix.stdout.log and $hang_prefix.app.log" |
+      tee -a "$out"
+  fi
+
+  # Collect FRAME lines
   echo "" >> "$out"
   echo "=== [FRAME] lines ===" >> "$out"
   grep "\[FRAME\]" "$log_file" >> "$out" 2>/dev/null || echo "(none)" >> "$out"

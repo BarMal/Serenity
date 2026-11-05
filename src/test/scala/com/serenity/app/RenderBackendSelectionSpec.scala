@@ -87,6 +87,40 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     decision.reason should (include("ui.render.backend=skia") and include("no libGL"))
   }
 
+  it should "carry the probe's cause on a Java2D decision only when the probe failed" in {
+    val failed = RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.Failed("libGL.so.1 missing")))
+    failed.skiaFailure shouldBe Some("libGL.so.1 missing")
+    RenderBackendSelection
+      .choose(healthyLinux.copy(setting = RenderBackendSetting.Skia, probe = Probe.Failed("no libGL")))
+      .skiaFailure shouldBe Some("no libGL")
+    RenderBackendSelection.choose(healthyLinux).skiaFailure shouldBe None
+    RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.Java2D)).skiaFailure shouldBe None
+    RenderBackendSelection.choose(healthyLinux.copy(skiaSurfaceAvailable = false)).skiaFailure shouldBe None
+    RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.NotRun)).skiaFailure shouldBe None
+  }
+
+  it should "carry the wrapped causes with the failure, and keep them out of the reason and the log line" in {
+    val decision = RenderBackendSelection.choose(
+      healthyLinux.copy(
+        setting = RenderBackendSetting.Auto,
+        probe = Probe.Failed("Wrapper: failed", Some("Inner: libGL.so.1"))
+      )
+    )
+    decision.skiaFailure shouldBe Some("Wrapper: failed (Inner: libGL.so.1)")
+    decision.reason shouldBe "native probe failed: Wrapper: failed"
+    decision.logLine shouldBe "backend=java2d reason=native probe failed: Wrapper: failed"
+  }
+
+  it should "keep the log line identical whether or not a cause is carried" in {
+    val failedProbe = Probe.Failed("libGL.so.1 missing")
+    RenderBackendSelection
+      .choose(healthyLinux.copy(setting = RenderBackendSetting.Auto, probe = failedProbe))
+      .logLine shouldBe "backend=java2d reason=native probe failed: libGL.so.1 missing"
+    RenderBackendSelection
+      .choose(healthyLinux.copy(probe = failedProbe))
+      .logLine shouldBe "backend=java2d reason=ui.render.backend=skia could not load: libGL.so.1 missing"
+  }
+
   it should "honour an explicit java2d setting" in {
     RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.Java2D)) shouldBe
       Decision(RenderBackend.Java2D, "ui.render.backend=java2d")

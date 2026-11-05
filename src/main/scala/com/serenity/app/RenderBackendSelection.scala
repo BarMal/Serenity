@@ -18,7 +18,7 @@ object RenderBackendSelection:
   enum Probe:
     case NotRun
     case Loaded
-    case Failed(cause: String)
+    case Failed(cause: String, detail: Option[String] = None)
 
   final case class Inputs(
       osName: String,
@@ -31,7 +31,10 @@ object RenderBackendSelection:
       rasterSurfaceAvailable: Boolean = false
   )
 
-  final case class Decision(backend: RenderBackend, reason: String):
+  /** `skiaFailure` is set only when Skia was wanted and the native probe failed: the one fallback a user did not ask
+    * for and cannot see. It is deliberately not part of `logLine`.
+    */
+  final case class Decision(backend: RenderBackend, reason: String, skiaFailure: Option[String] = None):
     def logLine: String = s"backend=${backend.configKey} reason=$reason"
 
   /** The flag beats the environment variable, which beats the config file; a value it does not recognise is ignored.
@@ -85,10 +88,12 @@ object RenderBackendSelection:
   private def afterProbe(inputs: Inputs, backend: RenderBackend, loadedReason: String): Decision =
     val explicit = inputs.setting == RenderBackendSetting.Skia || inputs.setting == RenderBackendSetting.SkiaRaster
     inputs.probe match
-      case Probe.Failed(cause) =>
-        java2d(
+      case Probe.Failed(cause, detail) =>
+        Decision(
+          RenderBackend.Java2D,
           if explicit then s"ui.render.backend=${inputs.setting.configKey} could not load: $cause"
-          else s"native probe failed: $cause"
+          else s"native probe failed: $cause",
+          Some(detail.fold(cause)(causes => s"$cause ($causes)"))
         )
       case Probe.NotRun => java2d("native probe not run")
       case Probe.Loaded =>

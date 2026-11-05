@@ -2,6 +2,7 @@ package com.serenity.ui.skia
 
 import cats.effect.IO
 import com.serenity.app.RenderBackendSelection.Probe
+import com.serenity.app.SkiaFallback
 import org.jetbrains.skia.Surface
 import org.jetbrains.skiko.Library
 
@@ -23,7 +24,4 @@ object SkiaProbe:
         surface.close()
         Probe.Loaded
       }
-    catch case error: Throwable => Probe.Failed(describe(error))
-
-  private def describe(error: Throwable): String =
-    s"${error.getClass.getSimpleName}: ${Option(error.getMessage).getOrElse("no message")}"
+    catch case error: Throwable => SkiaFallback.failure(error)

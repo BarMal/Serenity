@@ -44,16 +44,12 @@ class StateManagerReducerRoutingSpec extends AnyFlatSpec with Matchers with Even
     val stateManager = createStateManager()
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
-    val openedState = stateManager.getCurrentState.unsafeRunSync()
-    val commandSurface = openedState.runtime.uiSurfaces.collectFirst {
-      case surface @ UiSurface(_, SurfaceContent.CommandPalette(_), _, _) => surface
-    }
+    val openedState    = stateManager.getCurrentState.unsafeRunSync()
+    val commandSurface = openedState.commandPickerSurface
 
     commandSurface shouldBe defined
     openedState.persisted.focus shouldBe Focus.Surface(commandSurface.get.id)
-    commandSurface.get.content match
-      case SurfaceContent.CommandPalette(runner) => runner.isActive shouldBe true
-      case other                                 => fail(s"Expected command palette, got $other")
+    CommandPaletteProbe.runner(openedState).map(_.isActive) shouldBe Some(true)
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val closedState = stateManager.getCurrentState.unsafeRunSync()
