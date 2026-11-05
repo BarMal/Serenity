@@ -13,6 +13,7 @@ import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry, Rect}
 import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
 import org.slf4j.LoggerFactory
+
 import SkiaLayerHost.LayerFrame
 
 /** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
