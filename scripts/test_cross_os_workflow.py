@@ -54,10 +54,16 @@ class AggregateJobTests(unittest.TestCase):
 
     def test_there_are_no_other_jobs_to_claim_the_required_names(self) -> None:
         jobs = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", _CALLER.split("\njobs:\n", 1)[1], re.M)
-        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos"], jobs)
+        # wake-train only dispatches the next merge train step on a train branch; its name is not a required check.
+        self.assertEqual(["shards-windows", "shards-macos", "test-windows", "test-macos", "wake-train"], jobs)
+        self.assertIn("    name: Wake the merge train\n", _job(_CALLER, "wake-train"))
 
 
 _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_request.draft)"
+# Once the merge train is live it runs Windows and macOS once per batch instead (#2553 item 3).
+_TRAIN_GATE = (
+    "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))"
+)
 _CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 _PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()
 
@@ -78,14 +84,34 @@ class DraftGateTests(unittest.TestCase):
                     ["opened", "synchronize", "reopened", "ready_for_review"], _pull_request_types(text)
                 )
 
-    def test_shards_and_their_required_checks_skip_drafts_together(self) -> None:
+    def test_shards_and_their_checks_skip_drafts_and_live_train_pull_requests_together(self) -> None:
         for label in ("windows", "macos"):
             with self.subTest(label=label):
-                self.assertIn(f"    if: {_DRAFT_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
-                self.assertIn(f"    if: always() && {_DRAFT_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
+                self.assertIn(f"    if: {_TRAIN_GATE}\n", _job(_CALLER, f"shards-{label}") + "\n")
+                self.assertIn(f"    if: always() && {_TRAIN_GATE}\n", _job(_CALLER, f"test-{label}") + "\n")
 
     def test_the_three_os_package_build_skips_drafts(self) -> None:
         self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
+
+
+def _concurrency(text: str) -> dict[str, str]:
+    block = re.search(r"^concurrency:\n((?:  [^\n]*\n)+)", text, re.M).group(1)
+    return dict(re.findall(r"^  ([a-z-]+): ([^\n]+)$", block, re.M))
+
+
+class ConcurrencyTests(unittest.TestCase):
+    """A newer push may cancel a pull request's older run, but never a master, nightly or dispatched run: one shared,
+    cancelling group left master with no completed Windows or macOS result after the 11-02 nightly (#2557)."""
+
+    def test_only_pull_request_runs_cancel_an_older_run(self) -> None:
+        self.assertEqual("${{ github.event_name == 'pull_request' }}", _concurrency(_CALLER)["cancel-in-progress"])
+
+    def test_the_nightly_has_its_own_group_so_a_master_push_cannot_replace_it_while_it_waits(self) -> None:
+        self.assertEqual(
+            "${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}"
+            "${{ github.event_name == 'schedule' && '-nightly' || '' }}",
+            _concurrency(_CALLER)["group"],
+        )
 
 
 class ShardCountTests(unittest.TestCase):
