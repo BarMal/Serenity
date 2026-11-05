@@ -128,3 +128,23 @@ class ListPickerCommandRowsSpec extends AnyFlatSpec with Matchers:
     result.state.modalSurface shouldBe None
     result.effects.size shouldBe 1
   }
+
+  "A picker with key hints" should "paint them as the last, muted row, under any refusal reason" in {
+    val hinted = ListPicker
+      .of("Commands", List(disabled, bound), "None")
+      .copy(message = Some("Needs a selection."), footer = Some("↑↓ move • Enter run • Esc close"))
+    val texts = planFor(hinted).paintBoxes.flatMap(_.text)
+
+    texts.takeRight(2) shouldBe List("Needs a selection.", "↑↓ move • Enter run • Esc close")
+    planFor(hinted).paintBoxes.lastOption.map(_.tone) shouldBe Some(OverlayTone.Muted)
+    ListPickerComposition.frameHeight(hinted, ModalWrap.ofContent(58, TextMeasure.Cells)) shouldBe
+      ListPickerComposition.frameHeight(hinted.copy(footer = None), ModalWrap.ofContent(58, TextMeasure.Cells)) + 1
+  }
+
+  it should "drop them when nothing matches, since there is no row to move to or run" in {
+    val empty = ListPicker.of("Commands", Nil, "No matching commands").copy(footer = Some("↑↓ move • Enter run"))
+
+    planFor(empty).paintBoxes.flatMap(_.text) should not contain "↑↓ move • Enter run"
+    ListPickerComposition.frameHeight(empty, ModalWrap.ofContent(58, TextMeasure.Cells)) shouldBe
+      ListPickerComposition.frameHeight(empty.copy(footer = None), ModalWrap.ofContent(58, TextMeasure.Cells))
+  }

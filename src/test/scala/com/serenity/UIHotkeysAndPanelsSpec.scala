@@ -41,9 +41,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.commandRunnerSurface shouldBe defined
+    state.commandPickerSurface shouldBe defined
     state.persisted.focus match
-      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case Focus.Surface(id) => state.commandPickerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
   it should "dismiss Search in Open Files when opening command palette" in new UIFixture:
@@ -54,9 +54,9 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
 
     val state = stateManager.getCurrentState.unsafeRunSync()
     state.searchInOpenFilesSurface shouldBe None
-    state.commandRunnerSurface shouldBe defined
+    state.commandPickerSurface shouldBe defined
     state.persisted.focus match
-      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case Focus.Surface(id) => state.commandPickerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
   it should "dismiss modal workflow when opening command palette" in new UIFixture:
@@ -66,10 +66,10 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.modalSurface shouldBe None
-    state.commandRunnerSurface shouldBe defined
+    state.modalSurface.map(_.id) shouldBe state.commandPickerSurface.map(_.id)
+    state.commandPickerSurface shouldBe defined
     state.persisted.focus match
-      case Focus.Surface(id) => state.commandRunnerSurface.map(_.id) shouldBe Some(id)
+      case Focus.Surface(id) => state.commandPickerSurface.map(_.id) shouldBe Some(id)
       case _                 => fail("Expected focus on command runner surface")
 
   it should "close command palette on a second ToggleCommandRunner" in new UIFixture:
@@ -77,7 +77,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.commandRunnerSurface shouldBe None
+    state.commandPickerSurface shouldBe None
     state.persisted.focus shouldBe a[Focus.EditorPane]
 
   // ── ESC dismissal ─────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ class UIHotkeysAndPanelsSpec extends AnyFlatSpec with Matchers:
     stateManager.applyEvent(Escape).unsafeRunSync()
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    state.commandRunnerSurface shouldBe None
+    state.commandPickerSurface shouldBe None
     state.persisted.focus shouldBe a[Focus.EditorPane]
 
   it should "dismiss a modal overlay with ESC and restore editor focus" in new UIFixture:

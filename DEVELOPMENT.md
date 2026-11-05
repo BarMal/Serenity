@@ -300,7 +300,7 @@ its default.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
@@ -314,9 +314,18 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
+the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
+the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
+(#2489); `ui.render.wayland` is then ignored. Terminal and safe-mode launches
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
+`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
+draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
+hardware says which should be the default.
 
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:

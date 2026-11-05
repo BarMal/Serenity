@@ -17,7 +17,7 @@ object OverlayStackLayout:
 
   private[layout] def orderedBelowCursorSurfaces(state: AppState): List[UiSurface] =
     val maybeToolbar = state.contextualToolbarSurface.filter(isBelowCursorSurface).toList
-    val maybeRunner  = state.commandRunnerSurface.filter(isBelowCursorSurface).toList
+    val maybeRunner  = state.commandRunnerSurface.orElse(state.commandPickerSurface).filter(isBelowCursorSurface).toList
     if maybeToolbar.nonEmpty && maybeRunner.nonEmpty then maybeToolbar ++ maybeRunner
     else
       val belowSurfaces = state.floatingSurfaces.filter {

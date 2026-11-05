@@ -7,7 +7,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, SurfaceContent}
+import com.serenity.state.models.AppState
 import com.serenity.testkit.HangBound
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
@@ -29,10 +29,7 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
     override def list(): IO[List[UiPreset]] = listings.update(_ + 1) >> gate.get.as(List(preset))
 
   private def previewNames(state: AppState): List[String] =
-    state.commandRunnerSurface
-      .map(_.content)
-      .collect { case SurfaceContent.CommandPalette(runner) => runner.uiPresetPreviews.map(_.name) }
-      .getOrElse(Nil)
+    com.serenity.CommandPaletteProbe.runner(state).map(_.uiPresetPreviews.map(_.name)).getOrElse(Nil)
 
   private def rigWithGatedStore: IO[(CommandRunnerOpeningRig, Deferred[IO, Unit])] =
     for
@@ -51,7 +48,7 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
 
     val opened = program.unsafeRunSync()
 
-    opened.commandRunnerSurface.isDefined shouldBe true
+    opened.commandPickerSurface.isDefined shouldBe true
     previewNames(opened) shouldBe Nil
   }
 
@@ -82,6 +79,6 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
 
     val (closed, after) = program.unsafeRunSync()
 
-    after.commandRunnerSurface shouldBe None
+    after.commandPickerSurface shouldBe None
     after.runtime.uiSurfaces shouldBe closed.runtime.uiSurfaces
   }
