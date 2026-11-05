@@ -255,3 +255,14 @@ trait PanelOutlineDrawing:
     @unused widthPx: Int,
     @unused heightPx: Int
   )(render: => Unit): Unit = render
+
+  /** Keep drawing performed by `render` off `kept`, rects in logical pixels whose pixels the frame holds correct. A
+    * redrawn row's antialiased ink reaches a little past its band, and where the neighbouring row is kept, that ink
+    * would be composited onto pixels that already carry it (#2481). A surface that does not address pixels draws whole
+    * cells, which spill nothing, so by default `render` runs unclipped.
+    */
+  def withoutPixels(@unused kept: List[PixelRect])(render: => Unit): Unit = render
+
+  /** Whether [[withoutPixels]] really keeps drawing off `kept`. A frame paints the rows beside redrawn ones only then.
+    */
+  def keepsOffPixels: Boolean = false
