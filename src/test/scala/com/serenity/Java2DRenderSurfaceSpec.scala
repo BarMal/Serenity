@@ -80,6 +80,26 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
   }
 
+  it should "confine drawing to the pixel rectangle when asked through the panel outlines" in {
+    val image    = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
+    val metrics  = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font     = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface  = new Java2DRenderSurface(image, metrics, font, _ => ())
+    val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
+
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
+    outlines.withPixelClip(13, 5, 20, 10) {
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
+    }
+    surface.flush()
+
+    new Color(image.getRGB(12, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(13, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(33, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 4), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
+  }
+
   "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
     Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202

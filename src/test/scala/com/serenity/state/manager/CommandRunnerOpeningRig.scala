@@ -4,7 +4,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.command.CommandSurfaceItem
 import com.serenity.project.ProjectPresence
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, CloseScope, SurfaceContent}
+import com.serenity.state.models.{AppState, CloseScope}
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.presets.UiPresetStore
@@ -18,13 +18,9 @@ final private[manager] class CommandRunnerOpeningRig(
 ):
   def state: IO[AppState] = ModelViews.appRef(modelRef).get
 
+  /** What the open command picker's runner lists for an empty query -- the rows the opening reads fill in. */
   def paletteItems: IO[List[CommandSurfaceItem]] =
-    state.map(
-      _.commandRunnerSurface
-        .map(_.content)
-        .collect { case SurfaceContent.CommandPalette(runner) => runner.visibleItems }
-        .getOrElse(Nil)
-    )
+    state.map(opened => com.serenity.CommandPaletteProbe.runner(opened).map(_.visibleItems).getOrElse(Nil))
 
 private[manager] object CommandRunnerOpeningRig:
 
@@ -49,8 +45,7 @@ private[manager] object CommandRunnerOpeningRig:
         def updateUndo(update: UndoState => UndoState): IO[Unit] = ModelViews.undoRef(modelRef).update(update)
         export modelCommit.updateValidated as updateModelValidated
         export modelCommit.updateValidatedPlaced as updateModelPlaced)
-    yield CommandRunnerOpeningRig(
-      new StateManagerEventPipeline(
+      pipeline = new StateManagerEventPipeline(
         statePort,
         effectPort,
         workflowPort,
@@ -66,7 +61,7 @@ private[manager] object CommandRunnerOpeningRig:
         operations,
         undoRecording,
         detectProjectPresence
-      ),
-      operations,
-      modelRef
-    )
+      )
+      // As `StateManager.apply` does: the reads a just-opened picker or settings view fills in run off the commit.
+      _ <- operations.installRunnerOpenedLoads(pipeline.requestRunnerLoads)
+    yield CommandRunnerOpeningRig(pipeline, operations, modelRef)

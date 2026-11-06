@@ -6,7 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.*
 import cats.syntax.all.*
-import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{AutoSaveMode, SpellCheckConfig, SpellCheckDictionaryFingerprint}
 import com.serenity.diagnostics.{ShutdownTrace, Trace}
 import com.serenity.document.CommentRendering
@@ -52,7 +51,8 @@ final private[manager] class StateManagerOperationBoundary private (
     announceClosedDocuments: (AppState, AppState) => IO[Unit],
     forgetClosedBuffers: (AppState, AppState) => IO[Unit],
     announceModeChange: (AppState, AppState) => IO[Unit],
-    autoSave: Ref[IO, BufferId => IO[Unit]]
+    autoSave: Ref[IO, BufferId => IO[Unit]],
+    runnerOpened: Ref[IO, (SurfaceId, AppState) => IO[Unit]]
 ):
 
   private val AutoSaveLane: Lane.Keyed = Lane.Keyed(LaneKey.AutoSave, LanePolicy.Sequential)
@@ -71,29 +71,7 @@ final private[manager] class StateManagerOperationBoundary private (
     */
   def dispatch[A](request: IO[A]): IO[A] = dispatcher.submit(request)
 
-  def ensureCommandRunnerSurface(state: AppState): AppState =
-    val registry = CommandRegistry.default
-    val activatedRunner =
-      CommandRunner.empty.activate(
-        registry,
-        state.persisted.config,
-        state.runtime.capabilities,
-        state.commandRunnerContext
-      )
-    val runner = activatedRunner
-    val (stateWithId, surfaceId) =
-      state.commandRunnerSurface.map(surface => (state, surface.id)).getOrElse(state.allocateSurfaceId)
-    val surface = UiSurface(
-      id = surfaceId,
-      content = SurfaceContent.CommandPalette(runner),
-      presentation = SurfacePresentation.Floating(state.activeCursorPosition, SurfacePlacement.BelowCursor)
-    )
-    stateWithId
-      .copy(runtime =
-        stateWithId.runtime
-          .copy(uiSurfaces = stateWithId.runtime.uiSurfaces.movedToEndWhere(_.id == surfaceId)(surface))
-      )
-      .pushFocus(Focus.Surface(surfaceId))
+  def ensureCommandRunnerSurface(state: AppState): AppState = CommandRunnerSurfaceEnsuring.ensured(state)
 
   private def currentModalId(state: AppState): Option[SurfaceId] =
     state.topModal.map(_.id).orElse(state.modalSurface.map(_.id))
@@ -107,6 +85,9 @@ final private[manager] class StateManagerOperationBoundary private (
       PanelContentSync.explorerListingsDue(committedState, fallbackState).traverse_(listExplorerDirectory) >>
       scheduleSessionSaveIfDue(fallbackState, committedState) >>
       scheduleAutoSaveIfDue(fallbackState, committedState) >>
+      CommandRunnerOpening
+        .openedBy(fallbackState, committedState)
+        .traverse_(surfaceId => runnerOpened.get.flatMap(_(surfaceId, fallbackState))) >>
       announceClosedDocuments(fallbackState, committedState) >> forgetClosedBuffers(fallbackState, committedState) >>
       commitsUnobserved.get.ifM(IO.unit, commitObserver.get.flatMap(_(fallbackState, committedState)))
 
@@ -151,7 +132,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private def logModalTransition(before: AppState, after: AppState): IO[Unit] =
     (currentModalId(before), currentModalId(after)) match
       case (beforeId, afterId) if beforeId != afterId =>
-        logger.info(
+        logger.debug(
           s"[STATE MODAL] before=${beforeId.getOrElse("none")} " +
             s"after=${afterId.getOrElse("none")} focus=${after.persisted.focus}"
         )
@@ -348,6 +329,12 @@ final private[manager] class StateManagerOperationBoundary private (
     */
   def installAutoSave(save: BufferId => IO[Unit]): IO[Unit] =
     autoSave.set(save)
+
+  /** Installs what reads the preset list and probes the project for a command picker or settings view a commit has just
+    * opened, however it was opened (#1911, #2577): built with the event pipeline, which is made after this boundary.
+    */
+  def installRunnerOpenedLoads(load: (SurfaceId, AppState) => IO[Unit]): IO[Unit] =
+    runnerOpened.set(load)
 
   private def scheduleAutoSaveIfDue(before: AppState, after: AppState): IO[Unit] =
     val config = after.persisted.config.autoSaveConfig
@@ -566,6 +553,7 @@ private[manager] object StateManagerOperationBoundary:
       commitObserver    <- Ref.of[IO, (AppState, AppState) => IO[Unit]]((_, _) => IO.unit)
       commitsUnobserved <- Ref.of[IO, Boolean](false)
       autoSave          <- Ref.of[IO, BufferId => IO[Unit]](_ => IO.unit)
+      runnerOpened      <- Ref.of[IO, (SurfaceId, AppState) => IO[Unit]]((_, _) => IO.unit)
     yield new StateManagerOperationBoundary(
       pendingOperations,
       modelRef,
@@ -593,5 +581,6 @@ private[manager] object StateManagerOperationBoundary:
       announceClosedDocuments,
       forgetClosedBuffers,
       announceModeChange,
-      autoSave
+      autoSave,
+      runnerOpened
     )

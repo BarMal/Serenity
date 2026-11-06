@@ -103,3 +103,16 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
     text should include("[RENDER]")
     text should not include "LD_LIBRARY_PATH"
   }
+
+  "StartupRecovery.Plan.withSkiaFallback" should "put the Skia notice on the start page after the earlier notices" in {
+    val plan  = StartupRecovery.Plan(safeMode = false, notices = List("Earlier notice."))
+    val skia  = SkiaFallback.notice(failed(missingLibGl)).getOrElse(fail("a failed probe must produce a notice"))
+    val shown = plan.withSkiaFallback(failed(missingLibGl)).noticeWith(Some("Config notice."))
+    shown shouldBe Some(s"Earlier notice. $skia Config notice.")
+  }
+
+  it should "add nothing when Skia was not expected to run or loaded" in {
+    val plan = StartupRecovery.Plan(safeMode = false, notices = Nil)
+    plan.withSkiaFallback(Decision(RenderBackend.Java2D, "ui.render.backend=java2d")) shouldBe plan
+    plan.withSkiaFallback(Decision(RenderBackend.Skia, "native probe passed")) shouldBe plan
+  }

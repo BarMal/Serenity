@@ -130,7 +130,7 @@ class TransientSurfaceFocusSpec extends AnyFlatSpec with Matchers with StateMana
     val bufferId = withBuffer(sm)
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val runnerId =
-      sm.getCurrentState.unsafeRunSync().commandRunnerSurface.map(_.id).getOrElse(fail("Expected the command runner"))
+      sm.getCurrentState.unsafeRunSync().commandPickerSurface.map(_.id).getOrElse(fail("Expected the command runner"))
 
     sm.applyEvent(InsertChar('x')).unsafeRunSync()
 

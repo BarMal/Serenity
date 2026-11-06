@@ -7,6 +7,7 @@ import com.serenity.ui.layout.{
   ColumnPager,
   ColumnPaging,
   LayoutEngine,
+  PaneRowBands,
   RichTextContext,
   ScrollLimits,
   TextLayoutSnapshot,
@@ -48,15 +49,29 @@ object CursorViewport:
         if shown.contains(bufferId) then placeCursor(current, buffer, wrapCache) else current
     }
 
+  /** Places `bufferId`'s viewport against its primary cursor, as a caret move would. */
+  def placed(state: AppState, bufferId: BufferId, wrapCache: WrappedLineCache = WrappedLineCache.Uncached): AppState =
+    state.persisted.buffers.get(bufferId).fold(state)(placeCursor(state, _, wrapCache))
+
+  /** The viewport that shows `cursor` in `buffer`'s pane: the page holding it in column mode, otherwise the rows
+    * typewriter scrolling or the edge margins call for. The one placement every caret move and jump goes through.
+    */
+  def placementFor(
+    buffer: Buffer,
+    state: AppState,
+    cursor: CursorPosition,
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): Viewport =
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then
+      adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
+    else adjustForCursor(buffer, state, cursor, wrapCache)
+
   private def placeCursor(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): AppState =
     buffer.editing.cursorPositions.headOption match
       case Some(cursor) =>
-        val surfaceConfig    = state.persisted.config.surfaceConfig
-        val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-        val placement =
-          if columnModeActive then adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
-          else adjustForCursor(buffer, state, cursor, wrapCache)
-        val placed = placement.copy(placement = ViewportPlacement.Placed)
+        val placement = placementFor(buffer, state, cursor, wrapCache)
+        val placed    = placement.copy(placement = ViewportPlacement.Placed)
         state.copy(persisted =
           state.persisted.copy(buffers = state.persisted.buffers + (buffer.id -> buffer.copy(viewport = placed)))
         )
@@ -76,7 +91,6 @@ object CursorViewport:
     val font                       = previewFontForBuffer(buffer, fontConfig)
     val gridWidthPx                = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
     val effectiveVisibleLines      = rowsDrawnPerScreen(viewport, fontConfig, font, isTui)
-    val halfVisibleLines           = effectiveVisibleLines / 2
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
     // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
     // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
@@ -91,6 +105,20 @@ object CursorViewport:
     val fontFallback        = currentState.persisted.config.editorConfig.fontConfig.fallback
     val headings            = currentState.effectiveHeadingSettings
     val openings            = buffer.effectiveOpenings(currentState.persisted.config.openingsConfig)
+    val richText = RichTextContext
+      .forBuffer(
+        buffer,
+        font,
+        dropCapsEnabled,
+        markdownViewMode,
+        isTui,
+        wrapCache,
+        tabSize = tabSize,
+        headings = headings,
+        openings = openings,
+        dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
+        fallback = fontFallback
+      )
     val cursorVisualLine =
       if !wordWrapEnabled then 0
       else
@@ -105,46 +133,71 @@ object CursorViewport:
           rowAffinity = cursor.rowAffinity,
           wrapCache = wrapCache,
           bufferLine = cursor.line,
-          richText = RichTextContext
-            .forBuffer(
-              buffer,
-              font,
-              dropCapsEnabled,
-              markdownViewMode,
-              isTui,
-              wrapCache,
-              tabSize = tabSize,
-              headings = headings,
-              openings = openings,
-              dropCapGapEm = currentState.persisted.config.documentConfig.dropCapGapEm,
-              fallback = fontFallback
-            )
+          richText = richText
         )
 
-    // Counted the same way `cursorVisualLine` above was measured, or the two disagree.
-    val visualRows = visualRowsFor(buffer, currentState, wrapCache)
+    // Placed by the rows' painted bands, not a count of rows: a heading, a drop cap or the prose font paints taller
+    // than a row of the buffer font, and counting rows sank a "centred" caret towards the pane's bottom (#2570).
+    val bands =
+      PaneRowBands.forBuffer(
+        buffer,
+        wrapWidthPx,
+        font,
+        cellMetricsOverride,
+        forceCellLayout,
+        wordWrapEnabled,
+        richText,
+        wrapCache
+      )
+    val paneHeightPx = paneHeightPxFor(viewport, fontConfig, isTui)
+    val caret        = PaneRowBands.Row(cursor.line, cursorVisualLine)
+    val caretBoxPx   = bands.textBoxPx(caret)
+    val current      = PaneRowBands.Row(viewport.topLine, if wordWrapEnabled then viewport.topVisualLine else 0)
 
-    // Desired top: halfVisibleLines rows of context above the cursor's own visual row, counted in visual rows (not
-    // logical lines) and carrying the partial offset into whatever line that lands on so the cursor stays centred.
-    // Forcing that offset to 0 whenever the top wasn't the cursor's own line let the cursor drift off-centre by up to a
-    // full wrapped line's worth of rows.
-    val scrollUpBudget = halfVisibleLines - cursorVisualLine
-    val (rawTopLine, rawTopVisualLine) =
-      if scrollUpBudget <= 0 then (cursor.line, math.max(0, cursorVisualLine - halfVisibleLines))
-      else visualRows.rowAbove(cursor.line, scrollUpBudget)
+    // Typewriter scrolling holds the caret's row at the pane's middle, padding past the document's end (#1204, #1293).
+    // Otherwise a caret already on screen moves the view only to stay `MarginRows` clear of the pane's edges -- less
+    // where the document ends sooner, so its last line still rests on the pane's bottom -- and a caret that jumped off
+    // it (a find, a go-to, a page) is brought to the middle, as #1204 kept jumps.
+    val ordering  = summon[Ordering[PaneRowBands.Row]]
+    val gridRowPx = paneHeightPx / math.max(1, viewport.visibleLines)
+    def centred   = bands.topPainting(caret, gridRowPx, viewport.visibleLines / 2)
+    val walk      = bands.tops(caret)
+    // How far below the current top the caret's text sits, when the pane shows it: read off the walk up from the caret,
+    // which stops at the current top, so a caret moving within the pane costs only the rows between the two.
+    val shownAtPx =
+      if typewriterScrollingEnabled || ordering.gt(current, caret) then None
+      else walk.takeWhile(_._2 <= paneHeightPx - caretBoxPx).find(_._1 == current).map(_._2)
+    val placedTop = shownAtPx match
+      case None => centred
+      case Some(offsetPx) =>
+        val margin = math.max(0, math.min(MarginRows * bands.lineHeightPx, (paneHeightPx - caretBoxPx) / 2))
+        if offsetPx >= margin && offsetPx <= paneHeightPx - caretBoxPx - margin then current
+        else
+          // The rows below the caret are counted only when it nears the bottom, where the document's end can lift
+          // the bottom margin.
+          val roomLow  = paneHeightPx - caretBoxPx - math.min(margin, bands.belowPx(caret, margin))
+          val earliest = bands.topWithin(walk, caret, roomLow)
+          val latest   = bands.topWithin(walk, caret, margin)
+          if ordering.lt(current, earliest) then earliest
+          else if ordering.gt(current, latest) then latest
+          else current
 
-    // Bottom clamp: the latest (line, visual-row) start that still fills the viewport with real content. Without this,
-    // a cursor near the end of a short-ish document can leave blank rows below the last line. Typewriter scrolling
-    // deliberately skips this clamp: its entire point is to hold the cursor's line at its centred row even while
-    // typing at the very end of the document, which means padding with blank rows below rather than showing as much
-    // real content as fits (#1204, #1293).
+    // Bottom clamp: the latest start that still fills the pane with real content, so a view left past the end of a
+    // shortened document comes back. Typewriter scrolling pads instead. Every line is at least one row, so a top above
+    // `lineCount - effectiveVisibleLines` is never past the last screen and need not be measured.
     val lineCount = buffer.document.content.lineCount
-    // Every line is at least one row, so the bottom-aligned top is never above `lineCount - effectiveVisibleLines`; a
-    // desired top above that cannot exceed it, and the last screen need not be measured.
     val (clampedTopLine, topVisualLine) =
-      if typewriterScrollingEnabled || lineCount <= 0 || rawTopLine < lineCount - effectiveVisibleLines then
-        (rawTopLine, rawTopVisualLine)
-      else ScrollLimits.last(visualRows, effectiveVisibleLines).clamp(rawTopLine, rawTopVisualLine)
+      if typewriterScrollingEnabled || lineCount <= 0 || placedTop.line < lineCount - effectiveVisibleLines then
+        (placedTop.line, placedTop.row)
+      else
+        val (line, row) = ScrollLimits
+          .last(visualRowsFor(buffer, currentState, wrapCache), effectiveVisibleLines)
+          .clamp(placedTop.line, placedTop.row)
+        // Rows counted at the buffer font's height can call a top the last screen that leaves the caret below the
+        // pane when its rows paint taller; the caret stays shown.
+        val earliest = bands.topWithin(walk, caret, paneHeightPx - caretBoxPx)
+        if ordering.lt(PaneRowBands.Row(line, row), earliest) then (earliest.line, earliest.row)
+        else (line, row)
     val clampedLeftColumn =
       if wordWrapEnabled then 0
       else
@@ -171,6 +224,20 @@ object CursorViewport:
       leftColumn = clampedLeftColumn,
       topVisualLine = topVisualLine
     )
+
+  /** The rows of the buffer font's height the view keeps between the caret and the pane's top and bottom edges when
+    * typewriter scrolling is off (#2570).
+    */
+  private[manager] val MarginRows = 3
+
+  /** The pane's height in the units its rows' bands are measured in: cells in the terminal, pixels of the code grid the
+    * pane is laid out on in the window.
+    */
+  private def paneHeightPxFor(viewport: Viewport, fontConfig: FontLoader.FontConfig, isTui: Boolean): Int =
+    if isTui then viewport.visibleLines
+    else
+      viewport.visibleLines *
+        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
 
   /** The visual rows of `buffer`'s lines as the pane wraps them, for the limits the wheel and the cursor both keep to.
     */
@@ -203,7 +270,7 @@ object CursorViewport:
       )
 
   /** The rows of the pane's own font that fit `buffer`'s pane. */
-  private[manager] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
+  private[serenity] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
     val fontConfig = currentState.persisted.config.editorConfig.fontConfig
     rowsDrawnPerScreen(
       buffer.viewport,
@@ -228,11 +295,7 @@ object CursorViewport:
     isTui: Boolean
   ): Int =
     if isTui then viewport.visibleLines
-    else
-      val codeLineHeightPx =
-        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
-      val panelHeightPx = viewport.visibleLines * codeLineHeightPx
-      ScrollLimits.rowsThatFit(panelHeightPx, CellMetrics.fromFont(font).lineHeight)
+    else ScrollLimits.rowsThatFit(paneHeightPxFor(viewport, fontConfig, isTui), CellMetrics.fromFont(font).lineHeight)
 
   /** Column-based document layout (issue #1338, Phase 1): discrete snapping only -- the viewport always lands on the
     * first column of the page holding the cursor's column, so that column is shown from its own top row. Columns are
