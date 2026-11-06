@@ -17,23 +17,17 @@ object SkiaTextCaches:
 
   private val Key = BackendCacheKey(classOf[SkiaTextCaches])
 
-  def fresh(fallbacks: FallbackFonts = FallbackFonts.system): SkiaTextCaches =
+  def fresh(): SkiaTextCaches =
     val warmup = new WarmupStats()
     SkiaTextCaches(
       new SkiaFontCache(warmup = warmup),
-      new SkiaShapedTextCache(warmup = warmup, fallbacks = fallbacks),
+      new SkiaShapedTextCache(warmup = warmup),
       new SkiaImageCache(),
       warmup = warmup
     )
 
   /** The set `owner` draws with, made the first time it is asked for. */
   def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh())
-
-  /** The set `owner` draws with, made with `fallbacks` if `owner` has none yet; for a caller that must not depend on
-    * the fonts the machine has installed.
-    */
-  def installing(owner: BackendCaches, fallbacks: FallbackFonts): SkiaTextCaches =
-    owner.getOrCreate(Key)(fresh(fallbacks))
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 
