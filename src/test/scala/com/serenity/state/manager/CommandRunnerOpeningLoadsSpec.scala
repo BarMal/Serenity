@@ -2,14 +2,13 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import scala.concurrent.duration.*
-
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
+import com.serenity.testkit.HangBound
 import com.serenity.ui.presets.{UiPreset, UiPresetStore}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -43,7 +42,7 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (rig, _) <- rigWithGatedStore
-        _        <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _        <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         opened   <- rig.state
       yield opened
 
@@ -57,7 +56,7 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (rig, gate) <- rigWithGatedStore
-        _           <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _           <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         _           <- gate.complete(())
         _           <- rig.operations.awaitEffects
         listed      <- rig.state
@@ -70,8 +69,8 @@ class CommandRunnerOpeningLoadsSpec extends AnyFlatSpec with Matchers:
     val program =
       for
         (rig, gate) <- rigWithGatedStore
-        _           <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
-        _           <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _           <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
+        _           <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         closed      <- rig.state
         _           <- gate.complete(())
         _           <- rig.operations.awaitEffects

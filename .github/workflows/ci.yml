@@ -133,6 +133,7 @@ jobs:
             scripts.test_abba_compare \
             scripts.test_abba_startup \
             scripts.test_aot_cache_scripts \
+            scripts.test_aot_macos_workflow \
             scripts.test_aot_workflow \
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
@@ -153,6 +154,7 @@ jobs:
             scripts.test_key_to_screen_summary \
             scripts.test_merge_train \
             scripts.test_perf_matrix \
+            scripts.test_perf_nightly \
             scripts.test_present_abba_summary \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
@@ -248,6 +250,49 @@ jobs:
       - name: Run heap-measurement specs
         if: ${{ !cancelled() }}
         run: sbt -v heapMeasurementTest
+
+  sdl-native:
+    name: SDL3 binding against the real library
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        uses: sbt/setup-sbt@v1
+
+      - name: Build libSDL3
+        id: sdl3
+        uses: ./.github/actions/build-sdl3
+
+      # ci/sdl3/layout.c prints the offsets and constants of the pinned SDL headers; the Scala binding is held against
+      # the checked-in copy (SdlLayoutsSpec), so this keeps that copy honest when the pin moves.
+      - name: Check the struct layouts against the SDL headers
+        run: |
+          cc -I "${{ steps.sdl3.outputs.directory }}/include" -o "$RUNNER_TEMP/sdl3-layout" ci/sdl3/layout.c
+          "$RUNNER_TEMP/sdl3-layout" | diff -u src/test/resources/sdl3/layout.txt -
+
+      # The GL specs run on SDL's offscreen driver, which makes an EGL context from Mesa's software rasteriser.
+      - name: Install Mesa EGL for the GL specs
+        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1-mesa-dri libgles2 sway
+
+      # `sbt test` excludes these specs (they load the library built above, on SDL's dummy and offscreen drivers).
+      - name: Run the SDL native specs
+        run: sbt -v -Dserenity.sdl3.library.path="${{ steps.sdl3.outputs.directory }}" sdlNativeTest
+
+      # The same specs again with a Wayland compositor present (headless sway), so the GL window host also opens on a
+      # real Wayland surface instead of canceling that spec.
+      - name: Run the SDL native specs on a headless Wayland compositor
+        run: ci/sdl3/with-sway.sh sbt -v -Dserenity.sdl3.library.path="${{ steps.sdl3.outputs.directory }}" sdlNativeTest
 
   perf:
     # The suite runs as two shards (contiguous slices of the suite, each judged on its own rows, see BenchmarkShard).
@@ -594,7 +639,7 @@ jobs:
   # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
   wake-train:
     name: Wake the merge train
-    needs: [checks, scripts, test, perf, perf-2x]
+    needs: [checks, scripts, test, sdl-native, perf, perf-2x]
     if: always() && startsWith(github.ref, 'refs/heads/train/')
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -605,4 +650,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh workflow run merge-train.yml --ref master
+        # A dispatch can meet a GitHub API error (HTTP 500 on train 17), and a red wake job reddens its whole run.
+        run: |
+          for attempt in 1 2 3 4; do
+            gh workflow run merge-train.yml --ref master && exit 0
+            echo "::warning::Starting a merge train step failed (try $attempt of 4)"
+            [ "$attempt" -lt 4 ] && sleep $((attempt * 5))
+          done
+          exit 1

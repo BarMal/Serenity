@@ -10,7 +10,7 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface}
 import com.serenity.ui.terminal.{LayerPresenter, SwingCanvasGeometry, SwingPresentationSite, SwingWindow}
-import org.jetbrains.skia.Picture
+import org.jetbrains.skia.{Bitmap, Image, Picture}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,11 +22,16 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val published              = new AtomicInteger(0)
     val disposed               = new AtomicInteger(0)
     val pictures               = new AtomicReference(List.empty[Picture])
+    val images                 = new AtomicReference(List.empty[Image])
     def baseAvailable: Boolean = published.get > 0
 
     def publish(picture: Picture): Unit =
       published.incrementAndGet()
       pictures.updateAndGet(picture :: _)
+
+    def publishImage(image: Image): Unit =
+      published.incrementAndGet()
+      images.updateAndGet(image :: _)
 
     def showCarets(carets: List[SwingWindow.CaretPaint]): Unit = ()
     def setCursor(cursor: java.awt.Cursor): Unit               = ()
@@ -36,14 +41,15 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
 
   final private class Harness(
       buildHost: JPanel => LayerHost,
-      fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+      fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D,
+      frames: LayerFrames = LayerFrames.Picture
   ):
     val canvas = new JPanel
     canvas.setSize(100, 60)
     val caches   = RenderCaches.create()
     val shown    = new AtomicReference(List.empty[BufferedImage])
     val attached = new AtomicReference(List.empty[LayerPresenter])
-    val factory  = new LayerSurfaceFactory(buildHost, fallback)
+    val factory  = new LayerSurfaceFactory(buildHost, fallback, frames)
 
     private def request(caches: RenderCaches) =
       FrameSurfaceRequest(
@@ -134,6 +140,47 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     created.get shouldBe 3
     harness.shown.get should have size 3
     harness.attached.get shouldBe empty
+  }
+
+  "LayerFrames" should "read the frame form from the property, and draw pictures when it says nothing usable" in {
+    LayerFrames.parse(Some("image")) shouldBe LayerFrames.Image
+    LayerFrames.parse(Some(" IMAGE ")) shouldBe LayerFrames.Image
+    LayerFrames.parse(Some("picture")) shouldBe LayerFrames.Picture
+    LayerFrames.parse(Some("raster")) shouldBe LayerFrames.Picture
+    LayerFrames.parse(None) shouldBe LayerFrames.Picture
+  }
+
+  "SkiaLayerSurfaceFactory in image mode" should "publish each frame as an image of the window's device size, not a picture" in {
+    val host    = new FakeHost
+    val harness = new Harness(_ => host, frames = LayerFrames.Image)
+    harness.frame()
+    harness.frame()
+    host.pictures.get shouldBe empty
+    host.images.get should have size 2
+    host.images.get.foreach { image =>
+      image.getWidth shouldBe 100
+      image.getHeight shouldBe 60
+    }
+    harness.attached.get should have size 1
+    harness.shown.get shouldBe empty
+  }
+
+  it should "publish an image holding what the frame painted, still readable after the frame ended" in {
+    val host    = new FakeHost
+    val harness = new Harness(_ => host, frames = LayerFrames.Image)
+    harness.frame()
+    val bitmap = Bitmap.Companion.makeFromImage(host.images.get.head)
+    bitmap.getColor(5, 5) shouldBe 0xffc81e1e
+  }
+
+  it should "give each frame an image of its own, so a later frame cannot change an earlier one" in {
+    val host    = new FakeHost
+    val harness = new Harness(_ => host, frames = LayerFrames.Image)
+    harness.frame()
+    harness.frame()
+    val List(second, first) = host.images.get
+    first should not be theSameInstanceAs(second)
+    Bitmap.Companion.makeFromImage(first).getColor(5, 5) shouldBe 0xffc81e1e
   }
 
   "RasterThenJava2D" should "paint with the Skia raster surface when it can" in {

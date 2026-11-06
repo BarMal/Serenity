@@ -434,7 +434,8 @@ lazy val root = (project in file("."))
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.SdlNativeTest")
     )
   )
 
@@ -450,12 +451,25 @@ realBoundaryTest := (Test / testOnly)
   )
   .value
 
+// Runs the specs that load the real libSDL3 through the FFM binding (#2380): on SDL's dummy video driver, and, for the GL
+// specs, on its offscreen driver, which needs Mesa's EGL. The library is a build product
+// (ci/sdl3/build-sdl3.sh), so `sbt test` leaves them out; hand the directory holding libSDL3.so.0 to the sbt JVM:
+// `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
+lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
+
+sdlNativeTest := (Test / testOnly)
+  .toTask(" com.serenity.ui.sdl.SdlNativeSuite")
+  .value
+
 // Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
 // stalls on their forced collections while they measure.
 lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
 
 heapMeasurementTest := (Test / testOnly)
-  .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
+  .toTask(
+    " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
+      " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
+  )
   .value
 
 libraryDependencies ++= Seq(

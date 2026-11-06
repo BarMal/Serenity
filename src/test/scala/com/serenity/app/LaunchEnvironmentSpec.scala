@@ -34,7 +34,7 @@ class LaunchEnvironmentSpec extends AnyFlatSpec with Matchers with ScalaCheckPro
     val problems = LaunchEnvironment.problems(Map("SERENITY_RENDER_BACKEND" -> "vulkan"))
     problems should have size 1
     problems.head should (include("SERENITY_RENDER_BACKEND") and include("vulkan") and include(
-      "auto, skia or java2d"
+      "auto, skia, skia-raster or java2d"
     ))
   }
 
