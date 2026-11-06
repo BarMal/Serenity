@@ -156,6 +156,7 @@ jobs:
             scripts.test_perf_matrix \
             scripts.test_perf_nightly \
             scripts.test_present_abba_summary \
+            scripts.test_pull_nightly \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
             scripts.test_smoke_test_app_image \
