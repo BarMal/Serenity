@@ -19,6 +19,7 @@ import unittest
 import urllib.error
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 from scripts import merge_train as mt
 
@@ -240,7 +241,12 @@ class FakeGitHub:
         self.merged: list[int] = []
         self.deleted_branches: list[str] = []
         self.comments: list[tuple[int, str]] = []
+        self.notes: dict[int, str] = {}
+        self.note_calls: list[tuple[int, str | None]] = []
+        self.note_error: Exception | None = None
         self.failed_jobs: dict[int, list[str]] = {}
+        self.unfinished_jobs: dict[int, list[str]] = {}
+        self.unfinished_looked_up: list[int] = []
         self.failed_suites_of_run: dict[int, list[mt.FailedSuite]] = {}
         self.suites_read: list[tuple[int, int]] = []
         self.changed: dict[int, list[str]] = {}
@@ -280,6 +286,10 @@ class FakeGitHub:
     def failed_job_names(self, run_id: int, attempt: int) -> list[str]:
         return self.failed_jobs.get(run_id, [])
 
+    def unfinished_job_names(self, run_id: int) -> list[str]:
+        self.unfinished_looked_up.append(run_id)
+        return self.unfinished_jobs.get(run_id, [])
+
     def squash_merge(self, number: int, head: str, title: str) -> None:
         if number in self.merge_fails_for:
             raise mt.MergeRefused(f"#{number} head moved")
@@ -290,6 +300,15 @@ class FakeGitHub:
 
     def delete_branch(self, name: str) -> None:
         self.deleted_branches.append(name)
+
+    def set_train_note(self, number: int, note: str | None) -> None:
+        if self.note_error is not None:
+            raise self.note_error
+        self.note_calls.append((number, note))
+        if note is None:
+            self.notes.pop(number, None)
+        else:
+            self.notes[number] = note
 
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
@@ -1024,6 +1043,269 @@ class RestFailedSuiteTests(unittest.TestCase):
         self.assertEqual(2, len(rest.paths))
 
 
+_WAKE = "Wake the merge train"
+
+
+class WakePollTests(unittest.TestCase):
+    """A train's last job dispatches the next step while its own run still reads as running, so the step can look at a
+    run that is seconds from done. When the wake job is all that is left, the step looks again shortly instead of
+    giving up until something else wakes the train."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.origin = Origin(self.root)
+        self.github = FakeGitHub(self.origin)
+        self.clone = self.root / "runner"
+        _git(self.root, "clone", "-q", str(self.origin.bare), str(self.clone))
+        self.log: list[str] = []
+        self.sleeps: list[float] = []
+        self.when_sleeping: list[Callable[[], None]] = []
+        self.github.add_pr(1, "a.txt", "a\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        self.branch = branch
+
+    def _sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        if self.when_sleeping:
+            self.when_sleeping.pop(0)()
+
+    def _train(self) -> mt.Train:
+        return mt.Train(
+            github=self.github,
+            git=mt.Git(self.clone),
+            batch=6,
+            dry_run=False,
+            flake_issue=99,
+            now=lambda: _NOW,
+            log=self.log.append,
+            sleep=self._sleep,
+        )
+
+    def _live_branch(self) -> str | None:
+        refs = _git(self.origin.bare, "for-each-ref", "--format=%(refname:short)", "refs/heads/train/")
+        return refs or None
+
+    def _ci_still_running(self, unfinished: list[str]) -> None:
+        self.github.runs[self.branch] = [_run(_CI, None, run_id=10), _run(_XOS, run_id=11)]
+        self.github.unfinished_jobs[10] = unfinished
+
+    def _ci_finishes(self, conclusion: str) -> Callable[[], None]:
+        def finish() -> None:
+            self.github.runs[self.branch] = [_run(_CI, conclusion, run_id=10), _run(_XOS, run_id=11)]
+            self.github.unfinished_jobs[10] = []
+
+        return finish
+
+    def test_a_run_left_with_only_its_wake_job_is_looked_at_again_and_the_train_merges_in_the_same_step(self) -> None:
+        self._ci_still_running([_WAKE])
+        self.when_sleeping = [self._ci_finishes("success")]
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+        self.assertEqual([10.0], self.sleeps)
+
+    def test_a_run_that_finishes_red_in_that_time_is_re_run_in_the_same_step(self) -> None:
+        self._ci_still_running([_WAKE])
+        self.when_sleeping = [self._ci_finishes("failure")]
+        self._train().tick()
+        self.assertEqual([10], self.github.reruns)
+
+    def test_it_looks_up_to_six_times_ten_seconds_apart_and_then_waits(self) -> None:
+        self._ci_still_running([_WAKE])
+        self._train().tick()
+        self.assertEqual([10.0] * 6, self.sleeps)
+        self.assertEqual([], self.github.merged)
+        self.assertEqual(self.branch, self._live_branch())
+        self.assertTrue(any("6" in line and "wake" in line.lower() for line in self.log))
+
+    def test_a_run_with_any_other_job_unfinished_is_waited_for_without_looking_again(self) -> None:
+        self._ci_still_running(["Performance benchmarks (shard 1/2)", _WAKE])
+        self._train().tick()
+        self.assertEqual([], self.sleeps)
+        self.assertEqual([], self.github.merged)
+
+    def test_a_wait_that_is_not_about_a_running_run_looks_up_no_jobs(self) -> None:
+        self.github.runs[self.branch] = [_run(_XOS, run_id=11)]
+        self._train().tick()
+        self.assertEqual([], self.sleeps)
+        self.assertEqual([], self.github.unfinished_looked_up)
+
+    def test_every_workflow_that_wakes_the_train_names_its_wake_job_as_the_script_expects(self) -> None:
+        for name in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=name):
+                self.assertIn(f"    name: {mt.WAKE_JOB_NAME}\n", _job_text(_workflow(name), "wake-train"))
+
+
+class RestUnfinishedJobTests(unittest.TestCase):
+    def test_the_jobs_of_the_latest_attempt_that_have_not_completed_are_named(self) -> None:
+        class Rest(mt.RestGitHub):
+            paths: list[str] = []
+
+            def _get(self, path: str) -> dict | list:
+                self.paths.append(path)
+                return {
+                    "jobs": [
+                        {"name": "Test", "status": "completed"},
+                        {"name": "Wake the merge train", "status": "in_progress"},
+                        {"name": "Performance benchmarks", "status": "queued"},
+                    ]
+                }
+
+        rest = Rest("token", "owner/repo")
+        self.assertEqual(["Wake the merge train", "Performance benchmarks"], rest.unfinished_job_names(7))
+        self.assertEqual(["actions/runs/7/jobs?filter=latest&per_page=100"], rest.paths)
+
+
+class TrainNoteTests(TrainRig):
+    """A push to a pull request in a live train abandons the batch, so each pull request in one carries a note saying
+    so, edited as the train moves on and deleted when the pull request leaves it (#2618)."""
+
+    def _built(self, numbers: tuple[int, ...] = (1, 2, 3)) -> str:
+        for number in numbers:
+            self.github.add_pr(number, f"file{number}.txt", f"{number}\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        return branch
+
+    def test_building_a_train_notes_each_pull_request_with_its_branch_and_what_a_push_costs(self) -> None:
+        branch = self._built((1, 2))
+        self.assertEqual({1, 2}, set(self.github.notes))
+        for note in self.github.notes.values():
+            self.assertIn(branch, note)
+            self.assertIn("#1 #2", note)
+            self.assertIn("push", note)
+            self.assertIn("abandons", note)
+            self.assertIn(mt.NOTE_MARKER, note)
+
+    def test_a_pull_request_left_out_of_the_batch_gets_no_note(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self._train().tick()
+        self.assertEqual({1}, set(self.github.notes))
+
+    def test_merging_the_train_removes_every_note(self) -> None:
+        branch = self._built((1, 2))
+        self._finish(branch)
+        self._train().tick()
+        self.assertEqual([1, 2], self.github.merged)
+        self.assertEqual({}, self.github.notes)
+
+    def test_a_re_run_leaves_the_notes_alone(self) -> None:
+        branch = self._built((1, 2))
+        before = list(self.github.note_calls)
+        self._finish(branch, xos="failure")
+        self._train().tick()
+        self.assertEqual([11], self.github.reruns)
+        self.assertEqual(before, self.github.note_calls)
+
+    def test_an_abandoned_train_notes_the_rebuilt_one_and_clears_a_pull_request_that_dropped_out(self) -> None:
+        old = self._built((1, 2, 3))
+        self.github.merged.append(2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        new = self._live_branch()
+        self.assertNotEqual(old, new)
+        self.assertEqual({1, 3}, set(self.github.notes))
+        for note in self.github.notes.values():
+            self.assertIn(str(new), note)
+            self.assertNotIn(old, note)
+
+    def test_an_ejected_pull_request_loses_its_note_and_the_rest_are_noted_for_the_rebuilt_train(self) -> None:
+        self.github.add_pr(1, "file1.txt", "1\n")
+        self.github.add_pr(2, "file2.txt", "2\n")
+        self.github.add_pr(3, "src/test/scala/com/serenity/CommandPickerSpec.scala", "3\n")
+        self._train().tick()
+        old = self._live_branch()
+        assert old is not None
+        self._finish(old, xos="failure")
+        self.github.failed_suites_of_run[11] = [mt.FailedSuite("Test (macos)", "com.serenity.CommandPickerSpec")]
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        self.assertEqual({1, 2}, set(self.github.notes))
+        self.assertNotIn(old, self.github.notes[1])
+
+    def test_a_lone_red_pull_request_loses_its_note_when_it_is_ejected(self) -> None:
+        branch = self._built((4,))
+        self._finish(branch, ci="failure", attempt=2)
+        self._train().tick()
+        self.assertEqual({}, self.github.notes)
+
+    def test_a_bisect_notes_only_the_half_it_builds(self) -> None:
+        branch = self._built((1, 2, 3))
+        self._finish(branch, ci="failure", attempt=2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        self.assertEqual([1, 2], self._train_numbers())
+        self.assertEqual({1, 2}, set(self.github.notes))
+
+    def test_a_dry_run_writes_no_notes(self) -> None:
+        self.github.add_pr(1, "a.txt", "a\n")
+        self._train(dry_run=True).tick()
+        self.assertEqual([], self.github.note_calls)
+
+    def test_a_note_that_cannot_be_written_does_not_stop_the_train(self) -> None:
+        self.github.note_error = urllib.error.URLError("503")
+        branch = self._built((1,))
+        self.assertIn(("ci.yml", branch), self.github.dispatched)
+        self.assertTrue(any("note" in line and "#1" in line for line in self.log))
+        self._finish(branch)
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+
+
+class _StubNotes(mt.RestGitHub):
+    """RestGitHub over canned issue comments: records every write, no network."""
+
+    def __init__(self, pages: list[list[dict]]) -> None:
+        super().__init__("token", "owner/repo")
+        self.pages, self.calls = pages, []
+
+    def _get(self, path: str) -> dict | list:
+        page = int(path.rsplit("page=", 1)[1])
+        return self.pages[page - 1] if page <= len(self.pages) else []
+
+    def _call(self, method: str, path: str, body: object | None = None) -> object:
+        if method == "GET":
+            return self._get(path)
+        self.calls.append((method, path, body))
+        return None
+
+
+class RestTrainNoteTests(unittest.TestCase):
+    _OLD = {"id": 55, "body": f"{mt.NOTE_MARKER}\nIn merge train `x`."}
+    _OTHER = {"id": 9, "body": "Looks good."}
+
+    def test_a_note_is_posted_when_the_pull_request_has_none(self) -> None:
+        rest = _StubNotes([[self._OTHER]])
+        rest.set_train_note(7, "the note")
+        self.assertEqual([("POST", "issues/7/comments", {"body": "the note"})], rest.calls)
+
+    def test_an_existing_note_is_edited_in_place(self) -> None:
+        rest = _StubNotes([[self._OTHER, self._OLD]])
+        rest.set_train_note(7, "the new note")
+        self.assertEqual([("PATCH", "issues/comments/55", {"body": "the new note"})], rest.calls)
+
+    def test_no_note_deletes_the_existing_one(self) -> None:
+        rest = _StubNotes([[self._OLD]])
+        rest.set_train_note(7, None)
+        self.assertEqual([("DELETE", "issues/comments/55", None)], rest.calls)
+
+    def test_no_note_and_nothing_to_delete_writes_nothing(self) -> None:
+        rest = _StubNotes([[self._OTHER]])
+        rest.set_train_note(7, None)
+        self.assertEqual([], rest.calls)
+
+    def test_the_note_is_found_on_a_later_page_of_comments(self) -> None:
+        full = [{"id": i, "body": "chat"} for i in range(100)]
+        rest = _StubNotes([full, [self._OLD]])
+        rest.set_train_note(7, None)
+        self.assertEqual([("DELETE", "issues/comments/55", None)], rest.calls)
+
+
 class _StubRest(mt.RestGitHub):
     """RestGitHub over a canned pulls payload: no network, CI green, no markers."""
 
@@ -1084,6 +1366,75 @@ def _job_text(workflow: str, job: str) -> str:
     return found.group(1) if found else ""
 
 
+def _run_block(job: str) -> str:
+    """The shell text of the job's `run: |` step, dedented."""
+    lines = job.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "run: |")
+    indent = len(lines[start]) - len(lines[start].lstrip()) + 2
+    body = []
+    for line in lines[start + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) < indent:
+            break
+        body.append(line[indent:])
+    return "\n".join(body) + "\n"
+
+
+class WakeRetryTests(unittest.TestCase):
+    """The wake job's one command can meet a GitHub API error (HTTP 500 on train 17). It retries a few times instead of
+    reddening its run, which the train would read as a failed batch (#2618)."""
+
+    def _run(self, workflow: str, failures: int) -> tuple[int, list[str], list[str], str]:
+        script = _run_block(_job_text(_workflow(workflow), "wake-train"))
+        with tempfile.TemporaryDirectory() as directory:
+            bin_dir = Path(directory) / "bin"
+            bin_dir.mkdir()
+            calls, sleeps = Path(directory) / "calls", Path(directory) / "sleeps"
+            (bin_dir / "gh").write_text(
+                '#!/bin/sh\necho "$@" >> "$CALLS"\n[ "$(wc -l < "$CALLS")" -gt "$FAILURES" ]\n'
+            )
+            (bin_dir / "sleep").write_text('#!/bin/sh\necho "$1" >> "$SLEEPS"\n')
+            for tool in ("gh", "sleep"):
+                (bin_dir / tool).chmod(0o755)
+            done = subprocess.run(
+                ["bash", "-e", "-c", script],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "CALLS": str(calls), "SLEEPS": str(sleeps), "FAILURES": str(failures)},
+            )
+            read = lambda path: path.read_text().splitlines() if path.exists() else []
+            return done.returncode, read(calls), read(sleeps), done.stdout + done.stderr
+
+    def test_a_dispatch_that_works_first_time_runs_once_and_never_waits(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, _ = self._run(workflow, failures=0)
+                self.assertEqual(0, code)
+                self.assertEqual(["workflow run merge-train.yml --ref master"], calls)
+                self.assertEqual([], sleeps)
+
+    def test_a_dispatch_that_fails_twice_is_retried_with_a_longer_wait_each_time_and_succeeds(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, _ = self._run(workflow, failures=2)
+                self.assertEqual(0, code)
+                self.assertEqual(3, len(calls))
+                self.assertEqual(["5", "10"], sleeps)
+
+    def test_a_dispatch_that_never_works_gives_up_after_four_tries_and_fails_the_job(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, output = self._run(workflow, failures=99)
+                self.assertNotEqual(0, code)
+                self.assertEqual(4, len(calls))
+                self.assertEqual(["5", "10", "15"], sleeps)
+                self.assertIn("::warning::", output)
+
+    def test_the_longest_wait_fits_inside_the_job_timeout(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                self.assertIn("    timeout-minutes: 5\n", _job_text(_workflow(workflow), "wake-train"))
+
+
 class WorkflowTests(unittest.TestCase):
     """How .github/workflows/merge-train.yml drives the script, and how the existing workflows make room for it."""
 
@@ -1131,7 +1482,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("    timeout-minutes: 5\n", job)
                 self.assertIn("GH_REPO: ${{ github.repository }}", job)
                 self.assertIn("GH_TOKEN: ${{ github.token }}", job)
-                self.assertIn("run: gh workflow run merge-train.yml --ref master\n", job)
+                self.assertIn("gh workflow run merge-train.yml --ref master", job)
                 others = [j for j in _job_ids(text) if j != "wake-train"]
                 self.assertEqual(f"    needs: [{', '.join(others)}]\n", next(l + "\n" for l in job.splitlines() if l.startswith("    needs:")))
 

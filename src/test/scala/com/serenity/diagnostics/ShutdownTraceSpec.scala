@@ -132,3 +132,61 @@ class ShutdownTraceSpec extends AnyFlatSpec with Matchers:
 
     whileRunning shouldBe Vector("info [SHUTDOWN] releasing persist")
   }
+
+  "A ShutdownLedger" should "list a step from when it starts releasing until it has finished" in {
+    val (during, after) = withLogger { logger =>
+      given org.typelevel.log4cats.Logger[IO] = logger
+      given ledger: ShutdownLedger            = ShutdownLedger.recording()
+      for
+        gate   <- Deferred[IO, Unit]
+        fiber  <- ShutdownTrace.traced("window")(Resource.make(IO.unit)(_ => gate.get)).use(_ => IO.unit).start
+        _      <- IO.sleep(150.millis)
+        during <- IO(ledger.unfinished)
+        _      <- gate.complete(())
+        _      <- fiber.joinWithNever
+        after  <- IO(ledger.unfinished)
+      yield (during, after)
+    }
+
+    during shouldBe List("window")
+    after shouldBe Nil
+  }
+
+  it should "not list a resource that is still in use, only one that has begun to release" in {
+    val whileInUse = withLogger { logger =>
+      given org.typelevel.log4cats.Logger[IO] = logger
+      given ledger: ShutdownLedger            = ShutdownLedger.recording()
+      ShutdownTrace.traced("window")(Resource.unit[IO]).use(_ => IO(ledger.unfinished))
+    }
+
+    whileInUse shouldBe Nil
+  }
+
+  it should "stop listing a step whose action failed, and keep listing one that is still running" in {
+    val (whileRunning, afterBoth) = withLogger { logger =>
+      given org.typelevel.log4cats.Logger[IO] = logger
+      given ledger: ShutdownLedger            = ShutdownLedger.recording()
+      for
+        gate         <- Deferred[IO, Unit]
+        first        <- ShutdownTrace.step("save")(gate.get).start
+        _            <- IO.sleep(100.millis)
+        _            <- ShutdownTrace.step("effects")(IO.raiseError[Unit](new RuntimeException("no"))).attempt
+        whileRunning <- IO(ledger.unfinished)
+        _            <- gate.complete(())
+        _            <- first.joinWithNever
+        afterBoth    <- IO(ledger.unfinished)
+      yield (whileRunning, afterBoth)
+    }
+
+    whileRunning shouldBe List("save")
+    afterBoth shouldBe Nil
+  }
+
+  it should "record nothing when a step has no owner, so tracing without one is harmless" in {
+    val unfinished = withLogger { logger =>
+      given org.typelevel.log4cats.Logger[IO] = logger
+      ShutdownTrace.step("save")(IO(ShutdownLedger.none.unfinished))
+    }
+
+    unfinished shouldBe Nil
+  }

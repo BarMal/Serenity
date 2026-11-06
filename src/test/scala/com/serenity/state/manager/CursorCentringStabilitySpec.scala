@@ -126,10 +126,12 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     }
     ()
 
+  // #2570 item 2, changed with the owner's approval: centring the caret is typewriter scrolling's alone (D3), so these
+  // hold it centred with typewriter scrolling on; without it the view keeps a margin and stays put.
   "Typing mid-paragraph in the bench lorem document" should "keep the cursor on its cold-layout centre row" in {
     for
       columns    <- List(60, 80, 100, 120)
-      typewriter <- List(false, true)
+      typewriter <- List(true)
     do typeMidParagraph(loremDocument, line = 150 * 2, columns, typewriter, keystrokes = 120)
   }
 
@@ -191,7 +193,7 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
   "The painted cursor row" should "stay on one row while typing mid-paragraph in the bench lorem document" in {
     for
       columns    <- List(50, 64, 80, 100, 117, 140)
-      typewriter <- List(false, true)
+      typewriter <- List(true)
       fraction   <- List(0.0, 0.5, 0.95)
     do
       withClue(s"columns=$columns typewriter=$typewriter fraction=$fraction: ")(
@@ -203,7 +205,7 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     val random    = new Random(7)
     val paragraph = Vector.fill(3_000)(words(random.nextInt(words.length))).mkString(" ")
     val text      = Vector("Heading", paragraph, "Tail").mkString("\n")
-    for typewriter <- List(false, true) do
+    for typewriter <- List(true) do
       val rows = paintedRows(text, columns = 40, typewriter, fraction = 0.5, line = 1, keystrokes = 100)
       withClue(s"typewriter=$typewriter: ")(rows should centred)
   }
