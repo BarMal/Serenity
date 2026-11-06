@@ -46,7 +46,7 @@ object PreservedPixels:
       .toList
 
   /** The kept rects within `margin` of the box a draw is bounded to: where its ink can reach one. */
-  private[renderer] def near(
+  private[ui] def near(
     kept: List[PixelRect],
     left: Int,
     top: Int,
