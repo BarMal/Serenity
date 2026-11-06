@@ -296,11 +296,11 @@ object RendererFramePlanner:
     }
     output.foreach { value =>
       caches.frameState.forgetScreenState(value.screenToken)
-      value.repaintRegion.set(None)
+      value.reset()
     }
 
   private def commitFramePlan(framePlan: Option[FramePlan], output: Option[FrameOutput]): Unit =
-    output.foreach(_.repaintRegion.set(framePlan.flatMap(_.repaintRegion)))
+    output.foreach(_.commit(framePlan))
 
   /** Decide which pane rows this frame still has to draw, and which pixel bands it may keep from an earlier frame.
     *
