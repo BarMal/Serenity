@@ -199,8 +199,8 @@ jobs:
           echo "SBT_OPTS=-Xlog:gc*,safepoint:file=jvm-diag/gc-safepoint.log:time,uptime,level,tags -Dserenity.test.stallLog=jvm-diag/stalls.log" >> "$GITHUB_ENV"
 
       # Ten specs `assume` a display and were cancelled on this headless runner, so nothing on Linux ran them. The perf
-      # job's virtual display, at a size that fits its largest window, lets them run; the one spec that needs AWT to be
-      # headless is cancelled in its place.
+      # job's virtual display, at a size that fits its largest window, lets them run; the one test that needs AWT to be
+      # headless is excluded here and run by the real-boundary job (`headlessAwtTest`).
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
@@ -293,6 +293,13 @@ jobs:
       # real Wayland surface instead of canceling that spec.
       - name: Run the SDL native specs on a headless Wayland compositor
         run: ci/sdl3/with-sway.sh sbt -v -Dserenity.sdl3.library.path="${{ steps.sdl3.outputs.directory }}" sdlNativeTest
+
+      # `sbt test` excludes these: every leg of it has a display, so a test that needs AWT to be headless was cancelled
+      # on all of them. This runner has none; the flag makes that explicit rather than inferred.
+      - name: Run headless-AWT specs
+        env:
+          SBT_OPTS: -Djava.awt.headless=true
+        run: sbt -v headlessAwtTest
 
   perf:
     # The suite runs as two shards (contiguous slices of the suite, each judged on its own rows, see BenchmarkShard).
