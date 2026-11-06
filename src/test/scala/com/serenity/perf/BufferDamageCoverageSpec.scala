@@ -15,12 +15,11 @@ import com.serenity.keystroke.events.{
   ScrollDown,
   ScrollUp
 }
-import com.serenity.setCursorPosition
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{BufferId, Damage}
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFrameState, ScreenIdentity, SurfaceContentIdentity}
-import com.serenity.MockRenderSurface
+import com.serenity.{MockRenderSurface, setCursorPosition}
 import org.scalacheck.Gen
 import org.scalatest.exceptions.TestFailedException
 import org.scalatest.flatspec.AnyFlatSpec
