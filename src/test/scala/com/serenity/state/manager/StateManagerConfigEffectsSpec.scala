@@ -244,7 +244,7 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers with Confi
     fixture.config
       .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnTargetWidth(60)), AppState.initial)
       .unsafeRunSync()
-    fixture.currentConfig.surfaceConfig.columnTargetWidthCells shouldBe 60
+    fixture.currentConfig.surfaceConfig.columnTargetWidthCells shouldBe Some(60)
 
     fixture.config
       .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnGap(4)), AppState.initial)

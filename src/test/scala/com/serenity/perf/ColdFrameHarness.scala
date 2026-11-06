@@ -13,6 +13,7 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
@@ -127,13 +128,7 @@ trait ColdFrameHarness:
     }
 
   protected def differing(drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
-    coldFrameWith(state, scale) { cold =>
-      for
-        x <- 0 until drawn.getWidth
-        y <- 0 until drawn.getHeight
-        if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-      yield (x, y)
-    }
+    coldFrameWith(state, scale)(cold => FrameDiff.differing(drawn, cold))
 
   protected def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)

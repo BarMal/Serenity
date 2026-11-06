@@ -19,6 +19,7 @@ import unittest
 import urllib.error
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 from scripts import merge_train as mt
 
@@ -244,6 +245,8 @@ class FakeGitHub:
         self.note_calls: list[tuple[int, str | None]] = []
         self.note_error: Exception | None = None
         self.failed_jobs: dict[int, list[str]] = {}
+        self.unfinished_jobs: dict[int, list[str]] = {}
+        self.unfinished_looked_up: list[int] = []
         self.failed_suites_of_run: dict[int, list[mt.FailedSuite]] = {}
         self.suites_read: list[tuple[int, int]] = []
         self.changed: dict[int, list[str]] = {}
@@ -282,6 +285,10 @@ class FakeGitHub:
 
     def failed_job_names(self, run_id: int, attempt: int) -> list[str]:
         return self.failed_jobs.get(run_id, [])
+
+    def unfinished_job_names(self, run_id: int) -> list[str]:
+        self.unfinished_looked_up.append(run_id)
+        return self.unfinished_jobs.get(run_id, [])
 
     def squash_merge(self, number: int, head: str, title: str) -> None:
         if number in self.merge_fails_for:
@@ -1034,6 +1041,122 @@ class RestFailedSuiteTests(unittest.TestCase):
         self.assertEqual(101, len(names))
         self.assertEqual("last.txt", names[-1])
         self.assertEqual(2, len(rest.paths))
+
+
+_WAKE = "Wake the merge train"
+
+
+class WakePollTests(unittest.TestCase):
+    """A train's last job dispatches the next step while its own run still reads as running, so the step can look at a
+    run that is seconds from done. When the wake job is all that is left, the step looks again shortly instead of
+    giving up until something else wakes the train."""
+
+    def setUp(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = Path(tmp.name)
+        self.origin = Origin(self.root)
+        self.github = FakeGitHub(self.origin)
+        self.clone = self.root / "runner"
+        _git(self.root, "clone", "-q", str(self.origin.bare), str(self.clone))
+        self.log: list[str] = []
+        self.sleeps: list[float] = []
+        self.when_sleeping: list[Callable[[], None]] = []
+        self.github.add_pr(1, "a.txt", "a\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        self.branch = branch
+
+    def _sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        if self.when_sleeping:
+            self.when_sleeping.pop(0)()
+
+    def _train(self) -> mt.Train:
+        return mt.Train(
+            github=self.github,
+            git=mt.Git(self.clone),
+            batch=6,
+            dry_run=False,
+            flake_issue=99,
+            now=lambda: _NOW,
+            log=self.log.append,
+            sleep=self._sleep,
+        )
+
+    def _live_branch(self) -> str | None:
+        refs = _git(self.origin.bare, "for-each-ref", "--format=%(refname:short)", "refs/heads/train/")
+        return refs or None
+
+    def _ci_still_running(self, unfinished: list[str]) -> None:
+        self.github.runs[self.branch] = [_run(_CI, None, run_id=10), _run(_XOS, run_id=11)]
+        self.github.unfinished_jobs[10] = unfinished
+
+    def _ci_finishes(self, conclusion: str) -> Callable[[], None]:
+        def finish() -> None:
+            self.github.runs[self.branch] = [_run(_CI, conclusion, run_id=10), _run(_XOS, run_id=11)]
+            self.github.unfinished_jobs[10] = []
+
+        return finish
+
+    def test_a_run_left_with_only_its_wake_job_is_looked_at_again_and_the_train_merges_in_the_same_step(self) -> None:
+        self._ci_still_running([_WAKE])
+        self.when_sleeping = [self._ci_finishes("success")]
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+        self.assertEqual([10.0], self.sleeps)
+
+    def test_a_run_that_finishes_red_in_that_time_is_re_run_in_the_same_step(self) -> None:
+        self._ci_still_running([_WAKE])
+        self.when_sleeping = [self._ci_finishes("failure")]
+        self._train().tick()
+        self.assertEqual([10], self.github.reruns)
+
+    def test_it_looks_up_to_six_times_ten_seconds_apart_and_then_waits(self) -> None:
+        self._ci_still_running([_WAKE])
+        self._train().tick()
+        self.assertEqual([10.0] * 6, self.sleeps)
+        self.assertEqual([], self.github.merged)
+        self.assertEqual(self.branch, self._live_branch())
+        self.assertTrue(any("6" in line and "wake" in line.lower() for line in self.log))
+
+    def test_a_run_with_any_other_job_unfinished_is_waited_for_without_looking_again(self) -> None:
+        self._ci_still_running(["Performance benchmarks (shard 1/2)", _WAKE])
+        self._train().tick()
+        self.assertEqual([], self.sleeps)
+        self.assertEqual([], self.github.merged)
+
+    def test_a_wait_that_is_not_about_a_running_run_looks_up_no_jobs(self) -> None:
+        self.github.runs[self.branch] = [_run(_XOS, run_id=11)]
+        self._train().tick()
+        self.assertEqual([], self.sleeps)
+        self.assertEqual([], self.github.unfinished_looked_up)
+
+    def test_every_workflow_that_wakes_the_train_names_its_wake_job_as_the_script_expects(self) -> None:
+        for name in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=name):
+                self.assertIn(f"    name: {mt.WAKE_JOB_NAME}\n", _job_text(_workflow(name), "wake-train"))
+
+
+class RestUnfinishedJobTests(unittest.TestCase):
+    def test_the_jobs_of_the_latest_attempt_that_have_not_completed_are_named(self) -> None:
+        class Rest(mt.RestGitHub):
+            paths: list[str] = []
+
+            def _get(self, path: str) -> dict | list:
+                self.paths.append(path)
+                return {
+                    "jobs": [
+                        {"name": "Test", "status": "completed"},
+                        {"name": "Wake the merge train", "status": "in_progress"},
+                        {"name": "Performance benchmarks", "status": "queued"},
+                    ]
+                }
+
+        rest = Rest("token", "owner/repo")
+        self.assertEqual(["Wake the merge train", "Performance benchmarks"], rest.unfinished_job_names(7))
+        self.assertEqual(["actions/runs/7/jobs?filter=latest&per_page=100"], rest.paths)
 
 
 class TrainNoteTests(TrainRig):
