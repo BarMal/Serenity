@@ -241,6 +241,9 @@ class FakeGitHub:
         self.merged: list[int] = []
         self.deleted_branches: list[str] = []
         self.comments: list[tuple[int, str]] = []
+        self.notes: dict[int, str] = {}
+        self.note_calls: list[tuple[int, str | None]] = []
+        self.note_error: Exception | None = None
         self.failed_jobs: dict[int, list[str]] = {}
         self.unfinished_jobs: dict[int, list[str]] = {}
         self.unfinished_looked_up: list[int] = []
@@ -297,6 +300,15 @@ class FakeGitHub:
 
     def delete_branch(self, name: str) -> None:
         self.deleted_branches.append(name)
+
+    def set_train_note(self, number: int, note: str | None) -> None:
+        if self.note_error is not None:
+            raise self.note_error
+        self.note_calls.append((number, note))
+        if note is None:
+            self.notes.pop(number, None)
+        else:
+            self.notes[number] = note
 
     def comment(self, number: int, body: str) -> None:
         self.comments.append((number, body))
@@ -1145,6 +1157,153 @@ class RestUnfinishedJobTests(unittest.TestCase):
         rest = Rest("token", "owner/repo")
         self.assertEqual(["Wake the merge train", "Performance benchmarks"], rest.unfinished_job_names(7))
         self.assertEqual(["actions/runs/7/jobs?filter=latest&per_page=100"], rest.paths)
+
+
+class TrainNoteTests(TrainRig):
+    """A push to a pull request in a live train abandons the batch, so each pull request in one carries a note saying
+    so, edited as the train moves on and deleted when the pull request leaves it (#2618)."""
+
+    def _built(self, numbers: tuple[int, ...] = (1, 2, 3)) -> str:
+        for number in numbers:
+            self.github.add_pr(number, f"file{number}.txt", f"{number}\n")
+        self._train().tick()
+        branch = self._live_branch()
+        assert branch is not None
+        return branch
+
+    def test_building_a_train_notes_each_pull_request_with_its_branch_and_what_a_push_costs(self) -> None:
+        branch = self._built((1, 2))
+        self.assertEqual({1, 2}, set(self.github.notes))
+        for note in self.github.notes.values():
+            self.assertIn(branch, note)
+            self.assertIn("#1 #2", note)
+            self.assertIn("push", note)
+            self.assertIn("abandons", note)
+            self.assertIn(mt.NOTE_MARKER, note)
+
+    def test_a_pull_request_left_out_of_the_batch_gets_no_note(self) -> None:
+        self.github.add_pr(1, "same.txt", "one\n")
+        self.github.add_pr(2, "same.txt", "two\n")
+        self._train().tick()
+        self.assertEqual({1}, set(self.github.notes))
+
+    def test_merging_the_train_removes_every_note(self) -> None:
+        branch = self._built((1, 2))
+        self._finish(branch)
+        self._train().tick()
+        self.assertEqual([1, 2], self.github.merged)
+        self.assertEqual({}, self.github.notes)
+
+    def test_a_re_run_leaves_the_notes_alone(self) -> None:
+        branch = self._built((1, 2))
+        before = list(self.github.note_calls)
+        self._finish(branch, xos="failure")
+        self._train().tick()
+        self.assertEqual([11], self.github.reruns)
+        self.assertEqual(before, self.github.note_calls)
+
+    def test_an_abandoned_train_notes_the_rebuilt_one_and_clears_a_pull_request_that_dropped_out(self) -> None:
+        old = self._built((1, 2, 3))
+        self.github.merged.append(2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        new = self._live_branch()
+        self.assertNotEqual(old, new)
+        self.assertEqual({1, 3}, set(self.github.notes))
+        for note in self.github.notes.values():
+            self.assertIn(str(new), note)
+            self.assertNotIn(old, note)
+
+    def test_an_ejected_pull_request_loses_its_note_and_the_rest_are_noted_for_the_rebuilt_train(self) -> None:
+        self.github.add_pr(1, "file1.txt", "1\n")
+        self.github.add_pr(2, "file2.txt", "2\n")
+        self.github.add_pr(3, "src/test/scala/com/serenity/CommandPickerSpec.scala", "3\n")
+        self._train().tick()
+        old = self._live_branch()
+        assert old is not None
+        self._finish(old, xos="failure")
+        self.github.failed_suites_of_run[11] = [mt.FailedSuite("Test (macos)", "com.serenity.CommandPickerSpec")]
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        self.assertEqual({1, 2}, set(self.github.notes))
+        self.assertNotIn(old, self.github.notes[1])
+
+    def test_a_lone_red_pull_request_loses_its_note_when_it_is_ejected(self) -> None:
+        branch = self._built((4,))
+        self._finish(branch, ci="failure", attempt=2)
+        self._train().tick()
+        self.assertEqual({}, self.github.notes)
+
+    def test_a_bisect_notes_only_the_half_it_builds(self) -> None:
+        branch = self._built((1, 2, 3))
+        self._finish(branch, ci="failure", attempt=2)
+        self.clock = _NOW + timedelta(minutes=1)
+        self._train().tick()
+        self.assertEqual([1, 2], self._train_numbers())
+        self.assertEqual({1, 2}, set(self.github.notes))
+
+    def test_a_dry_run_writes_no_notes(self) -> None:
+        self.github.add_pr(1, "a.txt", "a\n")
+        self._train(dry_run=True).tick()
+        self.assertEqual([], self.github.note_calls)
+
+    def test_a_note_that_cannot_be_written_does_not_stop_the_train(self) -> None:
+        self.github.note_error = urllib.error.URLError("503")
+        branch = self._built((1,))
+        self.assertIn(("ci.yml", branch), self.github.dispatched)
+        self.assertTrue(any("note" in line and "#1" in line for line in self.log))
+        self._finish(branch)
+        self._train().tick()
+        self.assertEqual([1], self.github.merged)
+
+
+class _StubNotes(mt.RestGitHub):
+    """RestGitHub over canned issue comments: records every write, no network."""
+
+    def __init__(self, pages: list[list[dict]]) -> None:
+        super().__init__("token", "owner/repo")
+        self.pages, self.calls = pages, []
+
+    def _get(self, path: str) -> dict | list:
+        page = int(path.rsplit("page=", 1)[1])
+        return self.pages[page - 1] if page <= len(self.pages) else []
+
+    def _call(self, method: str, path: str, body: object | None = None) -> object:
+        if method == "GET":
+            return self._get(path)
+        self.calls.append((method, path, body))
+        return None
+
+
+class RestTrainNoteTests(unittest.TestCase):
+    _OLD = {"id": 55, "body": f"{mt.NOTE_MARKER}\nIn merge train `x`."}
+    _OTHER = {"id": 9, "body": "Looks good."}
+
+    def test_a_note_is_posted_when_the_pull_request_has_none(self) -> None:
+        rest = _StubNotes([[self._OTHER]])
+        rest.set_train_note(7, "the note")
+        self.assertEqual([("POST", "issues/7/comments", {"body": "the note"})], rest.calls)
+
+    def test_an_existing_note_is_edited_in_place(self) -> None:
+        rest = _StubNotes([[self._OTHER, self._OLD]])
+        rest.set_train_note(7, "the new note")
+        self.assertEqual([("PATCH", "issues/comments/55", {"body": "the new note"})], rest.calls)
+
+    def test_no_note_deletes_the_existing_one(self) -> None:
+        rest = _StubNotes([[self._OLD]])
+        rest.set_train_note(7, None)
+        self.assertEqual([("DELETE", "issues/comments/55", None)], rest.calls)
+
+    def test_no_note_and_nothing_to_delete_writes_nothing(self) -> None:
+        rest = _StubNotes([[self._OTHER]])
+        rest.set_train_note(7, None)
+        self.assertEqual([], rest.calls)
+
+    def test_the_note_is_found_on_a_later_page_of_comments(self) -> None:
+        full = [{"id": i, "body": "chat"} for i in range(100)]
+        rest = _StubNotes([full, [self._OLD]])
+        rest.set_train_note(7, None)
+        self.assertEqual([("DELETE", "issues/comments/55", None)], rest.calls)
 
 
 class _StubRest(mt.RestGitHub):
