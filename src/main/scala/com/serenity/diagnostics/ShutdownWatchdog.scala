@@ -59,16 +59,23 @@ final class ShutdownWatchdog(val ledger: ShutdownLedger):
     bound: FiniteDuration = HookTimeout,
     exitCode: Int = HaltExitCode,
     report: String => Unit = defaultReport,
-    halt: Int => Unit = code => Runtime.getRuntime.halt(code)
+    halt: Int => Unit = code => Runtime.getRuntime.halt(code),
+    awtState: () => AwtStateProbe.State = AwtStateProbe.current,
+    snapshotGap: FiniteDuration = DumpBeforeTimeout
   ): IO[Unit] = IO {
     val watchdog = daemon("serenity-quit-watchdog") {
       try
-        TimeUnit.MILLISECONDS.sleep(bound.toMillis)
+        val gap = snapshotGap.min(bound)
+        TimeUnit.MILLISECONDS.sleep((bound - gap).toMillis)
+        val before = AwtStateProbe.describeRead(s"${(bound - gap).toMillis} ms after the quit", awtState)
+        TimeUnit.MILLISECONDS.sleep(gap.toMillis)
+        val after = AwtStateProbe.describeRead(s"${bound.toMillis} ms after the quit", awtState)
         report(
           describe(
             s"quit not finished ${bound.toSeconds} s after the editor shut down",
             ledger.unfinished,
-            captureThreads()
+            captureThreads(),
+            before ++ after
           )
         )
         halt(exitCode)
@@ -110,7 +117,12 @@ object ShutdownWatchdog:
         )
       )
 
-  def describe(reason: String, unfinished: List[String], threads: List[ThreadSnapshot]): String =
+  def describe(
+    reason: String,
+    unfinished: List[String],
+    threads: List[ThreadSnapshot],
+    awt: List[String] = Nil
+  ): String =
     val steps =
       if unfinished.isEmpty then "no step is releasing, so the shutdown is not waiting inside a traced release"
       else s"steps that started releasing and have not finished: ${unfinished.mkString(", ")}"
@@ -118,7 +130,7 @@ object ShutdownWatchdog:
       val flags = if thread.daemon then s"${thread.state}, daemon" else thread.state
       s"\"${thread.name}\" ($flags)" :: thread.stack.map(frame => s"\tat $frame")
     }
-    (s"[SHUTDOWN] $reason" :: s"[SHUTDOWN] $steps" :: "[SHUTDOWN] threads:" :: blocks).mkString("\n")
+    (s"[SHUTDOWN] $reason" :: s"[SHUTDOWN] $steps" :: awt ++ ("[SHUTDOWN] threads:" :: blocks)).mkString("\n")
 
   /** Logs the dump, and also prints it: the log may already be closing, and a terminal launch silences stderr, which
     * costs nothing.
