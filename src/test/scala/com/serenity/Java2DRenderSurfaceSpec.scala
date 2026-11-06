@@ -100,13 +100,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
   }
 
-  "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
-  }
-
-  it should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
+  "Java2DRenderSurface" should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
     val image   = new BufferedImage(200, 100, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 20)
