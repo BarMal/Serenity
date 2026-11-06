@@ -181,12 +181,20 @@ final class SkiaShapedTextCache(
   private val shapedN    = new java.util.concurrent.atomic.AtomicLong(0)
   private val lineN      = new java.util.concurrent.atomic.AtomicLong(0)
   private val promotedN  = new java.util.concurrent.atomic.LongAdder()
+  private val lookupN    = new java.util.concurrent.atomic.LongAdder()
+  private val evictedN   = new java.util.concurrent.atomic.LongAdder()
   private val shapeLock  = new Object
   private val rotateLock = new Object
 
   def shapings: Long = shapedN.get()
 
   def promotions: Long = promotedN.sum()
+
+  /** Every `stretchOf` call: the lookups that were answered are `lookups - shapings`. */
+  def lookups: Long = lookupN.sum()
+
+  /** Stretches a rotation dropped from the older generation, so held by neither generation any more. */
+  def evictions: Long = evictedN.sum()
 
   /** How many of those went through Skiko's `TextLine`, the slow path. */
   private[skia] def lineShapings: Long = lineN.get()
@@ -198,6 +206,7 @@ final class SkiaShapedTextCache(
     result
 
   def stretchOf(text: String, font: Font): SkiaShapedStretch =
+    lookupN.increment()
     val key = Key(text, font)
     Option(current.get.get(key)).getOrElse {
       Option(previous.get.get(key)).fold(shapeAndRemember(key))(promote(key, _))
@@ -214,6 +223,7 @@ final class SkiaShapedTextCache(
   private def remember(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
     rotateLock.synchronized {
       if current.get.size >= capacityPerGeneration then
+        evictedN.add(previous.get.size.toLong)
         previous.set(current.get)
         current.set(new Stretches())
       val _ = current.get.put(key, stretch)

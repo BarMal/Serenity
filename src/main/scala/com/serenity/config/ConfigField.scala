@@ -118,6 +118,15 @@ object FieldCodec:
         value => value.fold(HoconValue.string("auto"))(codec.render)
       )
 
+    /** `unlimited` is how this format spells "no limit" for a setting that is otherwise a size. */
+    def orUnlimited: FieldCodec[Option[A]] =
+      given Encoder[Option[A]] = Encoder.encodeOption(using codec.encoder)
+      given Decoder[Option[A]] = Decoder.decodeOption(using codec.decoder)
+      of(
+        text => if text.trim.equalsIgnoreCase("unlimited") then Some(None) else codec.parse(text).map(Some.apply),
+        value => value.fold(HoconValue.string("unlimited"))(codec.render)
+      )
+
     /** An empty string is how the settings that predate `auto` spell the same thing. */
     def orEmpty: FieldCodec[Option[A]] =
       given Encoder[Option[A]] = Encoder.encodeOption(using codec.encoder)
