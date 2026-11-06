@@ -61,13 +61,19 @@ class ShutdownBoundSpec extends AnyFlatSpec with Matchers:
     reader.join(5000)
     ChildRun(Option.when(exited)(process.exitValue()), lines.asScala.toList, elapsed)
 
+  /** What a failure needs to be explained without a rerun: how the child ended and how long it took, then its output.
+    */
+  private def describe(run: ChildRun): String =
+    s"exit code ${run.exitCode.fold("none (still running after the wait)")(_.toString)}, ${run.elapsedMillis} ms after the child printed READY\n" +
+      run.output.mkString("\n")
+
   "A JVM told to terminate while a release hangs" should "dump the threads and exit within the hook bound" in {
     assume(posix, "Process.destroy ends a Windows process without running its shutdown hooks")
     // `Process.destroy` sends SIGTERM and then closes this side of the child's pipes, which loses the dump the child
     // prints a second later. The handle's `destroy` sends the same signal and leaves the pipes open.
     val run = runChild("signal", _.toHandle.destroy())
 
-    withClue(run.output.mkString("\n")) {
+    withClue(describe(run)) {
       run.exitCode should not be empty
       run.elapsedMillis should be < 15000L
       run.output.exists(_.contains("steps that started releasing and have not finished: stuck window")) shouldBe true
@@ -78,7 +84,7 @@ class ShutdownBoundSpec extends AnyFlatSpec with Matchers:
   "A quit whose release hangs" should "dump the threads and halt with the watchdog's exit code" in {
     val run = runChild("quit-stuck", _ => ())
 
-    withClue(run.output.mkString("\n")) {
+    withClue(describe(run)) {
       run.exitCode shouldBe Some(ShutdownWatchdog.HaltExitCode)
       run.output.exists(_.contains("steps that started releasing and have not finished: stuck window")) shouldBe true
     }
@@ -87,7 +93,7 @@ class ShutdownBoundSpec extends AnyFlatSpec with Matchers:
   "A quit that finishes" should "end by itself, without the watchdog halting or reporting" in {
     val run = runChild("quit-clean", _ => ())
 
-    withClue(run.output.mkString("\n")) {
+    withClue(describe(run)) {
       run.exitCode shouldBe Some(0)
       run.output.exists(_.contains("[SHUTDOWN]")) shouldBe false
     }
@@ -96,7 +102,7 @@ class ShutdownBoundSpec extends AnyFlatSpec with Matchers:
   "A watchdog disarmed before its bound" should "not halt the JVM that goes on running" in {
     val run = runChild("disarmed", _ => ())
 
-    withClue(run.output.mkString("\n")) {
+    withClue(describe(run)) {
       run.exitCode shouldBe Some(0)
       run.output.exists(_.contains("[SHUTDOWN]")) shouldBe false
     }
