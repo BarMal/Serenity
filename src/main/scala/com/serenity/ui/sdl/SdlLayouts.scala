@@ -73,10 +73,23 @@ object SdlLayouts:
     "SDL_WINDOW_RESIZABLE"                   -> 32L,
     "SDL_WINDOW_HIDDEN"                      -> 8L,
     "SDL_WINDOW_HIGH_PIXEL_DENSITY"          -> 8192L,
+    "SDL_WINDOW_OPENGL"                      -> 2L,
     "SDL_WINDOW_SURFACE_VSYNC_DISABLED"      -> 0L,
     "SDL_WINDOW_SURFACE_VSYNC_ADAPTIVE"      -> -1L,
     "SDL_PIXELFORMAT_XRGB8888"               -> 370546692L,
     "SDL_PIXELFORMAT_ARGB8888"               -> 372645892L,
+    "SDL_GL_RED_SIZE"                        -> 0L,
+    "SDL_GL_GREEN_SIZE"                      -> 1L,
+    "SDL_GL_BLUE_SIZE"                       -> 2L,
+    "SDL_GL_ALPHA_SIZE"                      -> 3L,
+    "SDL_GL_DOUBLEBUFFER"                    -> 5L,
+    "SDL_GL_STENCIL_SIZE"                    -> 7L,
+    "SDL_GL_CONTEXT_MAJOR_VERSION"           -> 17L,
+    "SDL_GL_CONTEXT_MINOR_VERSION"           -> 18L,
+    "SDL_GL_CONTEXT_PROFILE_MASK"            -> 20L,
+    "SDL_GL_CONTEXT_PROFILE_CORE"            -> 1L,
+    "SDL_GL_CONTEXT_PROFILE_COMPATIBILITY"   -> 2L,
+    "SDL_GL_CONTEXT_PROFILE_ES"              -> 4L,
     "SDL_EVENT_QUIT"                         -> 256L,
     "SDL_EVENT_WINDOW_SHOWN"                 -> 514L,
     "SDL_EVENT_WINDOW_RESIZED"               -> 518L,
@@ -126,6 +139,8 @@ object SdlLayouts:
   val WindowResizable: Long        = at("SDL_WINDOW_RESIZABLE")
   val WindowHidden: Long           = at("SDL_WINDOW_HIDDEN")
   val WindowHighPixelDensity: Long = at("SDL_WINDOW_HIGH_PIXEL_DENSITY")
+  val WindowOpenGl: Long           = at("SDL_WINDOW_OPENGL")
+  val GlProfileEs: Int             = at("SDL_GL_CONTEXT_PROFILE_ES").toInt
   val SurfaceVsyncDisabled: Int    = at("SDL_WINDOW_SURFACE_VSYNC_DISABLED").toInt
   val SurfaceVsyncAdaptive: Int    = at("SDL_WINDOW_SURFACE_VSYNC_ADAPTIVE").toInt
   val PixelFormatXrgb8888: Int     = at("SDL_PIXELFORMAT_XRGB8888").toInt
@@ -138,6 +153,18 @@ object SdlLayouts:
 
   /** Byte offset of `Struct.field` within its struct. */
   def offset(name: String): Long = at(name)
+
+  /** An `SDL_GLAttr`, to be set before the window that needs it is created. */
+  enum GlAttribute(val id: Int):
+    case RedSize             extends GlAttribute(at("SDL_GL_RED_SIZE").toInt)
+    case GreenSize           extends GlAttribute(at("SDL_GL_GREEN_SIZE").toInt)
+    case BlueSize            extends GlAttribute(at("SDL_GL_BLUE_SIZE").toInt)
+    case AlphaSize           extends GlAttribute(at("SDL_GL_ALPHA_SIZE").toInt)
+    case DoubleBuffer        extends GlAttribute(at("SDL_GL_DOUBLEBUFFER").toInt)
+    case StencilSize         extends GlAttribute(at("SDL_GL_STENCIL_SIZE").toInt)
+    case ContextMajorVersion extends GlAttribute(at("SDL_GL_CONTEXT_MAJOR_VERSION").toInt)
+    case ContextMinorVersion extends GlAttribute(at("SDL_GL_CONTEXT_MINOR_VERSION").toInt)
+    case ContextProfileMask  extends GlAttribute(at("SDL_GL_CONTEXT_PROFILE_MASK").toInt)
 
   enum SystemCursor(val id: Int):
     case Default    extends SystemCursor(at("SDL_SYSTEM_CURSOR_DEFAULT").toInt)
