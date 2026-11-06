@@ -26,6 +26,8 @@ jobs:
   windows:
     name: Probe Windows natives
     runs-on: windows-latest
+    # p90 4.1 min over 22 successful runs (longest 41489394461, 41545538560); the 10 min floor applies.
+    timeout-minutes: 10
     env:
       SERENITY_SKIKO_TARGET: windows-x64
     steps:
@@ -71,6 +73,8 @@ jobs:
   linux:
     name: Probe Linux natives under Xvfb and Mesa
     runs-on: ubuntu-latest
+    # p90 3.1 min over 22 successful runs (longest 40731953847, 41489394461); the 10 min floor applies.
+    timeout-minutes: 10
     env:
       SERENITY_SKIKO_TARGET: linux-x64
     steps:

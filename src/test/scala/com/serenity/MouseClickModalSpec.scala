@@ -1,35 +1,22 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.config.AppConfigOps.*
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class MouseClickModalSpec extends AnyFlatSpec with Matchers:
+class MouseClickModalSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
-  given Balance = Balance.default
-
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
+  private def makeStateManager(): StateManager =
+    createStateManager("MouseClickModalSpec", initialConfig = AppConfig.default)
 
   "MouseClick" should "consume workspace clicks, presses, and drags while a close confirmation is active" in {
     val sm       = makeStateManager()

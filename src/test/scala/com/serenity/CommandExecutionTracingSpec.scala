@@ -6,7 +6,6 @@ import com.serenity.command.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.SurfaceContent
 import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -91,11 +90,9 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "toggle-line-numbers".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
-        case _                                     => None
-    } shouldBe Some("toggle-line-numbers")
+    CommandPaletteProbe.selectedCommandName(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(
+      "toggle-line-numbers"
+    )
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val lines = commandLines(recorded)

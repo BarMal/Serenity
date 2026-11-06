@@ -174,10 +174,9 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
-the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
-a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
-its signature.
+The Linux and Windows runtimes are built with `--generate-cds-archive`, which gives the JVM its base archive. macOS
+cannot write an archive after install, because writing into a signed `.app` would break its signature. All three
+packages ship the JDK 25 AOT cache described below instead of a dynamic AppCDS archive.
 
 The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
 (`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
@@ -185,8 +184,21 @@ and the JVM then logs `Mismatched values for property jdk.module.enable.native.a
 start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
 on that line.
 
-The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
-instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+The **macOS bundle ships the same cache inside the signed `.app`** (`Contents/app/serenity.aot`). `desktop-publish.yml`
+trains it after `jpackage` and before `scripts/sign-macos-app.sh`, so nothing writes into the bundle once it carries a
+signature, then runs `scripts/check-aot-cache.sh` on the signed bundle and verifies the signature again. The bundled
+runtime has no `bin/java`, which `-XX:AOTCacheOutput` forks to assemble the cache, so `scripts/train-aot-cache.sh` trains a
+bundle in two launcher runs (`-XX:AOTMode=record`, then `-XX:AOTMode=create`). A CI spike on `macos-latest` (#2522,
+comment 6625934280) showed a signed, hardened-runtime bundle opening a cache trained before signing, in place, from
+`/Applications` and from a DMG (a bundle moved to another parent directory keeps a valid cache). That spike used an
+ad-hoc signature and a stand-in app: a Developer ID signature and notarisation are checked on the first release build.
+The scripts do not use `timeout(1)`, which macOS lacks.
+
+The **Linux and Windows packages ship a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB
+compressed on Linux) instead of the AppCDS flags. Windows used to write an AppCDS archive on its first exit, so its first
+run was the slow one (3.38 s against 1.99 s, #2407); the cache is written at build time, so every run is a warm one.
+The scripts take all three layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they
+run under Git Bash, and the macOS bundle above). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
 (`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
 before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
@@ -251,6 +263,24 @@ with JDK 24 and later, and both packages pass them (`desktop-publish.yml`, `desk
 `scripts/smoke-test-app-image.sh` fails when the packaged app prints either warning. The JetBrains Runtime 25 is not
 supported yet: it fails 194 tests and garbles some text (#2380, #2390).
 
+### SDL3 (the window library behind native Wayland, #2380)
+
+`com.serenity.ui.sdl` binds SDL3 through the JDK's foreign-function API, with no binding library. Nothing selects it yet:
+the Swing window is still the only one the application opens. `libSDL3.so.0` is built from the upstream tag pinned in
+`ci/sdl3/pins.env` (`ci/sdl3/build-sdl3.sh`, in an `ubuntu:22.04` container so it asks no more of glibc than that release
+does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launcher passes
+`-Dserenity.sdl3.library.path=$APPDIR/natives`. Without that property the binding asks the system loader for
+`libSDL3.so.0`.
+
+- `SdlLayouts` holds the byte offsets of the SDL structs the binding reads and the values of the constants it passes.
+  `ci/sdl3/layout.c` prints the same from the pinned SDL headers; its output is checked in as
+  `src/test/resources/sdl3/layout.txt`, `SdlLayoutsSpec` holds the Scala table against it, and the `SDL3 binding` CI job
+  diffs the file against a fresh build of the program. When the pin moves, regenerate the file with
+  `cc -I <SDL>/include -o layout ci/sdl3/layout.c && ./layout > src/test/resources/sdl3/layout.txt` and read the diff.
+- `sbt test` leaves out the specs that load the real library. To run them: build it with
+  `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
+  `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` video driver, so no compositor is needed.
+
 ### JetBrains Runtime and native Wayland
 
 On a Wayland desktop, a stock JDK draws through XWayland. The [JetBrains Runtime](https://github.com/JetBrains/JetBrainsRuntime/releases)
@@ -298,7 +328,7 @@ its default.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
@@ -312,9 +342,18 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
+the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
+the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
+(#2489); `ui.render.wayland` is then ignored. Terminal and safe-mode launches
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
+`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
+draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
+hardware says which should be the default.
 
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:

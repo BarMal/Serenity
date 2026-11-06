@@ -53,6 +53,14 @@ lazy val architectureBaselineFile = settingKey[File]("Baseline of known architec
 lazy val architectureCheck        = taskKey[Unit]("Fail if any file or method grew past target, or a layer was crossed")
 lazy val writeArchitectureBaseline = taskKey[Unit]("Regenerate the architecture-check baseline from the current tree")
 
+lazy val moduleGraphBaselineFile = settingKey[File]("Baseline of known upward module edges (#2502)")
+lazy val moduleGraphSelfTest =
+  taskKey[Unit]("Regression guard for ModuleGraph itself: decoder, graph, cycles and ratchet")
+lazy val moduleGraph = taskKey[Unit]("Report the semanticdb file and module dependency graph (read-only)")
+lazy val moduleGraphCheck =
+  taskKey[Unit]("Fail if a module depends upward on a layer above it and the edge is not baselined")
+lazy val writeModuleGraphBaseline = taskKey[Unit]("Regenerate the module-graph baseline from the current tree")
+
 lazy val architectureChecksSelfTest = taskKey[Unit](
   "Regression guard for ArchitectureChecks itself: confirms forbidden fully-qualified references are still caught (#1676)"
 )
@@ -230,6 +238,45 @@ lazy val root = (project in file("."))
         s"architecture baseline written: ${violations.size} entries at ${architectureBaselineFile.value}"
       )
     },
+    moduleGraphBaselineFile := baseDirectory.value / "project" / "module-graph-baseline.tsv",
+    moduleGraphSelfTest := {
+      ModuleGraphSelfTest.run()
+      streams.value.log.info("moduleGraphSelfTest: decoder, graph, cycles and ratchet behave")
+    },
+    moduleGraph := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val report    = ModuleGraph.report(documents)
+      IO.write(target.value / "module-graph.txt", report)
+      streams.value.log.info(report)
+    },
+    moduleGraphCheck := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      ModuleGraph.check(documents, ModuleGraph.readBaseline(moduleGraphBaselineFile.value)) match {
+        case None => streams.value.log.info("moduleGraphCheck: no new upward module edges")
+        case Some(report) =>
+          sys.error(
+            s"""moduleGraphCheck failed.
+               |
+               |$report
+               |
+               |Break the edge, or if you deliberately accept it, run `sbt writeModuleGraphBaseline`
+               |and explain the new entry in review.""".stripMargin
+          )
+      }
+    },
+    writeModuleGraphBaseline := {
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val edges     = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(documents))
+      ModuleGraph.writeBaseline(moduleGraphBaselineFile.value, edges)
+      streams.value.log.info(
+        s"module-graph baseline written: ${edges.size} entries at ${moduleGraphBaselineFile.value}"
+      )
+    },
     // Build identity, generated into a source file so anything that reports it -- `--version`, an about surface --
     // reads one value rather than inventing its own. commitTime is the commit's date, not the wall clock, so the
     // same commit always generates the same file. Outside a git checkout every git-derived field falls back
@@ -388,6 +435,7 @@ lazy val root = (project in file("."))
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.SdlNativeTest"),
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeadlessAwtTest")
     )
   )
@@ -404,12 +452,24 @@ realBoundaryTest := (Test / testOnly)
   )
   .value
 
+// Runs the specs that load the real libSDL3 through the FFM binding on SDL's dummy video driver (#2380). The library is
+// a build product (ci/sdl3/build-sdl3.sh), so `sbt test` leaves them out; hand the directory holding libSDL3.so.0 to
+// the sbt JVM: `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
+lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
+
+sdlNativeTest := (Test / testOnly)
+  .toTask(" com.serenity.ui.sdl.SdlBindingSpec")
+  .value
+
 // Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
 // stalls on their forced collections while they measure.
 lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
 
 heapMeasurementTest := (Test / testOnly)
-  .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
+  .toTask(
+    " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
+      " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
+  )
   .value
 
 // Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
