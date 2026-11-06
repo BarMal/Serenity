@@ -142,9 +142,11 @@ private[config] object ConfigFieldsDisplay:
       "display.column_target_width",
       "display.column.target.width",
       "display_column_target_width"
-    )(int)(
+    )(
+      int.filtered(_ >= 1).orUnlimited
+    )(
       _.surfaceConfig.columnTargetWidthCells,
-      (config, value) => config.withColumnTargetWidth(value)
+      (config, value) => config.withColumnTargetWidthSetting(value)
     ),
     named(
       "editor.column_gap",

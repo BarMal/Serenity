@@ -34,20 +34,24 @@ object RenderDamageGranularity:
       case "cells" | "cell" => Some(Cells)
       case _                => None
 
-/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else. */
+/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else;
+  * `SkiaRaster` paints Skia on the CPU into an image that Java2D presents, on any display and toolkit.
+  */
 enum RenderBackendSetting(val configKey: String):
-  case Auto   extends RenderBackendSetting("auto")
-  case Skia   extends RenderBackendSetting("skia")
-  case Java2D extends RenderBackendSetting("java2d")
+  case Auto       extends RenderBackendSetting("auto")
+  case Skia       extends RenderBackendSetting("skia")
+  case SkiaRaster extends RenderBackendSetting("skia-raster")
+  case Java2D     extends RenderBackendSetting("java2d")
 
 object RenderBackendSetting:
 
   def fromConfigKey(value: String): Option[RenderBackendSetting] =
     value.trim.toLowerCase match
-      case "auto"            => Some(Auto)
-      case "skia" | "skiko"  => Some(Skia)
-      case "java2d" | "java" => Some(Java2D)
-      case _                 => None
+      case "auto"                                   => Some(Auto)
+      case "skia" | "skiko"                         => Some(Skia)
+      case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
+      case "java2d" | "java"                        => Some(Java2D)
+      case _                                        => None
 
 /** What a Wayland session does when the window would otherwise be painted by Skia. `Java2D` keeps the native Wayland
   * toolkit and Java2D; `SkiaRaster` keeps the toolkit and paints Skia on the CPU into an image Java2D presents;

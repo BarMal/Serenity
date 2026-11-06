@@ -82,6 +82,8 @@ class CursorCentringWorkSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap as many paragraphs as in a document a tenth the size" in {
     val small = mostWrappedPerKeystroke(500, 250, typewriter = false)
-    val large = mostWrappedPerKeystroke(5_000, 2_500, typewriter = false)
+    // Paragraph lengths repeat every 7 lines, so the larger document's cursor sits where the smaller one's does in that
+    // cycle (2504 = 250 mod 7): what the walk around the cursor wraps then depends only on the viewport (#2570).
+    val large = mostWrappedPerKeystroke(5_000, 2_504, typewriter = false)
     large shouldBe small
   }

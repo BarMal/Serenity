@@ -100,8 +100,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
-          proseMeasure = source.surfaceConfig.proseMeasure,
-          viewportSizing = source.surfaceConfig.viewportSizing
+          proseMeasure = source.surfaceConfig.proseMeasure
         )
       )
 

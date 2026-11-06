@@ -68,6 +68,8 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   private val bothRenderers: Set[String] = Set(
     "FrameBackend.scala",
     "perf/GutterContinuationMarkSpec.scala",
+    "perf/LaptopFrameBenchmarks.scala",
+    "perf/PersistingFramesBackendSpec.scala",
     "perf/SkiaFrameBenchmarks.scala",
     "ui/renderer/Java2DRunPaintSpec.scala",
     "ui/renderer/PanelTextSpacingRenderSpec.scala",

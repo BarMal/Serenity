@@ -11,7 +11,7 @@ import org.jetbrains.skia.{BlendMode, Canvas, ClipMode, Paint, PaintMode, PaintS
   * rounded ones are drawn here on its canvas.
   */
 final private[skia] class SkiaRoundedOutlines(
-    flat: PanelOutlineDrawing,
+    flat: SkiaExcludedPixels,
     canvas: Canvas,
     metrics: CellMetrics,
     argbOf: RenderColor => Int,
@@ -81,13 +81,14 @@ final private[skia] class SkiaRoundedOutlines(
       val px = metrics.toPixelX(x)
       val py = metrics.toPixelY(y)
       recordPaint(px.toDouble, py.toDouble, pw.toDouble, ph.toDouble, 1.0)
-      restoreUnderlay(px, py, pw, ph, radius, corners, underlay)
-      roundedFill.setBlendMode(BlendMode.SRC_OVER)
-      roundedFill.setColor(argbOf(color))
-      val _ = canvas.drawRRect(
-        roundedRect(px.toFloat, py.toFloat, pw.toFloat, ph.toFloat, radius.toFloat, corners),
-        roundedFill
-      )
+      flat.awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat):
+        restoreUnderlay(px, py, pw, ph, radius, corners, underlay)
+        roundedFill.setBlendMode(BlendMode.SRC_OVER)
+        roundedFill.setColor(argbOf(color))
+        val _ = canvas.drawRRect(
+          roundedRect(px.toFloat, py.toFloat, pw.toFloat, ph.toFloat, radius.toFloat, corners),
+          roundedFill
+        )
     rounds
 
   /** Each rounded corner's square, painted with what a cold frame has there, before the fill's fringe goes over it. */
@@ -134,17 +135,18 @@ final private[skia] class SkiaRoundedOutlines(
       roundedStroke.setBlendMode(BlendMode.SRC_OVER)
       roundedStroke.setColor(argbOf(color))
       roundedStroke.setStrokeWidth(strokeWidth)
-      val _ = canvas.drawRRect(
-        roundedRect(
-          (px + inset).toFloat,
-          (py + inset).toFloat,
-          (pw - 2 * inset).toFloat,
-          (ph - 2 * inset).toFloat,
-          (radius - inset).max(0).toFloat,
-          corners
-        ),
-        roundedStroke
-      )
+      flat.awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat):
+        val _ = canvas.drawRRect(
+          roundedRect(
+            (px + inset).toFloat,
+            (py + inset).toFloat,
+            (pw - 2 * inset).toFloat,
+            (ph - 2 * inset).toFloat,
+            (radius - inset).max(0).toFloat,
+            corners
+          ),
+          roundedStroke
+        )
 
   override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
     render: => Unit

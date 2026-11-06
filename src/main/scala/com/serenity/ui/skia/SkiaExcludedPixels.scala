@@ -1,33 +1,63 @@
 package com.serenity.ui.skia
 
+import java.util.concurrent.atomic.AtomicReference
+
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.PanelOutlineDrawing
+import com.serenity.ui.renderer.{PanelOutlineDrawing, PreservedPixels}
 import org.jetbrains.skia.{Canvas, ClipMode, Rect}
 
 /** Keeps drawing off the pixels a frame holds correct, so a redrawn row's antialiased ink cannot land on a kept row's
-  * (#2481).
+  * (#2481). A clip on the canvas for the whole painting would send every antialiased edge it draws through Skia's
+  * clip-mask path, which rounds its coverage differently from the unclipped one, so only the draws that can reach a
+  * kept rect are clipped, as [[com.serenity.ui.renderer.Java2DKeptOff]] does.
   */
 private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
   protected def canvas: Canvas
 
+  /** Where the canvas has been moved to from the pixels the kept rects are in. */
+  protected def translationPx: (Double, Double)
+
+  private val keptRects = AtomicReference[List[PixelRect]](Nil)
+
   override def keepsOffPixels: Boolean = true
 
   override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
-    val saved = canvas.save()
-    try
-      kept.foreach { area =>
-        val _ = canvas.clipRect(
-          Rect.Companion.makeLTRB(
-            area.xPx.toFloat,
-            area.yPx.toFloat,
-            (area.xPx + area.widthPx).toFloat,
-            (area.yPx + area.heightPx).toFloat
-          ),
-          ClipMode.DIFFERENCE,
-          false
-        )
-      }
-      render
-    finally
-      val _ = canvas.restoreToCount(saved)
+    val before = keptRects.getAndSet(kept)
+    try render
+    finally keptRects.set(before)
+
+  /** Runs `draw`, whose ink stays within a line's height of the box `left, top, right, bottom` (in the canvas's own
+    * coordinates, as [[SkiaRenderSurface]] records a run's reach), off the kept rects that ink can reach; a draw out of
+    * reach of all of them is not clipped at all.
+    */
+  private[skia] def awayFromKept(left: Float, top: Float, right: Float, bottom: Float)(draw: => Unit): Unit =
+    val kept = keptRects.get
+    if kept.isEmpty then draw
+    else
+      val (shiftX, shiftY) = translationPx
+      val boxLeft          = math.floor(left + shiftX).toInt
+      val boxTop           = math.floor(top + shiftY).toInt
+      val boxRight         = math.ceil(right + shiftX).toInt
+      val boxBottom        = math.ceil(bottom + shiftY).toInt
+      val margin           = (boxBottom - boxTop).max(4)
+      val near             = PreservedPixels.near(kept, boxLeft, boxTop, boxRight, boxBottom, margin)
+      if near.isEmpty then draw
+      else
+        val saved = canvas.save()
+        try
+          near.foreach { area =>
+            val _ = canvas.clipRect(
+              Rect.Companion.makeLTRB(
+                (area.xPx - shiftX).toFloat,
+                (area.yPx - shiftY).toFloat,
+                (area.xPx + area.widthPx - shiftX).toFloat,
+                (area.yPx + area.heightPx - shiftY).toFloat
+              ),
+              ClipMode.DIFFERENCE,
+              false
+            )
+          }
+          draw
+        finally
+          val _ = canvas.restoreToCount(saved)
