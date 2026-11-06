@@ -63,7 +63,8 @@ object PerformanceBenchmarks:
     IORuntime
   ): List[BenchmarkRunner.Benchmark] =
     val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
-      CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks ++ ScalingBenchmarks.benchmarks()
+      CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks ++ ScalingBenchmarks.benchmarks() ++
+      IndexWalkBenchmarks.benchmarks()
     val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
     require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
     all
