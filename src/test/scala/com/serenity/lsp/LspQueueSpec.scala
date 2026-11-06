@@ -6,8 +6,6 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.StateManagerTestSupport
-import com.serenity.TestTemp
 import com.serenity.command.*
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
@@ -15,6 +13,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.testkit.RopeText
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
