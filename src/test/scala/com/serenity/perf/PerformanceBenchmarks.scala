@@ -88,6 +88,7 @@ object PerformanceBenchmarks:
       RowCountBenchmarks.benchmarks() ++
       TabStripBenchmarks.benchmarks() ++
       CellGridBenchmarks.floatingChromeBenchmarks() ++
+      LaptopFrameBenchmarks.floatingTypingBenchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 

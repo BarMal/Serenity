@@ -566,6 +566,10 @@ private[perf] object LaptopFrameBenchmarks:
       )
     )
 
+  /** The typing frame in floating chrome, kept out of [[interactionBenchmarks]], whose rows are pinned. */
+  private[perf] def floatingTypingBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    List(FloatingTypingFrames.benchmark(Java2DFrames))
+
   private[perf] def interactionBenchmarks(transitions: => InteractionTransitions): List[BenchmarkRunner.Benchmark] =
     lazy val built = transitions
     List(
@@ -577,7 +581,6 @@ private[perf] object LaptopFrameBenchmarks:
         "laptop.render.scroll_frame_2x",
         AlternatingTransition(Java2DFrames, built.afterTyping, built.afterScroll)
       ),
-      FloatingTypingFrames.benchmark(),
       BenchmarkRunner.Benchmark.building(built)(
         BenchmarkRunner.Benchmark(
           "laptop.damage.typing_transition",
