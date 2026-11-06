@@ -17,7 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.{SharedDictionary, VirtualTime}
+import com.serenity.testkit.{SharedDictionary, StateDifference, VirtualTime}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -104,14 +104,20 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
   private def undoDepth(stateManager: StateManager): IO[Int] =
     stateManager.getModel.map(_.undo.undoStack.size)
 
-  private def matchesPerEvent(config: AppConfig, slices: List[List[Event]], after: List[Event] = Nil): Unit =
-    differences(config, slices, after, exactViewport = true) shouldBe empty
+  private def matchesPerEvent(
+    configName: String,
+    config: AppConfig,
+    slices: List[List[Event]],
+    after: List[Event] = Nil
+  ): Unit =
+    differences(configName, config, slices, after, exactViewport = true) shouldBe empty
 
   /** Where the viewports of a batched and a per-event run differ, or -- when `exactViewport` is false, because the view
     * keeps where it was until the caret nears an edge and so depends on the path taken -- where their text, cursors or
-    * undo depth differ, or the batched run leaves the caret out of the pane.
+    * undo depth differ, or the batched run leaves the caret out of the pane. Each difference says what differed.
     */
   private def differences(
+    configName: String,
     config: AppConfig,
     slices: List[List[Event]],
     after: List[Event],
@@ -134,7 +140,8 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           batchedDepth  <- undoDepth(batched)
           perEventDepth <- undoDepth(perEvent)
         yield Option.when(!same(actual, expected) || batchedDepth != perEventDepth)(
-          s"slice $index (${slice.size} events)"
+          s"$configName: slice $index (${slice.size} events): " +
+            StateDifference.describe(expected, actual, perEventDepth, batchedDepth).mkString("; ")
         )
       }
       afterDiffer <- after.zipWithIndex.traverse { (event, index) =>
@@ -143,7 +150,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
           _        <- perEvent.applyEvent(event)
           expected <- shown(perEvent, bufferId)
           actual   <- shown(batched, bufferId)
-        yield Option.when(!same(actual, expected))(s"$event #$index after the slices")
+        yield Option.when(!same(actual, expected))(
+          s"$configName: $event #$index after the slices: " +
+            StateDifference.describe(expected, actual, 0, 0).mkString("; ")
+        )
       }
     yield (differ ++ afterDiffer).flatten
     VirtualTime.runVirtual(program)
@@ -200,9 +210,10 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave every slice as applying its events one at a time would, undo steps included" in
-    List(wrapped, typewriter, unwrapped).foreach(
+    List("wrapped" -> wrapped, "typewriter" -> typewriter, "unwrapped" -> unwrapped).foreach((name, config) =>
       matchesPerEvent(
-        _,
+        name,
+        config,
         List(
           heldBackspace,
           editing,
@@ -226,7 +237,7 @@ class EditRunSettlingSpec extends AnyFlatSpec with Matchers:
     val differing =
       List("wrapped" -> (wrapped, false), "typewriter" -> (typewriter, true)).flatMap { (name, config) =>
         val (appConfig, exactViewport) = config
-        differences(appConfig, List(reading), undone, exactViewport).map(difference => s"$name: $difference")
+        differences(name, appConfig, List(reading), undone, exactViewport)
       }
     differing shouldBe empty
   }

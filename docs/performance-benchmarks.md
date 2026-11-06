@@ -153,7 +153,7 @@ The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, s
 
 `-Dserenity.bench.warmup.rowCapSeconds=` and `runCapSeconds=` change the caps for a study, and `-Dserenity.bench.warmup=off` turns the extension off. Rows with `fixedSampleCount` (those that grow the state they time, such as `prose.markdown_enter.renumber`, which adds a line per call) are not extended: extra calls would change their p50 instead of settling it. That is why `prose.markdown_enter.renumber` read 3.97x slower in the first experiment.
 
-**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change; it reads them with `PerformanceBenchmarks.names`, which builds no window and no fixture, because a benchmark is declared as its name and settings and the runner builds its fixture just before it verifies, warms up and times it. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only. The 2x job (`perf-2x` in `ci.yml`) runs nightly on master and on pull requests that carry the `perf` label, not on merge trains or unlabelled pull requests (#2618); a failed nightly run is also written on #2643.
+**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change; it reads them with `PerformanceBenchmarks.names`, which builds no window and no fixture, because a benchmark is declared as its name and settings and the runner builds its fixture just before it verifies, warms up and times it. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 40% of the rows and the rest, a split from measured job times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only. The 2x job (`perf-2x` in `ci.yml`) runs nightly on master and on pull requests that carry the `perf` label, not on merge trains or unlabelled pull requests (#2618); a failed nightly run is also written on #2643.
 
 **Measured** (12 full runs with the extension against 12 without, 4-core container; container figures):
 
@@ -234,7 +234,11 @@ wrote, escape sequences included; a caret flush made after a frame's content flu
 Only counters that were ever non-zero are listed. A typing frame that lists `rows-drawn max=` far above a handful, or a
 `present-px` near the whole window, is over-repainting however fast it happens to be. The `laptop.render.typing_frame_2x`
 and `scroll_frame_2x` benchmarks assert a ceiling on `rows-drawn` while verifying their frames (`MaxTypingRowsDrawn`,
-`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it.
+`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it. `skia.laptop.render.typing_frame_2x` and `skia.laptop.render.scroll_frame_2x` draw the same frames on Skia's CPU
+raster surface (`PersistingFrames` takes a `FrameBackend`) and run the same check before they are timed: the same row
+ceilings, and pixel equality with a frame Skia draws from scratch. They have the `skia.` prefix, so the per-PR gate
+does not judge them once `scripts/perf-gate-excluded-rows.txt` lists it; the other `laptop.render.*` rows differ from
+these two only in their fixtures and have no Skia twin.
 
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and

@@ -175,8 +175,8 @@ as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS 
 The archive is about 65 MB.
 
 The Linux and Windows runtimes are built with `--generate-cds-archive`, which gives the JVM its base archive. macOS
-has no archive: writing into a signed `.app` would break its signature. The packages ship the JDK 25 AOT cache
-described below instead of a dynamic AppCDS archive.
+cannot write an archive after install, because writing into a signed `.app` would break its signature. All three
+packages ship the JDK 25 AOT cache described below instead of a dynamic AppCDS archive.
 
 The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
 (`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
@@ -184,11 +184,21 @@ and the JVM then logs `Mismatched values for property jdk.module.enable.native.a
 start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
 on that line.
 
+The **macOS bundle ships the same cache inside the signed `.app`** (`Contents/app/serenity.aot`). `desktop-publish.yml`
+trains it after `jpackage` and before `scripts/sign-macos-app.sh`, so nothing writes into the bundle once it carries a
+signature, then runs `scripts/check-aot-cache.sh` on the signed bundle and verifies the signature again. The bundled
+runtime has no `bin/java`, which `-XX:AOTCacheOutput` forks to assemble the cache, so `scripts/train-aot-cache.sh` trains a
+bundle in two launcher runs (`-XX:AOTMode=record`, then `-XX:AOTMode=create`). A CI spike on `macos-latest` (#2522,
+comment 6625934280) showed a signed, hardened-runtime bundle opening a cache trained before signing, in place, from
+`/Applications` and from a DMG (a bundle moved to another parent directory keeps a valid cache). That spike used an
+ad-hoc signature and a stand-in app: a Developer ID signature and notarisation are checked on the first release build.
+The scripts do not use `timeout(1)`, which macOS lacks.
+
 The **Linux and Windows packages ship a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB
 compressed on Linux) instead of the AppCDS flags. Windows used to write an AppCDS archive on its first exit, so its first
 run was the slow one (3.38 s against 1.99 s, #2407); the cache is written at build time, so every run is a warm one.
-The scripts take both layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they run
-under Git Bash). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+The scripts take all three layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they
+run under Git Bash, and the macOS bundle above). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
 (`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
 before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets

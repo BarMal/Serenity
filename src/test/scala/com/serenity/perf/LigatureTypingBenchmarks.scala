@@ -1,11 +1,11 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
+import com.serenity.FramePixels
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.perf.LaptopFrameBenchmarks.{LogicalHeightPx, LogicalWidthPx}
 import com.serenity.rope.Balance
@@ -42,7 +42,7 @@ private[perf] object LigatureTypingBenchmarks:
     lazy val shown             = AtomicReference(current)
     lazy val firstFrame        = frames.render(shown.get, Damage.Everything)
     val letters                = BenchmarkFixtures.randomLetters(seed = 42L)
-    def typeAndShow(): BufferedImage =
+    def typeAndShow(): FramePixels =
       stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
       val after  = current
       val before = shown.getAndSet(after)

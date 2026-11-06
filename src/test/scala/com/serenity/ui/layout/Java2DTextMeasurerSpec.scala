@@ -46,7 +46,12 @@ class Java2DTextMeasurerSpec extends TextMeasurerContract:
     RenderingHints.VALUE_FRACTIONALMETRICS_OFF
   )
 
-  protected def measurers: Vector[TextMeasurer] = Vector(Java2DTextMeasurer(oneX), Java2DTextMeasurer(twoX))
+  /** The one measurer kept across draws, so its caches are warm when it is compared with a fresh one at the same key.
+    */
+  private val warmOneX = Java2DTextMeasurer(oneX)
+
+  protected def measurers: Vector[TextMeasurer] =
+    Vector(warmOneX, Java2DTextMeasurer(oneX), Java2DTextMeasurer(twoX))
 
   protected def fonts: Vector[FontSpec] = awtFonts.map(FontSpec.fromAwt)
 

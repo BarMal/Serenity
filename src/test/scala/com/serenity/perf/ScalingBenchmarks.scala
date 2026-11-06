@@ -88,7 +88,7 @@ private[perf] object ScalingBenchmarks:
 
     lazy val session    = MultiPaneSession.open(panes, MultiBufferFixture.LaptopSize)
     lazy val changed    = change(session)
-    lazy val transition = LaptopFrameBenchmarks.AlternatingTransition(changed._1, changed._2)
+    lazy val transition = LaptopFrameBenchmarks.java2dTransition(changed._1, changed._2)
     BenchmarkRunner.Benchmark.building(transition)(
       BenchmarkRunner.Benchmark(
         name,
@@ -112,7 +112,7 @@ private[perf] object ScalingBenchmarks:
   ): Unit =
     List(after, before).foreach { expected =>
       val drawn   = transition.nextFrame()
-      val cold    = LaptopFrameBenchmarks.renderedFrame(expected, RenderCaches.create(), image, cursorVisible = false)
+      val cold    = LaptopFrameBenchmarks.java2dColdFrame(expected)
       val outside = outsideEdgeColumns(LaptopFrameBenchmarks.differingPixels(drawn, cold), sharedEdges(expected))
       assert(
         outside.isEmpty,

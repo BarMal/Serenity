@@ -1,14 +1,12 @@
 package com.serenity.perf
 
-import java.awt.image.BufferedImage
-
 import cats.effect.unsafe.IORuntime
-import com.serenity.DockedPanelFixtures
 import com.serenity.rope.Balance
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.{AppState, Damage, SurfaceContent, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
+import com.serenity.{DockedPanelFixtures, FramePixels}
 
 /** Frames with a docked outline over the laptop prose, drawn with panel layer caching off and on (#1869). The two
   * variants are named apart so a run can take either by prefix (`laptop.render.pinned_panel.layer_cache_off`) and the
@@ -68,6 +66,6 @@ private[perf] object PanelLayerCachingBenchmarks:
     private val remaining = Iterator.continually(steps).flatten
     private val _         = steps.headOption.foreach((state, _) => frames.render(state, Damage.Everything))
 
-    def next(): BufferedImage =
+    def next(): FramePixels =
       val (state, damage) = remaining.next()
       frames.render(state, damage)

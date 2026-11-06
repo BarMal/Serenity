@@ -31,6 +31,10 @@ waiting for something else to wake the train; a run with any other job unfinishe
 
 The same job only dispatches the next step, so if it alone fails (a GitHub API error) its run turns red though every test
 passed; a run whose only failed job is that one counts as passed.
+
+A push to a pull request in a live train abandons the whole batch, so each pull request in one carries a single note
+saying so. The note is edited as the train moves on and deleted when the pull request leaves the train (merged,
+ejected, or left out of the rebuilt batch); a failure to write it never stops the train.
 """
 
 from __future__ import annotations
@@ -55,6 +59,7 @@ REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/ci.yml", ".github/work
 MAX_TRAIN_AGE = timedelta(hours=6)
 HAND_MERGE_LABEL = "hand-merge-next"
 DEFAULT_HOLD_MINUTES = 20
+NOTE_MARKER = "<!-- merge-train-note -->"
 WAKE_JOB_NAME = "Wake the merge train"
 WAKE_POLL_TRIES = 6
 WAKE_POLL_SECONDS = 10.0
@@ -319,6 +324,7 @@ class GitHub(Protocol):
     def squash_merge(self, number: int, head: str, title: str) -> None: ...
     def delete_branch(self, name: str) -> None: ...
     def comment(self, number: int, body: str) -> None: ...
+    def set_train_note(self, number: int, note: str | None) -> None: ...
 
 
 # GITHUB_TOKEN may not push a commit that changes a workflow file, so a train never carries one.
@@ -479,20 +485,20 @@ class Train:
                 if run.status != "completed":
                     self.github.cancel_run(run.id)
             self.git.delete_remote_branch(branch)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Merge):
             self.git.delete_remote_branch(branch)
             self._merge(manifest, tip)
             self._record_flakes(manifest, action.flaky_runs)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Eject):
             pr = manifest.prs[0]
             self.github.comment(pr.number, _ejection_comment(pr, manifest.base, action.failed_runs))
             self.git.delete_remote_branch(branch)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Bisect):
             self.git.delete_remote_branch(branch)
-            self._start(only=action.numbers)
+            self._clear_notes(manifest, self._start(only=action.numbers))
 
     def _runs_of(self, branch: str) -> list[Run]:
         return self._not_failed_by_the_wake_job(self.github.runs_for(branch))
@@ -549,17 +555,18 @@ class Train:
             pr = next(p for p in manifest.prs if p.number == number)
             self.github.comment(number, _owner_ejection_comment(pr, manifest, hits))
         self.git.delete_remote_branch(branch)
-        self._start()
+        self._clear_notes(manifest, self._start())
 
-    def _start(self, only: Sequence[int] | None = None) -> None:
+    def _start(self, only: Sequence[int] | None = None) -> frozenset[int]:
+        """Builds the next train; the numbers of the pull requests it put in one."""
         eligible = eligible_candidates(self.github.open_candidates(), only)
         if not eligible:
             self.log("No pull request is ready for a train.")
-            return
+            return frozenset()
         base = self.git.master()
         if self.dry_run:
             self.log(f"Would build a train of {_numbers(eligible[: self.batch])} on master {base[:8]}.")
-            return
+            return frozenset()
         created = self.now()
 
         def manifest_of(included: list[Candidate]) -> Manifest:
@@ -575,14 +582,28 @@ class Train:
                 if pr.head not in pr.held_heads:
                     self.github.comment(pr.number, _held_comment(pr))
             if self._holding_for_hand_merges([pr for pr in built.held_back if HAND_MERGE_LABEL in pr.labels]):
-                return
+                return frozenset()
         if not built.included:
-            return
+            return frozenset()
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
         self.git.push(built.tip, branch)
         for path in REQUIRED_WORKFLOWS:
             self.github.dispatch(Path(path).name, branch)
         self.log(f"Started {branch}: {_numbers(built.included)} on master {base[:8]}.")
+        for pr in built.included:
+            self._note(pr.number, _train_note(branch, built.included))
+        return frozenset(pr.number for pr in built.included)
+
+    def _note(self, number: int, note: str | None) -> None:
+        try:
+            self.github.set_train_note(number, note)
+        except (urllib.error.URLError, OSError) as error:
+            self.log(f"Could not update the train note on #{number}: {error}")
+
+    def _clear_notes(self, manifest: Manifest, keep: frozenset[int]) -> None:
+        for pr in manifest.prs:
+            if pr.number not in keep:
+                self._note(pr.number, None)
 
     def _holding_for_hand_merges(self, waiting: list[Candidate]) -> bool:
         """A hand merge moves master, which abandons a batch that was just built; so the batch waits for the pull
@@ -623,6 +644,15 @@ class Train:
             self.log(body)
         else:
             self.github.comment(self.flake_issue, body)
+
+
+def _train_note(branch: str, prs: Iterable[TrainPr | Candidate]) -> str:
+    return (
+        f"{NOTE_MARKER}\n"
+        f"In merge train `{branch}` with {_numbers(prs)}. A push to this pull request now abandons the batch, with "
+        "its CI and Cross-OS runs (about an hour of work). This note is edited as the train moves on and deleted when "
+        "the pull request merges, is ejected or leaves the train."
+    )
 
 
 def _numbers(prs: Iterable[TrainPr | Candidate]) -> str:
@@ -791,6 +821,27 @@ class RestGitHub:
             if len(files) < 100:
                 return names
             page += 1
+
+    def _note_comment_id(self, number: int) -> int | None:
+        page = 1
+        while True:
+            comments = self._get(f"issues/{number}/comments?per_page=100&page={page}")
+            for comment in comments:
+                if NOTE_MARKER in comment["body"]:  # type: ignore[index]
+                    return comment["id"]  # type: ignore[index,return-value]
+            if len(comments) < 100:
+                return None
+            page += 1
+
+    def set_train_note(self, number: int, note: str | None) -> None:
+        existing = self._note_comment_id(number)
+        if note is None:
+            if existing is not None:
+                self._call("DELETE", f"issues/comments/{existing}")
+        elif existing is None:
+            self._call("POST", f"issues/{number}/comments", {"body": note})
+        else:
+            self._call("PATCH", f"issues/comments/{existing}", {"body": note})
 
     def squash_merge(self, number: int, head: str, title: str) -> None:
         try:

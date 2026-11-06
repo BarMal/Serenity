@@ -51,7 +51,7 @@ object PerformanceBenchmarks:
     SwingWindow
       .resource(metrics = RenderBenchmarks.cellMetrics, chromeMetrics = RenderBenchmarks.uiMetrics)
       .flatMap(window =>
-        LaptopFrameBenchmarks
+        LaptopPresentBenchmarks
           .presentWindowResource(RenderBenchmarks.cellMetrics, RenderBenchmarks.uiMetrics)
           .map(window -> _)
       )
@@ -63,7 +63,8 @@ object PerformanceBenchmarks:
     IORuntime
   ): List[BenchmarkRunner.Benchmark] =
     val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
-      CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks ++ ScalingBenchmarks.benchmarks()
+      CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks ++ ScalingBenchmarks.benchmarks() ++
+      IndexWalkBenchmarks.benchmarks()
     val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
     require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
     all
