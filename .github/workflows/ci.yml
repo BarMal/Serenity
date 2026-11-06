@@ -154,6 +154,7 @@ jobs:
             scripts.test_key_to_screen_summary \
             scripts.test_merge_train \
             scripts.test_perf_matrix \
+            scripts.test_perf_nightly \
             scripts.test_present_abba_summary \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
