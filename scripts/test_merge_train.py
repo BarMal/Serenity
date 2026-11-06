@@ -1207,6 +1207,75 @@ def _job_text(workflow: str, job: str) -> str:
     return found.group(1) if found else ""
 
 
+def _run_block(job: str) -> str:
+    """The shell text of the job's `run: |` step, dedented."""
+    lines = job.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "run: |")
+    indent = len(lines[start]) - len(lines[start].lstrip()) + 2
+    body = []
+    for line in lines[start + 1 :]:
+        if line.strip() and len(line) - len(line.lstrip()) < indent:
+            break
+        body.append(line[indent:])
+    return "\n".join(body) + "\n"
+
+
+class WakeRetryTests(unittest.TestCase):
+    """The wake job's one command can meet a GitHub API error (HTTP 500 on train 17). It retries a few times instead of
+    reddening its run, which the train would read as a failed batch (#2618)."""
+
+    def _run(self, workflow: str, failures: int) -> tuple[int, list[str], list[str], str]:
+        script = _run_block(_job_text(_workflow(workflow), "wake-train"))
+        with tempfile.TemporaryDirectory() as directory:
+            bin_dir = Path(directory) / "bin"
+            bin_dir.mkdir()
+            calls, sleeps = Path(directory) / "calls", Path(directory) / "sleeps"
+            (bin_dir / "gh").write_text(
+                '#!/bin/sh\necho "$@" >> "$CALLS"\n[ "$(wc -l < "$CALLS")" -gt "$FAILURES" ]\n'
+            )
+            (bin_dir / "sleep").write_text('#!/bin/sh\necho "$1" >> "$SLEEPS"\n')
+            for tool in ("gh", "sleep"):
+                (bin_dir / tool).chmod(0o755)
+            done = subprocess.run(
+                ["bash", "-e", "-c", script],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "CALLS": str(calls), "SLEEPS": str(sleeps), "FAILURES": str(failures)},
+            )
+            read = lambda path: path.read_text().splitlines() if path.exists() else []
+            return done.returncode, read(calls), read(sleeps), done.stdout + done.stderr
+
+    def test_a_dispatch_that_works_first_time_runs_once_and_never_waits(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, _ = self._run(workflow, failures=0)
+                self.assertEqual(0, code)
+                self.assertEqual(["workflow run merge-train.yml --ref master"], calls)
+                self.assertEqual([], sleeps)
+
+    def test_a_dispatch_that_fails_twice_is_retried_with_a_longer_wait_each_time_and_succeeds(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, _ = self._run(workflow, failures=2)
+                self.assertEqual(0, code)
+                self.assertEqual(3, len(calls))
+                self.assertEqual(["5", "10"], sleeps)
+
+    def test_a_dispatch_that_never_works_gives_up_after_four_tries_and_fails_the_job(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                code, calls, sleeps, output = self._run(workflow, failures=99)
+                self.assertNotEqual(0, code)
+                self.assertEqual(4, len(calls))
+                self.assertEqual(["5", "10", "15"], sleeps)
+                self.assertIn("::warning::", output)
+
+    def test_the_longest_wait_fits_inside_the_job_timeout(self) -> None:
+        for workflow in ("ci.yml", "cross-os-tests.yml"):
+            with self.subTest(workflow=workflow):
+                self.assertIn("    timeout-minutes: 5\n", _job_text(_workflow(workflow), "wake-train"))
+
+
 class WorkflowTests(unittest.TestCase):
     """How .github/workflows/merge-train.yml drives the script, and how the existing workflows make room for it."""
 
@@ -1254,7 +1323,7 @@ class WorkflowTests(unittest.TestCase):
                 self.assertIn("    timeout-minutes: 5\n", job)
                 self.assertIn("GH_REPO: ${{ github.repository }}", job)
                 self.assertIn("GH_TOKEN: ${{ github.token }}", job)
-                self.assertIn("run: gh workflow run merge-train.yml --ref master\n", job)
+                self.assertIn("gh workflow run merge-train.yml --ref master", job)
                 others = [j for j in _job_ids(text) if j != "wake-train"]
                 self.assertEqual(f"    needs: [{', '.join(others)}]\n", next(l + "\n" for l in job.splitlines() if l.startswith("    needs:")))
 
