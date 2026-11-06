@@ -164,7 +164,7 @@ final class SkiaRenderSurface(
   private def paintRect(area: Rect, paint: Paint): Unit =
     val grow = if paint.getMode == PaintMode.STROKE then 2.0 * paint.getStrokeWidth + 1.0 else 0.0
     recordPaint(area.getLeft, area.getTop, area.getWidth, area.getHeight, grow)
-    val _ = canvas.drawRect(area, paint)
+    awayFromKept(area.getLeft, area.getTop, area.getRight, area.getBottom)(canvas.drawRect(area, paint): Unit)
 
   /** Tells the frame's record where this surface is about to paint, in the coordinates it paints in now. */
   private def recordPaint(xPx: Double, yPx: Double, widthPx: Double, heightPx: Double, growPx: Double = 0.0): Unit =
@@ -298,7 +298,7 @@ final class SkiaRenderSurface(
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
-          drawGlyphs
+          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(drawGlyphs)
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
@@ -336,9 +336,10 @@ final class SkiaRenderSurface(
       fillBackground(bgRef.get(), px, py, width, metrics.lineHeight)
       painted.touched(px, py, width, metrics.lineHeight)
       recordText(px.toDouble, py.toDouble, width.toDouble, metrics.lineHeight)
-      CellRuns.pieces(s).foreach { (cell, piece) =>
-        drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
-      }
+      awayFromKept(px.toFloat, py.toFloat, (px + width).toFloat, (py + metrics.lineHeight).toFloat):
+        CellRuns.pieces(s).foreach { (cell, piece) =>
+          drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
+        }
       drawRules(px, width, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
@@ -356,22 +357,25 @@ final class SkiaRenderSurface(
         ph + 2 * metrics.lineHeight
       )
       val glyph = char.toString
-      (0 until height).foreach { row =>
-        (0 until width).foreach { col =>
-          drawText(
-            glyph,
-            0,
-            1,
-            metrics.toPixelX(x + col).toFloat,
-            (metrics.toPixelY(y + row) + metrics.ascent).toFloat
-          )
+      awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat):
+        (0 until height).foreach { row =>
+          (0 until width).foreach { col =>
+            drawText(
+              glyph,
+              0,
+              1,
+              metrics.toPixelX(x + col).toFloat,
+              (metrics.toPixelY(y + row) + metrics.ascent).toFloat
+            )
+          }
         }
-      }
 
   override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
     val previous = logicalPixelRowOverride.getAndSet(Some(cellRow -> pixelY))
     try render
     finally logicalPixelRowOverride.set(previous)
+
+  override protected def translationPx: (Double, Double) = translation.get()
 
   override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
     val saved    = canvas.save()
@@ -449,7 +453,19 @@ final class SkiaRenderSurface(
         painted.touched(rects(i), rects(i + 1), widthPx, heightPx)
         recordPaint(rects(i).toDouble, rects(i + 1).toDouble, widthPx.toDouble, heightPx.toDouble)
       }
-      RectPath.fill(canvas, rects, filled(paintColor(color)))
+      val (left, top, right, bottom) =
+        (0 until rects.length by 4).foldLeft((Int.MaxValue, Int.MaxValue, Int.MinValue, Int.MinValue)) {
+          case ((l, t, r, b), i) =>
+            (
+              l.min(rects(i)),
+              t.min(rects(i + 1)),
+              r.max(rects(i) + rects(i + 2).max(1)),
+              b.max(rects(i + 1) + rects(i + 3).max(1))
+            )
+        }
+      awayFromKept(left.toFloat, top.toFloat, right.toFloat, bottom.toFloat)(
+        RectPath.fill(canvas, rects, filled(paintColor(color)))
+      )
 
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px     = metrics.toPixelX(x)
@@ -465,7 +481,9 @@ final class SkiaRenderSurface(
     recordPaint(px, py, pw, ph, 1.0)
     try
       clipTo(px, py, pw, ph)
-      val _ = canvas.drawImageRect(skia, source, target, ink)
+      awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat)(
+        canvas.drawImageRect(skia, source, target, ink): Unit
+      )
     finally restoreTo(saved)
 
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
