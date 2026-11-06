@@ -49,6 +49,38 @@ class SdlGlWindowSpec extends AnyFlatSpec with Matchers:
     onOffscreen(window => window.clearAndSwap(0.2f, 0.4f, 0.6f)) shouldBe Right(())
   }
 
+  it should "run what is posted on the SDL thread, in the order it was posted" taggedAs SdlNativeTest in {
+    val (order, threads) = onOffscreen { window =>
+      IO {
+        val ran     = new java.util.concurrent.ConcurrentLinkedQueue[(Int, String)]()
+        val allDone = new java.util.concurrent.CountDownLatch(50)
+        (1 to 50).foreach { index =>
+          window.post { _ =>
+            val _ = ran.add((index, Thread.currentThread().getName))
+            allDone.countDown()
+          }
+        }
+        allDone.await(5, java.util.concurrent.TimeUnit.SECONDS) shouldBe true
+        val seen = scala.jdk.CollectionConverters.IteratorHasAsScala(ran.iterator()).asScala.toList
+        (seen.map(_._1), seen.map(_._2).distinct)
+      }
+    }
+    order shouldBe (1 to 50).toList
+    threads shouldBe List("serenity-sdl")
+  }
+
+  it should "keep running what is posted after a posted task throws" taggedAs SdlNativeTest in {
+    val ran = onOffscreen { window =>
+      IO {
+        val after = new java.util.concurrent.CountDownLatch(1)
+        window.post(_ => throw new IllegalStateException("boom"))
+        window.post(_ => after.countDown())
+        after.await(5, java.util.concurrent.TimeUnit.SECONDS)
+      }
+    }
+    ran shouldBe true
+  }
+
   it should "complete awaitClose when the window is asked to close" taggedAs SdlNativeTest in {
     onOffscreen { window =>
       window.awaitClose.timeout(50.millis).attempt.map(_.isLeft) <*
