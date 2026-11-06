@@ -14,13 +14,21 @@ object AwtStateProbe:
 
   final case class State(windows: List[WindowState], pendingEvent: Option[String])
 
-  def current(): State =
-    State(
-      Window.getWindows.toList.map(window =>
-        WindowState(window.getClass.getName, window.isDisplayable, window.isShowing)
-      ),
-      Option(Toolkit.getDefaultToolkit.getSystemEventQueue.peekEvent()).map(_.getClass.getName)
-    )
+  /** Looks at the event queue only when a window exists: reading it starts the AWT toolkit if nobody has, and a report
+    * must not start what it is reporting on.
+    */
+  def current(
+    windows: () => List[WindowState] = openWindows,
+    pendingEvent: () => Option[String] = pendingEventName
+  ): State =
+    val open = windows()
+    State(open, if open.isEmpty then None else pendingEvent())
+
+  private def openWindows(): List[WindowState] =
+    Window.getWindows.toList.map(window => WindowState(window.getClass.getName, window.isDisplayable, window.isShowing))
+
+  private def pendingEventName(): Option[String] =
+    Option(Toolkit.getDefaultToolkit.getSystemEventQueue.peekEvent()).map(_.getClass.getName)
 
   def describe(moment: String, state: State): List[String] =
     val event = state.pendingEvent.fold("no event waiting on the event queue")(name => s"event waiting: $name")

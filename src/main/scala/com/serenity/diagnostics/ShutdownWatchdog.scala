@@ -60,7 +60,7 @@ final class ShutdownWatchdog(val ledger: ShutdownLedger):
     exitCode: Int = HaltExitCode,
     report: String => Unit = defaultReport,
     halt: Int => Unit = code => Runtime.getRuntime.halt(code),
-    awtState: () => AwtStateProbe.State = AwtStateProbe.current,
+    awtState: () => AwtStateProbe.State = () => AwtStateProbe.current(),
     snapshotGap: FiniteDuration = DumpBeforeTimeout
   ): IO[Unit] = IO {
     val watchdog = daemon("serenity-quit-watchdog") {
@@ -70,20 +70,29 @@ final class ShutdownWatchdog(val ledger: ShutdownLedger):
         val before = AwtStateProbe.describeRead(s"${(bound - gap).toMillis} ms after the quit", awtState)
         TimeUnit.MILLISECONDS.sleep(gap.toMillis)
         val after = AwtStateProbe.describeRead(s"${bound.toMillis} ms after the quit", awtState)
-        report(
-          describe(
-            s"quit not finished ${bound.toSeconds} s after the editor shut down",
-            ledger.unfinished,
-            captureThreads(),
-            before ++ after
+        if claimed(Thread.currentThread()) then
+          report(
+            describe(
+              s"quit not finished ${bound.toSeconds} s after the editor shut down",
+              ledger.unfinished,
+              captureThreads(),
+              before ++ after
+            )
           )
-        )
-        halt(exitCode)
+          halt(exitCode)
       catch case _: InterruptedException => ()
     }
     armed.getAndSet(Some(watchdog)).foreach(_.interrupt())
     watchdog.start()
   }
+
+  /** Interrupting a sleeping watchdog is only a wake-up: code it calls can swallow the interrupt, and a watchdog
+    * already past its sleep never sees it. What decides is this claim, which exactly one of [[disarm]], a newer arming
+    * and the watchdog itself wins.
+    */
+  private def claimed(watchdog: Thread): Boolean =
+    val current = armed.get
+    current.contains(watchdog) && armed.compareAndSet(current, None)
 
   /** Stops the clock, for a quit that is followed by a restart in the same JVM. */
   val disarm: IO[Unit] = IO(armed.getAndSet(None).foreach(_.interrupt()))
