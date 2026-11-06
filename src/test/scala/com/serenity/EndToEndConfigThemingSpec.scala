@@ -54,27 +54,21 @@ class EndToEndConfigThemingSpec extends AnyFlatSpec with Matchers:
     val bufferId = stateManager.createBuffer("val x = 42\nval y = \"hello\"", None).unsafeRunSync()
     stateManager.createPane(Some(bufferId)).unsafeRunSync()
 
-    // Apply initial theme
-    val initialTheme = themeManager.loadTheme("dark").unsafeRunSync()
-    stateManager
-      .updateState(state => state.copy(persisted = state.persisted.copy(theme = initialTheme)))
-      .unsafeRunSync()
+    // Switching, unlike loading, makes "dark" the theme the manager reloads
+    val (_, applyInitial) = themeManager.switchTheme("dark").unsafeRunSync()
+    stateManager.updateState(applyInitial).unsafeRunSync()
 
     val stateBeforeReload = stateManager.getCurrentState.unsafeRunSync()
 
     // Reload theme (simulating config file change)
-    themeManager.reloadCurrentTheme.unsafeRunSync() match
-      case Some((_, themeUpdate)) =>
-        stateManager.updateState(themeUpdate).unsafeRunSync()
+    val (reloaded, themeUpdate) = themeManager.reloadCurrentTheme.unsafeRunSync().getOrElse(fail("no theme to reload"))
+    stateManager.updateState(themeUpdate).unsafeRunSync()
 
-        val stateAfterReload = stateManager.getCurrentState.unsafeRunSync()
+    val stateAfterReload = stateManager.getCurrentState.unsafeRunSync()
 
-        // Theme should be reloaded but other state preserved
-        stateAfterReload.persisted.theme.name shouldBe "dark"
-        stateAfterReload.persisted.buffers shouldBe stateBeforeReload.persisted.buffers
-        stateAfterReload.persisted.layout shouldBe stateBeforeReload.persisted.layout
-
-      case None =>
-        // No theme was active to reload, which is also valid
-        succeed
+    // Theme should be reloaded but other state preserved
+    reloaded.name shouldBe "dark"
+    stateAfterReload.persisted.theme.name shouldBe "dark"
+    stateAfterReload.persisted.buffers shouldBe stateBeforeReload.persisted.buffers
+    stateAfterReload.persisted.layout shouldBe stateBeforeReload.persisted.layout
   }

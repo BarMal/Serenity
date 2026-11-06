@@ -125,7 +125,12 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
 
   // Entry points a spec launches as a separate JVM: their stdout is the channel the parent spec reads, not test noise.
   private val ChildProcessMains =
-    Set("crash/KillRecoveryChild.scala", "app/SkiaLazinessChild.scala", "app/ToolkitSelectionChild.scala")
+    Set(
+      "crash/KillRecoveryChild.scala",
+      "app/SkiaLazinessChild.scala",
+      "app/ToolkitSelectionChild.scala",
+      "diagnostics/ShutdownBoundChild.scala"
+    )
 
   private val DebugSuitePattern         = (raw"\bclass\s+" + "Deb" + "ug" + raw"\w*Sp" + "ec" + raw"\b").r
   private val ConsoleOutputPattern      = ("println" + raw"\s*\(").r
@@ -136,7 +141,8 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
 
   // Each entry is a sleep that is the stimulus or the bound itself, not a wait for something else to happen.
   private val ThreadSleepAllowlist = Map(
-    "app/instance/InstanceLockSpec.scala"         -> "child JVM parks forever so the lock stays held",
+    "app/instance/InstanceLockSpec.scala" -> "child JVM parks forever so the lock stays held",
+    "diagnostics/ShutdownWatchdogSpec.scala" -> "waits past a bound to see that a disarmed or replaced halt never fires",
     "spellcheck/DictionaryCacheSharingSpec.scala" -> "simulates a slow dictionary build the sharing must not repeat",
     "testkit/StallSampler.scala"                  -> "production default for the injected sleep",
     "testkit/StallSamplerSpec.scala"              -> "yields the sampler thread once its scripted delays run out",

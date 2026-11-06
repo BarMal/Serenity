@@ -47,24 +47,26 @@ private[perf] object RowCountBenchmarks:
     totalRows(cache, widePx)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val expectedCold = totalRows(WrappedLineCache.Uncached, narrowPx)
-    val expectedWide = totalRows(WrappedLineCache.Uncached, widePx)
-    List(
-      BenchmarkRunner.Benchmark(
-        "layout.row_count.cold",
-        2,
-        10,
-        () => assert(cold() == expectedCold),
-        () => cold(),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.row_count.after_grow",
-        2,
-        10,
-        () => assert(afterGrow() == expectedWide),
-        () => afterGrow(),
-        settleJit = true
+    lazy val expectedCold = totalRows(WrappedLineCache.Uncached, narrowPx)
+    lazy val expectedWide = totalRows(WrappedLineCache.Uncached, widePx)
+    BenchmarkRunner.Benchmark.sharing((expectedCold, expectedWide))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "layout.row_count.cold",
+          2,
+          10,
+          () => assert(cold() == expectedCold),
+          () => cold(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.row_count.after_grow",
+          2,
+          10,
+          () => assert(afterGrow() == expectedWide),
+          () => afterGrow(),
+          settleJit = true
+        )
       )
     )
 

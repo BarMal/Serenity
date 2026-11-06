@@ -1,0 +1,24 @@
+                                   scratch.md                                   
+ 1                                                                              
+     ╭──────────────────────────────────────────────────────────────────────╮   
+     │search: font size                                                     │   
+     │[View] Split Pane H... Split the focused editor p...        ctrl+alt+v│   
+     │                                                                      │   
+     │                                                                      │   
+     │                                                                      │   
+     │                                                                      │   
+     │                                                                      │   
+     │                                                                      │   
+     │↑↓ move • Enter run • Esc close                                       │   
+     │                                                                      │   
+     ╰──────────────────────────────────────────────────────────────────────╯   
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Line 1, Col 1 | Markdown | scratch.md | Code                                   

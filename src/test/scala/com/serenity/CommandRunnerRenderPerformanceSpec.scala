@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
-import com.serenity.state.models.{Buffer, BufferId, EditorPane, PaneId}
+import com.serenity.state.models.{Buffer, BufferId, EditorPane, Modal, PaneId, SurfaceContent, UiSurface}
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -11,7 +11,8 @@ import org.scalatest.matchers.should.Matchers
 /** Diagnostic coverage for #892/#930: typing into the command runner over a large document must not force a full
   * editor-scene rebuild per keystroke. The actual, deterministic regression guard for this lives in
   * MouseTargetCacheSpec (object-identity checks on the cached scene, independent of timing). This spec logs the real
-  * per-keystroke wall-clock cost for human review, but does not assert on it.
+  * per-keystroke wall-clock cost for human review, and asserts only that the keystrokes landed and that none took a
+  * hang-sized time.
   *
   * Two earlier versions of this spec asserted on timing and both produced false failures under CI load: an absolute
   * millisecond bound failed on a slower Windows runner even with the fix correctly in place, and a same-run
@@ -29,6 +30,10 @@ class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
       averageKeystrokeMillis(lineCount = 50000, scenarioName = "command-runner-render-perf-large-document")
 
     info(s"small-document average: ${smallAverage}ms, large-document average: ${largeAverage}ms")
+
+    withClue("a hang-sized bound only, since wall-clock timings are not asserted on shared CI hardware: ")(
+      math.max(smallAverage, largeAverage) should be < 60000L
+    )
   }
 
   private def averageKeystrokeMillis(lineCount: Int, scenarioName: String): Long =
@@ -65,5 +70,10 @@ class CommandRunnerRenderPerformanceSpec extends AnyFlatSpec with Matchers:
       driver.renderFrame(s"keystroke-$char").unsafeRunSync()
       (System.nanoTime() - start) / 1000000L
     }
+
+    val typed = driver.state.unsafeRunSync().commandPickerSurface.collect {
+      case UiSurface(_, SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)), _, _) => picker.queryText
+    }
+    typed shouldBe Some("blur radius")
 
     timings.sum / timings.length

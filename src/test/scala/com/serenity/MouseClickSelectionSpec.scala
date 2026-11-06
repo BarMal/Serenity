@@ -1,37 +1,17 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.{Balance, Leaf, Rope}
-import com.serenity.state.manager.StateManager
+import com.serenity.rope.{Leaf, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary, VerticalCursorState}
+import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
-
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(
-        logger,
-        dictionaryCache = SharedDictionary.default,
-        initialConfig = com.serenity.config.AppConfig.conventional
-      )(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
+class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
@@ -77,7 +57,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
     def apply(delegate: Rope): NonCollectingRope = new NonCollectingRope(delegate)
 
   "MouseClick" should "create a selection while dragging inside an editor pane" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -108,7 +88,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "start a new drag selection from the latest press instead of reusing an old anchor" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbravo\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -141,7 +121,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "select the clicked word on double click" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -171,7 +151,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "select the clicked word on double click without materialising the whole buffer" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha beta gamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -206,7 +186,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "select the clicked line on triple click" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -236,7 +216,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "extend the current selection from the existing anchor on shift-click" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -269,7 +249,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "preserve the original anchor while extending with shift-drag" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbeta gamma\ncharlie", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -303,7 +283,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "collapse multi-cursor state to the clicked cursor" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState { state =>
@@ -340,7 +320,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "collapse multi-selection state to a single drag selection" in {
-    val sm       = makeStateManager()
+    val sm       = createStateManager("MouseClickSelectionSpec")
     val bufferId = sm.createBuffer("alpha\nbeta\ngamma", None).unsafeRunSync()
     val first    = Selection(CursorPosition(0, 0), CursorPosition(0, 2))
     val second   = Selection(CursorPosition(2, 0), CursorPosition(2, 2))
