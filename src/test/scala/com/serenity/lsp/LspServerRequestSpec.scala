@@ -18,6 +18,7 @@ import com.serenity.lsp.client.{
   WorkspaceRootUri
 }
 import com.serenity.lsp.config.LanguageId
+import com.serenity.testkit.HangBound
 import io.circe.Json
 import io.circe.syntax.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -48,13 +49,11 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
     yield server
 
   private def replyTo(id: Json, method: String, params: Json): Json =
-    handshakeDone
-      .use { server =>
-        server.push(Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id, "method" -> method.asJson, "params" -> params)) >>
-          server.takeReceived
-      }
-      .timeout(testTimeout)
-      .unsafeRunSync()
+    val exchange = handshakeDone.use { server =>
+      server.push(Json.obj("jsonrpc" -> "2.0".asJson, "id" -> id, "method" -> method.asJson, "params" -> params)) >>
+        server.takeReceived
+    }
+    HangBound.within(exchange, testTimeout).unsafeRunSync()
 
   private def result(reply: Json): Option[Json] = reply.hcursor.downField("result").focus
 
@@ -131,8 +130,13 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
     )
   )
 
-  private def withHooks[A](hooks: LspClientHooks)(use: (MockLspServer, LspConnection) => IO[A]): A =
-    (for
+  /** A hook that finishes late is still waited for, unless `requestTimeout` is what the case is about: a fiber a loaded
+    * runner delays for 300 ms must not turn a prompt answer into a timed-out one.
+    */
+  private def withHooks[A](hooks: LspClientHooks, requestTimeout: FiniteDuration = LspConnection.DefaultRequestTimeout)(
+    use: (MockLspServer, LspConnection) => IO[A]
+  ): A =
+    val program = (for
       server <- MockLspServer.resource(Map("initialize" -> Json.obj("capabilities" -> Json.obj())), logger)
       connection <- LspConnection.connect(
         LanguageId.Scala,
@@ -140,12 +144,13 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
         server.clientOut,
         WorkspaceRootUri("file:///workspace"),
         logger,
-        requestTimeout = 300.millis,
+        requestTimeout = requestTimeout,
         handshakeTimeout = Some(testTimeout)
       )
       _ <- Resource.eval(server.drainReceived(2))
       _ <- Resource.make(connection.processIncoming((_, _) => IO.unit, hooks).start)(_.cancel)
-    yield (server, connection)).use(use.tupled).timeout(testTimeout).unsafeRunSync()
+    yield (server, connection)).use(use.tupled)
+    HangBound.within(program, testTimeout).unsafeRunSync()
 
   it should "apply workspace/applyEdit through the client and report whether it was applied" in {
     val seen = new java.util.concurrent.atomic.AtomicReference[Option[LspApplyEditRequest]](None)
@@ -175,9 +180,26 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
     seen.get.map(_.edits.keySet) shouldBe Some(Set(DocumentUri("file:///a")))
   }
 
+  it should "wait for a workspace/applyEdit the client is slow to apply, not only a prompt one" in {
+    val hooks =
+      LspClientHooks.ignoring.copy(onApplyEdit = _ => IO.sleep(500.millis).as(LspApplyEditResult(applied = true, None)))
+    val reply = withHooks(hooks) { (server, _) =>
+      server.push(
+        Json.obj(
+          "jsonrpc" -> "2.0".asJson,
+          "id"      -> 23.asJson,
+          "method"  -> "workspace/applyEdit".asJson,
+          "params"  -> Json.obj("edit" -> Json.obj("changes" -> Json.obj("file:///a" -> Json.arr(edit))))
+        )
+      ) >> server.takeReceived
+    }
+
+    result(reply).flatMap(_.hcursor.downField("applied").as[Boolean].toOption) shouldBe Some(true)
+  }
+
   it should "answer workspace/applyEdit as not applied when the client takes too long" in {
     val hooks = LspClientHooks.ignoring.copy(onApplyEdit = _ => IO.never)
-    val reply = withHooks(hooks) { (server, _) =>
+    val reply = withHooks(hooks, requestTimeout = 300.millis) { (server, _) =>
       server.push(
         Json.obj(
           "jsonrpc" -> "2.0".asJson,
@@ -292,7 +314,10 @@ class LspServerRequestSpec extends AnyFlatSpec with Matchers:
     val hooks =
       LspClientHooks.ignoring.copy(onMessageRequest = _ => IO.never[Option[Int]].onCancel(IO(cancelled.set(true))))
 
-    val reply = withHooks(hooks)((server, _) => server.push(messageRequest(44)) >> server.takeReceived)
+    val reply =
+      withHooks(hooks, requestTimeout = 300.millis)((server, _) =>
+        server.push(messageRequest(44)) >> server.takeReceived
+      )
 
     result(reply) shouldBe Some(Json.Null)
     cancelled.get shouldBe true

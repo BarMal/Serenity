@@ -1,30 +1,23 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
+import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.reducers.PanelStateReducer
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The command/keyboard resize entry point (issue #1310): `ViewIntent.SetPanelSize` feeds the same
   * `PanelStateReducer.resize` the existing mouse-drag path already uses, via a plain `Command` -- the same generic
   * execution path the command palette itself runs through.
   */
-class PanelResizeCommandSpec extends AnyFlatSpec with Matchers:
-
-  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+class PanelResizeCommandSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("PanelResizeCommandSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("PanelResizeCommandSpec", initialConfig = AppConfig.default)
 
   private def resizeCommand(surfaceId: com.serenity.state.models.SurfaceId, delta: Int): Command =
     Command.typed(
