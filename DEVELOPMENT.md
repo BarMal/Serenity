@@ -375,6 +375,75 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
 
+#### Skia on NixOS
+
+Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
+cannot find them. The native probe then fails and the window paints with Java2D. The start page says so, naming the
+missing library, and the log carries the failure:
+`[RENDER] backend=java2d reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
+(Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
+`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads. Setting `ui.render.backend = java2d` ends the
+notice.
+
+The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
+set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:
+
+```bash
+ldd ~/.skiko/*/libskiko-linux-x64.so | grep 'not found'
+```
+
+On the Intel laptop (NixOS, Hyprland, Wayland session, #2570) it listed `libGL.so.1`, `libX11.so.6`,
+`libfontconfig.so.1` and `libstdc++.so.6`. With these directories on `LD_LIBRARY_PATH` the same jar chose Skia and the
+layer reported `renderApi=OPENGL`:
+
+| Directory | Package (nixpkgs) | Provides |
+| --- | --- | --- |
+| `/run/opengl-driver/lib` | the system graphics driver (`hardware.graphics`) | `libGL.so.1` |
+| `libx11`, `libxext`, `libxrender`, `libxtst`, `libxi` | same names | `libX11.so.6` and the X11 libraries |
+| `libglvnd` | `libglvnd` | the GL dispatch libraries |
+| `fontconfig.lib` | `fontconfig` (`lib` output) | `libfontconfig.so.1` |
+| `stdenv.cc.cc.lib` | the compiler's runtime (`gcc` `lib` output) | `libstdc++.so.6` |
+
+Caution, here be imagine dragons: that set is confirmed to work together, but `ldd` flagged only the four libraries
+above. Which of `libxext`, `libxrender`, `libxtst`, `libxi` and `libglvnd` are needed on their own was not tested.
+
+**A launcher script (recommended; no root).** Put a small script on your `PATH` that builds the library directory from
+nixpkgs each time it starts, then launches the jar. This is what the laptop does, with `SERENITY_JAR` overriding the
+default jar; there, a launch through it logs `backend=skia`, `native probe passed` and `renderApi=OPENGL`, and the cached
+library-path computation costs about 1.4 s per launch. A sketch of the pattern (not run as written; `<nixpkgs>` has to
+resolve on your system, otherwise name your pinned nixpkgs):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+libs=$(nix-build --no-out-link -E '
+  with import <nixpkgs> {};
+  symlinkJoin {
+    name = "serenity-skia-libs";
+    paths = [ libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib ];
+  }')
+export LD_LIBRARY_PATH="/run/opengl-driver/lib:$libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec java --enable-native-access=ALL-UNNAMED -jar "${SERENITY_JAR:-target/scala-3.9.0/Serenity.jar}" "$@"
+```
+
+Build the directory at launch rather than writing store paths into the script. A store path is not a garbage-collection
+root, so `nix-collect-garbage` removes it and the script then breaks; rebuilt on demand, the first launch after a
+collection pays the rebuild and later ones hit the cache. To make the result survive collections too, give `nix-build`
+an `--out-link` in place of `--no-out-link`: that symlink is a GC root, at the price of a link to look after.
+
+**Without a script.** The same libraries can be put on the path for one command, which needs no files but holds the same
+store paths only for as long as `nix-shell` keeps them. This line is assembled from the table and has not been run as
+written:
+
+```bash
+nix-shell -p libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib \
+  --run 'export LD_LIBRARY_PATH="/run/opengl-driver/lib:$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
+```
+
+Skia loaded with these libraries on Java 21.0.12 (the diagnostic, #2570) and on Java 25.0.4.1 (the benchmark runs,
+#2489), both from nixpkgs; the JDK this document expects is Temurin 25 (see "Java version and launch options"). On
+Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the same path (#2479).
+
 #### Comparing the renderers
 
 `serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
