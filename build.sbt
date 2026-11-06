@@ -479,7 +479,10 @@ heapMeasurementTest := (Test / testOnly)
 
 // Rewrites src/test/resources/perf/frame-counts.tsv, the counts FrameCountRatchetSpec compares every run with. The spec
 // never writes the file; changing a count is this explicit command, committed with the change that moved it.
-addCommandAlias("writeFrameCountBaseline", "Test/runMain com.serenity.perf.FrameCountBaseline")
+addCommandAlias(
+  "writeFrameCountBaseline",
+  "Test/runMain com.serenity.perf.FrameCountBaseline src/test/resources/perf/frame-counts.tsv"
+)
 
 libraryDependencies ++= Seq(
   "org.typelevel" %% "cats-effect" % "3.7.1",

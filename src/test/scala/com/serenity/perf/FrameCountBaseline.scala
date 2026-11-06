@@ -1,7 +1,7 @@
 package com.serenity.perf
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Paths}
 
 import cats.effect.unsafe.implicits.global
 
@@ -12,8 +12,6 @@ object FrameCountBaseline:
 
   /** Where the spec finds the baseline on the test classpath. */
   val Resource = "/perf/frame-counts.tsv"
-
-  val SourceFile: Path = Paths.get("src", "test", "resources", "perf", "frame-counts.tsv")
 
   val RegenerateCommand = "sbt writeFrameCountBaseline"
 
@@ -79,11 +77,15 @@ object FrameCountBaseline:
         parse(text.linesIterator.toList)
     }
 
-  /** `sbt writeFrameCountBaseline`: measures every scenario and overwrites [[SourceFile]]. */
+  /** `sbt writeFrameCountBaseline`: measures every scenario and overwrites the file the command names. The path comes
+    * from the command alias in build.sbt, run at the repository root, so nothing here reads the source tree by itself.
+    */
   def main(args: Array[String]): Unit =
-    val measured = FrameCountScenarios.entries(DeviceScale)
-    Files.createDirectories(SourceFile.getParent)
-    val _ = Files.writeString(SourceFile, render(measured), StandardCharsets.UTF_8)
-    println(s"frame-count baseline written: ${measured.size} counts at $SourceFile")
+    BenchmarkMain.run:
+      val target   = args.headOption.map(Paths.get(_)).getOrElse(throw new IllegalArgumentException(RegenerateCommand))
+      val measured = FrameCountScenarios.entries(DeviceScale)
+      Files.createDirectories(target.toAbsolutePath.getParent)
+      val _ = Files.writeString(target, render(measured), StandardCharsets.UTF_8)
+      println(s"frame-count baseline written: ${measured.size} counts at $target")
 
 end FrameCountBaseline
