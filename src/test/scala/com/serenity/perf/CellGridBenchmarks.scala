@@ -3,7 +3,8 @@ package com.serenity.perf
 import java.awt.image.BufferedImage
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, AppMode}
+import com.serenity.ChromeOn
+import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
@@ -45,8 +46,11 @@ private[perf] object CellGridBenchmarks:
 
   private def text(line: Int => String): String = Vector.tabulate(Lines)(line).mkString("\n")
 
-  private def stateOf(content: String): AppState =
-    val config       = AppConfig.conventional.withAppMode(AppMode.Code)
+  /** `ChromeOn.config`, like every other frame fixture: flush chrome, so these rows keep pinning the rectangles they
+    * always measured. Floating, rounded chrome has its own row.
+    */
+  private def stateOf(content: String, chrome: AppConfig = ChromeOn.config): AppState =
+    val config       = chrome.withAppMode(AppMode.Code)
     val (manager, _) = LaptopFrameBenchmarks.stateManagerHolding(content, config, grid = viewport)
     manager.getCurrentState.unsafeRunSync()
 
@@ -102,6 +106,9 @@ private[perf] object CellGridBenchmarks:
         )
         .sum
 
+  /** The frame rows settle the JIT before sampling, as the layout rows do. A frame runs the chrome's code once, and
+    * unsettled they timed the first few hundred frames of a JVM, where that code is still interpreted.
+    */
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
     lazy val asciiFrame    = frameOf(stateOf(text(asciiLine)))
     lazy val mixedFrame    = frameOf(stateOf(text(mixedLine)))
@@ -119,28 +126,32 @@ private[perf] object CellGridBenchmarks:
           3,
           12,
           () => assert(hasPixels(asciiFrame()), "cell-grid ASCII frame drew nothing"),
-          () => asciiFrame()
+          () => asciiFrame(),
+          settleJit = true
         ),
         BenchmarkRunner.Benchmark(
           "render.cell_grid.frame_mixed",
           3,
           12,
           () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
-          () => mixedFrame()
+          () => mixedFrame(),
+          settleJit = true
         ),
         BenchmarkRunner.Benchmark(
           "render.cell_grid.frame_emoji",
           3,
           12,
           () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
-          () => emojiFrame()
+          () => emojiFrame(),
+          settleJit = true
         ),
         BenchmarkRunner.Benchmark(
           "render.cell_grid.frame_emoji_clusters",
           3,
           12,
           () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
-          () => clusterFrame()
+          () => clusterFrame(),
+          settleJit = true
         ),
         BenchmarkRunner.Benchmark(
           "layout.cell_grid.emoji_cluster_lines",
@@ -164,6 +175,26 @@ private[perf] object CellGridBenchmarks:
           BenchmarkIterationCounts.LayoutVisibleViewport,
           () => assert(mixedLayout() >= Lines),
           () => mixedLayout(),
+          settleJit = true
+        )
+      )
+    )
+
+  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with. Kept apart from
+    * [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order pins them to.
+    */
+  def floatingChromeBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    lazy val frame = frameOf(
+      stateOf(text(asciiLine), ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating))
+    )
+    List(
+      BenchmarkRunner.Benchmark.building(frame)(
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_ascii.floating_chrome",
+          3,
+          12,
+          () => assert(hasPixels(frame()), "cell-grid ASCII frame in floating chrome drew nothing"),
+          () => frame(),
           settleJit = true
         )
       )

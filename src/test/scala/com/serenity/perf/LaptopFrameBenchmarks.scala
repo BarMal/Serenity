@@ -35,6 +35,7 @@ import com.serenity.ui.renderer.{
 }
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{
+  ChromeOn,
   DockedPanelFixtures,
   FrameBackend,
   FramePixels,
@@ -176,7 +177,7 @@ private[perf] object LaptopFrameBenchmarks:
     */
   private[perf] def proseStateManager(
     paragraphs: Int = 300,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 150,
     dictionaryCache: Option[DictionaryCache] = None,
     grid: ViewportSize = viewport
@@ -193,7 +194,7 @@ private[perf] object LaptopFrameBenchmarks:
   /** [[proseStateManager]] over any `text`, with the cursor placed at `cursorLine`, `cursorColumn`. */
   private[perf] def stateManagerHolding(
     text: String,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     cursorLine: Int = 0,
     cursorColumn: Int = 0,
     dictionaryCache: Option[DictionaryCache] = None,
@@ -354,9 +355,7 @@ private[perf] object LaptopFrameBenchmarks:
 
   private def typewriterBenchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     val typewriter =
-      AppConfig.conventional.copy(surfaceConfig =
-        AppConfig.conventional.surfaceConfig.copy(typewriterScrollingEnabled = true)
-      )
+      ChromeOn.config.copy(surfaceConfig = ChromeOn.config.surfaceConfig.copy(typewriterScrollingEnabled = true))
     lazy val (stateManager, proseBufferId) = proseStateManager(config = typewriter)
     def length: Option[Int] =
       stateManager.getCurrentState.unsafeRunSync().persisted.buffers.get(proseBufferId).map(_.document.content.weight)
@@ -566,6 +565,10 @@ private[perf] object LaptopFrameBenchmarks:
         AlternatingTransition(backend, built.afterTyping, built.afterScroll)
       )
     )
+
+  /** The typing frame in floating chrome, kept out of [[interactionBenchmarks]], whose rows are pinned. */
+  private[perf] def floatingTypingBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    List(FloatingTypingFrames.benchmark(Java2DFrames))
 
   private[perf] def interactionBenchmarks(transitions: => InteractionTransitions): List[BenchmarkRunner.Benchmark] =
     lazy val built = transitions

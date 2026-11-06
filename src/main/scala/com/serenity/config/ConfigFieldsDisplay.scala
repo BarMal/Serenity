@@ -92,6 +92,11 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.tabStrip,
       (config, value) => config.withTabStrip(value)
     ),
+    // Not `filtered`: an out-of-range width is clamped, and `ConfigManager.invalidEntry` reports it.
+    field("editor.tab_max_width")(int.mapped(TabMaxWidth.clamp, width => width))(
+      _.surfaceConfig.tabMaxWidth,
+      (config, value) => config.withTabMaxWidth(value)
+    ),
     named(
       "editor.visual_line_navigation",
       "visualLineCursorNavigation",

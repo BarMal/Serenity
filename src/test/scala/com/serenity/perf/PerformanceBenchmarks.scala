@@ -86,6 +86,9 @@ object PerformanceBenchmarks:
       FindReplaceBenchmarks.benchmarks() ++
       BoundaryCacheBenchmarks.benchmarks() ++
       RowCountBenchmarks.benchmarks() ++
+      TabStripBenchmarks.benchmarks() ++
+      CellGridBenchmarks.floatingChromeBenchmarks() ++
+      LaptopFrameBenchmarks.floatingTypingBenchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks()
 
