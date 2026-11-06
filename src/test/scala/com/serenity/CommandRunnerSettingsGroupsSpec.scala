@@ -129,7 +129,11 @@ class CommandRunnerSettingsGroupsSpec extends AnyFlatSpec with Matchers:
       "render-fps",
       "render-damage-granularity",
       "render-backend",
-      "render-wayland"
+      "render-wayland",
+      "ui-corner-radius",
+      "docked-corner-style",
+      "pane-header-corners",
+      "tab-max-width"
     )
     group("settings-language-tools").children.map(_.id) shouldBe List("buffer-language", "settings-spellcheck")
     nestedGroup("settings-text-display").label shouldBe "Text Display"

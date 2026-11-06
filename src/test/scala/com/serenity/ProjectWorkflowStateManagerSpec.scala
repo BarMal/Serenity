@@ -143,9 +143,9 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync()
 
   private def projectBuildItem(state: AppState): CommandSurfaceItem.CommandItem =
-    state.commandRunnerSurface
-      .map(_.content)
-      .collect { case SurfaceContent.CommandPalette(runner) => runner.visibleItems }
+    CommandPaletteProbe
+      .runner(state)
+      .map(_.visibleItems)
       .getOrElse(fail("expected the command palette to be open"))
       .collectFirst { case item: CommandSurfaceItem.CommandItem if item.command.name == "project-build" => item }
       .getOrElse(fail("expected project-build to stay listed"))

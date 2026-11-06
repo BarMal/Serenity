@@ -21,11 +21,15 @@ concurrency:
 jobs:
   auto-squash-merge:
     name: Auto squash merge
+    # Once the merge train is live it is the only thing that merges (#2553).
     if: >
+      vars.MERGE_TRAIN_MODE != 'live' &&
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
+    # Successful runs take seconds (p90 0.1 min over 4 runs, e.g. 41726663084, 41724660025); 30 only bounds a hang, since one run held a runner for 136 min (job 125785069759).
+    timeout-minutes: 30
 
     steps:
       - name: Squash merge PR after checks pass

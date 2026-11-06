@@ -78,6 +78,17 @@ trait TextMeasurerContract extends AnyPropSpec with ScalaCheckPropertyChecks wit
       (java.lang.Float.floatToRawIntBits(advances.caretsFrom(index, 1)(1)), advances.isContextFree(index, index + 1))
     }
 
+  property("contract: two distinct measurers share a metrics key, so the alike properties compare across measurers") {
+    val available = measurers
+    val distinctWithEqualKeys = for
+      first  <- available
+      second <- available
+      if (first ne second) && first.metricsKey == second.metricsKey
+    yield (first, second)
+
+    distinctWithEqualKeys should not be empty
+  }
+
   property("contract: measurers with equal metrics keys measure alike") {
     forAll(genLine, genMeasurer) { (line, other) =>
       whenever(other.metricsKey == line.measurer.metricsKey) {

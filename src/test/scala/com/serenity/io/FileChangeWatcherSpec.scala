@@ -1,8 +1,11 @@
 package com.serenity.io
 
-import java.nio.file.Files
+import java.nio.file.StandardWatchEventKinds.{ENTRY_MODIFY, OVERFLOW}
+import java.nio.file.{Files, Path, WatchEvent, WatchKey, Watchable}
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.duration.*
+import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -31,7 +34,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           _       <- watcher.sync(Set(directory))
           _       <- cats.effect.IO.blocking(Files.writeString(file, "changed"))
           changed <- watcher.pollChangedFiles(PollWindow)
-        yield changed shouldBe Set(file)
+        yield changed shouldBe WatchedChanges.files(Set(file))
       }
       .unsafeRunSync()
   }
@@ -44,7 +47,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
         for
           _       <- watcher.sync(Set(directory))
           changed <- watcher.pollChangedFiles(1.second)
-        yield changed shouldBe Set.empty
+        yield changed shouldBe WatchedChanges.none
       }
       .unsafeRunSync()
   }
@@ -61,7 +64,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           _       <- watcher.sync(Set.empty)
           _       <- cats.effect.IO.blocking(Files.writeString(file, "changed"))
           changed <- watcher.pollChangedFiles(1.second)
-        yield changed shouldBe Set.empty
+        yield changed shouldBe WatchedChanges.none
       }
       .unsafeRunSync()
   }
@@ -80,7 +83,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           _       <- watcher.sync(Set(directoryA, directoryB))
           _       <- cats.effect.IO.blocking(Files.writeString(fileB, "changed"))
           changed <- watcher.pollChangedFiles(PollWindow)
-        yield changed shouldBe Set(fileB)
+        yield changed shouldBe WatchedChanges.files(Set(fileB))
       }
       .unsafeRunSync()
   }
@@ -102,7 +105,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           after   <- watcher.pollChangedFiles(500.millis)
         yield (changed, after)
       }
-      .unsafeRunTimed(10.seconds) shouldBe Some((Set(file), Set.empty))
+      .unsafeRunTimed(10.seconds) shouldBe Some((WatchedChanges.files(Set(file)), WatchedChanges.none))
   }
 
   "The polling fallback" should "report a file written into a synced directory" in {
@@ -117,7 +120,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           _       <- watcher.sync(Set(directory))
           _       <- IO.blocking(Files.writeString(file, "changed, and longer"))
           changed <- watcher.awaitChangedFiles(50.millis)
-        yield changed shouldBe Set(file)
+        yield changed shouldBe WatchedChanges.files(Set(file))
       }
       .unsafeRunSync()
   }
@@ -129,7 +132,7 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
     FileChangeWatcher
       .polling(100.millis)
       .use(watcher => watcher.sync(Set(directory)) >> watcher.pollChangedFiles(500.millis))
-      .unsafeRunSync() shouldBe Set.empty
+      .unsafeRunSync() shouldBe WatchedChanges.none
   }
 
   it should "report a burst of writes within the settle window as one change (#1885)" in {
@@ -150,7 +153,41 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           after   <- watcher.pollChangedFiles(500.millis)
         yield (changed, after)
       }
-      .unsafeRunTimed(10.seconds) shouldBe Some((Set(file), Set.empty))
+      .unsafeRunTimed(10.seconds) shouldBe Some((WatchedChanges.files(Set(file)), WatchedChanges.none))
+  }
+
+  it should "account for every file of a burst too large for the platform's event queue" in {
+    // The JDK keeps at most 512 pending events per watched directory and replaces them with one OVERFLOW (#2531 W3);
+    // a polling backend sees every file instead. Either way no file may go unreported.
+    val directory = TestTemp.directory("file-change-watcher-overflow")
+    val burst     = (1 to 2000).map(n => directory.resolve(s"burst-$n.txt")).toSet
+
+    FileChangeWatcher.create
+      .use { watcher =>
+        for
+          _       <- watcher.sync(Set(directory))
+          _       <- IO.blocking(burst.foreach(Files.createFile(_)))
+          changed <- watcher.pollChangedFiles(PollWindow)
+        yield burst.filterNot(file => changed.files(file) || changed.overflowed(file.getParent)) shouldBe empty
+      }
+      .unsafeRunSync()
+  }
+
+  "drainKey" should "report the directory whose events overflowed, which the JDK reports with no file name" in {
+    val directory = Path.of("project", "src")
+    val key       = FakeWatchKey(directory, List(FakeEvent(ENTRY_MODIFY, Path.of("a.txt")), FakeEvent(OVERFLOW, null)))
+
+    FileChangeWatcher.drainKey(key).unsafeRunSync() shouldBe
+      WatchedChanges(files = Set(directory.resolve("a.txt")), overflowed = Set(directory))
+    key.resets shouldBe 1
+  }
+
+  "WatchedChanges" should "combine the files and the overflowed directories of two reports" in {
+    val a = Path.of("a")
+    val b = Path.of("b")
+    WatchedChanges.files(Set(a)) ++ WatchedChanges(Set.empty, Set(b)) shouldBe WatchedChanges(Set(a), Set(b))
+    WatchedChanges.none.isEmpty shouldBe true
+    WatchedChanges(Set.empty, Set(b)).isEmpty shouldBe false
   }
 
   "isJdkPollingService" should "recognise the JDK's built-in poller, which macOS gets instead of a native watcher" in {
@@ -178,7 +215,22 @@ class FileChangeWatcherSpec extends AnyFlatSpec with Matchers:
           _       <- watcher.sync(Set(directory))
           _       <- cats.effect.IO.blocking(Files.writeString(file, "changed"))
           changed <- watcher.pollChangedFiles(PollWindow)
-        yield changed shouldBe Set(file)
+        yield changed shouldBe WatchedChanges.files(Set(file))
       }
       .unsafeRunSync()
   }
+
+// The JDK's OVERFLOW event carries a null context, so a fake event must be able to as well.
+final private class FakeEvent[A](kindOf: WatchEvent.Kind[A], contextOf: A) extends WatchEvent[A]:
+  def kind: WatchEvent.Kind[A] = kindOf
+  def count: Int               = 1
+  def context: A               = contextOf
+
+final private class FakeWatchKey(directory: Path, events: List[WatchEvent[?]]) extends WatchKey:
+  private val resetCount                        = AtomicInteger(0)
+  def resets: Int                               = resetCount.get
+  def isValid: Boolean                          = true
+  def pollEvents: java.util.List[WatchEvent[?]] = events.asJava
+  def reset: Boolean                            = resetCount.incrementAndGet() > 0
+  def cancel(): Unit                            = ()
+  def watchable: Watchable                      = directory
