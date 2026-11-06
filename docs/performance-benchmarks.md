@@ -234,7 +234,11 @@ wrote, escape sequences included; a caret flush made after a frame's content flu
 Only counters that were ever non-zero are listed. A typing frame that lists `rows-drawn max=` far above a handful, or a
 `present-px` near the whole window, is over-repainting however fast it happens to be. The `laptop.render.typing_frame_2x`
 and `scroll_frame_2x` benchmarks assert a ceiling on `rows-drawn` while verifying their frames (`MaxTypingRowsDrawn`,
-`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it.
+`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it. `skia.laptop.render.typing_frame_2x` and `skia.laptop.render.scroll_frame_2x` draw the same frames on Skia's CPU
+raster surface (`PersistingFrames` takes a `FrameBackend`) and run the same check before they are timed: the same row
+ceilings, and pixel equality with a frame Skia draws from scratch. They have the `skia.` prefix, so the per-PR gate
+does not judge them once `scripts/perf-gate-excluded-rows.txt` lists it; the other `laptop.render.*` rows differ from
+these two only in their fixtures and have no Skia twin.
 
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and

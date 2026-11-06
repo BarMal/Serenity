@@ -51,7 +51,7 @@ object PerformanceBenchmarks:
     SwingWindow
       .resource(metrics = RenderBenchmarks.cellMetrics, chromeMetrics = RenderBenchmarks.uiMetrics)
       .flatMap(window =>
-        LaptopFrameBenchmarks
+        LaptopPresentBenchmarks
           .presentWindowResource(RenderBenchmarks.cellMetrics, RenderBenchmarks.uiMetrics)
           .map(window -> _)
       )

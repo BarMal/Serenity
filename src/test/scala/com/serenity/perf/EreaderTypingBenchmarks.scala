@@ -1,8 +1,7 @@
 package com.serenity.perf
 
-import java.awt.image.BufferedImage
-
 import cats.effect.unsafe.IORuntime
+import com.serenity.FramePixels
 import com.serenity.config.AppConfig
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.lsp.config.LanguageId
@@ -83,7 +82,7 @@ private[perf] object EreaderTypingBenchmarks:
     lazy val steps           = Iterator.continually(List(after -> forward, before -> backward)).flatten
     lazy val firstFrame      = frames.render(before, Damage.Everything)
 
-    def next(): BufferedImage =
+    def next(): FramePixels =
       val (state, damage) = steps.next()
       frames.render(state, damage)
 
