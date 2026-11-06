@@ -64,13 +64,15 @@ private[perf] object ScalingShapeCacheBenchmarks:
     val state  = MultiBufferFixture.state(kind, buffers, size, shaped)
     val caches = RenderCaches.create()
     val cache  = SkiaTextCaches.of(caches.backendCaches).shapedText
-    val traffic = Vector.tabulate(passes) { _ =>
+    diagHeader(shaped)
+    val traffic = Vector.tabulate(passes) { pass =>
       Vector.tabulate(buffers) { index =>
         val before  = counters(cache)
         val started = System.nanoTime()
         val _       = LaptopColdFrames.of(SkiaFrames, MultiBufferFixture.switchTo(state, BufferId(index + 1)), caches)
         val nanos   = System.nanoTime() - started
         val after   = counters(cache)
+        diagnose(shaped, pass, index, before, after, cache)
         FrameTraffic(
           after.lookups - before.lookups,
           after.shapings - before.shapings,
@@ -81,6 +83,35 @@ private[perf] object ScalingShapeCacheBenchmarks:
       }
     }
     (traffic, counters(cache))
+
+  // DIAGNOSTIC (branch claude/diag-shape-cache-misses, not for merging): prints what the plain-prose traces looked up and
+  // missed, so the same traces on Windows and Linux can be compared. It changes no counter and no assertion.
+  private def diagHeader(shaped: Boolean): Unit =
+    if !shaped then
+      val families = java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment.getAvailableFontFamilyNames.length
+      println(
+        s"DIAG trace(shaped=false) os=${System.getProperty("os.name")} java=${System.getProperty("java.version")} " +
+          s"headless=${java.awt.GraphicsEnvironment.isHeadless} fontFamilies=$families"
+      )
+
+  private def diagnose(
+      shaped: Boolean,
+      pass: Int,
+      index: Int,
+      before: FrameTraffic,
+      after: FrameTraffic,
+      cache: SkiaShapedTextCache
+  ): Unit =
+    if !shaped then
+      val lookedUp = cache.drainDiagLookups().groupMapReduce(identity)(_ => 1)(_ + _)
+      val missed   = cache.drainDiagMisses()
+      println(
+        s"DIAG frame pass=$pass buffer=$index lookups=${after.lookups - before.lookups} " +
+          s"shapings=${after.shapings - before.shapings} distinctLookedUp=${lookedUp.size} missed=${missed.size}"
+      )
+      if pass == 0 then
+        lookedUp.toList.sortBy(-_._2).foreach((key, n) => println(s"DIAG   looked up x$n: $key"))
+        missed.foreach(key => println(s"DIAG   MISSED: $key"))
 
   private def report(kind: MultiBufferFixture.Kind, shaped: Boolean, buffers: Int): Unit =
     val (traffic, totals) = trace(kind, buffers, Passes, MultiBufferFixture.FullSize, shaped)

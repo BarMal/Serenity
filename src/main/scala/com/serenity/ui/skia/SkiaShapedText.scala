@@ -205,15 +205,33 @@ final class SkiaShapedTextCache(
     record(System.nanoTime() - started)
     result
 
+  // DIAGNOSTIC (branch claude/diag-shape-cache-misses, not for merging): what was looked up and what missed.
+  private val diagLookups = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+  private val diagMisses  = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+
+  private def diagKey(key: Key): String =
+    val shown = key.text.take(60).flatMap(c => if c < ' ' || c > '~' then f"\\u${c.toInt}%04x" else c.toString)
+    val font  = key.font
+    val face  = Option(font.getTypeface).map(_.getFamilyName).getOrElse("no typeface")
+    s"'$shown'(${key.text.length}) font=$face/size=${font.getSize}/scaleX=${font.getScaleX}/id=${System.identityHashCode(font)}"
+
+  private[serenity] def drainDiagLookups(): List[String] =
+    Iterator.continually(diagLookups.poll()).takeWhile(_ != null).toList
+
+  private[serenity] def drainDiagMisses(): List[String] =
+    Iterator.continually(diagMisses.poll()).takeWhile(_ != null).toList
+
   def stretchOf(text: String, font: Font): SkiaShapedStretch =
     lookupN.increment()
     val key = Key(text, font)
+    val _   = diagLookups.add(diagKey(key))
     Option(current.get.get(key)).getOrElse {
       Option(previous.get.get(key)).fold(shapeAndRemember(key))(promote(key, _))
     }
 
   private def shapeAndRemember(key: Key): SkiaShapedStretch =
     val _ = shapedN.incrementAndGet()
+    val _ = diagMisses.add(diagKey(key))
     remember(key, timed(warmup.shaped)(shapeLock.synchronized(shape(key.text, key.font))))
 
   private def promote(key: Key, stretch: SkiaShapedStretch): SkiaShapedStretch =
