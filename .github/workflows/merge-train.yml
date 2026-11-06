@@ -1,0 +1,62 @@
+name: Merge Train
+
+# Batches ready pull requests onto one train/* branch, runs CI and Cross-OS Tests there once, and merges the batch only
+# when that exact tree passed, so master never advances to an untested combination (#2553). A red batch has its failed
+# jobs re-run once, then is halved until the culprit is found and ejected. The logic and its tests are in
+# scripts/merge_train.py and scripts/test_merge_train.py; this file only decides when a step runs.
+#
+# The repository variable MERGE_TRAIN_MODE switches it: unset or "off" does nothing, "dry-run" only reports what it
+# would do, and "live" builds and merges trains (and stands Auto Squash Merge down). MERGE_TRAIN_BATCH caps a batch
+# (default 6); MERGE_TRAIN_FLAKE_ISSUE is the issue that flakes passed on re-run are recorded on.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  # A train's own runs finishing is the earliest moment there is something to do. Scheduled steps cover the case where
+  # a run started by the workflow token raises no workflow_run event.
+  workflow_run:
+    workflows: [CI, Cross-OS Tests]
+    types: [completed]
+  # Master advancing is when the next batch can start: a train's merges, or a manual one. The schedule alone is not
+  # enough, because scheduled events can be dropped under load.
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  issues: write
+
+# One step at a time, and a step is never cancelled: one stopped half-way through merging would leave master with part
+# of a batch. GitHub keeps one pending run per group, so a workflow_run event for a non-train branch (which the job
+# below skips) gets a group of its own: in the shared group it would replace the pending step that has real work.
+concurrency:
+  group: ${{ (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.head_branch, 'train/')) && format('merge-train-noop-{0}', github.run_id) || 'merge-train' }}
+  cancel-in-progress: false
+
+jobs:
+  step:
+    name: Merge train step
+    if: >
+      (vars.MERGE_TRAIN_MODE == 'dry-run' || vars.MERGE_TRAIN_MODE == 'live') &&
+      (github.event_name != 'workflow_run' || startsWith(github.event.workflow_run.head_branch, 'train/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Full history, file contents fetched on demand: squash-applying a pull request needs its merge base.
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Run one step of the train
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          MERGE_TRAIN_MODE: ${{ vars.MERGE_TRAIN_MODE }}
+          MERGE_TRAIN_BATCH: ${{ vars.MERGE_TRAIN_BATCH }}
+          MERGE_TRAIN_FLAKE_ISSUE: ${{ vars.MERGE_TRAIN_FLAKE_ISSUE }}
+        run: python3 scripts/merge_train.py tick

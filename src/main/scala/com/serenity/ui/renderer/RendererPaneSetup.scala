@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.document.{KeywordHighlight, KeywordHighlights}
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -267,6 +268,10 @@ object RendererPaneSetup:
           baseViewport.visibleColumns
         )
     val visibleLines = ScrollLimits.rowsThatFit(panelHeightPx, bufferMetrics.lineHeight)
+    context.caches.scrollRows.report(
+      buffer.id,
+      ScrollRowCounts(baseViewport.visibleLines, CursorViewport.rowsThatFit(buffer, state), visibleLines)
+    )
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
       visibleLines = visibleLines

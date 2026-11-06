@@ -11,6 +11,9 @@ class SummonGeneratorSpec extends AnyFlatSpec with Matchers:
 
   private val platforms = List("linux", "Mac OS X", "Windows 11")
 
+  private val DrawAttempts   = 2000L
+  private val MinimumChecked = 500
+
   private def conflictsOn(osName: String, summon: SummonConfig) =
     summon.settled(HotkeyConfig.forOs(osName), FocusedKeymapConfig())._2
 
@@ -33,10 +36,14 @@ class SummonGeneratorSpec extends AnyFlatSpec with Matchers:
 
   "The summon configuration generator" should "make chords that no platform's hotkeys take, or a save would not come back" in {
     val params = Gen.Parameters.default
-    val clashing = (0L until 2000L).flatMap { n =>
-      ConfigGenerators.genSummonConfig.apply(params, Seed(n)).toList.flatMap { summon =>
-        platforms.collect { case osName if conflictsOn(osName, summon).nonEmpty => s"$osName: $summon" }
-      }
+    val drawn  = (0L until DrawAttempts).flatMap(n => ConfigGenerators.genSummonConfig.apply(params, Seed(n)))
+
+    withClue(s"only ${drawn.size} of $DrawAttempts draws gave a configuration, so too few were checked: ")(
+      drawn.size should be >= MinimumChecked
+    )
+
+    val clashing = drawn.flatMap { summon =>
+      platforms.collect { case osName if conflictsOn(osName, summon).nonEmpty => s"$osName: $summon" }
     }
 
     clashing shouldBe empty

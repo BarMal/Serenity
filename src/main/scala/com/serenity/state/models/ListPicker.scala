@@ -2,20 +2,26 @@ package com.serenity.state.models
 
 import java.nio.file.Path
 
-import com.serenity.command.Command
+import com.serenity.command.{Command, CommandRegistry, CommandRunner}
 import com.serenity.io.ProjectFileListing
 import com.serenity.ui.widget.{EndBehaviour, Loadable, SelectableList, TextField}
 
 /** One entry of a [[ListPicker]]: what it shows, and the command picking it runs. A choice with a `waitingLabel` starts
   * slow work: picking it keeps the picker open, showing that label, until the work lands. A `preview` runs whenever the
-  * choice becomes the highlighted one, without counting as a use of that command.
+  * choice becomes the highlighted one, without counting as a use of that command. A `hint` (such as the key that runs
+  * the command) shows on the right; a choice with a `disabledReason` shows greyed with that reason, and picking it
+  * refuses rather than runs.
   */
 final case class ListChoice(
     label: String,
     detail: Option[String],
     action: Command,
     waitingLabel: Option[String] = None,
-    preview: Option[Command] = None
+    preview: Option[Command] = None,
+    hint: Option[String] = None,
+    disabledReason: Option[String] = None,
+    // Laid out in label/detail/hint columns even without a hint, as every row of the command picker is.
+    columns: Boolean = false
 )
 
 /** What a picker's choices are recomputed from each time its query changes -- see [[ListPickerSearch.refreshed]]. Data
@@ -36,12 +42,19 @@ enum PickerSource:
     */
   case ProjectFiles(root: Path, listing: Loadable[ProjectFileListing], matched: Option[FileMatches] = None)
 
+  /** The palette's commands and settings hits (#2577), searched by `runner` -- activated when the picker opened, so its
+    * editing context is the one the picker was opened from -- over `registry`. Both compare by reference, which is
+    * right: each is built once per open.
+    */
+  case Commands(runner: CommandRunner, registry: CommandRegistry)
+
   /** Whether more choices than the picker holds can still be loaded, by [[ListPickerSearch.extended]]. */
   def hasMore: Boolean =
     this match
       case Fixed(_)                => false
       case BufferText(_, resumeAt) => resumeAt.isDefined
       case ProjectFiles(_, _, _)   => false
+      case Commands(_, _)          => false
 
 /** A titled list to pick one entry from, as data -- so a new picker needs only a value of this. Its choices may still
   * be loading when it opens. While it is `pending` on a picked choice, that choice's work applies only if the picker is
@@ -58,7 +71,11 @@ final case class ListPicker(
     query: Option[TextField] = None,
     source: Option[PickerSource] = None,
     onDismiss: Option[Command] = None,
-    searchPending: Boolean = false
+    searchPending: Boolean = false,
+    // Why the last pick was refused; cleared by the next move or edit.
+    message: Option[String] = None,
+    // Key hints shown under the choices; left out when nothing matched, as there is no row to act on.
+    footer: Option[String] = None
 ):
   def selectedChoice: Option[ListChoice] = items.toOption.flatMap(_.selectedItem)
 
@@ -67,6 +84,11 @@ final case class ListPicker(
   def queryText: String = query.fold("")(_.text)
 
   def hasMore: Boolean = source.exists(_.hasMore)
+
+  def isCommandPicker: Boolean =
+    source match
+      case Some(PickerSource.Commands(_, _)) => true
+      case _                                 => false
 
   def withChoices(choices: Seq[ListChoice], emptyMessage: String): ListPicker =
     copy(items = ListPicker.loaded(choices, emptyMessage))

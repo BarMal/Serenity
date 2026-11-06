@@ -1,7 +1,7 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p xdotool wmctrl python3 xorg.xwininfo coreutils procps
 
-# bench-laptop.sh <jar> <label> [java2d|skia]
+# bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]
 #
 # With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
 # the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
@@ -26,11 +26,11 @@
 set -euo pipefail
 
 JAR="${1:?Usage: bench-laptop.sh <jar> <label>}"
-LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia]}"
+LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]}"
 BACKEND="${3:-}"
 case "$BACKEND" in
-  ""|java2d|skia) ;;
-  *) echo "ERROR: backend must be java2d or skia, not: $BACKEND" >&2; exit 1 ;;
+  ""|java2d|skia|skia-raster) ;;
+  *) echo "ERROR: backend must be java2d, skia or skia-raster, not: $BACKEND" >&2; exit 1 ;;
 esac
 RENDERER_FLAG=()
 if [[ -n "$BACKEND" ]]; then RENDERER_FLAG=("--renderer=$BACKEND"); fi
@@ -193,12 +193,25 @@ CFG
   sleep 8
 
   echo "[$(date +%T)] Quitting" | tee -a "$out"
+  # XSendEvent, which a Java window may ignore. The run types text first, so a quit that does arrive raises the
+  # unsaved-changes modal rather than quitting, and it is the SIGTERM below that ends the app (#2507).
+  echo "Quit key: xdotool key --window $win_id ctrl+q (sent as an X event to the window)" | tee -a "$out"
   xdotool key --window "$win_id" ctrl+q 2>/dev/null || true
   sleep 2
   stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
 
-  # Collect FRAME lines
   log_file="$(find_app_log "$bench_home" || echo /dev/null)"
+  echo "Unsaved-changes modal lines ([STATE MODAL]) in the app log: $(grep -c 'STATE MODAL' "$log_file" 2>/dev/null || true)" |
+    tee -a "$out"
+  hang_prefix="$RESULTS_DIR/${LABEL}-run${run_n}-hang"
+  if grep -q "after SIGTERM" "$RESULTS_DIR/${LABEL}-run${run_n}.threads" 2>/dev/null; then
+    cp "$bench_home/stdout.log" "$hang_prefix.stdout.log" 2>/dev/null || true
+    cp "$log_file" "$hang_prefix.app.log" 2>/dev/null || true
+    echo "HUNG: still alive after SIGTERM; killed. Threads: $RESULTS_DIR/${LABEL}-run${run_n}.threads, logs: $hang_prefix.stdout.log and $hang_prefix.app.log" |
+      tee -a "$out"
+  fi
+
+  # Collect FRAME lines
   echo "" >> "$out"
   echo "=== [FRAME] lines ===" >> "$out"
   grep "\[FRAME\]" "$log_file" >> "$out" 2>/dev/null || echo "(none)" >> "$out"

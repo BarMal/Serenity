@@ -2,8 +2,6 @@ package com.serenity
 
 import java.nio.file.Files
 
-import scala.concurrent.duration.*
-
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
@@ -17,7 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{HangBound, SharedDictionary}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -65,7 +63,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       result <- forced.get
     yield result shouldBe true
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
   }
 
   it should "terminate the app loop when the external close signal fires" in {
@@ -97,7 +95,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       registerResizeCallback = _ => ()
     )
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
   }
 
   it should "shut the input handler down when the external close signal fires" in {
@@ -136,7 +134,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       registerResizeCallback = _ => ()
     )
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
     shutdownObserved.get.unsafeRunSync() shouldBe true
   }
 
@@ -179,7 +177,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       registerResizeCallback = _ => ()
     )
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
   }
 
   it should "force a safe quit when a runtime fiber fails" in {
@@ -221,7 +219,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       registerResizeCallback = _ => ()
     )
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
     Files.exists(sessionRoot.resolve("session-index.json")) shouldBe true
   }
 
@@ -323,5 +321,5 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
       failure.get.message should include("viewport=120x40")
       failure.flatMap(_.error).map(_.getMessage) should contain("boom")
 
-    program.unsafeRunTimed(10.seconds) shouldBe defined
+    HangBound.unsafeRunTimed(program) shouldBe defined
   }

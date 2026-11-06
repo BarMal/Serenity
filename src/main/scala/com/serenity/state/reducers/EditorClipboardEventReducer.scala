@@ -40,7 +40,11 @@ private[reducers] object EditorClipboardEventReducer:
   private def withCopied(state: AppState, entry: ClipboardEntry): AppState =
     state.copy(runtime =
       state.runtime
-        .copy(clipboard = Some(entry.text), clipboardHistory = state.runtime.clipboardHistory.recorded(entry))
+        .copy(
+          clipboard = Some(entry.text),
+          clipboardHistory = state.runtime.clipboardHistory.recorded(entry),
+          clipboardExports = state.runtime.clipboardExports + 1
+        )
     )
 
   private def reduceCopy(ctx: CursorEventContext): ReducerResult =
