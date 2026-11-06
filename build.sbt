@@ -425,7 +425,12 @@ lazy val root = (project in file("."))
       // Each alert also probes the global IO runtime with a trivial IO and aborts the run, with the thread dump, when it
       // cannot answer; the reporter's construction installs the JVM-wide uncaught-exception handler (RuntimeWatch).
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter"),
+      // The slowpoke alerts above only report. This reporter ends the hang: a test that runs 5 minutes (15 for
+      // FallbackRunsSpec) has its thread interrupted, so it fails under its own name with a thread dump, instead of
+      // the whole job dying at its 40 or 52 minute guard with no test named. It watches every suite from here, so no
+      // suite mixes anything in; see com.serenity.testkit.TestHangBound.
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.TestHangBoundReporter")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
