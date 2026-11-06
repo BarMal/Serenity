@@ -12,6 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.benchmark.ShapingTraffic
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.skia.{FallbackFonts, SkiaTextCaches}
 import com.serenity.ui.tui.TuiFrameCountScenario
 
 /** The fixed interactions whose frame counts the ratchet pins: what the planner decided for each, measured on Skia CPU
@@ -23,6 +24,14 @@ import com.serenity.ui.tui.TuiFrameCountScenario
 private[perf] object FrameCountScenarios:
 
   given Balance = Balance.default
+
+  /** Render caches whose Skia text draws with the bundled fonts alone, so the counts do not depend on which fonts the
+    * machine has installed for the glyphs they lack.
+    */
+  def cachesWithoutSystemFallbacks(): RenderCaches =
+    val caches = RenderCaches.create()
+    val _      = SkiaTextCaches.installing(caches.backendCaches, FallbackFonts.unavailable)
+    caches
 
   val LogicalWidthPx  = 1500
   val LogicalHeightPx = 1000
@@ -55,7 +64,7 @@ private[perf] object FrameCountScenarios:
   /** A window's frame loop over one persisting Skia surface, counting every frame it draws. */
   final private class CountedFrames(scale: Double):
     private val frame  = SkiaFrames.newFrame(deviceSize(LogicalWidthPx, scale), deviceSize(LogicalHeightPx, scale))
-    private val caches = RenderCaches.create()
+    private val caches = FrameCountScenarios.cachesWithoutSystemFallbacks()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
@@ -92,7 +101,7 @@ private[perf] object FrameCountScenarios:
   /** Frames drawn from scratch over a surface that keeps nothing, the way a window's first paint is drawn. */
   final private class ScratchFrames(scale: Double):
     private val frame  = SkiaFrames.newFrame(deviceSize(LogicalWidthPx, scale), deviceSize(LogicalHeightPx, scale))
-    private val caches = RenderCaches.create()
+    private val caches = FrameCountScenarios.cachesWithoutSystemFallbacks()
     caches.frameCounters.setEnabled(true)
 
     def render(state: AppState): Unit =
