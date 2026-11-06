@@ -100,21 +100,25 @@ private[perf] object SkiaFrameBenchmarks:
       val (state, damage) = steps.next()
       frames.render(state, damage)
 
-  private def backendBenchmarks(label: String, backend: FrameBackend, codeFont: Font)(using
+  private def backendBenchmarks(label: String, backend: FrameBackend, codeFont: => Font)(using
     IORuntime
   ): List[BenchmarkRunner.Benchmark] =
-    val metrics           = CellMetrics.fromFont(codeFont)
-    val grid              = ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
-    def current: AppState = stateManager.getCurrentState.unsafeRunSync()
-    val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
-    stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
-    val afterScroll = current
-    val typing      = Alternating(Frames(backend, codeFont, metrics, grid), beforeTyping, afterTyping)
-    val scroll      = Alternating(Frames(backend, codeFont, metrics, grid), afterTyping, afterScroll)
+    lazy val font    = codeFont
+    lazy val metrics = CellMetrics.fromFont(font)
+    lazy val grid =
+      ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
+    lazy val (stateManager, _)           = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    def current: AppState                = stateManager.getCurrentState.unsafeRunSync()
+    lazy val (beforeTyping, afterTyping) = TypingTransition.of(stateManager)
+    lazy val afterScroll =
+      val _ = afterTyping
+      stateManager.applyEvent(ScrollDown(3)).unsafeRunSync()
+      current
+    lazy val typing = Alternating(Frames(backend, font, metrics, grid), beforeTyping, afterTyping)
+    lazy val scroll = Alternating(Frames(backend, font, metrics, grid), afterTyping, afterScroll)
     val letters     = BenchmarkFixtures.randomLetters(seed = 42L)
-    val fresh       = Frames(backend, codeFont, metrics, grid)
-    val shown       = AtomicReference(current)
+    lazy val fresh  = Frames(backend, font, metrics, grid)
+    lazy val shown  = AtomicReference(current)
     val primed      = AtomicBoolean(false)
     def typeAndShow(): FramePixels =
       if primed.compareAndSet(false, true) then
@@ -123,34 +127,36 @@ private[perf] object SkiaFrameBenchmarks:
       val next     = current
       val previous = shown.getAndSet(next)
       fresh.render(next, DamageProducer.forTransition(previous, next))
-    List(
-      BenchmarkRunner.Benchmark(
-        s"skia.compare.$label.typing_frame_2x",
-        2,
-        12,
-        () =>
-          assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          assert(hasPixels(typing.nextFrame()), "typing frame drew nothing")
-        ,
-        () => typing.nextFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        s"skia.compare.$label.scroll_frame_2x",
-        2,
-        12,
-        () =>
-          assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          assert(hasPixels(scroll.nextFrame()), "scroll frame drew nothing")
-        ,
-        () => scroll.nextFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        s"skia.compare.$label.typing_new_letter_2x",
-        3,
-        BenchmarkIterationCounts.RandomTyping,
-        () => assert(hasPixels(typeAndShow()), "typing a letter drew nothing"),
-        () => typeAndShow(),
-        fixedSampleCount = true
+    BenchmarkRunner.Benchmark.sharing((typing, scroll, fresh, shown))(
+      List(
+        BenchmarkRunner.Benchmark(
+          s"skia.compare.$label.typing_frame_2x",
+          2,
+          12,
+          () =>
+            assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
+            assert(hasPixels(typing.nextFrame()), "typing frame drew nothing")
+          ,
+          () => typing.nextFrame()
+        ),
+        BenchmarkRunner.Benchmark(
+          s"skia.compare.$label.scroll_frame_2x",
+          2,
+          12,
+          () =>
+            assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
+            assert(hasPixels(scroll.nextFrame()), "scroll frame drew nothing")
+          ,
+          () => scroll.nextFrame()
+        ),
+        BenchmarkRunner.Benchmark(
+          s"skia.compare.$label.typing_new_letter_2x",
+          3,
+          BenchmarkIterationCounts.RandomTyping,
+          () => assert(hasPixels(typeAndShow()), "typing a letter drew nothing"),
+          () => typeAndShow(),
+          fixedSampleCount = true
+        )
       )
     )
 
@@ -160,8 +166,9 @@ private[perf] object SkiaFrameBenchmarks:
       .unsafeRunSync()
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val system  = LaptopFrameBenchmarks.codeFont
-    val bundled = bundledFont
+    val system = LaptopFrameBenchmarks.codeFont
+
+    lazy val bundled = bundledFont
     backendBenchmarks("java2d.system_monospace", Java2DFrames, system) ++
       backendBenchmarks("skia_raster.system_monospace", SkiaFrames, system) ++
       backendBenchmarks("java2d.bundled_ligature_font", Java2DFrames, bundled) ++

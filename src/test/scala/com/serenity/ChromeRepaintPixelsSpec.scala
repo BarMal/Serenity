@@ -22,8 +22,8 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
   private val sentinel = 0xff00ff
 
   /** A device pixel just inside the top-left corner of the cell `rowOffset` rows down `cells`, away from glyph ink. */
-  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0): (Int, Int) =
-    val x = math.round(cellMetrics.toPixelX(cells.x) * scale).toInt + 1
+  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0, columnOffset: Int = 0): (Int, Int) =
+    val x = math.round(cellMetrics.toPixelX(cells.x + columnOffset) * scale).toInt + 1
     val y = math.round(cellMetrics.toPixelY(cells.y + rowOffset) * scale).toInt + 1
     image.stamp(x, y, sentinel)
     (x, y)
@@ -88,7 +88,9 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
   }
 
   it should "leave the room below the last row unpainted" in {
-    val before  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
+    // Flush chrome: the room is under a row only where the pane's rows tile its height that way; floating chrome's
+    // shorter pane leaves a whole row, which is not the room this pins.
+    val before  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5), chrome = ChromeOn.config)
     val after   = typedAt(before, proseLines, line = 4, text = "x")
     val session = Session()
     val plan    = session.settle(before)
@@ -158,8 +160,9 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     val session = Session()
     val plan    = session.settle(before)
 
-    val header     = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
-    val headerMark = stamp(session.pendingImage, header)
+    val header = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
+    // Two cells in, clear of the header's rounded top corners, which the header's fill no longer reaches.
+    val headerMark = stamp(session.pendingImage, header, columnOffset = 2)
 
     val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
 

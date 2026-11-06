@@ -15,8 +15,13 @@ class SkiaFrameBenchmarksCachesSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
+  /** Text below the combining marks is drawn without shaping, so a frame of plain ASCII counts nothing whichever cache
+    * it starts with; the arrows are what the first frame has to shape.
+    */
+  private val shapedProse = BenchmarkFixtures.loremIpsumProse(paragraphs = 300).replace(" ipsum ", " ipsum \u2192 ")
+
   private def twoIdenticalFrames(backend: FrameBackend): (Long, Long) =
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
+    val (stateManager, _) = LaptopFrameBenchmarks.stateManagerHolding(shapedProse, cursorLine = 150, cursorColumn = 40)
     val state             = stateManager.getCurrentState.unsafeRunSync()
     val frames = SkiaFrameBenchmarks.Frames(
       backend,

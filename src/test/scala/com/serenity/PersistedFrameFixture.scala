@@ -53,7 +53,8 @@ trait PersistedFrameFixture:
     cursor: CursorPosition,
     dirty: Boolean = true,
     topLine: Int = 0,
-    language: Option[LanguageId] = None
+    language: Option[LanguageId] = None,
+    chrome: AppConfig = AppConfig.conventional
   ): AppState =
     val base = Buffer.fromString(bufferId, text)
     val buffer = base.copy(
@@ -62,7 +63,7 @@ trait PersistedFrameFixture:
         Viewport(topLine = topLine, leftColumn = 0, visibleLines = viewport.height, visibleColumns = viewport.width),
       editing = EditingState(List(cursor))
     )
-    val initial = AppState.initial(AppConfig.conventional)
+    val initial = AppState.initial(chrome)
     initial.copy(persisted =
       initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
@@ -74,7 +75,7 @@ trait PersistedFrameFixture:
         ),
         focus = Focus.EditorPane(paneId),
         theme = Theme.light,
-        config = withMargins(AppConfig.conventional.withoutStatusLine)
+        config = withMargins(chrome.withoutStatusLine)
       )
     )
 

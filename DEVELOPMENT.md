@@ -280,15 +280,27 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
 - `sbt test` leaves out the specs that load the real library. To run them: build it with
   `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
   `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` and `offscreen` video drivers, so no
-  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1-mesa-dri libgles2`), and run on its
+  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1 libgl1-mesa-dri libgles2`; Skiko's natives link `libGL.so.1`), and run on its
   software rasteriser when there is no GPU.
 - `SdlGlWindow` is the window host with a GL context (phase 3): window, EGL context, event pump, resize and scale,
   clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
   EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
   `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
-- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 draws with
-  `makeGLWithInterface` instead, handing Skia an upcall to `SDL_GL_GetProcAddress`, so no native library of ours is
-  involved. Skiko's natives still need `libGL.so.1` and `libX11` installed.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 builds
+  the context with `makeGLWithInterface` instead (`SkiaGlContext`), handing Skia an upcall (`SkiaGlProcs`) that
+  answers each GL function from `SDL_GL_GetProcAddress`, so no native library of ours is involved. Skiko's natives
+  still need `libGL.so.1` and `libX11` installed.
+- `SkiaGlPresenter` (phase 4, in `ui/skia`) draws a GL window's frames straight onto the surface, with nothing selecting
+  it yet. The renderer draws onto a persistent offscreen GPU `Surface` (`SkiaGlTargets`, `SkiaGlFrames`), so it can
+  draw only what changed; a present draws that whole surface onto the window's framebuffer (a swap leaves the back
+  buffer undefined), fills the carets over it, and swaps. Everything runs on the window's SDL thread in the order the
+  calls were made (`SdlGlWindow.post`); drawing is never skipped, and a run of present requests that has not started
+  is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
+  scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
+- `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
 
 ### JetBrains Runtime and native Wayland
 
@@ -374,6 +386,75 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+#### Skia on NixOS
+
+Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
+cannot find them. The native probe then fails and the window paints with Java2D. The start page says so, naming the
+missing library, and the log carries the failure:
+`[RENDER] backend=java2d reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
+(Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
+`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads. Setting `ui.render.backend = java2d` ends the
+notice.
+
+The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
+set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:
+
+```bash
+ldd ~/.skiko/*/libskiko-linux-x64.so | grep 'not found'
+```
+
+On the Intel laptop (NixOS, Hyprland, Wayland session, #2570) it listed `libGL.so.1`, `libX11.so.6`,
+`libfontconfig.so.1` and `libstdc++.so.6`. With these directories on `LD_LIBRARY_PATH` the same jar chose Skia and the
+layer reported `renderApi=OPENGL`:
+
+| Directory | Package (nixpkgs) | Provides |
+| --- | --- | --- |
+| `/run/opengl-driver/lib` | the system graphics driver (`hardware.graphics`) | `libGL.so.1` |
+| `libx11`, `libxext`, `libxrender`, `libxtst`, `libxi` | same names | `libX11.so.6` and the X11 libraries |
+| `libglvnd` | `libglvnd` | the GL dispatch libraries |
+| `fontconfig.lib` | `fontconfig` (`lib` output) | `libfontconfig.so.1` |
+| `stdenv.cc.cc.lib` | the compiler's runtime (`gcc` `lib` output) | `libstdc++.so.6` |
+
+Caution, here be imagine dragons: that set is confirmed to work together, but `ldd` flagged only the four libraries
+above. Which of `libxext`, `libxrender`, `libxtst`, `libxi` and `libglvnd` are needed on their own was not tested.
+
+**A launcher script (recommended; no root).** Put a small script on your `PATH` that builds the library directory from
+nixpkgs each time it starts, then launches the jar. This is what the laptop does, with `SERENITY_JAR` overriding the
+default jar; there, a launch through it logs `backend=skia`, `native probe passed` and `renderApi=OPENGL`, and the cached
+library-path computation costs about 1.4 s per launch. A sketch of the pattern (not run as written; `<nixpkgs>` has to
+resolve on your system, otherwise name your pinned nixpkgs):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+libs=$(nix-build --no-out-link -E '
+  with import <nixpkgs> {};
+  symlinkJoin {
+    name = "serenity-skia-libs";
+    paths = [ libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib ];
+  }')
+export LD_LIBRARY_PATH="/run/opengl-driver/lib:$libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec java --enable-native-access=ALL-UNNAMED -jar "${SERENITY_JAR:-target/scala-3.9.0/Serenity.jar}" "$@"
+```
+
+Build the directory at launch rather than writing store paths into the script. A store path is not a garbage-collection
+root, so `nix-collect-garbage` removes it and the script then breaks; rebuilt on demand, the first launch after a
+collection pays the rebuild and later ones hit the cache. To make the result survive collections too, give `nix-build`
+an `--out-link` in place of `--no-out-link`: that symlink is a GC root, at the price of a link to look after.
+
+**Without a script.** The same libraries can be put on the path for one command, which needs no files but holds the same
+store paths only for as long as `nix-shell` keeps them. This line is assembled from the table and has not been run as
+written:
+
+```bash
+nix-shell -p libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib \
+  --run 'export LD_LIBRARY_PATH="/run/opengl-driver/lib:$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
+```
+
+Skia loaded with these libraries on Java 21.0.12 (the diagnostic, #2570) and on Java 25.0.4.1 (the benchmark runs,
+#2489), both from nixpkgs; the JDK this document expects is Temurin 25 (see "Java version and launch options"). On
+Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the same path (#2479).
 
 #### Comparing the renderers
 

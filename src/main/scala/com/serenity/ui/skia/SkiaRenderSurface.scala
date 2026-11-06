@@ -12,7 +12,6 @@ import com.serenity.ui.renderer.{
   CellRuns,
   Effects,
   FontSpec,
-  Java2DRenderSurface,
   PaintedPixels,
   PanelOutlineDrawing,
   PixelCopying,
@@ -24,6 +23,7 @@ import com.serenity.ui.renderer.{
   StyledFontCache,
   SurfaceActivity,
   SurfaceContentIdentity,
+  SurfaceSizing,
   TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
@@ -36,11 +36,11 @@ import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, 
   * run, from the advances layout measured with AWT, so Skia only has to draw the glyphs of the same font at the x it is
   * handed; [[SkiaFontCache]] makes the Skia font match the AWT one.
   *
-  * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers: a layer is
-  * a `BufferedImage` ([[RenderImage]]), and routing every modal and panel through a CPU image would cost the GPU path
-  * its point, so those are painted straight into the canvas. Content persistence and [[PixelCopying]] need pixels that
-  * outlive a frame, which a window's GPU canvas does not have, so they exist only for a surface built over a retained
-  * raster [[Surface]] ([[SkiaRenderSurface.retaining]]).
+  * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers (a layer is
+  * a `BufferedImage`, and routing every modal and panel through a CPU image would cost the GPU path its point), so
+  * those are painted straight into the canvas. Content persistence and [[PixelCopying]] need pixels that outlive a
+  * frame, which a window's GPU canvas lacks, so they exist only over a retained raster [[Surface]]
+  * ([[SkiaRenderSurface.retaining]]).
   *
   * Threading is that of the render pool: one thread draws a frame, and `onFlush` is called once when it ends.
   */
@@ -72,7 +72,7 @@ final class SkiaRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
 
   override def addressesPixels: Boolean = true
 
@@ -156,6 +156,8 @@ final class SkiaRenderSurface(
     val scale = alphaRef.get()
     if scale == OpaqueAlpha then argb else (((argb >>> 24) * scale / OpaqueAlpha) << 24) | (argb & 0x00ffffff)
 
+  private def argbOf(color: RenderColor): Int = blended(paintColor(color).getRGB)
+
   private def filled(color: Color): Paint =
     fill.setBlendMode(BlendMode.SRC_OVER)
     fill.setColor(blended(color.getRGB))
@@ -179,6 +181,9 @@ final class SkiaRenderSurface(
     */
   private def recordText(xPx: Double, yPx: Double, widthPx: Double, lineHeightPx: Int): Unit =
     recordPaint(xPx - lineHeightPx, yPx - lineHeightPx / 4.0, widthPx + 2.0 * lineHeightPx, lineHeightPx * 1.5)
+
+  private lazy val roundedOutlines =
+    SkiaRoundedOutlines(this, canvas, metrics, argbOf, recordPaint(_, _, _, _, _), userClipDepth)
 
   private def restoreTo(saveCount: Int): Unit =
     val _ = canvas.restoreToCount(saveCount)
@@ -414,7 +419,7 @@ final class SkiaRenderSurface(
     val inset = math.ceil(strokeWidth / 2).toInt
     painted.touched(px, py, pw, ph)
     stroke.setBlendMode(BlendMode.SRC_OVER)
-    stroke.setColor(blended(paintColor(color).getRGB))
+    stroke.setColor(argbOf(color))
     stroke.setStrokeWidth(strokeWidth)
     paintRect(
       rect((px + inset).toFloat, (py + inset).toFloat, (pw - 2 * inset).toFloat, (ph - 2 * inset).toFloat),
@@ -442,9 +447,7 @@ final class SkiaRenderSurface(
       filled(paintColor(color))
     )
 
-  /** One path of all the rects and one draw into Skia, instead of a native call for each. The frame's record still gets
-    * each rect, so what a scrolled image has to copy back is unchanged.
-    */
+  /** One path of all the rects and one draw into Skia, not a native call each. The frame's record still gets each. */
   override def fillPixelRects(rects: IArray[Int], color: RenderColor): Unit =
     if rects.length >= 4 then
       (0 until rects.length by 4).foreach { i =>
@@ -506,16 +509,13 @@ object SkiaRenderSurface:
   private val OpaqueAlpha = 255
   private val OpaqueBlack = 0xff000000
 
-  /** Reuses `current` when it already carries `color`, so a renderer re-setting the same theme colour on every run does
-    * not allocate a fresh `java.awt.Color` each time.
-    */
+  /** Reuses `current` when it already carries `color`, so re-setting a theme colour on every run allocates nothing. */
   private def awtColor(color: RenderColor, current: Color): Color =
     if current.getRGB == color.argb then current else color.toAwt
 
   /** A surface over the canvas of a window's render callback (a `SkiaLayer`'s `onRender`, or any `Canvas`). The canvas
-    * is in device pixels and is scaled here by the device scale, so `logicalWidthPx` and `logicalHeightPx` are the
-    * layer's size in logical pixels. Nothing is retained between frames: every frame starts from unknown pixels, so the
-    * renderer draws everything, and a pixel copy is not offered.
+    * is in device pixels, scaled here by the device scale, so the width and height are the layer's logical size.
+    * Nothing is retained between frames, so the renderer draws everything and a pixel copy is not offered.
     */
   def onCanvas(
     canvas: Canvas,
@@ -543,10 +543,9 @@ object SkiaRenderSurface:
       styledFonts = styledFonts
     )
 
-  /** A surface over a raster `Surface` the caller keeps between frames. It promises what a retained image does: the
-    * pixels of the last frame flushed through a surface over the same `Surface` are still there, so a renderer may skip
-    * unchanged rows and copy scrolled ones. Hand out the same `Surface` for the frames that should share pixels, and a
-    * different one (or [[onCanvas]]) for those that should not.
+  /** A surface over a raster `Surface` the caller keeps between frames, as a retained image is: the last flushed
+    * frame's pixels are still there, so a renderer may skip unchanged rows and copy scrolled ones. Hand out the same
+    * `Surface` for frames that should share pixels, and another (or [[onCanvas]]) for those that should not.
     */
   def retaining(
     surface: Surface,
@@ -577,7 +576,6 @@ object SkiaRenderSurface:
       changes = changes
     )
 
-  /** The device size of a surface that holds `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image.
-    */
+  /** The device size of a surface holding `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image. */
   def deviceDimension(logicalPx: Int, deviceScale: Double): Int =
-    Java2DRenderSurface.deviceImageDimension(logicalPx, deviceScale)
+    SurfaceSizing.deviceImageDimension(logicalPx, deviceScale)

@@ -4,7 +4,7 @@
 first_frame.rows-drawn	52
 first_frame.rows-preserved	0
 first_frame.runs	92
-first_frame.shapings	2
+first_frame.shapings	0
 first_frame.present-px	1481040
 first_frame.chrome-painted	1
 idle_frame.rows-drawn	0
@@ -37,7 +37,7 @@ page_down.runs	92
 page_down.shapings	0
 page_down.present-px	1437120
 page_down.chrome-painted	1
-cold_frame.shapings	2
+cold_frame.shapings	0
 warm_frame.shapings	0
 tui_typing_frame.rows-drawn	2
 tui_typing_frame.rows-preserved	106

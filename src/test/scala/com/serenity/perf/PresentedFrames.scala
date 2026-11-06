@@ -3,8 +3,8 @@ package com.serenity.perf
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.serenity.ui.renderer.Java2DRenderSurface
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
+import com.serenity.ui.display.DisplayScale.DeviceScale
+import com.serenity.ui.renderer.SurfaceSizing
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingWindow}
 
 /** Frames for the present benchmarks, shaped like the renderer's: device-size and opaque, taken from the window's own
@@ -19,8 +19,8 @@ final private[perf] class PresentedFrames(
     logicalHeightPx: Int,
     scale: DeviceScale
 ):
-  private val widthPx   = Java2DRenderSurface.deviceImageDimension(logicalWidthPx, scale.x)
-  private val heightPx  = Java2DRenderSurface.deviceImageDimension(logicalHeightPx, scale.y)
+  private val widthPx   = SurfaceSizing.deviceImageDimension(logicalWidthPx, scale.x)
+  private val heightPx  = SurfaceSizing.deviceImageDimension(logicalHeightPx, scale.y)
   private val presented = new AtomicInteger(0)
 
   def next(): BufferedImage =

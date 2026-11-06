@@ -1,29 +1,22 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Column-based document layout (issue #1338, Phase 1): the global `columnModeEnabled` toggle command, mirroring
   * `ToggleUICommandsSpec`'s "Toggle Typewriter Scrolling Command" coverage. Split into its own file (rather than grown
   * onto `ToggleUICommandsSpec`) to keep that file under the architecture ratchet's file-length target.
   */
-class ToggleColumnModeCommandSpec extends AnyFlatSpec with Matchers:
-
-  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+class ToggleColumnModeCommandSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("ToggleColumnModeCommandSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("ToggleColumnModeCommandSpec", initialConfig = AppConfig.default)
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,

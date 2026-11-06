@@ -29,6 +29,17 @@ final class SdlGlWindow private (
   /** Runs `use` on the SDL thread, the only thread that may call SDL or GL for this window. */
   def onSdlThread[A](use: Sdl => A): IO[A] = IO(use(sdl)).evalOn(executor)
 
+  /** Queues `use` for the SDL thread and returns at once. Tasks run in the order they were posted, whichever thread
+    * posts them, which an `IO` started from another thread does not promise. A task that throws is reported to the
+    * execution context and the ones behind it still run: the thread has to survive, since SDL's video calls belong to
+    * the one that initialised it.
+    */
+  def post(use: Sdl => Unit): Unit =
+    executor.execute { () =>
+      try use(sdl)
+      catch case failure: Exception => executor.reportFailure(failure)
+    }
+
   /** Completes once the window has been asked to close. */
   def awaitClose: IO[Unit] = closed.get
 

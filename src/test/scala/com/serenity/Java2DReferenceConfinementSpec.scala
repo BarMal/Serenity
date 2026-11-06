@@ -44,9 +44,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/OracleImages.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
     "perf/PanelLayerGeometrySpec.scala",
-    "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
     "perf/RenderBenchmarks.scala",
+    "perf/TabStripBenchmarks.scala",
     "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
@@ -54,7 +54,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/Java2DClearViewportExceptSpec.scala",
     "ui/renderer/LabelSpritesSpec.scala",
     "ui/renderer/LigatureFontShapingSpec.scala",
-    "ui/renderer/PixelLiftingContractSpec.scala",
     "ui/renderer/RenderImageSpec.scala",
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/StyledFontCacheSpec.scala",
@@ -66,11 +65,18 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
   private val bothRenderers: Set[String] = Set(
     "FrameBackend.scala",
+    "perf/GutterContinuationMarkSpec.scala",
     "perf/LaptopFrameBenchmarks.scala",
     "perf/PersistingFramesBackendSpec.scala",
     "perf/SkiaFrameBenchmarks.scala",
     "ui/renderer/Java2DRunPaintSpec.scala",
+    "ui/renderer/PanelTextSpacingRenderSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",
+    "ui/renderer/RoundedChromeRenderSpec.scala",
+    "ui/renderer/RoundedFillRepaintSpec.scala",
+    "ui/renderer/RoundedPanelDrawingSpec.scala",
+    "ui/renderer/RoundedTabStripRenderSpec.scala",
+    "ui/renderer/TabSeparatorRenderSpec.scala",
     "ui/renderer/SurfaceTextContractSpec.scala"
   )
 
