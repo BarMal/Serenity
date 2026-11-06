@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Checks the AOT cache of a trained Linux app image: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
+# Checks the AOT cache of a trained Linux or Windows app image or macOS bundle: scripts/check-aot-cache.sh dist/Serenity [timeout-seconds].
 # A valid cache must be opened without an [error][aot] line. A missing or stale cache (the jar changed after training,
 # which the JVM rejects for good) must still leave an app that starts, paints and exits cleanly, because a package that
 # only starts with its cache would be a regression from the AppCDS archive it replaces. The image is put back as found.
@@ -8,8 +8,7 @@ set -euo pipefail
 image="${1:?usage: $0 path/to/app-image [timeout-seconds]}"
 limit="${2:-120}"
 image="$(cd "$image" 2>/dev/null && pwd)" || { echo "No such app image: ${1}" >&2; exit 1; }
-launcher="$image/bin/Serenity"
-appdir="$image/lib/app"
+source "$(dirname "${BASH_SOURCE[0]}")/aot-image-layout.sh"
 cache="$appdir/serenity.aot"
 jar="$appdir/Serenity.jar"
 ready_line="SERENITY_SMOKE_READY"
@@ -32,7 +31,11 @@ trap restore EXIT
 
 launch() {
   local status=0
-  (cd "$work_dir" && JAVA_TOOL_OPTIONS="${1:-}" timeout "$limit" "$launcher" --smoke-test --safe-mode) >"$log" 2>&1 || status=$?
+  (cd "$work_dir" && export JAVA_TOOL_OPTIONS="${1:-}" && run_limited "$limit" "$launcher" --smoke-test --safe-mode) \
+    >"$log" 2>&1 || status=$?
+  if (( status == 124 )); then
+    fail "The launch timed out after ${limit}s."
+  fi
   return "$status"
 }
 
@@ -57,7 +60,8 @@ mv "$cache" "$work_dir/serenity.aot.hidden"
 starts_cleanly missing
 mv "$work_dir/serenity.aot.hidden" "$cache"
 
-touch -d 'now + 1 hour' "$jar"
+# BSD touch (macOS) has no -d "now + 1 hour", and GNU date and BSD date spell the offset differently.
+touch -t "$(date -d '+1 hour' +%Y%m%d%H%M.%S 2>/dev/null || date -v+1H +%Y%m%d%H%M.%S)" "$jar"
 starts_cleanly stale
 
 echo "AOT cache checks passed: valid cache opened, missing and stale caches start cleanly."

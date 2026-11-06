@@ -65,6 +65,12 @@ object AppConfigOps:
     def withRenderWayland(mode: WaylandRender): AppConfig =
       appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(renderWayland = mode))
 
+    def withOffscreenCursorSurfaces(choice: OffscreenCursorSurfaces): AppConfig =
+      appConfig.withSurfaceConfig(appConfig.surfaceConfig.copy(offscreenCursorSurfaces = choice))
+
+    def withExplorerOpenMode(mode: ExplorerOpenMode): AppConfig =
+      appConfig.withInputConfig(appConfig.inputConfig.copy(explorerOpenMode = mode))
+
     /** One line is the least a notch can usefully move; the upper bound keeps a mis-typed value from turning a notch
       * into a jump across the document.
       */

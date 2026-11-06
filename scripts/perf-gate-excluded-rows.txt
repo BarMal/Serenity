@@ -1,0 +1,45 @@
+# Benchmark rows that scripts/compare_perf_runs.py measures and prints but does not gate on (issue #2557, item 10).
+# An entry is a benchmark name; it also covers that name followed by ".<variant>". One entry per line, a comment above
+# each citing why. Blank lines and "#" comments are ignored. These rows are checked by the nightly ABBA instead, except those in the #2478 section at the end.
+# Evidence: the perf audit's rowstats.csv, 86 (1x) and 108 (2x) paired comparisons per row.
+
+# 77 first-pass flags (1x and 2x together), 0 confirmed; median spread 2.0x between runs of one commit, 62-64% of sides over 1.5x.
+rope.large_json.cursor_offset
+
+# 35 first-pass flags, 0 confirmed.
+render.markdown.live_preview
+
+# 29 first-pass flags, 0 confirmed; 44-50% of sides over 1.5x spread.
+laptop.input.state_manager.go_to_line_3000_paragraphs
+
+# 52% (1x) and 39% (2x) of sides over 1.5x spread.
+laptop.input.state_manager.typing_random_letters
+
+# 38% (1x) and 32% (2x) of sides over 1.5x spread.
+laptop.input.state_manager.typing_long_paragraph
+
+# 31-37% of sides over 1.5x spread, the row and its .chapter_ghosts, .diagnostics_gutter_*, .ereader_railed*, .ligature_font variants.
+laptop.render.typing_frame_2x
+
+# ---- #2478 scaling rows: record-only until the owner has read the numbers (#2478), NOT covered by the nightly ABBA ----
+# A new row has no baseline, so it is measured and printed here and gated only once the owner has read its numbers.
+# Delete a line to start gating that row. `scrollbar.four_panes.all_bars` is meant to stay: the late count runs on
+# another thread.
+buffers.switch_cold_frame.open_1.code
+buffers.switch_cold_frame.open_1.prose
+buffers.switch_cold_frame.open_20.code
+buffers.switch_cold_frame.open_20.prose
+panes.split1.typing_frame
+panes.split1.scroll_line_frame
+panes.split1.page_down_frame
+panes.split2.typing_frame
+panes.split2.scroll_line_frame
+panes.split2.page_down_frame
+panes.split4.typing_frame
+panes.split4.scroll_line_frame
+panes.split4.page_down_frame
+scrollbar.four_panes.all_bars
+footprint.buffers_1_shown.code
+footprint.buffers_1_shown.prose
+footprint.buffers_20_shown.code
+footprint.buffers_20_shown.prose

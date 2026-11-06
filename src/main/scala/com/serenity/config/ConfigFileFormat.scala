@@ -122,8 +122,12 @@ object ConfigFileFormat:
     comment("Keep the cursor's line vertically centred (typewriter scrolling), padding past the document's end"),
     field("editor.typewriter_scrolling"),
     comment(
-      "E-reader-style column layout: as many columns as fit the target width (in cells) plus the gap between " +
-        "them. Only takes effect while word wrap is also on"
+      "A popup opened with the cursor scrolled out of view: reveal-cursor scrolls back to it, summon-cursor moves it to the middle of the view, clamp leaves both and pins the popup to the view's edge"
+    ),
+    field("editor.cursor.offscreen_surfaces"),
+    comment(
+      "E-reader-style column layout: as many columns as fit the target width (in cells, or unlimited for one " +
+        "column that fills the pane) plus the gap between them. Only takes effect while word wrap is also on"
     ),
     field("editor.column_mode"),
     field("editor.column_target_width"),
@@ -146,6 +150,10 @@ object ConfigFileFormat:
     field("editor.contextual_toolbar_mode"),
     comment("Lines one mouse-wheel notch scrolls"),
     field("editor.wheel_scroll_lines"),
+    comment(
+      "Opening a file from the explorer: double-click, single-click, or preview (a single click opens a temporary tab the next one replaces)"
+    ),
+    field("explorer.open_mode"),
     comment("Cursor: blink or steady; colour overrides leave empty to use the active theme cursor"),
     field("editor.cursor.mode"),
     field("editor.cursor.active_color"),
@@ -205,7 +213,9 @@ object ConfigFileFormat:
         "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
     ),
     field("typography.fallback.families"),
-    comment("Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or off"),
+    comment(
+      "Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or unlimited (off means the same)"
+    ),
     field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
@@ -380,7 +390,7 @@ object ConfigFileFormat:
     comment("monospaced buffers only, falling back to rows for proportional or ligature-shaped text"),
     field("ui.render.damage_granularity"),
     comment("Renderer for the window: auto uses Skia's GPU layer where it loads, falling back to Skia on the CPU and"),
-    comment("then to Java2D; skia or java2d forces one."),
+    comment("then to Java2D; skia, skia-raster (Skia on the CPU, any display) or java2d forces one."),
     comment("SERENITY_RENDER_BACKEND overrides this. Needs a restart."),
     field("ui.render.backend"),
     comment("On a Wayland session on native Wayland: skia-raster, the default, paints Skia on the CPU; java2d keeps"),
@@ -422,11 +432,6 @@ object ConfigFileFormat:
     comment("Preferred desktop window size. Leave empty to use the default."),
     field("window.preferred.width"),
     field("window.preferred.height"),
-    comment("Editor viewport as a share of the window, with optional caps in cells"),
-    field("window.viewport.width_percent"),
-    field("window.viewport.width_max"),
-    field("window.viewport.height_percent"),
-    field("window.viewport.height_max"),
     blank,
     comment("Theme: follow the operating system's light, dark or high-contrast setting (off by default). When on, the"),
     comment("theme is re-checked at startup and on window focus; picking a theme by hand turns it off"),

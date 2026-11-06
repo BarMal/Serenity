@@ -60,6 +60,44 @@ class OverlaySegmentRowRendererSpec extends AnyFlatSpec with Matchers:
     s.getChar(0, 0) shouldBe 'x'
   }
 
+  "renderSegmentText" should "draw an italic segment in an italic font, then restore the row's font" in {
+    val s = surface()
+
+    OverlaySegmentRowRenderer.renderSegmentText(
+      s,
+      x = 0,
+      y = 0,
+      width = 6,
+      "peeked",
+      OverlaySegment("peeked", italic = true),
+      theme,
+      fg,
+      bg,
+      font
+    )
+
+    s.setFontCalls.map(_.isItalic) shouldBe List(true, false)
+  }
+
+  it should "leave the font alone for a segment that is not italic" in {
+    val s = surface()
+
+    OverlaySegmentRowRenderer.renderSegmentText(
+      s,
+      x = 0,
+      y = 0,
+      width = 4,
+      "kept",
+      OverlaySegment("kept"),
+      theme,
+      fg,
+      bg,
+      font
+    )
+
+    s.setFontCalls shouldBe Nil
+  }
+
   "renderCompactDistributedRow" should "honor leadingPadding and each segment's own allocatedWidth" in {
     val s = surface()
     val row = OverlayRow(

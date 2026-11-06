@@ -2,8 +2,6 @@ package com.serenity.state.manager
 
 import java.nio.file.Path
 
-import scala.concurrent.duration.*
-
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
 import com.serenity.command.CommandSurfaceItem
@@ -11,6 +9,7 @@ import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.project.ProjectPresence
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, SurfaceId}
+import com.serenity.testkit.HangBound
 import com.serenity.ui.presets.UiPresetStore
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -36,7 +35,7 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
       for
         gate   <- Deferred[IO, Unit]
         rig    <- rigProbing(gate, ProjectPresence.NotDetected)
-        _      <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _      <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         opened <- rig.state
         items  <- rig.paletteItems
       yield (opened, items)
@@ -52,7 +51,7 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
       for
         gate  <- Deferred[IO, Unit]
         rig   <- rigProbing(gate, ProjectPresence.NotDetected)
-        _     <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _     <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         _     <- gate.complete(())
         _     <- rig.operations.awaitEffects
         state <- rig.state
@@ -70,8 +69,8 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
       for
         gate   <- Deferred[IO, Unit]
         rig    <- rigProbing(gate, ProjectPresence.NotDetected)
-        _      <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
-        _      <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _      <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
+        _      <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         closed <- rig.state
         _      <- gate.complete(())
         _      <- rig.operations.awaitEffects
@@ -89,14 +88,14 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
       for
         gate   <- Deferred[IO, Unit]
         rig    <- rigProbing(gate, ProjectPresence.Detected)
-        _      <- rig.pipeline.applyEvent(ToggleCommandRunner).timeout(5.seconds)
+        _      <- HangBound.within(rig.pipeline.applyEvent(ToggleCommandRunner))
         opened <- rig.state
       yield opened
 
     val opened  = program.unsafeRunSync()
     val another = SurfaceId("another-palette")
 
-    opened.commandRunnerSurface.map(_.id) should not be Some(another)
+    opened.commandPickerSurface.map(_.id) should not be Some(another)
     CommandRunnerOpening.withPresenceDetected(opened, another, ProjectPresence.NotDetected) shouldBe opened
     CommandRunnerOpening.withPresetsListed(opened, another, Nil) shouldBe opened
   }
@@ -104,6 +103,6 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
   it should "leave a state without a palette as it is" in {
     val state: AppState = AppState.initial
 
-    state.commandRunnerSurface shouldBe None
+    state.commandPickerSurface shouldBe None
     CommandRunnerOpening.withPresenceDetected(state, SurfaceId("palette"), ProjectPresence.Detected) shouldBe state
   }

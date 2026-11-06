@@ -16,58 +16,59 @@ private[perf] object EqualsBenchmarks:
     * which has no custom `equals` of its own -- this is #1002's deferred "removed, or their retention is justified by
     * measurement" acceptance criterion.
     */
+  final private case class SingleBuffer(
+      stateA: AppState,
+      stateB: AppState,
+      stateACopy: AppState,
+      bufferA: Buffer,
+      bufferB: Buffer,
+      bufferACopy: Buffer
+  )
+
+  private def singleBuffer(): SingleBuffer =
+    val content = largeMultilineDocument(lines = 15_000)
+    val stateA  = editorState(content, None)
+    val stateB  = editorState(content, None)
+    val bufferA = stateA.persisted.buffers(BufferId(1))
+    SingleBuffer(
+      stateA,
+      stateB,
+      stateA.copy(),
+      bufferA,
+      stateB.persisted.buffers(BufferId(1)),
+      bufferA.copy()
+    )
+
+  // A comparison here costs a few nanoseconds, so each body binds what it compares to locals of its own: reading it
+  // back through the shared fixture on every call would be a visible part of what is timed.
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val content     = largeMultilineDocument(lines = 15_000)
-    val stateA      = editorState(content, None)
-    val stateB      = editorState(content, None)
-    val stateACopy  = stateA.copy()
-    val bufferA     = stateA.persisted.buffers(BufferId(1))
-    val bufferB     = stateB.persisted.buffers(BufferId(1))
-    val bufferACopy = bufferA.copy()
+    lazy val fixtures = singleBuffer()
 
     List(
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.same_reference",
-        3,
-        20,
-        () => assert(stateA == stateA),
-        () => stateA == stateA
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.shared_fields_different_instance",
-        3,
-        20,
-        () => assert(stateA == stateACopy),
-        () => stateA == stateACopy
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.independent_equal_content",
-        3,
-        20,
-        () => assert(stateA == stateB),
-        () => stateA == stateB
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.same_reference",
-        3,
-        20,
-        () => assert(bufferA == bufferA),
-        () => bufferA == bufferA
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.shared_fields_different_instance",
-        3,
-        20,
-        () => assert(bufferA == bufferACopy),
-        () => bufferA == bufferACopy
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.buffer.independent_equal_content",
-        3,
-        20,
-        () => assert(bufferA == bufferB),
-        () => bufferA == bufferB
-      )
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.same_reference", 3, 20) {
+        val stateA = fixtures.stateA
+        BenchmarkRunner.Body(() => assert(stateA == stateA), () => stateA == stateA)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.shared_fields_different_instance", 3, 20) {
+        val (stateA, stateACopy) = (fixtures.stateA, fixtures.stateACopy)
+        BenchmarkRunner.Body(() => assert(stateA == stateACopy), () => stateA == stateACopy)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.independent_equal_content", 3, 20) {
+        val (stateA, stateB) = (fixtures.stateA, fixtures.stateB)
+        BenchmarkRunner.Body(() => assert(stateA == stateB), () => stateA == stateB)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.buffer.same_reference", 3, 20) {
+        val bufferA = fixtures.bufferA
+        BenchmarkRunner.Body(() => assert(bufferA == bufferA), () => bufferA == bufferA)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.buffer.shared_fields_different_instance", 3, 20) {
+        val (bufferA, bufferACopy) = (fixtures.bufferA, fixtures.bufferACopy)
+        BenchmarkRunner.Body(() => assert(bufferA == bufferACopy), () => bufferA == bufferACopy)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.buffer.independent_equal_content", 3, 20) {
+        val (bufferA, bufferB) = (fixtures.bufferA, fixtures.bufferB)
+        BenchmarkRunner.Body(() => assert(bufferA == bufferB), () => bufferA == bufferB)
+      }
     ) ++ multiBufferEqualsBenchmarks()
 
   /** The equals-benchmark scenarios above compare a single buffer in isolation, but `AppState.equals` walks the whole
@@ -97,39 +98,31 @@ private[perf] object EqualsBenchmarks:
         )
       )
 
-    val baseSession        = session()
-    val independentSession = session()
+    lazy val baseSession        = session()
+    lazy val independentSession = session()
 
     val editedBufferId = BufferId(bufferCount - 1)
-    val editedBuffer   = baseSession.persisted.buffers(editedBufferId)
-    val oneEditedBuffers = baseSession.persisted.buffers.updated(
-      editedBufferId,
-      editedBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
-    )
-    val oneBufferEditedSession = baseSession.copy(persisted = baseSession.persisted.copy(buffers = oneEditedBuffers))
+    lazy val oneBufferEditedSession =
+      val editedBuffer = baseSession.persisted.buffers(editedBufferId)
+      val oneEditedBuffers = baseSession.persisted.buffers.updated(
+        editedBufferId,
+        editedBuffer.copy(editing = EditingState(List(CursorPosition(0, 1))))
+      )
+      baseSession.copy(persisted = baseSession.persisted.copy(buffers = oneEditedBuffers))
 
     List(
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.same_reference",
-        3,
-        20,
-        () => assert(baseSession == baseSession),
-        () => baseSession == baseSession
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.one_buffer_edited",
-        3,
-        20,
-        () => assert(baseSession != oneBufferEditedSession),
-        () => baseSession == oneBufferEditedSession
-      ),
-      BenchmarkRunner.Benchmark(
-        "equals.appstate.multi_buffer_session.independent_equal_content",
-        3,
-        20,
-        () => assert(baseSession == independentSession),
-        () => baseSession == independentSession
-      )
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.multi_buffer_session.same_reference", 3, 20) {
+        val built = baseSession
+        BenchmarkRunner.Body(() => assert(built == built), () => built == built)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.multi_buffer_session.one_buffer_edited", 3, 20) {
+        val (built, edited) = (baseSession, oneBufferEditedSession)
+        BenchmarkRunner.Body(() => assert(built != edited), () => built == edited)
+      },
+      BenchmarkRunner.Benchmark.lazily("equals.appstate.multi_buffer_session.independent_equal_content", 3, 20) {
+        val (built, independent) = (baseSession, independentSession)
+        BenchmarkRunner.Body(() => assert(built == independent), () => built == independent)
+      }
     )
 
 end EqualsBenchmarks

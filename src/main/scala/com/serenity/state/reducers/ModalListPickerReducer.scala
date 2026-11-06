@@ -12,7 +12,7 @@ import com.serenity.ui.widget.{Loadable, TextField, TextFieldOutcome, WidgetInpu
   * without one, Home/End jump like Ctrl+Home/Ctrl+End. Each move of the highlight runs the newly highlighted choice's
   * preview. Moving down off, or paging down onto, the last choice of a picker whose source has more loads the next
   * batch first. A choice that waits on slow work keeps the picker open and pending on it; nothing else can be picked or
-  * typed meanwhile.
+  * typed meanwhile. Picking a disabled choice runs nothing and shows its reason until the next move or edit.
   */
 private[reducers] object ModalListPickerReducer:
   import ModalEventReducer.{currentModal, dismissToPane, updateModal}
@@ -127,7 +127,7 @@ private[reducers] object ModalListPickerReducer:
     val preview =
       if after.selectedChoice == before.selectedChoice then None else after.selectedChoice.flatMap(_.preview)
     ReducerResult(
-      updateModal(state, id, Modal.ListPicker(after)),
+      updateModal(state, id, Modal.ListPicker(after.copy(message = None))),
       preview.map(AppEffect.ExecuteCommandUnrecorded(_)).toList ++ followUps
     )
 
@@ -139,6 +139,8 @@ private[reducers] object ModalListPickerReducer:
 
   private def picked(id: SurfaceId, picker: ListPicker, state: AppState): ReducerResult =
     picker.selectedChoice match
+      case Some(choice) if choice.disabledReason.isDefined =>
+        ReducerResult.noEffects(updateModal(state, id, Modal.ListPicker(picker.copy(message = choice.disabledReason))))
       case Some(choice) if choice.waitingLabel.isDefined =>
         val waiting = updateModal(state, id, Modal.ListPicker(picker.copy(pending = Some(choice))))
         ReducerResult.withEffect(waiting, AppEffect.ExecuteCommand(choice.action))

@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.effect.*
 import cats.syntax.foldable.*
 import com.serenity.config.{AppConfig, PreferredWindowSize}
+import com.serenity.diagnostics.ShutdownTrace
 import com.serenity.io.FileManager
 import com.serenity.keystroke.events.Event
 import com.serenity.lsp.{LspEffect, LspNotices}
@@ -184,10 +185,12 @@ private[manager] class StateManagerComposition(
     val fileManager = runtimeFileManager
     def submitSave(bufferId: BufferId, onFailure: Throwable => IO[Unit]): IO[Unit] =
       filePersistence.submitSave(bufferId, onFailure)
-    def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit]       = filePersistence.saveBufferAs(bufferId, path)
-    def reloadBuffer(bufferId: BufferId): IO[Unit]                   = filePersistence.reloadBuffer(bufferId)
-    def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]        = filePersistence.forceSaveExistingBuffer(bufferId)
-    def loadFile(path: Path): IO[Unit]                               = filePersistence.loadFile(path)
+    def saveBufferAs(bufferId: BufferId, path: Path): IO[Unit] = filePersistence.saveBufferAs(bufferId, path)
+    def reloadBuffer(bufferId: BufferId): IO[Unit]             = filePersistence.reloadBuffer(bufferId)
+    def forceSaveExistingBuffer(bufferId: BufferId): IO[Unit]  = filePersistence.forceSaveExistingBuffer(bufferId)
+    def loadFile(path: Path): IO[Unit]                         = filePersistence.loadFile(path)
+    def openFromExplorer(path: Path, preview: Boolean): IO[Unit] =
+      filePersistence.openFromExplorer(path, preview)
     def openFile(path: Path): IO[Unit]                               = filePersistence.openFile(path)
     def openFromDialog(dialog: com.serenity.io.FileDialog): IO[Unit] = filePersistence.openFromDialog(dialog)
     def openFolderFromDialog(dialog: com.serenity.io.FileDialog, openFolder: Path => IO[Unit]): IO[Unit] =
@@ -425,9 +428,11 @@ private[manager] class StateManagerComposition(
   // Shutting the effects down also cancels a running project task, destroying its process.
   private def forceQuit: IO[Unit] =
     operations.shutdownEffects() >> modelCommit.currentState.flatMap { state =>
-      sessionPersistence
-        .onAppClose(clearCloseActions(state))
-        .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit")) >>
+      ShutdownTrace.step("session save on close")(
+        sessionPersistence
+          .onAppClose(clearCloseActions(state))
+          .handleErrorWith(error => logger.error(error)("[SESSION] Failed to save session during forced quit"))
+      )(using logger) >>
         quitSignal.complete(()).attempt.void
     }
 

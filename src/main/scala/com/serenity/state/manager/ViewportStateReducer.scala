@@ -14,7 +14,7 @@ object ViewportStateReducer:
   ): ReducerResult =
     val scrolled = Focused.bufferOf(state, paneId).map { buffer =>
       val cursor   = buffer.editing.cursors.head.position
-      val viewport = CursorViewport.adjustForCursor(buffer, state, cursor, wrapCache)
+      val viewport = CursorViewport.placementFor(buffer, state, cursor, wrapCache)
       Focused.replaceBuffer(state, buffer.copy(viewport = viewport))
     }
     ReducerResult.noEffects(scrolled.getOrElse(state))

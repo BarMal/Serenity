@@ -36,7 +36,8 @@ private[perf] object ProseTypingBenchmarks:
 
   /** Runs just these benchmarks, which need no window: `sbt "Test/runMain com.serenity.perf.ProseTypingBenchmarks"`. */
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   private def withCursor(state: AppState, line: Int, column: Int): AppState =
     state.copy(persisted =
@@ -102,40 +103,44 @@ private[perf] object ProseTypingBenchmarks:
     state.updateAndGet(current => EditorEventReducer.reduce(InsertChar('x'), PaneId(0), current).state)
 
   private def richTextTyping(): BenchmarkRunner.Benchmark =
-    val state = new AtomicReference(richTextState)
+    lazy val state = new AtomicReference(richTextState)
     def verify(): Unit =
       val after  = typed(new AtomicReference(richTextState)).persisted.buffers(BufferIdUnderEdit)
       val inSync = after.richText.richTextDocument.filter(_ => after.richTextInSync)
       assert(inSync.flatMap(_.paragraphAt(RichLine)).exists(_.plainText.contains("x")))
-    BenchmarkRunner.Benchmark(
-      "prose.rich_text_typing",
-      3,
-      BenchmarkIterationCounts.Reducer,
-      verify,
-      () => typed(state),
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building(state)(
+      BenchmarkRunner.Benchmark(
+        "prose.rich_text_typing",
+        3,
+        BenchmarkIterationCounts.Reducer,
+        verify,
+        () => typed(state),
+        fixedSampleCount = true
+      )
     )
 
   private def markdownTypingWithGhosts(): BenchmarkRunner.Benchmark =
-    val state = new AtomicReference(markdownState)
-    val cache = new ChapterGhostCache
+    lazy val state = new AtomicReference(markdownState)
+    val cache      = new ChapterGhostCache
     def verify(): Unit =
       val after = typed(new AtomicReference(markdownState)).persisted.buffers(BufferIdUnderEdit)
       assert(after.document.content.getLine(ProseLine).exists(_.contains("x")))
     def run(): Any =
       val after = typed(state)
       cache.ghostsFor(after.persisted.buffers(BufferIdUnderEdit), after.persisted.buffers)
-    BenchmarkRunner.Benchmark(
-      "prose.markdown_typing.chapter_ghosts",
-      3,
-      BenchmarkIterationCounts.Reducer,
-      verify,
-      run,
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building(state)(
+      BenchmarkRunner.Benchmark(
+        "prose.markdown_typing.chapter_ghosts",
+        3,
+        BenchmarkIterationCounts.Reducer,
+        verify,
+        run,
+        fixedSampleCount = true
+      )
     )
 
   private def markdownTypingWithNotesPane(): BenchmarkRunner.Benchmark =
-    val state = new AtomicReference(notesPaneState)
+    lazy val state = new AtomicReference(notesPaneState)
     def verify(): Unit =
       val before = notesPaneState
       val after  = typed(new AtomicReference(before))
@@ -145,17 +150,19 @@ private[perf] object ProseTypingBenchmarks:
     def run(): Any =
       val before = state.get()
       NotesPaneSync.synced(typed(state), before)
-    BenchmarkRunner.Benchmark(
-      "prose.markdown_typing.notes_pane",
-      3,
-      BenchmarkIterationCounts.Reducer,
-      verify,
-      run,
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building(state)(
+      BenchmarkRunner.Benchmark(
+        "prose.markdown_typing.notes_pane",
+        3,
+        BenchmarkIterationCounts.Reducer,
+        verify,
+        run,
+        fixedSampleCount = true
+      )
     )
 
   private def markdownEnter(): BenchmarkRunner.Benchmark =
-    val state = new AtomicReference(markdownState)
+    lazy val state = new AtomicReference(markdownState)
     // A writer ends a paragraph with two Enters, which leaves a blank line between it and the next.
     def entered(current: AppState): AppState =
       List(NewLine, NewLine).foldLeft(current)((state, event) =>
@@ -164,13 +171,15 @@ private[perf] object ProseTypingBenchmarks:
     def verify(): Unit =
       val after = entered(markdownState).persisted.buffers(BufferIdUnderEdit)
       assert(after.document.content.lineCount == LinesPerChapter * Chapters + 1)
-    BenchmarkRunner.Benchmark(
-      "prose.markdown_enter.renumber",
-      3,
-      BenchmarkIterationCounts.Reducer,
-      verify,
-      () => state.updateAndGet(entered),
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building(state)(
+      BenchmarkRunner.Benchmark(
+        "prose.markdown_enter.renumber",
+        3,
+        BenchmarkIterationCounts.Reducer,
+        verify,
+        () => state.updateAndGet(entered),
+        fixedSampleCount = true
+      )
     )
 
 end ProseTypingBenchmarks

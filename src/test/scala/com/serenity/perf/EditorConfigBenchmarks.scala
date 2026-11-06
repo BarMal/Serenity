@@ -19,27 +19,32 @@ private[perf] object EditorConfigBenchmarks:
     val _ = Files.createDirectories(path.getParent)
     Files.writeString(path, text)
 
-  private def benchmark(name: String, document: Path): BenchmarkRunner.Benchmark =
-    val resolver = EditorConfigResolver()
-    BenchmarkRunner.Benchmark(
-      name,
-      warmups = 3,
-      iterations = 20,
-      verify = () => assert(resolver.indentationFor(document).unsafeRunSync() != IndentationHint.Empty),
-      run = () => resolver.indentationFor(document).unsafeRunSync(),
-      settleJit = true
+  private def benchmark(name: String, documentPath: => Path): BenchmarkRunner.Benchmark =
+    val resolver      = EditorConfigResolver()
+    lazy val document = documentPath
+    BenchmarkRunner.Benchmark.building(document)(
+      BenchmarkRunner.Benchmark(
+        name,
+        warmups = 3,
+        iterations = 20,
+        verify = () => assert(resolver.indentationFor(document).unsafeRunSync() != IndentationHint.Empty),
+        run = () => resolver.indentationFor(document).unsafeRunSync(),
+        settleJit = true
+      )
     )
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val shallowRoot = TestTemp.directory("editorconfig-bench-shallow")
-    val _           = write(shallowRoot.resolve(".editorconfig"), settings)
-    val shallow     = write(shallowRoot.resolve("a.md"), "x")
+    lazy val shallow =
+      val shallowRoot = TestTemp.directory("editorconfig-bench-shallow")
+      val _           = write(shallowRoot.resolve(".editorconfig"), settings)
+      write(shallowRoot.resolve("a.md"), "x")
 
-    val nestedRoot = TestTemp.directory("editorconfig-bench-nested")
-    val _          = write(nestedRoot.resolve(".editorconfig"), settings)
-    val _          = write(nestedRoot.resolve("src/.editorconfig"), "[*.scala]\nindent_size = 2\n")
-    val _      = write(nestedRoot.resolve("src/main/scala/com/example/.editorconfig"), "[*.scala]\nindent_size = 4\n")
-    val nested = write(nestedRoot.resolve("src/main/scala/com/example/deep/Main.scala"), "x")
+    lazy val nested =
+      val nestedRoot = TestTemp.directory("editorconfig-bench-nested")
+      val _          = write(nestedRoot.resolve(".editorconfig"), settings)
+      val _          = write(nestedRoot.resolve("src/.editorconfig"), "[*.scala]\nindent_size = 2\n")
+      val _ = write(nestedRoot.resolve("src/main/scala/com/example/.editorconfig"), "[*.scala]\nindent_size = 4\n")
+      write(nestedRoot.resolve("src/main/scala/com/example/deep/Main.scala"), "x")
 
     List(
       benchmark("editorconfig.indentation.shallow", shallow),

@@ -27,12 +27,15 @@ import com.serenity.diagnostics.{
   LogMigration,
   PreviousRun,
   RuntimeIdentity,
+  ShutdownLedger,
+  ShutdownTrace,
+  ShutdownWatchdog,
   Trace,
   TuiConsoleLogFilter
 }
 import com.serenity.frontend.{Frontend, FrontendRuntime, GuiFrontend}
-import com.serenity.input.{FileDropHandler, ImeDiagnostics, SwingInputHandler}
-import com.serenity.io.{FileDialogSelection, SwingFileDialog}
+import com.serenity.input.{FileDropHandler, ImeDiagnostics}
+import com.serenity.io.FileDialogSelection
 import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.models.RestartMode
@@ -40,8 +43,9 @@ import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
+import com.serenity.ui.host.InputSettings
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
-import com.serenity.ui.terminal.{SwingFailureDialog, SwingMenuBar, SwingPaintProbe, SwingWindow}
+import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -55,7 +59,7 @@ object Main extends IOApp:
   // with starvation warnings and corrupting the TUI display. An interactive editor has no latency SLA
   // that the checker could meaningfully enforce, so disable it.
   override def runtimeConfig: IORuntimeConfig =
-    super.runtimeConfig.copy(cpuStarvationCheckInitialDelay = Duration.Inf)
+    ShutdownWatchdog.withHookTimeout(super.runtimeConfig.copy(cpuStarvationCheckInitialDelay = Duration.Inf))
 
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
@@ -100,7 +104,12 @@ object Main extends IOApp:
               )
             ).void
           )
-          .flatMap(launchUntilSettled(options, _, MacDesktopIntegration()))
+          .flatMap(graphics =>
+            IO(new ShutdownWatchdog(ShutdownLedger.recording())).flatMap { watchdog =>
+              IO(watchdog.installSignalDump()) >>
+                launchUntilSettled(options, graphics, MacDesktopIntegration())(using watchdog)
+            }
+          )
           .handleErrorWith(reportStartupFailure(options, console))
 
   /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
@@ -130,11 +139,11 @@ object Main extends IOApp:
     options: LaunchOptions,
     graphics: GraphicsStartup.Resolved,
     desktop: DesktopEvents
-  ): IO[ExitCode] =
+  )(using watchdog: ShutdownWatchdog): IO[ExitCode] =
     Ref.of[IO, Option[RestartMode]](None).flatMap { restartRequested =>
       launch(options, graphics, desktop, mode => restartRequested.set(Some(mode))) >> restartRequested.get.flatMap {
         case Some(mode) =>
-          launchUntilSettled(
+          watchdog.disarm >> launchUntilSettled(
             options.copy(safeMode = mode == RestartMode.InSafeMode, resetConfig = false, resetSession = false),
             graphics,
             desktop
@@ -148,7 +157,7 @@ object Main extends IOApp:
     graphics: GraphicsStartup.Resolved,
     desktop: DesktopEvents,
     requestRestart: RestartMode => IO[Unit]
-  ): IO[ExitCode] =
+  )(using watchdog: ShutdownWatchdog): IO[ExitCode] =
     // #1215/#1669: must run before the `given logger` below logs anything -- it initialises logback and attaches the
     // console filter before the very first event a TUI launch could otherwise leak onto the terminal surface it is
     // about to take over. The real `GuiFrontend`/`TuiFrontend` instance doesn't exist yet this early (constructing one
@@ -159,6 +168,7 @@ object Main extends IOApp:
     )
 
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
+    given ShutdownLedger                            = watchdog.ledger
 
     val build = RuntimeIdentity.current
     for
@@ -176,8 +186,8 @@ object Main extends IOApp:
       // the claim so an open that launched this process is not lost. A terminal launch never touches the desktop.
       gui = !LaunchOptions.resolveTuiMode(launchOptionsForLogging)
       _ <- (for
-        hooks <- DesktopHooks.install(desktop, gui)
-        role  <- SingleInstance.claim(instances, requested, logger)
+        hooks <- ShutdownTrace.traced("desktop hooks")(DesktopHooks.install(desktop, gui))
+        role  <- ShutdownTrace.traced("instance claim")(SingleInstance.claim(instances, requested, logger))
       yield (hooks, role)).use {
         case (hooks, LaunchRole.Forwarded) =>
           DesktopHooks.forwardQueued(hooks, instances.forward, DesktopHooks.Grace) >> reportForwarded(requested)
@@ -216,7 +226,8 @@ object Main extends IOApp:
     surfaces: FrameSurfaceFactory,
     backend: String
   )(using
-    logger: Logger[IO]
+    logger: Logger[IO],
+    watchdog: ShutdownWatchdog
   ): IO[Unit] =
     val store = CrashRecord(LogLocation.current)
     role match
@@ -244,7 +255,7 @@ object Main extends IOApp:
     backend: String,
     store: CrashRecord,
     previousRun: PreviousRun
-  )(using logger: Logger[IO]): IO[Unit] =
+  )(using logger: Logger[IO], watchdog: ShutdownWatchdog): IO[Unit] =
     for
       startedAt <- IO.realTimeInstant
       (configMoved, sessionMoved) <- LaunchReset.applyRequested(
@@ -345,14 +356,16 @@ object Main extends IOApp:
     session: SessionChoice
   )(using
     logger: Logger[IO],
-    loggerFactory: LoggerFactory[IO]
+    loggerFactory: LoggerFactory[IO],
+    watchdog: ShutdownWatchdog
   ): IO[Unit] =
     // Silence raw System.err writes so they never corrupt the alternate-screen TUI surface. logback's console
     // appender is already suppressed by TuiConsoleLogFilter; this catches any direct System.err traffic that
     // bypasses the logging framework (CE3 stall checker, JVM internals). Crash info is preserved by CrashReporter.
+    given ShutdownLedger = watchdog.ledger
     IO(System.setErr(new java.io.PrintStream(java.io.OutputStream.nullOutputStream()))) >>
       TuiRuntime.run(
-        shell = TerminalShell.resource,
+        shell = ShutdownTrace.traced("terminal")(TerminalShell.resource),
         appConfig = appConfig,
         openPath = launchOptions.openPath,
         configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
@@ -362,11 +375,12 @@ object Main extends IOApp:
         recovery = startup.plan,
         restarter = Some(startup.requestRestart),
         onFirstFrame = startup.markStarted,
-        forwardedOpens = session.forwardedOpens
+        forwardedOpens = session.forwardedOpens,
+        afterEditorShutdown = watchdog.armHalt()
       )
 
   /** The GUI launch path: unchanged from before #1112 beyond being extracted into its own method. Constructs a
-    * [[SwingWindow]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
+    * [[SwingWindowHost]] and closes `AppRuntime.run`'s capabilities over it; never touches [[TerminalShell]].
     */
   private def runGui(
     appConfig: AppConfig,
@@ -376,170 +390,173 @@ object Main extends IOApp:
     session: SessionChoice
   )(using
     logger: Logger[IO],
-    loggerFactory: LoggerFactory[IO]
+    loggerFactory: LoggerFactory[IO],
+    watchdog: ShutdownWatchdog
   ): IO[Unit] =
+    given ShutdownLedger = watchdog.ledger
     for
       smokeReady   <- Deferred[IO, Unit]
       displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
       initialDisplay = displayState.snapshot
       frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (
-        SwingWindow.resource(
-          initialDisplay.codeMetrics,
-          initialDisplay.uiMetrics,
-          appConfig.windowChromeMode,
-          appConfig.preferredWindowSize,
-          frameTimings,
-          startup.plan.windowTitle
+        ShutdownTrace.traced("window")(
+          SwingWindowHost
+            .resource(
+              initialDisplay.codeMetrics,
+              initialDisplay.uiMetrics,
+              appConfig.windowChromeMode,
+              appConfig.preferredWindowSize,
+              frameTimings,
+              startup.plan.windowTitle
+            )
         ),
-        PaintExecutionContext.resource,
+        ShutdownTrace.traced("paint executor")(PaintExecutionContext.resource),
         FileDrops.create(description => logger.info(s"[DROP] $description"))
       ).tupled
-        .use { (swingWin, paintEc, drops) =>
+        .use { (host, paintEc, drops) =>
           val actualAppConfig =
-            resolveAutoTextScale(appConfig, swingWin.detectedDeviceTextScale)
+            resolveAutoTextScale(appConfig, host.control.detectedDeviceTextScale)
           val fileDialogSelection = FileDialogSelection.forThisProcess(actualAppConfig.fileDialogMode)
-          val fileDialog          = SwingFileDialog(swingWin.canvas, fileDialogSelection)
+          val fileDialog          = host.fileDialog(fileDialogSelection)
           val initialScaleSync =
             if actualAppConfig.editorConfig.fontConfig != appConfig.editorConfig.fontConfig then
               displayState.update(actualAppConfig.editorConfig.fontConfig) >>
                 IO.blocking {
                   val display = displayState.snapshot
-                  swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
+                  host.control.updateMetrics(display.codeMetrics, display.uiMetrics)
                 }
             else IO.unit
-          val installFileDrop    = IO(swingWin.installFileDrop(FileDropHandler(drops.dropped, drops.offered)))
+          val installFileDrop    = IO(host.control.installFileDrop(FileDropHandler(drops.dropped, drops.offered)))
           val initialWindowSetup = initialScaleSync >> installFileDrop
 
           def syncDisplayMetrics(): IO[Unit] =
             Trace.timed("render.syncDisplayMetrics") {
               IO {
                 val display = displayState.snapshot
-                if swingWin.metrics != display.codeMetrics then
-                  swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
+                if host.target.metrics != display.codeMetrics then
+                  host.control.updateMetrics(display.codeMetrics, display.uiMetrics)
               }
             }
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
               IO {
-                swingWin.updateChromeTheme(state.persisted.theme)
+                host.control.updateChromeTheme(state.persisted.theme)
               }
             }
 
-          (AccessibilitySync.empty, Deferred[IO, SwingInputHandler[IO, com.serenity.keystroke.events.Event]]).tupled
-            .flatMap { (accessibilitySync, menuInput) =>
-              def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
-                Trace.timed("render.syncAccessibility") {
-                  accessibilitySync
-                    .sync(state)(previous => IO(AccessibilitySnapshot.from(state, swingWin.viewportSize, previous)))
-                    .flatMap(snapshot => IO(swingWin.updateAccessibility(snapshot)))
-                }
+          AccessibilitySync.empty.flatMap { accessibilitySync =>
+            def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
+              Trace.timed("render.syncAccessibility") {
+                accessibilitySync
+                  .sync(state)(previous => IO(AccessibilitySnapshot.from(state, host.target.viewportSize, previous)))
+                  .flatMap(snapshot => IO(host.control.updateAccessibility(snapshot)))
+              }
 
-              val frontendRuntime = FrontendRuntime(
-                inputHandler = router =>
-                  IO.pure(
-                    new SwingInputHandler[IO, com.serenity.keystroke.events.Event](
-                      swingWin.canvas,
-                      router,
-                      () => swingWin.metrics,
-                      () => displayState.uiMetrics,
-                      actualAppConfig.inputConfig.wheelScrollLines,
-                      frameTimings,
-                      ImeDiagnostics.fromEnvironment(sys.env)
-                    )
-                  ).flatTap(menuInput.complete(_).void),
-                renderFull = (state, vis, cc, damage, caches) =>
-                  timedFrame(frameTimings, FrameKind.Full, paintEc)(
-                    syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
-                    IO(
-                      GuiFramePainting.paintFullFrame(
-                        CompositionPreview.displayed(state, caches.compositionRevisions),
-                        vis,
-                        cc,
-                        swingWin,
-                        displayState.snapshot,
-                        damage,
-                        caches,
-                        startup.surfaces
-                      )
-                    )
-                  ),
-                renderCursorOnly = (state, vis, cc, damage, caches) =>
-                  timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
-                    syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
-                    IO(
-                      GuiFramePainting.paintCursorFrame(
-                        CompositionPreview.displayed(state, caches.compositionRevisions),
-                        vis,
-                        cc,
-                        swingWin,
-                        displayState.snapshot,
-                        damage,
-                        caches,
-                        startup.surfaces
-                      )
-                    )
-                  ),
-                frameTimings = frameTimings,
-                menus =
-                  Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", ""), actualAppConfig.menuBarMode))(
-                    SwingMenuBar.resource(swingWin, menuInput.get, actualAppConfig.menuBarMode)
-                  ),
-                offscreenFrames = Some(
-                  OffscreenWarmUpFrames.forCanvas(
-                    swingWin.canvas,
-                    () => swingWin.viewportSize,
-                    () => displayState.snapshot
+            val frontendRuntime = FrontendRuntime(
+              inputHandler = router =>
+                host.inputHandler(
+                  router,
+                  InputSettings(
+                    () => host.target.metrics,
+                    () => displayState.uiMetrics,
+                    actualAppConfig.inputConfig.wheelScrollLines,
+                    frameTimings,
+                    ImeDiagnostics.fromEnvironment(sys.env)
                   )
                 ),
-                applyPointerShape = shape => IO(swingWin.updatePointerShape(shape))
-              )
-
-              initialWindowSetup >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
-                initialViewportSize = swingWin.viewportSize,
-                checkResize = IO(swingWin.doResizeIfNecessary()),
-                runtime = frontendRuntime,
-                appConfig = actualAppConfig,
-                configNotice = configNotice,
-                recovery = startup.plan,
-                onFirstFrame = startup.markStarted >> SwingPaintProbe.report(swingWin, logger) >>
-                  IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
-                makeStateManager = Some((logger, scrollCounting) =>
-                  com.serenity.state.manager.StateManager.apply(
-                    logger,
-                    policy = SessionManager.SessionPolicy.interactive,
-                    sessionRootOverride = session.rootOverride,
-                    endInputMethodComposition = IO(swingWin.endInputMethodComposition()),
-                    onFontConfigChanged = config =>
-                      displayState.update(config) >>
-                        IO.blocking {
-                          val display = displayState.snapshot
-                          swingWin.updateMetrics(display.codeMetrics, display.uiMetrics)
-                        },
-                    deviceTextScaleProvider = IO.blocking(swingWin.detectedDeviceTextScale),
-                    configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
-                    projectTasksEnabled = !startup.plan.safeMode,
-                    restarter = Some(startup.requestRestart),
-                    uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
-                    windowSizeProvider = IO.blocking(Some(swingWin.currentPreferredWindowSize)),
-                    onPreferredWindowSizeChanged = size => IO.blocking(swingWin.resizeToPreferred(size)),
-                    fileDialog = Some(fileDialog),
-                    scrollCounting = scrollCounting
+              renderFull = (state, vis, cc, damage, caches) =>
+                timedFrame(frameTimings, FrameKind.Full, paintEc)(
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
+                  IO(
+                    GuiFramePainting.paintFullFrame(
+                      CompositionPreview.displayed(state, caches.compositionRevisions),
+                      vis,
+                      cc,
+                      host.target,
+                      displayState.snapshot,
+                      damage,
+                      caches,
+                      startup.surfaces
+                    )
                   )
                 ),
-                awaitExternalQuit =
-                  if launchOptions.smokeTest then IO.race(swingWin.awaitClose, smokeReady.get).void
-                  else swingWin.awaitClose,
-                registerResizeCallback = cb => swingWin.setOnResize(cb),
-                registerFocusCallback = cb => swingWin.setOnFocusChange(cb),
-                openPath = launchOptions.openPath,
-                frontend = GuiFrontend,
-                forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(swingWin.bringToFront())),
-                quitRequests = session.quitRequests,
-                fileOrFolderOpen = fileDialog.supportsFileOrFolder
-              )
-            }
+              renderCursorOnly = (state, vis, cc, damage, caches) =>
+                timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
+                  IO(
+                    GuiFramePainting.paintCursorFrame(
+                      CompositionPreview.displayed(state, caches.compositionRevisions),
+                      vis,
+                      cc,
+                      host.target,
+                      displayState.snapshot,
+                      damage,
+                      caches,
+                      startup.surfaces
+                    )
+                  )
+                ),
+              frameTimings = frameTimings,
+              menus = host
+                .menus(actualAppConfig.menuBarMode)
+                .map(open => menuHost => ShutdownTrace.traced("menu bar")(open(menuHost))),
+              offscreenFrames = Some(
+                OffscreenWarmUpFrames.forTarget(
+                  host.target,
+                  () => host.target.viewportSize,
+                  () => displayState.snapshot
+                )
+              ),
+              applyPointerShape = shape => IO(host.control.updatePointerShape(shape))
+            )
+
+            initialWindowSetup >> logger.info(s"[FILE_DIALOG] ${fileDialogSelection.description}") >> AppRuntime.run(
+              initialViewportSize = host.target.viewportSize,
+              checkResize = IO(host.control.doResizeIfNecessary()),
+              runtime = frontendRuntime,
+              appConfig = actualAppConfig,
+              configNotice = configNotice,
+              recovery = startup.plan,
+              afterEditorShutdown = watchdog.armHalt(),
+              onFirstFrame = startup.markStarted >> host.control.reportFirstPaints(logger) >>
+                IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+              makeStateManager = Some((logger, scrollCounting) =>
+                com.serenity.state.manager.StateManager.apply(
+                  logger,
+                  policy = SessionManager.SessionPolicy.interactive,
+                  sessionRootOverride = session.rootOverride,
+                  endInputMethodComposition = IO(host.control.endInputMethodComposition()),
+                  onFontConfigChanged = config =>
+                    displayState.update(config) >>
+                      IO.blocking {
+                        val display = displayState.snapshot
+                        host.control.updateMetrics(display.codeMetrics, display.uiMetrics)
+                      },
+                  deviceTextScaleProvider = IO.blocking(host.control.detectedDeviceTextScale),
+                  configPersistencePath = startup.plan.configPersistencePath(ConfigManager.defaultConfigPath),
+                  projectTasksEnabled = !startup.plan.safeMode,
+                  restarter = Some(startup.requestRestart),
+                  uiPresetStore = startup.plan.uiPresetStore(session.rootOverride),
+                  windowSizeProvider = IO.blocking(Some(host.control.currentPreferredWindowSize)),
+                  onPreferredWindowSizeChanged = size => IO.blocking(host.control.resizeToPreferred(size)),
+                  fileDialog = Some(fileDialog),
+                  scrollCounting = scrollCounting
+                )
+              ),
+              awaitExternalQuit =
+                if launchOptions.smokeTest then IO.race(host.control.awaitClose, smokeReady.get).void
+                else host.control.awaitClose,
+              registerResizeCallback = cb => host.control.setOnResize(cb),
+              registerFocusCallback = cb => host.control.setOnFocusChange(cb),
+              openPath = launchOptions.openPath,
+              frontend = GuiFrontend,
+              forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(host.control.bringToFront())),
+              quitRequests = session.quitRequests,
+              fileOrFolderOpen = fileDialog.supportsFileOrFolder
+            )
+          }
         }
     yield ()
 

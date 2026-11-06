@@ -128,21 +128,23 @@ object TypingBurst:
     }
 
   def main(args: Array[String]): Unit =
-    val sweep   = args.headOption.contains("sweep")
-    val numbers = if sweep then args.drop(1) else args
-    def argument(index: Int, default: Int): Int =
-      numbers.lift(index).flatMap(_.toIntOption).filter(_ > 0).getOrElse(default)
-    val keys              = argument(0, 200)
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withWordWrap(true))
-    if sweep then
-      List(10, 30, 60, 200).foreach { keysPerSecond =>
-        (1 to argument(1, 3)).foreach(round =>
-          report(stateManager, s"rate=$keysPerSecond/s", keys, (1_000_000 / keysPerSecond).micros, round)
+    BenchmarkMain.run:
+      val sweep   = args.headOption.contains("sweep")
+      val numbers = if sweep then args.drop(1) else args
+      def argument(index: Int, default: Int): Int =
+        numbers.lift(index).flatMap(_.toIntOption).filter(_ > 0).getOrElse(default)
+      val keys = argument(0, 200)
+      val (stateManager, _) =
+        LaptopFrameBenchmarks.proseStateManager(config = AppConfig.conventional.withWordWrap(true))
+      if sweep then
+        List(10, 30, 60, 200).foreach { keysPerSecond =>
+          (1 to argument(1, 3)).foreach(round =>
+            report(stateManager, s"rate=$keysPerSecond/s", keys, (1_000_000 / keysPerSecond).micros, round)
+          )
+        }
+      else
+        val spacingMs = argument(1, 5)
+        (1 to argument(2, 5)).foreach(round =>
+          report(stateManager, s"spacing=${spacingMs}ms", keys, spacingMs.millis, round)
         )
-      }
-    else
-      val spacingMs = argument(1, 5)
-      (1 to argument(2, 5)).foreach(round =>
-        report(stateManager, s"spacing=${spacingMs}ms", keys, spacingMs.millis, round)
-      )
-    sys.exit(0)
+      sys.exit(0)

@@ -1,10 +1,15 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p xdotool wmctrl python3 xorg.xwininfo coreutils procps
 
-# bench-laptop.sh <jar> <label> [java2d|skia]
+# bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]
 #
 # With a backend, the jar is launched with --renderer=<backend> and ui.render.latency_trace is on, so the run file keeps
 # the tagged [LATENCY] summaries (key to screen) beside the [FRAME] lines; bench/key-to-screen-abba.sh drives it.
+#
+# BENCH_JAVA_OPTS is passed to the JVM as given (for instance "-Xlog:gc:file=/tmp/gc-%p.log:uptime
+# -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"); it is recorded in the conditions file. Each run's
+# whole app log and stdout are kept beside its run file as <label>-run<N>.applog and .stdout. A JVM still alive after the
+# quit key is thread-dumped (<label>-run<N>.threads), sent SIGTERM and, after BENCH_QUIT_GRACE seconds (15), SIGKILL.
 #
 # Runs Serenity from <jar> with an isolated config, drives deterministic input,
 # collects [FRAME] timing lines, and reports p50/p95 per phase.
@@ -21,11 +26,11 @@
 set -euo pipefail
 
 JAR="${1:?Usage: bench-laptop.sh <jar> <label>}"
-LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia]}"
+LABEL="${2:?Usage: bench-laptop.sh <jar> <label> [java2d|skia|skia-raster]}"
 BACKEND="${3:-}"
 case "$BACKEND" in
-  ""|java2d|skia) ;;
-  *) echo "ERROR: backend must be java2d or skia, not: $BACKEND" >&2; exit 1 ;;
+  ""|java2d|skia|skia-raster) ;;
+  *) echo "ERROR: backend must be java2d, skia or skia-raster, not: $BACKEND" >&2; exit 1 ;;
 esac
 RENDERER_FLAG=()
 if [[ -n "$BACKEND" ]]; then RENDERER_FLAG=("--renderer=$BACKEND"); fi
@@ -60,10 +65,9 @@ record_conditions() {
   echo "CPU governor: $(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo unknown)" >> "$out"
   echo "Load average: $(uptime)" >> "$out"
   echo "" >> "$out"
-  if command -v hyprctl &>/dev/null; then
-    echo "Hyprland monitors:" >> "$out"
-    hyprctl monitors 2>/dev/null | grep -E "Monitor|scale|resolution" >> "$out" || true
-  fi
+  echo "Java options: ${BENCH_JAVA_OPTS:-}" >> "$out"
+  echo "Display:" >> "$out"
+  display_conditions >> "$out"
   cat "$out"
   echo ""
 }
@@ -74,7 +78,7 @@ run_once() {
   local out="$RESULTS_DIR/${LABEL}-run${run_n}.txt"
   local bench_home
   bench_home="$(mktemp -d /tmp/serenity-bench-XXXXXX)"
-  trap "rm -rf '$bench_home'" RETURN
+  trap "keep_run_artifacts '$bench_home' '$RESULTS_DIR' '$LABEL' '$run_n'; rm -rf '$bench_home'" RETURN
 
   # Seed isolated config
   mkdir -p "$bench_home/.serenity"
@@ -90,7 +94,7 @@ CFG
   echo "--- Run $run_n: load average before: $(uptime | awk -F'load average:' '{print $2}')" | tee "$out"
 
   # Launch Serenity
-  java -Duser.home="$bench_home" -jar "$JAR" --gui "${RENDERER_FLAG[@]}" "$LOREM_FILE" \
+  java ${BENCH_JAVA_OPTS:-} -Duser.home="$bench_home" -jar "$JAR" --gui "${RENDERER_FLAG[@]}" "$LOREM_FILE" \
     > "$bench_home/stdout.log" 2>&1 &
   local serenity_pid=$!
   echo "Launched PID $serenity_pid" | tee -a "$out"
@@ -117,7 +121,7 @@ CFG
   done
   if ! $started; then
     echo "ERROR: timed out waiting for initial render" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
 
@@ -130,7 +134,7 @@ CFG
   done
   if [[ -z "$win_id" ]]; then
     echo "ERROR: could not find Serenity window" | tee -a "$out"
-    kill "$serenity_pid" 2>/dev/null || true
+    stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
     return 1
   fi
   local win_hex
@@ -189,13 +193,25 @@ CFG
   sleep 8
 
   echo "[$(date +%T)] Quitting" | tee -a "$out"
+  # XSendEvent, which a Java window may ignore. The run types text first, so a quit that does arrive raises the
+  # unsaved-changes modal rather than quitting, and it is the SIGTERM below that ends the app (#2507).
+  echo "Quit key: xdotool key --window $win_id ctrl+q (sent as an X event to the window)" | tee -a "$out"
   xdotool key --window "$win_id" ctrl+q 2>/dev/null || true
   sleep 2
-  kill "$serenity_pid" 2>/dev/null || true
-  wait "$serenity_pid" 2>/dev/null || true
+  stop_app "$serenity_pid" "$RESULTS_DIR" "$LABEL" "$run_n"
+
+  log_file="$(find_app_log "$bench_home" || echo /dev/null)"
+  echo "Unsaved-changes modal lines ([STATE MODAL]) in the app log: $(grep -c 'STATE MODAL' "$log_file" 2>/dev/null || true)" |
+    tee -a "$out"
+  hang_prefix="$RESULTS_DIR/${LABEL}-run${run_n}-hang"
+  if grep -q "after SIGTERM" "$RESULTS_DIR/${LABEL}-run${run_n}.threads" 2>/dev/null; then
+    cp "$bench_home/stdout.log" "$hang_prefix.stdout.log" 2>/dev/null || true
+    cp "$log_file" "$hang_prefix.app.log" 2>/dev/null || true
+    echo "HUNG: still alive after SIGTERM; killed. Threads: $RESULTS_DIR/${LABEL}-run${run_n}.threads, logs: $hang_prefix.stdout.log and $hang_prefix.app.log" |
+      tee -a "$out"
+  fi
 
   # Collect FRAME lines
-  log_file="$(find_app_log "$bench_home" || echo /dev/null)"
   echo "" >> "$out"
   echo "=== [FRAME] lines ===" >> "$out"
   grep "\[FRAME\]" "$log_file" >> "$out" 2>/dev/null || echo "(none)" >> "$out"
