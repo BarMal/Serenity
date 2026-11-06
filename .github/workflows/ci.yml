@@ -133,6 +133,7 @@ jobs:
             scripts.test_abba_compare \
             scripts.test_abba_startup \
             scripts.test_aot_cache_scripts \
+            scripts.test_aot_macos_workflow \
             scripts.test_aot_workflow \
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
@@ -153,6 +154,7 @@ jobs:
             scripts.test_key_to_screen_summary \
             scripts.test_merge_train \
             scripts.test_perf_matrix \
+            scripts.test_perf_nightly \
             scripts.test_present_abba_summary \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
@@ -648,4 +650,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh workflow run merge-train.yml --ref master
+        # A dispatch can meet a GitHub API error (HTTP 500 on train 17), and a red wake job reddens its whole run.
+        run: |
+          for attempt in 1 2 3 4; do
+            gh workflow run merge-train.yml --ref master && exit 0
+            echo "::warning::Starting a merge train step failed (try $attempt of 4)"
+            [ "$attempt" -lt 4 ] && sleep $((attempt * 5))
+          done
+          exit 1
