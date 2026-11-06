@@ -14,8 +14,8 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.BufferId
-import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.testkit.RopeText
+import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
