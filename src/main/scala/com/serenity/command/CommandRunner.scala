@@ -123,50 +123,13 @@ final case class CommandRunner(
       case CommandRunnerSurface.PresetDiffReview(presetName, changes, _, purpose) =>
         presetDiffReviewItems(presetName, changes, purpose)
       case CommandRunnerSurface.Palette(state) =>
-        val offered = state.filteredCommands
-          .map(command => command -> CommandAvailability.of(command, context))
-          .filter((_, availability) => availability.isOffered)
-        def itemsOf(commands: List[(Command, Availability)]): List[CommandSurfaceItem.CommandItem] =
-          commands.map((command, availability) => CommandSurfaceItem.CommandItem(command, availability.disabledReason))
-        // Category tabs are retired (issue #931): an empty query is just every command, no category to default to.
-        // Settings are still reachable here -- via search, below -- exactly as issue #931's "fold into text search"
-        // intends; there is just no longer a separate navigation mode for it.
-        //
-        // issue #1049: opening to a raw registry-order list showed an arbitrary alphabetical-ish top (whatever
-        // happens to be first in `defaultCommands`) rather than anything personalized. A stable sort by MRU
-        // recency (issue #1048's `commandUsage`) puts recently/frequently-used commands first while leaving every
-        // never-used command in its original relative order -- so a fresh session (empty `commandUsage`) still
-        // shows the exact same "sensible default set" it always has.
-        // Settings is a fixed first row that no amount of recency reorders past; behind it come the commands that
-        // can act on the current editing context (`CommandRelevance`): those it boosts (`CommandAvailability`) first,
-        // then recently used ones.
-        if state.searchTerm.isEmpty then
-          val (settingsEntry, commands) = offered.partition((command, _) => CommandRelevance.isSettingsEntry(command))
-          itemsOf(settingsEntry) ++ itemsOf(
-            commands
-              .filter((command, _) => CommandRelevance.isRelevant(command, context.editingContext))
-              .sortBy((command, availability) =>
-                (!availability.isBoosted, -commandUsage.getOrElse(CommandId(command.name), 0))
-              )
-          )
-        else
-          val commandItems = itemsOf(offered)
-          val (strongCommandMatches, remainingCommandMatches) =
-            commandItems.partition(item => CommandRunnerSearch.isStrongCommandMatch(item.command, state.searchTerm))
-          val (exactCommandMatches, remainingStrongCommandMatches) =
-            strongCommandMatches.partition(item =>
-              CommandRunnerSearch.isExactCommandMatch(item.command, state.searchTerm)
-            )
-          val settingsMatches = searchResults.settingsResults
-          val (exactSettingsMatches, remainingSettingsMatches) =
-            settingsMatches.partition(item =>
-              CommandRunnerSearch.isExactSettingsTarget(
-                item,
-                CommandRunnerSearch.normalizedSearchTerm(state.searchTerm)
-              )
-            )
-          exactCommandMatches ++ exactSettingsMatches ++ remainingStrongCommandMatches ++ remainingSettingsMatches ++
-            remainingCommandMatches
+        CommandPaletteResults.items(
+          state.searchTerm,
+          state.filteredCommands,
+          commandUsage,
+          context,
+          searchResults.settingsResults
+        )
 
   def selectedItem: Option[CommandSurfaceItem] =
     visibleItems.lift(selectedIndex)
@@ -177,15 +140,7 @@ final case class CommandRunner(
     * "search the root", never "keep editing a nested page" (that goes through `updateSubmenuSearch` instead).
     */
   def updateSearchTerm(term: String)(using registry: CommandRegistry): CommandRunner =
-    val filtered =
-      if term.isEmpty then registry.getAllCommands
-      else
-        // Filtered and ranked before the cap, so hidden commands can't crowd offered ones out of it, nor the cap
-        // drop a command its boosts would have lifted into it.
-        val matches = registry
-          .searchCommands(term, maxResults = registry.getAllCommands.size)
-          .filter(CommandAvailability.of(_, context).isOffered)
-        CommandRanking.ranked(matches, term, commandUsage, context).take(50)
+    val filtered     = CommandPaletteResults.matching(registry, term, commandUsage, context)
     val updatedState = CommandPaletteState(term, 0, filtered)
     val updatedSurface = surface match
       case CommandRunnerSurface.Palette(_)     => CommandRunnerSurface.Palette(updatedState)
@@ -293,6 +248,21 @@ final case class CommandRunner(
 
   def updateSettingsSearch(term: String)(using registry: CommandRegistry): CommandRunner =
     updateSearchTerm(term)
+
+  /** The settings view searched for `query`, drilled into the hit for `groupId` (and `itemId` in it) the way picking
+    * that hit does; just the searched root when the query no longer finds it.
+    */
+  def openSettingsAt(groupId: String, itemId: Option[String], query: String)(using CommandRegistry): CommandRunner =
+    val searched = openSettings.updateSettingsSearch(query)
+    val isTarget: CommandSurfaceItem => Boolean = {
+      case setting: CommandSurfaceItem.SettingSearchItem =>
+        setting.targetGroupId == groupId && itemId.contains(setting.targetItemId)
+      case group: CommandSurfaceItem.GroupItem => group.id == groupId && itemId.isEmpty
+      case _                                   => false
+    }
+    searched.visibleItems.indexWhere(isTarget) match
+      case -1    => searched
+      case index => searched.withRootSelectedIndex(index).enterSelectedGroup
 
   def enterSelectedGroup: CommandRunner =
     selectedItem match

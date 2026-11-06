@@ -20,6 +20,8 @@ import unittest
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+from captured_stdout import capture_stdout  # noqa: E402
 
 
 def _load(name: str):
@@ -40,6 +42,7 @@ class PairedGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
 
     def _write(self, name: str, p50: float, retained: int | None = None) -> str:
         path = os.path.join(self._tmpdir.name, name)
@@ -142,7 +145,8 @@ class ConfirmBeforeFailingTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
-        self.flagged = os.path.join(self._tmpdir.name, "flagged.txt")
+        self.stdout = capture_stdout(self)
+        self.flagged =os.path.join(self._tmpdir.name, "flagged.txt")
 
     def _run(self, prefix: str, side: str, p50s: dict[str, float]) -> str:
         path = os.path.join(self._tmpdir.name, f"{prefix}-{side}.csv")

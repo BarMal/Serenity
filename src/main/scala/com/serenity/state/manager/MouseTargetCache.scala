@@ -72,7 +72,7 @@ final private[manager] case class MouseTargetLayoutKey(
     // narrowing and `fromBufferColumn` snapshot, so a live column-mode toggle (or a target-width/gap change) must
     // invalidate the cached scene -- without them a toggle re-uses the full-width scene and has no visible effect.
     columnModeEnabled: Boolean,
-    columnTargetWidthCells: Int,
+    columnTargetWidthCells: Option[Int],
     columnGap: Int,
     // Count-driven columns (issue #1338, Phase 2 / slice 4): `resolvedColumnCount` reads this too, so a live change
     // to the explicit column count (with target width/gap unchanged) must also invalidate the cached scene.

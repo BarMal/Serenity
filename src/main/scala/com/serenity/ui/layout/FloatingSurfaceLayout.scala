@@ -97,7 +97,7 @@ object FloatingSurfaceLayout:
 
     for
       anchor         <- floatingAnchor(surface, state, buffer)
-      screenPosition <- panes.screenPosition(paneId, anchor)
+      screenPosition <- panes.anchorPosition(paneId, anchor)
       if surface.content match
         case SurfaceContent.ContextualToolbar(_) => contentRect.contains(screenPosition.x, screenPosition.y)
         case _                                   => true
@@ -154,7 +154,7 @@ object FloatingSurfaceLayout:
 
       LayoutRect(
         x = overlayX,
-        y = overlayY,
+        y = math.max(contentRect.y, math.min(overlayY, contentRect.bottom - finalHeight)),
         width = preferredWidth,
         height = finalHeight
       )
@@ -185,7 +185,7 @@ object FloatingSurfaceLayout:
       bufferId       <- pane.bufferId
       buffer         <- state.persisted.buffers.get(bufferId)
       anchor         <- floatingAnchor(surface, state, buffer)
-      screenPosition <- panes.screenPosition(paneId, anchor)
+      screenPosition <- panes.anchorPosition(paneId, anchor)
     yield FloatingAnchorFrame(paneLayout.contentRect, screenPosition)
 
   private def calculateFloatingSurfaceWidth(maxWidth: Int): Int =
