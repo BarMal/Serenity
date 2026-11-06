@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FixedFontCatalog
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
@@ -63,7 +64,7 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withLayerCaching(layerCaching)
       .withSpellCheck(SpellCheckConfig(enabled = spellCheckEnabled, languages = List("en")))
-    val runner = CommandRunner.empty
+    val runner = FixedFontCatalog.emptyRunner
       .activate(CommandRegistry.default, config)
       .updateSearchTerm("")(using
         CommandRegistry.default

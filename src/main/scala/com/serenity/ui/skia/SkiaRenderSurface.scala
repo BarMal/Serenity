@@ -10,7 +10,6 @@ import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.renderer.{
   CellRuns,
-  DeviceArea,
   Effects,
   FontSpec,
   Java2DRenderSurface,
@@ -28,7 +27,7 @@ import com.serenity.ui.renderer.{
   TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
-import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
+import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
 
 /** A [[RenderSurface]] that draws with Skia onto a `Canvas`.
   *
@@ -46,7 +45,7 @@ import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStro
   * Threading is that of the render pool: one thread draws a frame, and `onFlush` is called once when it ends.
   */
 final class SkiaRenderSurface(
-    canvas: Canvas,
+    protected val canvas: Canvas,
     metrics: CellMetrics,
     font: FontSpec,
     onFlush: () => Unit,
@@ -65,7 +64,7 @@ final class SkiaRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with PanelOutlineDrawing
+    with SkiaExcludedPixels
     with PixelCopying:
   import SkiaRenderSurface.*
   import caches.{fonts, images, inks, shapedText}
@@ -134,6 +133,8 @@ final class SkiaRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+  private val pixelMover =
+    SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -163,7 +164,7 @@ final class SkiaRenderSurface(
   private def paintRect(area: Rect, paint: Paint): Unit =
     val grow = if paint.getMode == PaintMode.STROKE then 2.0 * paint.getStrokeWidth + 1.0 else 0.0
     recordPaint(area.getLeft, area.getTop, area.getWidth, area.getHeight, grow)
-    val _ = canvas.drawRect(area, paint)
+    awayFromKept(area.getLeft, area.getTop, area.getRight, area.getBottom)(canvas.drawRect(area, paint): Unit)
 
   /** Tells the frame's record where this surface is about to paint, in the coordinates it paints in now. */
   private def recordPaint(xPx: Double, yPx: Double, widthPx: Double, heightPx: Double, growPx: Double = 0.0): Unit =
@@ -297,7 +298,7 @@ final class SkiaRenderSurface(
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
-          drawGlyphs
+          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(drawGlyphs)
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
@@ -335,9 +336,10 @@ final class SkiaRenderSurface(
       fillBackground(bgRef.get(), px, py, width, metrics.lineHeight)
       painted.touched(px, py, width, metrics.lineHeight)
       recordText(px.toDouble, py.toDouble, width.toDouble, metrics.lineHeight)
-      CellRuns.pieces(s).foreach { (cell, piece) =>
-        drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
-      }
+      awayFromKept(px.toFloat, py.toFloat, (px + width).toFloat, (py + metrics.lineHeight).toFloat):
+        CellRuns.pieces(s).foreach { (cell, piece) =>
+          drawText(piece, 0, piece.length, (px + cell * metrics.charWidth).toFloat, (py + metrics.ascent).toFloat)
+        }
       drawRules(px, width, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
@@ -355,22 +357,25 @@ final class SkiaRenderSurface(
         ph + 2 * metrics.lineHeight
       )
       val glyph = char.toString
-      (0 until height).foreach { row =>
-        (0 until width).foreach { col =>
-          drawText(
-            glyph,
-            0,
-            1,
-            metrics.toPixelX(x + col).toFloat,
-            (metrics.toPixelY(y + row) + metrics.ascent).toFloat
-          )
+      awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat):
+        (0 until height).foreach { row =>
+          (0 until width).foreach { col =>
+            drawText(
+              glyph,
+              0,
+              1,
+              metrics.toPixelX(x + col).toFloat,
+              (metrics.toPixelY(y + row) + metrics.ascent).toFloat
+            )
+          }
         }
-      }
 
   override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
     val previous = logicalPixelRowOverride.getAndSet(Some(cellRow -> pixelY))
     try render
     finally logicalPixelRowOverride.set(previous)
+
+  override protected def translationPx: (Double, Double) = translation.get()
 
   override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
     val saved    = canvas.save()
@@ -448,7 +453,19 @@ final class SkiaRenderSurface(
         painted.touched(rects(i), rects(i + 1), widthPx, heightPx)
         recordPaint(rects(i).toDouble, rects(i + 1).toDouble, widthPx.toDouble, heightPx.toDouble)
       }
-      RectPath.fill(canvas, rects, filled(paintColor(color)))
+      val (left, top, right, bottom) =
+        (0 until rects.length by 4).foldLeft((Int.MaxValue, Int.MaxValue, Int.MinValue, Int.MinValue)) {
+          case ((l, t, r, b), i) =>
+            (
+              l.min(rects(i)),
+              t.min(rects(i + 1)),
+              r.max(rects(i) + rects(i + 2).max(1)),
+              b.max(rects(i + 1) + rects(i + 3).max(1))
+            )
+        }
+      awayFromKept(left.toFloat, top.toFloat, right.toFloat, bottom.toFloat)(
+        RectPath.fill(canvas, rects, filled(paintColor(color)))
+      )
 
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px     = metrics.toPixelX(x)
@@ -464,48 +481,14 @@ final class SkiaRenderSurface(
     recordPaint(px, py, pw, ph, 1.0)
     try
       clipTo(px, py, pw, ph)
-      val _ = canvas.drawImageRect(skia, source, target, ink)
+      awayFromKept(px.toFloat, py.toFloat, (px + pw).toFloat, (py + ph).toFloat)(
+        canvas.drawImageRect(skia, source, target, ink): Unit
+      )
     finally restoreTo(saved)
 
-  /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read
-    * as it was before the copy. A clip in force (inside [[withRectClip]]) still bounds the copy, which Java2D's raw
-    * graphics would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows
-    * of one. A source that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs)
-    * copies only the part inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the
-    * rect's own corner would move it sideways.
-    */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
-    retainedSurface.foreach { surface =>
-      val left   = math.round(from.xPx * deviceScaleX).toInt
-      val top    = math.round(from.yPx * deviceScaleY).toInt
-      val width  = math.round(from.widthPx * deviceScaleX).toInt
-      val height = math.round(from.heightPx * deviceScaleY).toInt
-      val moved  = math.round(dyPx * deviceScaleY).toInt
-      changes.foreach(_.moved(DeviceArea(left, top, width, height), moved))
-      if userClipDepth.get() == 0 then
-        phases.timed(PresentPhase.SurfaceMove)(
-          PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
-        )
-      else
-        val insideLeft   = left.max(0)
-        val insideTop    = top.max(0)
-        val insideRight  = (left + width).min(surface.getWidth)
-        val insideBottom = (top + height).min(surface.getHeight)
-        if insideRight > insideLeft && insideBottom > insideTop then
-          val snap =
-            surface.makeImageSnapshot(IRect.Companion.makeLTRB(insideLeft, insideTop, insideRight, insideBottom))
-          val saved = canvas.save()
-          try
-            val _ = canvas.resetMatrix()
-            fill.setBlendMode(BlendMode.SRC)
-            fill.setColor(OpaqueBlack)
-            val _ = canvas.drawImage(snap, insideLeft.toFloat, (insideTop + moved).toFloat, fill)
-            fill.setBlendMode(BlendMode.SRC_OVER)
-          finally
-            restoreTo(saved)
-            snap.close()
-    }
+    pixelMover.copy(from, dyPx)
 
   def hideCursor(): Unit = ()
 

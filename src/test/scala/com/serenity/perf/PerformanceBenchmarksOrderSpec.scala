@@ -1,22 +1,17 @@
 package com.serenity.perf
 
-import java.awt.GraphicsEnvironment
-
-import com.serenity.testkit.DisplayExclusive
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The warm-up extension spends one budget in list order (the first rows are extended, the rest are not and still
   * benefit from what the first warmed), so the order of the suite is part of what a run measures: reordering it moves
   * which rows are warmed first, and has to be done on purpose.
+  *
+  * The names come from the suite's declarations, which build no window and no fixture, so this runs headless.
   */
 class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
 
-  // Building the suite is the cost (fixtures, frames rendered into real windows), and no accessor lists the names
-  // without it, so both tests read one build.
-  private lazy val suiteNames: List[String] =
-    // The suite is built inside two real windows, which other specs' screen captures and window checks must not see.
-    DisplayExclusive(PerformanceBenchmarks.withSuite(_.map(_.name)))
+  private lazy val suiteNames: List[String] = PerformanceBenchmarks.names
 
   private val firstRows = List(
     "rope.large_json.search",
@@ -62,11 +57,9 @@ class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
   )
 
   "The performance suite" should "start with the rows the warm-up budget is spent on, in this order" in {
-    assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
     suiteNames.take(firstRows.length) shouldBe firstRows
   }
 
   it should "have no two benchmarks with the same name" in {
-    assume(!GraphicsEnvironment.isHeadless, "Building the suite needs a window, which needs a display")
     suiteNames.distinct shouldBe suiteNames
   }

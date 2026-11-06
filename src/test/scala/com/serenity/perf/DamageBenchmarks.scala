@@ -103,8 +103,8 @@ private[perf] object DamageBenchmarks:
 
   private def pair(
     name: String,
-    before: AppState,
-    after: AppState,
+    beforeState: => AppState,
+    afterState: => AppState,
     verifyRows: Damage => Unit,
     verifyCells: Damage => Unit
   ): List[BenchmarkRunner.Benchmark] =
@@ -112,24 +112,26 @@ private[perf] object DamageBenchmarks:
       state.copy(persisted =
         state.persisted.copy(config = state.persisted.config.withRenderDamageGranularity(granularity))
       )
-    val rowsBefore  = withGranularity(before, RenderDamageGranularity.Rows)
-    val rowsAfter   = withGranularity(after, RenderDamageGranularity.Rows)
-    val cellsBefore = withGranularity(before, RenderDamageGranularity.Cells)
-    val cellsAfter  = withGranularity(after, RenderDamageGranularity.Cells)
-    List(
-      BenchmarkRunner.Benchmark(
-        s"damage.$name.rows",
-        3,
-        BenchmarkIterationCounts.Damage,
-        () => verifyRows(DamageProducer.forTransition(rowsBefore, rowsAfter)),
-        () => DamageProducer.forTransition(rowsBefore, rowsAfter)
-      ),
-      BenchmarkRunner.Benchmark(
-        s"damage.$name.cells",
-        3,
-        BenchmarkIterationCounts.Damage,
-        () => verifyCells(DamageProducer.forTransition(cellsBefore, cellsAfter)),
-        () => DamageProducer.forTransition(cellsBefore, cellsAfter)
+    lazy val rowsBefore  = withGranularity(beforeState, RenderDamageGranularity.Rows)
+    lazy val rowsAfter   = withGranularity(afterState, RenderDamageGranularity.Rows)
+    lazy val cellsBefore = withGranularity(beforeState, RenderDamageGranularity.Cells)
+    lazy val cellsAfter  = withGranularity(afterState, RenderDamageGranularity.Cells)
+    BenchmarkRunner.Benchmark.sharing((rowsBefore, rowsAfter, cellsBefore, cellsAfter))(
+      List(
+        BenchmarkRunner.Benchmark(
+          s"damage.$name.rows",
+          3,
+          BenchmarkIterationCounts.Damage,
+          () => verifyRows(DamageProducer.forTransition(rowsBefore, rowsAfter)),
+          () => DamageProducer.forTransition(rowsBefore, rowsAfter)
+        ),
+        BenchmarkRunner.Benchmark(
+          s"damage.$name.cells",
+          3,
+          BenchmarkIterationCounts.Damage,
+          () => verifyCells(DamageProducer.forTransition(cellsBefore, cellsAfter)),
+          () => DamageProducer.forTransition(cellsBefore, cellsAfter)
+        )
       )
     )
 
@@ -138,16 +140,16 @@ private[perf] object DamageBenchmarks:
     * prints the share of the canvas the published rects cover.
     */
   private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
-    val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics  = CellMetrics.fromFont(font)
-    val viewport = BenchmarkFixtures.viewportSize
-    val fixture  = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
-    val before =
+    val font         = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val metrics      = CellMetrics.fromFont(font)
+    val viewport     = BenchmarkFixtures.viewportSize
+    lazy val fixture = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
+    lazy val before =
       fixture.copy(persisted =
         fixture.persisted.copy(config = fixture.persisted.config.withStatusLinePlacement(placement))
       )
-    val after  = EditorEventReducer.reduce(MoveRight, PaneId(0), before).state
-    val damage = DamageProducer.forTransition(before, after)
+    lazy val after  = EditorEventReducer.reduce(MoveRight, PaneId(0), before).state
+    lazy val damage = DamageProducer.forTransition(before, after)
     def repaintAfterCaretMove(): Option[List[PixelRect]] =
       val surface = MockRenderSurface(viewport.width, viewport.height, persistentContent = true)
       val caches  = RenderCaches.create()
@@ -176,16 +178,18 @@ private[perf] object DamageBenchmarks:
       areaPx.foreach { area =>
         println(f"$name: ${100.0 * area / canvasAreaPx}%.1f%% of the canvas in ${region.fold(0)(_.size)} rects")
       }
-    BenchmarkRunner.Benchmark(
-      name,
-      3,
-      BenchmarkIterationCounts.Damage,
-      () => verifySmallerThanCanvas(),
-      () => repaintAfterCaretMove()
+    BenchmarkRunner.Benchmark.building((fixture, before, after, damage))(
+      BenchmarkRunner.Benchmark(
+        name,
+        3,
+        BenchmarkIterationCounts.Damage,
+        () => verifySmallerThanCanvas(),
+        () => repaintAfterCaretMove()
+      )
     )
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val s = scenarios()
+    lazy val s = scenarios()
 
     pair(
       "single_char_long_line",
