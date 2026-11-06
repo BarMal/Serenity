@@ -230,6 +230,7 @@ final class SkiaRenderSurface(
     s: String,
     clipGlyphToRun: Boolean = false
   ): Unit =
+    SkiaRunDiag.pending.set(s"drawRunPx text='${diagText(s)}' font=${diagFont()}")
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, s.nonEmpty, clipGlyphToRun) {
       drawText(s, 0, s.length, xPx, (yPx + ascentPx).toFloat)
     }
@@ -245,6 +246,7 @@ final class SkiaRenderSurface(
     until: Int,
     clipGlyphToRun: Boolean = false
   ): Unit =
+    SkiaRunDiag.pending.set(s"drawShapedRunPx text='${diagText(stretch.slice(from, until))}' font=${diagFont()}")
     paintRun(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, from < until, clipGlyphToRun) {
       val shaped =
         activity.counting(shapedText)(shapedText.stretchOf(stretch, fonts.faceFor(currentFontRef.get()).font))
@@ -276,6 +278,14 @@ final class SkiaRenderSurface(
     glyphs.setShader(inks.shaderOf(blended(fgRef.get().getRGB)))
     glyphs
 
+  private def diagText(text: String): String =
+    text.take(40).flatMap(c => if c < ' ' || c > '~' then f"\\u${c.toInt}%04x" else c.toString)
+
+  private def diagFont(): String =
+    val awt  = currentFontRef.get()
+    val font = fonts.faceFor(awt).font
+    s"${Option(font.getTypeface).map(_.getFamilyName).getOrElse("none")}/${font.getSize}(awt ${awt.getFamily}/${awt.getSize2D})"
+
   private def paintRun(
     xPx: Float,
     yPx: Int,
@@ -292,6 +302,7 @@ final class SkiaRenderSurface(
 
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
       activity.runDrawn()
+      SkiaRunDiag.record(s"x=$boundedLeft..$boundedRight y=$boundedTop..$boundedBottom hasText=$hasText")
       val boundedWidth  = boundedRight - boundedLeft
       val boundedHeight = boundedBottom - boundedTop
       if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
