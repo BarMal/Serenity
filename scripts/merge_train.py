@@ -29,6 +29,9 @@ A run's last job (`Wake the merge train`) dispatches a step before its own run i
 required run with nothing unfinished but wake jobs therefore looks again, up to 6 times 10 seconds apart, instead of
 waiting for something else to wake the train; a run with any other job unfinished is waited for as before.
 
+The same job only dispatches the next step, so if it alone fails (a GitHub API error) its run turns red though every test
+passed; a run whose only failed job is that one counts as passed.
+
 A push to a pull request in a live train abandons the whole batch, so each pull request in one carries a single note
 saying so. The note is edited as the train moves on and deleted when the pull request leaves the train (merged,
 ejected, or left out of the rebuilt batch); a failure to write it never stops the train.
@@ -46,7 +49,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
@@ -453,7 +456,7 @@ class Train:
         manifest = Manifest.from_commit_message(self.git.message(tip))
         if manifest is None:
             raise TrainError(f"{branch} has no manifest at its tip {tip[:8]}")
-        runs = self.github.runs_for(branch)
+        runs = self._runs_of(branch)
         heads = {p.number: self.github.head_of(p.number) for p in manifest.prs}
         master = self.git.master()
         action = decide(manifest, runs, heads=heads, master=master, now=self.now())
@@ -462,7 +465,7 @@ class Train:
             looks += 1
             self.log(f"{branch}: only the wake job is unfinished; looking again in {WAKE_POLL_SECONDS:.0f} s ({looks}/{WAKE_POLL_TRIES})")
             self.sleep(WAKE_POLL_SECONDS)
-            runs = self.github.runs_for(branch)
+            runs = self._runs_of(branch)
             action = decide(manifest, runs, heads=heads, master=master, now=self.now())
         self.log(f"{branch} ({_numbers(manifest.prs)}): {action}")
         owners = self._owners_of_failures(manifest, runs) if isinstance(action, (Rerun, Bisect, Eject)) else {}
@@ -496,6 +499,25 @@ class Train:
         elif isinstance(action, Bisect):
             self.git.delete_remote_branch(branch)
             self._clear_notes(manifest, self._start(only=action.numbers))
+
+    def _runs_of(self, branch: str) -> list[Run]:
+        return self._not_failed_by_the_wake_job(self.github.runs_for(branch))
+
+    def _not_failed_by_the_wake_job(self, runs: list[Run]) -> list[Run]:
+        latest = {
+            path: max(of_path, key=lambda r: r.id)
+            for path in REQUIRED_WORKFLOWS
+            if (of_path := [r for r in runs if r.path == path])
+        }
+        passed: list[Run] = []
+        for run in latest.values():
+            if run.status != "completed" or run.conclusion in (None, "success"):
+                continue
+            failed = self.github.failed_job_names(run.id, run.attempt)
+            if failed and set(failed) <= {WAKE_JOB_NAME}:
+                self.log(f"Run {run.id} failed only in the wake job ({WAKE_JOB_NAME}); counting it as passed.")
+                passed.append(run)
+        return [replace(r, conclusion="success") if r in passed else r for r in runs]
 
     def _only_wake_jobs_unfinished(self, runs: list[Run]) -> bool:
         """The wake job dispatches its step before its own run is marked complete, so a run with nothing left but
