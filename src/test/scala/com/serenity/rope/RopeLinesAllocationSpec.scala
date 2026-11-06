@@ -20,9 +20,7 @@ class RopeLinesAllocationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "copy a line that sits inside one chunk only once" in {
-    SettledAllocation.perCall(() => walk(), () => walk()) match
-      case Some((bytes, _)) =>
-        val perLine = bytes.toDouble / lineCount
-        withClue(s"$perLine bytes per line: ")(perLine should be < 320.0)
-      case None => info("per-thread allocation counter unsupported -- skipping")
+    val (bytes, _) = SettledAllocation.perCallRequired(() => walk(), () => walk())
+    val perLine    = bytes.toDouble / lineCount
+    withClue(s"$perLine bytes per line: ")(perLine should be < 320.0)
   }
