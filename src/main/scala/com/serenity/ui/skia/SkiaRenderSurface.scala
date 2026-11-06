@@ -10,7 +10,6 @@ import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.renderer.{
   CellRuns,
-  DeviceArea,
   Effects,
   FontSpec,
   Java2DRenderSurface,
@@ -28,7 +27,7 @@ import com.serenity.ui.renderer.{
   TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
-import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
+import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
 
 /** A [[RenderSurface]] that draws with Skia onto a `Canvas`.
   *
@@ -134,6 +133,8 @@ final class SkiaRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+  private val pixelMover =
+    SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -467,45 +468,9 @@ final class SkiaRenderSurface(
       val _ = canvas.drawImageRect(skia, source, target, ink)
     finally restoreTo(saved)
 
-  /** In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read
-    * as it was before the copy. A clip in force (inside [[withRectClip]]) still bounds the copy, which Java2D's raw
-    * graphics would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows
-    * of one. A source that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs)
-    * copies only the part inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the
-    * rect's own corner would move it sideways.
-    */
   override def copyPixels(from: PixelRect, dyPx: Int): Unit =
     painted.forgetClear()
-    retainedSurface.foreach { surface =>
-      val left   = math.round(from.xPx * deviceScaleX).toInt
-      val top    = math.round(from.yPx * deviceScaleY).toInt
-      val width  = math.round(from.widthPx * deviceScaleX).toInt
-      val height = math.round(from.heightPx * deviceScaleY).toInt
-      val moved  = math.round(dyPx * deviceScaleY).toInt
-      changes.foreach(_.moved(DeviceArea(left, top, width, height), moved))
-      if userClipDepth.get() == 0 then
-        phases.timed(PresentPhase.SurfaceMove)(
-          PixelMove.inPlace(surface, DeviceArea(left, top, width, height), moved)
-        )
-      else
-        val insideLeft   = left.max(0)
-        val insideTop    = top.max(0)
-        val insideRight  = (left + width).min(surface.getWidth)
-        val insideBottom = (top + height).min(surface.getHeight)
-        if insideRight > insideLeft && insideBottom > insideTop then
-          val snap =
-            surface.makeImageSnapshot(IRect.Companion.makeLTRB(insideLeft, insideTop, insideRight, insideBottom))
-          val saved = canvas.save()
-          try
-            val _ = canvas.resetMatrix()
-            fill.setBlendMode(BlendMode.SRC)
-            fill.setColor(OpaqueBlack)
-            val _ = canvas.drawImage(snap, insideLeft.toFloat, (insideTop + moved).toFloat, fill)
-            fill.setBlendMode(BlendMode.SRC_OVER)
-          finally
-            restoreTo(saved)
-            snap.close()
-    }
+    pixelMover.copy(from, dyPx)
 
   def hideCursor(): Unit = ()
 
