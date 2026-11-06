@@ -12,7 +12,6 @@ import com.serenity.ui.renderer.{
   CellRuns,
   Effects,
   FontSpec,
-  Java2DRenderSurface,
   PaintedPixels,
   PanelOutlineDrawing,
   PixelCopying,
@@ -24,6 +23,7 @@ import com.serenity.ui.renderer.{
   StyledFontCache,
   SurfaceActivity,
   SurfaceContentIdentity,
+  SurfaceSizing,
   TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
@@ -578,4 +578,4 @@ object SkiaRenderSurface:
 
   /** The device size of a surface holding `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image. */
   def deviceDimension(logicalPx: Int, deviceScale: Double): Int =
-    Java2DRenderSurface.deviceImageDimension(logicalPx, deviceScale)
+    SurfaceSizing.deviceImageDimension(logicalPx, deviceScale)
