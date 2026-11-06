@@ -14,8 +14,8 @@ import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, update
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.FrameDiff
-import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.testkit.FramePlanReport
+import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 
