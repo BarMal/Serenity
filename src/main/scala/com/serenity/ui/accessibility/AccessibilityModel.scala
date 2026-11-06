@@ -447,30 +447,31 @@ object AccessibilitySnapshot:
 
   private[accessibility] def surfaceName(content: SurfaceContent): String =
     content match
-      case SurfaceContent.StartPage(page)              => page.title
-      case _: SurfaceContent.CommandPalette            => "Command runner"
-      case _: SurfaceContent.CommandRunnerPeek         => "Command runner preview"
-      case SurfaceContent.ModalWorkflow(modal)         => modal.toString
-      case SurfaceContent.StatusLine(_)                => "Document status"
-      case SurfaceContent.MarkdownPreview(_, title)    => s"Preview: $title"
-      case SurfaceContent.QuickInfo(_)                 => "Quick information"
-      case SurfaceContent.FilePreview(path, _)         => s"Preview: ${path.getFileName}"
-      case SurfaceContent.SymbolDefinition(symbol, _)  => s"Symbol: $symbol"
-      case SurfaceContent.DirectoryListing(path, _, _) => s"Directory: ${path.getFileName}"
-      case SurfaceContent.DirectoryTree(_, _, _)       => "Directory tree"
-      case SurfaceContent.ThemeCreator(_)              => "Theme creator"
-      case SurfaceContent.ContextualToolbar(_)         => "Contextual toolbar"
-      case SurfaceContent.ContextMenu(menu)            => menu.title
-      case SurfaceContent.CommentLens(_)               => "Comment"
-      case SurfaceContent.Terminal(_, _)               => "Terminal"
-      case SurfaceContent.Outline(_, _, _)             => "Outline"
-      case SurfaceContent.Comments(_, _, _)            => "Comments"
-      case SurfaceContent.Diagnostics(_, _, _)         => "Diagnostics"
-      case SurfaceContent.ShortcutsHelp(_)             => "Keyboard shortcuts"
-      case SurfaceContent.TabList(_, _)                => "Open tabs"
-      case SurfaceContent.TabBar(_, _)                 => "Tab bar"
-      case SurfaceContent.RecentFilesInMode(mode, _)   => s"Recent in ${mode.toString} mode"
-      case SurfaceContent.Notice(notice, _)            => notice.level.label
+      case SurfaceContent.StartPage(page)                         => page.title
+      case _: SurfaceContent.CommandPalette                       => "Command runner"
+      case _: SurfaceContent.CommandRunnerPeek                    => "Command runner preview"
+      case SurfaceContent.ModalWorkflow(Modal.ListPicker(picker)) => picker.title
+      case SurfaceContent.ModalWorkflow(modal)                    => modal.toString
+      case SurfaceContent.StatusLine(_)                           => "Document status"
+      case SurfaceContent.MarkdownPreview(_, title)               => s"Preview: $title"
+      case SurfaceContent.QuickInfo(_)                            => "Quick information"
+      case SurfaceContent.FilePreview(path, _)                    => s"Preview: ${path.getFileName}"
+      case SurfaceContent.SymbolDefinition(symbol, _)             => s"Symbol: $symbol"
+      case SurfaceContent.DirectoryListing(path, _, _)            => s"Directory: ${path.getFileName}"
+      case SurfaceContent.DirectoryTree(_, _, _)                  => "Directory tree"
+      case SurfaceContent.ThemeCreator(_)                         => "Theme creator"
+      case SurfaceContent.ContextualToolbar(_)                    => "Contextual toolbar"
+      case SurfaceContent.ContextMenu(menu)                       => menu.title
+      case SurfaceContent.CommentLens(_)                          => "Comment"
+      case SurfaceContent.Terminal(_, _)                          => "Terminal"
+      case SurfaceContent.Outline(_, _, _)                        => "Outline"
+      case SurfaceContent.Comments(_, _, _)                       => "Comments"
+      case SurfaceContent.Diagnostics(_, _, _)                    => "Diagnostics"
+      case SurfaceContent.ShortcutsHelp(_)                        => "Keyboard shortcuts"
+      case SurfaceContent.TabList(_, _)                           => "Open tabs"
+      case SurfaceContent.TabBar(_, _)                            => "Tab bar"
+      case SurfaceContent.RecentFilesInMode(mode, _)              => s"Recent in ${mode.toString} mode"
+      case SurfaceContent.Notice(notice, _)                       => notice.level.label
 
   private[accessibility] def surfaceValue(content: SurfaceContent): Option[String] =
     content match

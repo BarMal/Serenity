@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.ScrollbarLayout
+import com.serenity.ui.layout.{ScrollbarLayout, TextRowMetrics}
 import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,11 +23,15 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
   final private case class Column(x: Int, fromY: Int, toY: Int)
 
   private def stampColumn(image: FramePixels, plan: EditorPaneRenderPlan, scale: Double): Column =
-    val content = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
+    val content  = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout")).contentRect
+    val snapshot = plan.snapshots.getOrElse(paneId, fail("expected the pane's snapshot"))
+    val metrics  = TextRowMetrics.forSnapshot(content, cellMetrics, snapshot, snapshot.usesMeasuredLayout)
+    // The column covers the rows: the room under the last one is kept as it is whatever the frame copies.
+    val rowsBottom = metrics.bandBottomPx(snapshot.visualLines.size - 1).min(metrics.contentBottomPx)
     val column = Column(
       x = math.round(ScrollbarLayout.strip(content, cellMetrics).xPx * scale).toInt - 3,
       fromY = math.round(cellMetrics.toPixelY(content.y) * scale).toInt,
-      toY = math.round(cellMetrics.toPixelY(content.bottom) * scale).toInt
+      toY = math.round(rowsBottom * scale).toInt
     )
     (column.fromY until column.toY).foreach(y => image.stamp(column.x, y, sentinel))
     column

@@ -39,6 +39,11 @@ sealed trait Frontend:
     */
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration]
 
+  /** Runs a task on this frontend's event thread, or `None` when it has none to be late. The frame-timing report posts
+    * a no-op through it to measure how long that thread keeps what it is sent waiting (#2489).
+    */
+  def eventThread: Option[Runnable => Unit]
+
   /** Whether this frontend can spawn a Markdown preview window (issue #1113), replacing the
     * `MarkdownPreviewWindowAvailability` that used to reach `StateManager`/`StateManagerPanelEffects` as a bare
     * constructor parameter threaded in from `com.serenity.ui.tui` directly -- a `state.manager` reference
@@ -69,6 +74,8 @@ case object GuiFrontend extends Frontend:
   val logRouting: LogRouting                                   = Frontend.guiLogRouting
   val markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
 
+  val eventThread: Option[Runnable => Unit] = Some(task => javax.swing.SwingUtilities.invokeLater(task))
+
   def cursorIdleInterval(config: AppConfig): Option[FiniteDuration] =
     config.cursorMode match
       case CursorMode.Blink  => Some(Frontend.BlinkInterval)
@@ -84,8 +91,9 @@ final case class TuiFrontend(
     keyboardFidelityTier: KeyboardFidelityTier,
     markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
 ) extends Frontend:
-  val capabilities: FrontendCapabilities = FrontendCapabilities.tui(keyboardFidelityTier)
-  val logRouting: LogRouting             = Frontend.tuiLogRouting
+  val capabilities: FrontendCapabilities    = FrontendCapabilities.tui(keyboardFidelityTier)
+  val logRouting: LogRouting                = Frontend.tuiLogRouting
+  val eventThread: Option[Runnable => Unit] = None
 
   /** Issue #1170: the caret is delegated to the terminal's own hardware cursor
     * (`RendererCursorOverlay.presentHardwareCursor`), which owns blink timing entirely, so there is no idle work left

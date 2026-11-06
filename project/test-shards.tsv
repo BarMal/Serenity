@@ -38,6 +38,7 @@ com.serenity.state.manager.ThemeFollowManualPickSpec	1	5.087
 com.serenity.perf.LaptopFramesMatchColdSpec	1	4.926
 com.serenity.state.manager.DeleteKeysStateManagerSpec	1	4.278
 com.serenity.state.manager.SaveFailureNoticeRoutingSpec	1	4.18
+com.serenity.io.ProjectFileWalkerParallelSpec	2	3.966
 com.serenity.state.manager.ModeSwitchLifecycleSpec	1	3.947
 com.serenity.ui.tui.TuiFileWorkflowSpec	1	3.759
 com.serenity.state.manager.EditRunSettlingSpec	1	3.7
