@@ -27,7 +27,10 @@ private[perf] object FrameDifferencePicture:
         val marks   = columns.map(x => if differences.contains((x, y)) then '^' else ' ').mkString
         f"$y%5d  $left  $right  $marks"
       }
-      s"$label: first difference at ($cx,$cy); drawn | cold | differing\n${rows.mkString("\n")}"
+      val samples = differences
+        .take(6)
+        .map((x, y) => f"($x,$y) drawn=${drawn.getRGB(x, y) & 0xffffff}%06x cold=${cold.getRGB(x, y) & 0xffffff}%06x")
+      s"$label: first difference at ($cx,$cy); ${samples.mkString("; ")}; drawn | cold | differing\n${rows.mkString("\n")}"
     }
 
   /** Every rect of the plan's layout contract and pane layouts, in device pixels, that touches the first differing

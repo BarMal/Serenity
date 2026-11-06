@@ -11,7 +11,7 @@ private[perf] object FloatingTypingFrames:
 
   def benchmark(): BenchmarkRunner.Benchmark =
     lazy val typing =
-      val (manager, _)    = LaptopFrameBenchmarks.proseStateManager(
+      val (manager, _) = LaptopFrameBenchmarks.proseStateManager(
         config = ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating)
       )
       val (before, after) = TypingTransition.of(manager)

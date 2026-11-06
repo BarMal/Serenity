@@ -184,7 +184,9 @@ private[perf] object CellGridBenchmarks:
     * [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order pins them to.
     */
   def floatingChromeBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    lazy val frame = frameOf(stateOf(text(asciiLine), ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating)))
+    lazy val frame = frameOf(
+      stateOf(text(asciiLine), ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating))
+    )
     List(
       BenchmarkRunner.Benchmark.building(frame)(
         BenchmarkRunner.Benchmark(
