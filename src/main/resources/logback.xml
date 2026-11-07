@@ -26,8 +26,9 @@
         </encoder>
     </appender>
 
-    <!-- Root logger - captures everything -->
-    <root level="INFO">
+    <!-- INFO is for user-relevant events. The per-command and per-modal state-change lines are DEBUG; set
+         SERENITY_LOG_LEVEL=DEBUG (an environment variable or -DSERENITY_LOG_LEVEL) to see them, WARN to quieten. -->
+    <root level="${SERENITY_LOG_LEVEL:-INFO}">
         <appender-ref ref="STDOUT" />
         <appender-ref ref="APP_FILE" />
     </root>

@@ -1,27 +1,18 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.{AppConfig, AppMode}
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Command wiring for switching the app between code and prose mode (issue #1297). */
-class StateManagerAppModeSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class StateManagerAppModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerAppModeSpec"))
-    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("StateManagerAppModeSpec", initialConfig = AppConfig.default)
 
   "StateManager" should "start in code mode" in {
     val stateManager = createStateManager()

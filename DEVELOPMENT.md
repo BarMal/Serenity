@@ -187,10 +187,9 @@ The first run with a missing or stale archive (a rebuilt jar, a different JDK) s
 as it exits, printing a few `[warning][cds] Skipping ...` lines for classes CDS cannot store; later runs start from it.
 The archive is about 65 MB.
 
-The Windows package passes the same flags through jpackage's `--java-options`, with the archive next to the jar in
-the app image (`$APPDIR/serenity.jsa`). The Windows and Linux runtimes are built with `--generate-cds-archive` because
-a dynamic archive needs the runtime's own base archive. macOS has no archive: writing into a signed `.app` would break
-its signature.
+The Linux and Windows runtimes are built with `--generate-cds-archive`, which gives the JVM its base archive. macOS
+cannot write an archive after install, because writing into a signed `.app` would break its signature. All three
+packages ship the JDK 25 AOT cache described below instead of a dynamic AppCDS archive.
 
 The runtime's base archive is dumped again after `jpackage` by `scripts/regenerate-base-cds-archive.sh`
 (`java -Xshare:dump --enable-native-access=ALL-UNNAMED`). jlink dumps it without that option, but the launcher passes it,
@@ -198,8 +197,21 @@ and the JVM then logs `Mismatched values for property jdk.module.enable.native.a
 start on) and drops its archived module graph. `scripts/smoke-test-app-image.sh` runs the image with `-Xlog:cds` and fails
 on that line.
 
-The **Linux package ships a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB compressed)
-instead of the AppCDS flags. It starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
+The **macOS bundle ships the same cache inside the signed `.app`** (`Contents/app/serenity.aot`). `desktop-publish.yml`
+trains it after `jpackage` and before `scripts/sign-macos-app.sh`, so nothing writes into the bundle once it carries a
+signature, then runs `scripts/check-aot-cache.sh` on the signed bundle and verifies the signature again. The bundled
+runtime has no `bin/java`, which `-XX:AOTCacheOutput` forks to assemble the cache, so `scripts/train-aot-cache.sh` trains a
+bundle in two launcher runs (`-XX:AOTMode=record`, then `-XX:AOTMode=create`). A CI spike on `macos-latest` (#2522,
+comment 6625934280) showed a signed, hardened-runtime bundle opening a cache trained before signing, in place, from
+`/Applications` and from a DMG (a bundle moved to another parent directory keeps a valid cache). That spike used an
+ad-hoc signature and a stand-in app: a Developer ID signature and notarisation are checked on the first release build.
+The scripts do not use `timeout(1)`, which macOS lacks.
+
+The **Linux and Windows packages ship a JDK 25 AOT cache** (`$APPDIR/serenity.aot`, about 92 MB on disk and 22 MB
+compressed on Linux) instead of the AppCDS flags. Windows used to write an AppCDS archive on its first exit, so its first
+run was the slow one (3.38 s against 1.99 s, #2407); the cache is written at build time, so every run is a warm one.
+The scripts take all three layouts (`bin/Serenity` + `lib/app` on Linux, `Serenity.exe` + `app` on Windows, where they
+run under Git Bash, and the macOS bundle above). On Linux it starts about 12% faster (first painted frame: 1406 ms against 1606 ms on a CI runner,
 #2380). `scripts/train-aot-cache.sh` writes it from one `--smoke-test` run of the finished image
 (`-XX:AOTCacheOutput`) and then adds `-XX:AOTCache=$APPDIR/serenity.aot` to `Serenity.cfg`; the cache has to exist
 before the option is added, and the JVM refuses `-XX:AOTCache` together with `-XX:SharedArchiveFile`, so an image gets
@@ -264,6 +276,45 @@ with JDK 24 and later, and both packages pass them (`desktop-publish.yml`, `desk
 `scripts/smoke-test-app-image.sh` fails when the packaged app prints either warning. The JetBrains Runtime 25 is not
 supported yet: it fails 194 tests and garbles some text (#2380, #2390).
 
+### SDL3 (the window library behind native Wayland, #2380)
+
+`com.serenity.ui.sdl` binds SDL3 through the JDK's foreign-function API, with no binding library. Nothing selects it yet:
+the Swing window is still the only one the application opens. `libSDL3.so.0` is built from the upstream tag pinned in
+`ci/sdl3/pins.env` (`ci/sdl3/build-sdl3.sh`, in an `ubuntu:22.04` container so it asks no more of glibc than that release
+does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launcher passes
+`-Dserenity.sdl3.library.path=$APPDIR/natives`. Without that property the binding asks the system loader for
+`libSDL3.so.0`.
+
+- `SdlLayouts` holds the byte offsets of the SDL structs the binding reads and the values of the constants it passes.
+  `ci/sdl3/layout.c` prints the same from the pinned SDL headers; its output is checked in as
+  `src/test/resources/sdl3/layout.txt`, `SdlLayoutsSpec` holds the Scala table against it, and the `SDL3 binding` CI job
+  diffs the file against a fresh build of the program. When the pin moves, regenerate the file with
+  `cc -I <SDL>/include -o layout ci/sdl3/layout.c && ./layout > src/test/resources/sdl3/layout.txt` and read the diff.
+- `sbt test` leaves out the specs that load the real library. To run them: build it with
+  `ci/sdl3/build-sdl3.sh work out` (needs the packages listed in the script), then
+  `sbt -Dserenity.sdl3.library.path=$PWD/out sdlNativeTest`. They use SDL's `dummy` and `offscreen` video drivers, so no
+  compositor is needed; the GL specs on `offscreen` need Mesa's EGL (`libegl1 libgl1 libgl1-mesa-dri libgles2`; Skiko's natives link `libGL.so.1`), and run on its
+  software rasteriser when there is no GPU.
+- `SdlGlWindow` is the window host with a GL context (phase 3): window, EGL context, event pump, resize and scale,
+  clear and swap, all on one dedicated thread. Where SDL cannot make a context (the `dummy` driver, a machine without
+  EGL) `SdlGlWindow.open` returns SDL's reason and leaves nothing behind; `PresentPath` turns that into
+  `RasterFallback`, which is Skia's CPU raster into the window surface and a later phase. Nothing selects any of this yet.
+- Skiko's GL entry point, `DirectContext.makeGL`, looks for a GLX context and fails on this EGL one. Phase 4 builds
+  the context with `makeGLWithInterface` instead (`SkiaGlContext`), handing Skia an upcall (`SkiaGlProcs`) that
+  answers each GL function from `SDL_GL_GetProcAddress`, so no native library of ours is involved. Skiko's natives
+  still need `libGL.so.1` and `libX11` installed.
+- `SkiaGlPresenter` (phase 4, in `ui/skia`) draws a GL window's frames straight onto the surface, with nothing selecting
+  it yet. The renderer draws onto a persistent offscreen GPU `Surface` (`SkiaGlTargets`, `SkiaGlFrames`), so it can
+  draw only what changed; a present draws that whole surface onto the window's framebuffer (a swap leaves the back
+  buffer undefined), fills the carets over it, and swaps. Everything runs on the window's SDL thread in the order the
+  calls were made (`SdlGlWindow.post`); drawing is never skipped, and a run of present requests that has not started
+  is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
+  scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
+- `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
+
 ### JetBrains Runtime and native Wayland
 
 On a Wayland desktop, a stock JDK draws through XWayland. The [JetBrains Runtime](https://github.com/JetBrains/JetBrainsRuntime/releases)
@@ -311,7 +362,7 @@ its default.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
 | `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
@@ -325,9 +376,18 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D. Terminal and safe-mode launches
+log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
+the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
+the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
+(#2489); `ui.render.wayland` is then ignored. Terminal and safe-mode launches
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
+
+The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
+`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
+draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
+hardware says which should be the default.
 
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:
@@ -339,6 +399,75 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
+
+#### Skia on NixOS
+
+Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
+cannot find them. The native probe then fails and the window paints with Java2D. The start page says so, naming the
+missing library, and the log carries the failure:
+`[RENDER] backend=java2d reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
+(Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
+`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads. Setting `ui.render.backend = java2d` ends the
+notice.
+
+The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
+set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:
+
+```bash
+ldd ~/.skiko/*/libskiko-linux-x64.so | grep 'not found'
+```
+
+On the Intel laptop (NixOS, Hyprland, Wayland session, #2570) it listed `libGL.so.1`, `libX11.so.6`,
+`libfontconfig.so.1` and `libstdc++.so.6`. With these directories on `LD_LIBRARY_PATH` the same jar chose Skia and the
+layer reported `renderApi=OPENGL`:
+
+| Directory | Package (nixpkgs) | Provides |
+| --- | --- | --- |
+| `/run/opengl-driver/lib` | the system graphics driver (`hardware.graphics`) | `libGL.so.1` |
+| `libx11`, `libxext`, `libxrender`, `libxtst`, `libxi` | same names | `libX11.so.6` and the X11 libraries |
+| `libglvnd` | `libglvnd` | the GL dispatch libraries |
+| `fontconfig.lib` | `fontconfig` (`lib` output) | `libfontconfig.so.1` |
+| `stdenv.cc.cc.lib` | the compiler's runtime (`gcc` `lib` output) | `libstdc++.so.6` |
+
+Caution, here be imagine dragons: that set is confirmed to work together, but `ldd` flagged only the four libraries
+above. Which of `libxext`, `libxrender`, `libxtst`, `libxi` and `libglvnd` are needed on their own was not tested.
+
+**A launcher script (recommended; no root).** Put a small script on your `PATH` that builds the library directory from
+nixpkgs each time it starts, then launches the jar. This is what the laptop does, with `SERENITY_JAR` overriding the
+default jar; there, a launch through it logs `backend=skia`, `native probe passed` and `renderApi=OPENGL`, and the cached
+library-path computation costs about 1.4 s per launch. A sketch of the pattern (not run as written; `<nixpkgs>` has to
+resolve on your system, otherwise name your pinned nixpkgs):
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+libs=$(nix-build --no-out-link -E '
+  with import <nixpkgs> {};
+  symlinkJoin {
+    name = "serenity-skia-libs";
+    paths = [ libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib ];
+  }')
+export LD_LIBRARY_PATH="/run/opengl-driver/lib:$libs/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+exec java --enable-native-access=ALL-UNNAMED -jar "${SERENITY_JAR:-target/scala-3.9.0/Serenity.jar}" "$@"
+```
+
+Build the directory at launch rather than writing store paths into the script. A store path is not a garbage-collection
+root, so `nix-collect-garbage` removes it and the script then breaks; rebuilt on demand, the first launch after a
+collection pays the rebuild and later ones hit the cache. To make the result survive collections too, give `nix-build`
+an `--out-link` in place of `--no-out-link`: that symlink is a GC root, at the price of a link to look after.
+
+**Without a script.** The same libraries can be put on the path for one command, which needs no files but holds the same
+store paths only for as long as `nix-shell` keeps them. This line is assembled from the table and has not been run as
+written:
+
+```bash
+nix-shell -p libx11 libxext libxrender libxtst libxi libglvnd fontconfig.lib stdenv.cc.cc.lib \
+  --run 'export LD_LIBRARY_PATH="/run/opengl-driver/lib:$(printf "%s/lib:" $buildInputs)$LD_LIBRARY_PATH"; java -jar target/scala-3.9.0/Serenity.jar'
+```
+
+Skia loaded with these libraries on Java 21.0.12 (the diagnostic, #2570) and on Java 25.0.4.1 (the benchmark runs,
+#2489), both from nixpkgs; the JDK this document expects is Temurin 25 (see "Java version and launch options"). On
+Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the same path (#2479).
 
 #### Comparing the renderers
 

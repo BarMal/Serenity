@@ -52,10 +52,13 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
 
       val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
       val newState = result.state
-      val runner   = runnerFrom(newState)
+      val runner   = CommandPaletteProbe.runner(newState).getOrElse(fail("Expected the command picker"))
 
       runner.isActive shouldEqual true
-      newState.persisted.focus shouldEqual Focus.Surface(SurfaceId("command-runner"))
+      newState.commandRunnerSurface shouldBe None
+      newState.persisted.focus shouldEqual Focus.Surface(
+        newState.commandPickerSurface.map(_.id).getOrElse(fail("no picker"))
+      )
       newState.runtime.focusHistory should contain(Focus.EditorPane(PaneId(1)))
 
     it("should replace an open find modal when toggled"):
@@ -78,9 +81,9 @@ class CommandRunnerBehaviorSpec extends AnyFunSpec with Matchers:
       val result   = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
       val newState = result.state
 
-      newState.modalSurface shouldBe None
-      newState.commandRunnerSurface shouldBe defined
-      newState.commandRunnerSurface.map(surface => Focus.Surface(surface.id)) shouldBe Some(newState.persisted.focus)
+      newState.modalSurface.map(_.id) shouldBe newState.commandPickerSurface.map(_.id)
+      newState.commandPickerSurface shouldBe defined
+      newState.commandPickerSurface.map(surface => Focus.Surface(surface.id)) shouldBe Some(newState.persisted.focus)
 
     it("should deactivate and restore previous focus when escaped"):
       val registry  = CommandRegistry.default

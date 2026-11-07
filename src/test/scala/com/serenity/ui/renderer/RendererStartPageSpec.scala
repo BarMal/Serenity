@@ -149,6 +149,38 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     surface.styleCalls should contain(surface.StyleCall("disable", theme.focusStyle))
   }
 
+  private val longNotice =
+    "Skia could not load, so Serenity is painting with Java2D. The dynamic loader cannot find libGL.so.1. " +
+      "Put the directories that hold it on LD_LIBRARY_PATH before launching (see \"Skia on NixOS\" in " +
+      "DEVELOPMENT.md). Set ui.render.backend = java2d to stop this notice."
+
+  it should "lay out the whole status message inside a window narrower than it, wrapping at word boundaries" in {
+    val width        = 50
+    val surface      = new MockRenderSurface(width, 24, fontRenderContextOverride = None)
+    val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
+    val viewportSize = ViewportSize(width, 24)
+
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+
+    val drawn = (0 until 24).map(row => surface.getRow(row).trim).filter(_.nonEmpty)
+    drawn.mkString(" ") should include(longNotice)
+  }
+
+  it should "keep each action's hit-test bounds on the row it is drawn on once the status message wraps" in {
+    val width        = 50
+    val surface      = new MockRenderSurface(width, 24, fontRenderContextOverride = None)
+    val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
+    val viewportSize = ViewportSize(width, 24)
+
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+
+    val bounds = page.actionBounds(viewportSize, cellMetrics, cellMetrics)
+    bounds.map(_.index) shouldBe List(0, 1)
+    bounds.zip(List("One", "Two")).foreach { (bound, label) =>
+      surface.getRow(cellMetrics.toRow(bound.yPx)).trim shouldBe label
+    }
+  }
+
   it should "colour the title and every unselected option with the theme's plain foreground, and other lines muted" in {
     val surface      = new MockRenderSurface(80, 24, fontRenderContextOverride = None)
     val page         = simplePage(selectedIndex = 1) // "One" (line 3) is an unselected option

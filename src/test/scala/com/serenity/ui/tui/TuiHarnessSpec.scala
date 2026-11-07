@@ -64,9 +64,9 @@ class TuiHarnessSpec extends TuiSpec:
   "a lone Escape" should "be delivered as Escape rather than merging into the sentinel that follows it" in runTui() {
     for
       _ <- ctrl('p')
-      _ <- verifyState("palette open")(state => state.commandRunnerSurface should not be empty)
+      _ <- verifyState("palette open")(state => com.serenity.CommandPaletteProbe.isOpen(state) shouldBe true)
       _ <- escape
-      _ <- verifyState("palette closed")(state => state.commandRunnerSurface shouldBe empty)
+      _ <- verifyState("palette closed")(state => com.serenity.CommandPaletteProbe.isOpen(state) shouldBe false)
     yield ()
   }
 

@@ -14,6 +14,8 @@ import unittest
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+from captured_stdout import capture_stdout  # noqa: E402
 
 
 def _load(name: str):
@@ -42,6 +44,7 @@ class CombinePerfRunsTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
 
     def _path(self, name: str) -> str:
         return os.path.join(self._tmpdir.name, name)
