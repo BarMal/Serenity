@@ -61,4 +61,4 @@ private[perf] object LigatureTypingBenchmarks:
           fixedSampleCount = true
         )
       )
-    ).map(_.measuringAllThreads)
+    )

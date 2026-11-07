@@ -22,7 +22,7 @@ object LaptopPresentBenchmarks:
     )
 
   def benchmarks(presentWindow: => SwingWindow): List[BenchmarkRunner.Benchmark] =
-    List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow)).map(_.measuringAllThreads)
+    List(presentBenchmark(presentWindow), presentCaretBenchmark(presentWindow))
 
   /** A full-window present of a freshly rendered frame, through to the display.
     *
