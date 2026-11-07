@@ -51,10 +51,12 @@ sbt                                          # once; keep it open
 
 ### Before a PR
 
-Run the Scala checks before opening or updating a PR:
+Run the Scala checks before opening or updating a PR. The full `sbt test` is left to CI: the merge train runs the whole
+suite on Linux, Windows and macOS for each batch before anything merges, so run the specs you changed (see the fast
+local loop above) rather than the 15–26 minute full run:
 
 ```bash
-sbt -v test assembly architectureCheck
+sbt -v assembly architectureCheck
 ```
 
 Run formatting and Scalafix before committing when changing Scala code:
