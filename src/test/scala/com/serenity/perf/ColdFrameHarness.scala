@@ -13,7 +13,7 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameDiff, FramePlanReport}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport}
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
@@ -125,6 +125,9 @@ trait ColdFrameHarness:
 
   protected val oracleImages: OracleImages = OracleImages(referenceFrames)
 
+  /** How many failing steps of one session get the full report and its PNGs; the rest get the short line. */
+  private val FullReports = 3
+
   /** Draws the cold frame of `state` into lent images, with caches made for this frame alone, and runs `use` on it
     * before the images go back; the frame is valid only inside `use`.
     */
@@ -143,6 +146,21 @@ trait ColdFrameHarness:
 
   protected def failureLine(step: Int, label: String, diff: Seq[(Int, Int)], plan: Option[FramePlan]): String =
     s"step $step ($label): ${summary(diff)}; ${FramePlanReport.describe(plan)}"
+
+  /** [[failureLine]] plus what a log needs to say why: the colours of the first differing pixels in each frame, which
+    * of them lie outside every rect the window presented, and the frames as PNGs beside the JUnit reports.
+    */
+  protected def failureReport(
+    step: Int,
+    label: String,
+    drawn: BufferedImage,
+    cold: BufferedImage,
+    diff: Seq[(Int, Int)],
+    plan: Option[FramePlan],
+    scale: Double
+  ): String =
+    val coverage = FramePlanReport.coverage(plan, diff, scale, drawn.getWidth, drawn.getHeight)
+    s"${failureLine(step, label, diff, plan)}\n${FrameMismatchDump.write(s"step $step $label", drawn, cold, diff, Some(coverage))}"
 
   final protected class Session(document: RichTextDocument, scale: Double, config: AppConfig = baseConfig):
     private val (stateManager, id) =
@@ -163,6 +181,7 @@ trait ColdFrameHarness:
     private val shown     = AtomicReference(stateManager.getCurrentState.unsafeRunSync())
     private val failures  = AtomicReference(Vector.empty[String])
     private val stepCount = AtomicInteger(0)
+    private val reported  = AtomicInteger(0)
     private val onScreen  = AtomicReference(frames.render(shown.get, Damage.Everything))
 
     def placeCursor(line: Int, column: Int): Unit =
@@ -197,9 +216,16 @@ trait ColdFrameHarness:
       shown.set(after)
       val drawn = frames.render(after, DamageProducer.forTransition(before, after))
       onScreen.set(drawn)
-      val diff = differing(drawn, after, scale)
-      val n    = stepCount.incrementAndGet()
-      if diff.nonEmpty then failures.updateAndGet(_ :+ failureLine(n, label, diff, frames.lastPlan))
+      val n = stepCount.incrementAndGet()
+      coldFrameWith(after, scale) { cold =>
+        val diff = FrameDiff.differing(drawn, cold)
+        if diff.nonEmpty then
+          val full = reported.incrementAndGet() <= FullReports
+          val report =
+            if full then failureReport(n, label, drawn, cold, diff, frames.lastPlan, scale)
+            else failureLine(n, label, diff, frames.lastPlan)
+          failures.updateAndGet(_ :+ report)
+      }
 
     /** What a cold frame draws for the state as it now stands. */
     def coldFrame(): BufferedImage = Pooled(scale, persists = false).render(shown.get, Damage.Everything)
