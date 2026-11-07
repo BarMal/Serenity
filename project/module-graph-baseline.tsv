@@ -2,13 +2,6 @@
 # Each line is an edge from a lower layer to a higher one (see ModuleGraph.Layers), which a layer must not have.
 # This list may shrink, never grow. Removing an entry is the point.
 # Columns: from-module <TAB> from-file <TAB> to-module <TAB> to-file
-core-text	src/main/scala/com/serenity/io/AtomicFileWriter.scala	app	src/main/scala/com/serenity/io/RenameRetryPolicy.scala
-manuscript	src/main/scala/com/serenity/publish/ManuscriptExport.scala	app	src/main/scala/com/serenity/io/FileType.scala
 markdown	src/main/scala/com/serenity/markdown/MarkdownInlineView.scala	app	src/main/scala/com/serenity/config/DisplayEnums.scala
-theme	src/main/scala/com/serenity/ui/fonts/FontLoader.scala	app	src/main/scala/com/serenity/state/models/Buffer.scala
-theme	src/main/scala/com/serenity/ui/fonts/FontLoader.scala	app	src/main/scala/com/serenity/ui/layout/CellMetrics.scala
-theme	src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala	app	src/main/scala/com/serenity/config/DisplayEnums.scala
-theme	src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala	app	src/main/scala/com/serenity/document/MarkdownHeadingIndex.scala
-theme	src/main/scala/com/serenity/ui/openings/MarkdownOpenings.scala	app	src/main/scala/com/serenity/document/MarkdownHeadingIndex.scala
-theme	src/main/scala/com/serenity/ui/theme/MarkdownInlineStyling.scala	markdown	src/main/scala/com/serenity/markdown/MarkdownInlineSpans.scala
-theme	src/main/scala/com/serenity/ui/theme/config/AppThemeManager.scala	app	src/main/scala/com/serenity/state/models/AppState.scala
+theme	src/main/scala/com/serenity/ui/theme/RichTextStyling.scala	app	src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala
+theme	src/main/scala/com/serenity/ui/theme/TextStyle.scala	app	src/main/scala/com/serenity/ui/fonts/LogicalFontFamilies.scala

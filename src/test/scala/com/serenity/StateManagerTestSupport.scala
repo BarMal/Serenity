@@ -28,7 +28,7 @@ trait StateManagerTestSupport:
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     fileDialog: Option[FileDialog] = None,
-    initialConfig: AppConfig = AppConfig.conventional
+    initialConfig: AppConfig = ChromeOn.config
   ): IO[StateManager] =
     IO.blocking(TestTemp.directory(s"${loggerName.toLowerCase}-state-manager"))
       .flatMap(root =>
@@ -48,7 +48,7 @@ trait StateManagerTestSupport:
     onFontConfigChanged: FontConfig => IO[Unit] = _ => IO.unit,
     deviceTextScaleProvider: IO[Double] = IO.pure(1.0),
     fileDialog: Option[FileDialog] = None,
-    initialConfig: AppConfig = AppConfig.conventional
+    initialConfig: AppConfig = ChromeOn.config
   ): StateManager =
     createStateManagerIO(loggerName, onFontConfigChanged, deviceTextScaleProvider, fileDialog, initialConfig)
       .unsafeRunSync()

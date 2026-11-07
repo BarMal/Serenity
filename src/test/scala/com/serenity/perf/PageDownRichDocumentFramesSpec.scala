@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, ProseMeasure, StatusLinePlacement, TabStripMode}
 import com.serenity.keystroke.events.PageDown
 import com.serenity.richtext.{
@@ -21,7 +22,7 @@ import com.serenity.richtext.{
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameMismatchDump
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -208,13 +209,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     fringe: Boolean = false
   ): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), 1) { frames =>
-      val cold = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
-      val differing =
-        for
-          x <- 0 until drawn.getWidth
-          y <- 0 until drawn.getHeight
-          if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-        yield (x, y)
+      val cold      = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
+      val differing = FrameDiff.differing(drawn, cold)
       if differing.nonEmpty then
         System.err.println(
           FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
@@ -282,7 +278,7 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   )
 
   for
-    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
+    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> ChromeOn.config)
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- documents
     if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")

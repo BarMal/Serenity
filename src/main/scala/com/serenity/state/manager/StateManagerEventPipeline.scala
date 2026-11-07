@@ -189,7 +189,8 @@ final private[manager] class StateManagerEventPipeline(
     MouseHitTestingPort(
       currentState = modelCommit.currentState,
       applyReducerResult = applyReducerResult,
-      authoritativeScene = state.authoritativeScene
+      authoritativeScene = state.authoritativeScene,
+      wrapCache = wrappedLines
     ),
     editorMouseTargeting,
     editorContextMenuHitTesting,
@@ -283,7 +284,7 @@ final private[manager] class StateManagerEventPipeline(
             case FocusScopes.PeekKeyOutcome.Consumed(_) => None
       case _ => None
 
-  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor centred once for all of its keys. */
+  /** Commits a run [[typedRunStep]] folded from `start`, with the cursor placed once for all of its keys. */
   private[manager] def commitTypedRun(start: Model, typed: Model): cats.effect.IO[Unit] =
     val centred =
       typed.copy(app =
@@ -444,10 +445,13 @@ final private[manager] class StateManagerEventPipeline(
     registry: CommandRegistry
   ): cats.effect.IO[Unit] =
     val unchecked = prevState.copy(runtime = prevState.runtime.copy(projectPresence = ProjectPresence.Unchecked))
-    applyReducerResult(AppEventReducer.reduce(event, unchecked, registry)(using balance), prevState) >>
-      modelCommit.currentState.flatMap(opened =>
-        CommandRunnerOpening.openedBy(prevState, opened).traverse_(commandRunnerLoads.request(_, prevState))
-      )
+    applyReducerResult(AppEventReducer.reduce(event, unchecked, registry)(using balance), prevState)
+
+  /** The reads a just-opened command picker or settings view fills in (#1911): installed on the commit boundary, so it
+    * runs however the surface was opened -- Ctrl+P, or the Open Settings command.
+    */
+  private[manager] def requestRunnerLoads(surfaceId: SurfaceId, before: AppState): cats.effect.IO[Unit] =
+    commandRunnerLoads.request(surfaceId, before)
 
   /** Bumps `markdownPreviewEditGeneration` synchronously for any buffer this event's dispatch changed the content of,
     * provided that buffer currently has a live markdown preview -- and schedules a debounced commit of that generation

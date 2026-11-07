@@ -19,8 +19,8 @@ final case class SurfaceGeometry(
     deviceScale: DeviceScale,
     identity: ScreenIdentity
 ):
-  def deviceWidthPx: Int  = Java2DRenderSurface.deviceImageDimension(logicalWidthPx, deviceScale.x)
-  def deviceHeightPx: Int = Java2DRenderSurface.deviceImageDimension(logicalHeightPx, deviceScale.y)
+  def deviceWidthPx: Int  = SurfaceSizing.deviceImageDimension(logicalWidthPx, deviceScale.x)
+  def deviceHeightPx: Int = SurfaceSizing.deviceImageDimension(logicalHeightPx, deviceScale.y)
 
 /** Where the renderer paints a window's frames. A window system implements it; the renderer asks it for the surface to
   * draw into and hands the finished frame back, with no window-system type crossing the boundary.

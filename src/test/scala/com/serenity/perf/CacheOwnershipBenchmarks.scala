@@ -70,37 +70,40 @@ private[perf] object CacheOwnershipBenchmarks:
     * subtract.
     */
   private def anchorWrapBenchmarks: List[BenchmarkRunner.Benchmark] =
-    val unchanged = cursorOnScreen(LaptopFrameBenchmarks.proseState)
-    val expected  = caretCell(unchanged)
+    lazy val unchanged = cursorOnScreen(LaptopFrameBenchmarks.proseState)
+    lazy val expected  = caretCell(unchanged)
     def editing(): java.util.concurrent.atomic.AtomicReference[AppState] =
       java.util.concurrent.atomic.AtomicReference(unchanged)
-    val withLookup = editing()
-    val reduceOnly = editing()
-    val letters    = BenchmarkFixtures.randomLetters(seed = 7L)
-    List(
-      BenchmarkRunner.Benchmark(
-        "layout.anchor_wrap.warm_caret_lookup",
-        Warmups,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(expected.nonEmpty && caretCell(unchanged) == expected, "caret lookup found no cell"),
-        () => caretCell(unchanged),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.anchor_wrap.after_edit.caret_lookup",
-        Warmups,
-        Iterations,
-        () => assert(caretCell(withLookup.updateAndGet(typed(letters.next(), _))).nonEmpty, "edited caret has no cell"),
-        () => caretCell(withLookup.updateAndGet(typed(letters.next(), _))),
-        fixedSampleCount = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.anchor_wrap.after_edit.reduce_only",
-        Warmups,
-        Iterations,
-        () => assert(reduceOnly.updateAndGet(typed(letters.next(), _)) ne unchanged, "typing changed nothing"),
-        () => reduceOnly.updateAndGet(typed(letters.next(), _)),
-        fixedSampleCount = true
+    lazy val withLookup = editing()
+    lazy val reduceOnly = editing()
+    val letters         = BenchmarkFixtures.randomLetters(seed = 7L)
+    BenchmarkRunner.Benchmark.sharing((unchanged, expected, withLookup, reduceOnly))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "layout.anchor_wrap.warm_caret_lookup",
+          Warmups,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(expected.nonEmpty && caretCell(unchanged) == expected, "caret lookup found no cell"),
+          () => caretCell(unchanged),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.anchor_wrap.after_edit.caret_lookup",
+          Warmups,
+          Iterations,
+          () =>
+            assert(caretCell(withLookup.updateAndGet(typed(letters.next(), _))).nonEmpty, "edited caret has no cell"),
+          () => caretCell(withLookup.updateAndGet(typed(letters.next(), _))),
+          fixedSampleCount = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.anchor_wrap.after_edit.reduce_only",
+          Warmups,
+          Iterations,
+          () => assert(reduceOnly.updateAndGet(typed(letters.next(), _)) ne unchanged, "typing changed nothing"),
+          () => reduceOnly.updateAndGet(typed(letters.next(), _)),
+          fixedSampleCount = true
+        )
       )
     )
 
@@ -144,36 +147,40 @@ private[perf] object CacheOwnershipBenchmarks:
   private def coldFontBenchmarks: List[BenchmarkRunner.Benchmark] =
     val proseSizes    = AtomicInteger(0)
     val snapshotFonts = FreshFonts(proseBase)
-    val document      = Buffer.fromString(bufferId, BenchmarkFixtures.loremIpsumProse(paragraphs = 3))
-    List(
-      coldProbe("layout.cold_font.glyph_advances", proseBase)(ColdFontProbes.glyphAdvances)(_._4 > 0),
-      coldProbe("layout.cold_font.shaping_barriers", proseBase)(ColdFontProbes.shapingBarriers)(_ >= 1),
-      coldProbe("layout.cold_font.font_line_extents", proseBase)(ColdFontProbes.lineExtents)(_.heightPx > 0),
-      coldProbe("layout.cold_font.measured_layout_memo.proportional", proseBase)(ColdFontProbes.measuredLayoutDecision)(
-        identity
-      ),
-      coldProbe("layout.cold_font.measured_layout_memo.monospaced", codeBase)(ColdFontProbes.measuredLayoutDecision)(
-        _ => true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.cold_font.prose_column",
-        Warmups,
-        Iterations,
-        () =>
-          val state = proseColumnState(14f + proseSizes.incrementAndGet() * 0.001f)
-          assert(!state.runtime.capabilities.isCellGrid, "a cell grid never measures the prose font")
-          assert(ProseColumn.widthCells(state).nonEmpty, "prose column measure was not applied")
-        ,
-        () => ProseColumn.widthCells(proseColumnState(14f + proseSizes.incrementAndGet() * 0.001f)),
-        fixedSampleCount = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.cold_font.text_layout_snapshot",
-        Warmups,
-        Iterations,
-        () => assert(snapshotOf(document, snapshotFonts.next()).visualLines.nonEmpty, "snapshot has no rows"),
-        () => snapshotOf(document, snapshotFonts.next()),
-        fixedSampleCount = true
+    lazy val document = Buffer.fromString(bufferId, BenchmarkFixtures.loremIpsumProse(paragraphs = 3))
+    BenchmarkRunner.Benchmark.sharing(document)(
+      List(
+        coldProbe("layout.cold_font.glyph_advances", proseBase)(ColdFontProbes.glyphAdvances)(_._4 > 0),
+        coldProbe("layout.cold_font.shaping_barriers", proseBase)(ColdFontProbes.shapingBarriers)(_ >= 1),
+        coldProbe("layout.cold_font.font_line_extents", proseBase)(ColdFontProbes.lineExtents)(_.heightPx > 0),
+        coldProbe("layout.cold_font.measured_layout_memo.proportional", proseBase)(
+          ColdFontProbes.measuredLayoutDecision
+        )(
+          identity
+        ),
+        coldProbe("layout.cold_font.measured_layout_memo.monospaced", codeBase)(ColdFontProbes.measuredLayoutDecision)(
+          _ => true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.cold_font.prose_column",
+          Warmups,
+          Iterations,
+          () =>
+            val state = proseColumnState(14f + proseSizes.incrementAndGet() * 0.001f)
+            assert(!state.runtime.capabilities.isCellGrid, "a cell grid never measures the prose font")
+            assert(ProseColumn.widthCells(state).nonEmpty, "prose column measure was not applied")
+          ,
+          () => ProseColumn.widthCells(proseColumnState(14f + proseSizes.incrementAndGet() * 0.001f)),
+          fixedSampleCount = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.cold_font.text_layout_snapshot",
+          Warmups,
+          Iterations,
+          () => assert(snapshotOf(document, snapshotFonts.next()).visualLines.nonEmpty, "snapshot has no rows"),
+          () => snapshotOf(document, snapshotFonts.next()),
+          fixedSampleCount = true
+        )
       )
     )
 
@@ -199,8 +206,8 @@ private[perf] object CacheOwnershipBenchmarks:
   private def twoRuntimes(name: String, secondRuntimeLetter: Char => Char)(using
     IORuntime
   ): BenchmarkRunner.Benchmark =
-    val (first, firstBuffer)   = LaptopFrameBenchmarks.proseStateManager()
-    val (second, secondBuffer) = LaptopFrameBenchmarks.proseStateManager()
+    lazy val (first, firstBuffer)   = LaptopFrameBenchmarks.proseStateManager()
+    lazy val (second, secondBuffer) = LaptopFrameBenchmarks.proseStateManager()
     def weight(manager: StateManager, id: BufferId): Option[Int] =
       manager.getCurrentState.unsafeRunSync().persisted.buffers.get(id).map(_.document.content.weight)
     val letters = BenchmarkFixtures.randomLetters(seed = 42L)
@@ -208,20 +215,22 @@ private[perf] object CacheOwnershipBenchmarks:
       val letter = letters.next()
       first.applyEvent(InsertChar(letter)).unsafeRunSync()
       second.applyEvent(InsertChar(secondRuntimeLetter(letter))).unsafeRunSync()
-    BenchmarkRunner.Benchmark(
-      name,
-      Warmups,
-      BenchmarkIterationCounts.RandomTyping,
-      () =>
-        val (before1, before2) = (weight(first, firstBuffer), weight(second, secondBuffer))
-        keystroke()
-        assert(
-          weight(first, firstBuffer) == before1.map(_ + 1) && weight(second, secondBuffer) == before2.map(_ + 1),
-          s"both runtimes should have grown by one character: $before1/$before2"
-        )
-      ,
-      () => keystroke(),
-      fixedSampleCount = true
+    BenchmarkRunner.Benchmark.building((first, firstBuffer, second, secondBuffer))(
+      BenchmarkRunner.Benchmark(
+        name,
+        Warmups,
+        BenchmarkIterationCounts.RandomTyping,
+        () =>
+          val (before1, before2) = (weight(first, firstBuffer), weight(second, secondBuffer))
+          keystroke()
+          assert(
+            weight(first, firstBuffer) == before1.map(_ + 1) && weight(second, secondBuffer) == before2.map(_ + 1),
+            s"both runtimes should have grown by one character: $before1/$before2"
+          )
+        ,
+        () => keystroke(),
+        fixedSampleCount = true
+      )
     )
 
 end CacheOwnershipBenchmarks

@@ -95,7 +95,7 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
     val opened  = program.unsafeRunSync()
     val another = SurfaceId("another-palette")
 
-    opened.commandRunnerSurface.map(_.id) should not be Some(another)
+    opened.commandPickerSurface.map(_.id) should not be Some(another)
     CommandRunnerOpening.withPresenceDetected(opened, another, ProjectPresence.NotDetected) shouldBe opened
     CommandRunnerOpening.withPresetsListed(opened, another, Nil) shouldBe opened
   }
@@ -103,6 +103,6 @@ class CommandRunnerOpeningPresenceSpec extends AnyFlatSpec with Matchers:
   it should "leave a state without a palette as it is" in {
     val state: AppState = AppState.initial
 
-    state.commandRunnerSurface shouldBe None
+    state.commandPickerSurface shouldBe None
     CommandRunnerOpening.withPresenceDetected(state, SurfaceId("palette"), ProjectPresence.Detected) shouldBe state
   }

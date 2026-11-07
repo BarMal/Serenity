@@ -325,6 +325,15 @@ class ExcludedRowTests(unittest.TestCase):
         self.assertTrue(compare_perf_runs.is_excluded("laptop.render.typing_frame_2x.ligature_font", listed))
         self.assertFalse(compare_perf_runs.is_excluded("render.markdown.inline_lens", listed))
 
+    def test_the_skia_rows_are_off_the_gate(self) -> None:
+        listed = compare_perf_runs.load_excluded(str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
+        for row in (
+            "skia.compare.skia_raster.system_monospace.typing_frame_2x",
+            "skia.compare.java2d.bundled_ligature_font.scroll_frame_2x",
+        ):
+            self.assertTrue(compare_perf_runs.is_excluded(row, listed), row)
+        self.assertFalse(compare_perf_runs.is_excluded("skiable.row", listed))
+
     def test_the_default_exclusion_file_is_the_checked_in_one(self) -> None:
         self.assertEqual(compare_perf_runs.DEFAULT_EXCLUDE_FILE, str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
 

@@ -29,8 +29,8 @@ abstract class PixelLiftingBehaviour extends AnyFlatSpec with Matchers:
 
   private def painted(scale: Double): (FramePixels, RenderSurface) =
     val image = frames.newFrame(
-      Java2DRenderSurface.deviceImageDimension(width, scale),
-      Java2DRenderSurface.deviceImageDimension(height, scale)
+      SurfaceSizing.deviceImageDimension(width, scale),
+      SurfaceSizing.deviceImageDimension(height, scale)
     )
     val surface = frames.surfaceOver(image, metrics, font, width, height, scale, persists = true, RenderCaches.create())
     surface.clearViewport(black)

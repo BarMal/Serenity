@@ -142,15 +142,15 @@ private[manager] object PanelTransitions:
     tree.flatMap { workspaceTree =>
       if isNewlyDocked then
         val (splitId, leafId) = workspaceTree.nextDockIds(surfaceId)
-        workspaceTree.dockSized(surfaceId, position, splitId, leafId, size, state.runtime.viewportSize)
+        workspaceTree.dockSized(surfaceId, position, splitId, leafId, size, state.panelViewportSize)
       else if workspaceTree.positionForSurface(surfaceId).contains(position) then
         workspaceTree
-          .allocationRatio(surfaceId, size, state.runtime.viewportSize)
+          .allocationRatio(surfaceId, size, state.panelViewportSize)
           .flatMap(workspaceTree.resizeSurface(surfaceId, _))
       else
         val (splitId, _) = workspaceTree.nextDockIds(surfaceId)
         workspaceTree.moveSurface(surfaceId, position, splitId).flatMap { moved =>
-          moved.allocationRatio(surfaceId, size, state.runtime.viewportSize).flatMap(moved.resizeSurface(surfaceId, _))
+          moved.allocationRatio(surfaceId, size, state.panelViewportSize).flatMap(moved.resizeSurface(surfaceId, _))
         }
     }
 

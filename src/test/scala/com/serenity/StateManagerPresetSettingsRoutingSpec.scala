@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.keystroke.events.ToggleCommandRunner
+import com.serenity.keystroke.events.RunCommand
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -96,7 +96,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
     val sm    = managerWithStore(store)
     store.upsert(drafting).unsafeRunSync()
     store.upsert(drafting.copy(name = "Second")).unsafeRunSync()
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     execute(
       sm,
       "ui-preset-clear-theme",
@@ -171,7 +171,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
   it should "refuse a built-in preset and change nothing" in {
     val store = UiPresetStore(TestTemp.directory("preset-routing-built-in").resolve("ui-presets.json"))
     val sm    = managerWithStore(store)
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
     execute(
       sm,
       "ui-preset-overwrite",
@@ -204,7 +204,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
   "Editing the global settings" should "change the live config and create no preset" in {
     val store = UiPresetStore(TestTemp.directory("preset-routing-global").resolve("ui-presets.json"))
     val sm    = managerWithStore(store)
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     execute(
       sm,
@@ -220,7 +220,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
   it should "change the live config when the global page's own row is submitted" in {
     val store = UiPresetStore(TestTemp.directory("preset-routing-global-row").resolve("ui-presets.json"))
     val sm    = managerWithStore(store)
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     submitInput(sm, inputOn(sm, "settings-code-font", "code-font-size"), EditedFontSize.toString)
 
@@ -231,7 +231,7 @@ class StateManagerPresetSettingsRoutingSpec extends AnyFlatSpec with Matchers:
   it should "treat a global-targeted edit exactly like the edit it carries" in {
     val store = UiPresetStore(TestTemp.directory("preset-routing-global-target").resolve("ui-presets.json"))
     val sm    = managerWithStore(store)
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     execute(
       sm,
