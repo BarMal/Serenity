@@ -164,14 +164,14 @@ object StartupWarmUp:
     scratchRoot: Path = systemTempDirectory,
     dictionaryCache: DictionaryCache = DictionaryCache()
   )(using Balance): IO[Outcome] =
-    lowPriorityThread.use { warmUpThread =>
+    WarmUpDiag.mark("run: entered") >> lowPriorityThread.use { warmUpThread =>
       val warmUp = (
         throwawayEditor(config, theme, viewport, document(plan.paragraphs), scratchRoot, dictionaryCache),
-        frames
+        frames.evalTap(_ => WarmUpDiag.mark("frames: acquired"))
       ).tupled
-        .use((editor, offscreen) => exercise(editor, offscreen, config, plan, firstInput))
+        .use((editor, offscreen) => WarmUpDiag.mark("exercise: start") >> exercise(editor, offscreen, config, plan, firstInput))
         .evalOn(warmUpThread)
-      IO.race(firstInput.get, warmUp).map(_.fold(_ => Outcome.Interrupted, identity))
+      IO.race(firstInput.get, warmUp).map(_.fold(_ => Outcome.Interrupted, identity)) <* WarmUpDiag.mark("run: done")
     }
 
   /** Checks for input before every batch as well as racing it: the race only cancels once its fiber is scheduled, and
@@ -186,6 +186,7 @@ object StartupWarmUp:
     firstInput: Deferred[IO, Unit]
   )(using Balance): IO[Outcome] =
     for
+      _               <- WarmUpDiag.mark("exercise: building router")
       router          <- InputRouter.create[IO, Event](new TextEntryTranslator(config))
       cursorVisible   <- Ref.of[IO, Boolean](true)
       translatorCache <- Ref.of[IO, Option[AppRuntimeRenderLoops.FocusedTranslatorCacheEntry]](None)
@@ -223,7 +224,9 @@ object StartupWarmUp:
       case batch :: rest =>
         firstInput.tryGet.flatMap {
           case Some(_) => IO.pure(Outcome.Interrupted)
-          case None    => step(batch) >> remaining(rest, done + 1, firstInput, step)
+          case None =>
+          WarmUpDiag.mark(s"batch ${done + 1}: start") >> step(batch) >> WarmUpDiag.mark(s"batch ${done + 1}: done") >>
+            remaining(rest, done + 1, firstInput, step)
         }
 
   /** Parses the configured spell-check dictionaries into `cache` ahead of the first analysis, which would otherwise
@@ -248,9 +251,11 @@ object StartupWarmUp:
     given LoggerFactory[IO] = NoOpFactory[IO]
     val noSessionWrites     = SessionManager.SessionPolicy(saveOnFileChange = false, saveOnAppClose = false)
     for
+      _ <- Resource.eval(WarmUpDiag.mark("editor: building"))
       sessionRoot <- Resource.make(IO.blocking(Files.createTempDirectory(scratchRoot, "serenity-warm-up")))(
         DirectoryTree.deleteRecursively
       )
+      _ <- Resource.eval(WarmUpDiag.mark("editor: temp directory created"))
       editor <- Resource.make(
         StateManager(
           NoOpLogger[IO],
@@ -260,10 +265,14 @@ object StartupWarmUp:
           dictionaryCache = dictionaryCache
         )
       )(_.runtimeLifecycle.forceQuit)
+      _ <- Resource.eval(WarmUpDiag.mark("editor: StateManager built"))
       _ <- Resource.eval(
         editor.updateStateValidated(state => state.copy(persisted = state.persisted.copy(theme = theme))) >>
+          WarmUpDiag.mark("editor: theme set") >>
           editor.applyEvent(ResizeEvent(viewport)) >>
-          editor.updateStateValidated(state => seeded(state, content).getOrElse(state))
+          WarmUpDiag.mark("editor: resized") >>
+          editor.updateStateValidated(state => seeded(state, content).getOrElse(state)) >>
+          WarmUpDiag.mark("editor: seeded")
       )
     yield editor
 
