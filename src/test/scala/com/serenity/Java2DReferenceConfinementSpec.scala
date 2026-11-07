@@ -85,14 +85,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     * are pinned on Windows only, and the focused rich-text and virtual drop cap suites on macOS only, where Skia leaves
     * a few pixels of one row different; the raised letter and column paging suites are pinned everywhere.
     */
-  private val pinnedBySkiaGap: Set[String] = Set(
-    "perf/ColumnPagingFramesSpec.scala",
-    "perf/FocusedRichTextFrameSpec.scala",
-    "perf/HeadingSpacingFramesSpec.scala",
-    "perf/LineNumberGutterSpillSpec.scala",
-    "perf/RaisedLetterIncrementalFrameSpec.scala",
-    "perf/VirtualDropCapIncrementalFrameSpec.scala"
-  )
+  private val pinnedBySkiaGap: Set[String] = Set.empty
 
   /** Window specs that still use Java2D as the reference for what Skia paints; the list only shrinks. */
   private val windowSpecsNotYetMoved: Set[String] = Set(

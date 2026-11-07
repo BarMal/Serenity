@@ -14,7 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.testkit.{FrameMismatchDump, FramePlanReport}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{ChromeOn, FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
+import com.serenity.{ChromeOn, FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -68,10 +68,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     )
 
   /** The renderer the frames are drawn with. */
-  // Windows only: on Skia the typing case with line numbers leaves a pixel at (20, 90) different from the cold frame
-  // (CI on #2402, two runs); Linux and macOS pass. It stays on Java2D there until that is fixed (#2380).
-  private def referenceFrames: FrameBackend =
-    if System.getProperty("os.name", "").toLowerCase.contains("windows") then Java2DFrames else SkiaFrames
+  private def referenceFrames: FrameBackend = SkiaFrames
 
   private val oracleImages = OracleImages(referenceFrames)
 
