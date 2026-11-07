@@ -27,7 +27,17 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
   /** Starts a window at (37,41), asks for `Target` the way `ask` says, and hands over the frame once the toolkit has
     * taken the size, which is when a move requested with it would have been made too.
     */
+  /** DIAGNOSTIC: each case is run `Repeats` times, a window of its own each, so a race at window creation gets many
+    * chances in one CI run; the first failing repeat fails the test, with its trace written.
+    */
+  private val Repeats = 30
+
   private def afterResize(
+    label: String
+  )(ask: com.serenity.ui.terminal.SwingWindow => Unit)(check: Frame => Unit): Unit =
+    (1 to Repeats).foreach(i => afterResizeOnce(s"$label #$i")(ask)(check))
+
+  private def afterResizeOnce(
     label: String
   )(ask: com.serenity.ui.terminal.SwingWindow => Unit)(check: Frame => Unit): Unit =
     DisplayExclusive {
