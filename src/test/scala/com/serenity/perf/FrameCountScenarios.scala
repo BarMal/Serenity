@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.benchmark.ShapingTraffic
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
-import com.serenity.ui.skia.{PinnedInterTypeface, SkiaTextCaches}
+import com.serenity.ui.skia.SkiaTestFonts
 import com.serenity.ui.tui.TuiFrameCountScenario
 
 /** The fixed interactions whose frame counts the ratchet pins: what the planner decided for each, measured on Skia CPU
@@ -128,10 +128,18 @@ private[perf] object FrameCountScenarios:
     /** What shaping the frame just drawn paid for, as the render benchmark's shaping traffic reads it. */
     def shapings(): Long = ShapingTraffic.Frame.of(caches.frameCounters.drain()).shapings
 
-  /** Skia draws the pinned Inter from its bundled bytes, not from whichever Inter (or fallback) the machine has. */
-  private def pinnedInterCaches(): RenderCaches =
-    val caches = RenderCaches.create()
-    val _      = SkiaTextCaches.of(caches.backendCaches, PinnedInterTypeface.system)
+  private val PinnedInterResource = "/fonts/Inter-Regular-Subset.ttf"
+
+  /** The family Skia is given for the pinned Inter, or why it could not be installed. */
+  private[perf] def pinnedInterFamily: Either[String, String] =
+    SkiaTestFonts.install(RenderCaches.create().backendCaches, PinnedInterResource)
+
+  /** Caches whose Skia draws the pinned Inter from its bundled bytes, not from whichever Inter (or fallback) the
+    * machine has: the font is loaded into AWT only, and runs split by the typeface's widths.
+    */
+  private[perf] def pinnedInterCaches(caches: RenderCaches = RenderCaches.create()): RenderCaches =
+    val installed = SkiaTestFonts.install(caches.backendCaches, PinnedInterResource)
+    require(installed.isRight, installed.left.getOrElse(""))
     caches
 
   private def deviceSize(logicalPx: Int, scale: Double): Int = math.ceil(logicalPx * scale).toInt

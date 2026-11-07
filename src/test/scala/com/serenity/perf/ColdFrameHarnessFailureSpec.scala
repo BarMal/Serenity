@@ -35,3 +35,21 @@ class ColdFrameHarnessFailureSpec extends AnyFlatSpec with Matchers with ColdFra
     failure should include("pane 0:")
     failure should include("preserved y")
   }
+
+  "The report for a deliberately mismatching frame" should "give the colours, the repaint rects and which pixels fell outside them" in {
+    val session = Session(document, 1.0)
+    session(InsertChar('Q'), "edit")
+    val shown = session.screen
+    shown.setRGB(5, 2, shown.getRGB(5, 2) ^ 0x000001)
+    val diff = differing(shown, session.currentState, 1.0)
+    val report = coldFrameWith(session.currentState, 1.0) { cold =>
+      failureReport(1, "edit", shown, cold, diff, session.planOfLastFrame, 1.0)
+    }
+    report should include("step 1 (edit)")
+    report should include("1 px differ")
+    report should include("(5,2)")
+    report should include("actual=")
+    report should include("expected=")
+    report should include("repaint coverage:")
+    report should include("repaint")
+  }

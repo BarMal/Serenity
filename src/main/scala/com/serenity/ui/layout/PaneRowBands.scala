@@ -40,9 +40,15 @@ final class PaneRowBands private (
     * falls in.
     */
   def topPainting(caret: Row, gridRowPx: Int, targetRow: Int): Row =
+    topPainting(tops(caret), caret, gridRowPx, targetRow)
+
+  /** [[topPainting]] read off a walk of [[tops]] already under way, as [[topWithin]] reads a limit, so rows another
+    * limit has measured are not measured again.
+    */
+  def topPainting(walk: LazyList[(Row, Int)], caret: Row, gridRowPx: Int, targetRow: Int): Row =
     val rowPx               = math.max(1, gridRowPx)
     val targetPx            = targetRow * rowPx + rowPx / 2
-    val (reachable, beyond) = tops(caret).span((_, textTopPx) => textTopPx < (targetRow + 1) * rowPx)
+    val (reachable, beyond) = walk.span((_, textTopPx) => textTopPx < (targetRow + 1) * rowPx)
     (reachable ++ beyond.take(1))
       .minByOption((_, textTopPx) => (math.abs(textTopPx / rowPx - targetRow), math.abs(textTopPx - targetPx)))
       .fold(caret)(_._1)
