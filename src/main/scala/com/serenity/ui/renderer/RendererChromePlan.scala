@@ -221,7 +221,7 @@ private[renderer] object RendererChromePlan:
     for
       layout <- renderPlan.paneLayouts.get(paneId)
       if context.surface.addressesPixels && renderPlan.columnSnapshotsFor(paneId).isEmpty
-      last <- RendererPaneSetup.paneRowRects(layout.contentRect, context, snapshot).lastOption
+      last <- RendererPaneSetup.lastPaneRowRect(layout.contentRect, context, snapshot)
       topPx    = last.yPx + last.heightPx
       bottomPx = context.cellMetrics.toPixelY(layout.contentRect.bottom)
       if bottomPx > topPx && bottomPx - topPx < last.heightPx

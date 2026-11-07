@@ -164,6 +164,7 @@ com.serenity.app.DesktopHooksSpec	1	0.432
 com.serenity.SessionManagerSpec	1	0.42
 com.serenity.state.manager.StateManagerDictionaryCacheSpec	1	0.415
 com.serenity.AppRuntimeInputEventSpec	1	0.412
+com.serenity.ui.renderer.LastPaneRowRectSpec	2	0.4
 com.serenity.ui.openings.RichTextOpeningsSpec	1	0.392
 com.serenity.PinnedPanelMouseSpec	1	0.382
 com.serenity.ui.layout.WrappedLineCacheSpec	1	0.38
