@@ -2,31 +2,22 @@ package com.serenity
 
 import java.nio.file.{Files, Path}
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.AppMode
+import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.ToggleCommandRunner
 import com.serenity.project.{ProjectPresence, ProjectTaskKind}
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent}
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.PanelPosition
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("ProjectWorkflowStateManagerSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("ProjectWorkflowStateManagerSpec", initialConfig = AppConfig.default)
 
   private def bottomTerminalText(state: com.serenity.state.models.AppState): Option[String] =
     state.pinnedSurfaces
@@ -143,9 +134,9 @@ class ProjectWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
     stateManager.getCurrentState.unsafeRunSync()
 
   private def projectBuildItem(state: AppState): CommandSurfaceItem.CommandItem =
-    state.commandRunnerSurface
-      .map(_.content)
-      .collect { case SurfaceContent.CommandPalette(runner) => runner.visibleItems }
+    CommandPaletteProbe
+      .runner(state)
+      .map(_.visibleItems)
       .getOrElse(fail("expected the command palette to be open"))
       .collectFirst { case item: CommandSurfaceItem.CommandItem if item.command.name == "project-build" => item }
       .getOrElse(fail("expected project-build to stay listed"))

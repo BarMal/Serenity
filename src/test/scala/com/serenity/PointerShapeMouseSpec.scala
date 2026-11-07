@@ -2,36 +2,23 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class PointerShapeMouseSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class PointerShapeMouseSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val viewport   = ViewportSize(100, 32)
   private val explorerId = SurfaceId("explorer")
 
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
+  private def makeStateManager(): StateManager =
+    createStateManager("PointerShapeMouseSpec", initialConfig = AppConfig.default)
 
   private def managerWithLeftExplorer(): StateManager =
     val root = Paths.get("/repo")

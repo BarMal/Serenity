@@ -112,6 +112,15 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     preset.targetEditorPaneCount shouldBe Some(2)
   }
 
+  it should "show the workspace mode in the status line of every built-in preset that shows one (#2570)" in {
+    val shown = UiPreset.builtInNames
+      .flatMap(name => UiPreset.builtIn(name).map(name -> _))
+      .filter(_._2.config.statusLine.isShown)
+
+    shown should not be empty
+    shown.filterNot(_._2.config.statusLine.segments.contains(StatusSegment.Mode)).map(_._1) shouldBe Nil
+  }
+
   it should "provide peer prose, code, and compact workflow presets" in {
     UiPreset.builtInNames shouldBe List("Writing", "Documentation", "Code", "Compact", "Review")
 
@@ -365,12 +374,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
       .withoutStatusLine
       .withWordWrap(false)
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
-      .withViewportSizing(
-        ViewportSizing(
-          width = ViewportAxisSizing.fromPercent(80.0, Some(120)),
-          height = ViewportAxisSizing.fromPercent(90.0, Some(40))
-        )
-      )
 
     val patched = UiPreset.Patch.TextDisplay(sourceConfig).applyTo(preset)
 
@@ -378,7 +381,6 @@ class UiPresetSpec extends AnyFlatSpec with Matchers:
     patched.config.statusLine.isPinned shouldBe false
     patched.config.surfaceConfig.wordWrapEnabled shouldBe false
     patched.config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets.fromPercent(20.0, 10.0)
-    patched.config.surfaceConfig.viewportSizing shouldBe sourceConfig.surfaceConfig.viewportSizing
     patched.pinnedPanels shouldBe List(panel)
     patched.targetEditorPaneCount shouldBe Some(1)
   }

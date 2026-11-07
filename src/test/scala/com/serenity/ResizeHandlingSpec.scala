@@ -2,7 +2,6 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, ViewportAxisSizing, ViewportSizing}
 import com.serenity.keystroke.events.ResizeEvent
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -34,7 +33,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = ChromeOn.config)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -87,10 +86,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val firstBuffer  = Buffer.fromString(BufferId(0), "first")
     val secondBuffer = Buffer.fromString(BufferId(1), "second")
     val initialState = com.serenity.state.models.AppState
-      .initial(AppConfig.conventional)
+      .initial(ChromeOn.config)
       .copy(
         persisted = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(firstBuffer.id -> firstBuffer, secondBuffer.id -> secondBuffer),
@@ -116,7 +115,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
             focus = Focus.EditorPane(firstPaneId)
           ),
         runtime = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .runtime
           .copy(
             nextBufferId = BufferId(2),
@@ -158,21 +157,8 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep editor viewport dimensions matched to the available pane area" in {
-    val viewportSizing = ViewportSizing(
-      width = ViewportAxisSizing(percent = 0.8, maxCells = None),
-      height = ViewportAxisSizing(percent = 1.0, maxCells = Some(20))
-    )
-    val initialState = com.serenity.state.models.AppState
-      .initial(AppConfig.conventional)
-      .copy(
-        persisted = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
-          .persisted
-          .copy(
-            config = AppConfig.conventional.withViewportSizing(viewportSizing)
-          )
-      )
-    val newSize = ViewportSize(120, 40)
+    val initialState = com.serenity.state.models.AppState.initial(ChromeOn.config)
+    val newSize      = ViewportSize(120, 40)
 
     val resizedState = com.serenity.state.reducers.SystemEventReducer
       .reduce(ResizeEvent(newSize), initialState)
@@ -193,7 +179,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = ChromeOn.config)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -223,7 +209,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = ChromeOn.config)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -270,7 +256,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = AppConfig.conventional)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, initialConfig = ChromeOn.config)(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -309,10 +295,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val bufferId = BufferId(0)
     val paneId   = PaneId(0)
     val state = com.serenity.state.models.AppState
-      .initial(AppConfig.conventional)
+      .initial(ChromeOn.config)
       .copy(
         persisted = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> Buffer.fromString(bufferId, longLine)),
@@ -325,7 +311,7 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
             )
           ),
         runtime = com.serenity.state.models.AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .runtime
           .copy(
             nextBufferId = BufferId(1),

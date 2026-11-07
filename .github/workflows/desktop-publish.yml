@@ -22,11 +22,47 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
+  # A master build (the nightly, or a manual dispatch on master) does not re-run the suite: the Cross-OS Tests nightly
+  # already runs it on Windows and macOS, and the Linux job in ci.yml covers Linux (#2557). Instead it takes the newest
+  # completed scheduled Cross-OS run on master, fails unless that run is green, and outputs the commit it tested; the
+  # build and publish jobs check out exactly that commit. It is the nightly's commit rather than master's head because
+  # GitHub can delay a scheduled run by hours while master moves on, so requiring the two to match would rarely publish.
+  # Tag builds and dispatches from other branches have no nightly to lean on, so they run the suite themselves.
+  gate:
+    name: Require green Cross-OS nightly
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.nightly.outputs.sha }}
+    steps:
+      - name: Check out the gate script
+        if: github.ref == 'refs/heads/master'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          sparse-checkout: scripts
+
+      - name: Require a green Cross-OS nightly
+        id: nightly
+        if: github.ref == 'refs/heads/master'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SHA="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/cross-os-tests.yml/runs?branch=master&event=schedule&per_page=20" \
+            | python3 scripts/cross_os_nightly_gate.py)"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
   build:
     name: Build ${{ matrix.artifact_suffix }}
+    needs: gate
     runs-on: ${{ matrix.os }}
+    # p90 36.9 min (macos-arm64) over 10 successful runs per OS (longest 40675248593, 40862800896); limit is 2x, rounded up.
+    timeout-minutes: 74
     # Each OS image and jar carries only its own Skiko natives (#2028); build.sbt reads this to pick the runtime jar.
     env:
       SERENITY_SKIKO_TARGET: ${{ matrix.artifact_suffix }}
@@ -45,7 +81,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.gate.outputs.sha || github.ref }}
           fetch-depth: 0
 
       # A release tag must name a plain X.Y.Z[-pre] version and sit on master, so a stray tag on a side branch cannot
@@ -76,12 +112,31 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
+      - name: Build runnable JAR
+        if: github.ref == 'refs/heads/master'
+        shell: bash
+        env:
+          SERENITY_NIGHTLY: 'true'
+        run: sbt -v clean assembly writePackageVersion
+
+      # Tag builds and other-branch dispatches run the suite here. NullRenderSurfaceSpec builds a benchmark window whose
+      # scaled GraphicsConfiguration reads the default screen device, which throws HeadlessException without a display,
+      # so the Linux leg runs under Xvfb as the ci.yml Test job does.
       - name: Test and build runnable JAR
+        if: github.ref != 'refs/heads/master'
         shell: bash
         env:
           # Branch builds are the nightly channel; a tag build leaves this off so PackageVersion reports release.
           SERENITY_NIGHTLY: ${{ github.ref_type == 'tag' && 'false' || 'true' }}
-        run: sbt -v clean test assembly writePackageVersion
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            sudo apt-get update
+            sudo apt-get install -y xvfb
+            xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v clean test assembly writePackageVersion
+          else
+            sbt -v clean test assembly writePackageVersion
+          fi
 
       - name: Verify tag, package version and BuildInfo agree
         if: github.ref_type == 'tag'
@@ -144,6 +199,11 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Build libSDL3 (Linux)
+        id: sdl3
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/build-sdl3
+
       - name: Prepare app image
         shell: bash
         run: |
@@ -174,6 +234,13 @@ jobs:
           if [ "${RUNNER_OS:-}" = "Windows" ]; then
             APP_ARGS+=(--icon "$GITHUB_WORKSPACE/src/main/resources/icons/serenity.ico")
           fi
+          # The Wayland window library (#2380): the copy built from the pinned SDL tag travels beside the jar, and the
+          # launcher tells the binding where it is. jpackage expands $APPDIR in --java-options.
+          if [ "${RUNNER_OS:-}" = "Linux" ]; then
+            mkdir -p package-input/natives
+            cp "${{ steps.sdl3.outputs.directory }}/libSDL3.so.0" "${{ steps.sdl3.outputs.directory }}/LICENSE-SDL.txt" package-input/natives/
+            APP_ARGS+=(--java-options '-Dserenity.sdl3.library.path=$APPDIR/natives')
+          fi
           # Heap policy (see DEVELOPMENT.md), on every OS. A cap of a quarter of RAM stops an editor that is left open
           # from growing to the JVM default of a quarter-to-a-half of the machine. G1 is named explicitly because the
           # JVM falls back to Serial on small machines, which would ignore the periodic flag. Every 60 s of idleness
@@ -195,9 +262,9 @@ jobs:
             --java-options '--sun-misc-unsafe-memory-access=allow'
           )
           # Class-data sharing (see DEVELOPMENT.md). The runtime always gets its base archive from jlink, and jlink needs
-          # the java launcher left in the image to generate one. macOS has neither: writing into the signed bundle would
-          # break its signature. Linux and Windows ship a JDK 25 AOT cache, written by the training steps below; the
-          # JVM refuses -XX:AOTCache together with the AppCDS options, so no OS sets them.
+          # the java launcher left in the image to generate one; a macOS runtime has neither. Every OS ships a JDK 25 AOT
+          # cache instead, written by the training steps below (macOS trains before signing, so nothing writes into the
+          # signed bundle); the JVM refuses -XX:AOTCache together with the AppCDS options, so no OS sets them.
           if [ "$(uname -s)" != "Darwin" ]; then
             APP_ARGS+=(--jlink-options "--strip-debug --no-man-pages --no-header-files --generate-cds-archive")
           fi
@@ -259,6 +326,12 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y xvfb
+          # The Wayland window library must be in the image, and be the library the binding asks the loader for.
+          sdl="$(find dist -type f -path '*/app/natives/libSDL3.so.0' -print -quit)"
+          if [ -z "$sdl" ] || ! readelf -d "$sdl" | grep -q 'SONAME.*libSDL3.so.0'; then
+            echo "App image is missing natives/libSDL3.so.0" >&2
+            exit 1
+          fi
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/smoke-test-app-image.sh dist/Serenity/bin/Serenity 120
 
       # The cache is written from a run of the finished image, so it follows the smoke test that proves the image
@@ -274,6 +347,17 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x800x24" scripts/check-aot-cache.sh dist/Serenity 120
           ls -l dist/Serenity/lib/app/serenity.aot
           echo "Image after training: $(du -sh dist/Serenity | cut -f1) on disk, $(tar czf - dist/Serenity | wc -c) bytes gzipped"
+
+      # The cache goes into the bundle before it is signed: a signature seals every file, so nothing may be written
+      # into the bundle afterwards (#2522, item 1c). The runtime has no bin/java, so the script trains in two steps.
+      - name: Train macOS AOT cache
+        if: runner.os == 'macOS'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/train-aot-cache.sh dist/Serenity.app 120
+          ls -l dist/Serenity.app/Contents/app/serenity.aot
 
       - name: Import macOS Developer ID certificate
         if: runner.os == 'macOS'
@@ -340,6 +424,17 @@ jobs:
         timeout-minutes: 5
         shell: bash
         run: scripts/smoke-test-app-image.sh dist/Serenity.app/Contents/MacOS/Serenity 120
+
+      # The signed bundle must still open its cache, and the check puts the bundle back as found, so the signature is
+      # verified again afterwards. Ad-hoc and Developer ID signatures both seal the cache as a resource.
+      - name: Check macOS AOT cache on the signed bundle
+        if: runner.os == 'macOS'
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/check-aot-cache.sh dist/Serenity.app 120
+          codesign --verify --deep --strict --verbose=2 dist/Serenity.app
 
       - name: Archive Windows app image
         if: runner.os == 'Windows'
@@ -496,14 +591,16 @@ jobs:
 
   publish:
     name: Publish ${{ github.ref_type == 'tag' && 'versioned release' || 'nightly desktop build' }}
-    needs: build
+    needs: [gate, build]
     runs-on: ubuntu-latest
+    # p90 0.7 min over 10 successful runs (39757060632, 40180584764); the 10 min floor applies.
+    timeout-minutes: 10
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.ref }}
+          ref: ${{ needs.gate.outputs.sha || github.ref }}
           fetch-depth: 0
 
       - name: Download build artifacts

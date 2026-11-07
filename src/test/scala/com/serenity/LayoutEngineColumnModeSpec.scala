@@ -64,6 +64,18 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       LayoutEngine.columnCount(contentWidthCells = 200, columnTargetWidthCells = 80, columnGap = 2)
   }
 
+  it should "fill the pane with one column by default, however wide it is (unlimited line length)" in {
+    val surfaceConfig = AppConfig.default.surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 600, surfaceConfig) shouldBe 1
+  }
+
+  it should "still lay out several columns once a target width is opted in" in {
+    val surfaceConfig = AppConfig.default.withColumnTargetWidth(80).withColumnGap(2).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 2
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 400, surfaceConfig) shouldBe 4
+  }
+
   it should "pin exactly the configured count when set and it fits" in {
     val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(3)).surfaceConfig
     LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 3
@@ -111,7 +123,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = true,
       columnModeEnabled = true,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 
@@ -126,7 +138,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = false,
       columnModeEnabled = true,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 
@@ -141,7 +153,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
       panelRect,
       wordWrapEnabled = true,
       columnModeEnabled = false,
-      columnTargetWidthCells = 80,
+      columnTargetWidthCells = Some(80),
       columnGap = 2
     )
 

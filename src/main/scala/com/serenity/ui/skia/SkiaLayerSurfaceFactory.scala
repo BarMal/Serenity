@@ -7,7 +7,7 @@ import scala.util.{Failure, Success, Try}
 
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, RenderSurface}
 import com.serenity.ui.terminal.SwingPresentationSite
-import org.jetbrains.skia.PictureRecorder
+import org.jetbrains.skia.{PictureRecorder, Surface}
 import org.slf4j.LoggerFactory
 
 /** Paints a window's frames through a GPU layer: each frame is recorded as a Skia `Picture` and handed to the window's
@@ -19,7 +19,8 @@ import org.slf4j.LoggerFactory
   */
 class LayerSurfaceFactory private[ui] (
     buildHost: JPanel => LayerHost,
-    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D,
+    frames: LayerFrames = LayerFrames.Picture
 ) extends FrameSurfaceFactory:
 
   def create(request: FrameSurfaceRequest): RenderSurface =
@@ -28,8 +29,36 @@ class LayerSurfaceFactory private[ui] (
         LayerSurfaceFactory.WindowLayer
           .of(canvas)
           .host(request, canvas, buildHost)
-          .fold(fallback.create(request))(record(request, _))
+          .fold(fallback.create(request))(host =>
+            frames match
+              case LayerFrames.Picture => record(request, host)
+              case LayerFrames.Image   => paint(request, host)
+          )
       case _ => fallback.create(request)
+
+  /** Paints the frame on a raster surface of its own and publishes a snapshot of it. The surface is closed at once; the
+    * snapshot keeps the pixels, so the event thread can draw frame N while frame N+1 is being painted.
+    */
+  private def paint(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
+    val geometry = request.geometry
+    val scale    = geometry.deviceScale
+    val surface  = Surface.Companion.makeRaster(RasterFrames.frameInfo(geometry.deviceWidthPx, geometry.deviceHeightPx))
+    SkiaRenderSurface.retaining(
+      surface,
+      request.metrics,
+      FontSpec.fromAwt(request.font),
+      geometry.logicalWidthPx,
+      geometry.logicalHeightPx,
+      scale.x,
+      SkiaTextCaches.of(request.backendCaches),
+      request.textCaches.styledFonts,
+      onFlush = () =>
+        val image = surface.makeImageSnapshot()
+        surface.close()
+        host.publishImage(image)
+      ,
+      layerCacheOwner = Some(geometry.identity)
+    )
 
   private def record(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
     val geometry      = request.geometry
@@ -67,14 +96,18 @@ final class RasterThenJava2D(raster: FrameSurfaceFactory) extends FrameSurfaceFa
 object SkiaLayerSurfaceFactory
     extends LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas),
-      new RasterThenJava2D(SkiaRasterSurfaceFactory)
+      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      LayerFrames.configured
     )
 
 /** For a timing run: asks the layer to wait for the GPU after each draw, which Skiko only allows where the canvas has a
   * GPU context; it has none, so this draws like [[SkiaLayerSurfaceFactory]], and the layer's draw stats say so.
   */
 object SynchronousSkiaLayerSurfaceFactory
-    extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas, syncGpu = true))
+    extends LayerSurfaceFactory(
+      canvas => SkiaLayerHost.create(canvas, syncGpu = true),
+      frames = LayerFrames.configured
+    )
 
 object LayerSurfaceFactory:
 

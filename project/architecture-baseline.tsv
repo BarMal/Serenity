@@ -21,3 +21,13 @@ test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file leng
 # that later PRs move into runtime-owned state. Items that can never move are in ArchitectureChecks.PurityAllowlist.
 main/scala/com/serenity/text/TextCounts.scala	mutable declaration `TextCounts.threadLocalSegmentations` holds ThreadLocal: a top-level object may not own mutable state -- scope it to an owning instance instead (#1677)	1
 main/scala/com/serenity/ui/renderer/FontFirstUse.scala	object-held stateful instance `FontFirstUse.shared` is a FontFirstUse: a top-level object may not own a mutable instance -- have the runtime that uses it own it (#1677)	1
+# paydown: process ownership (#2508). Seven sites still start their own external process; each migration PR (steps 2-8
+# of the plan on #2508) moves one onto the process service and deletes its entry here, until the rule has no exception
+# but the service's own launcher.
+main/scala/com/serenity/diagnostics/LogFolder.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	2
+main/scala/com/serenity/input/ExternalToolClipboard.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	1
+main/scala/com/serenity/lsp/client/LspConnection.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	1
+main/scala/com/serenity/project/ProjectTask.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	1
+main/scala/com/serenity/ui/benchmark/MachineState.scala	process ownership: `sys.process` outside the process service (#2508)	1
+main/scala/com/serenity/ui/fonts/LogicalFontFamilies.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	1
+main/scala/com/serenity/ui/theme/appearance/OsAppearanceDetector.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	2

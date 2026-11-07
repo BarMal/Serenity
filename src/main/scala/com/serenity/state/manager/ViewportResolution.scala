@@ -6,8 +6,10 @@ import com.serenity.ui.layout.WrappedLineCache
 /** Splits `CursorViewport.ensureVisibleCursors` into the cheap half that records a caret move and the measuring half
   * that places the viewport against it, so a run of moves can be recorded one at a time and placed once.
   *
-  * `resolve` relies on `CursorViewport.adjustForCursor` placing a viewport from the caret, the content, the viewport
-  * size and the config alone, so placing later gives the same answer as placing straight after the move.
+  * A run placed once at its end rests where placing after each move would only where placement reads the caret, the
+  * content, the viewport size and the config alone -- typewriter centring and column paging. Without typewriter
+  * scrolling the view keeps where it was until the caret nears an edge, so a run can rest a little differently from the
+  * same keys placed one at a time; placing each key would re-wrap the edited paragraph once per key (#1879).
   */
 object ViewportResolution:
 
@@ -46,11 +48,8 @@ object ViewportResolution:
     }
 
   private def placed(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): Buffer =
-    val surfaceConfig    = state.persisted.config.surfaceConfig
-    val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
     val viewport = buffer.editing.cursorPositions.headOption.fold(buffer.viewport) { cursor =>
-      if columnModeActive then CursorViewport.adjustForCursorColumnMode(buffer, state, cursor, wrapCache)
-      else CursorViewport.adjustForCursor(buffer, state, cursor, wrapCache)
+      CursorViewport.placementFor(buffer, state, cursor, wrapCache)
     }
     buffer.copy(viewport = viewport.copy(placement = ViewportPlacement.Placed))
 

@@ -144,11 +144,11 @@ class CommandPaletteGoldenRankingSpec extends AnyFlatSpec with Matchers:
       "command:return-to-start-page"
     ),
     "tab width" -> List(
+      "setting:settings-look-advanced/tab-max-width",
       "command:toggle-tab-list",
       "command:change-indentation",
       "command:toggle-explorer-panel",
-      "command:toggle-outline-panel",
-      "command:toggle-project-output-panel"
+      "command:toggle-outline-panel"
     ),
     "split" -> List(
       "command:split-pane-horizontal",
