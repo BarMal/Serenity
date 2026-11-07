@@ -81,9 +81,7 @@ class LastPaneRowRectSpec extends AnyFlatSpec with Matchers:
   it should "be the last of the rows' bands when every row has room above and below it" in
     lastBandIsTheLastOfAll(
       snapshot =>
-        snapshot.copy(visualLines =
-          snapshot.visualLines.map(line => line.copy(spaceBeforePx = 6, spaceAfterPx = 3))
-        ),
+        snapshot.copy(visualLines = snapshot.visualLines.map(line => line.copy(spaceBeforePx = 6, spaceAfterPx = 3))),
       lines = 400
     )
 
