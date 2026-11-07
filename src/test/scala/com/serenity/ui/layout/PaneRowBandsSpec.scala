@@ -36,7 +36,7 @@ class PaneRowBandsSpec extends AnyFlatSpec with Matchers:
   "topPainting over a walk" should "give the top a walk of its own gives" in {
     val bands = bandsOf(200)
     for
-      caret              <- carets
+      caret               <- carets
       (gridRowPx, target) <- grids
     do
       withClue(s"caret $caret, grid row $gridRowPx px, target row $target: ")(
@@ -48,7 +48,7 @@ class PaneRowBandsSpec extends AnyFlatSpec with Matchers:
   it should "give the same top when another limit has already read part of the walk" in {
     val bands = bandsOf(200)
     for
-      caret              <- carets
+      caret               <- carets
       (gridRowPx, target) <- grids
     do
       val walk = bands.tops(caret)
