@@ -1,13 +1,12 @@
-package com.serenity.ui.layout
+package com.serenity.perf
 
 import java.awt.Font
 import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
-import com.serenity.perf.BenchmarkMain
-import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
+import com.serenity.ui.layout.{DropCapWidths, FontFirstUseProbes, FontLineExtents}
+import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache, StyledFontCache}
 
 /** Standalone reproduction, run in a fresh JVM per trial (it is a test-scope main, not a spec): many threads make the
   * first use of one font at once through the measuring paths whose results live for the life of the process, then each
@@ -67,34 +66,24 @@ object FontFirstUseRepro:
     val _ = lineExtents.of(font, frc)
     val _ = styledFonts.underlineOf(font)
     val _ = dropCapWidths(font, frc, "A")
-    val _ = GlyphAdvances.layoutAdvanceMatchesSum(font, frc, FontProbes())
-    val _ = GlyphAdvances.advancesAreUniform(font, frc, FontProbes())
-    Texts.foreach(text => measure(text, font, frc, shapedText))
-
-  private def measure(text: String, font: Font, frc: FontRenderContext, shaped: ShapedTextCache): GlyphAdvances =
-    GlyphAdvances.measure(text, 0, text.length, 0, LineFontResolver(font, Vector.empty), frc, shaped)
+    val _ = FontFirstUseProbes.advanceChecks(font, frc)
+    Texts.foreach(text => FontFirstUseProbes.measure(text, font, frc, shapedText))
 
   private def stretchDigest(stretch: ShapedStretch): String =
     (0 until stretch.glyphCount)
       .map(glyph => s"${stretch.glyphCodeAt(glyph)}@${stretch.xAt(glyph)},${stretch.yAt(glyph)}")
       .mkString(";") + s"|${stretch.advance}"
 
-  private def advancesDigest(advances: GlyphAdvances): String =
-    advances.caretsFrom(0, advances.length).mkString(",") + "|" +
-      (0 until advances.length).map(index => if advances.isContextFree(index, index + 1) then "c" else "-").mkString
-
   /** What the process ends up believing, as a hash: a single-threaded run is the reference every racing run must match.
     */
   private def settledDigest(font: Font, frc: FontRenderContext): String =
     val beliefs = Texts.map { text =>
       stretchDigest(shapedText.stretchOf(text, font, frc)) +
-        advancesDigest(measure(text, font, frc, shapedText))
+        FontFirstUseProbes.advancesDigest(text, font, frc, shapedText)
     } :+ lineExtents.of(font, frc).toString :+
       styledFonts.underlineOf(font).toString :+
       dropCapWidths(font, frc, "A").toString :+
-      GlyphAdvances.layoutAdvanceMatchesSum(font, frc, FontProbes()).toString :+ GlyphAdvances
-        .advancesAreUniform(font, frc, FontProbes())
-        .toString
+      FontFirstUseProbes.advanceChecks(font, frc).toString
     Integer.toHexString(beliefs.mkString("\n").hashCode)
 
   private def disagreements(font: Font, frc: FontRenderContext): Vector[String] =
@@ -122,8 +111,8 @@ object FontFirstUseRepro:
       )
     val advances = Texts
       .filter { text =>
-        advancesDigest(measure(text, font, frc, shapedText)) !=
-          advancesDigest(measure(text, font, frc, new ShapedTextCache()))
+        FontFirstUseProbes.advancesDigest(text, font, frc, shapedText) !=
+          FontFirstUseProbes.advancesDigest(text, font, frc, new ShapedTextCache())
       }
       .map(_ => "advances")
     (shapes ++ extents ++ underline ++ dropCap ++ advances).distinct

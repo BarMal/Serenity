@@ -206,6 +206,7 @@ private[serenity] object AppRuntimeRenderLoops:
       _     <- IO(traceAppliedKeys(context.frameTimings.keyLatency, inputs, batch.remaining))
       _     <- batch.applied.traverse_(context.logEvent(_, batch.after.app.persisted.focus))
       _     <- context.observeBatch(batch.before.app, batch.after.app)
+      _     <- ClipboardEventSync.exportIfCopied(batch.before.app, batch.after.app, context.systemClipboard)
       _ <- IO.whenA(batch.applied.nonEmpty)(
         context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app)) >>
           context.damagePublishedFor(batch.after.app) >>

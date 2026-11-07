@@ -68,40 +68,5 @@ private[config] object ConfigFieldsSurface:
     )(
       _.surfaceConfig.textAreaInsets.bottomPercent,
       (config, value) => config.withTextAreaBottomInset(fractionOfPercent(value))
-    ),
-    named("window.viewport.width_percent", "viewportWidthPercent", "viewport.width.percent", "viewport_width_percent")(
-      viewportPercent
-    )(
-      _.surfaceConfig.viewportSizing.width.percentValue,
-      (config, value) =>
-        config.withViewportWidthSizing(
-          config.surfaceConfig.viewportSizing.width.copy(percent = fractionOfPercent(value))
-        )
-    ),
-    named("window.viewport.width_max", "viewportWidthMax", "viewport.width.max", "viewport_width_max")(
-      int.filtered(_ >= 1).orEmpty
-    )(
-      _.surfaceConfig.viewportSizing.width.maxCells,
-      (config, value) =>
-        config.withViewportWidthSizing(config.surfaceConfig.viewportSizing.width.copy(maxCells = value))
-    ),
-    named(
-      "window.viewport.height_percent",
-      "viewportHeightPercent",
-      "viewport.height.percent",
-      "viewport_height_percent"
-    )(viewportPercent)(
-      _.surfaceConfig.viewportSizing.height.percentValue,
-      (config, value) =>
-        config.withViewportHeightSizing(
-          config.surfaceConfig.viewportSizing.height.copy(percent = fractionOfPercent(value))
-        )
-    ),
-    named("window.viewport.height_max", "viewportHeightMax", "viewport.height.max", "viewport_height_max")(
-      int.filtered(_ >= 1).orEmpty
-    )(
-      _.surfaceConfig.viewportSizing.height.maxCells,
-      (config, value) =>
-        config.withViewportHeightSizing(config.surfaceConfig.viewportSizing.height.copy(maxCells = value))
     )
   )

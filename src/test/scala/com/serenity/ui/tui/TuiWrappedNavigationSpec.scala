@@ -189,8 +189,11 @@ class TuiWrappedNavigationSpec extends TuiSpec:
 
   // -- Viewport centring under word wrap (#1266, third defect) -------------------------------------------------------
 
+  /** #2570 item 2, changed with the owner's approval: holding the caret centred is typewriter scrolling's (D3). */
+  private val typewriterEnvironment = environment.withConfig(_.withTypewriterScrolling(true))
+
   "the viewport" should "keep the caret vertically centred once the document scrolls beneath it" in
-    runTui(environment) {
+    runTui(typewriterEnvironment) {
       for
         _       <- pressAll(List.fill(40)(TuiKeys.ArrowDown)*)
         settled <- settledScreen
@@ -203,7 +206,7 @@ class TuiWrappedNavigationSpec extends TuiSpec:
         top.getOrElse(0) should be > 0
     }
 
-  it should "hold that centre as the caret keeps descending" in runTui(environment) {
+  it should "hold that centre as the caret keeps descending" in runTui(typewriterEnvironment) {
     for
       _    <- pressAll(List.fill(40)(TuiKeys.ArrowDown)*)
       _    <- settledScreen

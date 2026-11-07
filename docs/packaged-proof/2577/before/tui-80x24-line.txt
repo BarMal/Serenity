@@ -1,0 +1,24 @@
+                                   scratch.md                                   
+ 1                                                                              
+     ╭──────────────────────────────────────────────────────────────────────╮   
+     │search: line                                                          │   
+     │[Edit] Go to Line      Go to a specific line number.            ctrl+g│   
+     │                                                                      │   
+     │[File] Change Line ... Choose the line ending (LF, CRLF or CR) the ...│   
+     │                                                                      │   
+     │[View] Toggle Line ... Show or hide line numbers.                     │   
+     │                                                                      │   
+     │                                                                      │   
+     │↑↓ move • Enter run • Esc close                                       │   
+     │                                                                      │   
+     ╰──────────────────────────────────────────────────────────────────────╯   
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Line 1, Col 1 | Markdown | scratch.md | Code                                   

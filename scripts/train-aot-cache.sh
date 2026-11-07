@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Writes the JDK 25 AOT cache of a Linux or Windows app image and points its launcher at it: scripts/train-aot-cache.sh
-# dist/Serenity [timeout-seconds]. One --smoke-test run records what start-up loads and links, and the cache is created
-# as that run exits. The launcher option is added only afterwards because the JVM refuses -XX:AOTCache for a file that
-# does not exist yet. Run it under xvfb-run on a headless box; scripts/check-aot-cache.sh then verifies the result.
+# Writes the JDK 25 AOT cache of a Linux or Windows app image or a macOS bundle and points its launcher at it: scripts/train-aot-cache.sh
+# dist/Serenity [timeout-seconds]. A --smoke-test run records what start-up loads and links, and the cache is created as
+# that run exits (-XX:AOTCacheOutput). A macOS bundle's runtime has no bin/java for that option to fork, so the bundle is
+# recorded and then assembled in two launcher runs. The launcher option is added only afterwards because the JVM refuses
+# -XX:AOTCache for a file that does not exist yet. Train a bundle before signing it. Run under xvfb-run on a headless Linux
+# box; scripts/check-aot-cache.sh then verifies the result.
 set -euo pipefail
 
 image="${1:?usage: $0 path/to/app-image [timeout-seconds]}"
@@ -11,6 +13,7 @@ image="$(cd "$image" 2>/dev/null && pwd)" || { echo "No such app image: ${1}" >&
 source "$(dirname "${BASH_SOURCE[0]}")/aot-image-layout.sh"
 cfg="$appdir/Serenity.cfg"
 cache="$appdir/serenity.aot"
+recording="$appdir/serenity.aotconf"
 option='java-options=-XX:AOTCache=$APPDIR/serenity.aot'
 
 if [[ ! -f "$cfg" ]]; then
@@ -27,18 +30,34 @@ if grep -q 'AOTCache' "$cfg"; then
 fi
 
 work_dir="$(mktemp -d)"
-trap 'rm -rf "$work_dir"' EXIT
-status=0
-(cd "$work_dir" && JAVA_TOOL_OPTIONS="-XX:AOTCacheOutput=$cache" timeout "$limit" "$launcher" --smoke-test --safe-mode) \
-  >"$work_dir/training.log" 2>&1 || status=$?
+trap 'rm -rf "$work_dir" "$recording"' EXIT
 
-if (( status != 0 )); then
-  cat "$work_dir/training.log" >&2
-  echo "The training run exited with status $status." >&2
-  exit 1
+# Runs the launcher once with the given JVM options; reports how it ended, and fails when it did not exit cleanly.
+training_run() {
+  local name="$1" options="$2" status=0
+  (cd "$work_dir" && export JAVA_TOOL_OPTIONS="$options" && run_limited "$limit" "$launcher" --smoke-test --safe-mode) \
+    >"$work_dir/$name.log" 2>&1 || status=$?
+  if (( status == 124 )); then
+    cat "$work_dir/$name.log" >&2
+    echo "The training run timed out after ${limit}s." >&2
+    exit 1
+  fi
+  if (( status != 0 )); then
+    cat "$work_dir/$name.log" >&2
+    echo "The training run exited with status $status." >&2
+    exit 1
+  fi
+}
+
+if (( assemble_in_two_steps )); then
+  training_run record "-XX:AOTMode=record -XX:AOTConfiguration=$recording"
+  training_run create "-XX:AOTMode=create -XX:AOTConfiguration=$recording -XX:AOTCache=$cache"
+else
+  training_run record "-XX:AOTCacheOutput=$cache"
 fi
+
 if [[ ! -s "$cache" ]]; then
-  cat "$work_dir/training.log" >&2
+  cat "$work_dir"/*.log >&2
   echo "The training run did not write $cache." >&2
   exit 1
 fi

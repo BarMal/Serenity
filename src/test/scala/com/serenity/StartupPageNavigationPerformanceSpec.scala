@@ -16,8 +16,9 @@ import org.scalatest.matchers.should.Matchers
   * (`MouseHitTestGeometry.isInsideFloatingSurface` and `EditorMouseTargeting.resolveMouseTarget` both build that scene
   * unconditionally). The actual, deterministic regression guard for this lives in `MouseTargetCacheSpec`
   * (object-identity checks on the cached scene, independent of timing); this spec logs the real wall-clock cost of a
-  * nav+hover cycle for human review, but does not assert on it -- see `CommandRunnerRenderPerformanceSpec` for why
-  * wall-clock assertions are unreliable on shared CI hardware.
+  * nav+hover cycle for human review, and asserts only that the selection moved as driven and that the cycle did not
+  * take a hang-sized time -- see `CommandRunnerRenderPerformanceSpec` for why wall-clock assertions are unreliable on
+  * shared CI hardware.
   */
 class StartupPageNavigationPerformanceSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
@@ -63,4 +64,12 @@ class StartupPageNavigationPerformanceSpec extends AnyFlatSpec with Matchers:
     }
 
     info(s"per-navigation average: ${timings.sum / timings.length}ms, max: ${timings.max}ms")
+
+    val selected = driver.state.unsafeRunSync().startPageSurface.collect {
+      case UiSurface(_, SurfaceContent.StartPage(page), _, _) => page.selectedIndex
+    }
+    selected shouldBe Some(timings.size % actions.size)
+    withClue("a hang-sized bound only, since wall-clock timings are not asserted on shared CI hardware: ")(
+      timings.sum should be < 120000L
+    )
   }

@@ -53,6 +53,9 @@ Serenity keeps everything under `.serenity` in your home folder on every OS (`~/
 | `~/.serenity/serenity.log` | The application log. It rolls at 5 MB and keeps 14 days, 50 MB at most. |
 | `~/.serenity/logs/` | Language-server logs. |
 
+The log and the console record user-relevant events at INFO. To see every command and dialog change as well, start
+Serenity with the environment variable `SERENITY_LOG_LEVEL=DEBUG`; `WARN` keeps only problems.
+
 Serenity's own code makes no network connections, and has no telemetry or update check. Your files, settings,
 sessions and logs stay on your machine. Language servers are separate programs that Serenity starts when you work in a
 language that has one; they behave as their own authors made them. The full statement is in [docs/PRIVACY.md](docs/PRIVACY.md).

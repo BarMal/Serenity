@@ -88,7 +88,7 @@ final private[manager] class StateManagerFileWorkflow(
       )
       currentState.flatMap { current =>
         val shown = ModalStateReducer.show(Modal.FileWorkflow(workflow), current).state
-        logger.info(
+        logger.debug(
           s"[FILE-WORKFLOW OPENED] mode=$mode filename=${workflow.filename} path=${workflow.path} " +
             s"surfaceId=${shown.topModal.map(_.id).getOrElse("none")} focus=${shown.persisted.focus}"
         ) >> commitState(shown, current) >>
