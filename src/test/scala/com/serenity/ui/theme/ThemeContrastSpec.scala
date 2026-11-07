@@ -39,20 +39,36 @@ class ThemeContrastSpec extends AnyFlatSpec with Matchers:
     Theme.contrastRatio(theme.highlighted.background, theme.background) should be >= NonTextMinimum
   }
 
-  "the light and dark themes" should "report their contrast pairs, informationally" in {
-    List("light", "dark").foreach { name =>
-      val pairs = pairsOf(bundled(name))
-      val below = pairs.filter(pair => pair.ratio < pair.kind.minimum)
-      info(s"$name: ${below.size} of ${pairs.size} pairs below target")
-      below.foreach(pair => info(s"$name: ${pair.describe}"))
+  "the light and dark themes" should "keep every text pair at 3:1 and not fall further short of the 7:1 target than they do now" in {
+    val belowTarget = Map("light" -> LightPairsBelowTarget, "dark" -> DarkPairsBelowTarget)
+
+    belowTarget.foreach { (name, allowed) =>
+      val pairs    = pairsOf(bundled(name))
+      val below    = pairs.filter(pair => pair.ratio < pair.kind.minimum)
+      val unusable = pairs.filter(pair => pair.kind == PairKind.Text && pair.ratio < LargeTextMinimum)
+
+      withClue(s"$name text pairs under $LargeTextMinimum:1${unusable.map(_.describe).mkString("\n", "\n", "\n")}")(
+        unusable shouldBe empty
+      )
+      withClue(s"$name pairs below target${below.map(_.describe).mkString("\n", "\n", "\n")}")(
+        below.size should be <= allowed
+      )
     }
-    succeed
   }
 
 object ThemeContrastSpec:
 
   val TextMinimum: Double    = 7.0
   val NonTextMinimum: Double = 3.0
+
+  /** The WCAG floor for large text, below which no text pair of any bundled theme may fall. */
+  val LargeTextMinimum: Double = 3.0
+
+  /** How many of 30 pairs the light and dark themes miss the high-contrast target by today; a ratchet, to be lowered as
+    * they are fixed and never raised.
+    */
+  val LightPairsBelowTarget: Int = 16
+  val DarkPairsBelowTarget: Int  = 12
 
   enum PairKind(val minimum: Double):
     case Text    extends PairKind(TextMinimum)

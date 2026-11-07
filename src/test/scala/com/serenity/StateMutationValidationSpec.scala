@@ -2,21 +2,17 @@ package com.serenity
 
 import java.nio.file.Files
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, TabKey}
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.ModalStateReducer
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** #858 part 2: direct `Ref[IO, AppState]` mutation paths that bypass `validateAndUpdateState` can commit a
   * structurally invalid `AppState`. These tests drive a corrupted-but-realistic precondition (a `nextBufferId` counter
@@ -24,14 +20,10 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
   * in test fixtures) through the public file-loading API and assert the checked commit path rejects the resulting
   * invalid state instead of silently persisting it.
   */
-class StateMutationValidationSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class StateMutationValidationSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("StateMutationValidationSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("StateMutationValidationSpec", initialConfig = AppConfig.default)
 
   /** Forces `nextBufferId` to collide with the buffer that `AppState.initial` already ships (`BufferId(0)`), which is
     * also the focused buffer -- the precondition under which the bypassed commit produces a duplicate `bufferOrder`

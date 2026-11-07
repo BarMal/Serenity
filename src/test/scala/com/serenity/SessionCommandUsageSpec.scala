@@ -3,31 +3,20 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** A named-session command run from the palette is recorded as the most recent command and opens its prompt: the prompt
   * is shown on the state current when it opens, not on the snapshot taken before the command was recorded.
   */
-class SessionCommandUsageSpec extends AnyFlatSpec with Matchers:
-
-  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+class SessionCommandUsageSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    StateManager
-      .apply(
-        LoggerFactory[IO].getLogger(using LoggerName("SessionCommandUsageSpec")),
-        sessionRootOverride = Some(TestTemp.directory("session-command-usage-spec")),
-        dictionaryCache = SharedDictionary.default
-      )
-      .unsafeRunSync()
+    createStateManager("SessionCommandUsageSpec", initialConfig = AppConfig.default)
 
   private def runFromPalette(stateManager: StateManager, commandName: String): AppState =
     (stateManager.applyEvent(ToggleCommandRunner) >>

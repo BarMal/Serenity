@@ -27,7 +27,7 @@ private[command] trait CommandRunnerLifecycle:
     copy(
       isActive = true,
       surface = CommandRunnerSurface.Palette(CommandPaletteState(filteredCommands = registry.getAllCommands)),
-      optionSelections = CommandRunnerOptionSelections.default(config),
+      optionSelections = CommandRunnerOptionSelections.default(config, fontFamilies),
       inputItems = CommandRunnerSettingsInputItems.build(config, capabilities),
       commandBindings = CommandRunner.commandBindings(config),
       capabilities = capabilities,
@@ -39,7 +39,7 @@ private[command] trait CommandRunnerLifecycle:
   def updateInputItems(config: AppConfig): CommandRunner =
     copy(
       inputItems = CommandRunnerSettingsInputItems.build(config, capabilities),
-      optionSelections = CommandRunnerOptionSelections.default(config),
+      optionSelections = CommandRunnerOptionSelections.default(config, fontFamilies),
       commandBindings = CommandRunner.commandBindings(config),
       statusSegments = config.statusLine.segments,
       context = context.copy(previousFontSizes = config.editorConfig.fontConfig.previousSizes)

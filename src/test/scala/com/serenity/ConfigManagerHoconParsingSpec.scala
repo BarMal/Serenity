@@ -124,7 +124,7 @@ class ConfigManagerHoconParsingSpec extends AnyFlatSpec with Matchers with Optio
       case Right(result) =>
         result.config.editorConfig.fontConfig.textFontFamily shouldBe "Legacy Serif"
         result.config.languageToolsConfig.spellCheck.dictionaryPaths shouldBe List("C:\\Dictionaries\\en_US.dic")
-        result.config.surfaceConfig.viewportSizing.width.maxCells shouldBe None
+        result.report.removedKeys shouldBe List("window.viewport.width_max")
       case Left(error) => fail(s"expected mixed legacy and HOCON config to load, received $error")
   }
 

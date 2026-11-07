@@ -18,6 +18,11 @@ object ListPickerSearch:
         searchedBufferText(picker, source, state)
       case source: PickerSource.ProjectFiles =>
         FileFinder.refreshed(picker, source, state.persisted.recentFiles)
+      case PickerSource.Commands(runner, registry) =>
+        picker.withChoices(
+          com.serenity.command.CommandPicker.choices(runner, registry, picker.queryText),
+          com.serenity.command.CommandPicker.NoMatches
+        )
     }
 
   /** Whether `refreshed` is cheap enough for the reducer to run on the dispatcher: short fixed lists, a handful of
@@ -26,7 +31,9 @@ object ListPickerSearch:
     */
   def isCheap(picker: ListPicker, state: AppState): Boolean =
     picker.source.forall {
-      case PickerSource.Fixed(_)         => true
+      case PickerSource.Fixed(_) => true
+      // The palette has always searched its commands on the dispatcher, per keystroke.
+      case PickerSource.Commands(_, _)   => true
       case PickerSource.BufferText(_, _) => picker.queryText.isEmpty || openText(state) <= CheapTextLength
       case PickerSource.ProjectFiles(_, listing, matched) =>
         listing.toOption.forall(project =>

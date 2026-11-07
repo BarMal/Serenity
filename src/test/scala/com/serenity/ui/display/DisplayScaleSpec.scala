@@ -2,6 +2,7 @@ package com.serenity.ui.display
 
 import java.awt.{Component, GraphicsEnvironment}
 
+import com.serenity.testkit.HeadlessAwtTest
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,8 +48,10 @@ class DisplayScaleSpec extends AnyFlatSpec with Matchers:
     scale.y should be >= 1.0
   }
 
-  it should "fall back to One via the AWT catch branch in a headless environment" in {
-    assume(GraphicsEnvironment.isHeadless, "This test only exercises the try/catch fallback when AWT is headless")
+  it should "fall back to One via the AWT catch branch in a headless environment" taggedAs HeadlessAwtTest in {
+    withClue("run it with `sbt headlessAwtTest` on a JVM started with -Djava.awt.headless=true: ")(
+      GraphicsEnvironment.isHeadless shouldBe true
+    )
 
     DisplayScale.defaultDeviceScale shouldBe DisplayScale.One
   }

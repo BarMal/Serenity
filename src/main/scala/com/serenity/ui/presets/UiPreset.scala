@@ -100,8 +100,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
-          proseMeasure = source.surfaceConfig.proseMeasure,
-          viewportSizing = source.surfaceConfig.viewportSizing
+          proseMeasure = source.surfaceConfig.proseMeasure
         )
       )
 
@@ -310,7 +309,7 @@ object UiPreset:
       case (Some(tree), (docked, surface)) =>
         val (splitId, leafId) = tree.nextDockIds(surface.id)
         tree
-          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.runtime.viewportSize)
+          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.panelViewportSize)
           .orElse(Some(tree))
       case (None, _) =>
         None

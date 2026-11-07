@@ -259,6 +259,40 @@ class AppRuntimeExternalChangeWatchSpec extends AnyFlatSpec with Matchers:
       checked <- checkedBuffers.get
     yield checked
 
+  it should "check a buffer whose change was lost when a burst overflowed the watcher's queue (#2531)" in {
+    val bufferId = BufferId(1)
+    val program =
+      Resource
+        .make(IO.blocking(ownFile("external-change-watch-overflow"))) { file =>
+          IO.blocking {
+            scala.util.Using.resource(Files.list(file.getParent))(_.forEach(entry => Files.deleteIfExists(entry)))
+            Files.deleteIfExists(file.getParent)
+          }.void
+        }
+        .use { file =>
+          for
+            checkedBuffers <- Ref.of[IO, List[BufferId]](Nil)
+            _ <- FileChangeWatcher.create.use { watcher =>
+              val loop = AppRuntime.externalChangeWatchLoop(
+                watcher,
+                openBufferPaths = IO.pure(Map(file -> bufferId)),
+                checkBufferForExternalChanges = id => checkedBuffers.update(_ :+ id)
+              )
+              // More events than the JDK queues per directory (512), then the buffer's own write last, so a watcher
+              // that drops the overflow never reports the buffer at all.
+              val burst = IO.blocking {
+                (1 to 2000).foreach(n => Files.createFile(file.getParent.resolve(s"burst-$n.txt")))
+                Files.writeString(file, "changed during the burst")
+              }
+              val checked = (IO.sleep(50.millis) >> checkedBuffers.get).iterateUntil(_.nonEmpty).timeout(10.seconds)
+              loop.compile.drain.background.surround(IO.sleep(500.millis) >> burst >> checked)
+            }
+            checked <- checkedBuffers.get
+          yield checked.distinct
+        }
+    program.unsafeRunTimed(30.seconds) shouldBe Some(List(bufferId))
+  }
+
   it should "check a file once for a burst of writes that land within the settle window (#1885)" in {
     burstChecks(FileChangeWatcher.create).unsafeRunTimed(30.seconds) shouldBe Some(List(BufferId(1)))
   }

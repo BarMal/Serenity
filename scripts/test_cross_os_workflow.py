@@ -94,6 +94,46 @@ class DraftGateTests(unittest.TestCase):
         self.assertIn(_DRAFT_GATE, _job(_PACKAGE, "build"))
 
 
+class FailureSummaryTests(unittest.TestCase):
+    """A failing test's name and message go in the step summary and one annotation per failure, instead of ~380 lines
+    of raw JUnit XML on Windows and macOS and nothing at all on Linux (#2557)."""
+
+    _COMMAND = 'scripts/summarize_test_failures.py target/test-reports --summary "$GITHUB_STEP_SUMMARY"'
+
+    def _step(self, job: str) -> str:
+        return next(step for step in re.split(r"\n      - ", job) if "summarize_test_failures.py" in step)
+
+    def test_the_linux_test_job_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_CI, "test")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_each_shard_summarises_right_after_running_the_tests(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        step = self._step(job)
+        self.assertIn(self._COMMAND, step)
+        self.assertIn("if: always()", step)
+        self.assertLess(job.index("name: Run tests"), job.index(step))
+        self.assertLess(job.index(step), job.index("name: Upload test reports"))
+
+    def test_the_raw_xml_dump_is_gone_but_the_reports_are_still_uploaded(self) -> None:
+        self.assertNotIn("Print test failure detail", _SHARDS)
+        self.assertNotIn('cat "$report"', _SHARDS)
+        self.assertIn("path: target/test-reports/**", _SHARDS)
+
+    def test_a_failed_aggregate_says_which_result_it_saw_and_where_the_shards_are(self) -> None:
+        for label in ("windows", "macos"):
+            with self.subTest(label=label):
+                job = _job(_CALLER, f"test-{label}")
+                self.assertIn("RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", job)
+                self.assertIn('"$RESULT"', job.split("::error", 1)[1])
+                self.assertIn("$RUN_URL", job.split("::error", 1)[1])
+                self.assertIn(f"Test ({label}, shard", job)
+
+
 def _concurrency(text: str) -> dict[str, str]:
     block = re.search(r"^concurrency:\n((?:  [^\n]*\n)+)", text, re.M).group(1)
     return dict(re.findall(r"^  ([a-z-]+): ([^\n]+)$", block, re.M))
@@ -141,6 +181,48 @@ class ShardJobTests(unittest.TestCase):
     def test_the_extra_jvm_options_still_reach_the_run(self) -> None:
         self.assertIn("jvm_opts: ${{ inputs.jvm_opts }}", _job(_CALLER, "shards-macos"))
         self.assertIn("EXTRA_JVM_OPTS: ${{ inputs.jvm_opts }}", _SHARDS)
+
+
+class CompileOnceTests(unittest.TestCase):
+    """One compile job per OS builds the classes and the shards reuse them (#2484), so each shard stops spending a
+    quarter to a third of its time compiling the same 2,766 sources."""
+
+    def test_a_compile_job_builds_the_tests_and_uploads_the_result_named_for_its_os(self) -> None:
+        job = _job(_SHARDS, "compile")
+        self.assertIn("runs-on: ${{ inputs.os }}", job)
+        self.assertIn("sbt -v Test/compile", job)
+        self.assertNotIn("clean", job)
+        self.assertIn("uses: actions/upload-artifact@v4", job)
+        self.assertIn("name: compiled-${{ inputs.label }}", job)
+
+    def test_the_compile_job_has_its_own_hang_guard_inside_its_job_limit(self) -> None:
+        job = _job(_SHARDS, "compile")
+        guard = int(re.search(r"HANG_MINUTES: '(\d+)'", job).group(1))
+        limit = int(re.search(r"timeout-minutes: (\d+)", job).group(1))
+        self.assertLess(guard, limit)
+        self.assertIn("run-tests-with-hang-dump.sh sbt", job)
+
+    def test_the_shards_wait_for_the_compile_job_and_restore_its_classes_before_testing(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        self.assertIn("needs: compile", job)
+        restore = job.index("actions/download-artifact@v4")
+        self.assertIn("name: compiled-${{ inputs.label }}", job[restore:])
+        self.assertLess(restore, job.index("Run tests"))
+
+    def test_the_shards_run_test_without_clean_so_the_restored_classes_count(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        run = re.search(r"run: bash \.github/scripts/run-tests-with-hang-dump\.sh (sbt [^\n]+)", job).group(1)
+        self.assertEqual("sbt -v test", run)
+
+    def test_a_shard_that_had_to_recompile_says_so_but_still_runs(self) -> None:
+        job = _job(_SHARDS, "test-shard")
+        self.assertIn("compiling", job)
+        self.assertIn("::warning::", job)
+
+    def test_the_extracted_files_are_the_whole_build_output_and_nothing_else(self) -> None:
+        compile_job = _job(_SHARDS, "compile")
+        self.assertRegex(compile_job, r"tar [^\n]*compiled\.tar[^\n]* target project/target")
+        self.assertIn("path: compiled.tar", compile_job)
 
 
 if __name__ == "__main__":
