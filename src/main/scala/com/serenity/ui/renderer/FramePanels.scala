@@ -72,7 +72,7 @@ final private[renderer] case class FramePanels(
 private[renderer] object FramePanels:
 
   def of(state: AppState, context: RenderContext, scene: UiSceneSnapshot): FramePanels =
-    val overlays = OverlayViewModel.fromState(state, scene)
+    val overlays = OverlayViewModel.fromState(state, scene, context.caches.tabBarMeasures)
     FrameCounting.overlayModelBuilt(context.caches.frameCounters)
     val window = PixelRect(
       0,

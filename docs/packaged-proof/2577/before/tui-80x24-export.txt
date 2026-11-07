@@ -1,0 +1,24 @@
+                                   scratch.md                                   
+ 1                                                                              
+     ╭──────────────────────────────────────────────────────────────────────╮   
+     │search: export                                                        │   
+     │[File] Export Manus... Export the current document, or the book its...│   
+     │                                                                      │   
+     │[File] Export Manus... Export the current document, or the book its...│   
+     │                                                                      │   
+     │[File] Export Manus... Export the current document, or the book its...│   
+     │                                                                      │   
+     │                                                                      │   
+     │↑↓ move • Enter run • Esc close                                       │   
+     │                                                                      │   
+     ╰──────────────────────────────────────────────────────────────────────╯   
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Line 1, Col 1 | Markdown | scratch.md | Code                                   

@@ -95,8 +95,9 @@ class TypingBurstLatencySpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _         <- typePaced(component, chars, spacing)
-      _         <- awaitDamaged(frameTimings).timeout(60.seconds)
+      _ <- typePaced(component, chars, spacing)
+      // A plain timeout rather than HangBound.within: its watchdog would poll beside the latencies this spec measures.
+      _         <- awaitDamaged(frameTimings).timeout(20.seconds)
       _         <- handler.shutdown
       _         <- inputLoop.joinWithNever
       published <- slices.get
