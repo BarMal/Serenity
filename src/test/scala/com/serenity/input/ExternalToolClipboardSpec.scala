@@ -55,5 +55,6 @@ class ExternalToolClipboardSpec extends AnyFlatSpec with Matchers:
     val runner    = StubRunner(calls, failing = Set(ExternalClipboardTool.WlClipboard.writeCommand))
     val clipboard = ExternalToolClipboard(ExternalClipboardTool.WlClipboard, runner)
 
-    clipboard.writeText("text").unsafeRunSync()
+    clipboard.writeText("text").attempt.unsafeRunSync() shouldBe Right(())
+    calls.get.unsafeRunSync() shouldBe List(ExternalClipboardTool.WlClipboard.writeCommand -> Some("text"))
   }

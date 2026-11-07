@@ -41,11 +41,12 @@ private[renderer] object RendererRepaintRegion:
         } ++ columnRailRects(context, renderPlan, paneId, dirty)
     }
     val statusRow = contract.gutterRect.filter(_ => Damage.touchesChrome(damage))
+    val toPixels  = RendererChromePlan.pixelRectOf(context.cellMetrics)
     val headers   = Damage.paneChromeIds(damage).toList.flatMap(contract.paneHeaderRect)
     val tabBar    = contract.tabBarRect.filter(_ => Damage.touchesTabBar(damage))
     PixelRect.coalesced(
-      rowRects ++ scrollbarTracks ++ (statusRow.toList ++ headers ++ tabBar.toList)
-        .map(RendererChromePlan.pixelRectOf(context.cellMetrics)),
+      rowRects ++ scrollbarTracks ++ (headers ++ tabBar.toList).map(toPixels) ++
+        statusRow.toList.map(toPixels).map(RendererChromePlan.withDescenderBleed(context)),
       PixelRect.RepaintRectLimit
     )
 

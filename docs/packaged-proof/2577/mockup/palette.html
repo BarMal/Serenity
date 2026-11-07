@@ -1,0 +1,125 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root {
+    --bg: #0B1017; --panel: #111821; --fg: #F5F7FA; --muted: #7B8794; --border: #37566A;
+    --sel-bg: #24556D; --sel-fg: #F5F7FA; --sel-muted: #C9D6E0; --accent: #F4D03F; --hover: #182330;
+    --chip: #1B2733; --error: #FF6B6B; --rule: #22303D; --note: #F4D03F;
+  }
+  body.light {
+    --bg: #FFFFFF; --panel: #EFF3F8; --fg: #102A43; --muted: #61758A; --border: #B0C4D0;
+    --sel-bg: #365F78; --sel-fg: #FDFDFD; --sel-muted: #DCE7EF; --accent: #0066CC; --hover: #E2E9F1;
+    --chip: #E2E9F1; --error: #B00020; --rule: #D5DFE8; --note: #B5560B;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.35 "DejaVu Sans", "Inter", sans-serif; }
+  .stage { position: relative; width: 1100px; height: 560px; padding-top: 34px; }
+  .caret { position: absolute; left: 40px; top: 14px; width: 2px; height: 16px; background: var(--accent); }
+  .doc { position: absolute; left: 50px; top: 12px; color: var(--muted); font-family: "DejaVu Sans Mono", monospace; }
+  .palette { width: 640px; margin: 0 auto; background: var(--panel); border: 2px solid var(--border); border-radius: 6px; }
+  .query { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  .prompt { color: var(--muted); font-weight: 700; }
+  .qtext { flex: 1; }
+  .qtext .cursor { display: inline-block; width: 2px; height: 15px; background: var(--accent); vertical-align: -2px; }
+  .placeholder { color: var(--muted); }
+  .count { color: var(--muted); font-size: 12px; }
+  .section { padding: 8px 14px 3px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  .row { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 5px 14px; border-left: 3px solid transparent; }
+  .row .title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .desc { grid-column: 1; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .tag { grid-column: 2; grid-row: 2; justify-self: end; color: var(--muted); font-size: 11px; }
+  .row .keys { grid-column: 2; grid-row: 1; justify-self: end; display: flex; gap: 3px; }
+  .chip { font-size: 11px; padding: 0 5px; border-radius: 3px; background: var(--chip); color: var(--fg); border: 1px solid var(--rule); }
+  mark { background: none; color: var(--accent); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+  .row.sel { background: var(--sel-bg); color: var(--sel-fg); border-left-color: var(--accent); }
+  .row.sel .title { font-weight: 700; }
+  .row.sel .desc, .row.sel .tag { color: var(--sel-muted); }
+  .row.sel mark { color: var(--sel-fg); }
+  .row.sel .chip { background: transparent; color: var(--sel-fg); border-color: var(--sel-muted); }
+  .row.hover { background: var(--hover); }
+  .row.off .title { color: var(--muted); }
+  .row.off .desc { color: var(--muted); font-style: italic; }
+  .row.compact { grid-template-columns: auto 1fr auto auto; padding: 3px 14px; }
+  .row.compact .desc { grid-column: auto; padding-left: 10px; }
+  .row.compact .tag { grid-column: auto; grid-row: auto; padding-left: 8px; }
+  .row.compact .keys { grid-column: auto; grid-row: auto; padding-left: 8px; }
+  .footer { display: flex; justify-content: space-between; padding: 7px 14px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .note { position: absolute; font: 600 11px/1.3 "DejaVu Sans", sans-serif; color: var(--note); max-width: 190px; }
+  .note::before { content: "◀ "; }
+  .note.left::before { content: ""; }
+  .note.left::after { content: " ▶"; }
+</style>
+</head>
+<body>
+<div id="scene"></div>
+<script>
+const scenes = {
+  line: `
+  <div class="palette">
+    <div class="query"><span class="prompt">›</span><span class="qtext">line<span class="cursor"></span></span><span class="count">9 results</span></div>
+    <div class="section">Commands</div>
+    <div class="row sel"><div class="title">Go to <mark>Line</mark>…</div><div class="keys"><span class="chip">Ctrl</span><span class="chip">G</span></div><div class="desc">Go to a specific line number.</div><div class="tag">Go</div></div>
+    <div class="row hover"><div class="title">Change <mark>Line</mark> Ending…</div><div class="keys"></div><div class="desc">Choose the line ending (LF, CRLF or CR) the current file is saved with.</div><div class="tag">File</div></div>
+    <div class="row"><div class="title">Toggle <mark>Line</mark> Numbers</div><div class="keys"></div><div class="desc">Show or hide line numbers.</div><div class="tag">View · on</div></div>
+    <div class="row"><div class="title">Toggle <mark>Line</mark> Wrap</div><div class="keys"></div><div class="desc">Soft-wrap long logical lines to the editor width.</div><div class="tag">View · off</div></div>
+    <div class="row"><div class="title">Toggle <mark>Line</mark> Comment</div><div class="keys"><span class="chip">Ctrl</span><span class="chip">/</span></div><div class="desc">Comment or uncomment the selected lines.</div><div class="tag">Edit</div></div>
+    <div class="section">Settings</div>
+    <div class="row"><div class="title"><mark>Line</mark> Numbers</div><div class="keys"><span class="chip">On</span></div><div class="desc">Editor › Gutter</div><div class="tag">Setting</div></div>
+    <div class="footer"><span>↑↓ move · Enter run · Tab actions · Esc close</span><span>1 / 9</span></div>
+  </div>
+  <div class="note" style="left:860px;top:70px">Title first, never cut before the rest. Matches underlined.</div>
+  <div class="note" style="left:860px;top:118px">Hover is its own colour, separate from the selection.</div>
+  <div class="note" style="left:860px;top:166px">Category tag and current state on the right, muted.</div>
+  <div class="note" style="left:860px;top:296px">Settings are their own labelled section, at most 3 rows.</div>
+  <div class="note left" style="left:20px;top:70px;text-align:right">Accent bar and bold title on the selected row.</div>`,
+  export: `
+  <div class="palette">
+    <div class="query"><span class="prompt">›</span><span class="qtext">export<span class="cursor"></span></span><span class="count">5 results</span></div>
+    <div class="section">Commands</div>
+    <div class="row sel"><div class="title"><mark>Export</mark> Manuscript…</div><div class="keys"></div><div class="desc">Export the current document, or the book its manuscript.conf describes.</div><div class="tag">File</div></div>
+    <div class="row"><div class="title"><mark>Export</mark> Manuscript as DOCX…</div><div class="keys"></div><div class="desc">Export the current document, or the book, as a Word document.</div><div class="tag">File</div></div>
+    <div class="row"><div class="title"><mark>Export</mark> Manuscript as EPUB…</div><div class="keys"></div><div class="desc">Export the current document, or the book, as an EPUB e-book.</div><div class="tag">File</div></div>
+    <div class="row"><div class="title"><mark>Export</mark> Manuscript as PDF…</div><div class="keys"></div><div class="desc">Export the current document, or the book, as a PDF.</div><div class="tag">File</div></div>
+    <div class="row"><div class="title"><mark>Export</mark> Current Theme…</div><div class="keys"></div><div class="desc">Export the current theme to a theme config file.</div><div class="tag">Appearance</div></div>
+    <div class="footer"><span>↑↓ move · Enter run · Tab actions · Esc close</span><span>1 / 5</span></div>
+  </div>
+  <div class="note" style="left:860px;top:110px">Today all three read "Export Manus…". The title keeps its full width, so the rows can be told apart.</div>
+  <div class="note" style="left:860px;top:200px">Descriptions differ, so they say what is different, not repeat the shared text.</div>`,
+  empty: `
+  <div class="palette">
+    <div class="query"><span class="prompt">›</span><span class="qtext"><span class="cursor"></span><span class="placeholder">Type a command · : line · / settings · ? help</span></span><span class="count">Ctrl+E files</span></div>
+    <div class="section">Recent</div>
+    <div class="row sel"><div class="title">Toggle Line Wrap</div><div class="keys"></div><div class="desc">Soft-wrap long logical lines to the editor width.</div><div class="tag">View · off</div></div>
+    <div class="row"><div class="title">Test Project</div><div class="keys"></div><div class="desc">Run tests for the detected project.</div><div class="tag">Project · sbt</div></div>
+    <div class="section">Suggested here</div>
+    <div class="row"><div class="title">Copy</div><div class="keys"><span class="chip">Ctrl</span><span class="chip">C</span></div><div class="desc">Copy the active selection.</div><div class="tag">Edit</div></div>
+    <div class="row off"><div class="title">Cut to Darlings</div><div class="keys"></div><div class="desc">Unavailable: needs a text selection.</div><div class="tag">Edit</div></div>
+    <div class="section">All commands</div>
+    <div class="row"><div class="title">About Serenity</div><div class="keys"></div><div class="desc">Version, file locations and privacy.</div><div class="tag">Help</div></div>
+    <div class="footer"><span>↑↓ move · Enter run · Tab actions · Esc close</span><span>1 / 160</span></div>
+  </div>
+  <div class="note" style="left:860px;top:40px">The prompt says what can be typed, and the footer points to files.</div>
+  <div class="note" style="left:860px;top:100px">Labelled sections: Recent, Suggested here, All.</div>
+  <div class="note" style="left:860px;top:150px">The build provider is data, shown as detail (language-agnostic).</div>
+  <div class="note" style="left:860px;top:250px">Disabled: muted title, italic reason. Still findable; Enter says why.</div>`,
+  compact: `
+  <div class="palette">
+    <div class="query"><span class="prompt">›</span><span class="qtext">line<span class="cursor"></span></span><span class="count">9 results</span></div>
+    <div class="row compact sel"><div class="title">Go to <mark>Line</mark>…</div><div class="desc">Go to a specific line number.</div><div class="tag">Go</div><div class="keys"><span class="chip">Ctrl</span><span class="chip">G</span></div></div>
+    <div class="row compact"><div class="title">Change <mark>Line</mark> Ending…</div><div class="desc">Choose the line ending (LF, CRLF or CR)…</div><div class="tag">File</div><div class="keys"></div></div>
+    <div class="row compact"><div class="title">Toggle <mark>Line</mark> Numbers</div><div class="desc">Show or hide line numbers.</div><div class="tag">View · on</div><div class="keys"></div></div>
+    <div class="row compact"><div class="title">Toggle <mark>Line</mark> Wrap</div><div class="desc">Soft-wrap long logical lines to the…</div><div class="tag">View · off</div><div class="keys"></div></div>
+    <div class="row compact"><div class="title">Toggle <mark>Line</mark> Comment</div><div class="desc">Comment or uncomment the selected…</div><div class="tag">Edit</div><div class="keys"><span class="chip">Ctrl</span><span class="chip">/</span></div></div>
+    <div class="footer"><span>↑↓ move · Enter run · Esc close</span><span>1 / 9</span></div>
+  </div>
+  <div class="note" style="left:860px;top:70px">Compact density: one line per row. The description gives way first, then the tag; the title last.</div>`
+};
+const p = new URLSearchParams(location.search);
+if (p.get('theme') === 'light') document.body.classList.add('light');
+document.getElementById('scene').innerHTML =
+  `<div class="stage"><div class="caret"></div><div class="doc">1</div>${scenes[p.get('scene') || 'line']}</div>`;
+</script>
+</body>
+</html>

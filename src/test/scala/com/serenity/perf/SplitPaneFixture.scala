@@ -68,6 +68,12 @@ private[perf] object SplitPaneFixture:
   def overhangingLines(index: Int): String =
     (1 to 800).map(line => s"́ pane $index line $line, with words enough to fill out the row").mkString("\n")
 
+  /** Lines of box-drawing verticals, whose glyphs fill the whole height of a row and so spill antialiased ink into the
+    * row above and below (#2481).
+    */
+  def boxDrawingLines(index: Int): String =
+    (1 to 800).map(line => "│" * (30 + (line + index) % 20)).mkString("\n")
+
   private def showTheRest(manager: StateManager, first: PaneId, buffers: List[BufferId]): IO[List[PaneId]] =
     buffers match
       case _ :: second :: Nil =>
