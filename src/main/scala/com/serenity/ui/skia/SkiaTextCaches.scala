@@ -1,6 +1,7 @@
 package com.serenity.ui.skia
 
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches}
+import org.jetbrains.skia.Typeface
 
 /** What a Skia surface paints text and images through. Their owner shares one set across every frame and layer it
   * draws, as it does for a Java2D surface ([[com.serenity.ui.renderer.SurfaceTextCaches]]).
@@ -17,17 +18,20 @@ object SkiaTextCaches:
 
   private val Key = BackendCacheKey(classOf[SkiaTextCaches])
 
-  def fresh(): SkiaTextCaches =
+  def fresh(resolveTypeface: SkiaTypefaces.TypefaceKey => Typeface = SkiaTypefaces.typefaceFor): SkiaTextCaches =
     val warmup = new WarmupStats()
     SkiaTextCaches(
-      new SkiaFontCache(warmup = warmup),
+      new SkiaFontCache(warmup = warmup, resolveTypeface = resolveTypeface),
       new SkiaShapedTextCache(warmup = warmup),
       new SkiaImageCache(),
       warmup = warmup
     )
 
-  /** The set `owner` draws with, made the first time it is asked for. */
-  def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh())
+  /** The set `owner` draws with, made the first time it is asked for; `resolveTypeface` only matters to that first ask. */
+  def of(
+      owner: BackendCaches,
+      resolveTypeface: SkiaTypefaces.TypefaceKey => Typeface = SkiaTypefaces.typefaceFor
+  ): SkiaTextCaches = owner.getOrCreate(Key)(fresh(resolveTypeface))
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 

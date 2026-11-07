@@ -12,6 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.ui.benchmark.ShapingTraffic
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
+import com.serenity.ui.skia.{PinnedInterTypeface, SkiaTextCaches}
 import com.serenity.ui.tui.TuiFrameCountScenario
 
 /** The fixed interactions whose frame counts the ratchet pins: what the planner decided for each, measured on Skia CPU
@@ -55,7 +56,7 @@ private[perf] object FrameCountScenarios:
   /** A window's frame loop over one persisting Skia surface, counting every frame it draws. */
   final private class CountedFrames(scale: Double):
     private val frame  = SkiaFrames.newFrame(deviceSize(LogicalWidthPx, scale), deviceSize(LogicalHeightPx, scale))
-    private val caches = RenderCaches.create()
+    private val caches = pinnedInterCaches()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
@@ -92,7 +93,7 @@ private[perf] object FrameCountScenarios:
   /** Frames drawn from scratch over a surface that keeps nothing, the way a window's first paint is drawn. */
   final private class ScratchFrames(scale: Double):
     private val frame  = SkiaFrames.newFrame(deviceSize(LogicalWidthPx, scale), deviceSize(LogicalHeightPx, scale))
-    private val caches = RenderCaches.create()
+    private val caches = pinnedInterCaches()
     caches.frameCounters.setEnabled(true)
 
     def render(state: AppState): Unit =
@@ -126,6 +127,12 @@ private[perf] object FrameCountScenarios:
 
     /** What shaping the frame just drawn paid for, as the render benchmark's shaping traffic reads it. */
     def shapings(): Long = ShapingTraffic.Frame.of(caches.frameCounters.drain()).shapings
+
+  /** Skia draws the pinned Inter from its bundled bytes, not from whichever Inter (or fallback) the machine has. */
+  private def pinnedInterCaches(): RenderCaches =
+    val caches = RenderCaches.create()
+    val _      = SkiaTextCaches.of(caches.backendCaches, PinnedInterTypeface.system)
+    caches
 
   private def deviceSize(logicalPx: Int, scale: Double): Int = math.ceil(logicalPx * scale).toInt
 
