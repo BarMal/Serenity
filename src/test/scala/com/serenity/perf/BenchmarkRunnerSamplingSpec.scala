@@ -104,11 +104,16 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
     try
       val kept = java.util.concurrent.atomic.AtomicReference[Array[Byte]](Array.emptyByteArray)
       def offThread(): Unit =
-        worker.submit(new Runnable { def run(): Unit = kept.set(new Array[Byte](200_000)) }).get()
+        worker
+          .submit(
+            new Runnable:
+              def run(): Unit = kept.set(new Array[Byte](200_000))
+          )
+          .get()
         ()
       def declared = BenchmarkRunner.Benchmark("laptop.test.off_thread", 2, 5, () => offThread(), () => offThread())
-      val alone = BenchmarkRunner.runBenchmark(declared)
-      val all   = BenchmarkRunner.runBenchmark(declared.measuringAllThreads)
+      val alone    = BenchmarkRunner.runBenchmark(declared)
+      val all      = BenchmarkRunner.runBenchmark(declared.measuringAllThreads)
       alone.allocationAllThreadsP50Bytes shouldBe None
       alone.allocationP50Bytes.exists(_ < 200_000L) shouldBe true
       all.allocationAllThreadsP50Bytes.exists(_ >= 200_000L) shouldBe true
