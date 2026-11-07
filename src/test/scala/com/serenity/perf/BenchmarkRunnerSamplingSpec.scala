@@ -70,8 +70,8 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
     BenchmarkRunner.tracksAllocation("rope.large_json.search") shouldBe false
   }
 
-  "the header" should "name the retained_bytes column last" in {
-    BenchmarkRunner.csvHeader.split(',').last shouldBe "retained_bytes"
+  "the header" should "keep retained_bytes where a reader of the older layout finds it" in {
+    BenchmarkRunner.csvHeader.split(',')(10) shouldBe "retained_bytes"
   }
 
   it should "append the all-threads allocation columns after retained_bytes, empty for a row measured on its own thread" in {
