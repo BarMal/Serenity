@@ -11,7 +11,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameMismatchDump, FramePlanReport}
+import com.serenity.testkit.{FrameMismatchDump, FramePlanReport, PresentAreas}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
@@ -136,16 +136,10 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
       screenImage.toImage
 
     private def present(image: FramePixels, region: Option[List[PixelRect]]): Unit =
-      region match
+      PresentAreas.of(region, image.recordedPaint, scale, image.widthPx, image.heightPx) match
         case None => screenImage.blit(image, 0, 0, image.widthPx, image.heightPx)
-        case Some(rects) =>
-          rects.foreach { rect =>
-            val (x, y) = (math.floor(rect.xPx * scale).toInt, math.floor(rect.yPx * scale).toInt)
-            val (w, h) = (math.ceil(rect.widthPx * scale).toInt, math.ceil(rect.heightPx * scale).toInt)
-            val clipped = new java.awt.Rectangle(x, y, w, h)
-              .intersection(new java.awt.Rectangle(0, 0, image.widthPx, image.heightPx))
-            if !clipped.isEmpty then screenImage.blit(image, clipped.x, clipped.y, clipped.width, clipped.height)
-          }
+        case Some(areas) =>
+          areas.foreach(area => screenImage.blit(image, area.x, area.y, area.width, area.height))
 
   /** The pixels where `drawn` differs from a cold frame of `state`. A mismatch is also printed with the colours, the
     * repaint rects and which pixels lie outside them, and the frames are written as PNGs beside the JUnit reports.

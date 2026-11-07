@@ -1,14 +1,15 @@
 package com.serenity
 
-import java.awt.Font
+import java.awt.{Font, Rectangle}
 import java.awt.image.BufferedImage
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.unused
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
-import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
+import com.serenity.ui.skia.{PaintLog, SkiaRenderSurface, SkiaTextCaches}
 import org.jetbrains.skia.{
   Bitmap,
   BlendMode,
@@ -42,6 +43,11 @@ trait FramePixels:
   /** Copies the `width` x `height` pixels at (`x`, `y`) of `source`, a frame of the same renderer, to the same place.
     */
   def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit
+
+  /** The areas the surface painting this frame recorded painting, in device pixels: what a window copies to the screen
+    * beside the planner's rects. A renderer that does not record them reports none.
+    */
+  def recordedPaint: List[Rectangle] = Nil
 
   /** The frame as an image, for the dump a failed comparison writes. */
   final def toImage: BufferedImage =
@@ -182,8 +188,12 @@ object SkiaPixels:
 object SkiaFrames extends FrameBackend:
 
   final private class SkiaFrame(val surface: Surface) extends FramePixels:
+    val log: AtomicReference[Option[PaintLog]] = AtomicReference(None)
+
     def widthPx: Int  = surface.getWidth
     def heightPx: Int = surface.getHeight
+
+    override def recordedPaint: List[Rectangle] = log.get.fold(List.empty[Rectangle])(_.rects)
 
     def rgbAt(x: Int, y: Int): Int =
       val pixel = Bitmap()
@@ -230,7 +240,7 @@ object SkiaFrames extends FrameBackend:
     frame match
       case skia: SkiaFrame =>
         if persists then
-          SkiaRenderSurface.retaining(
+          val (surface, log) = PaintLog.retaining(
             skia.surface,
             metrics,
             FontSpec.fromAwt(font),
@@ -239,8 +249,10 @@ object SkiaFrames extends FrameBackend:
             scale,
             SkiaTextCaches.of(caches.backendCaches),
             caches.styledFonts,
-            layerCacheOwner = screen.orElse(Some(ScreenIdentity(skia)))
+            screen.getOrElse(ScreenIdentity(skia))
           )
+          skia.log.set(Some(log))
+          surface
         else
           SkiaRenderSurface.onCanvas(
             skia.surface.getCanvas,

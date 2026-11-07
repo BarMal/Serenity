@@ -1,7 +1,7 @@
 package com.serenity.perf
 
 import java.awt.image.BufferedImage
-import java.awt.{Font, Rectangle}
+import java.awt.Font
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
@@ -13,7 +13,7 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas}
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
@@ -111,17 +111,10 @@ trait ColdFrameHarness:
     def rowsDrawn: Long = caches.frameCounters.lastFrame(FrameCounter.RowsDrawn)
 
     private def present(image: FramePixels, region: Option[List[PixelRect]]): Unit =
-      region match
+      PresentAreas.of(region, image.recordedPaint, scale, image.widthPx, image.heightPx) match
         case None => screenImage.blit(image, 0, 0, image.widthPx, image.heightPx)
-        case Some(rects) =>
-          rects.foreach { rect =>
-            val x       = math.floor(rect.xPx * scale).toInt
-            val y       = math.floor(rect.yPx * scale).toInt
-            val w       = math.ceil(rect.widthPx * scale).toInt
-            val h       = math.ceil(rect.heightPx * scale).toInt
-            val clipped = new Rectangle(x, y, w, h).intersection(new Rectangle(0, 0, image.widthPx, image.heightPx))
-            if !clipped.isEmpty then screenImage.blit(image, clipped.x, clipped.y, clipped.width, clipped.height)
-          }
+        case Some(areas) =>
+          areas.foreach(area => screenImage.blit(image, area.x, area.y, area.width, area.height))
 
   protected val oracleImages: OracleImages = OracleImages(referenceFrames)
 
