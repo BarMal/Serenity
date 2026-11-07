@@ -33,11 +33,16 @@ object ShutdownBoundChild extends IOApp:
 
   private val ready: IO[Unit] = IO(System.out.println("READY"))
 
+  private val hookInstalled: IO[Unit] =
+    IO(IoAppReadiness.hookInstalled(IoAppReadiness.currentMainFrames())).flatMap(installed =>
+      if installed then IO.unit else IO.sleep(5.millis) >> hookInstalled
+    )
+
   def run(args: List[String]): IO[ExitCode] =
     args.headOption match
       case Some("signal") =>
         IO(watchdog.installSignalDump(seconds("child.dumpAfterSeconds").getOrElse(8.seconds), report)) >>
-          stuckRelease.use(_ => ready >> IO.never)
+          stuckRelease.use(_ => hookInstalled >> ready >> IO.never)
       case Some("quit-stuck") =>
         watchdog.armHalt(2.seconds, ShutdownWatchdog.HaltExitCode, report) >>
           stuckRelease.use(_ => ready).as(ExitCode.Success)
