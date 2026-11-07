@@ -193,7 +193,9 @@ class TuiRuntimeSpec extends AnyFlatSpec with Matchers with Eventually:
       sessionRootOverride = Some(sessionRoot)
     )
 
-    program.attempt.unsafeRunTimed(15.seconds) shouldBe defined
+    val fiber = program.attempt.void.start.unsafeRunSync()
+
+    awaitOrDumpThreads(fiber, 15.seconds) shouldBe defined
     harness.written should include(exitCaMode)
     harness.written should include(cursorShown)
   }
