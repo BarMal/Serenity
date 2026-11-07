@@ -11,8 +11,8 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.testkit.{FrameMismatchDump, FramePlanReport}
+import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
