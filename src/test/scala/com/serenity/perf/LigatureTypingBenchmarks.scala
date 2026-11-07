@@ -1,11 +1,11 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.IORuntime
+import com.serenity.FramePixels
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.perf.LaptopFrameBenchmarks.{LogicalHeightPx, LogicalWidthPx}
 import com.serenity.rope.Balance
@@ -33,30 +33,32 @@ private[perf] object LigatureTypingBenchmarks:
       .unsafeRunSync()
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val font              = ligatureFont
-    val metrics           = CellMetrics.fromFont(font)
-    val grid              = ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
-    def current: AppState = stateManager.getCurrentState.unsafeRunSync()
-    val frames            = LaptopFrameBenchmarks.PersistingFrames(font, font, metrics, grid)
-    val shown             = AtomicReference(current)
-    val _                 = frames.render(shown.get, Damage.Everything)
-    val letters           = BenchmarkFixtures.randomLetters(seed = 42L)
-    def typeAndShow(): BufferedImage =
+    lazy val font              = ligatureFont
+    lazy val metrics           = CellMetrics.fromFont(font)
+    lazy val grid              = ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
+    lazy val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
+    def current: AppState      = stateManager.getCurrentState.unsafeRunSync()
+    lazy val frames            = LaptopFrameBenchmarks.PersistingFrames(font, font, metrics, grid)
+    lazy val shown             = AtomicReference(current)
+    lazy val firstFrame        = frames.render(shown.get, Damage.Everything)
+    val letters                = BenchmarkFixtures.randomLetters(seed = 42L)
+    def typeAndShow(): FramePixels =
       stateManager.applyEvent(InsertChar(letters.next())).unsafeRunSync()
       val after  = current
       val before = shown.getAndSet(after)
       frames.render(after, DamageProducer.forTransition(before, after))
-    List(
-      BenchmarkRunner.Benchmark(
-        "laptop.render.typing_frame_2x.ligature_font",
-        3,
-        BenchmarkIterationCounts.RandomTyping,
-        () =>
-          assert(FontLoader.ligaturesEnabled(font), "the benchmark font has no ligatures on")
-          assert(LaptopFrameBenchmarks.hasPixels(typeAndShow()), "typing a letter drew nothing")
-        ,
-        () => typeAndShow(),
-        fixedSampleCount = true
+    BenchmarkRunner.Benchmark.sharing((font, metrics, grid, stateManager, frames, shown, firstFrame))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "laptop.render.typing_frame_2x.ligature_font",
+          3,
+          BenchmarkIterationCounts.RandomTyping,
+          () =>
+            assert(FontLoader.ligaturesEnabled(font), "the benchmark font has no ligatures on")
+            assert(LaptopFrameBenchmarks.hasPixels(typeAndShow()), "typing a letter drew nothing")
+          ,
+          () => typeAndShow(),
+          fixedSampleCount = true
+        )
       )
     )

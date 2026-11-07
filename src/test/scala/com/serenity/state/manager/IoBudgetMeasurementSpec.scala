@@ -10,13 +10,14 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.unsafe.{IORuntime, IORuntimeConfig}
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import com.serenity.TestTemp
 import com.serenity.app.AppRuntime
 import com.serenity.io.{AtomicFileWriter, FileChangeWatcher, SettledClock}
 import com.serenity.session.SessionManager
 import com.serenity.state.models.*
+import com.serenity.testkit.VirtualTime
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -277,26 +278,46 @@ class IoBudgetMeasurementSpec extends AnyFlatSpec with Matchers with StateManage
 
   it should "count external-change watcher wakeups" in {
     // Its own directory, so only this spec's activity reaches the watcher.
-    val file   = Files.createFile(TestTemp.directory("io-budget-watch").resolve("notes.txt"))
-    val window = 10.seconds
-    val count = (open: Map[Path, BufferId]) =>
-      FileChangeWatcher.create.use { watcher =>
+    val file = Files.createFile(TestTemp.directory("io-budget-watch").resolve("notes.txt"))
+    // Nothing is watched, so the loop never calls the watcher and nothing blocks: a quiet ten seconds costs no time.
+    val idle = VirtualTime.runVirtual(
+      FileChangeWatcher.pollingListings(FileChangeWatcher.DefaultPollInterval, _ => IO.pure(Map.empty)).use { watcher =>
         for
           derivations <- Ref.of[IO, Int](0)
           _ <- AppRuntime
-            .externalChangeWatchLoop(watcher, derivations.update(_ + 1).as(open), _ => IO.unit)
-            .interruptAfter(window)
+            .externalChangeWatchLoop(watcher, derivations.update(_ + 1).as(Map.empty), _ => IO.unit)
+            .interruptAfter(10.seconds)
             .compile
             .drain
           n <- derivations.get
         yield n
       }
-    val idle    = count(Map.empty).unsafeRunSync()
-    val watched = count(Map(file -> BufferId(1))).unsafeRunSync()
-    // The first derivation is the loop's start; every later one is a wakeup.
-    val perMinute = (derivations: Int) => (derivations - 1).max(0) * (60.seconds / window).toInt
-    info(s"[IO-BUDGET] watcher wakeups/min, nothing open: ${perMinute(idle)}")
-    info(s"[IO-BUDGET] watcher wakeups/min, one file open, idle: ${perMinute(watched)}")
-    perMinute(idle) shouldBe 0
-    perMinute(watched) shouldBe 0
+    )
+    // The platform watcher blocks, so no clock can stand in for waiting. The change is the clock: events reach the
+    // loop in order, so every derivation it made before reacting to the change was a wakeup nothing asked for. The
+    // file is rewritten until the loop has registered its watch, since a write before that is never reported.
+    val watched = FileChangeWatcher.create
+      .use { watcher =>
+        for
+          derivations <- Ref.of[IO, Int](0)
+          reacted     <- Deferred[IO, Int]
+          open       = derivations.update(_ + 1).as(Map(file -> BufferId(1)))
+          atReaction = (_: BufferId) => derivations.get.flatMap(reacted.complete).void
+          rewriting  = (IO.blocking(Files.writeString(file, "changed")) >> IO.sleep(50.millis)).foreverM
+          derivationsAtReaction <- AppRuntime
+            .externalChangeWatchLoop(watcher, open, atReaction)
+            .compile
+            .drain
+            .background
+            .use(_ => rewriting.background.use(_ => reacted.get.timeout(30.seconds)))
+        yield derivationsAtReaction
+      }
+      .unsafeRunSync()
+    // The first derivation is the loop's start; the watched run's last is the reaction to the change.
+    val idleWakeups    = (idle - 1).max(0)
+    val watchedWakeups = (watched - 2).max(0)
+    info(s"[IO-BUDGET] watcher wakeups in ten idle seconds, nothing open: $idleWakeups")
+    info(s"[IO-BUDGET] watcher wakeups before the first change, one file open, idle: $watchedWakeups")
+    idleWakeups shouldBe 0
+    watchedWakeups shouldBe 0
   }

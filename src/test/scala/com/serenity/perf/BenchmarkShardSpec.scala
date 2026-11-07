@@ -26,10 +26,10 @@ class BenchmarkShardSpec extends AnyFlatSpec with Matchers:
     shards.map(_.select(rows).size).max - shards.map(_.select(rows).size).min should be <= 1
   }
 
-  it should "give the first of two shards the first 45% of the rows, where the heavy rows are" in {
+  it should "give the first of two shards the first 40% of the rows, where the heavy rows are" in {
     val hundred = (1 to 100).toList
-    BenchmarkShard(1, 2).select(hundred) shouldBe hundred.take(45)
-    BenchmarkShard(2, 2).select(hundred) shouldBe hundred.drop(45)
+    BenchmarkShard(1, 2).select(hundred) shouldBe hundred.take(40)
+    BenchmarkShard(2, 2).select(hundred) shouldBe hundred.drop(40)
     (BenchmarkShard(1, 2).select(rows) ++ BenchmarkShard(2, 2).select(rows)) shouldBe rows
   }
 

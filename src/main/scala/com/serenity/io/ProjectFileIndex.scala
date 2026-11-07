@@ -36,7 +36,8 @@ final class ProjectFileIndex private (
     trees: Ref[IO, Map[Path, ProjectTree]],
     read: DirectoryReader,
     globalExcludes: IO[Vector[Path]],
-    firstPartialAt: Int
+    firstPartialAt: Int,
+    parallelism: Int
 ):
   import ProjectFileIndex.{MaxProjects, RacyWindowMillis}
 
@@ -61,7 +62,8 @@ final class ProjectFileIndex private (
         Vector(RootDirectory -> extras.rules),
         Int.MaxValue,
         firstPartialAt,
-        found => onPartial(ProjectFileListing(found.sortBy(_.toString), truncated = true))
+        found => onPartial(ProjectFileListing(found.sortBy(_.toString), truncated = true)),
+        parallelism
       )
     yield ProjectTree(walk.directories.toMap, extras.modified)
 
@@ -74,7 +76,10 @@ final class ProjectFileIndex private (
         else revalidated(root, tree.directories, extras.rules).map(ProjectTree(_, tree.extras))
     yield current
 
-  /** Visits the tree level by level, reading again just the directories that changed. */
+  /** Visits the tree level by level, reading again just the directories that changed. Within a level the checks and the
+    * reads run up to `parallelism` at once; the reads are then applied in order. That is safe because a reread changes
+    * only its own directory and what lies below it, and the rules it inherits come from directories above.
+    */
   private def revalidated(
     root: Path,
     snapshots: Snapshots,
@@ -83,49 +88,60 @@ final class ProjectFileIndex private (
     Monad[IO].tailRecM[(Snapshots, Vector[Path]), Snapshots]((snapshots, Vector(RootDirectory))) { (directories, level) =>
       if level.isEmpty then IO.pure(Right(directories))
       else
-        IO.blocking(level.partition(directory => directories.get(directory).forall(changed(root, directory, _))))
-          .flatMap { (changedDirectories, unchanged) =>
-            val below = unchanged.flatMap(directory => subdirectories(directories, directory))
-            changedDirectories
-              .foldLeftM((directories, below)) { (state, directory) =>
-                reread(root, base, directory, state._1).map((updated, more) => (updated, state._2 ++ more))
-              }
-              .map(Left(_))
-          }
+        IO.parTraverseN(parallelism)(level) { directory =>
+          IO.blocking(directories.get(directory).forall(changed(root, directory, _))).map(directory -> _)
+        }.flatMap { checked =>
+          val (changedDirectories, unchanged) =
+            checked.partitionMap((directory, isChanged) => if isChanged then Left(directory) else Right(directory))
+          val below = unchanged.flatMap(directory => subdirectories(directories, directory))
+          IO.parTraverseN(parallelism)(changedDirectories)(directory => rescanned(root, base, directory, directories))
+            .flatMap(_.foldLeftM((directories, below)) { (state, rescan) =>
+              applied(root, rescan, state._1).map((updated, more) => (updated, state._2 ++ more))
+            })
+            .map(Left(_))
+        }
     }
 
-  /** Reads `directory` again. Returns the updated snapshots and the subdirectories still to be checked: those that were
-    * there before and are not new, since a new one is walked here and then needs no check.
+  /** A changed directory read again, beside what it held before; nothing for one that was never listed. */
+  final private case class Rescan(
+      directory: Path,
+      before: DirectorySnapshot,
+      after: Either[Throwable, (DirectorySnapshot, IgnoreRules)]
+  )
+
+  private def rescanned(root: Path, base: IgnoreRules, directory: Path, snapshots: Snapshots): IO[Option[Rescan]] =
+    snapshots.get(directory).traverse { before =>
+      IO.blocking(scan(root, directory, rulesAbove(directory, snapshots, base), read))
+        .attempt
+        .map(Rescan(directory, before, _))
+    }
+
+  /** Applies a rescan. Returns the updated snapshots and the subdirectories still to be checked: those that were there
+    * before and are not new, since a new one is walked here and then needs no check.
     */
-  private def reread(
-    root: Path,
-    base: IgnoreRules,
-    directory: Path,
-    snapshots: Snapshots
-  ): IO[(Snapshots, Vector[Path])] =
-    snapshots.get(directory).fold(IO.pure((snapshots, Vector.empty[Path]))) { before =>
-      IO.blocking(scan(root, directory, rulesAbove(directory, snapshots, base), read)).attempt.flatMap {
-        case Left(error) if directory == RootDirectory => IO.raiseError(error)
-        case Left(_)                                   => IO.pure((without(snapshots, Vector(directory)), Vector.empty))
-        case Right((after, rules)) =>
-          val rulesChanged = after.rules != before.rules
-          val gone =
-            if rulesChanged then before.directories else before.directories.filterNot(after.directories.contains)
-          val added =
-            if rulesChanged then after.directories else after.directories.filterNot(before.directories.contains)
-          val kept    = after.directories.filterNot(added.contains)
-          val trimmed = without(snapshots, gone.map(directory.resolve(_))) + (directory -> after)
-          ProjectFileWalker
-            .build(
-              root,
-              read,
-              added.map(name => directory.resolve(name) -> rules),
-              Int.MaxValue,
-              Int.MaxValue,
-              _ => IO.unit
-            )
-            .map(walk => (trimmed ++ walk.directories, kept.map(directory.resolve(_))))
-      }
+  private def applied(root: Path, rescan: Option[Rescan], snapshots: Snapshots): IO[(Snapshots, Vector[Path])] =
+    rescan.fold(IO.pure((snapshots, Vector.empty[Path]))) {
+      case Rescan(directory, _, Left(error)) if directory == RootDirectory => IO.raiseError(error)
+      case Rescan(directory, _, Left(_)) => IO.pure((without(snapshots, Vector(directory)), Vector.empty))
+      case Rescan(directory, before, Right((after, rules))) =>
+        val rulesChanged = after.rules != before.rules
+        val gone =
+          if rulesChanged then before.directories else before.directories.filterNot(after.directories.contains)
+        val added =
+          if rulesChanged then after.directories else after.directories.filterNot(before.directories.contains)
+        val kept    = after.directories.filterNot(added.contains)
+        val trimmed = without(snapshots, gone.map(directory.resolve(_))) + (directory -> after)
+        ProjectFileWalker
+          .build(
+            root,
+            read,
+            added.map(name => directory.resolve(name) -> rules),
+            Int.MaxValue,
+            Int.MaxValue,
+            _ => IO.unit,
+            parallelism
+          )
+          .map(walk => (trimmed ++ walk.directories, kept.map(directory.resolve(_))))
     }
 
   private def changed(root: Path, directory: Path, snapshot: DirectorySnapshot): Boolean =
@@ -165,16 +181,24 @@ object ProjectFileIndex:
   /** An index holding nothing yet. `Ref.unsafe` only allocates, so it is safe to build where no `IO` is at hand. */
   def empty(
     globalExcludes: IO[Vector[Path]] = gitGlobalExcludes,
-    firstPartialAt: Int = DefaultFirstPartialAt
+    firstPartialAt: Int = DefaultFirstPartialAt,
+    parallelism: Int = ProjectFileWalker.DefaultParallelism
   ): ProjectFileIndex =
-    emptyReading(ProjectFileWalker.readDirectory, globalExcludes, firstPartialAt)
+    emptyReading(ProjectFileWalker.readDirectory, globalExcludes, firstPartialAt, parallelism)
 
   private[io] def emptyReading(
     read: DirectoryReader,
     globalExcludes: IO[Vector[Path]],
-    firstPartialAt: Int
+    firstPartialAt: Int,
+    parallelism: Int = ProjectFileWalker.DefaultParallelism
   ): ProjectFileIndex =
-    new ProjectFileIndex(Ref.unsafe[IO, Map[Path, ProjectTree]](Map.empty), read, globalExcludes, firstPartialAt)
+    new ProjectFileIndex(
+      Ref.unsafe[IO, Map[Path, ProjectTree]](Map.empty),
+      read,
+      globalExcludes,
+      firstPartialAt,
+      parallelism.max(1)
+    )
 
   /** The excludes file git itself would apply: `core.excludesFile` from the user's git config, else the default
     * `$XDG_CONFIG_HOME/git/ignore` (`~/.config/git/ignore`).

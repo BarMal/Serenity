@@ -21,7 +21,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
-  private val bareConfig = AppConfig.conventional.withLineNumbers(false).withoutStatusLine
+  private val bareConfig = ChromeOn.config.withLineNumbers(false).withoutStatusLine
 
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
@@ -111,7 +111,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         bufferOrder = List(bufferId),
         layout = singlePaneLayout(paneId, bufferId),
         theme = Theme.light,
-        config = AppConfig.conventional.withoutStatusLine.withWordWrap(true)
+        config = ChromeOn.config.withoutStatusLine.withWordWrap(true)
       )
     )
     val viewportSize = ViewportSize(11, 6)
@@ -260,7 +260,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       codeFont,
       cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
       textFontOverride = Some(textFont),
-      config = AppConfig.conventional.withLineNumbers(true).withoutStatusLine
+      config = ChromeOn.config.withLineNumbers(true).withoutStatusLine
     )
 
     val firstTextRun =
