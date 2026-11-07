@@ -15,6 +15,7 @@ final case class SurfaceConfig(
     wordWrapEnabled: Boolean = true,
     scrollbarEnabled: Boolean = true,
     tabStrip: TabStripMode = TabStripMode.Auto,
+    tabMaxWidth: Int = TabMaxWidth.Default,
     // Whether Up/Down under word wrap follow visual rows (the wrapped screen line) rather than jumping straight to
     // the previous/next logical line. Independent of wordWrapEnabled itself: only takes effect while wrap is also on.
     visualLineCursorNavigation: Boolean = true,
@@ -24,13 +25,14 @@ final case class SurfaceConfig(
     // stays at its centred row even while typing at the very end of the document, padding with blank rows below it
     // the way iA Writer/Ulysses-style typewriter scrolling does (#1204, #1293).
     typewriterScrollingEnabled: Boolean = false,
+    offscreenCursorSurfaces: OffscreenCursorSurfaces = OffscreenCursorSurfaces.RevealCursor,
     // E-reader-style column layout (issue #1338, Phase 1): global toggle, no per-document/per-pane settings
     // infrastructure exists today. Only takes effect while `wordWrapEnabled` is also on -- otherwise a no-op, falling
     // back to ordinary vertical scrolling.
     columnModeEnabled: Boolean = false,
     // Target column width in cells; used only in Auto mode (`columnCount = None`), where the count is however many of
-    // this width (plus `columnGap`) fit the pane.
-    columnTargetWidthCells: Int = 80,
+    // this width (plus `columnGap`) fit the pane. `None` is unlimited: one column fills the pane.
+    columnTargetWidthCells: Option[Int] = None,
     columnGap: Int = 2,
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven mode. `None` is Auto -- the
     // width-driven "as many columns of `columnTargetWidthCells` as fit" behaviour above, unchanged. `Some(n)` pins
@@ -71,7 +73,6 @@ final case class SurfaceConfig(
     // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
     // insets above.
     proseMeasure: Option[Int] = None,
-    viewportSizing: ViewportSizing = ViewportSizing(),
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
@@ -95,7 +96,7 @@ final case class SurfaceConfig(
     copy(
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       columnGap = columnGap.max(0),
-      columnTargetWidthCells = columnTargetWidthCells.max(1),
+      columnTargetWidthCells = columnTargetWidthCells.map(_.max(1)),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = commandRunnerItemGapRows.map(AppConfig.clampCommandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
@@ -104,6 +105,6 @@ final case class SurfaceConfig(
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
       proseMeasure = proseMeasure.map(ProseMeasure.clamp),
-      viewportSizing = viewportSizing.normalized,
+      tabMaxWidth = TabMaxWidth.clamp(tabMaxWidth),
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )

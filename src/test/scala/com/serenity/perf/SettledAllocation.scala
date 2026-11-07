@@ -110,4 +110,18 @@ object SettledAllocation:
         case unsettled: Settling.Unsettled  => Assertions.fail(unsettled.message)
     }
 
+  /** For specs whose whole point is an allocation bound: a runtime that cannot count must fail them, not skip them. */
+  private[perf] def required[A](measured: Option[A]): A =
+    measured.getOrElse(
+      Assertions.fail(
+        "the JVM per-thread allocation counter is unsupported on this runtime, so the allocation bound cannot be checked"
+      )
+    )
+
+  def perCallRequired(
+    small: () => Any,
+    large: () => Any,
+    acceptable: ((Long, Long)) => Boolean = _ => true
+  ): (Long, Long) = required(perCall(small, large, acceptable))
+
 end SettledAllocation

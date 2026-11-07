@@ -1,29 +1,21 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.rope.Balance
+import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.SurfaceContent
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The tab list and recent-in-mode list are summonable via the command runner (issue #1307), toggling open/closed like
   * the existing keyboard-shortcuts reference (`ToggleShortcutsHelp`) rather than needing a dedicated dismiss gesture.
   */
-class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class ModeTabWidgetSurfacesSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("ModeTabWidgetSurfacesSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("ModeTabWidgetSurfacesSpec", initialConfig = AppConfig.default)
 
   "CommandRegistry" should "register the tab-list and recent-in-mode commands" in {
     val commandNames = CommandRegistry.default.getAllCommands.map(_.name)

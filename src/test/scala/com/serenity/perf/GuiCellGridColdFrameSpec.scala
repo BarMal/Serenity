@@ -6,6 +6,7 @@ import java.nio.file.Paths
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
@@ -47,7 +48,7 @@ class GuiCellGridColdFrameSpec extends AnyFlatSpec with Matchers:
     Vector.tabulate(40)(line => s"line $line 中文 mixed ★ text 中 and more 文文 → 안녕 end").mkString("\n")
 
   private def configWith(families: List[String]): AppConfig =
-    val base = AppConfig.conventional.withAppMode(AppMode.Code)
+    val base = ChromeOn.config.withAppMode(AppMode.Code)
     base.withFontConfig(base.editorConfig.fontConfig.copy(fallbackFamilies = families))
 
   final private class PersistingImage:

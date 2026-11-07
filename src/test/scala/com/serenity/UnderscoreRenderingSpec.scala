@@ -3,7 +3,7 @@ package com.serenity
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.RendererEntryPoints
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,7 +55,11 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
     val state = AppState.empty.copy(
       persisted = AppState.empty.persisted.copy(
         buffers = Map(bufferId -> buffer),
-        layout = Layout.empty.copy(editorPanes = Map(paneId -> pane))
+        layout = Layout.empty.copy(
+          editorPanes = Map(paneId -> pane),
+          activeEditorPaneId = Some(paneId),
+          workspaceTree = Some(WorkspaceTree(WorkspaceNode.Leaf(WorkspaceNodeId("editor-1"), paneId)))
+        )
       )
     )
 
@@ -67,5 +71,8 @@ class UnderscoreRenderingSpec extends AnyFlatSpec with Matchers:
       ViewportSize(80, 24),
       com.serenity.state.manager.RenderCaches.create()
     )
-    // Verify rendering completes without exception
+
+    val drawnText =
+      surface.putStringCalls.map(_.s) ++ surface.putStringPixelYCalls.map(_.text) ++ surface.drawRunPxCalls.map(_.s)
+    drawnText.mkString should include("test_with_underscores")
   }

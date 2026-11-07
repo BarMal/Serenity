@@ -7,7 +7,6 @@ import java.awt.image.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
@@ -38,7 +37,7 @@ class Java2DRenderSurface(
     with TextDrawing
     with PixelDrawing
     with Effects
-    with PanelOutlineDrawing
+    with Java2DKeptOff
     with LayerBufferSupport
     with PixelCopying:
   import textCaches.{labelSprites, shapedText, styledFonts}
@@ -46,7 +45,7 @@ class Java2DRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
   override def addressesPixels: Boolean = true
@@ -94,6 +93,8 @@ class Java2DRenderSurface(
     )
 
   private val g: Graphics2D = image.createGraphics()
+
+  override protected def clipGraphics: Graphics2D = g
   private val effectiveLogicalWidthPx =
     if logicalWidthPx > 0 then logicalWidthPx else image.getWidth
   private val effectiveLogicalHeightPx =
@@ -121,6 +122,9 @@ class Java2DRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+
+  private val roundedOutlines =
+    Java2DRoundedOutlines(this, g, metrics, paintColor, painted.touched(_, _, _, _), userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -178,22 +182,23 @@ class Java2DRenderSurface(
     val boundedBottom = runBottom(yPx, lineHeightPx)
 
     if boundedLeft < boundedRight && boundedTop < boundedBottom then
-      activity.runDrawn()
-      val boundedWidth  = boundedRight - boundedLeft
-      val boundedHeight = boundedBottom - boundedTop
-      if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
-        fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
-        painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
-      if hasText then
-        g.setColor(fgRef.get())
-        val savedClip = if userClipDepth.get() == 0 then None else Option(g.getClip)
-        try
-          if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
-          else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
-          drawGlyphs
-        finally Java2DRenderSurface.restoreClip(g, savedClip)
-        drawUnderline(boundedLeft, boundedWidth, yPx + ascentPx)
-        painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+      awayFromKept(boundedLeft, boundedTop, boundedRight, boundedBottom):
+        activity.runDrawn()
+        val boundedWidth  = boundedRight - boundedLeft
+        val boundedHeight = boundedBottom - boundedTop
+        if painted.needsBackground(boundedLeft, boundedTop, boundedRight, boundedBottom, bgRef.get()) then
+          fillBackground(bgRef.get(), boundedLeft, boundedTop, boundedWidth, boundedHeight)
+          painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+        if hasText then
+          g.setColor(fgRef.get())
+          val savedClip = if userClipDepth.get() == 0 then None else Option(g.getClip)
+          try
+            if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
+            else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
+            drawGlyphs
+          finally Java2DRenderSurface.restoreClip(g, savedClip)
+          drawUnderline(boundedLeft, boundedWidth, yPx + ascentPx)
+          painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
 
   private def runLeft(xPx: Float): Int = math.floor(xPx.toDouble).toInt.max(0).min(cellGridWidthPx)
 
@@ -225,7 +230,9 @@ class Java2DRenderSurface(
     LabelAnchor.of(g.getTransform, xPx, yPx + ascentPx) match
       case Some(anchor) if s.nonEmpty && userClipDepth.get() == 0 =>
         drawRunPx(xPx, yPx, bgWidthPx, lineHeightPx, ascentPx, "")
-        blitLabel(anchor, s)
+        awayFromKept(runLeft(xPx), runTop(yPx), runRight(xPx, bgWidthPx), runBottom(yPx, lineHeightPx))(
+          blitLabel(anchor, s)
+        )
         val left = runLeft(xPx)
         drawUnderline(left, runRight(xPx, bgWidthPx) - left, yPx + ascentPx)
         painted.ranOver(left, runTop(yPx), runRight(xPx, bgWidthPx), runBottom(yPx, lineHeightPx))
@@ -240,11 +247,12 @@ class Java2DRenderSurface(
     try
       device.setComposite(g.getComposite)
       device.clipRect(0, 0, cellGridWidthPx * anchor.scaleX, cellGridHeightPx * anchor.scaleY)
+      clippedLikeSurface(device)
       val _ = device.drawImage(
         sprite.image,
         anchor.deviceX - sprite.originX,
         anchor.deviceBaseline - sprite.baseline,
-        Java2DRenderSurface.NoOpImageObserver
+        SurfaceSizing.NoOpImageObserver
       )
     finally device.dispose()
 
@@ -277,11 +285,11 @@ class Java2DRenderSurface(
       val savedComposite = g.getComposite
       g.setComposite(AlphaComposite.Src)
       g.setColor(if image.getColorModel.hasAlpha then color else Color.BLACK)
-      g.fillRect(px, py, pw, ph)
+      awayFromKept(px, py, px + pw, py + ph)(g.fillRect(px, py, pw, ph))
       g.setComposite(savedComposite)
     else
       g.setColor(color)
-      g.fillRect(px, py, pw, ph)
+      awayFromKept(px, py, px + pw, py + ph)(g.fillRect(px, py, pw, ph))
 
   override def clearViewport(color: RenderColor): Unit =
     setBackgroundColor(color)
@@ -313,9 +321,10 @@ class Java2DRenderSurface(
       g.setColor(fgRef.get())
       // A narrow stretch is drawn as one shaped string so font features like ligatures can apply; a wide character is
       // drawn alone on its own cell, since its glyph's advance need not be two of them.
-      CellRuns
-        .pieces(s)
-        .foreach((cell, piece) => g.drawString(piece, px + cell * metrics.charWidth, py + metrics.ascent))
+      awayFromKept(px, py, px + widthPx, py + metrics.lineHeight):
+        CellRuns
+          .pieces(s)
+          .foreach((cell, piece) => g.drawString(piece, px + cell * metrics.charWidth, py + metrics.ascent))
       drawUnderline(px, widthPx, py + metrics.ascent)
 
   def fillRect(x: Int, y: Int, width: Int, height: Int, char: Char): Unit =
@@ -327,11 +336,12 @@ class Java2DRenderSurface(
     painted.touched(px, py, pw, ph)
     if char != ' ' then
       g.setColor(fgRef.get())
-      (0 until height).foreach { row =>
-        (0 until width).foreach { col =>
-          g.drawString(char.toString, metrics.toPixelX(x + col), metrics.toPixelY(y + row) + metrics.ascent)
+      awayFromKept(px, py, px + pw, py + ph):
+        (0 until height).foreach { row =>
+          (0 until width).foreach { col =>
+            g.drawString(char.toString, metrics.toPixelX(x + col), metrics.toPixelY(y + row) + metrics.ascent)
+          }
         }
-      }
 
   override def withLogicalPixelRow(cellRow: Int, pixelY: Int)(render: => Unit): Unit =
     val previous = logicalPixelRowOverride.getAndSet(Some(cellRow -> pixelY))
@@ -374,7 +384,7 @@ class Java2DRenderSurface(
     painted.touched(px, py, pw, ph)
     g.setColor(paintColor(color))
     g.setStroke(new BasicStroke(strokeWidth, BasicStroke.CAP_SQUARE, BasicStroke.JOIN_MITER))
-    g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset)
+    awayFromKept(px, py, px + pw, py + ph)(g.drawRect(px + inset, py + inset, pw - 2 * inset, ph - 2 * inset))
     g.setStroke(savedStroke)
 
   override def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
@@ -404,7 +414,7 @@ class Java2DRenderSurface(
   ): Unit =
     painted.touched(xPx, yPx, widthPx.max(1), heightPx.max(1))
     g.setColor(paintColor(color))
-    g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1))
+    awayFromKept(xPx, yPx, xPx + widthPx, yPx + heightPx)(g.fillRect(xPx, yPx, widthPx.max(1), heightPx.max(1)))
 
   override def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     val px        = metrics.toPixelX(x)
@@ -414,7 +424,8 @@ class Java2DRenderSurface(
     val savedClip = g.getClip
     painted.touched(px, py, pw, ph)
     g.clipRect(px, py, pw, ph)
-    g.drawImage(image.toAwt, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
+    awayFromKept(px, py, px + pw, py + ph):
+      val _ = g.drawImage(image.toAwt, px, py, pw, ph, SurfaceSizing.NoOpImageObserver)
     g.setClip(savedClip)
 
   /** Blit a whole-surface layer buffer straight onto this surface's backing image at device resolution, 1:1, bypassing
@@ -434,7 +445,7 @@ class Java2DRenderSurface(
     painted.forgetClear()
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, SurfaceSizing.NoOpImageObserver)
     finally rawGraphics.dispose()
 
   /** In device pixels on an untransformed graphics, because `copyArea` is not implemented for a scaled one. A copy onto
@@ -468,19 +479,9 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  type DeviceScale = DisplayScale.DeviceScale
-  val DeviceScale: DisplayScale.DeviceScale.type = DisplayScale.DeviceScale
-
   /** `Graphics2D` can only express "no clip" as a null `Shape`. */
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
   private def restoreClip(g: Graphics2D, saved: Option[Shape]): Unit = g.setClip(saved.orNull)
-
-  /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
-    * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
-    * can never fire and a `null` observer (Java's usual shorthand for "don't call me back") is equivalent to this
-    * no-op. Returning `false` tells the (never-invoked) caller not to bother scheduling further notifications.
-    */
-  private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
 
   /** Reuses `current` when it already carries `color`, so a renderer re-setting the same theme colour on every run does
     * not allocate a fresh `java.awt.Color` each time.
@@ -576,10 +577,3 @@ object Java2DRenderSurface:
       activity,
       bounds
     )
-
-  private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
-    math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
-
-  private[serenity] def logicalCanvasDimension(currentPx: Int, preferredPx: Int): Int =
-    if currentPx > 0 then currentPx
-    else preferredPx.max(1)
