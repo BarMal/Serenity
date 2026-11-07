@@ -3,8 +3,9 @@ package com.serenity.perf
 import java.awt.font.FontRenderContext
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.PixelRect
+import com.serenity.ui.layout.{PixelRect, RoundedCorners}
 import com.serenity.ui.renderer.{
+  CornerUnderlay,
   Effects,
   FontSpec,
   FrameSurfaceFactory,
@@ -180,6 +181,40 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   def withRectClip(x: Int, y: Int, width: Int, height: Int)(render: => Unit): Unit =
     counts.increment(DrawKind.ClipPush)
     try inner.panelOutlines.fold(render)(_.withRectClip(x, y, width, height)(render))
+    finally counts.increment(DrawKind.ClipPop)
+
+  override def fillRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    corners: RoundedCorners,
+    radiusPx: Int,
+    color: RenderColor,
+    underlay: CornerUnderlay
+  ): Boolean =
+    val drew = inner.panelOutlines.exists(_.fillRoundRect(x, y, width, height, corners, radiusPx, color, underlay))
+    if drew then counts.increment(DrawKind.FillRect)
+    drew
+
+  override def strokeRoundRect(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    corners: RoundedCorners,
+    radiusPx: Int,
+    color: RenderColor,
+    strokeWidth: Float
+  ): Unit =
+    counts.increment(DrawKind.StrokeRect)
+    inner.panelOutlines.foreach(_.strokeRoundRect(x, y, width, height, corners, radiusPx, color, strokeWidth))
+
+  override def withRoundRectClip(x: Int, y: Int, width: Int, height: Int, corners: RoundedCorners, radiusPx: Int)(
+    render: => Unit
+  ): Unit =
+    counts.increment(DrawKind.ClipPush)
+    try inner.panelOutlines.fold(render)(_.withRoundRectClip(x, y, width, height, corners, radiusPx)(render))
     finally counts.increment(DrawKind.ClipPop)
 
   override def withPixelClip(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int)(render: => Unit): Unit =

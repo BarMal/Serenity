@@ -72,7 +72,7 @@ final private[manager] case class MouseTargetLayoutKey(
     // narrowing and `fromBufferColumn` snapshot, so a live column-mode toggle (or a target-width/gap change) must
     // invalidate the cached scene -- without them a toggle re-uses the full-width scene and has no visible effect.
     columnModeEnabled: Boolean,
-    columnTargetWidthCells: Int,
+    columnTargetWidthCells: Option[Int],
     columnGap: Int,
     // Count-driven columns (issue #1338, Phase 2 / slice 4): `resolvedColumnCount` reads this too, so a live change
     // to the explicit column count (with target width/gap unchanged) must also invalidate the cached scene.
@@ -82,6 +82,8 @@ final private[manager] case class MouseTargetLayoutKey(
     proseColumnCells: Option[Int],
     interfaceDensity: InterfaceDensity,
     uiElementGap: Double,
+    // The docked corner style reaches layout only as this margin, which also depends on the surface and the gap.
+    chromeInset: Int,
     showPaneHeaders: Boolean,
     statusLine: StatusLineConfig,
     scrollbarShown: Boolean,
@@ -195,6 +197,7 @@ private[manager] object MouseTargetLayoutKey:
       proseColumnCells = ProseColumn.widthCells(state),
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.effectiveUiElementGap,
+      chromeInset = ChromeFrame.inset(state),
       showPaneHeaders = state.chrome.paneHeaders,
       statusLine = state.chrome.statusLine,
       scrollbarShown = state.chrome.scrollbar,
@@ -234,7 +237,7 @@ private[manager] object MouseTargetLayoutKey:
         tree.dockedSurfaceIds.flatMap { id =>
           for
             position <- tree.positionForSurface(id)
-            size     <- tree.currentSize(id, state.runtime.viewportSize)
+            size     <- tree.currentSize(id, state.panelViewportSize)
           yield (id, position, size)
         }
       },

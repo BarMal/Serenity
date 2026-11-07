@@ -3,6 +3,7 @@ package com.serenity.perf
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.perf.SettledAllocation.Settling
+import org.scalatest.exceptions.TestFailedException
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -90,4 +91,14 @@ class SettledAllocationSpec extends AnyFlatSpec with Matchers:
   it should "say that the allocation did not settle when the rounds never agreed" in {
     Settling.Unsettled(552L, 28800L, 60, agreedAboveBound = false).message shouldBe
       "allocation did not settle in 60 rounds (last round: 552 B and 28800 B)"
+  }
+
+  "A missing allocation counter" should "fail the spec, naming the counter, rather than pass" in {
+    val failure = the[TestFailedException] thrownBy SettledAllocation.required[(Long, Long)](None)
+
+    failure.getMessage should include("per-thread allocation counter")
+  }
+
+  "A present allocation measurement" should "be handed to the spec unchanged" in {
+    SettledAllocation.required(Some((12L, 34L))) shouldBe ((12L, 34L))
   }

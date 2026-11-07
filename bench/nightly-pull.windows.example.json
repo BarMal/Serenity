@@ -1,0 +1,24 @@
+{
+  "machine": "windows-rtx3070",
+  "results_dir": "~/serenity-bench/windows",
+  "token_env": "SERENITY_BENCH_TOKEN",
+  "commands": [
+    {
+      "name": "render-benchmark",
+      "argv": ["java", "-jar", "{jar}", "--render-benchmark", "--render-benchmark-size", "1600x1000"],
+      "timeout_s": 1800,
+      "collect": [
+        {"kind": "render_json", "path": "{out}/render-benchmark-*.json"}
+      ]
+    },
+    {
+      "name": "performance-benchmarks",
+      "argv": ["java", "-cp", "{perf_jar}", "com.serenity.perf.PerformanceBenchmarks", "laptop.render.", "laptop.present."],
+      "stdout_to": "{out}/performance-benchmarks.csv",
+      "timeout_s": 3600,
+      "collect": [
+        {"kind": "perf_csv", "path": "{out}/performance-benchmarks.csv"}
+      ]
+    }
+  ]
+}

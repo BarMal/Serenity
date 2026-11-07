@@ -63,7 +63,13 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-windows.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (windows)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (windows, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
 
   test-macos:
     name: Test (macos)
@@ -75,7 +81,13 @@ jobs:
       - name: Require every shard to have passed
         env:
           RESULT: ${{ needs.shards-macos.result }}
-        run: test "$RESULT" = success
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        # `needs` carries one result for all of an OS's shards, not one per shard, so the message points at the run.
+        run: |
+          if [ "$RESULT" != success ]; then
+            echo "::error title=Test (macos)::The shards finished with result '$RESULT'. Look for the jobs named 'Test (macos, shard N/2)' that did not succeed; their step summaries list the failing tests: $RUN_URL"
+          fi
+          test "$RESULT" = success
 
   # GITHUB_TOKEN-created runs raise no workflow_run event, so a train's own CI and Cross-OS runs cannot wake the merge
   # train when they finish. This last job does, on train branches only; the token may start a workflow_dispatch run.
@@ -92,4 +104,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: gh workflow run merge-train.yml --ref master
+        # A dispatch can meet a GitHub API error (HTTP 500 on train 17), and a red wake job reddens its whole run.
+        run: |
+          for attempt in 1 2 3 4; do
+            gh workflow run merge-train.yml --ref master && exit 0
+            echo "::warning::Starting a merge train step failed (try $attempt of 4)"
+            [ "$attempt" -lt 4 ] && sleep $((attempt * 5))
+          done
+          exit 1

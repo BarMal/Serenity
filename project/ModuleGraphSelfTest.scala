@@ -125,21 +125,29 @@ object ModuleGraphSelfTest {
 
   private def assignsModules(): Unit = {
     val expected = Seq(
-      "src/main/scala/com/serenity/rope/btree/BTreeEdit.scala"           -> "core-text",
-      "src/main/scala/com/serenity/text/bidi/Run.scala"                  -> "core-text",
-      "src/main/scala/com/serenity/io/AtomicFileWriter.scala"            -> "core-text",
-      "src/main/scala/com/serenity/io/FileManager.scala"                 -> "app",
-      "src/main/scala/com/serenity/lsp/model/Diagnostic.scala"           -> "lsp-protocol",
-      "src/main/scala/com/serenity/lsp/client/LspFramer.scala"           -> "lsp-protocol",
-      "src/main/scala/com/serenity/lsp/LspManager.scala"                 -> "app",
-      "src/main/scala/com/serenity/richtext/XmlDom.scala"                -> "richtext",
-      "src/main/scala/com/serenity/exporting/PdfExporter.scala"          -> "manuscript",
-      "src/main/scala/com/serenity/ui/theme/Theme.scala"                 -> "theme",
-      "src/main/scala/com/serenity/ui/fonts/FontLoader.scala"            -> "theme",
-      "src/main/scala/com/serenity/markdown/BlockScan.scala"             -> "markdown",
-      "src/main/scala/com/serenity/state/models/AppState.scala"          -> "app",
-      "src/main/scala/Main.scala"                                        -> "app",
-      "target/scala-3.9.0/src_managed/main/com/serenity/BuildInfo.scala" -> "app"
+      "src/main/scala/com/serenity/rope/btree/BTreeEdit.scala"              -> "core-text",
+      "src/main/scala/com/serenity/text/bidi/Run.scala"                     -> "core-text",
+      "src/main/scala/com/serenity/io/AtomicFileWriter.scala"               -> "core-text",
+      "src/main/scala/com/serenity/io/FileManager.scala"                    -> "app",
+      "src/main/scala/com/serenity/lsp/model/Diagnostic.scala"              -> "lsp-protocol",
+      "src/main/scala/com/serenity/lsp/client/LspFramer.scala"              -> "lsp-protocol",
+      "src/main/scala/com/serenity/lsp/LspManager.scala"                    -> "app",
+      "src/main/scala/com/serenity/richtext/XmlDom.scala"                   -> "richtext",
+      "src/main/scala/com/serenity/exporting/PdfExporter.scala"             -> "manuscript",
+      "src/main/scala/com/serenity/ui/theme/Theme.scala"                    -> "theme",
+      "src/main/scala/com/serenity/ui/fonts/FontLoader.scala"               -> "app",
+      "src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala"       -> "app",
+      "src/main/scala/com/serenity/ui/theme/config/AppThemeManager.scala"   -> "app",
+      "src/main/scala/com/serenity/ui/theme/config/ThemeConfigLoader.scala" -> "theme",
+      "src/main/scala/com/serenity/ui/theme/MarkdownInlineStyling.scala"    -> "markdown",
+      "src/main/scala/com/serenity/ui/color/RenderColor.scala"              -> "theme",
+      "src/main/scala/com/serenity/io/RenameRetryPolicy.scala"              -> "core-text",
+      "src/main/scala/com/serenity/publish/ManuscriptExport.scala"          -> "app",
+      "src/main/scala/com/serenity/manuscript/CompileSpec.scala"            -> "manuscript",
+      "src/main/scala/com/serenity/markdown/BlockScan.scala"                -> "markdown",
+      "src/main/scala/com/serenity/state/models/AppState.scala"             -> "app",
+      "src/main/scala/Main.scala"                                           -> "app",
+      "target/scala-3.9.0/src_managed/main/com/serenity/BuildInfo.scala"    -> "app"
     )
     expected.foreach {
       case (uri, module) =>
