@@ -22,10 +22,10 @@ private[renderer] object LayerSurfaces:
     bounds: Option[PixelRect]
   ): Java2DRenderSurface =
     val origin = bounds.map(DeviceOrigin.of(_, deviceScaleX, deviceScaleY)).getOrElse(DeviceOrigin.Zero)
-    val width = bounds.fold(Java2DRenderSurface.deviceImageDimension(logicalWidthPx, deviceScaleX))(
+    val width = bounds.fold(SurfaceSizing.deviceImageDimension(logicalWidthPx, deviceScaleX))(
       DeviceOrigin.widthOf(_, deviceScaleX)
     )
-    val height = bounds.fold(Java2DRenderSurface.deviceImageDimension(logicalHeightPx, deviceScaleY))(
+    val height = bounds.fold(SurfaceSizing.deviceImageDimension(logicalHeightPx, deviceScaleY))(
       DeviceOrigin.heightOf(_, deviceScaleY)
     )
     val image = recycled

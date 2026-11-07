@@ -367,18 +367,14 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
       pipeline = composedPipeline(
         modelRef,
         operations,
-        _ => operations.enqueueEvent(ToggleCommandRunner) >> operations.enqueueEvent(RunnerInsertChar('x'))
+        _ => operations.enqueueEvent(ToggleCommandRunner) >> operations.enqueueEvent(ModalInsertChar('x'))
       )
       _ <- pipeline.applyReducerResult(
         ReducerResult.withEffect(initialState, AppEffect.CompleteQuit),
         initialState
       )
       state <- ModelViews.appRef(modelRef).get
-    yield state.commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => Some(runner.searchTerm)
-        case _                                     => None
-    } shouldBe Some("x")
+    yield com.serenity.CommandPaletteProbe.queryText(state) shouldBe Some("x")
 
     program.unsafeRunSync()
   }

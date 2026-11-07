@@ -94,16 +94,21 @@ object OverlayViewModel:
   private val InactiveFloatingPanelAlphaMultiplier = 0.68f
 
   def fromState(state: AppState, layout: CalculatedLayout): OverlayViews =
-    fromState(state, layout, None)
+    fromState(state, layout, None, new TabBarMeasures)
 
   /** Build overlay views from the frame scene so rendering shares the snapshot used by hit testing. */
-  def fromState(state: AppState, scene: UiSceneSnapshot): OverlayViews =
-    fromState(state, scene.calculatedLayout, Some(scene))
+  def fromState(
+    state: AppState,
+    scene: UiSceneSnapshot,
+    tabBarMeasures: TabBarMeasures = new TabBarMeasures
+  ): OverlayViews =
+    fromState(state, scene.calculatedLayout, Some(scene), tabBarMeasures)
 
   private def fromState(
     state: AppState,
     layout: CalculatedLayout,
-    scene: Option[UiSceneSnapshot]
+    scene: Option[UiSceneSnapshot],
+    tabBarMeasures: TabBarMeasures
   ): OverlayViews =
     val aboveCursorStack = stackViews(aboveCursorSurfaceIds(state, layout), state, layout, scene)
     val aboveCursor      = aboveCursorStack.headOption
@@ -122,7 +127,7 @@ object OverlayViewModel:
     }
 
     val tabBar = state.tabBarSurface.flatMap(surface =>
-      buildView(surface, state, layout.tabBarRect, collapsed = false, verticalOffsetRows = 0.0)
+      buildView(surface, state, layout.tabBarRect, collapsed = false, verticalOffsetRows = 0.0, tabBarMeasures)
     )
 
     OverlayViews(
@@ -147,7 +152,8 @@ object OverlayViewModel:
     state: AppState,
     layoutRect: Option[LayoutRect],
     collapsed: Boolean,
-    verticalOffsetRows: Double
+    verticalOffsetRows: Double,
+    tabBarMeasures: TabBarMeasures = new TabBarMeasures
   ): Option[TextOverlayView] =
     surface.content match
       case content =>
@@ -170,7 +176,7 @@ object OverlayViewModel:
               // A collapsed (stacked-behind) surface renders `resolved`'s one-line summary (`collapsedContentView`),
               // never the full composition -- composition painting always wins over `rows` when present, so it must
               // not be set here while collapsed.
-              composition = if collapsed then None else compositionFor(content, rect, state)
+              composition = if collapsed then None else compositionFor(content, rect, state, tabBarMeasures)
             )
           }
         }
@@ -311,7 +317,8 @@ object OverlayViewModel:
   private def compositionFor(
     content: SurfaceContent,
     rect: LayoutRect,
-    state: AppState
+    state: AppState,
+    tabBarMeasures: TabBarMeasures = new TabBarMeasures
   ): Option[ResolvedSurfaceComposition] =
     content match
       case SurfaceContent.ModalWorkflow(modal) =>
@@ -348,7 +355,14 @@ object OverlayViewModel:
           )
         )
       case SurfaceContent.TabBar(entries, activeBufferId) =>
-        Some(TabBarSurfaceComposition.forTabBar(entries, activeBufferId, rect))
+        Some(
+          TabBarSurfaceComposition.forTabBar(
+            entries,
+            activeBufferId,
+            rect,
+            TabBarLayoutSettings.of(state, measures = tabBarMeasures)
+          )
+        )
       case SurfaceContent.ContextualToolbar(toolbarState) =>
         Some(ContextualToolbarSurfaceComposition.forToolbar(toolbarState, state, rect))
       case SurfaceContent.CommentLens(lens) =>
