@@ -364,8 +364,14 @@ object RendererFramePlanner:
             record.snapshot
           )
           val dirty =
-            damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, scrollIsEveryRow = !moving) ++
-              ghostRows
+            damageDirtyRows(
+              effectiveDamage,
+              record,
+              persistenceKey,
+              context.caches,
+              scrollIsEveryRow = !moving,
+              widened = !PreservedPixels.clipsKeptPixels(context.surface)
+            ) ++ ghostRows
           paneId -> RendererScrollReuse.planPane(
             state,
             context,
@@ -444,7 +450,15 @@ object RendererFramePlanner:
               renderPlan,
               panes,
               screenDamageSincePublish,
-              dirtyRowsFor(screenDamageSincePublish, _, _, screenSnapshots, persistenceKey, context.caches),
+              dirtyRowsFor(
+                screenDamageSincePublish,
+                _,
+                _,
+                screenSnapshots,
+                persistenceKey,
+                context.caches,
+                widened = !PreservedPixels.clipsKeptPixels(context.surface)
+              ),
               RendererScrollbars.strips(context, renderPlan, screenScrollbars) ++ screenVacated
             )
           }
@@ -489,9 +503,10 @@ object RendererFramePlanner:
     record: PaneFrameRecord,
     screenSnapshots: Map[PaneId, TextLayoutSnapshot],
     persistenceKey: SurfaceContentIdentity,
-    caches: com.serenity.state.manager.RenderCaches
+    caches: com.serenity.state.manager.RenderCaches,
+    widened: Boolean
   ): Set[Int] =
-    damageDirtyRows(damage, record, persistenceKey, caches, scrollIsEveryRow = true) ++
+    damageDirtyRows(damage, record, persistenceKey, caches, scrollIsEveryRow = true, widened) ++
       DirtyLineDiff.dirtyRows(screenSnapshots.get(paneId), record.snapshot)
 
   /** The rows `damage` itself marks dirty -- [[dirtyRowsFor]] without the comparison of snapshots. A scroll
@@ -503,7 +518,8 @@ object RendererFramePlanner:
     record: PaneFrameRecord,
     persistenceKey: SurfaceContentIdentity,
     caches: com.serenity.state.manager.RenderCaches,
-    scrollIsEveryRow: Boolean
+    scrollIsEveryRow: Boolean,
+    widened: Boolean
   ): Set[Int] =
     val facts    = Damage.rowFactsFor(record.bufferId, damage)
     val everyRow = facts.everyRow && (scrollIsEveryRow || !facts.scrollOnly)
@@ -514,7 +530,7 @@ object RendererFramePlanner:
       }.toSet
       val dirty = lineRows ++ rowsUnderSpans(record, facts.spans)
       DropCapLayout.closedOverGlyphs(
-        DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) ++
+        (if widened then DirtyLineDiff.dilate(dirty, record.rowBufferLines.length) else dirty) ++
           record.overflowingRows ++
           vacatedFloatingSurfaceRows(damage, record, persistenceKey, caches),
         record.snapshot

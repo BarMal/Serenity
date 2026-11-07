@@ -72,3 +72,11 @@ class PreservedPixelsSpec extends AnyFlatSpec with Matchers:
     val keptOff = PreservedPixels.of(contextOver(clippingSurface), Some(planKeeping(kept)))
     keptOff.rowsToPaint(Map(paneId -> Set(0))) shouldBe Map(paneId -> Set(0, 1))
   }
+
+  "A surface that can address and keep off pixels" should "be one the planner leaves its neighbouring rows to" in {
+    PreservedPixels.clipsKeptPixels(clippingSurface) shouldBe true
+  }
+
+  "A surface that cannot clip" should "be one the planner widens the dirty rows for" in {
+    PreservedPixels.clipsKeptPixels(new MockRenderSurface(40, 10)) shouldBe false
+  }

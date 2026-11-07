@@ -10,7 +10,7 @@ import com.serenity.ui.layout.{DirtyLineDiff, PixelRect}
 final class PreservedPixels private (context: RenderContext, kept: List[PixelRect]):
 
   private def clipping: Option[PanelOutlineDrawing] =
-    context.surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => kept.nonEmpty && context.surface.addressesPixels)
+    PreservedPixels.clipper(context.surface).filter(_ => kept.nonEmpty)
 
   def apply(paint: => Unit): Unit = clipping.fold(paint)(_.withoutPixels(kept)(paint))
 
@@ -25,6 +25,14 @@ final class PreservedPixels private (context: RenderContext, kept: List[PixelRec
     else dirtyRows.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap
 
 object PreservedPixels:
+
+  private def clipper(surface: RenderSurface): Option[PanelOutlineDrawing] =
+    surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => surface.addressesPixels)
+
+  /** Whether `surface` can keep painting off the pixels a frame holds, so that the planner need not clear the rows
+    * beside a redrawn one and repaint them whole.
+    */
+  def clipsKeptPixels(surface: RenderSurface): Boolean = clipper(surface).isDefined
 
   /** A frame redrawing only some rows keeps the others; chrome it keeps is left out, as ink beside it is a row's. */
   def of(context: RenderContext, framePlan: Option[FramePlan]): PreservedPixels =
