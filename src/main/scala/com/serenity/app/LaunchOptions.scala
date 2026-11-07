@@ -27,7 +27,7 @@ import com.serenity.ui.benchmark.RenderBenchmarkOptions
   * @param resetSession
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param renderer
-  *   `--renderer=auto|skia|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
+  *   `--renderer=auto|skia|skia-raster|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
   * @param waylandRender
   *   `--wayland-render=java2d|skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
   * @param renderBenchmark
@@ -124,13 +124,14 @@ object LaunchOptions:
     Opts
       .option[String](
         "renderer",
-        "Which renderer paints the window: auto, skia or java2d. Beats SERENITY_RENDER_BACKEND and ui.render.backend.",
-        metavar = "auto|skia|java2d"
+        "Which renderer paints the window: auto, skia, skia-raster or java2d. Beats SERENITY_RENDER_BACKEND and " +
+          "ui.render.backend.",
+        metavar = "auto|skia|skia-raster|java2d"
       )
       .mapValidated(value =>
         RenderBackendSetting
           .fromConfigKey(value)
-          .toValidNel(s"Unknown renderer '$value'; expected auto, skia or java2d.")
+          .toValidNel(s"Unknown renderer '$value'; expected auto, skia, skia-raster or java2d.")
       )
       .orNone
 

@@ -6,6 +6,7 @@ import com.serenity.document.CommentRendering
 import com.serenity.keystroke.events.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{HiddenMarkerCaret, ReducerResult, Transition}
+import com.serenity.ui.layout.WrappedLineCache
 
 /** State the event pipeline exposes for applying a resolved editor click/press/drag target to buffer selection, as a
   * capability record rather than a trait -- nothing here breaks a construction-order cycle (#1389), so mockability is
@@ -14,7 +15,8 @@ import com.serenity.state.reducers.{HiddenMarkerCaret, ReducerResult, Transition
 final private[manager] case class MouseHitTestingPort(
     currentState: IO[AppState],
     applyReducerResult: (ReducerResult, AppState) => IO[Unit],
-    authoritativeScene: AuthoritativeUiScene
+    authoritativeScene: AuthoritativeUiScene,
+    wrapCache: WrappedLineCache
 )
 
 /** Routes primary/secondary mouse click, press, drag, and move events to the editor, the context menu, the contextual
@@ -74,7 +76,9 @@ final private[manager] class MouseHitTesting(
                                         case false =>
                                           editorTargeting
                                             .resolveMouseTarget(click, state)
-                                            .flatMap(target => commit(MouseHitTesting.editorClick(click, target)))
+                                            .flatMap(target =>
+                                              commit(MouseHitTesting.editorClick(click, target, port.wrapCache))
+                                            )
                                       }
                                   }
                             }
@@ -177,8 +181,8 @@ final private[manager] class MouseHitTesting(
     )
 
   private def hoverTarget(move: MouseMove, state: AppState): IO[PointerHitTarget] =
-    def clearHover(target: PointerHitTarget): IO[PointerHitTarget] =
-      commit(EditorMouseTargeting.hover(None)).as(target)
+    def clearHover(target: PointerHitTarget, tab: Option[BufferId] = None): IO[PointerHitTarget] =
+      commit(EditorMouseTargeting.hover(None)).flatMap(_ => commit(MouseHitTesting.recordHoveredTab(tab))).as(target)
     contextMenu.handleContextMenuMouseHover(move, state).flatMap {
       case true => clearHover(PointerHitTarget.Control)
       case false =>
@@ -196,7 +200,8 @@ final private[manager] class MouseHitTesting(
                     .orElse(
                       pinnedPanel.resizeHandleAt(move, state)
                     ) match
-                    case Some(target) => clearHover(target)
+                    case Some(target) =>
+                      clearHover(target, TabBarMouseHitTesting.hoveredTabAt(state, move.col, move.row))
                     case None =>
                       pinnedPanel.handlePinnedPanelMouseHover(move, state).flatMap {
                         case true => clearHover(PointerHitTarget.Control)
@@ -226,6 +231,16 @@ private[manager] object MouseHitTesting:
         )
     )
 
+  /** The tab under the pointer, which a frontend with a hover shows the close box of. Leaves `state` untouched when it
+    * is already the hovered one, so only a pointer that crosses from one tab to another changes anything.
+    */
+  def recordHoveredTab(tab: Option[BufferId]): Transition[Unit] =
+    Transition.modify(state =>
+      val gesture = state.runtime.pointerGesture
+      if gesture.hoveredTab == tab then state
+      else state.copy(runtime = state.runtime.copy(pointerGesture = gesture.copy(hoveredTab = tab)))
+    )
+
   def recordPointerShape(shape: PointerShape, underModal: Boolean = false): Transition[Unit] =
     Transition.modify(state =>
       val gesture = state.runtime.pointerGesture
@@ -239,10 +254,24 @@ private[manager] object MouseHitTesting:
   /** A click on an editor target moves the cursor there (a double/triple click selects the word/line, a shift-click
     * extends the selection) and dismisses any open context menu; a click on no editor target only dismisses the menu.
     */
-  def editorClick(click: MouseClick, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =
+  def editorClick(
+    click: MouseClick,
+    target: Option[(PaneId, Buffer, CursorPosition)],
+    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+  ): Transition[Unit] =
     target.fold(EditorContextMenuHitTesting.dismissIfOpen) { (paneId, buffer, clickedCursor) =>
-      Transition.modify(applyEditorClick(_, click, paneId, buffer.id, clickedCursor))
+      Transition.modify(state =>
+        typewriterCentred(applyEditorClick(state, click, paneId, buffer.id, clickedCursor), buffer.id, wrapCache)
+      )
     }
+
+  /** Typewriter scrolling brings a clicked line to the pane's middle (#2570). Only the click does: a press or a drag
+    * moving the view would slide the text out from under the pointer mid-selection.
+    */
+  private def typewriterCentred(state: AppState, bufferId: BufferId, wrapCache: WrappedLineCache): AppState =
+    if state.persisted.config.surfaceConfig.typewriterScrollingEnabled then
+      CursorViewport.placed(state, bufferId, wrapCache)
+    else state
 
   /** A press moves the cursor (a shift-press extends the selection), so a following drag selects from there. */
   def editorPress(press: MousePress, target: Option[(PaneId, Buffer, CursorPosition)]): Transition[Unit] =

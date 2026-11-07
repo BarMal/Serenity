@@ -1,28 +1,19 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{Command, CommandCategory, CommandIntent, ViewIntent}
-import com.serenity.config.DefaultDocumentMode
-import com.serenity.rope.Balance
+import com.serenity.config.{AppConfig, DefaultDocumentMode}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.PaneId
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class StateManagerDefaultDocumentModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("StateManagerDefaultDocumentModeSpec"))
-    StateManager(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("StateManagerDefaultDocumentModeSpec", initialConfig = AppConfig.default)
 
   "StateManager startup" should "retain the explicit default workspace tree" in {
     val stateManager = createStateManager()

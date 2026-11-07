@@ -122,3 +122,52 @@ class StartupProbeSpec extends AnyFlatSpec with Matchers:
   it should "say nothing when the probe is not asked for" in {
     StartupProbe.refusal(LaunchOptions(), Path.of("/nonexistent/home")) shouldBe None
   }
+
+  "StartupProbe.firstFrame" should "do nothing at the first frame of an ordinary launch" in {
+    val console = Console()
+
+    val (started, released) = (for
+      quit    <- Deferred[IO, Unit]
+      started <- Ref.of[IO, Int](0)
+      _       <- StartupProbe.firstFrame(LaunchOptions(), quit, started.update(_ + 1), console.out)
+      count   <- started.get
+      freed   <- quit.tryGet
+    yield (count, freed.isDefined)).unsafeRunSync()
+
+    console.text shouldBe ""
+    started shouldBe 0
+    released shouldBe false
+  }
+
+  it should "print the ready line and release quit for a smoke test, without starting the probe" in {
+    val console = Console()
+
+    val (started, released) = (for
+      quit    <- Deferred[IO, Unit]
+      started <- Ref.of[IO, Int](0)
+      _       <- StartupProbe.firstFrame(LaunchOptions(smokeTest = true), quit, started.update(_ + 1), console.out)
+      count   <- started.get
+      freed   <- quit.tryGet
+    yield (count, freed.isDefined)).unsafeRunSync()
+
+    console.text.trim shouldBe SmokeTest.readyLine
+    started shouldBe 0
+    released shouldBe true
+  }
+
+  it should "print the ready line and start the probe once, leaving quit to the probe" in {
+    val console = Console()
+
+    val (started, released) = (for
+      quit    <- Deferred[IO, Unit]
+      started <- Ref.of[IO, Int](0)
+      _       <- StartupProbe.firstFrame(LaunchOptions(startupProbe = true), quit, started.update(_ + 1), console.out)
+      _       <- IO.sleep(100.millis)
+      count   <- started.get
+      freed   <- quit.tryGet
+    yield (count, freed.isDefined)).unsafeRunSync()
+
+    console.text.trim shouldBe SmokeTest.readyLine
+    started shouldBe 1
+    released shouldBe false
+  }

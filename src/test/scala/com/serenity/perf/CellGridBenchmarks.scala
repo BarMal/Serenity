@@ -3,7 +3,8 @@ package com.serenity.perf
 import java.awt.image.BufferedImage
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, AppMode}
+import com.serenity.ChromeOn
+import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
@@ -18,13 +19,13 @@ private[perf] object CellGridBenchmarks:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  private val Lines    = 40
-  private val width    = 1200
-  private val height   = 800
-  private val codeFont = BenchmarkFonts.courierPrimeRegular().deriveFont(10.0f)
-  private val cells    = CellMetrics.fromFont(codeFont)
-  private val viewport = ViewportSize(width / cells.charWidth, height / cells.lineHeight)
-  private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+  private val Lines         = 40
+  private val width         = 1200
+  private val height        = 800
+  private lazy val codeFont = BenchmarkFonts.courierPrimeRegular().deriveFont(10.0f)
+  private lazy val cells    = CellMetrics.fromFont(codeFont)
+  private lazy val viewport = ViewportSize(width / cells.charWidth, height / cells.lineHeight)
+  private lazy val frc      = TextLayoutSnapshot.defaultFontRenderContext()
 
   private def asciiLine(index: Int): String =
     s"val value$index = compute(input, $index) // plain ASCII code line, no wide characters at all"
@@ -45,8 +46,11 @@ private[perf] object CellGridBenchmarks:
 
   private def text(line: Int => String): String = Vector.tabulate(Lines)(line).mkString("\n")
 
-  private def stateOf(content: String): AppState =
-    val config       = AppConfig.conventional.withAppMode(AppMode.Code)
+  /** `ChromeOn.config`, like every other frame fixture: flush chrome, so these rows keep pinning the rectangles they
+    * always measured. Floating, rounded chrome has its own row.
+    */
+  private def stateOf(content: String, chrome: AppConfig = ChromeOn.config): AppState =
+    val config       = chrome.withAppMode(AppMode.Code)
     val (manager, _) = LaptopFrameBenchmarks.stateManagerHolding(content, config, grid = viewport)
     manager.getCurrentState.unsafeRunSync()
 
@@ -102,65 +106,96 @@ private[perf] object CellGridBenchmarks:
         )
         .sum
 
+  /** The frame rows settle the JIT before sampling, as the layout rows do. A frame runs the chrome's code once, and
+    * unsettled they timed the first few hundred frames of a JVM, where that code is still interpreted.
+    */
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val asciiFrame    = frameOf(stateOf(text(asciiLine)))
-    val mixedFrame    = frameOf(stateOf(text(mixedLine)))
-    val emojiFrame    = frameOf(stateOf(text(emojiLine)))
-    val clusterFrame  = frameOf(stateOf(text(clusterLine)))
-    val clusterLayout = layoutOf(clusterLine)
-    val asciiLayout   = layoutOf(asciiLine)
-    val mixedLayout   = layoutOf(mixedLine)
+    lazy val asciiFrame    = frameOf(stateOf(text(asciiLine)))
+    lazy val mixedFrame    = frameOf(stateOf(text(mixedLine)))
+    lazy val emojiFrame    = frameOf(stateOf(text(emojiLine)))
+    lazy val clusterFrame  = frameOf(stateOf(text(clusterLine)))
+    lazy val clusterLayout = layoutOf(clusterLine)
+    lazy val asciiLayout   = layoutOf(asciiLine)
+    lazy val mixedLayout   = layoutOf(mixedLine)
+    BenchmarkRunner.Benchmark.sharing(
+      (asciiFrame, mixedFrame, emojiFrame, clusterFrame, clusterLayout, asciiLayout, mixedLayout)
+    )(
+      List(
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_ascii",
+          3,
+          12,
+          () => assert(hasPixels(asciiFrame()), "cell-grid ASCII frame drew nothing"),
+          () => asciiFrame(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_mixed",
+          3,
+          12,
+          () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
+          () => mixedFrame(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_emoji",
+          3,
+          12,
+          () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
+          () => emojiFrame(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_emoji_clusters",
+          3,
+          12,
+          () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
+          () => clusterFrame(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.cell_grid.emoji_cluster_lines",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(clusterLayout() >= Lines),
+          () => clusterLayout(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.cell_grid.ascii_lines",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(asciiLayout() >= Lines),
+          () => asciiLayout(),
+          settleJit = true
+        ),
+        BenchmarkRunner.Benchmark(
+          "layout.cell_grid.mixed_lines",
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          BenchmarkIterationCounts.LayoutVisibleViewport,
+          () => assert(mixedLayout() >= Lines),
+          () => mixedLayout(),
+          settleJit = true
+        )
+      )
+    )
+
+  /** The same plain ASCII frame in floating, rounded chrome, which has no flush base to compare with. Kept apart from
+    * [[benchmarks]] so the rows after the cell-grid ones keep the places the warm-up order pins them to.
+    */
+  def floatingChromeBenchmarks(): List[BenchmarkRunner.Benchmark] =
+    lazy val frame = frameOf(
+      stateOf(text(asciiLine), ChromeOn.config.withDockedCornerStyle(DockedCornerStyle.Floating))
+    )
     List(
-      BenchmarkRunner.Benchmark(
-        "render.cell_grid.frame_ascii",
-        3,
-        12,
-        () => assert(hasPixels(asciiFrame()), "cell-grid ASCII frame drew nothing"),
-        () => asciiFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.cell_grid.frame_mixed",
-        3,
-        12,
-        () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
-        () => mixedFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.cell_grid.frame_emoji",
-        3,
-        12,
-        () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
-        () => emojiFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "render.cell_grid.frame_emoji_clusters",
-        3,
-        12,
-        () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
-        () => clusterFrame()
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.cell_grid.emoji_cluster_lines",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(clusterLayout() >= Lines),
-        () => clusterLayout(),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.cell_grid.ascii_lines",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(asciiLayout() >= Lines),
-        () => asciiLayout(),
-        settleJit = true
-      ),
-      BenchmarkRunner.Benchmark(
-        "layout.cell_grid.mixed_lines",
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        BenchmarkIterationCounts.LayoutVisibleViewport,
-        () => assert(mixedLayout() >= Lines),
-        () => mixedLayout(),
-        settleJit = true
+      BenchmarkRunner.Benchmark.building(frame)(
+        BenchmarkRunner.Benchmark(
+          "render.cell_grid.frame_ascii.floating_chrome",
+          3,
+          12,
+          () => assert(hasPixels(frame()), "cell-grid ASCII frame in floating chrome drew nothing"),
+          () => frame(),
+          settleJit = true
+        )
       )
     )

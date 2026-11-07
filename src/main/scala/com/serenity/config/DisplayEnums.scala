@@ -34,20 +34,24 @@ object RenderDamageGranularity:
       case "cells" | "cell" => Some(Cells)
       case _                => None
 
-/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else. */
+/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else;
+  * `SkiaRaster` paints Skia on the CPU into an image that Java2D presents, on any display and toolkit.
+  */
 enum RenderBackendSetting(val configKey: String):
-  case Auto   extends RenderBackendSetting("auto")
-  case Skia   extends RenderBackendSetting("skia")
-  case Java2D extends RenderBackendSetting("java2d")
+  case Auto       extends RenderBackendSetting("auto")
+  case Skia       extends RenderBackendSetting("skia")
+  case SkiaRaster extends RenderBackendSetting("skia-raster")
+  case Java2D     extends RenderBackendSetting("java2d")
 
 object RenderBackendSetting:
 
   def fromConfigKey(value: String): Option[RenderBackendSetting] =
     value.trim.toLowerCase match
-      case "auto"            => Some(Auto)
-      case "skia" | "skiko"  => Some(Skia)
-      case "java2d" | "java" => Some(Java2D)
-      case _                 => None
+      case "auto"                                   => Some(Auto)
+      case "skia" | "skiko"                         => Some(Skia)
+      case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
+      case "java2d" | "java"                        => Some(Java2D)
+      case _                                        => None
 
 /** What a Wayland session does when the window would otherwise be painted by Skia. `Java2D` keeps the native Wayland
   * toolkit and Java2D; `SkiaRaster` keeps the toolkit and paints Skia on the CPU into an image Java2D presents;
@@ -170,6 +174,29 @@ object TabStripMode:
 
   def fromConfigKey(value: String): Option[TabStripMode] =
     TabStripMode.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** How docked panels, the status bar and the tab strip meet the window: `Floating` insets them from the window edges
+  * and from each other by the UI element gap, so every corner rounds; `Flush` keeps today's layout and rounds only the
+  * corners that face the workspace (#2389).
+  */
+enum DockedCornerStyle(val configKey: String):
+  case Floating extends DockedCornerStyle("floating")
+  case Flush    extends DockedCornerStyle("flush")
+
+object DockedCornerStyle:
+
+  def fromConfigKey(value: String): Option[DockedCornerStyle] =
+    DockedCornerStyle.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
+
+/** Whether the top corners of an editor pane's header band are rounded or square (#2389). */
+enum PaneHeaderCorners(val configKey: String):
+  case Rounded extends PaneHeaderCorners("rounded")
+  case Square  extends PaneHeaderCorners("square")
+
+object PaneHeaderCorners:
+
+  def fromConfigKey(value: String): Option[PaneHeaderCorners] =
+    PaneHeaderCorners.values.find(_.configKey == value.trim.toLowerCase(java.util.Locale.ROOT))
 
 enum FileDialogMode(val configKey: String):
   case Auto   extends FileDialogMode("auto")
