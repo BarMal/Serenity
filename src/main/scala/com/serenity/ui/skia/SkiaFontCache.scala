@@ -111,16 +111,6 @@ private[skia] object SkiaTypefaces:
 
   private[skia] def bundledTypefaces: List[Typeface] = Bundled.faces
 
-  private val registered = new java.util.concurrent.atomic.AtomicReference(List.empty[Typeface])
-
-  /** Makes a font file visible to every Skia font cache in this JVM, as an installed family would be. Tests use it for
-    * a fixture font that is registered with AWT only: Skia asks the system font manager, which has never heard of it.
-    */
-  private[skia] def register(typeface: Typeface): Unit =
-    val _ = registered.updateAndGet(current =>
-      if current.exists(_.getUniqueId == typeface.getUniqueId) then current else typeface :: current
-    )
-
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
@@ -209,7 +199,7 @@ private[skia] object SkiaTypefaces:
     font.measureTextWidth(MeasureProbe).toDouble
 
   private def bundledTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
-    val sameFamily = (registered.get ++ Bundled.faces).filter(_.getFamilyName.equalsIgnoreCase(family))
+    val sameFamily = Bundled.faces.filter(_.getFamilyName.equalsIgnoreCase(family))
     val exact      = sameFamily.find(face => face.isBold == bold && face.isItalic == italic)
     exact.orElse(sameFamily.headOption).map(withWeight(_, bold))
 
