@@ -44,7 +44,7 @@ class CurrentRoomBelowRowsSpec extends AnyFlatSpec with Matchers:
     )
 
   private def contextAndPlan(state: AppState): (RenderContext, EditorPaneRenderPlan) =
-    val caches  = RenderCaches.create()
+    val caches = RenderCaches.create()
     // A surface that addresses pixels, as the window's does: a room below the rows exists only on one.
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height):
       override def addressesPixels: Boolean = true
