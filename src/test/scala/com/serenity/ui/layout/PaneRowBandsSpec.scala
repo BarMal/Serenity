@@ -2,12 +2,13 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
+import scala.util.Random
+
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.PaneRowBands.Row
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import scala.util.Random
 
 /** Placing a view reads several limits off the rows above the caret. They share one walk of those rows (#2618): the
   * rows are measured once, not once per limit, and the answer is the one a walk of its own gives.
