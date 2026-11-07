@@ -37,7 +37,8 @@ class ScalingShapeCacheBenchmarksSpec extends AnyFlatSpec with Matchers:
       MultiBufferFixture.Kind.Prose,
       buffers = 3,
       passes = 3,
-      MultiBufferFixture.TestSize
+      MultiBufferFixture.TestSize,
+      shaped = true
     )
 
     passes should have size 3
@@ -55,7 +56,8 @@ class ScalingShapeCacheBenchmarksSpec extends AnyFlatSpec with Matchers:
       MultiBufferFixture.Kind.Prose,
       buffers = 3,
       passes = 2,
-      MultiBufferFixture.TestSize
+      MultiBufferFixture.TestSize,
+      shaped = true
     )
 
     passes(1).map(_.shapings).sum should be < passes.head.map(_.shapings).sum

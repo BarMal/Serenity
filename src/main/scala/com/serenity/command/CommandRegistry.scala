@@ -82,16 +82,19 @@ object CommandRegistry:
   def apply(commands: List[Command]): CommandRegistry = new CommandRegistry(commands)
 
   /** Registry with default commands. The command list is static, so this is built once and reused. */
-  lazy val default: CommandRegistry = new CommandRegistry(defaultCommands ++ commentCommands ++ occurrenceCommands)
+  lazy val default: CommandRegistry = new CommandRegistry(
+    defaultCommands ++ AppModeCommands.switchCommands ++ commentCommands ++ occurrenceCommands
+  )
 
   /** Registry with default commands plus UI toggle commands. The command list is static, so this is built once and
     * reused.
     */
   lazy val withToggleUI: CommandRegistry = new CommandRegistry(
-    defaultCommands ++ toggleUICommands ++ commentCommands ++ occurrenceCommands
+    defaultCommands ++ toggleUICommands ++ AppModeCommands.switchCommands ++ commentCommands ++ occurrenceCommands
   )
 
-  // Last in every registry, so that adding them leaves the ranking of the commands before them as it was.
+  // Last in every registry, so that adding them leaves the ranking of the commands before them as it was. The mode
+  // commands go just before them: the occurrence commands stay the last three.
   private def commentCommands: List[Command] = CommandRegistryEditCommands.commentCommands
 
   private def occurrenceCommands: List[Command] = CommandRegistryEditCommands.occurrenceCommands

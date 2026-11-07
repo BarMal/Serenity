@@ -321,7 +321,7 @@ final private[manager] class StateManagerEffectHandlers(
     // commands the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores), and
     // anything the palette cannot offer -- settings rows, theme picks, toolbar buttons -- whose ids would only clutter
     // the table (#1877).
-    logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
+    logger.debug(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
         Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
       ).whenA(recordUsage && StateManagerEffectHandlers.recordsUsage(command.name)) >> dispatch

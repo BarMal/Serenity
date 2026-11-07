@@ -86,8 +86,8 @@ class Java2DClearViewportExceptSpec extends AnyFlatSpec with Matchers:
     finally graphics.dispose()
 
   private def noisyImage(scale: Double): BufferedImage =
-    val width  = Java2DRenderSurface.deviceImageDimension(logicalWidth, scale)
-    val height = Java2DRenderSurface.deviceImageDimension(logicalHeight, scale)
+    val width  = SurfaceSizing.deviceImageDimension(logicalWidth, scale)
+    val height = SurfaceSizing.deviceImageDimension(logicalHeight, scale)
     val image  = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
     val random = new scala.util.Random(width * 31 + height)
     for
