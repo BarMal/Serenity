@@ -48,7 +48,7 @@ final private[manager] class StateManagerConfigEffects(
     configOnDisk: Option[AppConfig] = None,
     loadConfig: java.nio.file.Path => IO[Either[ConfigError, ConfigLoadResult]] = ConfigFileSync.defaultLoad,
     followSystemAppearance: IO[Unit] = IO.unit
-)(using balance: com.serenity.rope.Balance):
+):
 
   private val writes = WriteCoalescer.unsafe
 
@@ -254,22 +254,22 @@ final private[manager] class StateManagerConfigEffects(
     updateTextDisplayConfig(config => config.withLineNumberLayout(update(config.lineNumberLayout))).void
 
   private def interpretInterfaceChromeIntent(intent: InterfaceChromeIntent): IO[Unit] =
+    import InterfaceChromeIntent as Chrome
     intent match
-      case InterfaceChromeIntent.SetCommandRunnerShowKeyHints(enabled) =>
+      case Chrome.SetCommandRunnerShowKeyHints(enabled) =>
         updateAppearanceConfig(_.withCommandRunnerShowKeyHints(enabled)).void
-      case InterfaceChromeIntent.SetUiElementGap(gap) =>
-        updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
-      case InterfaceChromeIntent.SetUiOutlineThicknessPx(thickness) =>
+      case Chrome.SetUiElementGap(gap) => updateAppearanceConfig(_.withUiElementGap(Some(gap))).void
+      case Chrome.SetUiOutlineThicknessPx(thickness) =>
         updateAppearanceConfig(_.withUiOutlineThicknessPx(thickness)).void
-      case InterfaceChromeIntent.SetInterfaceDensity(density) =>
-        updateAppearanceConfig(_.withInterfaceDensity(density)).void
-      case InterfaceChromeIntent.SetWindowChromeMode(mode) =>
-        updateAppearanceConfig(_.withWindowChromeMode(mode)).void
-      case InterfaceChromeIntent.SetMenuBarMode(mode) =>
-        updateAppearanceConfig(_.withMenuBarMode(mode)).void
-      case InterfaceChromeIntent.SetUiLayout(layout) =>
-        switchLayout(layout)
-      case InterfaceChromeIntent.ToggleUiLayout =>
+      case Chrome.SetUiCornerRadiusPx(radius)   => updateAppearanceConfig(_.withUiCornerRadiusPx(radius)).void
+      case Chrome.SetDockedCornerStyle(style)   => updateAppearanceConfig(_.withDockedCornerStyle(style)).void
+      case Chrome.SetPaneHeaderCorners(corners) => updateAppearanceConfig(_.withPaneHeaderCorners(corners)).void
+      case Chrome.SetTabMaxWidth(width)         => updateAppearanceConfig(_.withTabMaxWidth(width)).void
+      case Chrome.SetInterfaceDensity(density)  => updateAppearanceConfig(_.withInterfaceDensity(density)).void
+      case Chrome.SetWindowChromeMode(mode)     => updateAppearanceConfig(_.withWindowChromeMode(mode)).void
+      case Chrome.SetMenuBarMode(mode)          => updateAppearanceConfig(_.withMenuBarMode(mode)).void
+      case Chrome.SetUiLayout(layout)           => switchLayout(layout)
+      case Chrome.ToggleUiLayout =>
         currentState.flatMap(current => switchLayout(current.persisted.config.uiLayout.toggled))
       case InterfaceChromeIntent.SetSummonModifiers(modifiers) =>
         changeSummon(config => config.summon.withModifiersChecked(modifiers, hotkeysOf(config), keymapsOf(config)))
@@ -422,13 +422,17 @@ final private[manager] class StateManagerConfigEffects(
       ).flatMap(config => onFontConfigChanged(config.editorConfig.fontConfig))
     }
 
+  private def commitRunnerChange(change: AppState => AppState): IO[Unit] =
+    currentState.flatMap(current => editor.commitState(change(current), current))
+
   private def interpretGeneralSettingsIntent(intent: GeneralSettingsIntent, state: AppState): IO[Unit] =
     intent match
       case GeneralSettingsIntent.OpenSettings =>
-        currentState.flatMap { current =>
-          val newState = CommandRunnerReducer.openSettings(current, CommandRegistry.withToggleUI)(using balance)
-          editor.commitState(newState, current)
-        }
+        commitRunnerChange(CommandRunnerReducer.openSettings(_, CommandRegistry.withToggleUI))
+      case GeneralSettingsIntent.OpenSettingsAt(groupId, itemId, query) =>
+        commitRunnerChange(
+          CommandRunnerReducer.openSettingsAt(_, CommandRegistry.withToggleUI, groupId, itemId, query)
+        )
       case GeneralSettingsIntent.SaveConfig =>
         persistConfigFile(state.committedConfig)
       case GeneralSettingsIntent.ResetSettings =>

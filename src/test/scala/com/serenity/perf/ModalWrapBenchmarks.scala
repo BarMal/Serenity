@@ -79,7 +79,7 @@ private[perf] object ModalWrapBenchmarks:
     rect -> ModalSurfaceComposition.forModal(modal, rect, 1, measure = measure).fold(0)(_.paintBoxes.size)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    val pixels = TextMeasure.pixelsFor(
+    lazy val pixels = TextMeasure.pixelsFor(
       AppState.initial(AppConfig.default),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
     )
@@ -89,36 +89,45 @@ private[perf] object ModalWrapBenchmarks:
       "file_workflow"   -> fileWorkflow
     )
     val settled = modals.flatMap { (name, modal) =>
-      List(
-        ("nowrap", TextMeasure.Cells, 1000),
-        ("cells", TextMeasure.Cells, FrameWidth),
-        ("pixels", pixels, FrameWidth)
-      ).map { (strategy, measure, width) =>
-        BenchmarkRunner.Benchmark(
-          s"render.modal_wrap.$name.$strategy",
-          200,
-          400,
-          () => assert(frame(modal, width, measure)._2 > 0),
-          () => frame(modal, width, measure),
-          minBatch = 50,
-          settleJit = true
+      List[(String, () => TextMeasure, Int)](
+        ("nowrap", () => TextMeasure.Cells, 1000),
+        ("cells", () => TextMeasure.Cells, FrameWidth),
+        ("pixels", () => pixels, FrameWidth)
+      ).map { (strategy, measureOf, width) =>
+        lazy val measure = measureOf()
+        BenchmarkRunner.Benchmark.building(measure)(
+          BenchmarkRunner.Benchmark(
+            s"render.modal_wrap.$name.$strategy",
+            200,
+            400,
+            () => assert(frame(modal, width, measure)._2 > 0),
+            () => frame(modal, width, measure),
+            minBatch = 50,
+            settleJit = true
+          )
         )
       }
     }
     val counter = java.util.concurrent.atomic.AtomicInteger(0)
-    val cold = List(("cells", TextMeasure.Cells), ("pixels", pixels)).map { (strategy, measure) =>
-      BenchmarkRunner.Benchmark(
-        s"render.modal_wrap.long_confirm.cold_$strategy",
-        200,
-        400,
-        () => assert(frame(longConfirm("0"), FrameWidth, measure)._2 > 0),
-        () => frame(longConfirm(counter.incrementAndGet().toString), FrameWidth, measure),
-        minBatch = 10,
-        settleJit = true
-      )
+    val cold = List[(String, () => TextMeasure)](("cells", () => TextMeasure.Cells), ("pixels", () => pixels)).map {
+      (strategy, measureOf) =>
+        lazy val measure = measureOf()
+        BenchmarkRunner.Benchmark.building(measure)(
+          BenchmarkRunner.Benchmark(
+            s"render.modal_wrap.long_confirm.cold_$strategy",
+            200,
+            400,
+            () => assert(frame(longConfirm("0"), FrameWidth, measure)._2 > 0),
+            () => frame(longConfirm(counter.incrementAndGet().toString), FrameWidth, measure),
+            minBatch = 10,
+            settleJit = true
+          )
+        )
     }
     settled ++ cold
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+
 end ModalWrapBenchmarks

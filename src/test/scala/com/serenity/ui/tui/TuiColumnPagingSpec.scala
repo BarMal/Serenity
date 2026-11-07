@@ -131,3 +131,43 @@ class TuiColumnPagingSpec extends TuiSpec:
         left  <- keepsCaretShown(List.fill(400)(TuiKeys.ArrowLeft))
       yield (down ++ right ++ up ++ left).take(5) shouldBe Nil
     }
+
+  // #2570 item 4: a wheel notch used to step the page by three logical lines, so the columns re-flowed from a line no
+  // page starts on and the caret dropped off screen until the next key snapped the view back.
+  private val wheelDown = TuiKeys.wheelDown(10, 5)
+  private val wheelUp   = TuiKeys.wheelUp(10, 5)
+
+  "A wheel notch down in column mode" should "show the next page laid out from its first column" in
+    runTui(environment(shortLines)) {
+      for
+        first <- settledScreen
+        rows = pageRowsOf(first)
+        _     <- press(wheelDown)
+        after <- settled
+      yield
+        labelAt(after._1, f"L$rows%04d") shouldBe labelAt(first, "L0000")
+        labelAt(after._1, f"L${rows - 1}%04d") shouldBe None
+        after._2 shouldBe Some(CursorPosition(0, 0))
+    }
+
+  "A wheel notch up in column mode" should "turn back to the page before" in
+    runTui(environment(shortLines)) {
+      for
+        first <- settledScreen
+        _     <- pressAll(wheelDown, wheelDown, wheelUp)
+        after <- settled
+        rows = pageRowsOf(first)
+      yield labelAt(after._1, f"L$rows%04d") shouldBe labelAt(first, "L0000")
+    }
+
+  "A key after the wheel has turned the page" should "bring the caret's own page back" in
+    runTui(environment(shortLines)) {
+      for
+        first   <- settledScreen
+        _       <- pressAll(wheelDown, wheelDown)
+        problem <- checked(TuiKeys.ArrowRight)
+        after   <- settledScreen
+      yield
+        problem shouldBe None
+        labelAt(after, "L0000") shouldBe labelAt(first, "L0000")
+    }

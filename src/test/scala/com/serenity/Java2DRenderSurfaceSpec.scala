@@ -11,6 +11,7 @@ import com.serenity.state.models.AppState
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints, SurfaceTextCaches}
+import com.serenity.ui.terminal.SwingCanvasGeometry
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,13 +58,49 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     new Color(image.getRGB(35, 35), true) shouldBe Color.WHITE
   }
 
-  "Java2DRenderSurface.deviceImageDimension" should "scale logical pixels up to device pixels" in {
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 1024, deviceScale = 2.0) shouldBe 2048
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 801, deviceScale = 1.5) shouldBe 1202
-    Java2DRenderSurface.deviceImageDimension(logicalDimensionPx = 0, deviceScale = 2.0) shouldBe 2
+  "Java2DRenderSurface.withPixelClip" should "confine drawing to the pixel rectangle, between cells" in {
+    val image   = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
+    val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font    = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface = new Java2DRenderSurface(image, metrics, font, _ => ())
+
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
+    surface.withPixelClip(xPx = 13, yPx = 5, widthPx = 20, heightPx = 10) {
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
+    }
+    surface.flush()
+
+    new Color(image.getRGB(12, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(13, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(32, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(33, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 4), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 5), true) shouldBe Color.BLACK
+    new Color(image.getRGB(20, 14), true) shouldBe Color.BLACK
+    new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
   }
 
-  it should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
+  it should "confine drawing to the pixel rectangle when asked through the panel outlines" in {
+    val image    = new BufferedImage(120, 120, BufferedImage.TYPE_INT_ARGB)
+    val metrics  = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
+    val font     = new Font(Font.MONOSPACED, Font.PLAIN, 12)
+    val surface  = new Java2DRenderSurface(image, metrics, font, _ => ())
+    val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
+
+    surface.clearViewport(RenderColor.fromAwt(Color.WHITE))
+    outlines.withPixelClip(13, 5, 20, 10) {
+      surface.fillPixelRect(0, 0, 120, 120, RenderColor.fromAwt(Color.BLACK))
+    }
+    surface.flush()
+
+    new Color(image.getRGB(12, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(13, 8), true) shouldBe Color.BLACK
+    new Color(image.getRGB(33, 8), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 4), true) shouldBe Color.WHITE
+    new Color(image.getRGB(20, 15), true) shouldBe Color.WHITE
+  }
+
+  "Java2DRenderSurface" should "keep viewport dimensions in logical cells for a high-DPI backing image" in {
     val image   = new BufferedImage(200, 100, BufferedImage.TYPE_INT_ARGB)
     val metrics = CellMetrics(charWidth = 10, lineHeight = 10, ascent = 8)
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 20)
@@ -177,7 +214,7 @@ class Java2DRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val surface = Java2DRenderSurface.forFrame(
       metrics,
       font,
-      canvas,
+      SwingCanvasGeometry.of(canvas),
       _ => (),
       (width, height, imageType) =>
         val image = new BufferedImage(width, height, imageType)

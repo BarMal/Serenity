@@ -32,13 +32,11 @@ class SpellCheckerIncrementalAllocationSpec extends AnyFlatSpec with Matchers:
     () => refreshed(edited_)
 
   "Re-checking after a one-character edit" should "cost the same for a 1 MB document as for a 10 KB one" in {
-    SettledAllocation.perCall(refreshAfterOneEdit(10 * 1024), refreshAfterOneEdit(1024 * 1024)) match
-      case Some((small, large)) =>
-        info(s"10 KB document allocated ${small}B, 1 MB document allocated ${large}B")
-        withClue(s"10 KB document allocated ${small}B, 1 MB document allocated ${large}B: ") {
-          large should be < small * 2L
-        }
-      case None =>
-        info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
+    val (small, large) =
+      SettledAllocation.perCallRequired(refreshAfterOneEdit(10 * 1024), refreshAfterOneEdit(1024 * 1024))
+    info(s"10 KB document allocated ${small}B, 1 MB document allocated ${large}B")
+    withClue(s"10 KB document allocated ${small}B, 1 MB document allocated ${large}B: ") {
+      large should be < small * 2L
+    }
   }
 end SpellCheckerIncrementalAllocationSpec

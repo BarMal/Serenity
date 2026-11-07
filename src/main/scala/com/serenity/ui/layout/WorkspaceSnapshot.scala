@@ -14,7 +14,14 @@ import com.serenity.state.models.{
 
 /** Persisted form of the [[PanelContent]] cases that can be pinned to a panel position. */
 enum SessionPanelContent:
-  case DirectoryTree(rootPath: String, selectedPath: Option[String], expandedPaths: List[String])
+
+  case DirectoryTree(
+      rootPath: String,
+      selectedPath: Option[String],
+      expandedPaths: List[String],
+      rootCollapsed: Boolean = false
+  )
+
   case Terminal(buffer: String, cursor: Int)
   case Outline(symbols: List[Symbol])
   case Comments(symbols: List[Symbol])
@@ -23,12 +30,13 @@ enum SessionPanelContent:
 
   def toSurfaceContent: SurfaceContent =
     this match
-      case DirectoryTree(rootPath, selectedPath, expandedPaths) =>
+      case DirectoryTree(rootPath, selectedPath, expandedPaths, rootCollapsed) =>
         SurfaceContent.DirectoryTree(
           DirectoryTreeData(
             rootPath = Path.of(rootPath),
             expandedPaths = expandedPaths.map(Path.of(_)).toSet,
-            entries = Map.empty
+            entries = Map.empty,
+            rootCollapsed = rootCollapsed
           ),
           selectedPath.map(Path.of(_))
         )
@@ -72,7 +80,7 @@ object SessionPinnedPanel:
         for
           tree     <- state.persisted.layout.workspaceTree
           position <- tree.positionForSurface(surface.id)
-          size     <- tree.currentSize(surface.id, state.runtime.viewportSize)
+          size     <- tree.currentSize(surface.id, state.panelViewportSize)
           panel    <- fromSurfaceContent(surface.content, position, size)
         yield panel
       case _ =>
@@ -101,7 +109,8 @@ object SessionPinnedPanel:
         SessionPanelContent.DirectoryTree(
           rootPath = tree.rootPath.toString,
           selectedPath = selectedPath.map(_.toString),
-          expandedPaths = tree.expandedPaths.toList.map(_.toString).sorted
+          expandedPaths = tree.expandedPaths.toList.map(_.toString).sorted,
+          rootCollapsed = tree.rootCollapsed
         )
       case PanelContent.Terminal(buffer, cursor) =>
         SessionPanelContent.Terminal(buffer, cursor)
@@ -237,12 +246,12 @@ object SessionDockedPanel:
 
   private def panelIdOf(content: SessionPanelContent): PanelId =
     content match
-      case SessionPanelContent.DirectoryTree(_, _, _) => PanelId.Explorer
-      case SessionPanelContent.Terminal(_, _)         => PanelId.ProjectOutput
-      case SessionPanelContent.Outline(_)             => PanelId.Outline
-      case SessionPanelContent.Comments(_)            => PanelId.Comments
-      case SessionPanelContent.Diagnostics(_)         => PanelId.Diagnostics
-      case SessionPanelContent.MarkdownPreview(_, _)  => PanelId.MarkdownPreview
+      case SessionPanelContent.DirectoryTree(_, _, _, _) => PanelId.Explorer
+      case SessionPanelContent.Terminal(_, _)            => PanelId.ProjectOutput
+      case SessionPanelContent.Outline(_)                => PanelId.Outline
+      case SessionPanelContent.Comments(_)               => PanelId.Comments
+      case SessionPanelContent.Diagnostics(_)            => PanelId.Diagnostics
+      case SessionPanelContent.MarkdownPreview(_, _)     => PanelId.MarkdownPreview
 
   private def renamed(node: SessionWorkspaceNode, renames: Map[String, String]): SessionWorkspaceNode =
     node match

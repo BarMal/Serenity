@@ -11,10 +11,10 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameDiff
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
+import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
+import com.serenity.{ChromeOn, FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -43,7 +43,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     .withLevel(2)(_.copy(spaceBefore = Some(1.0f), spaceAfter = Some(0.5f)))
 
   private val spacedConfig   = AppConfig.default.withHeadingsConfig(spacing)
-  private val spacedChrome   = AppConfig.conventional.withHeadingsConfig(spacing)
+  private val spacedChrome   = ChromeOn.config.withHeadingsConfig(spacing)
   private val numberedConfig = spacedConfig.withLineNumbers(true)
 
   private def paragraph(text: String, role: ParagraphRole = ParagraphRole.Body): RichTextParagraph =
@@ -95,6 +95,10 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     private val caches      = RenderCaches.create()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
+    private val lastOutput  = new AtomicReference(FrameOutput(screen, new AtomicReference(None)))
+
+    /** What the planner drew and kept for the latest frame. */
+    def lastPlan: Option[FramePlan] = lastOutput.get.lastPlan.get
 
     def render(state: AppState, damage: Damage): BufferedImage =
       val image = images(drawn.getAndIncrement() % images.size)
@@ -110,6 +114,8 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
         Some(screen)
       )
       val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
+      val output        = FrameOutput(screen, repaintRegion)
+      lastOutput.set(output)
       val _ = RendererFramePlanner.renderFrame(
         state,
         cursorVisible = false,
@@ -122,7 +128,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
         cellMetrics,
         uiMetrics,
         None,
-        Some(FrameOutput(screen, repaintRegion)),
+        Some(output),
         damage,
         caches = caches
       )
@@ -141,10 +147,31 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
             if !clipped.isEmpty then screenImage.blit(image, clipped.x, clipped.y, clipped.width, clipped.height)
           }
 
-  private def differing(window: Window, drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
+  /** The pixels where `drawn` differs from a cold frame of `state`. A mismatch is also printed with the colours, the
+    * repaint rects and which pixels lie outside them, and the frames are written as PNGs beside the JUnit reports.
+    */
+  private def differing(
+    window: Window,
+    drawn: BufferedImage,
+    state: AppState,
+    scale: Double,
+    plan: Option[FramePlan]
+  ): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages) { frames =>
-      val cold = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
-      FrameDiff.differing(drawn, cold)
+      val cold  = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
+      val found = FrameDiff.differing(drawn, cold)
+      if found.nonEmpty then
+        val coverage = FramePlanReport.coverage(plan, found, scale, drawn.getWidth, drawn.getHeight)
+        println(
+          FrameMismatchDump.write(
+            s"heading spacing ${window.width}x${window.height} at ${scale}x",
+            drawn,
+            cold,
+            found,
+            Some(s"${FramePlanReport.describe(plan)}\n$coverage")
+          )
+        )
+      found
     }
 
   private def summary(d: Seq[(Int, Int)]): String =
@@ -178,7 +205,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
       step(stateManager)
       val next  = stateManager.getCurrentState.unsafeRunSync()
       val image = frames.render(next, DamageProducer.forTransition(shown.getAndSet(next), next))
-      differing(window, image, next, scale)
+      differing(window, image, next, scale, frames.lastPlan)
 
     def placeCursor(line: Int, column: Int): Unit =
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()

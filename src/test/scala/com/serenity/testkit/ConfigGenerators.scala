@@ -256,10 +256,13 @@ object ConfigGenerators:
       density    <- oneOfEnum(InterfaceDensity.values)
       gap        <- Gen.option(double(AppConfig.MinUiElementGap, AppConfig.MaxUiElementGap))
       thickness  <- Gen.choose(AppConfig.MinUiOutlineThicknessPx, AppConfig.MaxUiOutlineThicknessPx)
+      radius     <- Gen.choose(AppConfig.MinUiCornerRadiusPx, AppConfig.MaxUiCornerRadiusPx)
+      docked     <- oneOfEnum(DockedCornerStyle.values)
+      header     <- oneOfEnum(PaneHeaderCorners.values)
       menuBar    <- oneOfEnum(MenuBarMode.values)
       fileDialog <- oneOfEnum(FileDialogMode.values)
       layout     <- oneOfEnum(UiLayout.values)
-    yield InterfaceConfig(density, gap, thickness, menuBar, fileDialog, layout)
+    yield InterfaceConfig(density, gap, thickness, radius, docked, header, menuBar, fileDialog, layout)
 
   val genThemeFollowConfig: Gen[ThemeFollowConfig] =
     val themeName = Gen.oneOf("light", "dark", "paper", "ink", "high-contrast", "solar")
@@ -306,10 +309,12 @@ object ConfigGenerators:
       codeEscape  <- oneOfEnum(PanelEscapeTarget.values)
       proseEscape <- oneOfEnum(PanelEscapeTarget.values)
       summon      <- genSummonConfig
+      explorer    <- oneOfEnum(ExplorerOpenMode.values)
     yield InputConfig(
       wheelScrollLines = lines,
       panelEscapeReturnsTo = PerMode(codeEscape, proseEscape),
-      summon = summon
+      summon = summon,
+      explorerOpenMode = explorer
     )
 
   val genTextAreaInsets: Gen[TextAreaInsets] =
@@ -328,12 +333,6 @@ object ConfigGenerators:
       padding     <- Gen.option(Gen.choose(0, LineNumberLayout.MaxCells))
     yield LineNumberLayout(side, marginLeft, marginRight, padding)
 
-  val genViewportAxisSizing: Gen[ViewportAxisSizing] =
-    for
-      percent <- double(ViewportAxisSizing.MinPercent, ViewportAxisSizing.MaxPercent)
-      max     <- Gen.option(Gen.choose(1, 500))
-    yield ViewportAxisSizing(percent, max)
-
   /** Surface settings that are independent of one another, constructed directly. */
   val genSurfaceConfig: Gen[SurfaceConfig] =
     for
@@ -343,6 +342,7 @@ object ConfigGenerators:
       wordWrap            <- Gen.oneOf(true, false)
       visualLineNav       <- Gen.oneOf(true, false)
       typewriterScrolling <- Gen.oneOf(true, false)
+      offscreenSurfaces   <- oneOfEnum(OffscreenCursorSurfaces.values)
       focusedTextBody     <- Gen.oneOf(true, false)
       toolbar             <- Gen.oneOf(true, false)
       toolbarMode         <- oneOfEnum(ToolbarDisplayMode.values)
@@ -372,8 +372,6 @@ object ConfigGenerators:
       skiaVsync        <- Gen.oneOf(true, false)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
-      width            <- genViewportAxisSizing
-      height           <- genViewportAxisSizing
       frameStateCacheCapacity <- Gen.choose(
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
@@ -384,13 +382,14 @@ object ConfigGenerators:
       warmUp       <- Gen.oneOf(true, false)
       scrollbar    <- Gen.oneOf(true, false)
       tabStrip     <- oneOfEnum(TabStripMode.values)
+      tabMaxWidth  <- Gen.choose(TabMaxWidth.Min, TabMaxWidth.Max)
       compaction   <- Gen.oneOf(true, false)
       diagnosticBlendWeight <- double(
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
       )
       columnMode        <- Gen.oneOf(true, false)
-      columnTargetWidth <- Gen.choose(1, 400)
+      columnTargetWidth <- Gen.option(Gen.choose(1, 400))
       columnGap         <- Gen.choose(0, 40)
       columnCount       <- Gen.option(Gen.choose(1, 20))
       proseMeasure      <- Gen.option(Gen.choose(ProseMeasure.Min, ProseMeasure.Max))
@@ -401,6 +400,7 @@ object ConfigGenerators:
       wordWrapEnabled = wordWrap,
       visualLineCursorNavigation = visualLineNav,
       typewriterScrollingEnabled = typewriterScrolling,
+      offscreenCursorSurfaces = offscreenSurfaces,
       focusedTextBodyEnabled = focusedTextBody,
       contextualToolbarEnabled = toolbar,
       contextualToolbarDisplayMode = toolbarMode,
@@ -419,7 +419,6 @@ object ConfigGenerators:
       renderSkiaVsync = skiaVsync,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
-      viewportSizing = ViewportSizing(width, height),
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
       layerCachingEnabled = layerCaching,
       frameTimingEnabled = frameTiming,
@@ -427,6 +426,7 @@ object ConfigGenerators:
       startupWarmUpEnabled = warmUp,
       scrollbarEnabled = scrollbar,
       tabStrip = tabStrip,
+      tabMaxWidth = tabMaxWidth,
       memoryCompactionEnabled = compaction,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,

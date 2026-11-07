@@ -3,7 +3,7 @@ package com.serenity.ui.skia
 import java.awt.event.{InputEvent, KeyAdapter, KeyEvent, MouseAdapter, MouseEvent}
 import java.awt.image.BufferedImage
 import java.awt.{Color, Dimension, GraphicsEnvironment, Point, Rectangle, Robot, Toolkit}
-import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import scala.annotation.tailrec
@@ -12,6 +12,7 @@ import com.serenity.SkiaPixels
 import com.serenity.testkit.{DisplayExclusive, ScreenLocation}
 import com.serenity.ui.terminal.SwingWindow
 import org.jetbrains.skia.{Paint, Picture, PictureRecorder, Rect, Surface}
+import org.jetbrains.skiko.SkiaLayer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,7 +47,22 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     def capture(): BufferedImage =
       new Robot().createScreenCapture(new Rectangle(screenOrigin, new Dimension(canvas.getWidth, canvas.getHeight)))
 
-  private def withWindow[A](body: Window => A): A =
+  private def withWindow[A](body: Window => A): A = withReportingWindow(_ => ())(body)
+
+  /** Passes every request through and counts the draws the layer reports starting. */
+  final private class CountingRedraw(inner: LayerRedraw) extends LayerRedraw:
+    val drawsStarted = new AtomicInteger(0)
+
+    def afterPublish(): Unit       = inner.afterPublish()
+    def afterCaretsChanged(): Unit = inner.afterCaretsChanged()
+
+    def drawStarted(): Unit =
+      val _ = drawsStarted.incrementAndGet()
+      inner.drawStarted()
+
+  private def withReportingWindow[A](report: String => Unit, redrawOf: SkiaLayer => LayerRedraw = LayerRedraw.forLayer)(
+    body: Window => A
+  ): A =
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
     DisplayExclusive:
       val canvas = new JPanel(null)
@@ -60,7 +76,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         f.setVisible(true)
         f
       }
-      val host = SkiaLayerHost.create(canvas)
+      val host = SkiaLayerHost.createWith(canvas, syncGpu = false, redrawOf, report)
       try
         val _ = onEdt(canvas.requestFocusInWindow())
         body(new Window(frame, canvas, host))
@@ -139,6 +155,36 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val raster = SkiaPixels.read(expected)
       showsExactly(window, raster, marker = 0x203040)
     }
+
+  it should "show a published image exactly as the raster rasteriser draws it, and close the ones it replaced" in
+    withWindow { window =>
+      def painted: org.jetbrains.skia.Image =
+        val surface = Surface.Companion.makeRasterN32Premul(width, height)
+        scene(surface.getCanvas)
+        val image = surface.makeImageSnapshot()
+        surface.close()
+        image
+      window.host.publishImage(painted)
+      window.host.publishImage(painted)
+      eventually("the first frame")(window.host.renderCount > 0)
+      val expected = Surface.Companion.makeRasterN32Premul(width, height)
+      scene(expected.getCanvas)
+      showsExactly(window, SkiaPixels.read(expected), marker = 0x203040)
+      window.host.publishedFrames shouldBe 2
+      eventually("the replaced image to be closed")(window.host.closedPictures >= 1)
+    }
+
+  it should "report the render API once, on its first draw, and leave what it draws alone" in {
+    val lines = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+    withReportingWindow(line => lines.add(line)) { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      val seen = window.host.renderCount
+      window.host.publish(record(scene))
+      eventually("a second draw")(window.host.renderCount > seen)
+      lines.toArray.toList shouldBe List(s"[RENDER] skia layer renderApi=${window.host.renderApi}")
+    }
+  }
 
   it should "draw the carets over the retained picture without recording the picture again" in
     withWindow { window =>
@@ -383,6 +429,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
             def afterCaretsChanged(): Unit =
               val _ = changes.incrementAndGet()
               real.afterCaretsChanged()
+            def drawStarted(): Unit = real.drawStarted()
       )
       try
         second.publish(record(scene))
@@ -444,4 +491,21 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       finally
         host.dispose()
         onEdt(frame.dispose())
+  }
+
+  it should "tell its redraw each time a draw starts, so one request answers every change made before it" in {
+    val redraws = new AtomicReference[Option[CountingRedraw]](None)
+    val counting = (layer: SkiaLayer) =>
+      val redraw = new CountingRedraw(LayerRedraw.forLayer(layer))
+      redraws.set(Some(redraw))
+      redraw
+    withReportingWindow(_ => (), counting) { window =>
+      eventually("the first frame")(window.host.renderCount > 0)
+      val redraw = redraws.get().getOrElse(fail("the redraw was never made"))
+      eventually("every draw reported")(redraw.drawsStarted.get == window.host.renderCount)
+      val before = window.host.renderCount
+      window.host.showCarets(Nil)
+      eventually("a redraw for the carets")(window.host.renderCount > before)
+      eventually("every draw reported again")(redraw.drawsStarted.get == window.host.renderCount)
+    }
   }

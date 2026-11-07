@@ -79,6 +79,40 @@ private[command] object CommandRunnerSettingsAppearanceItems:
       hint = Some("Applies after restart; every menu command stays in this palette whichever you pick")
     )
 
+  private[command] def dockedCornerStyleOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    def option(label: String, style: DockedCornerStyle) =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetDockedCornerStyle(style)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "docked-corner-style",
+      label = "Docked Corner Style",
+      options = List(option("Floating", DockedCornerStyle.Floating), option("Flush", DockedCornerStyle.Flush)),
+      selectedIndex = optionSelections.getOrElse("docked-corner-style", 0),
+      category = CommandCategory.Settings,
+      hint = Some("Floating insets the panels, status bar and tab strip by the element gap, so every corner rounds")
+    )
+
+  private[command] def paneHeaderCornersOptionItem(
+    optionSelections: Map[String, Int]
+  ): CommandSurfaceItem.OptionItem =
+    def option(label: String, corners: PaneHeaderCorners) =
+      CommandOption(
+        label,
+        CommandIntent.Settings(SettingsIntent.InterfaceChrome(InterfaceChromeIntent.SetPaneHeaderCorners(corners)))
+      )
+    CommandSurfaceItem.OptionItem(
+      id = "pane-header-corners",
+      label = "Pane Header Corners",
+      options = List(option("Rounded", PaneHeaderCorners.Rounded), option("Square", PaneHeaderCorners.Square)),
+      selectedIndex = optionSelections.getOrElse("pane-header-corners", 0),
+      category = CommandCategory.Settings,
+      hint = Some("The top corners of an editor pane's header")
+    )
+
   private[command] def windowChromeOptionItem(
     optionSelections: Map[String, Int]
   ): CommandSurfaceItem.OptionItem =

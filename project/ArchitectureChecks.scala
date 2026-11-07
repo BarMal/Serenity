@@ -96,6 +96,22 @@ object ArchitectureChecks {
       "the command layer must stay frontend-agnostic (issue #1669): read FrontendCapabilities instead of reaching " +
         "into a concrete frontend's own implementation package",
       mainOnly = true
+    ),
+    // #2380: the renderer paints into a RenderTarget and the host seam hands the application a window by capability;
+    // a Swing component is the Swing window's own business, so a second window system (SDL3) can plug in beside it.
+    ImportRule(
+      "com/serenity/ui/renderer",
+      Seq("javax.swing"),
+      "the renderer paints into a RenderTarget and reads its size and scale from it (#2380): a Swing component " +
+        "belongs to the Swing window in ui.terminal",
+      mainOnly = true
+    ),
+    ImportRule(
+      "com/serenity/ui/host",
+      Seq("javax.swing", "java.awt.Component", "java.awt.Window", "java.awt.Frame", "java.awt.Toolkit", "ui.terminal"),
+      "the window-host seam names capabilities, not a window system (#2380): its Swing implementation lives in " +
+        "ui.terminal",
+      mainOnly = true
     )
   )
 
@@ -297,6 +313,41 @@ object ArchitectureChecks {
           }
       }
 
+  /** #2508: every external process starts through the process service, which owns the launch, the stop, the tree kill
+    * and the live list. The one file allowed to name the JDK's, fs2's or Scala's process API is the service's launcher.
+    *
+    * The tokens are deliberately narrow: `.exec(` alone would catch fs2's `Stream.exec`, and `ProcessHandle` would
+    * catch the repo's own trait of that name. `main/` only, as the other call rules are: specs start child JVMs.
+    */
+  val ProcessLauncherFile: String = "main/scala/com/serenity/process/ProcessLauncher.scala"
+
+  val ProcessTokens: Seq[String] =
+    Seq("ProcessBuilder", "Runtime.getRuntime.exec", "getRuntime().exec", "sys.process")
+
+  /** One violation per file and token, measured in the lines that hit, so a line shift is not a new violation. */
+  private def processOwnershipViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/") || path == ProcessLauncherFile) Nil
+    else {
+      val code = lines.filterNot(line => line.trim.startsWith("//") || line.trim.startsWith("*"))
+      ProcessTokens.flatMap { token =>
+        val hits = code.count(_.contains(token))
+        if (hits == 0) None
+        else Some(Violation(path, s"process ownership: `$token` outside the process service (#2508)", hits))
+      }
+    }
+
+  /** The process service is a leaf: it may be used from anywhere, so it must not depend on the code that uses it. */
+  private def processLeafViolations(path: String, lines: Vector[String]): Seq[Violation] =
+    if (!path.startsWith("main/scala/com/serenity/process/")) Nil
+    else {
+      val hits = lines.count { line =>
+        val text = line.trim
+        text.startsWith("import com.serenity.") && !text.startsWith("import com.serenity.process")
+      }
+      if (hits == 0) Nil
+      else Seq(Violation(path, "process service depends on other Serenity packages (#2508)", hits))
+    }
+
   /** Declarations that can never move out of an object, each with the reason. Kept apart from the baseline: the
     * baseline only shrinks as code is fixed, while an entry here is removed by a redesign, argued in
     * docs/allowlist-review.md. An entry that no longer matches a declaration fails [[check]], so this list cannot rot.
@@ -341,7 +392,8 @@ object ArchitectureChecks {
       val fileViolation =
         if (lines.length > MaxFileLines) Seq(Violation(path, "file length", lines.length)) else Nil
       fileViolation ++ methodViolations(path, lines) ++ importViolations(path, lines) ++ callViolations(path, lines) ++
-        stateOwnershipViolations(path, lines) ++ documentContentViolations(path, lines)
+        stateOwnershipViolations(path, lines) ++ documentContentViolations(path, lines) ++
+        processOwnershipViolations(path, lines) ++ processLeafViolations(path, lines)
     }
     structural ++ purityViolations(files.map { case (path, lines) => PurityChecks.parse(path, lines) })
   }
@@ -511,6 +563,37 @@ object ArchitectureChecks {
         "import com.serenity.ui.fonts.FontLoader"
       ),
       expectCaught = true
+    )
+
+    check(
+      "a Swing component named from the renderer",
+      Vector(
+        "package com.serenity.ui.renderer",
+        "  def scaleOf(canvas: javax.swing.JPanel): Double = 1.0"
+      ),
+      expectCaught = true,
+      path = "main/scala/com/serenity/ui/renderer/Sample.scala"
+    )
+
+    check(
+      "a window-system class named from the host seam",
+      Vector(
+        "package com.serenity.ui.host",
+        "import java.awt.Frame"
+      ),
+      expectCaught = true,
+      path = "main/scala/com/serenity/ui/host/Sample.scala"
+    )
+
+    check(
+      "AWT data classes in the host seam, which the renderer is built on",
+      Vector(
+        "package com.serenity.ui.host",
+        "import java.awt.Rectangle",
+        "import java.awt.image.BufferedImage"
+      ),
+      expectCaught = false,
+      path = "main/scala/com/serenity/ui/host/Sample.scala"
     )
 
     def checkDispatcherPath(description: String, line: String, path: String, expectCaught: Boolean): Unit = {
@@ -684,6 +767,122 @@ object ArchitectureChecks {
       Vector("  val fixture = buffer.document.copy(content = Rope(text))"),
       expectCaught = false,
       path = "test/scala/com/serenity/state/reducers/SampleSpec.scala"
+    )
+
+    def checkProcess(
+        description: String,
+        lines: Vector[String],
+        expectCaught: Boolean,
+        path: String = "main/scala/com/serenity/lsp/client/Sample.scala"
+    ): Unit = {
+      val violations = processOwnershipViolations(path, lines)
+      require(
+        violations.nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected a process start to be " +
+          s"${if (expectCaught) "caught" else "ignored"}, got ${violations.size} violation(s)"
+      )
+    }
+
+    checkProcess(
+      "a new ProcessBuilder in a main file",
+      Vector("  val process = new ProcessBuilder(command*).start()"),
+      expectCaught = true
+    )
+
+    checkProcess(
+      "a fully-qualified java.lang.ProcessBuilder",
+      Vector("  IO.blocking(new java.lang.ProcessBuilder(command.toArray*).start())"),
+      expectCaught = true
+    )
+
+    checkProcess(
+      "fs2's ProcessBuilder",
+      Vector("  fs2.io.process.ProcessBuilder(\"git\", args).spawn[IO]"),
+      expectCaught = true
+    )
+
+    checkProcess(
+      "scala.sys.process",
+      Vector("import scala.sys.process.Process"),
+      expectCaught = true
+    )
+
+    checkProcess(
+      "Runtime.getRuntime.exec",
+      Vector("  val process = Runtime.getRuntime.exec(Array(\"ls\"))"),
+      expectCaught = true
+    )
+
+    checkProcess(
+      "a comment line that mentions ProcessBuilder",
+      Vector("  // ProcessBuilder merges stderr into stdout when asked to"),
+      expectCaught = false
+    )
+
+    checkProcess(
+      "a doc comment line that mentions ProcessBuilder",
+      Vector("  * Starts it with a ProcessBuilder."),
+      expectCaught = false
+    )
+
+    checkProcess(
+      "fs2's Stream.exec, which starts nothing",
+      Vector("  Stream.exec(IO(trace.setEnabled(on))) ++ rest"),
+      expectCaught = false
+    )
+
+    checkProcess(
+      "the repo's own trait called ProcessHandle",
+      Vector("  private[project] trait ProcessHandle:", "    def waitFor: IO[Int]"),
+      expectCaught = false
+    )
+
+    checkProcess(
+      "the process service's own launcher file",
+      Vector("  val process = new ProcessBuilder(command*).start()"),
+      expectCaught = false,
+      path = ProcessLauncherFile
+    )
+
+    checkProcess(
+      "a spec that starts a child JVM",
+      Vector("  val process = new ProcessBuilder(command*).start()"),
+      expectCaught = false,
+      path = "test/scala/com/serenity/app/SkiaLazinessSpec.scala"
+    )
+
+    checkProcess(
+      "the same file counted by its hits, so a line shift is not a new violation",
+      Vector("  new ProcessBuilder(a)", "  new ProcessBuilder(b)"),
+      expectCaught = true
+    )
+    require(
+      processOwnershipViolations(
+        "main/scala/com/serenity/lsp/client/Sample.scala",
+        Vector("  new ProcessBuilder(a)", "", "  new ProcessBuilder(b)")
+      ).map(v => (v.detail, v.measured)) ==
+        processOwnershipViolations(
+          "main/scala/com/serenity/lsp/client/Sample.scala",
+          Vector("", "  new ProcessBuilder(a)", "  new ProcessBuilder(b)", "")
+        ).map(v => (v.detail, v.measured)),
+      "ArchitectureChecks self-test failed (a process violation's identity must not depend on its line number)"
+    )
+
+    def checkLeaf(description: String, path: String, line: String, expectCaught: Boolean): Unit =
+      require(
+        processLeafViolations(path, Vector(line)).nonEmpty == expectCaught,
+        s"ArchitectureChecks self-test failed ($description): expected the import to be " +
+          s"${if (expectCaught) "caught" else "ignored"}"
+      )
+
+    val servicePath = "main/scala/com/serenity/process/Sample.scala"
+    checkLeaf("the service importing editor state", servicePath, "import com.serenity.state.models.AppState", true)
+    checkLeaf("the service importing its own package", servicePath, "import com.serenity.process.ProcessSpec", false)
+    checkLeaf(
+      "another package importing the service",
+      "main/scala/com/serenity/lsp/Sample.scala",
+      "import com.serenity.process.ProcessService",
+      false
     )
   }
 }

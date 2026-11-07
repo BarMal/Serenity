@@ -2,39 +2,34 @@ package com.serenity
 
 import java.nio.file.Paths
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.AppConfigOps.withExplorerOpenMode
+import com.serenity.config.{AppConfig, ExplorerOpenMode}
 import com.serenity.document.DocumentNavigation
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, PinnedPanelComponent}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val viewport              = ViewportSize(100, 32)
   private val compactSquareViewport = ViewportSize(40, 12)
 
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
+  private def makeStateManager(): StateManager =
+    createStateManager("PinnedPanelMouseSpec", initialConfig = AppConfig.default)
+
+  /** A click selects a folder row and a double-click opens it: the explorer's behaviour before `explorer.open_mode`. */
+  private def inDoubleClickMode(sm: StateManager): Unit =
+    sm.updateState(state =>
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withExplorerOpenMode(ExplorerOpenMode.DoubleClick))
       )
-      .unsafeRunSync()
+    ).unsafeRunSync()
 
   private def dockExplorer(
     sm: StateManager,
@@ -132,6 +127,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val surfaceId = SurfaceId("explorer")
     val sm        = makeStateManager()
     dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
+    inDoubleClickMode(sm)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val before = sm.getCurrentState.unsafeRunSync()
@@ -222,6 +218,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val surfaceId = SurfaceId("expanded-explorer")
     val sm        = makeStateManager()
     dockExpandedExplorer(sm, surfaceId, tree, selectedPath = Some(root))
+    inDoubleClickMode(sm)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 2)
@@ -292,6 +289,7 @@ class PinnedPanelMouseSpec extends AnyFlatSpec with Matchers:
     val surfaceId = SurfaceId("explorer")
     val sm        = makeStateManager()
     dockExplorer(sm, surfaceId, tree, selectedPath = Some(root))
+    inDoubleClickMode(sm)
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()
 
     val point = panelItemPoint(sm.getCurrentState.unsafeRunSync(), surfaceId, displayedItemRow = 1)

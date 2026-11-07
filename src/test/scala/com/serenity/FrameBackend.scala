@@ -3,8 +3,10 @@ package com.serenity
 import java.awt.Font
 import java.awt.image.BufferedImage
 
+import scala.annotation.unused
+
 import com.serenity.state.manager.RenderCaches
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
 import org.jetbrains.skia.{
@@ -51,7 +53,9 @@ object FramePixels:
     image.setRGB(0, 0, widthPx, heightPx, pixels, 0, widthPx)
     image
 
-/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. */
+/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. A Java2D
+  * surface reports to `onKeptOff` each set of rects it keeps pixels off; a Skia surface does not report them.
+  */
 trait FrameBackend:
   def newFrame(widthPx: Int, heightPx: Int): FramePixels
 
@@ -64,7 +68,8 @@ trait FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity] = None
+    screen: Option[ScreenIdentity] = None,
+    onKeptOff: List[PixelRect] => Unit = _ => ()
   ): RenderSurface
 
 object Java2DFrames extends FrameBackend:
@@ -105,7 +110,8 @@ object Java2DFrames extends FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity]
+    screen: Option[ScreenIdentity],
+    onKeptOff: List[PixelRect] => Unit
   ): RenderSurface =
     frame match
       case java2d: Java2DFrame =>
@@ -121,7 +127,10 @@ object Java2DFrames extends FrameBackend:
           contentPersists = persists,
           layerCacheOwnerOverride = screen.orElse(Some(ScreenIdentity(java2d.image))),
           textCaches = caches.surfaceText
-        )
+        ):
+          override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
+            onKeptOff(kept)
+            super.withoutPixels(kept)(render)
       case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
 
 /** The renderer the pixel specs paint with: a frame and a surface painting into it, read back as an image. */
@@ -219,7 +228,8 @@ object SkiaFrames extends FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity]
+    screen: Option[ScreenIdentity],
+    @unused onKeptOff: List[PixelRect] => Unit
   ): RenderSurface =
     frame match
       case skia: SkiaFrame =>

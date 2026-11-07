@@ -6,7 +6,6 @@ import com.serenity.command.*
 import com.serenity.keystroke.events.{Enter, InsertChar, ToggleCommandRunner}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.state.models.SurfaceContent
 import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,19 +20,19 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  /** Records every `.info` message; other levels and the structured (context-carrying) variants are no-ops. Enough to
-    * assert what a command execution emits, without pulling in a log4cats testing dependency.
+  /** Records every `.info` and `.debug` message, each prefixed with its level; other levels are no-ops. Enough to
+    * assert what a command execution emits and at which level, without pulling in a log4cats testing dependency.
     */
   private class RecordingLogger(ref: Ref[IO, List[String]]) extends SelfAwareStructuredLogger[IO]:
-    def info(message: => String): IO[Unit]                                         = ref.update(_ :+ message)
-    def info(t: Throwable)(message: => String): IO[Unit]                           = ref.update(_ :+ message)
-    def info(ctx: Map[String, String])(message: => String): IO[Unit]               = ref.update(_ :+ message)
-    def info(ctx: Map[String, String], t: Throwable)(message: => String): IO[Unit] = ref.update(_ :+ message)
+    def info(message: => String): IO[Unit]                                         = ref.update(_ :+ s"INFO $message")
+    def info(t: Throwable)(message: => String): IO[Unit]                           = ref.update(_ :+ s"INFO $message")
+    def info(ctx: Map[String, String])(message: => String): IO[Unit]               = ref.update(_ :+ s"INFO $message")
+    def info(ctx: Map[String, String], t: Throwable)(message: => String): IO[Unit] = ref.update(_ :+ s"INFO $message")
 
-    def debug(message: => String): IO[Unit]                                         = IO.unit
-    def debug(t: Throwable)(message: => String): IO[Unit]                           = IO.unit
-    def debug(ctx: Map[String, String])(message: => String): IO[Unit]               = IO.unit
-    def debug(ctx: Map[String, String], t: Throwable)(message: => String): IO[Unit] = IO.unit
+    def debug(message: => String): IO[Unit]                                         = ref.update(_ :+ s"DEBUG $message")
+    def debug(t: Throwable)(message: => String): IO[Unit]                           = ref.update(_ :+ s"DEBUG $message")
+    def debug(ctx: Map[String, String])(message: => String): IO[Unit]               = ref.update(_ :+ s"DEBUG $message")
+    def debug(ctx: Map[String, String], t: Throwable)(message: => String): IO[Unit] = ref.update(_ :+ s"DEBUG $message")
     def error(message: => String): IO[Unit]                                         = IO.unit
     def error(t: Throwable)(message: => String): IO[Unit]                           = IO.unit
     def error(ctx: Map[String, String])(message: => String): IO[Unit]               = IO.unit
@@ -48,7 +47,7 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
     def trace(ctx: Map[String, String], t: Throwable)(message: => String): IO[Unit] = IO.unit
 
     def isTraceEnabled: IO[Boolean] = IO.pure(false)
-    def isDebugEnabled: IO[Boolean] = IO.pure(false)
+    def isDebugEnabled: IO[Boolean] = IO.pure(true)
     def isInfoEnabled: IO[Boolean]  = IO.pure(true)
     def isWarnEnabled: IO[Boolean]  = IO.pure(false)
     def isErrorEnabled: IO[Boolean] = IO.pure(false)
@@ -64,7 +63,10 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
     (StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync(), recorded)
 
   private def commandLines(recorded: Ref[IO, List[String]]): List[String] =
-    recorded.get.unsafeRunSync().filter(_.startsWith("[COMMAND]"))
+    recorded.get.unsafeRunSync().filter(_.startsWith("DEBUG [COMMAND]")).map(_.stripPrefix("DEBUG "))
+
+  private def infoCommandLines(recorded: Ref[IO, List[String]]): List[String] =
+    recorded.get.unsafeRunSync().filter(_.startsWith("INFO [COMMAND]"))
 
   "Command execution tracing" should "log a [COMMAND] line naming command and intent for the mouse/effect path" in {
     val (stateManager, recorded) = stateManagerRecording()
@@ -91,11 +93,9 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
 
     stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
     "toggle-line-numbers".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
-    stateManager.getCurrentState.unsafeRunSync().commandRunnerSurface.flatMap {
-      _.content match
-        case SurfaceContent.CommandPalette(runner) => runner.selectedCommand.map(_.name)
-        case _                                     => None
-    } shouldBe Some("toggle-line-numbers")
+    CommandPaletteProbe.selectedCommandName(stateManager.getCurrentState.unsafeRunSync()) shouldBe Some(
+      "toggle-line-numbers"
+    )
     stateManager.applyEvent(Enter).unsafeRunSync()
 
     val lines = commandLines(recorded)
@@ -112,5 +112,16 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
     "toggle-line-numbers".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
     stateManager.applyEvent(Enter).unsafeRunSync()
 
+    commandLines(recorded).count(_.contains("command=toggle-line-numbers")) shouldBe 1
+  }
+
+  it should "keep executed-command lines off the INFO console and at DEBUG" in {
+    val (stateManager, recorded) = stateManagerRecording()
+
+    stateManager.applyEvent(ToggleCommandRunner).unsafeRunSync()
+    "toggle-line-numbers".foreach(char => stateManager.applyEvent(InsertChar(char)).unsafeRunSync())
+    stateManager.applyEvent(Enter).unsafeRunSync()
+
+    infoCommandLines(recorded) shouldBe Nil
     commandLines(recorded).count(_.contains("command=toggle-line-numbers")) shouldBe 1
   }

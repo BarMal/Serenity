@@ -33,7 +33,8 @@ private[perf] object BoundaryCacheBenchmarks:
   def benchmarks(): List[BenchmarkRunner.Benchmark] = boundaryBenchmarks() ++ findBenchmarks() ++ countBenchmarks()
 
   def main(args: Array[String]): Unit =
-    BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
+    BenchmarkMain.run:
+      BenchmarkRunner.printResults(BenchmarkRunner.runMatching(args.toList, benchmarks()))
 
   /** A cluster is more than one char, so a boundary question next to it cannot be answered by the plain-neighbour fast
     * path and reaches the `BreakIterator`: e with a combining acute, a thumbs-up with a skin tone, and the Devanagari
@@ -57,10 +58,10 @@ private[perf] object BoundaryCacheBenchmarks:
     (text.toString, clusters.result())
 
   private def boundaryBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val (text, allClusters) = proseWithClusters(paragraphs = 400)
-    val rope                = Rope(text)
-    val stride              = allClusters.length / Probes
-    val clusters            = Vector.tabulate(Probes)(index => allClusters(index * stride))
+    lazy val (text, allClusters) = proseWithClusters(paragraphs = 400)
+    lazy val rope                = Rope(text)
+    lazy val stride              = allClusters.length / Probes
+    lazy val clusters            = Vector.tabulate(Probes)(index => allClusters(index * stride))
     def wordMotion(): Int =
       clusters.foldLeft(0)((sum, cluster) =>
         sum + rope.nextWordBoundary(cluster._1) + rope.previousWordBoundary(cluster._1)
@@ -74,8 +75,8 @@ private[perf] object BoundaryCacheBenchmarks:
         rope.nextGraphemeBoundary(start) == start + length && rope.previousGraphemeBoundary(start + length) == start
       )
 
-    val (typedAt, clusterLength) = allClusters(allClusters.length / 2)
-    val typing                   = new AtomicReference[(Rope, Int)]((rope, typedAt))
+    lazy val (typedAt, clusterLength) = allClusters(allClusters.length / 2)
+    lazy val typing                   = new AtomicReference[(Rope, Int)]((rope, typedAt))
     def keystroke(): Int =
       val (current, cursor) = typing.get
       val edited            = current.insert(cursor, if cursor % 2 == 0 then "a" else " ").getOrElse(current)
@@ -84,67 +85,73 @@ private[perf] object BoundaryCacheBenchmarks:
       edited.previousWordBoundary(next) + edited.nextWordBoundary(next) +
         edited.previousGraphemeBoundary(next + clusterLength) + edited.nextGraphemeBoundary(next)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "text.boundary.word_motion",
-        Warmups,
-        Iterations,
-        () => assert(wordMotion() > 0, "word motion found no boundaries"),
-        () => wordMotion()
-      ),
-      BenchmarkRunner.Benchmark(
-        "text.boundary.grapheme_motion",
-        Warmups,
-        Iterations,
-        () => assert(crossesWholeClusters(), "a grapheme question did not cross a whole cluster"),
-        () => graphemeMotion()
-      ),
-      BenchmarkRunner.Benchmark(
-        "text.boundary.keystroke_after_edit",
-        Warmups,
-        Iterations,
-        () => assert(keystroke() > 0, "keystroke found no boundaries"),
-        () => keystroke()
+    BenchmarkRunner.Benchmark.sharing((text, allClusters, rope, stride, clusters, typedAt, clusterLength, typing))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "text.boundary.word_motion",
+          Warmups,
+          Iterations,
+          () => assert(wordMotion() > 0, "word motion found no boundaries"),
+          () => wordMotion()
+        ),
+        BenchmarkRunner.Benchmark(
+          "text.boundary.grapheme_motion",
+          Warmups,
+          Iterations,
+          () => assert(crossesWholeClusters(), "a grapheme question did not cross a whole cluster"),
+          () => graphemeMotion()
+        ),
+        BenchmarkRunner.Benchmark(
+          "text.boundary.keystroke_after_edit",
+          Warmups,
+          Iterations,
+          () => assert(keystroke() > 0, "keystroke found no boundaries"),
+          () => keystroke()
+        )
       )
     )
 
   private def findBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val document  = Rope(loremIpsumProse(paragraphs = 3000))
-    val wholeWord = FindOptions(wholeWord = true)
-    def search()  = FindSearch.search(document, "dolor", wholeWord, anchor = 0)
+    lazy val document = Rope(loremIpsumProse(paragraphs = 3000))
+    val wholeWord     = FindOptions(wholeWord = true)
+    def search()      = FindSearch.search(document, "dolor", wholeWord, anchor = 0)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "text.boundary.find_whole_word",
-        Warmups,
-        Iterations,
-        () => assert(search().results.nonEmpty, "whole-word find matched nothing"),
-        () => search()
+    BenchmarkRunner.Benchmark.sharing(document)(
+      List(
+        BenchmarkRunner.Benchmark(
+          "text.boundary.find_whole_word",
+          Warmups,
+          Iterations,
+          () => assert(search().results.nonEmpty, "whole-word find matched nothing"),
+          () => search()
+        )
       )
     )
 
   private def countBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    val text   = loremIpsumProse(paragraphs = 400)
-    val base   = Rope(text)
-    val counts = base.wordCount
-    val edits  = new AtomicInteger(0)
+    lazy val text   = loremIpsumProse(paragraphs = 400)
+    lazy val base   = Rope(text)
+    lazy val counts = base.wordCount
+    val edits       = new AtomicInteger(0)
     def edit(): Int =
       val offset = 3 + (edits.getAndIncrement() * 7919) % (base.weight - 8)
       base.insert(offset, "ab ").map(_.wordCount).getOrElse(-1)
 
-    List(
-      BenchmarkRunner.Benchmark(
-        "text.counts.rope_build",
-        Warmups,
-        Iterations,
-        () => assert(Rope(text).wordCount == counts, "a rebuilt rope counted differently"),
-        () => Rope(text).wordCount
-      ),
-      BenchmarkRunner.Benchmark(
-        "text.counts.rope_edit",
-        Warmups,
-        Iterations,
-        () => assert(edit() == counts + 1, "an inserted word did not add one to the count"),
-        () => edit()
+    BenchmarkRunner.Benchmark.sharing((text, base, counts))(
+      List(
+        BenchmarkRunner.Benchmark(
+          "text.counts.rope_build",
+          Warmups,
+          Iterations,
+          () => assert(Rope(text).wordCount == counts, "a rebuilt rope counted differently"),
+          () => Rope(text).wordCount
+        ),
+        BenchmarkRunner.Benchmark(
+          "text.counts.rope_edit",
+          Warmups,
+          Iterations,
+          () => assert(edit() == counts + 1, "an inserted word did not add one to the count"),
+          () => edit()
+        )
       )
     )

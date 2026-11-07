@@ -236,10 +236,11 @@ final private[manager] class StateManagerEffectHandlers(
 
   private def interpretFileEffect(effect: FileEffect): IO[Unit] =
     effect match
-      case FileEffect.SaveBuffer(bufferId)         => saveBufferEffect(bufferId)
-      case FileEffect.SaveBufferAs(bufferId, path) => saveBufferAsEffect(bufferId, path)
-      case FileEffect.DirectLoadFile(path)         => directLoadFileEffect(path)
-      case FileEffect.OpenForRenameEdit(pending)   => openFilesForRenameEdit(pending)
+      case FileEffect.SaveBuffer(bufferId)            => saveBufferEffect(bufferId)
+      case FileEffect.SaveBufferAs(bufferId, path)    => saveBufferAsEffect(bufferId, path)
+      case FileEffect.DirectLoadFile(path)            => directLoadFileEffect(path)
+      case FileEffect.OpenFromExplorer(path, preview) => openFromExplorer(path, preview)
+      case FileEffect.OpenForRenameEdit(pending)      => openFilesForRenameEdit(pending)
 
   private def interpretExplorerEffect(effect: ExplorerEffect): IO[Unit] =
     effect match
@@ -320,7 +321,7 @@ final private[manager] class StateManagerEffectHandlers(
     // commands the user did not choose (`AppEffect.ExecuteCommandUnrecorded`: picker previews and restores), and
     // anything the palette cannot offer -- settings rows, theme picks, toolbar buttons -- whose ids would only clutter
     // the table (#1877).
-    logger.info(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
+    logger.debug(s"[COMMAND] ${StateManager.describeCommandExecution(command)}") >>
       updateModelValidated(model =>
         Some(model.copy(app = StateManagerEffectHandlers.withCommandUsageRecorded(model.app, command.name)))
       ).whenA(recordUsage && StateManagerEffectHandlers.recordsUsage(command.name)) >> dispatch

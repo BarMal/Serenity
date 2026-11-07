@@ -1,18 +1,15 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Cut, Paste, ReverseTabKey, TabKey}
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{CursorPosition, PaneId, Selection}
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
+import com.serenity.testkit.EditingStateFixtures
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Regression coverage for issue #1291: saving a formatted document loses formatting on export. `#1072` centralised
   * `richTextDocument` remapping behind `Buffer.withEditedContent`, but four edit paths never adopted it -- a
@@ -22,14 +19,10 @@ import org.typelevel.log4cats.{LoggerFactory, LoggerName}
   * Markdown alike -- falls back to `RichTextDocument.fromPlainText`, silently discarding every mark, heading and
   * alignment the user had applied.
   */
-class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class RichTextEditPathDesyncSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger       = LoggerFactory[IO].getLogger(using LoggerName("RichTextEditPathDesyncSpec"))
-    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val stateManager = createStateManager("RichTextEditPathDesyncSpec", initialConfig = AppConfig.default)
     // Rich-text formatting belongs to prose mode.
     stateManager.updateState(TestAppModes.prose).unsafeRunSync()
     stateManager

@@ -48,9 +48,9 @@ private[presets] object UiPresetSummary:
 
   private def panelContentName(content: SessionPanelContent): String =
     content match
-      case SessionPanelContent.DirectoryTree(_, _, _) => "files"
-      case SessionPanelContent.Terminal(_, _)         => "terminal"
-      case SessionPanelContent.Outline(_)             => "outline"
-      case SessionPanelContent.Comments(_)            => "comments"
-      case SessionPanelContent.Diagnostics(_)         => "diagnostics"
-      case SessionPanelContent.MarkdownPreview(_, _)  => "markdown preview"
+      case SessionPanelContent.DirectoryTree(_, _, _, _) => "files"
+      case SessionPanelContent.Terminal(_, _)            => "terminal"
+      case SessionPanelContent.Outline(_)                => "outline"
+      case SessionPanelContent.Comments(_)               => "comments"
+      case SessionPanelContent.Diagnostics(_)            => "diagnostics"
+      case SessionPanelContent.MarkdownPreview(_, _)     => "markdown preview"

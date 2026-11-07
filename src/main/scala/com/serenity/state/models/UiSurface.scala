@@ -137,7 +137,8 @@ final case class StartupPage(
     val lineHeightPx     = math.max(codeMetrics.lineHeight, uiMetrics.lineHeight)
     val viewportWidthPx  = viewportSize.width * codeMetrics.charWidth
     val viewportHeightPx = viewportSize.height * codeMetrics.lineHeight
-    val startYPx         = math.max(0, (viewportHeightPx - (renderLines.size * lineHeightPx)) / 2)
+    val pageHeightPx     = renderLinesWithin(viewportSize.width).size * lineHeightPx
+    val startYPx         = math.max(0, (viewportHeightPx - pageHeightPx) / 2)
 
     launchActions.zip(actionLineIndices).zipWithIndex.flatMap {
       case ((action, lineIndex), index) =>
@@ -163,12 +164,19 @@ final case class StartupPage(
   ): Option[Int] =
     actionBounds(viewportSize, codeMetrics, uiMetrics).find(_.contains(pixelX, pixelY)).map(_.index)
 
-  def renderLines: List[String] =
+  def renderLines: List[String] = renderLinesWithin(Int.MaxValue)
+
+  /** The lines of the page for a window `widthCells` wide. A status message wider than the window is broken at word
+    * boundaries, so the renderer and the hit-testing, which both lay the page out from these lines, agree on its
+    * height; the actions come before it and keep their line indices.
+    */
+  def renderLinesWithin(widthCells: Int): List[String] =
     val actionLines = launchActions.map(_.renderedLabel)
     val baseLines   = List(title, "") ++ actionLines
+    val footer      = "↑↓ Navigate  •  Enter Select  •  Esc Close"
     statusMessage match
-      case Some(message) => baseLines ++ List("", message, "", "↑↓ Navigate  •  Enter Select  •  Esc Close")
-      case None          => baseLines ++ List("", "↑↓ Navigate  •  Enter Select  •  Esc Close")
+      case Some(message) => baseLines ++ List("") ++ StartupPage.statusRows(message, widthCells) ++ List("", footer)
+      case None          => baseLines ++ List("", footer)
 
   def withSelectedIndex(index: Int): StartupPage =
     val clampedIndex =
@@ -180,6 +188,15 @@ final case class StartupPage(
 
   def moveSelectionDown: StartupPage =
     withSelectedIndex(selectedIndex + 1)
+
+object StartupPage:
+
+  // Cells kept clear on each side of a wrapped status message.
+  private val StatusMarginCells = 2
+
+  private[models] def statusRows(message: String, widthCells: Int): List[String] =
+    val rows = TextWrapping.wrap(message, math.max(1, widthCells - 2 * StatusMarginCells))
+    if rows.size == 1 then List(message) else rows
 
 final case class ContextMenuItem(
     id: String,
@@ -214,7 +231,7 @@ final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntr
   * or `Buffer <id>` for one not yet saved to disk) -- never the full path, matching `RendererPaneChrome.renderHeader`'s
   * existing per-pane header title.
   */
-final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean)
+final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean, isPreview: Boolean = false)
 
 enum SurfacePlacement:
   case AboveCursor

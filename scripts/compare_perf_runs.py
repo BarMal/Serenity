@@ -36,6 +36,10 @@ caller re-measures just those benchmarks in fresh pairs on the same runner and r
 pairs alone, not the old ones with the new, so the benchmark that was picked for being the worst of ninety does not
 count its own first luck twice. Retained-heap and allocation checks are not noisy in this way and fail on the first pass.
 
+Rows named in `--exclude-file` (default `scripts/perf-gate-excluded-rows.txt`, issue #2557) are noisy enough that a
+first-pass flag almost never confirms. They are measured and printed, marked as excluded, but never fail the build, never
+reach `--write-flagged`, and are left out of the memory check; the nightly ABBA covers them.
+
 Exit codes: 0 no regression (or every flagged benchmark was forgiven), 1 a regression, a memory failure, or fewer than
 `--min-pairs` usable pairs for every benchmark, 2 timing regressions to confirm (only with `--write-flagged`).
 """
@@ -46,6 +50,7 @@ import argparse
 import statistics
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
 from check_perf_regression import Row, build_parser, check_memory, parse_csv
 
@@ -54,6 +59,8 @@ DEFAULT_MIN_DELTA_MS = 0.05
 DEFAULT_MIN_PAIRS = 2
 DEFAULT_UNSTABLE_SPREAD = 2.0
 MIN_BASELINE_MS = 0.001
+DEFAULT_EXCLUDE_FILE = str(Path(__file__).resolve().parent / "perf-gate-excluded-rows.txt")
+EXCLUDED_MARK = "excluded from the gate (nightly ABBA)"
 
 
 @dataclass(frozen=True)
@@ -123,6 +130,16 @@ def judge(
     return verdicts
 
 
+def load_excluded(path: str) -> list[str]:
+    with open(path) as handle:
+        stripped = (line.split("#", 1)[0].strip() for line in handle)
+        return [entry for entry in stripped if entry]
+
+
+def is_excluded(name: str, excluded: list[str]) -> bool:
+    return any(name == entry or name.startswith(entry + ".") for entry in excluded)
+
+
 def _median_int(values: list[int | None]) -> int | None:
     present = [v for v in values if v is not None]
     return int(statistics.median(present)) if present else None
@@ -154,6 +171,7 @@ def main_with_args(argv: list[str]) -> int:
     parser.add_argument("--unstable-spread", type=float, default=DEFAULT_UNSTABLE_SPREAD)
     parser.add_argument("--write-flagged", metavar="FILE", help="Write the timing regressions to FILE, one name a line, and exit 2 for them")
     parser.add_argument("--only", metavar="FILE", help="Judge only the benchmarks named in FILE, from runs made to confirm them")
+    parser.add_argument("--exclude-file", metavar="FILE", default=DEFAULT_EXCLUDE_FILE, help="Rows to measure and print but not gate on")
     args = parser.parse_args(argv)
 
     if len(args.base) != len(args.head):
@@ -178,18 +196,24 @@ def main_with_args(argv: list[str]) -> int:
         print(f"::error::No benchmark has {args.min_pairs} usable base/head pairs -- nothing was compared.")
         return 1
 
+    excluded = load_excluded(args.exclude_file)
     print(f"{'benchmark':<55} {'base p50':>12} {'head p50':>12} {'ratio':>7} {'pairs':>5}")
     for v in verdicts:
+        if is_excluded(v.name, excluded):
+            past = "past the threshold, " if v.regressed else ""
+            print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5} ({past}{EXCLUDED_MARK})")
+            continue
         flag = " <-- REGRESSION" if v.regressed else (" (unstable base)" if v.unstable else "")
         print(f"{v.name:<55} {v.base_ms:>12.5f} {v.head_ms:>12.5f} {v.ratio:>6.2f}x {v.pairs:>5}{flag}")
-    regressions = [v for v in verdicts if v.regressed]
+    gated = [v for v in verdicts if not is_excluded(v.name, excluded)]
+    regressions = [v for v in gated if v.regressed]
     level = "warning" if args.write_flagged else "error"
     for v in regressions:
         print(
             f"::{level}::{v.name}: fastest-run head/base ratio {v.ratio:.2f}x over {v.pairs} paired runs "
             f"({v.base_ms:.5f}ms -> {v.head_ms:.5f}ms), past {args.threshold}x."
         )
-    unstable = [v for v in verdicts if v.unstable and not v.regressed]
+    unstable = [v for v in gated if v.unstable and not v.regressed]
     if unstable:
         print(f"::notice::{len(unstable)} benchmark(s) had base runs more than {args.unstable_spread}x apart; see log.")
     if args.only:
@@ -197,7 +221,10 @@ def main_with_args(argv: list[str]) -> int:
             return 1
         print("\nEvery flagged benchmark was back under the threshold on the confirmation runs; the first reading is forgiven.")
         return 0
-    memory_failures = check_memory(median_rows(base_runs), median_rows(head_runs), build_parser().parse_args(["-", "-"]))
+    def gated_rows(runs: list[dict[str, Row]]) -> dict[str, Row]:
+        return {name: row for name, row in median_rows(runs).items() if not is_excluded(name, excluded)}
+
+    memory_failures = check_memory(gated_rows(base_runs), gated_rows(head_runs), build_parser().parse_args(["-", "-"]))
     if memory_failures:
         return 1
     if regressions and args.write_flagged:

@@ -15,12 +15,17 @@ final case class Runtime(
     actionStack: List[AppAction] = Nil,
     viewportSize: Option[ViewportSize] = None,
     nextBufferId: BufferId = BufferId(0),
+    // The tab the explorer last opened as a preview, which the next preview replaces; never saved with the workspace.
+    previewTab: Option[PreviewTab] = None,
     nextPaneId: PaneId = PaneId(0),
     nextSurfaceId: SurfaceIdSupply = SurfaceIdSupply.initial,
     clipboard: Option[String] = None,
     // Never persisted: recent copies for Paste from History. Its newest entry also says whether `clipboard` still holds
     // a whole-line copy, which pastes above the caret line (#1962).
     clipboardHistory: ClipboardHistory = ClipboardHistory.empty,
+    // Never persisted: counts Copy and Cut so the system clipboard is rewritten for each, even for text it already
+    // holds, which another application may have replaced since.
+    clipboardExports: Long = 0L,
     focusHistory: List[Focus] = List.empty,
     navigation: NavigationHistory = NavigationHistory(),
     typingActivity: TypingActivity = TypingActivity.idle,
