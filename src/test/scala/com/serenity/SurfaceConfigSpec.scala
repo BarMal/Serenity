@@ -45,7 +45,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   "SurfaceConfig" should "default column mode off, with a sensible target width and gap" in {
     val default = SurfaceConfig()
     default.columnModeEnabled.shouldBe(false)
-    default.columnTargetWidthCells.shouldBe(80)
+    default.columnTargetWidthCells.shouldBe(None)
     default.columnGap.shouldBe(2)
   }
 
@@ -76,9 +76,10 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "clamp columnTargetWidthCells to at least 1" in {
-    SurfaceConfig(columnTargetWidthCells = -5).normalized.columnTargetWidthCells.shouldBe(1)
-    SurfaceConfig(columnTargetWidthCells = 0).normalized.columnTargetWidthCells.shouldBe(1)
-    SurfaceConfig(columnTargetWidthCells = 100).normalized.columnTargetWidthCells.shouldBe(100)
+    SurfaceConfig(columnTargetWidthCells = Some(-5)).normalized.columnTargetWidthCells.shouldBe(Some(1))
+    SurfaceConfig(columnTargetWidthCells = Some(0)).normalized.columnTargetWidthCells.shouldBe(Some(1))
+    SurfaceConfig(columnTargetWidthCells = Some(100)).normalized.columnTargetWidthCells.shouldBe(Some(100))
+    SurfaceConfig(columnTargetWidthCells = None).normalized.columnTargetWidthCells.shouldBe(None)
   }
 
   "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
@@ -149,29 +150,31 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
 
   "SurfaceConfig" should "leave every surface setting's key to ConfigRegistry" in {
     ConfigRegistry.allKeys.should(contain("editor.contextual_toolbar_mode"))
-    ConfigRegistry.allKeys.should(contain("window.viewport.height_max"))
+    ConfigRegistry.allKeys.should(contain("editor.text_area.bottom"))
+  }
+
+  it should "read the column target width as a cell count or unlimited, and write unlimited by default" in {
+    val field = ConfigRegistry.find("editor.column_target_width").getOrElse(fail("missing editor.column_target_width"))
+
+    field
+      .read(AppConfig.default.withColumnTargetWidth(60), "unlimited")
+      .map(field.setting(_)._2.config.unwrapped) shouldBe
+      Some("unlimited")
+    field.read(AppConfig.default, " Unlimited ").map(field.setting(_)._2.config.unwrapped) shouldBe Some("unlimited")
+    field.read(AppConfig.default, "60").map(field.setting(_)._2.config.unwrapped) shouldBe Some(60)
+    field.read(AppConfig.default, "0") shouldBe None
+    field.read(AppConfig.default, "wide") shouldBe None
+    field.setting(AppConfig.default)._2.config.unwrapped shouldBe "unlimited"
   }
 
   it should "group appearance and text display settings under AppConfig" in {
     val config = AppConfig.conventional
       .withTextAreaInsets(TextAreaInsets.fromPercent(20.0, 10.0))
-      .withViewportSizing(
-        ViewportSizing(
-          width = ViewportAxisSizing.fromPercent(80.0, Some(120)),
-          height = ViewportAxisSizing.fromPercent(90.0, Some(40))
-        )
-      )
       .withWordWrap(false)
       .withFocusedTextBody(true)
       .withContextualToolbarDisplayMode(ToolbarDisplayMode.TextOnly)
 
     config.surfaceConfig.textAreaInsets.shouldBe(TextAreaInsets.fromPercent(20.0, 10.0))
-    config.surfaceConfig.viewportSizing.shouldBe(
-      ViewportSizing(
-        width = ViewportAxisSizing.fromPercent(80.0, Some(120)),
-        height = ViewportAxisSizing.fromPercent(90.0, Some(40))
-      )
-    )
     config.surfaceConfig.wordWrapEnabled.shouldBe(false)
     config.surfaceConfig.focusedTextBodyEnabled.shouldBe(true)
     config.surfaceConfig.contextualToolbarDisplayMode.shouldBe(ToolbarDisplayMode.TextOnly)

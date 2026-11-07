@@ -114,10 +114,12 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       PanelPosition.Right,
       22
     )
+    // Square corners: a rounded panel is clipped to its shape, which the mock surface records as a rect clip.
+    val squared = state.copy(persisted = state.persisted.copy(config = state.persisted.config.withUiCornerRadiusPx(0)))
     val surface = new MockRenderSurface(100, 30)
 
     RendererEntryPoints.render(
-      state,
+      squared,
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),

@@ -52,7 +52,7 @@ class UiLayoutSpec extends AnyFlatSpec with Matchers:
     AppConfig.conventional.menuBarMode shouldBe MenuBarMode.Hidden
   }
 
-  it should "differ from the minimal layout in the layout key and the five chrome settings only" in {
+  it should "differ from the minimal layout in the layout key and the six chrome settings only" in {
     val asMinimal = AppConfig.conventional
       .withUiLayout(UiLayout.Minimal)
       .withLineNumbers(false)
@@ -60,6 +60,7 @@ class UiLayoutSpec extends AnyFlatSpec with Matchers:
       .withStatusLinePlacement(StatusLinePlacement.Off)
       .withTabStrip(TabStripMode.Off)
       .withScrollbar(false)
+      .withDockedCornerStyle(DockedCornerStyle.Flush)
 
     asMinimal shouldBe AppConfig.default
   }

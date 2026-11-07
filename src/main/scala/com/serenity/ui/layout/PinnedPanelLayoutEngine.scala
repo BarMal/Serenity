@@ -1,6 +1,5 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.InterfaceDensityMetrics
 import com.serenity.state.models.*
 
 /** Geometry for panels pinned to a screen edge or docked into the workspace tree, plus drag-to-resize handling for
@@ -171,7 +170,9 @@ object PinnedPanelLayoutEngine:
     cellY: Int
   ): Option[PinnedPanelDragResize] =
     val layout        = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
-    val contentHeight = calculateContentHeight(state, viewportSize)
+    val frame         = ChromeFrame.of(state, viewportSize)
+    val bounds        = frame.panelBounds
+    val contentHeight = bounds.height + frame.tabBarHeight
     val uiElementGap  = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     // The panel's already-rendered extent at this edge -- the workspace tree's own ratio (issue #817) is the sole
     // size record for a docked panel, so this reads the geometry that ratio just produced rather than any size still
@@ -187,12 +188,12 @@ object PinnedPanelLayoutEngine:
     resizeFromDragRegion(layout, cellX, cellY).flatMap { position =>
       val requestedSize =
         position match
-          case PanelPosition.Left   => cellX + 1
-          case PanelPosition.Right  => viewportSize.width - cellX
-          case PanelPosition.Top    => cellY + 1
-          case PanelPosition.Bottom => contentHeight - cellY
+          case PanelPosition.Left   => cellX + 1 - bounds.x
+          case PanelPosition.Right  => bounds.right - cellX
+          case PanelPosition.Top    => cellY + 1 - frame.topMargin
+          case PanelPosition.Bottom => bounds.bottom - cellY
 
-      clampedPinnedPanelSize(position, requestedSize, panelSizes, viewportSize.width, contentHeight, uiElementGap)
+      clampedPinnedPanelSize(position, requestedSize, panelSizes, bounds.width, contentHeight, uiElementGap)
         .map(PinnedPanelDragResize(position, _))
     }
 
@@ -296,11 +297,6 @@ object PinnedPanelLayoutEngine:
             uiElementGap
           ).end
         }
-
-  private def calculateContentHeight(state: AppState, viewportSize: ViewportSize): Int =
-    val densityMetrics = InterfaceDensityMetrics.forDensity(state.persisted.config.interfaceDensity)
-    val gutterHeight   = if LayoutEngine.usesBottomGutter(state) then densityMetrics.gutterHeight else 0
-    math.max(1, viewportSize.height - gutterHeight)
 
   private def calculatePinnedAxisSizes(
     startSize: Option[Int],

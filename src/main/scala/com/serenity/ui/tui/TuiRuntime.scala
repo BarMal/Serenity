@@ -10,6 +10,7 @@ import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import com.serenity.app.{AppRuntime, StartupRecovery}
 import com.serenity.config.AppConfig
+import com.serenity.diagnostics.ShutdownLedger
 import com.serenity.frontend.{FrontendRuntime, MarkdownPreviewWindowAvailability, TuiFrontend}
 import com.serenity.input.{
   ClipboardStrategy,
@@ -62,8 +63,14 @@ object TuiRuntime:
     restarter: Option[RestartMode => IO[Unit]] = None,
     onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
-    escDeadline: FiniteDuration = TerminalInputHandler.EscDisambiguationDeadline
-  )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
+    escDeadline: FiniteDuration = TerminalInputHandler.EscDisambiguationDeadline,
+    afterEditorShutdown: IO[Unit] = IO.unit
+  )(using
+    logger: Logger[IO],
+    loggerFactory: LoggerFactory[IO],
+    balance: com.serenity.rope.Balance,
+    ledger: ShutdownLedger
+  ): IO[Unit] =
     // #1213: a real terminal cannot deliver Cmd/Meta as an ordinary keystroke the way AWT does for a focused Swing
     // window, so any hotkey still at its macOS/Cmd-conditioned platform default (Quit, Save, ...) is rewritten here
     // to the Ctrl-based binding every terminal actually forwards, before that config reaches the input translator or
@@ -163,7 +170,8 @@ object TuiRuntime:
             configNotice = configNotice,
             recovery = recovery,
             onFirstFrame = onFirstFrame,
-            forwardedOpens = forwardedOpens
+            forwardedOpens = forwardedOpens,
+            afterEditorShutdown = afterEditorShutdown
           )
         yield ()
     }

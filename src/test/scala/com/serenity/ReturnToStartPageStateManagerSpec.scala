@@ -1,34 +1,24 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.{CommandIntent, CommandRegistry, SessionIntent}
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.*
-import com.serenity.rope.{Balance, Rope}
+import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** #6: a command-runner option to return to the start page from an editor. The Save / Close Anyway / Cancel dialog
   * appears for unsaved buffers, but -- unlike Quit/Close -- no buffer is dropped: the whole session (including any
   * still-unsaved buffers) is snapshotted so [Tab] Quick-resume restores the editor exactly as it was left.
   */
-class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class ReturnToStartPageStateManagerSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private def createStateManager(): StateManager =
-    val logger  = LoggerFactory[IO].getLogger(using LoggerName("ReturnToStartPageStateManagerSpec"))
-    val tempDir = TestTemp.directory("serenity-return-to-start-page")
-    StateManager
-      .apply(logger, sessionRootOverride = Some(tempDir), dictionaryCache = SharedDictionary.default)
-      .unsafeRunSync()
+    createStateManager("ReturnToStartPageStateManagerSpec", initialConfig = AppConfig.default)
 
   private def returnCommand =
     CommandRegistry.withToggleUI
