@@ -43,7 +43,7 @@ private[perf] object IndexWalkBenchmarks:
         () => verify(warmed, fixture),
         () => listing(warmed, fixture.root)
       )
-    )
+    ).map(_.measuringAllThreads)
 
   /** No global excludes file, so the walk does not depend on the machine's git configuration. */
   private def emptyIndex(): ProjectFileIndex = ProjectFileIndex.empty(globalExcludes = IO.pure(Vector.empty))

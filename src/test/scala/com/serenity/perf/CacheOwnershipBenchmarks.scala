@@ -199,7 +199,7 @@ private[perf] object CacheOwnershipBenchmarks:
     List(
       twoRuntimes("laptop.input.state_manager.two_runtimes.same_text", identity),
       twoRuntimes("laptop.input.state_manager.two_runtimes.different_text", distinctFrom)
-    )
+    ).map(_.measuringAllThreads)
 
   private def distinctFrom(letter: Char): Char = if letter.isLetter then letter.toUpper else '-'
 

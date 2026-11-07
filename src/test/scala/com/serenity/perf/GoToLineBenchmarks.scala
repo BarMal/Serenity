@@ -38,4 +38,4 @@ object GoToLineBenchmarks:
           minBatch = BenchmarkIterationCounts.GoToLineBatch
         )
       )
-    )
+    ).map(_.measuringAllThreads)

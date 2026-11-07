@@ -307,7 +307,7 @@ private[perf] object LaptopFrameBenchmarks:
           () => roundTrip(PageDown, PageUp)
         )
       )
-    ) ++ typewriterBenchmarks ++ GoToLineBenchmarks.benchmarks
+    ).map(_.measuringAllThreads) ++ typewriterBenchmarks ++ GoToLineBenchmarks.benchmarks
 
   /** Typing seeded-random letters, so almost every keystroke edits text the wrap cache has not seen: the cyclic a..z of
     * `continuous_typing` and the re-typed text of `type_and_delete` repeat wraps and flatter the typing path. Paragraph
@@ -323,7 +323,7 @@ private[perf] object LaptopFrameBenchmarks:
           cursorColumn = LongParagraphChars / 2
         )
       )
-    )
+    ).map(_.measuringAllThreads)
 
   private val LongParagraphChars = 4_000
 
@@ -375,7 +375,7 @@ private[perf] object LaptopFrameBenchmarks:
           () => keystroke()
         )
       )
-    )
+    ).map(_.measuringAllThreads)
 
   private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
   private val uiMetrics = CellMetrics.fromFont(uiFont)
