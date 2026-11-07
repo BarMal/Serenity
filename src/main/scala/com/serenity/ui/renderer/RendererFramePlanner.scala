@@ -354,6 +354,7 @@ object RendererFramePlanner:
         val movable =
           RendererScrollReuse.rowsMayMove(state, context, renderPlan, persistenceKey, effectiveDamage, geometryChanged)
         val previousGhosts = context.caches.frameState.previousRowGhostsFor(persistenceKey)
+        val widened        = !PreservedPixels.clipsKeptPixels(context.surface)
         val redraws = panes.map { (paneId, record) =>
           val moving = movable && renderPlan.columnSnapshotsFor(paneId).isEmpty
           val ghostRows = DropCapLayout.closedOverGlyphs(
@@ -364,14 +365,7 @@ object RendererFramePlanner:
             record.snapshot
           )
           val dirty =
-            damageDirtyRows(
-              effectiveDamage,
-              record,
-              persistenceKey,
-              context.caches,
-              scrollIsEveryRow = !moving,
-              widened = !PreservedPixels.clipsKeptPixels(context.surface)
-            ) ++ ghostRows
+            damageDirtyRows(effectiveDamage, record, persistenceKey, context.caches, !moving, widened) ++ ghostRows
           paneId -> RendererScrollReuse.planPane(
             state,
             context,
@@ -450,15 +444,7 @@ object RendererFramePlanner:
               renderPlan,
               panes,
               screenDamageSincePublish,
-              dirtyRowsFor(
-                screenDamageSincePublish,
-                _,
-                _,
-                screenSnapshots,
-                persistenceKey,
-                context.caches,
-                widened = !PreservedPixels.clipsKeptPixels(context.surface)
-              ),
+              dirtyRowsFor(screenDamageSincePublish, _, _, screenSnapshots, persistenceKey, context.caches, widened),
               RendererScrollbars.strips(context, renderPlan, screenScrollbars) ++ screenVacated
             )
           }
