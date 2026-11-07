@@ -85,6 +85,7 @@ in `third-party/`. Do not edit it by hand: `sbt checkThirdPartyNotices` fails wh
 | ETC1 (Android PKM decoder) | a17429660467 | Apache-2.0 | The Android Open Source Project | <https://android.googlesource.com/platform/frameworks/native/+/master/opengl/> | Apache-2.0 |
 | D3D12 Memory Allocator (Windows native library) | 169895d529df | MIT | Advanced Micro Devices, Inc. | <https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator> | MIT-d3d12-memory-allocator |
 | PartitionAlloc (Windows native library) | 03cc513177b4 | BSD-3-Clause | The Chromium Authors | <https://chromium.googlesource.com/chromium/src/base/allocator/partition_allocator.git> | BSD-3-Clause-chromium |
+| SDL3 (libSDL3.so.0, Linux packages) | 3.4.14 | Zlib | Copyright (C) 1997-2026 Sam Lantinga; built unmodified from the release-3.4.14 tag (ci/sdl3) and loaded through our own FFM binding | <https://github.com/libsdl-org/SDL> | Zlib-SDL |
 
 ## Licence and notice texts
 
@@ -4712,6 +4713,28 @@ Copyright notice:
 
   Jean-loup Gailly        Mark Adler
   jloup@gzip.org          madler@alumni.caltech.edu
+```
+
+### Zlib-SDL
+
+```text
+Copyright (C) 1997-2026 Sam Lantinga <slouken@libsdl.org>
+  
+This software is provided 'as-is', without any express or implied
+warranty.  In no event will the authors be held liable for any damages
+arising from the use of this software.
+
+Permission is granted to anyone to use this software for any purpose,
+including commercial applications, and to alter it and redistribute it
+freely, subject to the following restrictions:
+  
+1. The origin of this software must not be misrepresented; you must not
+   claim that you wrote the original software. If you use this software
+   in a product, an acknowledgment in the product documentation would be
+   appreciated but is not required. 
+2. Altered source versions must be plainly marked as such, and must not be
+   misrepresented as being the original software.
+3. This notice may not be removed or altered from any source distribution.
 ```
 
 ### libjpeg-turbo

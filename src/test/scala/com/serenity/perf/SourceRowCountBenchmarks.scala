@@ -76,20 +76,24 @@ private[perf] object SourceRowCountBenchmarks:
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
     List(("source_ligatures_off", false), ("source_ligatures_on", true)).map { (name, ligatures) =>
-      val font     = codeFont(ligatures)
-      val expected = wrappedRows(font)
+      lazy val font     = codeFont(ligatures)
+      lazy val expected = wrappedRows(font)
       // With ligatures on the certificate is built once, off the render path, so it is ready before any count; with
       // them off it is measured on the spot, and a fresh set of memos charges every count for it.
-      val shared = LayoutMemos(_.run())
-      val memos  = () => if ligatures then shared else LayoutMemos(_.run())
-      if ligatures then totalRows(font, shared)
-      BenchmarkRunner.Benchmark(
-        s"layout.row_count.$name",
-        2,
-        10,
-        () => assert(totalRows(font, memos()) == expected),
-        () => totalRows(font, memos()),
-        settleJit = true
+      lazy val shared = LayoutMemos(_.run())
+      val memos       = () => if ligatures then shared else LayoutMemos(_.run())
+      lazy val certificate: Unit =
+        if ligatures then
+          val _ = totalRows(font, shared)
+      BenchmarkRunner.Benchmark.building((font, expected, shared, certificate))(
+        BenchmarkRunner.Benchmark(
+          s"layout.row_count.$name",
+          2,
+          10,
+          () => assert(totalRows(font, memos()) == expected),
+          () => totalRows(font, memos()),
+          settleJit = true
+        )
       )
     }
 

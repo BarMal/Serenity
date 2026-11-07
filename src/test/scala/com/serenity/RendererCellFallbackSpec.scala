@@ -28,7 +28,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   private def buildState(
     content: String,
     language: Option[LanguageId] = None,
-    config: AppConfig = AppConfig.conventional,
+    config: AppConfig = ChromeOn.config,
     selection: Option[Selection] = None
   ): AppState =
     val paneId     = PaneId(0)
@@ -40,10 +40,10 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
     )
     val pane = EditorPane.withBuffer(paneId, bufferId)
     AppState
-      .initial(AppConfig.conventional)
+      .initial(ChromeOn.config)
       .copy(
         persisted = AppState
-          .initial(AppConfig.conventional)
+          .initial(ChromeOn.config)
           .persisted
           .copy(
             buffers = Map(bufferId -> buffer),
