@@ -311,8 +311,8 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
   is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
   scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
 - `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
-  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
-  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set app / Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "app / Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
   `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
 
 ### JetBrains Runtime and native Wayland
