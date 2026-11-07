@@ -412,7 +412,7 @@ object RendererFramePlanner:
                   dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet).toList.flatMap(record.rowRects.lift)
                 }
                 .map(RendererChromePlan.withBleed(context)) ++
-                Option.when(chrome.paintsAny)(RendererChromePlan.regions(context, renderPlan)).toList.flatten
+                Option.when(chrome.paintsAny)(RendererChromePlan.regions(context, renderPlan, panes)).toList.flatten
             val frame =
               PanelReuse.Frame(context.surface.viewportWidth, context.surface.viewportHeight, context.cursorVisible)
             PanelReuse.kept(

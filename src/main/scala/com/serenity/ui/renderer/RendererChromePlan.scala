@@ -95,9 +95,9 @@ private[renderer] object RendererChromePlan:
       Signals(
         geometryChanged || !context.surface.addressesPixels,
         rowsOverflow(context, renderPlan, panes, persistenceKey),
-        surfacesMayTouch(context, renderPlan, persistenceKey, damage, chromeRegions(context, renderPlan)),
+        surfacesMayTouch(context, renderPlan, persistenceKey, damage, chromeRegions(context, renderPlan, panes)),
         lastRowIfRowCountChanged(context, renderPlan.layoutContract.activePaneId, panes, persistenceKey),
-        staleRoomBelowRows(context, renderPlan, panes.keySet, persistenceKey)
+        staleRoomBelowRows(context, renderPlan, panes, persistenceKey)
       )
     )
 
@@ -187,10 +187,18 @@ private[renderer] object RendererChromePlan:
     else band
 
   /** Every place chrome is painted. */
-  private[renderer] def regions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
-    chromeRegions(context, renderPlan)
+  private[renderer] def regions(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord]
+  ): List[PixelRect] =
+    chromeRegions(context, renderPlan, panes)
 
-  private def chromeRegions(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
+  private def chromeRegions(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    records: Map[PaneId, PaneFrameRecord]
+  ): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val panes = renderPlan.paneLayouts.values.toList.flatMap(layout =>
       List(layout.headerRect, layout.topSpacerRect, layout.bottomSpacerRect)
@@ -205,7 +213,7 @@ private[renderer] object RendererChromePlan:
     (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
       .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context)) ++
-      roomsBelowRows(context, renderPlan, renderPlan.paneLayouts.keySet)
+      roomsBelowRows(context, renderPlan, records, renderPlan.paneLayouts.keySet)
 
   /** The room below a pane's last row, when it is less than a row: the rows are tiled from the top of the content, so
     * what is left of the content rect under the last one is too short for another. Row ink is clipped to the rows
@@ -218,10 +226,33 @@ private[renderer] object RendererChromePlan:
     paneId: PaneId,
     snapshot: TextLayoutSnapshot
   ): Option[PixelRect] =
+    roomBelow(context, renderPlan, paneId)(RendererPaneSetup.lastPaneRowRect(_, context, snapshot))
+
+  /** [[roomBelowRows]] for the pane as this frame draws it. A pane with a frame record already has the band of each of
+    * its rows, built from the same snapshot and content rect, so the last is read off the record instead of being built
+    * again for each of the frame's uses of the room.
+    */
+  private[renderer] def currentRoomBelowRows(
+    context: RenderContext,
+    renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord],
+    paneId: PaneId
+  ): Option[PixelRect] =
+    renderPlan.snapshots.get(paneId).flatMap { snapshot =>
+      roomBelow(context, renderPlan, paneId) { contentRect =>
+        panes
+          .get(paneId)
+          .fold(RendererPaneSetup.lastPaneRowRect(contentRect, context, snapshot))(_.rowRects.lastOption)
+      }
+    }
+
+  private def roomBelow(context: RenderContext, renderPlan: EditorPaneRenderPlan, paneId: PaneId)(
+    lastRowIn: LayoutRect => Option[PixelRect]
+  ): Option[PixelRect] =
     for
       layout <- renderPlan.paneLayouts.get(paneId)
       if context.surface.addressesPixels && renderPlan.columnSnapshotsFor(paneId).isEmpty
-      last <- RendererPaneSetup.lastPaneRowRect(layout.contentRect, context, snapshot)
+      last <- lastRowIn(layout.contentRect)
       topPx    = last.yPx + last.heightPx
       bottomPx = context.cellMetrics.toPixelY(layout.contentRect.bottom)
       if bottomPx > topPx && bottomPx - topPx < last.heightPx
@@ -230,11 +261,10 @@ private[renderer] object RendererChromePlan:
   private def roomsBelowRows(
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
+    panes: Map[PaneId, PaneFrameRecord],
     paneIds: Set[PaneId]
   ): List[PixelRect] =
-    paneIds.toList.flatMap(paneId =>
-      renderPlan.snapshots.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _))
-    )
+    paneIds.toList.flatMap(paneId => currentRoomBelowRows(context, renderPlan, panes, paneId))
 
   /** The panes whose room below the last row is not the one this surface last drew: a different place, or none known.
     * Only a room kept in the same place holds what is there now.
@@ -242,12 +272,12 @@ private[renderer] object RendererChromePlan:
   private def staleRoomBelowRows(
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    paneIds: Set[PaneId],
+    panes: Map[PaneId, PaneFrameRecord],
     persistenceKey: SurfaceContentIdentity
   ): Set[PaneId] =
     val previous = context.caches.frameState.previousSnapshotsFor(persistenceKey)
-    paneIds.filter { paneId =>
-      val now = renderPlan.snapshots.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _))
+    panes.keySet.filter { paneId =>
+      val now = currentRoomBelowRows(context, renderPlan, panes, paneId)
       now.exists(room => !previous.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _)).contains(room))
     }
 
@@ -329,7 +359,7 @@ private[renderer] object RendererChromePlan:
     }
     val rooms = panes.keys.filterNot(repaint.slack.includes).toSet
     spacers ++ headers.map(toPixels) ++ statusRow.map(toPixels).map(withDescenderBleed(context)) ++
-      roomsBelowRows(context, renderPlan, rooms) ++
+      roomsBelowRows(context, renderPlan, panes, rooms) ++
       keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 
