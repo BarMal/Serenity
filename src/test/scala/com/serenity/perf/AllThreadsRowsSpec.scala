@@ -10,7 +10,7 @@ class AllThreadsRowsSpec extends AnyFlatSpec with Matchers:
     BenchmarkRunner.Benchmark(name, 1, 1, () => (), () => ())
 
   "AllThreadsRows" should "flag the listed rows and leave the others measuring their own thread" in {
-    val flagged = AllThreadsRows(List(declared("laptop.input.state_manager.go_to_line_3000_paragraphs"), declared("a.b")))
+    val flagged = AllThreadsRows(List(declared("laptop.input.state_manager.move_down_up"), declared("a.b")))
     flagged.map(_.allThreads) shouldBe List(true, false)
   }
 
