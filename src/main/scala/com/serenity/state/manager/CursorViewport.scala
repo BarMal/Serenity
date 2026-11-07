@@ -160,8 +160,8 @@ object CursorViewport:
     // it (a find, a go-to, a page) is brought to the middle, as #1204 kept jumps.
     val ordering  = summon[Ordering[PaneRowBands.Row]]
     val gridRowPx = paneHeightPx / math.max(1, viewport.visibleLines)
-    def centred   = bands.topPainting(caret, gridRowPx, viewport.visibleLines / 2)
     val walk      = bands.tops(caret)
+    def centred   = bands.topPainting(walk, caret, gridRowPx, viewport.visibleLines / 2)
     // How far below the current top the caret's text sits, when the pane shows it: read off the walk up from the caret,
     // which stops at the current top, so a caret moving within the pane costs only the rows between the two.
     val shownAtPx =
