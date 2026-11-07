@@ -45,16 +45,16 @@ class EditorPaneComponent(
         rowScrolled(currentState, lines)
       case ScrollUp(lines) if ScrollBoundary.scrollsByRows(currentState) =>
         rowScrolled(currentState, -lines)
-      case _ =>
+      case _: ScrollDown => pageTurned(currentState, direction = 1)
+      case _: ScrollUp   => pageTurned(currentState, direction = -1)
+      case _             =>
         // Measured once here, at the effect boundary, rather than by the reducer reaching for
         // `EditorGeometryProducer` itself (#1676) -- `reduce` stays a pure function of state and this geometry.
         val geometry     = EditorGeometryProducer.forEvent(event, currentState, paneId, wrapCache)
         val reduced      = EditorEventReducer.reduce(event, paneId, currentState, geometry)
-        val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state, wrapCache)
-        val limitedState = event match
-          case _: ScrollDown | _: ScrollUp => ScrollBoundary.clampPane(visibleState, paneId, wrapCache)
-          case _                           => visibleState
-        ComponentResult.reducerResult(ReducerResult(limitedState, reduced.effects))
+        val keyedIn      = currentState.persisted.layout.editorPanes.get(paneId).flatMap(_.bufferId)
+        val visibleState = CursorViewport.ensureVisibleCursors(currentState, reduced.state, wrapCache, keyedIn)
+        ComponentResult.reducerResult(ReducerResult(visibleState, reduced.effects))
 
   /** A wheel step counts on-screen rows (#2479): the reducer's step of whole lines cannot move through a document of
     * one long wrapped line.
@@ -62,6 +62,12 @@ class EditorPaneComponent(
   private def rowScrolled(currentState: AppState, rows: Int): ComponentResult =
     ComponentResult.reducerResult(
       ReducerResult(ScrollBoundary.scrollRows(currentState, paneId, rows, wrapCache), Nil)
+    )
+
+  /** A notch turns a whole page in column mode whatever its line count (#2570): a fast flick is still one turn. */
+  private def pageTurned(currentState: AppState, direction: Int): ComponentResult =
+    ComponentResult.reducerResult(
+      ReducerResult(ScrollBoundary.turnPage(currentState, paneId, direction, wrapCache), Nil)
     )
 
   /** The edit or caret step `event` makes with the cursor left where centring found it, for a caller that centres a

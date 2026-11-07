@@ -1,9 +1,11 @@
 package com.serenity
 
+import com.serenity.config.StatusLinePlacement
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.ui.layout.LayoutRect
+import com.serenity.ui.layout.{LayoutRect, TextRowMetrics}
+import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,8 +22,8 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
   private val sentinel = 0xff00ff
 
   /** A device pixel just inside the top-left corner of the cell `rowOffset` rows down `cells`, away from glyph ink. */
-  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0): (Int, Int) =
-    val x = math.round(cellMetrics.toPixelX(cells.x) * scale).toInt + 1
+  private def stamp(image: FramePixels, cells: LayoutRect, rowOffset: Int = 0, columnOffset: Int = 0): (Int, Int) =
+    val x = math.round(cellMetrics.toPixelX(cells.x + columnOffset) * scale).toInt + 1
     val y = math.round(cellMetrics.toPixelY(cells.y + rowOffset) * scale).toInt + 1
     image.stamp(x, y, sentinel)
     (x, y)
@@ -30,6 +32,33 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     (image.rgbAt(at._1, at._2) & 0xffffff) == sentinel
 
   private def nonEmpty(rect: LayoutRect): Boolean = rect.width > 0 && rect.height > 0
+
+  private def deviceX(logicalPx: Int): Int = math.round(logicalPx * scale).toInt
+  private def deviceY(logicalPx: Int): Int = math.round(logicalPx * scale).toInt
+
+  private def layoutOf(plan: EditorPaneRenderPlan) = plan.paneLayouts.getOrElse(paneId, fail("expected a pane layout"))
+
+  /** The logical pixel rows between the pane's last text row and the bottom of its content rect. */
+  private def roomBelowLastRow(plan: EditorPaneRenderPlan): (Int, Int) =
+    val snapshot = plan.snapshots.getOrElse(paneId, fail("expected a snapshot"))
+    val metrics =
+      TextRowMetrics.forSnapshot(layoutOf(plan).contentRect, cellMetrics, snapshot, snapshot.usesMeasuredLayout)
+    (metrics.bandBottomPx(snapshot.visualLines.size - 1), metrics.contentBottomPx)
+
+  /** What differs between the two frames in the room below the last row, and a couple of device pixels above it. The
+    * rest of the frame is compared by the specs above; two pixels beside the text differ on macOS on master as well
+    * (#2398).
+    */
+  private def differingInRoom(
+    drawn: FramePixels,
+    expected: FramePixels,
+    plan: EditorPaneRenderPlan,
+    deviceScale: Double
+  ): Seq[(Int, Int)] =
+    val (top, bottom) = roomBelowLastRow(plan)
+    val from          = math.floor(top * deviceScale).toInt - 2
+    val to            = math.ceil(bottom * deviceScale).toInt + 2
+    differingPixels(drawn, expected).filter((_, y) => y >= from && y <= to)
 
   "A keystroke frame" should "leave other rows' line numbers, the pane header and the spacers unpainted" in {
     val before  = stateOf(codeLines.mkString("\n"), CursorPosition(10, 0), language = Some(LanguageId.Scala))
@@ -58,6 +87,72 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     withClue("line number of the edited row: ")(survives(drawn, editedRow) shouldBe false)
   }
 
+  it should "leave the room below the last row unpainted" in {
+    // Flush chrome: the room is under a row only where the pane's rows tile its height that way; floating chrome's
+    // shorter pane leaves a whole row, which is not the room this pins.
+    val before  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5), chrome = ChromeOn.config)
+    val after   = typedAt(before, proseLines, line = 4, text = "x")
+    val session = Session()
+    val plan    = session.settle(before)
+
+    val (roomTop, roomBottom) = roomBelowLastRow(plan)
+    roomBottom - roomTop should (be > 0 and be < cellMetrics.lineHeight)
+    val target = session.pendingImage
+    val mark   = (deviceX(cellMetrics.toPixelX(layoutOf(plan).contentRect.x)) + 1, deviceY(roomTop) + 1)
+    target.stamp(mark._1, mark._2, sentinel)
+
+    val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
+
+    survives(drawn, mark) shouldBe true
+  }
+
+  it should "equal a frame drawn from scratch when the last row appears and the room below it goes" in {
+    val fewer   = proseLines.take(31)
+    val first   = stateOf(fewer.mkString("\n"), CursorPosition(4, 5))
+    val second  = typedAt(first, fewer, line = 30, text = "x\nmore")
+    val session = Session()
+
+    val _             = session.settle(first)
+    val (drawn, plan) = session.draw(second, DamageProducer.forTransition(first, second))
+
+    differingInRoom(drawn, cold(second), plan, scale) shouldBe empty
+  }
+
+  it should "equal a frame drawn from scratch at the fractional device scales of a Windows display" in
+    List(1.25, 1.5, 1.75).foreach { windowScale =>
+      val first   = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
+      val second  = typedAt(first, proseLines, line = 4, text = "x")
+      val session = Session(windowScale)
+
+      val _                    = session.settle(first)
+      val (drawn, typedPlan)   = session.draw(second, DamageProducer.forTransition(first, second))
+      val (undone, undonePlan) = session.draw(first, DamageProducer.forTransition(second, first))
+
+      withClue(s"typing at $windowScale: ")(
+        differingInRoom(drawn, cold(second, windowScale), typedPlan, windowScale) shouldBe empty
+      )
+      withClue(s"undo at $windowScale: ")(
+        differingInRoom(undone, cold(first, windowScale), undonePlan, windowScale) shouldBe empty
+      )
+    }
+
+  it should "repaint a changed status row on both pooled images, equal to a frame drawn from scratch" in {
+    def pinned(state: AppState): AppState =
+      state.copy(persisted =
+        state.persisted.copy(config = state.persisted.config.withStatusLinePlacement(StatusLinePlacement.Pinned))
+      )
+    val first   = pinned(stateOf(proseLines.mkString("\n"), CursorPosition(4, 5), dirty = false))
+    val second  = pinned(typedAt(first, proseLines, line = 4, text = "x"))
+    val session = Session()
+
+    val _              = session.settle(first)
+    val (firstDraw, _) = session.draw(second, DamageProducer.forTransition(first, second))
+    val (otherDraw, _) = session.draw(second, Damage.Nothing)
+
+    withClue("image drawn on the changing frame: ")(differingPixels(firstDraw, cold(second)) shouldBe empty)
+    withClue("the other pooled image, one frame later: ")(differingPixels(otherDraw, cold(second)) shouldBe empty)
+  }
+
   it should "repaint the pane header when the keystroke changes it" in {
     val before =
       stateOf(codeLines.mkString("\n"), CursorPosition(10, 0), dirty = false, language = Some(LanguageId.Scala))
@@ -65,8 +160,9 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     val session = Session()
     val plan    = session.settle(before)
 
-    val header     = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
-    val headerMark = stamp(session.pendingImage, header)
+    val header = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
+    // Two cells in, clear of the header's rounded top corners, which the header's fill no longer reaches.
+    val headerMark = stamp(session.pendingImage, header, columnOffset = 2)
 
     val (drawn, _) = session.draw(after, DamageProducer.forTransition(before, after))
 

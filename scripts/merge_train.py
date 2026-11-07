@@ -10,9 +10,31 @@ commit carrying the manifest (base, pull requests and their heads). The tip bein
 the tree master gets once the batch is merged, which is checked after every merge.
 
 A step looks at the live train and either waits, re-runs its failed jobs once (the owner's flake rule), merges it,
-ejects its only pull request, or replaces it with its oldest half (bisecting a red batch). Halving oldest-first and then
-re-queueing the rest also finds a failure that only two pull requests cause together: the first half merges, and the
-second is then tested on top of it.
+ejects its only pull request, or replaces it with its oldest half (bisecting a red batch). The re-run is for a full
+batch only: a train a bisect built is marked `bisected`, because the batch above it already failed twice, and a red half
+is red at once. Halving oldest-first and then re-queueing the rest also finds a failure that only two pull requests
+cause together: the first half merges, and the second is then tested on top of it.
+
+Pull requests that change workflow files are merged by hand, and a hand merge moves master and so abandons the batch just
+built. So when a pull request carrying the `hand-merge-next` label is waiting to be merged by hand, the next batch is
+held back until 20 minutes (MERGE_TRAIN_HOLD_MINUTES) after master last moved: each hand merge restarts the window, and
+the hold ends as soon as no labelled pull request is waiting.
+
+A red suite that exactly one pull request of the batch adds or changes is that pull request's to fix: it is ejected at
+once, with no re-run and no bisect, and the batch is rebuilt without it. The failed suites are read from the failing jobs'
+logs (the `Failed tests:` block sbt prints). A suite no pull request, or more than one, touches, a failure outside the
+test run, and a log that cannot be read all fall back to the re-run and the bisect.
+
+A run's last job (`Wake the merge train`) dispatches a step before its own run is marked complete. A step that finds a
+required run with nothing unfinished but wake jobs therefore looks again, up to 6 times 10 seconds apart, instead of
+waiting for something else to wake the train; a run with any other job unfinished is waited for as before.
+
+The same job only dispatches the next step, so if it alone fails (a GitHub API error) its run turns red though every test
+passed; a run whose only failed job is that one counts as passed.
+
+A push to a pull request in a live train abandons the whole batch, so each pull request in one carries a single note
+saying so. The note is edited as the train moves on and deleted when the pull request leaves the train (merged,
+ejected, or left out of the rebuilt batch); a failure to write it never stops the train.
 """
 
 from __future__ import annotations
@@ -21,17 +43,26 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Callable, Iterable, Protocol, Sequence
 
 REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/ci.yml", ".github/workflows/cross-os-tests.yml")
 MAX_TRAIN_AGE = timedelta(hours=6)
+HAND_MERGE_LABEL = "hand-merge-next"
+DEFAULT_HOLD_MINUTES = 20
+NOTE_MARKER = "<!-- merge-train-note -->"
+WAKE_JOB_NAME = "Wake the merge train"
+WAKE_POLL_TRIES = 6
+WAKE_POLL_SECONDS = 10.0
 _MANIFEST_KEY = "Merge-Train-Manifest: "
 _BRANCH_PREFIX = "train/"
 _BOT = ("-c", "user.name=merge-train", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com")
@@ -58,13 +89,18 @@ class Manifest:
     base: str
     prs: tuple[TrainPr, ...]
     created: datetime
+    # A train built by a bisect: the full batch already failed its re-run, so a flake is ruled out and a red half is
+    # red at once instead of being re-run again.
+    bisected: bool = False
 
     def commit_message(self) -> str:
-        payload = {
+        payload: dict[str, object] = {
             "base": self.base,
             "created": self.created.isoformat(),
             "prs": [{"number": p.number, "head": p.head, "title": p.title, "head_ref": p.head_ref} for p in self.prs],
         }
+        if self.bisected:
+            payload["bisected"] = True
         numbers = " ".join(f"#{p.number}" for p in self.prs)
         return f"Merge train: {numbers}\n\n{_MANIFEST_KEY}{json.dumps(payload, sort_keys=True)}\n"
 
@@ -78,6 +114,7 @@ class Manifest:
             base=payload["base"],
             prs=tuple(TrainPr(p["number"], p["head"], p["title"], p.get("head_ref", "")) for p in payload["prs"]),
             created=datetime.fromisoformat(payload["created"]),
+            bisected=bool(payload.get("bisected", False)),
         )
 
 
@@ -92,6 +129,8 @@ class Candidate:
     head_ref: str
     ci_green: bool
     ejected_heads: frozenset[str] = field(default_factory=frozenset)
+    held_heads: frozenset[str] = field(default_factory=frozenset)
+    labels: frozenset[str] = field(default_factory=frozenset)
 
 
 @dataclass(frozen=True)
@@ -102,6 +141,19 @@ class Run:
     conclusion: str | None
     attempt: int
     url: str
+
+
+@dataclass(frozen=True)
+class FailedSuite:
+    job: str
+    suite: str
+
+
+@dataclass(frozen=True)
+class OwnedFailure:
+    suite: FailedSuite
+    run: Run
+    spec: str
 
 
 @dataclass(frozen=True)
@@ -142,8 +194,12 @@ def ejection_marker(head: str) -> str:
     return f"<!-- merge-train-ejected:{head} -->"
 
 
-def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
-    prefix, suffix = "<!-- merge-train-ejected:", " -->"
+def held_marker(head: str) -> str:
+    return f"<!-- merge-train-held:{head} -->"
+
+
+def _heads_marked(comment_bodies: Iterable[str], kind: str) -> frozenset[str]:
+    prefix, suffix = f"<!-- merge-train-{kind}:", " -->"
     found = set()
     for body in comment_bodies:
         for line in body.splitlines():
@@ -152,7 +208,15 @@ def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
     return frozenset(found)
 
 
-def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int] | None = None) -> list[Candidate]:
+def ejected_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "ejected")
+
+
+def held_heads_in(comment_bodies: Iterable[str]) -> frozenset[str]:
+    return _heads_marked(comment_bodies, "held")
+
+
+def eligible_candidates(candidates: Iterable[Candidate], only: Sequence[int] | None = None) -> list[Candidate]:
     eligible = [
         c
         for c in candidates
@@ -163,7 +227,11 @@ def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int
         and c.head not in c.ejected_heads
         and (only is None or c.number in only)
     ]
-    return sorted(eligible, key=lambda c: c.number)[:limit]
+    return sorted(eligible, key=lambda c: c.number)
+
+
+def select_batch(candidates: Iterable[Candidate], limit: int, only: Sequence[int] | None = None) -> list[Candidate]:
+    return eligible_candidates(candidates, only)[:limit]
 
 
 def decide(
@@ -196,13 +264,45 @@ def decide(
     failed = [r for r in latest if r.conclusion != "success"]
     if not failed:
         return Merge(flaky_runs=tuple(r for r in latest if r.attempt > 1))
-    first_attempts = [r for r in failed if r.attempt < 2]
+    first_attempts = [] if manifest.bisected else [r for r in failed if r.attempt < 2]
     if first_attempts:
         return Rerun(run_ids=tuple(r.id for r in first_attempts))
     if len(manifest.prs) == 1:
         return Eject(number=manifest.prs[0].number, failed_runs=tuple(failed))
     half = math.ceil(len(manifest.prs) / 2)
     return Bisect(numbers=tuple(p.number for p in manifest.prs[:half]))
+
+
+_ANSI_COLOUR = re.compile(r"\x1b\[[0-9;]*m")
+_RUNNER_TIMESTAMP = re.compile(r"^\d{4}-\d\d-\d\dT[\d:.]+Z ")
+_SUITE_BLOCK_HEADERS = ("[error] Failed tests:", "[error] Error during tests:")
+_SUITE_LINE = re.compile(r"^\[error\] \t(\S+)$")
+
+
+def failed_suites_in_log(log: str) -> list[str]:
+    """The suites sbt names under `Failed tests:` and `Error during tests:` (an aborted suite), in log order."""
+    suites: list[str] = []
+    in_block = False
+    for raw in log.splitlines():
+        line = _RUNNER_TIMESTAMP.sub("", _ANSI_COLOUR.sub("", raw)).rstrip()
+        if line in _SUITE_BLOCK_HEADERS:
+            in_block = True
+            continue
+        if not in_block:
+            continue
+        match = _SUITE_LINE.match(line)
+        if match is None:
+            in_block = False
+        elif match.group(1) not in suites:
+            suites.append(match.group(1))
+    return suites
+
+
+def spec_owner(suite: str, changes: dict[int, list[str]]) -> tuple[int, str] | None:
+    """The pull request whose files include `suite`'s spec, with that file, when exactly one pull request does."""
+    ending = "/" + suite.replace(".", "/") + ".scala"
+    touching = [(number, path) for number, paths in changes.items() for path in paths if ("/" + path).endswith(ending)]
+    return touching[0] if len({number for number, _ in touching}) == 1 else None
 
 
 def perf_base(head_message: str) -> str:
@@ -218,9 +318,31 @@ class GitHub(Protocol):
     def rerun_failed_jobs(self, run_id: int) -> None: ...
     def cancel_run(self, run_id: int) -> None: ...
     def failed_job_names(self, run_id: int, attempt: int) -> list[str]: ...
+    def unfinished_job_names(self, run_id: int) -> list[str]: ...
+    def failed_suites(self, run_id: int, attempt: int) -> list[FailedSuite]: ...
+    def changed_files(self, number: int) -> list[str]: ...
     def squash_merge(self, number: int, head: str, title: str) -> None: ...
     def delete_branch(self, name: str) -> None: ...
     def comment(self, number: int, body: str) -> None: ...
+    def set_train_note(self, number: int, note: str | None) -> None: ...
+
+
+# GITHUB_TOKEN may not push a commit that changes a workflow file, so a train never carries one.
+_WORKFLOWS_DIR = ".github/workflows/"
+
+
+class Outcome(Enum):
+    APPLIED = "applied"
+    LEFT_OUT = "left out"
+    HELD_BACK = "held back"
+
+
+@dataclass(frozen=True)
+class Built:
+    tip: str
+    included: list[Candidate]
+    left_out: list[Candidate]
+    held_back: list[Candidate]
 
 
 class Git:
@@ -240,6 +362,9 @@ class Git:
         self._run("fetch", "-q", "origin", "+refs/heads/master:refs/remotes/origin/master")
         return self._out("rev-parse", "refs/remotes/origin/master")
 
+    def master_time(self) -> datetime:
+        return datetime.fromtimestamp(int(self._out("show", "-s", "--format=%ct", self.master())), timezone.utc)
+
     def live_trains(self) -> list[str]:
         lines = self._out("ls-remote", "--heads", "origin", f"refs/heads/{_BRANCH_PREFIX}*").splitlines()
         return sorted(line.split("\trefs/heads/", 1)[1] for line in lines if "\trefs/heads/" in line)
@@ -254,22 +379,44 @@ class Git:
     def tree(self, ref: str) -> str:
         return self._out("rev-parse", f"{ref}^{{tree}}")
 
-    def build(self, base: str, manifest_of: Callable[[list[Candidate]], Manifest], prs: list[Candidate]) -> tuple[str, list[Candidate]]:
+    def build(
+        self, base: str, manifest_of: Callable[[list[Candidate]], Manifest], prs: list[Candidate], limit: int
+    ) -> Built:
+        """Squash-applies `prs` in order until `limit` have applied, so a pull request that conflicts, has moved or is
+        held back is replaced by the next one. Each is applied on top of those already included, so a later pull
+        request is checked against the batch built so far."""
         self._run("checkout", "-q", "--detach", base)
         included: list[Candidate] = []
+        left_out: list[Candidate] = []
+        held_back: list[Candidate] = []
         for pr in prs:
-            self._run("fetch", "-q", "origin", f"refs/pull/{pr.number}/head")
-            if self._out("rev-parse", "FETCH_HEAD") != pr.head:
-                continue
-            if self._run("merge", "--squash", "FETCH_HEAD", check=False).returncode != 0:
-                self._run("reset", "-q", "--hard", "HEAD")
-                continue
-            if self._run("diff", "--cached", "--quiet", check=False).returncode == 0:
-                continue
-            self._run("commit", "-q", "-m", f"{pr.title} (#{pr.number})")
-            included.append(pr)
+            if len(included) == limit:
+                break
+            outcome = self._apply(pr)
+            if outcome is Outcome.APPLIED:
+                self._run("commit", "-q", "-m", f"{pr.title} (#{pr.number})")
+                included.append(pr)
+            elif outcome is Outcome.HELD_BACK:
+                held_back.append(pr)
+            else:
+                left_out.append(pr)
         self._run("commit", "-q", "--allow-empty", "-m", manifest_of(included).commit_message())
-        return self._out("rev-parse", "HEAD"), included
+        return Built(self._out("rev-parse", "HEAD"), included, left_out, held_back)
+
+    def _apply(self, pr: Candidate) -> Outcome:
+        self._run("fetch", "-q", "origin", f"refs/pull/{pr.number}/head")
+        if self._out("rev-parse", "FETCH_HEAD") != pr.head:
+            return Outcome.LEFT_OUT
+        if self._run("merge", "--squash", "FETCH_HEAD", check=False).returncode != 0:
+            self._run("reset", "-q", "--hard", "HEAD")
+            return Outcome.LEFT_OUT
+        staged = self._out("diff", "--cached", "--name-only").splitlines()
+        if not staged:
+            return Outcome.LEFT_OUT
+        if any(path.startswith(_WORKFLOWS_DIR) for path in staged):
+            self._run("reset", "-q", "--hard", "HEAD")
+            return Outcome.HELD_BACK
+        return Outcome.APPLIED
 
     def push(self, sha: str, branch: str) -> None:
         self._run("push", "-q", "origin", f"{sha}:refs/heads/{branch}")
@@ -289,9 +436,13 @@ class Train:
         flake_issue: int | None,
         now: Callable[[], datetime],
         log: Callable[[str], None],
+        hold_minutes: int = DEFAULT_HOLD_MINUTES,
+        summary: Callable[[str], None] = lambda _text: None,
+        sleep: Callable[[float], None] = time.sleep,
     ) -> None:
         self.github, self.git, self.batch, self.dry_run = github, git, batch, dry_run
         self.flake_issue, self.now, self.log = flake_issue, now, log
+        self.hold, self.summary, self.sleep = timedelta(minutes=hold_minutes), summary, sleep
 
     def tick(self) -> None:
         live = self.git.live_trains()
@@ -305,11 +456,25 @@ class Train:
         manifest = Manifest.from_commit_message(self.git.message(tip))
         if manifest is None:
             raise TrainError(f"{branch} has no manifest at its tip {tip[:8]}")
-        runs = self.github.runs_for(branch)
+        runs = self._runs_of(branch)
         heads = {p.number: self.github.head_of(p.number) for p in manifest.prs}
-        action = decide(manifest, runs, heads=heads, master=self.git.master(), now=self.now())
+        master = self.git.master()
+        action = decide(manifest, runs, heads=heads, master=master, now=self.now())
+        looks = 0
+        while isinstance(action, Wait) and looks < WAKE_POLL_TRIES and self._only_wake_jobs_unfinished(runs):
+            looks += 1
+            self.log(f"{branch}: only the wake job is unfinished; looking again in {WAKE_POLL_SECONDS:.0f} s ({looks}/{WAKE_POLL_TRIES})")
+            self.sleep(WAKE_POLL_SECONDS)
+            runs = self._runs_of(branch)
+            action = decide(manifest, runs, heads=heads, master=master, now=self.now())
         self.log(f"{branch} ({_numbers(manifest.prs)}): {action}")
+        owners = self._owners_of_failures(manifest, runs) if isinstance(action, (Rerun, Bisect, Eject)) else {}
+        for number, hits in owners.items():
+            self.log(f"#{number} owns the failing {', '.join(hit.suite.suite for hit in hits)}")
         if self.dry_run or isinstance(action, Wait):
+            return
+        if owners:
+            self._eject_owners(branch, manifest, owners)
             return
         if isinstance(action, Rerun):
             for run_id in action.run_ids:
@@ -320,47 +485,139 @@ class Train:
                 if run.status != "completed":
                     self.github.cancel_run(run.id)
             self.git.delete_remote_branch(branch)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Merge):
             self.git.delete_remote_branch(branch)
             self._merge(manifest, tip)
             self._record_flakes(manifest, action.flaky_runs)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Eject):
             pr = manifest.prs[0]
             self.github.comment(pr.number, _ejection_comment(pr, manifest.base, action.failed_runs))
             self.git.delete_remote_branch(branch)
-            self._start()
+            self._clear_notes(manifest, self._start())
         elif isinstance(action, Bisect):
             self.git.delete_remote_branch(branch)
-            self._start(only=action.numbers)
+            self._clear_notes(manifest, self._start(only=action.numbers))
 
-    def _start(self, only: Sequence[int] | None = None) -> None:
-        batch = select_batch(self.github.open_candidates(), self.batch, only)
-        if not batch:
+    def _runs_of(self, branch: str) -> list[Run]:
+        return self._not_failed_by_the_wake_job(self.github.runs_for(branch))
+
+    def _not_failed_by_the_wake_job(self, runs: list[Run]) -> list[Run]:
+        latest = {
+            path: max(of_path, key=lambda r: r.id)
+            for path in REQUIRED_WORKFLOWS
+            if (of_path := [r for r in runs if r.path == path])
+        }
+        passed: list[Run] = []
+        for run in latest.values():
+            if run.status != "completed" or run.conclusion in (None, "success"):
+                continue
+            failed = self.github.failed_job_names(run.id, run.attempt)
+            if failed and set(failed) <= {WAKE_JOB_NAME}:
+                self.log(f"Run {run.id} failed only in the wake job ({WAKE_JOB_NAME}); counting it as passed.")
+                passed.append(run)
+        return [replace(r, conclusion="success") if r in passed else r for r in runs]
+
+    def _only_wake_jobs_unfinished(self, runs: list[Run]) -> bool:
+        """The wake job dispatches its step before its own run is marked complete, so a run with nothing left but
+        wake jobs is seconds from done; a run with anything else unfinished is simply still working."""
+        running = [
+            max(of_path, key=lambda r: r.id)
+            for path in REQUIRED_WORKFLOWS
+            if (of_path := [r for r in runs if r.path == path])
+        ]
+        running = [r for r in running if r.status != "completed"]
+        return bool(running) and all(
+            set(self.github.unfinished_job_names(r.id)) <= {WAKE_JOB_NAME} for r in running
+        )
+
+    def _owners_of_failures(self, manifest: Manifest, runs: list[Run]) -> dict[int, list[OwnedFailure]]:
+        latest = [
+            max(of_path, key=lambda r: r.id)
+            for path in REQUIRED_WORKFLOWS
+            if (of_path := [r for r in runs if r.path == path])
+        ]
+        failed = [r for r in latest if r.status == "completed" and r.conclusion != "success"]
+        suites = [(suite, run) for run in failed for suite in self.github.failed_suites(run.id, run.attempt)]
+        if not suites:
+            return {}
+        changes = {pr.number: self.github.changed_files(pr.number) for pr in manifest.prs}
+        owned: dict[int, list[OwnedFailure]] = {}
+        for suite, run in suites:
+            owner = spec_owner(suite.suite, changes)
+            if owner is not None:
+                owned.setdefault(owner[0], []).append(OwnedFailure(suite, run, owner[1]))
+        return owned
+
+    def _eject_owners(self, branch: str, manifest: Manifest, owners: dict[int, list[OwnedFailure]]) -> None:
+        for number, hits in owners.items():
+            pr = next(p for p in manifest.prs if p.number == number)
+            self.github.comment(number, _owner_ejection_comment(pr, manifest, hits))
+        self.git.delete_remote_branch(branch)
+        self._clear_notes(manifest, self._start())
+
+    def _start(self, only: Sequence[int] | None = None) -> frozenset[int]:
+        """Builds the next train; the numbers of the pull requests it put in one."""
+        eligible = eligible_candidates(self.github.open_candidates(), only)
+        if not eligible:
             self.log("No pull request is ready for a train.")
-            return
+            return frozenset()
         base = self.git.master()
         if self.dry_run:
-            self.log(f"Would build a train of {_numbers(batch)} on master {base[:8]}.")
-            return
+            self.log(f"Would build a train of {_numbers(eligible[: self.batch])} on master {base[:8]}.")
+            return frozenset()
         created = self.now()
 
         def manifest_of(included: list[Candidate]) -> Manifest:
             prs = tuple(TrainPr(c.number, c.head, c.title, c.head_ref) for c in included)
-            return Manifest(base=base, prs=prs, created=created)
+            return Manifest(base=base, prs=prs, created=created, bisected=only is not None)
 
-        tip, included = self.git.build(base, manifest_of, batch)
-        left_out = [c for c in batch if c not in included]
-        if left_out:
-            self.log(f"Left out (conflict, no change or moved head): {_numbers(left_out)}")
-        if not included:
-            return
+        built = self.git.build(base, manifest_of, eligible, self.batch)
+        if built.left_out:
+            self.log(f"Left out (conflict, no change or moved head): {_numbers(built.left_out)}")
+        if built.held_back:
+            self.log(f"Held back (touches workflows, merged by hand): {_numbers(built.held_back)}")
+            for pr in built.held_back:
+                if pr.head not in pr.held_heads:
+                    self.github.comment(pr.number, _held_comment(pr))
+            if self._holding_for_hand_merges([pr for pr in built.held_back if HAND_MERGE_LABEL in pr.labels]):
+                return frozenset()
+        if not built.included:
+            return frozenset()
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
-        self.git.push(tip, branch)
+        self.git.push(built.tip, branch)
         for path in REQUIRED_WORKFLOWS:
             self.github.dispatch(Path(path).name, branch)
-        self.log(f"Started {branch}: {_numbers(included)} on master {base[:8]}.")
+        self.log(f"Started {branch}: {_numbers(built.included)} on master {base[:8]}.")
+        for pr in built.included:
+            self._note(pr.number, _train_note(branch, built.included))
+        return frozenset(pr.number for pr in built.included)
+
+    def _note(self, number: int, note: str | None) -> None:
+        try:
+            self.github.set_train_note(number, note)
+        except (urllib.error.URLError, OSError) as error:
+            self.log(f"Could not update the train note on #{number}: {error}")
+
+    def _clear_notes(self, manifest: Manifest, keep: frozenset[int]) -> None:
+        for pr in manifest.prs:
+            if pr.number not in keep:
+                self._note(pr.number, None)
+
+    def _holding_for_hand_merges(self, waiting: list[Candidate]) -> bool:
+        """A hand merge moves master, which abandons a batch that was just built; so the batch waits for the pull
+        requests that are about to be merged by hand. Master's last commit marks the window, so every hand merge
+        restarts it without any stored state."""
+        if not waiting:
+            return False
+        until = self.git.master_time() + self.hold
+        if self.now() >= until:
+            return False
+        text = f"Holding the next train until {until:%H:%M}Z for hand merges: {_numbers(waiting)}."
+        self.log(text)
+        self.summary(text)
+        return True
 
     def _merge(self, manifest: Manifest, tip: str) -> None:
         for pr in manifest.prs:
@@ -389,8 +646,25 @@ class Train:
             self.github.comment(self.flake_issue, body)
 
 
+def _train_note(branch: str, prs: Iterable[TrainPr | Candidate]) -> str:
+    return (
+        f"{NOTE_MARKER}\n"
+        f"In merge train `{branch}` with {_numbers(prs)}. A push to this pull request now abandons the batch, with "
+        "its CI and Cross-OS runs (about an hour of work). This note is edited as the train moves on and deleted when "
+        "the pull request merges, is ejected or leaves the train."
+    )
+
+
 def _numbers(prs: Iterable[TrainPr | Candidate]) -> str:
     return " ".join(f"#{p.number}" for p in prs)
+
+
+def _held_comment(pr: Candidate) -> str:
+    return (
+        f"The merge train leaves this pull request out: it changes `{_WORKFLOWS_DIR.rstrip('/')}`, and the token the "
+        "train pushes with cannot push workflow files. Merge it by hand; a new push is looked at again.\n"
+        f"{held_marker(pr.head)}"
+    )
 
 
 def _ejection_comment(pr: TrainPr, base: str, failed_runs: tuple[Run, ...]) -> str:
@@ -401,6 +675,23 @@ def _ejection_comment(pr: TrainPr, base: str, failed_runs: tuple[Run, ...]) -> s
         f"{runs}\n\n"
         f"The train skips this head ({pr.head[:8]}); pushing a fix puts the pull request back in line."
     )
+
+
+def _owner_ejection_comment(pr: TrainPr, manifest: Manifest, hits: list[OwnedFailure]) -> str:
+    failures = "\n".join(f"- `{h.suite.suite}` (`{h.spec}`) in {h.suite.job}: {h.run.url}" for h in hits)
+    return (
+        f"{ejection_marker(pr.head)}\n"
+        f"The merge train ejected this pull request from the batch of {_numbers(manifest.prs)} on master "
+        f"{manifest.base[:8]}. It adds or changes the spec of a suite that failed, and no other pull request in the "
+        f"batch touches that spec:\n\n{failures}\n\n"
+        "So there was no re-run and no bisect, and the batch was rebuilt without it. "
+        f"The train skips this head ({pr.head[:8]}); pushing a fix puts the pull request back in line."
+    )
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args: object, **kwargs: object) -> None:
+        return None
 
 
 class RestGitHub:
@@ -435,6 +726,7 @@ class RestGitHub:
             same_repo = (p["head"]["repo"] or {}).get("full_name") == self.repository
             plausible = same_repo and not p["draft"]
             head = p["head"]["sha"]
+            ejected, held = self._marked_heads(p["number"]) if plausible else (frozenset(), frozenset())
             candidates.append(
                 Candidate(
                     number=p["number"],
@@ -445,7 +737,9 @@ class RestGitHub:
                     same_repo=same_repo,
                     head_ref=p["head"]["ref"],
                     ci_green=plausible and self._ci_green(head),
-                    ejected_heads=self._ejected_heads(p["number"]) if plausible else frozenset(),
+                    ejected_heads=ejected,
+                    held_heads=held,
+                    labels=frozenset(label["name"] for label in p.get("labels", [])),
                 )
             )
         return candidates
@@ -455,9 +749,10 @@ class RestGitHub:
         latest = max(runs, key=lambda r: r["id"], default=None)
         return latest is not None and latest["conclusion"] == "success"
 
-    def _ejected_heads(self, number: int) -> frozenset[str]:
+    def _marked_heads(self, number: int) -> tuple[frozenset[str], frozenset[str]]:
         comments = self._get(f"issues/{number}/comments?per_page=100")
-        return ejected_heads_in(c["body"] or "" for c in comments)  # type: ignore[union-attr]
+        bodies = [c["body"] or "" for c in comments]  # type: ignore[union-attr]
+        return ejected_heads_in(bodies), held_heads_in(bodies)
 
     def head_of(self, number: int) -> str | None:
         pull = self._get(f"pulls/{number}")
@@ -480,9 +775,73 @@ class RestGitHub:
             if error.code != 409:  # 409: it finished meanwhile
                 raise
 
-    def failed_job_names(self, run_id: int, attempt: int) -> list[str]:
+    def unfinished_job_names(self, run_id: int) -> list[str]:
+        jobs = self._get(f"actions/runs/{run_id}/jobs?filter=latest&per_page=100")["jobs"]  # type: ignore[index]
+        return [j["name"] for j in jobs if j["status"] != "completed"]
+
+    def _failed_jobs(self, run_id: int, attempt: int) -> list[dict]:
         jobs = self._get(f"actions/runs/{run_id}/attempts/{attempt}/jobs?per_page=100")["jobs"]  # type: ignore[index]
-        return [j["name"] for j in jobs if j["conclusion"] not in ("success", "skipped", "neutral", None)]
+        return [j for j in jobs if j["conclusion"] not in ("success", "skipped", "neutral", None)]
+
+    def failed_job_names(self, run_id: int, attempt: int) -> list[str]:
+        return [j["name"] for j in self._failed_jobs(run_id, attempt)]
+
+    def failed_suites(self, run_id: int, attempt: int) -> list[FailedSuite]:
+        found: list[FailedSuite] = []
+        for job in self._failed_jobs(run_id, attempt):
+            try:
+                log = self._job_log(job["id"])
+            except urllib.error.URLError:
+                continue  # an expired or missing log means the old path, not a failed step
+            found.extend(FailedSuite(job["name"], suite) for suite in failed_suites_in_log(log))
+        return found
+
+    def _job_log(self, job_id: int) -> str:
+        """The log lives behind a redirect to blob storage, which must not be sent the API token."""
+        request = urllib.request.Request(
+            f"{self.api}/repos/{self.repository}/actions/jobs/{job_id}/logs",
+            headers={"Authorization": f"Bearer {self.token}", "X-GitHub-Api-Version": "2022-11-28"},
+        )
+        try:
+            urllib.request.build_opener(_NoRedirect).open(request, timeout=60)
+        except urllib.error.HTTPError as redirect:
+            location = redirect.headers.get("Location") if redirect.code in (301, 302, 303, 307, 308) else None
+            if location is None:
+                raise
+            with urllib.request.urlopen(location, timeout=120) as response:
+                return response.read().decode("utf-8", errors="replace")
+        raise urllib.error.URLError(f"job {job_id}: no redirect to the log")
+
+    def changed_files(self, number: int) -> list[str]:
+        names: list[str] = []
+        page = 1
+        while True:
+            files = self._get(f"pulls/{number}/files?per_page=100&page={page}")
+            names.extend(f["filename"] for f in files)  # type: ignore[union-attr]
+            if len(files) < 100:
+                return names
+            page += 1
+
+    def _note_comment_id(self, number: int) -> int | None:
+        page = 1
+        while True:
+            comments = self._get(f"issues/{number}/comments?per_page=100&page={page}")
+            for comment in comments:
+                if NOTE_MARKER in comment["body"]:  # type: ignore[index]
+                    return comment["id"]  # type: ignore[index,return-value]
+            if len(comments) < 100:
+                return None
+            page += 1
+
+    def set_train_note(self, number: int, note: str | None) -> None:
+        existing = self._note_comment_id(number)
+        if note is None:
+            if existing is not None:
+                self._call("DELETE", f"issues/comments/{existing}")
+        elif existing is None:
+            self._call("POST", f"issues/{number}/comments", {"body": note})
+        else:
+            self._call("PATCH", f"issues/comments/{existing}", {"body": note})
 
     def squash_merge(self, number: int, head: str, title: str) -> None:
         try:
@@ -499,6 +858,13 @@ class RestGitHub:
 
     def comment(self, number: int, body: str) -> None:
         self._call("POST", f"issues/{number}/comments", {"body": body})
+
+
+def _step_summary(text: str) -> None:
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path:
+        with open(path, "a", encoding="utf-8") as summary:
+            summary.write(text + "\n")
 
 
 def main(argv: Sequence[str]) -> int:
@@ -523,6 +889,8 @@ def main(argv: Sequence[str]) -> int:
         flake_issue=int(flake_issue) if flake_issue else None,
         now=lambda: datetime.now(timezone.utc),
         log=print,
+        hold_minutes=int(os.environ.get("MERGE_TRAIN_HOLD_MINUTES") or DEFAULT_HOLD_MINUTES),
+        summary=_step_summary,
     )
     try:
         train.tick()

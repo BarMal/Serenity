@@ -1,30 +1,21 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.config.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
-import com.serenity.testkit.SharedDictionary
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The status line's segment list is ordered and independently toggleable: the include/exclude toggle and the discrete
   * reorder intents, plus the rendered text.
   */
-class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class StatusLineSegmentsSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   /** A state manager whose status line starts empty, so each test adds exactly the segments it reasons about. */
   private def makeStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("StatusLineSegmentsSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm = createStateManager("StatusLineSegmentsSpec", initialConfig = AppConfig.default)
     StatusSegment.values.foreach(segment => execute(sm, StatusLineIntent.SetSegmentIncluded(segment, included = false)))
     sm
 

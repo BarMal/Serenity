@@ -7,7 +7,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.keystroke.events.ToggleCommandRunner
+import com.serenity.keystroke.events.RunCommand
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
@@ -51,7 +51,7 @@ class StateManagerUiPresetThemeSpec extends AnyFlatSpec with Matchers with Befor
       )
       .unsafeRunSync()
 
-    (sm.applyEvent(ToggleCommandRunner) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
+    (sm.applyEvent(RunCommand("open-settings")) >> sm.runtimeLifecycle.awaitEffects).unsafeRunSync()
 
     def run(intent: UiPresetsIntent): Unit =
       sm.executeCommand(

@@ -13,7 +13,7 @@ import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{HangBound, SharedDictionary}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import fs2.Stream
@@ -63,7 +63,10 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
 
   final private case class Seen(firstSceneHadBar: Boolean, scrollbarDamage: Set[PaneId])
 
-  /** Runs the app until its render loop is told a scrollbar needs repainting, or a few seconds pass. */
+  /** Runs the app until its render loop is told a scrollbar needs repainting, or five seconds of un-paused time pass: a
+    * terminal frontend never repaints the bar, so for it the wait is the whole observation, and a collection pause
+    * during it must not shorten it (#2484).
+    */
   private def runWith(frontend: Frontend): (Seen, Boolean) =
     given org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("ScrollCountLaunchSpec"))
     val outcome = (for
@@ -85,25 +88,27 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
         renderFull = render,
         renderCursorOnly = (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) => IO.unit
       )
-      done <- AppRuntime
-        .run(
-          initialViewportSize = viewport,
-          checkResize = IO.pure(None),
-          runtime = runtime,
-          appConfig = AppConfig.default,
-          makeStateManager = Some((logger, scrollCounting) =>
-            StateManager.apply(
-              logger,
-              initialConfig = AppConfig.conventional,
-              dictionaryCache = SharedDictionary.default,
-              scrollCounting = scrollCounting
-            )
+      done <- HangBound
+        .within(
+          AppRuntime.run(
+            initialViewportSize = viewport,
+            checkResize = IO.pure(None),
+            runtime = runtime,
+            appConfig = AppConfig.default,
+            makeStateManager = Some((logger, scrollCounting) =>
+              StateManager.apply(
+                logger,
+                initialConfig = AppConfig.conventional,
+                dictionaryCache = SharedDictionary.default,
+                scrollCounting = scrollCounting
+              )
+            ),
+            awaitExternalQuit = HangBound.within(repainted.get, 5.seconds).attempt.void,
+            registerResizeCallback = _ => (),
+            frontend = frontend
           ),
-          awaitExternalQuit = repainted.get.timeout(5.seconds).attempt.void,
-          registerResizeCallback = _ => (),
-          frontend = frontend
+          bound = 15.seconds
         )
-        .timeout(15.seconds)
         .attempt
       panes <- repainted.tryGet
       bar   <- firstBar.tryGet
