@@ -197,7 +197,7 @@ private[renderer] object RendererChromePlan:
   private def chromeRegions(
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    panes: Map[PaneId, PaneFrameRecord]
+    records: Map[PaneId, PaneFrameRecord]
   ): List[PixelRect] =
     val contract = renderPlan.layoutContract
     val panes = renderPlan.paneLayouts.values.toList.flatMap(layout =>
@@ -213,7 +213,7 @@ private[renderer] object RendererChromePlan:
     (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
       contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
       .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context)) ++
-      roomsBelowRows(context, renderPlan, panes, renderPlan.paneLayouts.keySet)
+      roomsBelowRows(context, renderPlan, records, renderPlan.paneLayouts.keySet)
 
   /** The room below a pane's last row, when it is less than a row: the rows are tiled from the top of the content, so
     * what is left of the content rect under the last one is too short for another. Row ink is clipped to the rows
