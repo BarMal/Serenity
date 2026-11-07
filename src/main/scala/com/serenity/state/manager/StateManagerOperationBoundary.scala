@@ -132,7 +132,7 @@ final private[manager] class StateManagerOperationBoundary private (
   private def logModalTransition(before: AppState, after: AppState): IO[Unit] =
     (currentModalId(before), currentModalId(after)) match
       case (beforeId, afterId) if beforeId != afterId =>
-        logger.info(
+        logger.debug(
           s"[STATE MODAL] before=${beforeId.getOrElse("none")} " +
             s"after=${afterId.getOrElse("none")} focus=${after.persisted.focus}"
         )

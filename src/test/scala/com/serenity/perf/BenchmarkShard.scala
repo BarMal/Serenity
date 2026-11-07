@@ -5,8 +5,12 @@ package com.serenity.perf
   *
   * Slices are equal except for two shards: the rows of the first half of the suite cost more than the second half's
   * (one unsharded run, 132 timed rows: half of the time the rows themselves took, leaving out the warm-up extension,
-  * was spent by row 61, i.e. at 46%), so the first shard takes the first 45% and the second the rest. That figure is
+  * was spent by row 61, i.e. at 46%), so the first shard takes the first 40% and the second the rest. That figure is
   * from one run and moves as rows are added.
+  *
+  * 40, not 45, since CI run 41996744074 (#2618): at 45 the 1x first shard's base+head pair cost about 644 s against
+  * about 457 s for the second, and its job ran 47.8 min against 38.3. The 2x gap was smaller (42.2 against 37.5 min),
+  * so one constant cannot balance both scales; 40 sits between what each wanted.
   */
 final private[perf] case class BenchmarkShard(index: Int, count: Int):
 
@@ -19,7 +23,7 @@ final private[perf] case class BenchmarkShard(index: Int, count: Int):
 
 private[perf] object BenchmarkShard:
 
-  val FirstOfTwoPercent: Int = 45
+  val FirstOfTwoPercent: Int = 40
 
   private val Option = "--shard="
 

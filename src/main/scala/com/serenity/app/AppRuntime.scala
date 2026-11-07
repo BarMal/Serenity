@@ -11,7 +11,14 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.diagnostics.{EdtLagTrace, FrameTimingReport, FrameTimings, KeyLatencyReport, ShutdownTrace}
+import com.serenity.diagnostics.{
+  EdtLagTrace,
+  FrameTimingReport,
+  FrameTimings,
+  KeyLatencyReport,
+  ShutdownLedger,
+  ShutdownTrace
+}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -160,8 +167,14 @@ object AppRuntime:
     onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
     quitRequests: Stream[IO, QuitResponse] = Stream.empty,
-    fileOrFolderOpen: Boolean = false
-  )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
+    fileOrFolderOpen: Boolean = false,
+    afterEditorShutdown: IO[Unit] = IO.unit
+  )(using
+    logger: Logger[IO],
+    loggerFactory: LoggerFactory[IO],
+    balance: com.serenity.rope.Balance,
+    ledger: ShutdownLedger
+  ): IO[Unit] =
     (
       ShutdownTrace.traced("callback dispatcher")(Dispatcher.parallel[IO]),
       ShutdownTrace.traced("timer supervisor")(Supervisor[IO](await = false))
@@ -345,6 +358,7 @@ object AppRuntime:
                 }
           }
         _ <- logger.info("Serenity editor shutdown complete")
+        _ <- afterEditorShutdown
       yield ()
     }
 
@@ -457,7 +471,7 @@ object AppRuntime:
     viewport: ViewportSize,
     firstInput: Deferred[IO, Unit],
     dictionaryCache: Option[DictionaryCache]
-  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Resource[IO, Unit] =
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance, ledger: ShutdownLedger): Resource[IO, Unit] =
     val config = initialState.persisted.config
     val preload = dictionaryCache.fold(Resource.unit[IO])(cache =>
       ShutdownTrace.traced("spell dictionary preload")(

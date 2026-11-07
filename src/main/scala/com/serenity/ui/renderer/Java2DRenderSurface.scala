@@ -7,7 +7,6 @@ import java.awt.image.*
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.LabelAnchor.isWhole
 import com.serenity.ui.theme.TextStyle
@@ -46,7 +45,7 @@ class Java2DRenderSurface(
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
-  override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
+  override def panelOutlines: Option[PanelOutlineDrawing] = Some(roundedOutlines)
   override def layerBuffers: Option[LayerBufferSupport]   = Some(this)
 
   override def addressesPixels: Boolean = true
@@ -123,6 +122,9 @@ class Java2DRenderSurface(
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
+
+  private val roundedOutlines =
+    Java2DRoundedOutlines(this, g, metrics, paintColor, painted.touched(_, _, _, _), userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont.toAwt)
@@ -250,7 +252,7 @@ class Java2DRenderSurface(
         sprite.image,
         anchor.deviceX - sprite.originX,
         anchor.deviceBaseline - sprite.baseline,
-        Java2DRenderSurface.NoOpImageObserver
+        SurfaceSizing.NoOpImageObserver
       )
     finally device.dispose()
 
@@ -423,7 +425,7 @@ class Java2DRenderSurface(
     painted.touched(px, py, pw, ph)
     g.clipRect(px, py, pw, ph)
     awayFromKept(px, py, px + pw, py + ph):
-      val _ = g.drawImage(image.toAwt, px, py, pw, ph, Java2DRenderSurface.NoOpImageObserver)
+      val _ = g.drawImage(image.toAwt, px, py, pw, ph, SurfaceSizing.NoOpImageObserver)
     g.setClip(savedClip)
 
   /** Blit a whole-surface layer buffer straight onto this surface's backing image at device resolution, 1:1, bypassing
@@ -443,7 +445,7 @@ class Java2DRenderSurface(
     painted.forgetClear()
     val rawGraphics = image.createGraphics()
     try
-      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, Java2DRenderSurface.NoOpImageObserver)
+      val _ = rawGraphics.drawImage(layerImage.toAwt, origin.xPx, origin.yPx, SurfaceSizing.NoOpImageObserver)
     finally rawGraphics.dispose()
 
   /** In device pixels on an untransformed graphics, because `copyArea` is not implemented for a scaled one. A copy onto
@@ -477,19 +479,9 @@ class Java2DRenderSurface(
 
 object Java2DRenderSurface:
 
-  type DeviceScale = DisplayScale.DeviceScale
-  val DeviceScale: DisplayScale.DeviceScale.type = DisplayScale.DeviceScale
-
   /** `Graphics2D` can only express "no clip" as a null `Shape`. */
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
   private def restoreClip(g: Graphics2D, saved: Option[Shape]): Unit = g.setClip(saved.orNull)
-
-  /** `Graphics2D.drawImage`'s `ImageObserver` callback exists for images that may still be loading asynchronously (e.g.
-    * from a URL); every image this class ever draws is an already-fully-materialised `BufferedImage`, so the callback
-    * can never fire and a `null` observer (Java's usual shorthand for "don't call me back") is equivalent to this
-    * no-op. Returning `false` tells the (never-invoked) caller not to bother scheduling further notifications.
-    */
-  private[serenity] val NoOpImageObserver: ImageObserver = (_, _, _, _, _, _) => false
 
   /** Reuses `current` when it already carries `color`, so a renderer re-setting the same theme colour on every run does
     * not allocate a fresh `java.awt.Color` each time.
@@ -585,10 +577,3 @@ object Java2DRenderSurface:
       activity,
       bounds
     )
-
-  private[serenity] def deviceImageDimension(logicalDimensionPx: Int, deviceScale: Double): Int =
-    math.ceil(logicalDimensionPx.max(1) * deviceScale.max(1.0)).toInt.max(1)
-
-  private[serenity] def logicalCanvasDimension(currentPx: Int, preferredPx: Int): Int =
-    if currentPx > 0 then currentPx
-    else preferredPx.max(1)
