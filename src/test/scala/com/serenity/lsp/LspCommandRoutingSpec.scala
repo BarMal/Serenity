@@ -6,30 +6,23 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.TestTemp
 import com.serenity.command.*
+import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{BufferId, CursorPosition, EditingState}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.{StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
-class LspCommandRoutingSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class LspCommandRoutingSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   /** Long enough for the request fixtures' cursors to sit inside it, which a validated write requires. */
   private val requestFixtureContent = List.fill(4)("val subtotal = 1").mkString("\n")
 
   private def createStateManager(): StateManager =
-    val logger = LoggerFactory[IO].getLogger(using LoggerName("LspCommandRoutingSpec"))
-    StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    createStateManager("LspCommandRoutingSpec", initialConfig = AppConfig.default)
 
   "LSP command routing" should "register hover, completion, and definition commands" in {
     val commandNames = CommandRegistry.default.getAllCommands.map(_.name)

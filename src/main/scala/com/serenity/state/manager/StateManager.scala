@@ -297,7 +297,8 @@ object StateManager:
       )
       .flatMap { operations =>
         val manager = new StateManagerImpl(runtime, operations)
-        operations.installAutoSave(manager.composition.autoSave.saveBuffer).as(manager)
+        (operations.installAutoSave(manager.composition.autoSave.saveBuffer) >>
+          operations.installRunnerOpenedLoads(manager.composition.events.requestRunnerLoads)).as(manager)
       }
 
   def describeCommandRunnerEvent(event: Event, runner: CommandRunner): String =

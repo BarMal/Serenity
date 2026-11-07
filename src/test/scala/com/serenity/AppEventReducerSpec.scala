@@ -5,7 +5,7 @@ import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.state.reducers.{AppEffect, AppEventReducer, ModalStateReducer, UndoEffect}
+import com.serenity.state.reducers.{AppEffect, AppEventReducer, CommandRunnerReducer, ModalStateReducer, UndoEffect}
 import com.serenity.state.undo.{EditGrouping, HistoryEntry}
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,14 +38,14 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val opened = AppEventReducer.reduce(ToggleCommandRunner, initialState, registry)
 
-    opened.state.commandRunnerSurface shouldBe defined
-    opened.state.persisted.focus shouldBe Focus.Surface(opened.state.commandRunnerSurface.get.id)
+    opened.state.commandPickerSurface shouldBe defined
+    opened.state.persisted.focus shouldBe Focus.Surface(opened.state.commandPickerSurface.get.id)
     opened.state.runtime.focusHistory should contain(Focus.EditorPane(PaneId(0)))
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, opened.state, registry)
 
     closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    closed.state.commandRunnerSurface shouldBe None
+    closed.state.commandPickerSurface shouldBe None
     closed.effects shouldBe Nil
   }
 
@@ -97,12 +97,12 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
 
     val withRunner = AppEventReducer.reduce(ToggleCommandRunner, withModal, registry)
     withRunner.state.topModal shouldBe None
-    withRunner.state.commandRunnerSurface shouldBe defined
+    withRunner.state.commandPickerSurface shouldBe defined
 
     val closed = AppEventReducer.reduce(ToggleCommandRunner, withRunner.state, registry)
 
     closed.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
-    closed.state.commandRunnerSurface shouldBe None
+    closed.state.commandPickerSurface shouldBe None
     closed.state.topModal shouldBe None
   }
 
@@ -126,7 +126,7 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
       30
     )
 
-    val opened = AppEventReducer.reduce(ToggleCommandRunner, base, registry).state
+    val opened = CommandRunnerReducer.openSettings(base, registry)
     val runner = opened.commandRunnerSurface
       .flatMap {
         _.content match
@@ -373,8 +373,8 @@ class AppEventReducerSpec extends AnyFlatSpec with Matchers:
     val released = AppEventReducer.reduce(CursorPeekModifierReleased(Modifier.Meta, 5L), pressed1, registry).state
     val opened   = AppEventReducer.reduce(CursorPeekModifierPressed(Modifier.Meta, 200L), released, registry).state
 
-    opened.commandRunnerSurface shouldBe defined
-    opened.persisted.focus shouldBe Focus.Surface(opened.commandRunnerSurface.get.id)
+    opened.commandPickerSurface shouldBe defined
+    opened.persisted.focus shouldBe Focus.Surface(opened.commandPickerSurface.get.id)
     opened.runtime.pointerGesture.cursorPeekAnchor shouldBe None
     opened.runtime.uiSurfaces.find(_.id == SurfaceId.CursorPeek) shouldBe None
   }

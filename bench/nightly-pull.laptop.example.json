@@ -1,0 +1,45 @@
+{
+  "machine": "laptop",
+  "results_dir": "~/serenity-bench/laptop",
+  "token_env": "SERENITY_BENCH_TOKEN",
+  "commands": [
+    {
+      "name": "lorem",
+      "argv": ["python3", "-I", "{bundle}/bench/gen-lorem.py"],
+      "stdout_to": "{bundle}/bench/lorem-bench.txt",
+      "timeout_s": 120
+    },
+    {
+      "name": "app-benchmark",
+      "argv": [
+        "nix-shell", "-p", "xdotool", "wmctrl", "python3", "xorg.xwininfo",
+        "--run", "bash {bundle}/bench/bench-laptop.sh {jar} {label}"
+      ],
+      "cwd": "bundle",
+      "timeout_s": 1800,
+      "collect": [
+        {"kind": "laptop_summary", "path": "{bundle}/bench/bench-results/{label}-summary.txt"}
+      ]
+    },
+    {
+      "name": "float-on",
+      "argv": ["bash", "{bundle}/bench/hyprland-float.sh", "on"],
+      "allow_failure": true,
+      "timeout_s": 60
+    },
+    {
+      "name": "render-benchmark",
+      "argv": ["java", "-jar", "{jar}", "--render-benchmark"],
+      "timeout_s": 1800,
+      "collect": [
+        {"kind": "render_json", "path": "{out}/render-benchmark-*.json"}
+      ]
+    },
+    {
+      "name": "float-off",
+      "argv": ["bash", "{bundle}/bench/hyprland-float.sh", "off"],
+      "allow_failure": true,
+      "timeout_s": 60
+    }
+  ]
+}
