@@ -191,7 +191,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   it should "show, frame for frame, what a window drawing every frame from scratch shows, through typing, undo and scroll" in {
     val first  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
     val second = typedAt(first, proseLines, line = 4, text = "x")
-    val third  = typedAt(second, proseLines, line = 9, text = "yz")
+    val third  = typedAt(second, proseLines, line = 6, text = "yz")
     val moved  = scrolledTo(third, 12)
     val steps = List(
       ("open", first, Damage.Everything),
