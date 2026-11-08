@@ -39,9 +39,13 @@ final class SurfaceActivity:
     promoted(traffic.promotions - promotedBefore)
     answer
 
-  /** A draw near kept pixels worked out the `pieces` rectangles it may paint in. */
-  def clipSwept(pieces: Int): Unit =
+  /** A draw near kept pixels needed the rectangles it may paint in worked out, rather than reusing an earlier answer.
+    */
+  def clipSwept(): Unit =
     val _ = clipSweeps.incrementAndGet()
+
+  /** A draw near kept pixels was made `pieces` times, once in each rectangle it may paint in. */
+  def clipDrawn(pieces: Int): Unit =
     val _ = clipPieces.addAndGet(pieces)
 
   def layerComposited(): Unit =

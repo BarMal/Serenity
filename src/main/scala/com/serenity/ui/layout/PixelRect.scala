@@ -117,12 +117,24 @@ object PixelRect:
           latest.copy(bottom = band.bottom) :: earlier
         case _ => band :: bands
 
-  private def clippedTo(bounds: PixelRect)(rect: PixelRect): Option[PixelRect] =
+  def clippedTo(bounds: PixelRect)(rect: PixelRect): Option[PixelRect] =
     val left   = rect.xPx.max(bounds.xPx)
     val top    = rect.yPx.max(bounds.yPx)
     val right  = rect.rightPx.min(bounds.rightPx)
     val bottom = rect.bottomPx.min(bounds.bottomPx)
     Option.when(left < right && top < bottom)(PixelRect(left, top, right - left, bottom - top))
+
+  /** `pieces`, disjoint, with those of the same width that abut vertically merged into one. */
+  def joinedVertically(pieces: List[PixelRect]): List[PixelRect] =
+    pieces
+      .groupBy(piece => (piece.xPx, piece.widthPx))
+      .values
+      .flatMap(_.sortBy(_.yPx).foldLeft(List.empty[PixelRect]) {
+        case (above :: earlier, piece) if above.bottomPx == piece.yPx =>
+          above.copy(heightPx = above.heightPx + piece.heightPx) :: earlier
+        case (joined, piece) => piece :: joined
+      })
+      .toList
 
   /** The stretches of `left` to `right` that `covering` leaves bare, as left and right edges, alternating. */
   private def spansBetween(left: Int, right: Int, covering: Vector[PixelRect]): Array[Int] =

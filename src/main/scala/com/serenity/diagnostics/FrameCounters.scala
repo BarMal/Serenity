@@ -39,7 +39,7 @@ enum FrameCounter(val label: String):
     */
   case ClipSweeps extends FrameCounter("clip-sweeps")
 
-  /** Clipped draws those sweeps led to: a draw is made once for each rectangle left. */
+  /** Clipped draws made near kept rows: a draw is made once in each rectangle it may paint in. */
   case ClipPieces extends FrameCounter("clip-pieces")
 
 /** The counters of one finished frame. */
