@@ -11,10 +11,10 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameMismatchDump, FramePlanReport}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{ChromeOn, FrameBackend, FramePixels, Java2DFrames, SkiaFrames, setCursorPosition}
+import com.serenity.{ChromeOn, FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -68,10 +68,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     )
 
   /** The renderer the frames are drawn with. */
-  // Windows only: on Skia the typing case with line numbers leaves a pixel at (20, 90) different from the cold frame
-  // (CI on #2402, two runs); Linux and macOS pass. It stays on Java2D there until that is fixed (#2380).
-  private def referenceFrames: FrameBackend =
-    if System.getProperty("os.name", "").toLowerCase.contains("windows") then Java2DFrames else SkiaFrames
+  private def referenceFrames: FrameBackend = SkiaFrames
 
   private val oracleImages = OracleImages(referenceFrames)
 
@@ -158,13 +155,8 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
     plan: Option[FramePlan]
   ): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), pooledImages) { frames =>
-      val cold = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
-      val found =
-        for
-          x <- 0 until drawn.getWidth
-          y <- 0 until drawn.getHeight
-          if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-        yield (x, y)
+      val cold  = Pooled(window, scale, persists = false, frames).render(state, Damage.Everything)
+      val found = FrameDiff.differing(drawn, cold)
       if found.nonEmpty then
         val coverage = FramePlanReport.coverage(plan, found, scale, drawn.getWidth, drawn.getHeight)
         println(

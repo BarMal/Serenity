@@ -73,7 +73,10 @@ trait ColdFrameHarness:
     /** What the planner drew and kept for the latest frame. */
     def lastPlan: Option[FramePlan] = lastOutput.get.lastPlan.get
 
-    def render(state: AppState, damage: Damage): BufferedImage =
+    def render(state: AppState, damage: Damage): BufferedImage = renderFrame(state, damage).toImage
+
+    /** Draws the frame and returns the pixels the window shows, which later frames draw over. */
+    def renderFrame(state: AppState, damage: Damage): FramePixels =
       val image = images(drawn.getAndIncrement() % images.length)
       val surface = referenceFrames.surfaceOver(
         image,
@@ -106,7 +109,7 @@ trait ColdFrameHarness:
         caches = caches
       )
       present(image, repaintRegion.get())
-      screenImage.toImage
+      screenImage
 
     def rowsDrawn: Long = caches.frameCounters.lastFrame(FrameCounter.RowsDrawn)
 
@@ -132,12 +135,25 @@ trait ColdFrameHarness:
     * before the images go back; the frame is valid only inside `use`.
     */
   protected def coldFrameWith[A](state: AppState, scale: Double)(use: BufferedImage => A): A =
+    coldFramePixelsWith(state, scale)(pixels =>
+      use(FramePixels.image(deviceWidthPx(scale), deviceHeightPx(scale), pixels))
+    )
+
+  /** The same, read as pixels, which builds no image. */
+  protected def coldFramePixelsWith[A](state: AppState, scale: Double)(use: Array[Int] => A): A =
     oracleImages.lend(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists = false)) { frames =>
-      use(Pooled(scale, persists = false, frames, RenderCaches.create()).render(state, Damage.Everything))
+      use(
+        Pooled(scale, persists = false, frames, RenderCaches.create()).renderFrame(state, Damage.Everything).rgbPixels
+      )
     }
 
   protected def differing(drawn: BufferedImage, state: AppState, scale: Double): Seq[(Int, Int)] =
     coldFrameWith(state, scale)(cold => FrameDiff.differing(drawn, cold))
+
+  protected def differingPixels(drawn: Array[Int], state: AppState, scale: Double): Seq[(Int, Int)] =
+    coldFramePixelsWith(state, scale)(cold =>
+      FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
+    )
 
   protected def summary(d: Seq[(Int, Int)]): String =
     val ys = d.map(_._2)
@@ -182,14 +198,15 @@ trait ColdFrameHarness:
     private val failures  = AtomicReference(Vector.empty[String])
     private val stepCount = AtomicInteger(0)
     private val reported  = AtomicInteger(0)
-    private val onScreen  = AtomicReference(frames.render(shown.get, Damage.Everything))
+    private val onScreen  = AtomicReference(frames.renderFrame(shown.get, Damage.Everything).rgbPixels)
+    private val built     = AtomicInteger(0)
 
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
       val after = stateManager.getCurrentState.unsafeRunSync()
       shown.set(after)
-      frames.render(after, DamageProducer.forTransition(before, after))
+      val _ = frames.renderFrame(after, DamageProducer.forTransition(before, after))
 
     /** The first edit changes the buffer's chrome as well as its rows; later keystrokes change rows alone. */
     def markModified(): Unit =
@@ -214,21 +231,27 @@ trait ColdFrameHarness:
       act
       val after = stateManager.getCurrentState.unsafeRunSync()
       shown.set(after)
-      val drawn = frames.render(after, DamageProducer.forTransition(before, after))
+      val drawn = frames.renderFrame(after, DamageProducer.forTransition(before, after)).rgbPixels
       onScreen.set(drawn)
       val n = stepCount.incrementAndGet()
-      coldFrameWith(after, scale) { cold =>
-        val diff = FrameDiff.differing(drawn, cold)
+      coldFramePixelsWith(after, scale) { cold =>
+        val diff = FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
         if diff.nonEmpty then
           val full = reported.incrementAndGet() <= FullReports
           val report =
-            if full then failureReport(n, label, drawn, cold, diff, frames.lastPlan, scale)
+            if full then
+              val (width, height) = (deviceWidthPx(scale), deviceHeightPx(scale))
+              val drawnImage      = FramePixels.image(width, height, drawn)
+              val coldImage       = FramePixels.image(width, height, cold)
+              failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           failures.updateAndGet(_ :+ report)
       }
 
     /** What a cold frame draws for the state as it now stands. */
-    def coldFrame(): BufferedImage = Pooled(scale, persists = false).render(shown.get, Damage.Everything)
+    def coldFrame(): BufferedImage =
+      built.incrementAndGet()
+      Pooled(scale, persists = false).render(shown.get, Damage.Everything)
 
     def currentState: AppState = shown.get
 
@@ -236,7 +259,12 @@ trait ColdFrameHarness:
     def planOfLastFrame: Option[FramePlan] = frames.lastPlan
 
     /** What the window shows after the latest step. */
-    def screen: BufferedImage = onScreen.get
+    def screen: BufferedImage =
+      built.incrementAndGet()
+      FramePixels.image(deviceWidthPx(scale), deviceHeightPx(scale), onScreen.get)
+
+    /** How many images this session has built; a step builds none. */
+    def imagesBuilt: Int = built.get
 
     def mismatches: List[String] = failures.get.take(4).toList
 

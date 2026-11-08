@@ -138,6 +138,13 @@ object CursorViewport:
 
     // Placed by the rows' painted bands, not a count of rows: a heading, a drop cap or the prose font paints taller
     // than a row of the buffer font, and counting rows sank a "centred" caret towards the pane's bottom (#2570).
+    val reach = viewport.visibleLines + MarginRows
+    // A jump (the caret above the view, or further below it than the pane shows) walks about a pane of lines up from
+    // the caret; they are read in one pass. A caret moving within the pane reads only the lines between it and the top.
+    val jumped =
+      typewriterScrollingEnabled || cursor.line < viewport.topLine || cursor.line - viewport.topLine > reach
+    val readAhead =
+      if jumped then PaneRowBands.ReadAhead(cursor.line - reach, reach + 1) else PaneRowBands.ReadAhead.None
     val bands =
       PaneRowBands.forBuffer(
         buffer,
@@ -147,7 +154,8 @@ object CursorViewport:
         forceCellLayout,
         wordWrapEnabled,
         richText,
-        wrapCache
+        wrapCache,
+        readAhead = readAhead
       )
     val paneHeightPx = paneHeightPxFor(viewport, fontConfig, isTui)
     val caret        = PaneRowBands.Row(cursor.line, cursorVisualLine)

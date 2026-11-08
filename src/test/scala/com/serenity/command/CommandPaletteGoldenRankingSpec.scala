@@ -281,7 +281,7 @@ class CommandPaletteGoldenRankingSpec extends AnyFlatSpec with Matchers:
       "command:restore-darling",
       "command:split-pane-horizontal",
       "command:split-pane-vertical",
-      "command:apply-review-preset"
+      "command:reformat-headings"
     ),
     "theme" -> List(
       "command:theme-chooser",

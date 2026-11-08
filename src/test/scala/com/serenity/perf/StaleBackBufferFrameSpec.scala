@@ -1,9 +1,6 @@
 package com.serenity.perf
 
-import scala.util.Random
-
-import com.serenity.keystroke.events.{DeleteBackward, Enter, Event, InsertChar}
-import com.serenity.richtext.{RichTextDocument, RichTextParagraph, RichTextRun}
+import com.serenity.keystroke.events.{DeleteBackward, Enter, InsertChar}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,18 +9,7 @@ import org.scalatest.matchers.should.Matchers
   * image's own previous frame only by the edit that took it back. Frames are compared with cold ones as
   * [[ColdFrameHarness]] describes.
   */
-class StaleBackBufferFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
-
-  private val scales = List(1.0, 2.0)
-
-  private def words(count: Int, seed: String): String =
-    (1 to count).map(n => s"${seed}word$n").mkString(" ")
-
-  private def body(wordCount: Int, seed: String): RichTextParagraph =
-    RichTextParagraph(List(RichTextRun(words(wordCount, seed))))
-
-  private def prose: RichTextDocument =
-    RichTextDocument((1 to 8).toList.map(n => body(40 + 7 * n, s"p$n")))
+class StaleBackBufferFrameSpec extends AnyFlatSpec with Matchers with StaleBackBufferScenarios:
 
   for scale <- scales do
     s"Typing two characters then deleting one across a paragraph at ${scale}x" should
@@ -55,29 +41,3 @@ class StaleBackBufferFrameSpec extends AnyFlatSpec with Matchers with ColdFrameH
         }
         session.mismatches shouldBe empty
       }
-
-  /** Typing leans towards a delete straight after, so runs often go A, B, A. */
-  private def randomEdit(random: Random): (Event, String) =
-    if random.nextInt(12) == 0 then Enter -> "Enter"
-    else if random.nextInt(5) < 2 then
-      val char = "WWiM m".charAt(random.nextInt(6))
-      InsertChar(char) -> s"type '$char'"
-    else DeleteBackward -> "delete"
-
-  for
-    scale <- scales
-    seed  <- 1 to 6
-  do
-    s"A random run of edits at seed $seed and ${scale}x" should "draw what a cold frame draws at every step" in {
-      val random  = Random(seed)
-      val session = Session(prose, scale)
-      session.markModified()
-      (1 to 40).foreach { round =>
-        session.placeCursor(0, 20 + random.nextInt(260))
-        (1 to 8).foreach { _ =>
-          val (event, label) = randomEdit(random)
-          session(event, s"round $round: $label")
-        }
-      }
-      session.mismatches shouldBe empty
-    }

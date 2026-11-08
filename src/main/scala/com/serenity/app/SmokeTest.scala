@@ -11,5 +11,8 @@ object SmokeTest:
 
   val readyLine: String = "SERENITY_SMOKE_READY"
 
+  def printReady(out: PrintStream = System.out): IO[Unit] =
+    IO { out.println(readyLine); out.flush() }
+
   def announceReady(quit: Deferred[IO, Unit], out: PrintStream = System.out): IO[Unit] =
-    IO { out.println(readyLine); out.flush() } >> quit.complete(()).void
+    printReady(out) >> quit.complete(()).void

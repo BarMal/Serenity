@@ -78,6 +78,22 @@ class FrameDiffSpec extends AnyFlatSpec with Matchers:
     error.getMessage should include("4x5")
   }
 
+  "Pixel arrays with the same colours" should "have no differing pixels, whatever the alpha byte holds" in {
+    val drawn = Array.fill(12)(0x80123456)
+    FrameDiff.differing(drawn, Array.fill(12)(0xff123456), 4, 3) shouldBe empty
+  }
+
+  "Pixel arrays that differ" should "name the pixels by column and row, column by column" in {
+    val drawn = Array.fill(12)(0xff000000)
+    List((3, 0), (1, 2), (1, 1)).foreach((x, y) => drawn(y * 4 + x) = 0xff000001)
+    FrameDiff.differing(drawn, Array.fill(12)(0xff000000), 4, 3) shouldBe Seq((1, 1), (1, 2), (3, 0))
+  }
+
+  "Pixel arrays that do not fill the frame they are said to" should "be refused" in {
+    val error = intercept[IllegalArgumentException](FrameDiff.differing(Array.fill(11)(0), Array.fill(12)(0), 4, 3))
+    error.getMessage should include("4x3")
+  }
+
   "Random frames" should "give the pixels the earlier loop gave, whether or not they differ" in {
     val random = Random(7)
     (1 to 40).foreach { round =>

@@ -52,6 +52,8 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/markdown/MarkdownDocumentPreview.scala",
       "com/serenity/markdown/MarkdownPreviewImageResources.scala",
       "com/serenity/lsp/LspManager.scala",
+      // Reads a watcher's `file:` base URI into a path; java.net.URI is only a parser here and nothing connects.
+      "com/serenity/lsp/client/LspWatch.scala",
       // Both read `file:` URIs from a language server into paths; java.net.URI is only a parser here and nothing connects.
       "com/serenity/lsp/LspWorkspaceConnections.scala",
       "com/serenity/lsp/LspConnectionPool.scala",
@@ -61,6 +63,8 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/app/WaylandSocket.scala",
       // Reads the `file:` URIs a drag carries into paths; java.net.URI is only a parser here and nothing connects.
       "com/serenity/input/DroppedPaths.scala",
+      // Parses the `file:` URIs a build server sends over a local process's stdin/stdout (#2522 B1); nothing connects.
+      "com/serenity/bsp/BspProtocol.scala",
       "com/serenity/io/ExternalBrowser.scala",
       "com/serenity/io/ReleasesPage.scala",
       "com/serenity/state/manager/ReleasesPageEffect.scala",

@@ -23,6 +23,7 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
   private val Titles    = new java.util.concurrent.atomic.AtomicInteger(0)
   private val Elsewhere = new Point(37, 41)
   private val Target    = PreferredWindowSize(800, 500)
+  private val MovePause = scala.concurrent.duration.DurationInt(150).millis
 
   /** Starts a window at (37,41), asks for `Target` the way `ask` says, and hands over the frame once the toolkit has
     * taken the size, which is when a move requested with it would have been made too.
@@ -37,16 +38,26 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
       window.start()
       try
         val frame = Frame.getFrames.find(_.getTitle == title).getOrElse(fail("no window"))
-        // Until the toolkit has mapped the window it may still place it, so the move is asked for again until it holds.
         eventually(frame.isShowing shouldBe true)
-        eventually {
-          SwingUtilities.invokeAndWait(() => frame.setLocation(Elsewhere.x, Elsewhere.y))
-          frame.getLocation shouldBe Elsewhere
-        }
-        ask(window)
-        eventually((frame.getWidth, frame.getHeight) shouldBe (Target.width, Target.height))
+        placeThenAsk(frame)(ask(window))
         check(frame)
       finally window.stop()
+    }
+
+  /** A window that is showing can still be taking its first place and size from the toolkit, which may then give the
+    * frame that geometry back for good: with no window manager, as under Xvfb, about 1 window in 100 sat at its first
+    * place and size through the whole wait, and the frame's own record of a move is no proof the toolkit took it. So
+    * the move is proved by the frame still being there after a pause, and the move and the ask are made again until the
+    * toolkit has taken the size too.
+    */
+  private def placeThenAsk(frame: Frame)(ask: => Unit): Unit =
+    eventually {
+      SwingUtilities.invokeAndWait(() => frame.setLocation(Elsewhere.x, Elsewhere.y))
+      val movedAt = System.nanoTime()
+      eventually((System.nanoTime() - movedAt) should be >= MovePause.toNanos)
+      frame.getLocation shouldBe Elsewhere
+      ask
+      eventually(timeout(Span(300, Millis)))((frame.getWidth, frame.getHeight) shouldBe (Target.width, Target.height))
     }
 
   private def withDisplay(): Unit =

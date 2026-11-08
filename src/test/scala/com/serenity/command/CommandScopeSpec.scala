@@ -41,6 +41,7 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
   private val proseCommands = Set(
     "align-center",
     "align-justify",
+    "reformat-headings",
     "align-left",
     "align-right",
     "bold",
