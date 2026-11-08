@@ -215,6 +215,13 @@ private[command] object CommandRegistryEditCommands:
       CommandIntent.RichText(RichTextIntent.SetRichTextParagraphAlignment(ParagraphAlignment.Justify)),
       CommandCategory.Edit,
       label = "Justify"
+    ),
+    Command.typed(
+      "reformat-headings",
+      "Remove the formatting headings carry of their own, in the selection or the whole document, so they take the heading styles.",
+      CommandIntent.RichText(RichTextIntent.ReformatHeadings),
+      CommandCategory.Edit,
+      label = "Reformat Headings to Current Styles"
     )
   )
 

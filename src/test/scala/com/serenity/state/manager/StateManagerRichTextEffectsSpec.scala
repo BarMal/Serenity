@@ -265,6 +265,42 @@ class StateManagerRichTextEffectsSpec extends AnyFlatSpec with Matchers:
     )
   }
 
+  private val boldStyle = RichTextStyle(marks = Set(InlineMark.Bold))
+
+  private def importedHeading(style: RichTextStyle = boldStyle): Buffer =
+    val document = RichTextDocument(
+      List(RichTextParagraph(List(RichTextRun("Title", style)), role = ParagraphRole.Heading(1)))
+    )
+    val plain = Buffer.fromString(bufferId, document.plainText)
+    plain.copy(richText = plain.richText.withSyncedDocument(Some(document), plain.document.contentVersion))
+
+  it should "reformat headings, say how many it changed, and undo them in one step" in {
+    val fixture = harness(importedHeading())
+
+    fixture.richText.interpret(RichTextIntent.ReformatHeadings).unsafeRunSync()
+
+    fixture.currentBuffer.richText.richTextDocument.flatMap(_.paragraphAt(0)).map(_.runs) shouldBe
+      Some(List(RichTextRun("Title")))
+    fixture.notices.get.unsafeRunSync() shouldBe List(
+      PeekContent.QuickInfo("Reformatted 1 heading to the current styles.")
+    )
+    val undone = UndoRecording.undone(fixture.modelRef.get.unsafeRunSync()).getOrElse(fail("expected an undo step"))
+    undone.app.persisted
+      .buffers(bufferId)
+      .richText
+      .richTextDocument shouldBe importedHeading().richText.richTextDocument
+  }
+
+  it should "say so when no heading has formatting of its own to remove" in {
+    val fixture = harness(importedHeading(RichTextStyle.empty))
+
+    fixture.richText.interpret(RichTextIntent.ReformatHeadings).unsafeRunSync()
+
+    fixture.notices.get.unsafeRunSync() shouldBe List(
+      PeekContent.QuickInfo("No heading has formatting of its own to remove.")
+    )
+  }
+
   it should "record a formatting command as an undo step that restores the previous formatting" in {
     val fixture = harness(bufferWithSelection("hello world", selection(0, 0, 0, 5)))
     fixture.richText.interpret(RichTextIntent.ToggleRichTextMark(InlineMark.Italic)).unsafeRunSync()
