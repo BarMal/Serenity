@@ -4,7 +4,7 @@ import com.serenity.config.CommentDisplayMode
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
-import com.serenity.ui.layout.{PanelPosition, WorkspaceTree}
+import com.serenity.ui.layout.{ChromeFrame, PanelPosition, WorkspaceTree}
 
 /** What pinning a panel comes to, decided from the current state. */
 private[manager] enum PanelPinPlan:
@@ -142,15 +142,17 @@ private[manager] object PanelTransitions:
     tree.flatMap { workspaceTree =>
       if isNewlyDocked then
         val (splitId, leafId) = workspaceTree.nextDockIds(surfaceId)
-        workspaceTree.dockSized(surfaceId, position, splitId, leafId, size, state.runtime.viewportSize)
+        workspaceTree.dockSized(surfaceId, position, splitId, leafId, size, ChromeFrame.panelViewportSize(state))
       else if workspaceTree.positionForSurface(surfaceId).contains(position) then
         workspaceTree
-          .allocationRatio(surfaceId, size, state.runtime.viewportSize)
+          .allocationRatio(surfaceId, size, ChromeFrame.panelViewportSize(state))
           .flatMap(workspaceTree.resizeSurface(surfaceId, _))
       else
         val (splitId, _) = workspaceTree.nextDockIds(surfaceId)
         workspaceTree.moveSurface(surfaceId, position, splitId).flatMap { moved =>
-          moved.allocationRatio(surfaceId, size, state.runtime.viewportSize).flatMap(moved.resizeSurface(surfaceId, _))
+          moved
+            .allocationRatio(surfaceId, size, ChromeFrame.panelViewportSize(state))
+            .flatMap(moved.resizeSurface(surfaceId, _))
         }
     }
 

@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 
 class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
 
-  final private class FakePresenter(hasBase: Boolean) extends LayerPresenter:
+  final private class FakePresenter(hasBase: Boolean, reportsDrawEnd: Boolean = false) extends LayerPresenter:
     val carets                                            = new AtomicReference(List.empty[SwingWindow.CaretPaint])
     val cursors                                           = new AtomicReference(List.empty[Cursor])
     val disposed                                          = new AtomicInteger(0)
@@ -27,9 +27,16 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       val _ = cursors.updateAndGet(cursor :: _)
     def dispose(): Unit =
       val _ = disposed.incrementAndGet()
-    val rendered                               = new AtomicReference[Option[() => Unit]](None)
-    def onRendered(callback: () => Unit): Unit = rendered.set(Some(callback))
-    def renderApi: String                      = "FAKE"
+    val rendered                                           = new AtomicReference[Option[() => Unit]](None)
+    def onRendered(callback: () => Unit): Unit             = rendered.set(Some(callback))
+    def renderApi: String                                  = "FAKE"
+    val drawStarted                                        = new AtomicReference[Option[() => Unit]](None)
+    val drawEnded                                          = new AtomicReference[Option[() => Unit]](None)
+    override def onDrawStarted(callback: () => Unit): Unit = drawStarted.set(Some(callback))
+    override def tellsWhenDrawsEnd: Boolean                = reportsDrawEnd
+    override def onDrawEnded(callback: () => Unit): Unit   = drawEnded.set(Some(callback))
+    def fire(slot: AtomicReference[Option[() => Unit]]): Unit =
+      slot.get().fold(fail("the presenter was given no callback"))(_.apply())
 
   private def withWindow[A](body: SwingWindow => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A window needs a display")
@@ -110,6 +117,62 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       presenter.rendered.get().fold(fail("the presenter was given no callback"))(_.apply())
       presented.get should be > before
     }
+
+  final private class StepClock:
+    private val now               = new java.util.concurrent.atomic.AtomicLong(0L)
+    def advanceMs(ms: Long): Unit = now.addAndGet(ms * 1_000_000L): Unit
+    def read(): Long              = now.get()
+
+  private def withTimedWindow[A](timings: com.serenity.diagnostics.FrameTimings)(body: SwingWindow => A): A =
+    assume(!GraphicsEnvironment.isHeadless, "A window needs a display")
+    DisplayExclusive:
+      val window = new SwingWindow(
+        new Dimension(640, 480),
+        CellMetrics(8, 16, 13),
+        WindowChromeMode.Custom,
+        CellMetrics(8, 16, 13),
+        frameTimings = timings,
+        env = Map("XDG_SESSION_TYPE" -> "x11")
+      )
+      try
+        window.start()
+        SwingUtilities.invokeAndWait(() => ())
+        body(window)
+      finally
+        window.stop()
+        SwingUtilities.invokeAndWait(() => ())
+
+  it should "end a draw's paint stamp when the presenter says its draw cycle ended, not when its render callback returned" in {
+    val clock   = StepClock()
+    val timings = com.serenity.diagnostics.FrameTimings(() => clock.read(), backend = "skia")
+    withTimedWindow(timings) { window =>
+      val presenter = new FakePresenter(hasBase = true, reportsDrawEnd = true)
+      window.attachLayerPresenter(presenter)
+      SwingUtilities.invokeAndWait(() => ())
+      timings.setEnabled(true)
+      presenter.fire(presenter.drawStarted)
+      clock.advanceMs(1)
+      presenter.fire(presenter.rendered)
+      clock.advanceMs(9)
+      presenter.fire(presenter.drawEnded)
+      timings.drain().phases(com.serenity.diagnostics.FramePhase.Paint).maxMs shouldBe 10.0
+    }
+  }
+
+  it should "still end a draw's paint stamp at the render callback for a presenter that does not say when its draws end" in {
+    val clock   = StepClock()
+    val timings = com.serenity.diagnostics.FrameTimings(() => clock.read(), backend = "skia")
+    withTimedWindow(timings) { window =>
+      val presenter = new FakePresenter(hasBase = true)
+      window.attachLayerPresenter(presenter)
+      SwingUtilities.invokeAndWait(() => ())
+      timings.setEnabled(true)
+      presenter.fire(presenter.drawStarted)
+      clock.advanceMs(1)
+      presenter.fire(presenter.rendered)
+      timings.drain().phases(com.serenity.diagnostics.FramePhase.Paint).maxMs shouldBe 1.0
+    }
+  }
 
   it should "expose the attached presenter" in
     withWindow { window =>

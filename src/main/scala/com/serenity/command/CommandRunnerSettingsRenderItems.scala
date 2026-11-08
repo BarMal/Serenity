@@ -96,11 +96,17 @@ private[command] object CommandRunnerSettingsRenderItems:
           CommandIntent.Settings(
             SettingsIntent.General(GeneralSettingsIntent.SetRenderBackend(RenderBackendSetting.Java2D))
           )
+        ),
+        CommandOption(
+          "Skia (CPU)",
+          CommandIntent.Settings(
+            SettingsIntent.General(GeneralSettingsIntent.SetRenderBackend(RenderBackendSetting.SkiaRaster))
+          )
         )
       ),
       selectedIndex = optionSelections.getOrElse("render-backend", 0),
       category = CommandCategory.Settings,
-      hint = Some("Takes effect after restarting; Skia needs an X11 display on Linux")
+      hint = Some("Takes effect after restarting; Skia needs an X11 display on Linux, Skia (CPU) does not")
     )
 
   private[command] def renderWaylandOptionItem(

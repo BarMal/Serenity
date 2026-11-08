@@ -19,7 +19,7 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
   given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
   private def activeCommandRunner(state: AppState): Option[UiSurface] =
-    state.commandRunnerSurface
+    state.commandPickerSurface
 
   "renderCursorOnly behavior with Command Runner" should "not render editor cursor when command runner is focused" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))

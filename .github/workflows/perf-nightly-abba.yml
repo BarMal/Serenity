@@ -1,0 +1,120 @@
+name: Perf Nightly ABBA
+
+# The per-PR perf gate does not judge the rows in scripts/perf-gate-excluded-rows.txt (issue #2557, item 10): their
+# first-pass flags almost never confirm on a shared runner. This runs them as an ABBA instead (bench/abba.sh,
+# docs/performance-benchmarks.md "ABBA protocol"): master against the commit of the last successful nightly, both built
+# here as serenity-perf.jar, so nothing is stored between nights except the run history. The logic is in
+# scripts/perf_nightly.py.
+on:
+  # Off the 03:17 Cross-OS nightly so the two do not compete for the shared runners.
+  schedule:
+    - cron: '29 5 * * *'
+  workflow_dispatch:
+    inputs:
+      previous_ref:
+        description: Commit to use as the A side instead of the last successful nightly's
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: perf-nightly-abba
+  cancel-in-progress: false
+
+jobs:
+  abba:
+    name: ABBA on the excluded rows
+    runs-on: ubuntu-latest
+    # Two sbt assembly builds plus eight runs of a handful of rows. Caution, here be imagine dragons: the build time is
+    # inferred from bench-artifacts.yml, not measured; 90 minutes is a ceiling to adjust after the first nightly.
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out master
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Find the commit to compare against
+        id: previous
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIOUS_REF: ${{ inputs.previous_ref }}
+        run: |
+          set -euo pipefail
+          if [ -n "$PREVIOUS_REF" ]; then
+            previous="$(git rev-parse "$PREVIOUS_REF^{commit}")"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/perf-nightly-abba.yml/runs?status=success&per_page=30" > "$RUNNER_TEMP/runs.json"
+            previous="$(python3 scripts/perf_nightly.py previous-sha "$RUNNER_TEMP/runs.json")"
+            if [ -z "$previous" ]; then
+              previous="$(git rev-list -1 --before='24 hours ago' HEAD)"
+              echo "::notice::No earlier successful nightly; comparing against the last commit older than 24 hours ($previous)."
+            fi
+          fi
+          echo "sha=$previous" >> "$GITHUB_OUTPUT"
+          if [ "$previous" = "$(git rev-parse HEAD)" ]; then
+            echo "::notice::Master has not moved since $previous; nothing to compare."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up JDK 25
+        if: steps.previous.outputs.skip != 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: sbt
+
+      - name: Set up sbt launcher
+        if: steps.previous.outputs.skip != 'true'
+        uses: sbt/setup-sbt@v1
+
+      - name: Install Xvfb
+        if: steps.previous.outputs.skip != 'true'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # perf-assembly.sbt is copied in, not committed, exactly as bench-artifacts.yml does, so any commit builds. A ref
+      # from before the module split (#2502) has one root project that holds the sources; a later one has an `app`
+      # project, and the test assembly has to be aimed at it (the aggregate root packs nothing).
+      - name: Build serenity-perf.jar for both commits
+        if: steps.previous.outputs.skip != 'true'
+        shell: bash
+        env:
+          PREVIOUS_SHA: ${{ steps.previous.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git worktree add --detach "$RUNNER_TEMP/previous" "$PREVIOUS_SHA"
+          for dir in . "$RUNNER_TEMP/previous"; do
+            if grep -Eq '^lazy val app\b' "$dir/build.sbt"; then
+              cp bench/ci/perf-assembly-app.sbt "$dir/perf-assembly.sbt"
+              (cd "$dir" && sbt -v "app/Test / assembly")
+            else
+              cp bench/ci/perf-assembly.sbt "$dir/perf-assembly.sbt"
+              (cd "$dir" && sbt -v "Test / assembly")
+            fi
+          done
+
+      - name: Run the ABBA on the excluded rows
+        if: steps.previous.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -uo pipefail
+          mapfile -t prefixes < <(python3 scripts/perf_nightly.py prefixes scripts/perf-gate-excluded-rows.txt)
+          perf_jar() { ls "$1"/modules/app/target/scala-*/serenity-perf.jar "$1"/target/scala-*/serenity-perf.jar 2>/dev/null | head -n 1; }
+          status=0
+          bash bench/abba.sh "$(perf_jar "$RUNNER_TEMP/previous")" "$(perf_jar .)" abba-runs "${prefixes[@]}" || status=$?
+          python3 scripts/perf_nightly.py verdict "$status" --exclude-file scripts/perf-gate-excluded-rows.txt
+
+      - name: Archive ABBA results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-nightly-abba
+          path: abba-runs/
+          if-no-files-found: ignore
+          retention-days: 90

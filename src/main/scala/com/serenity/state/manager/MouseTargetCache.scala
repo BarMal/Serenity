@@ -72,7 +72,7 @@ final private[manager] case class MouseTargetLayoutKey(
     // narrowing and `fromBufferColumn` snapshot, so a live column-mode toggle (or a target-width/gap change) must
     // invalidate the cached scene -- without them a toggle re-uses the full-width scene and has no visible effect.
     columnModeEnabled: Boolean,
-    columnTargetWidthCells: Int,
+    columnTargetWidthCells: Option[Int],
     columnGap: Int,
     // Count-driven columns (issue #1338, Phase 2 / slice 4): `resolvedColumnCount` reads this too, so a live change
     // to the explicit column count (with target width/gap unchanged) must also invalidate the cached scene.
@@ -82,6 +82,8 @@ final private[manager] case class MouseTargetLayoutKey(
     proseColumnCells: Option[Int],
     interfaceDensity: InterfaceDensity,
     uiElementGap: Double,
+    // The docked corner style reaches layout only as this margin, which also depends on the surface and the gap.
+    chromeInset: Int,
     showPaneHeaders: Boolean,
     statusLine: StatusLineConfig,
     scrollbarShown: Boolean,
@@ -195,6 +197,7 @@ private[manager] object MouseTargetLayoutKey:
       proseColumnCells = ProseColumn.widthCells(state),
       interfaceDensity = state.persisted.config.interfaceDensity,
       uiElementGap = state.effectiveUiElementGap,
+      chromeInset = ChromeFrame.inset(state),
       showPaneHeaders = state.chrome.paneHeaders,
       statusLine = state.chrome.statusLine,
       scrollbarShown = state.chrome.scrollbar,
@@ -234,7 +237,7 @@ private[manager] object MouseTargetLayoutKey:
         tree.dockedSurfaceIds.flatMap { id =>
           for
             position <- tree.positionForSurface(id)
-            size     <- tree.currentSize(id, state.runtime.viewportSize)
+            size     <- tree.currentSize(id, ChromeFrame.panelViewportSize(state))
           yield (id, position, size)
         }
       },
@@ -359,16 +362,18 @@ final private[serenity] class AuthoritativeUiScene(
     }
     val key = SceneKey(layoutKeyFor(state, viewportSize), paneFonts, cellMetrics)
     settled(
+      state.persisted.layout.activeEditorPaneId,
       publishedScene(key)
         .map(countedSince(key, _))
         .getOrElse(buildOnce(key, () => buildScene(state, viewportSize, codeFont, textFont, cellMetrics)))
     )
 
   /** Tells the counting what the scene just handed out shows, a cached scene as much as a new one: a bar still waiting
-    * has its count, a counted one ends any count that was waiting on another size.
+    * has its count, a counted one ends any count that was waiting on another size. The focused pane's count is handed
+    * in first, so with more panes than count threads it is the one that starts.
     */
-  private def settled(scene: UiSceneSnapshot): UiSceneSnapshot =
-    scene.scrollKeys.foreach { (paneId, key) =>
+  private def settled(focused: Option[PaneId], scene: UiSceneSnapshot): UiSceneSnapshot =
+    scene.scrollKeys.toList.sortBy((paneId, _) => !focused.contains(paneId)).foreach { (paneId, key) =>
       scene.pendingScrolls.get(paneId) match
         case Some(pending) => counting.count(paneId, pending.rows, key)
         case None          => scene.paneScrolls.get(paneId).foreach(counting.counted(paneId, _, key))

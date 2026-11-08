@@ -476,7 +476,12 @@ lazy val app = (project in file("modules/app"))
       // Each alert also probes the global IO runtime with a trivial IO and aborts the run, with the thread dump, when it
       // cannot answer; the reporter's construction installs the JVM-wide uncaught-exception handler (RuntimeWatch).
       Tests.Argument(TestFrameworks.ScalaTest, "-W", "120", "60"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter")
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.HangReporter"),
+      // The slowpoke alerts above only report. This reporter ends the hang: a test that runs 5 minutes (15 for
+      // FallbackRunsSpec) has its thread interrupted, so it fails under its own name with a thread dump, instead of
+      // the whole job dying at its 40 or 52 minute guard with no test named. It watches every suite from here, so no
+      // suite mixes anything in; see com.serenity.testkit.TestHangBound.
+      Tests.Argument(TestFrameworks.ScalaTest, "-C", "com.serenity.testkit.TestHangBoundReporter")
     ),
     // Real-OS-boundary specs (a genuine loopback socket, a genuine sun.misc.Signal.raise -- see
     // com.serenity.testkit.RealBoundaryTest's doc comment) are excluded from `sbt test`'s discovery of the whole
@@ -485,7 +490,9 @@ lazy val app = (project in file("modules/app"))
     // unfiltered, so `realBoundaryTest` below can name these specs directly and still run them.
     Test / test / testOptions := (Test / testOptions).value ++ Seq(
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.RealBoundaryTest"),
-      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest")
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.SdlNativeTest"),
+      Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeadlessAwtTest")
     ),
     checkTestShards := {
       val table = TestShards
@@ -629,8 +636,17 @@ lazy val app = (project in file("modules/app"))
         " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
       )
       .value,
+    sdlNativeTest := (Test / testOnly)
+      .toTask(" com.serenity.ui.sdl.SdlNativeSuite")
+      .value,
     heapMeasurementTest := (Test / testOnly)
-      .toTask(" com.serenity.perf.FootprintBenchmarksSpec")
+      .toTask(
+        " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
+          " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
+      )
+      .value,
+    headlessAwtTest := (Test / testOnly)
+      .toTask(" com.serenity.ui.display.DisplayScaleSpec -- -n com.serenity.testkit.HeadlessAwtTest")
       .value
   )
 
@@ -660,3 +676,13 @@ lazy val realBoundaryTest = taskKey[Unit]("Run the real-OS-boundary integration 
 // Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
 // stalls on their forced collections while they measure.
 lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
+
+// Runs the specs that load the real libSDL3 through the FFM binding (#2380): on SDL's dummy video driver, and, for the GL
+// specs, on its offscreen driver, which needs Mesa's EGL. The library is a build product
+// (ci/sdl3/build-sdl3.sh), so `sbt test` leaves them out; hand the directory holding libSDL3.so.0 to the sbt JVM:
+// `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
+lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
+
+// Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
+// of it has a display. Start sbt with -Djava.awt.headless=true; the tests fail, not cancel, on a JVM that is not.
+lazy val headlessAwtTest = taskKey[Unit]("Run the headless-AWT specs excluded from `sbt test`")

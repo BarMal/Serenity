@@ -10,9 +10,19 @@ import javax.swing.{JPanel, SwingUtilities}
 import scala.util.Try
 
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
-import org.jetbrains.skia.{Canvas, Paint, Picture, PixelGeometry, Rect}
-import org.jetbrains.skiko.{RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
+import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry, Rect}
+import org.jetbrains.skiko.{
+  GraphicsApi,
+  OS,
+  RenderFactory,
+  SkiaLayer,
+  SkiaLayerAnalytics,
+  SkiaLayerProperties,
+  SkikoRenderDelegate
+}
 import org.slf4j.LoggerFactory
+
+import SkiaLayerHost.LayerFrame
 
 /** A Skiko `SkiaLayer` filling a window canvas. The layer draws on the event thread when asked to, so the thread that
   * renders frames records each as a `Picture` and publishes it. Skiko hands `onRender` a canvas that records into its
@@ -28,10 +38,11 @@ final class SkiaLayerHost private (
     layer: SkiaLayer,
     syncGpu: Boolean,
     redraw: LayerRedraw,
-    report: String => Unit
+    report: String => Unit,
+    onDrawEnd: AtomicReference[Option[() => Unit]]
 ) extends LayerHost:
 
-  private val slot         = new PictureSlot[Picture](_.close())
+  private val slot         = new PictureSlot[LayerFrame](_.close())
   private val carets       = new AtomicReference(List.empty[SwingWindow.CaretPaint])
   private val published    = new AtomicBoolean(false)
   private val renders      = new AtomicInteger(0)
@@ -78,6 +89,7 @@ final class SkiaLayerHost private (
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
+    redraw.drawStarted()
     onDrawStart.get().foreach(_.apply())
     val _           = renders.incrementAndGet()
     val started     = System.nanoTime()
@@ -86,7 +98,10 @@ final class SkiaLayerHost private (
     surface.clear(0xff000000)
     val version    = publishes.get()
     val hasContext = Option(surface.getRecordingContext).isDefined
-    val drawn      = slot.drawLatest(picture => SkiaLayerHost.addPicture(surface, picture))
+    val drawn = slot.drawLatest {
+      case LayerFrame.Recorded(picture) => SkiaLayerHost.addPicture(surface, picture)
+      case LayerFrame.Rasterized(image) => val _ = surface.drawImage(image, 0f, 0f)
+    }
     if drawn then shown.set(version)
     val replayedAt = System.nanoTime()
     val scale      = layer.getContentScale
@@ -139,6 +154,10 @@ final class SkiaLayerHost private (
 
   override def onDrawStarted(callback: () => Unit): Unit = onDrawStart.set(Some(callback))
 
+  override def tellsWhenDrawsEnd: Boolean = true
+
+  override def onDrawEnded(callback: () => Unit): Unit = onDrawEnd.set(Some(callback))
+
   def renderApi: String = layer.getRenderApi.toString
 
   override def drawStats: LayerDrawStats =
@@ -150,10 +169,15 @@ final class SkiaLayerHost private (
       .copy(pictureOpsMean = mean(pictureOps.get()), pictureBytesMean = mean(pictureBytes.get()))
 
   def publish(picture: Picture): Unit =
-    val _ = awaiting.compareAndSet(0L, System.nanoTime())
     val _ = pictureOps.addAndGet(picture.getApproximateOpCount.toLong)
     val _ = pictureBytes.addAndGet(picture.getApproximateBytesUsed.toLong)
-    slot.publish(picture)
+    offer(LayerFrame.Recorded(picture))
+
+  def publishImage(image: Image): Unit = offer(LayerFrame.Rasterized(image))
+
+  private def offer(frame: LayerFrame): Unit =
+    val _ = awaiting.compareAndSet(0L, System.nanoTime())
+    slot.publish(frame)
     published.set(true)
     val _ = publishes.incrementAndGet()
     onPublish.get().foreach(_.apply())
@@ -183,6 +207,14 @@ final class SkiaLayerHost private (
   private[skia] def layerCursorType: Int              = layer.getCursor.getType
 
 object SkiaLayerHost:
+
+  private enum LayerFrame:
+    case Recorded(picture: Picture)
+    case Rasterized(image: Image)
+
+    def close(): Unit = this match
+      case Recorded(picture) => picture.close()
+      case Rasterized(image) => image.close()
 
   /** The totals of a layer's draws, in nanoseconds. */
   final private case class Draws(
@@ -293,20 +325,36 @@ object SkiaLayerHost:
     report: String => Unit = line => log.info(line)
   ): SkiaLayerHost =
     onEventThread {
-      val layer = newLayer()
-      val host  = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer), report)
+      val drawEnd = new AtomicReference[Option[() => Unit]](None)
+      val layer   = newLayer(drawEnd)
+      val host    = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer), report, drawEnd)
       host.install()
       host
     }
 
+  /** Skiko calls `afterFrameRender` once its frame is drawn and swapped, on the thread that drew it, which is not
+    * always the event thread; the callback is posted there, where the render callback also runs.
+    */
+  private def drawEndAnalytics(drawEnd: AtomicReference[Option[() => Unit]]): SkiaLayerAnalytics =
+    new SkiaLayerAnalytics:
+      override def device(
+        skikoVersion: String,
+        os: OS,
+        api: GraphicsApi,
+        deviceName: String
+      ): SkiaLayerAnalytics.DeviceAnalytics =
+        new SkiaLayerAnalytics.DeviceAnalytics:
+          override def afterFrameRender(): Unit =
+            drawEnd.get().foreach(callback => SwingUtilities.invokeLater(() => callback()))
+
   // Skiko's accessibility hook is a Kotlin function parameter whose default is "none".
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
-  private def newLayer(): SkiaLayer =
+  private def newLayer(drawEnd: AtomicReference[Option[() => Unit]]): SkiaLayer =
     new SkiaLayer(
       null,
       new SkiaLayerProperties(),
       RenderFactory.Companion.getDefault(),
-      SkiaLayerAnalytics.Companion.getEmpty(),
+      drawEndAnalytics(drawEnd),
       PixelGeometry.UNKNOWN,
       false
     )

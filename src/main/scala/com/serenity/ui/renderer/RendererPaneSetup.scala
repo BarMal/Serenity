@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Font
 
 import com.serenity.document.{KeywordHighlight, KeywordHighlights}
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
@@ -267,6 +268,10 @@ object RendererPaneSetup:
           baseViewport.visibleColumns
         )
     val visibleLines = ScrollLimits.rowsThatFit(panelHeightPx, bufferMetrics.lineHeight)
+    context.caches.scrollRows.report(
+      buffer.id,
+      ScrollRowCounts(baseViewport.visibleLines, CursorViewport.rowsThatFit(buffer, state), visibleLines)
+    )
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
       visibleLines = visibleLines
@@ -480,13 +485,29 @@ object RendererPaneSetup:
     context: RenderContext,
     snapshot: TextLayoutSnapshot
   ): Vector[PixelRect] =
+    snapshot.visualLines.indices.toVector.map(rowRectIn(contentRect, context, snapshot))
+
+  /** The last of [[paneRowRects]], read without building the rest. */
+  private[renderer] def lastPaneRowRect(
+    contentRect: LayoutRect,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Option[PixelRect] =
+    Option.when(snapshot.visualLines.nonEmpty)(
+      rowRectIn(contentRect, context, snapshot)(snapshot.visualLines.length - 1)
+    )
+
+  private def rowRectIn(
+    contentRect: LayoutRect,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot
+  ): Int => PixelRect =
     val rowMetrics    = RendererPaneContent.textRowMetrics(contentRect, context, snapshot)
     val leftPx        = context.cellMetrics.toPixelX(contentRect.x)
     val widthPx       = context.cellMetrics.toPixelX(contentRect.right) - leftPx
     val topLimitPx    = context.cellMetrics.toPixelY(contentRect.y)
     val bottomLimitPx = rowMetrics.contentBottomPx
-    snapshot.visualLines.indices.toVector.map { row =>
+    row =>
       val topPx    = rowMetrics.bandTopPx(row).max(topLimitPx)
       val bottomPx = rowMetrics.bandBottomPx(row).min(bottomLimitPx)
       PixelRect(leftPx, topPx, widthPx.max(0), (bottomPx - topPx).max(0))
-    }

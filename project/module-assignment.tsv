@@ -4,6 +4,7 @@
 # Columns: path under com/serenity/ <TAB> module
 command/CloseCommands.scala	model
 command/CommandId.scala	base
+command/CommandPicker.scala	model
 command/CommandRunnerSettingsTextParsing.scala	base
 command/CommandUsageHistory.scala	base
 command/DarlingIntent.scala	base
@@ -27,6 +28,7 @@ config/DisplayEnums.scala	base
 config/ExplorerOpenMode.scala	base
 config/ExportTypographyConfig.scala	base
 config/LineNumberLayout.scala	base
+config/OffscreenCursorSurfaces.scala	base
 config/PanelEscapeTarget.scala	base
 config/PerMode.scala	base
 config/ProseMeasure.scala	base
@@ -180,6 +182,7 @@ ui/fonts/Java2DGlyphCoverage.scala	base
 ui/fonts/LogicalFontFamilies.scala	base
 ui/layout/BoundaryScratch.scala	base
 ui/layout/CellMetrics.scala	base
+ui/layout/CellWrapping.scala	base
 ui/layout/CharWidth.scala	base
 ui/layout/DropCapWidths.scala	base
 ui/layout/FontLineExtents.scala	base

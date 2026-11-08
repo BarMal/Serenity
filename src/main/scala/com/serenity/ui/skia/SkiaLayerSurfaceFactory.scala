@@ -5,21 +5,22 @@ import javax.swing.JPanel
 
 import scala.util.{Failure, Success, Try}
 
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, RenderSurface}
+import com.serenity.ui.renderer.{BackendCacheKey, FontSpec, FrameSurfaceFactory, FrameSurfaceRequest, RenderSurface}
 import com.serenity.ui.terminal.SwingPresentationSite
-import org.jetbrains.skia.PictureRecorder
+import org.jetbrains.skia.{PictureRecorder, Surface}
 import org.slf4j.LoggerFactory
 
 /** Paints a window's frames through a GPU layer: each frame is recorded as a Skia `Picture` and handed to the window's
-  * [[LayerHost]], which replays it on the event thread. A frame redraws everything, as a surface with no persistent
-  * pixels must.
+  * [[LayerHost]], which replays it on the event thread. A picture frame redraws everything, as a surface with no
+  * persistent pixels must; an image frame (see [[LayerFrames]]) paints on a surface that keeps its pixels.
   *
   * If the layer cannot be made (no GL context, a native failure) the window keeps working: this window's frames go to
   * `fallback` from then on, instead of a blank canvas.
   */
 class LayerSurfaceFactory private[ui] (
     buildHost: JPanel => LayerHost,
-    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D,
+    frames: LayerFrames = LayerFrames.Picture
 ) extends FrameSurfaceFactory:
 
   def create(request: FrameSurfaceRequest): RenderSurface =
@@ -28,8 +29,45 @@ class LayerSurfaceFactory private[ui] (
         LayerSurfaceFactory.WindowLayer
           .of(canvas)
           .host(request, canvas, buildHost)
-          .fold(fallback.create(request))(record(request, _))
+          .fold(fallback.create(request))(host =>
+            frames match
+              case LayerFrames.Picture => record(request, host)
+              case LayerFrames.Image   => paint(request, host)
+          )
       case _ => fallback.create(request)
+
+  /** Paints the frame on the window's raster surface and publishes a snapshot of it. A frame whose content persists
+    * starts from the pixels the last one left, so the renderer paints only what changed, as the raster arm does; the
+    * snapshot keeps the pixels it was taken of (the surface copies them before the next frame paints over them), so the
+    * event thread can draw frame N while frame N+1 is being painted. Any other frame gets a surface of its own, closed
+    * once the snapshot is taken.
+    */
+  private def paint(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
+    val geometry = request.geometry
+    val scale    = geometry.deviceScale
+    val kept = Option.when(request.contentPersists)(
+      request.backendCaches.getOrCreate(LayerSurfaceFactory.LayerImageKey)(new LayerImageFrames)
+    )
+    val surface =
+      kept.fold(Surface.Companion.makeRaster(RasterFrames.frameInfo(geometry.deviceWidthPx, geometry.deviceHeightPx)))(
+        _.surfaceFor(geometry.deviceWidthPx, geometry.deviceHeightPx, scale.x)
+      )
+    SkiaRenderSurface.retaining(
+      surface,
+      request.metrics,
+      FontSpec.fromAwt(request.font),
+      geometry.logicalWidthPx,
+      geometry.logicalHeightPx,
+      scale.x,
+      SkiaTextCaches.of(request.backendCaches),
+      request.textCaches.styledFonts,
+      onFlush = () =>
+        val image = surface.makeImageSnapshot()
+        kept.fold(surface.close())(_.release())
+        host.publishImage(image)
+      ,
+      layerCacheOwner = Some(geometry.identity)
+    )
 
   private def record(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
     val geometry      = request.geometry
@@ -67,16 +105,22 @@ final class RasterThenJava2D(raster: FrameSurfaceFactory) extends FrameSurfaceFa
 object SkiaLayerSurfaceFactory
     extends LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas),
-      new RasterThenJava2D(SkiaRasterSurfaceFactory)
+      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      LayerFrames.configured
     )
 
 /** For a timing run: asks the layer to wait for the GPU after each draw, which Skiko only allows where the canvas has a
   * GPU context; it has none, so this draws like [[SkiaLayerSurfaceFactory]], and the layer's draw stats say so.
   */
 object SynchronousSkiaLayerSurfaceFactory
-    extends LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas, syncGpu = true))
+    extends LayerSurfaceFactory(
+      canvas => SkiaLayerHost.create(canvas, syncGpu = true),
+      frames = LayerFrames.configured
+    )
 
 object LayerSurfaceFactory:
+
+  private[skia] val LayerImageKey = BackendCacheKey(classOf[LayerImageFrames])
 
   private val log = LoggerFactory.getLogger(classOf[LayerSurfaceFactory])
 

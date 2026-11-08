@@ -141,6 +141,61 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     trace.paintStarted()
     trace.paintFinished()
 
+  /** One keystroke through every stage up to, but not including, the end of the paint that shows it. */
+  private def paintStartedFor(trace: KeyLatencyTrace, clock: ManualClock): Unit =
+    trace.keyReceived(WallClockMs)
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.keysApplied(1)
+    trace.damageEmitted()
+    trace.frameWoke()
+    trace.frameDeadlineReached()
+    trace.frameModelRead()
+    clock.advanceMs(1)
+    trace.framePublished()
+    trace.frameEnded()
+    trace.paintStarted()
+
+  "KeyLatencyTrace.firstKeyPainted" should "stay incomplete until the paint showing a keystroke has finished" in {
+    val (trace, clock) = recorder()
+
+    paintStartedFor(trace, clock)
+    trace.firstKeyPainted.isDone shouldBe false
+
+    trace.paintFinished()
+    trace.firstKeyPainted.isDone shouldBe true
+  }
+
+  it should "stay incomplete when a paint shows no keystroke" in {
+    val (trace, _) = recorder()
+
+    trace.paintStarted()
+    trace.paintFinished()
+
+    trace.firstKeyPainted.isDone shouldBe false
+  }
+
+  it should "stay complete after the window is drained" in {
+    val (trace, clock) = recorder()
+    paintStartedFor(trace, clock)
+    trace.paintFinished()
+
+    trace.drain()
+
+    trace.firstKeyPainted.isDone shouldBe true
+  }
+
+  it should "stay incomplete while tracing is off" in {
+    val (trace, clock) = recorder()
+    trace.setEnabled(false)
+
+    paintStartedFor(trace, clock)
+    trace.paintFinished()
+
+    trace.firstKeyPainted.isDone shouldBe false
+  }
+
   "KeyLatencyTrace" should "follow one keystroke from the event thread to the end of the paint showing it" in {
     val (trace, clock) = recorder()
 
@@ -343,7 +398,7 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
   "LatencyWindow.summaryLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
     val skia = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "skia")
     skia.summaryLine shouldBe
-      "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+      "[LATENCY] summary backend=skia presented=draw-cycle-end window=5.0s keys=0 unpainted=0 | no keystrokes"
 
     val java2d = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "java2d")
     java2d.summaryLine shouldBe
@@ -356,5 +411,5 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     trace.setEnabled(true)
 
     trace.drain().backend shouldBe "skia"
-    trace.drain().summaryLine should include("backend=skia presented=render-callback-end")
+    trace.drain().summaryLine should include("backend=skia presented=draw-cycle-end")
   }

@@ -100,8 +100,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
-          proseMeasure = source.surfaceConfig.proseMeasure,
-          viewportSizing = source.surfaceConfig.viewportSizing
+          proseMeasure = source.surfaceConfig.proseMeasure
         )
       )
 
@@ -306,11 +305,12 @@ object UiPreset:
       .map(WorkspaceTree.apply)
       .filter(_.validationErrors(state.persisted.layout.editorPanes.keySet, restoredPanels.map(_.id).toSet).isEmpty)
 
+    val panelViewport = ChromeFrame.panelViewportSize(state)
     val redockedTree = preset.dockedPanels.zip(restoredPanels).foldLeft(prunedTree) {
       case (Some(tree), (docked, surface)) =>
         val (splitId, leafId) = tree.nextDockIds(surface.id)
         tree
-          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, state.runtime.viewportSize)
+          .dockSized(surface.id, docked.panel.position, splitId, leafId, docked.panel.size, panelViewport)
           .orElse(Some(tree))
       case (None, _) =>
         None

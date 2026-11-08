@@ -69,16 +69,7 @@ private[manager] object ModeTransition:
     )
 
   private def documents(state: AppState): List[(String, LanguageId, Rope)] =
-    state.persisted.buffers.values.toList
-      .sortBy(_.id.value)
-      .flatMap { buffer =>
-        for
-          path     <- buffer.document.filePath
-          language <- buffer.document.language
-          if state.persisted.config.largeFiles.allowsLanguageTooling(buffer.document)
-        yield (path.toUri.toString, language, buffer.document.content)
-      }
-      .distinctBy((uri, _, _) => uri)
+    LanguageToolingDocuments.of(state).map(document => (document.uri, document.language, document.text))
 
   private def panelsOutsideMode(state: AppState): List[PanelId] =
     val mode = state.persisted.config.appMode

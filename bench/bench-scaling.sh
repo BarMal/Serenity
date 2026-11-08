@@ -18,7 +18,7 @@
 #
 # Mode d (time to the last of four panes' scrollbars) has no line in the app's logs: the late count ends in a repaint of
 # the bar strip, which neither [FRAME] nor [LATENCY] names. The harness row `scrollbar.four_panes.all_bars` measures it.
-# Mode c's shape-cache half is not in the logs either: run `sbt "Test / runMain com.serenity.perf.ScalingShapeCacheBenchmarks"`.
+# Mode c's shape-cache half is not in the logs either: run `sbt "app / Test / runMain com.serenity.perf.ScalingShapeCacheBenchmarks"`.
 #
 # Runs 3 times per configuration (BENCH_RUNS), medians across runs. Results: bench-results/<label>-<mode>-<config>-runN.txt.
 

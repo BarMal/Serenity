@@ -1,5 +1,7 @@
 package com.serenity
 
+import java.util.concurrent.{CountDownLatch, Executors}
+
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
@@ -11,9 +13,9 @@ import com.serenity.input.InputHandler
 import com.serenity.keystroke.events.*
 import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{RenderCaches, StateManager}
+import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{HangBound, SharedDictionary}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import fs2.Stream
@@ -63,51 +65,65 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
 
   final private case class Seen(firstSceneHadBar: Boolean, scrollbarDamage: Set[PaneId])
 
-  /** Runs the app until its render loop is told a scrollbar needs repainting, or a few seconds pass. */
+  /** Runs the app until its render loop is told a scrollbar needs repainting, or five seconds of un-paused time pass: a
+    * terminal frontend never repaints the bar, so for it the wait is the whole observation, and a collection pause
+    * during it must not shorten it (#2484).
+    */
   private def runWith(frontend: Frontend): (Seen, Boolean) =
     given org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("ScrollCountLaunchSpec"))
-    val outcome = (for
-      repainted <- Deferred[IO, Set[PaneId]]
-      firstBar  <- Deferred[IO, Boolean]
-      render = (state: AppState, _: Boolean, _: Option[RenderColor], damage: Damage, caches: RenderCaches) =>
-        for
-          started <- firstBar.tryGet
-          _ <-
-            if started.isEmpty then
-              IO(caches.authoritativeScene.forState(longDocument, viewport).paneScrolls.contains(paneId))
-                .flatMap(firstBar.complete(_).void)
-            else IO.unit
-          panes = Damage.scrollbarPaneIds(damage)
-          _ <- if panes.nonEmpty then repainted.complete(panes).void else IO.unit
-        yield ()
-      runtime = FrontendRuntime(
-        inputHandler = _ => IO.pure(new SilentInputHandler),
-        renderFull = render,
-        renderCursorOnly = (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) => IO.unit
-      )
-      done <- AppRuntime
-        .run(
-          initialViewportSize = viewport,
-          checkResize = IO.pure(None),
-          runtime = runtime,
-          appConfig = AppConfig.default,
-          makeStateManager = Some((logger, scrollCounting) =>
-            StateManager.apply(
-              logger,
-              initialConfig = AppConfig.conventional,
-              dictionaryCache = SharedDictionary.default,
-              scrollCounting = scrollCounting
+    val counter = Executors.newSingleThreadExecutor { runnable =>
+      val thread = new Thread(runnable, "scroll-count-launch-spec")
+      thread.setDaemon(true)
+      thread
+    }
+    val outcome =
+      try
+        (for
+          repainted <- Deferred[IO, Set[PaneId]]
+          firstBar  <- Deferred[IO, Boolean]
+          render = (state: AppState, _: Boolean, _: Option[RenderColor], damage: Damage, caches: RenderCaches) =>
+            for
+              started <- firstBar.tryGet
+              _ <-
+                if started.isEmpty then
+                  IO(caches.authoritativeScene.forState(longDocument, viewport).paneScrolls.contains(paneId))
+                    .flatMap(firstBar.complete(_).void)
+                else IO.unit
+              panes = Damage.scrollbarPaneIds(damage)
+              _ <- if panes.nonEmpty then repainted.complete(panes).void else IO.unit
+            yield ()
+          runtime = FrontendRuntime(
+            inputHandler = _ => IO.pure(new SilentInputHandler),
+            renderFull = render,
+            renderCursorOnly = (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) => IO.unit
+          )
+          done <- HangBound
+            .within(
+              AppRuntime.run(
+                initialViewportSize = viewport,
+                checkResize = IO.pure(None),
+                runtime = runtime,
+                appConfig = AppConfig.default,
+                makeStateManager = Some((logger, scrollCounting) =>
+                  StateManager.apply(
+                    logger,
+                    initialConfig = AppConfig.conventional,
+                    dictionaryCache = SharedDictionary.default,
+                    scrollCounting = scrollCounting
+                  )
+                ),
+                awaitExternalQuit = HangBound.within(repainted.get, 5.seconds).attempt.void,
+                registerResizeCallback = _ => (),
+                frontend = frontend,
+                scrollCountExecutor = counter
+              ),
+              bound = 15.seconds
             )
-          ),
-          awaitExternalQuit = repainted.get.timeout(5.seconds).attempt.void,
-          registerResizeCallback = _ => (),
-          frontend = frontend
-        )
-        .timeout(15.seconds)
-        .attempt
-      panes <- repainted.tryGet
-      bar   <- firstBar.tryGet
-    yield (Seen(bar.getOrElse(true), panes.getOrElse(Set.empty)), done.isRight)).unsafeRunSync()
+            .attempt
+          panes <- repainted.tryGet
+          bar   <- firstBar.tryGet
+        yield (Seen(bar.getOrElse(true), panes.getOrElse(Set.empty)), done.isRight)).unsafeRunSync()
+      finally counter.shutdown()
     outcome
 
   "AppRuntime.run with a graphical frontend" should "hand its state manager late counting and repaint the bar when a count lands" in {
@@ -115,6 +131,22 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
 
     finished shouldBe true
     seen.firstSceneHadBar shouldBe false
+    seen.scrollbarDamage should contain(paneId)
+  }
+
+  it should "not wait on the JVM-wide count thread, which other work may be holding" in {
+    val held   = new CountDownLatch(1)
+    val parked = new CountDownLatch(1)
+    ScrollCountExecutor.shared.execute { () =>
+      parked.countDown()
+      held.await()
+    }
+    parked.await()
+    val (seen, finished) =
+      try runWith(GuiFrontend)
+      finally held.countDown()
+
+    finished shouldBe true
     seen.scrollbarDamage should contain(paneId)
   }
 
