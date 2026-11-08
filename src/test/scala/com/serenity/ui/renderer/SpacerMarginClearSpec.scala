@@ -30,6 +30,20 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
 
   private def stamped(image: FramePixels, x: Int, y: Int): Boolean = (image.rgbAt(x, y) & 0xffffff) == sentinel
 
+  /** The middle of the band the edit redraws, found by drawing the edit once, so the sentinel lands inside a row the
+    * frame draws again whatever height the rows are drawn at.
+    */
+  private def redrawnBandMidY(before: AppState, after: AppState, columnLeftPx: Int): Int =
+    val probe = Session(scale)
+    val _     = probe.settle(before)
+    val _     = probe.draw(after, DamageProducer.forTransition(before, after))
+    val bands = probe.repaintRegion.getOrElse(fail("expected a bounded repaint")).filter { rect =>
+      rect.xPx <= (columnLeftPx - 1) / scale && (columnLeftPx - 1) / scale < rect.xPx + rect.widthPx
+    }
+    val top    = bands.map(_.yPx).minOption.getOrElse(fail("expected a repaint rect over the column's edge"))
+    val bottom = bands.map(rect => rect.yPx + rect.heightPx).max
+    math.round((top + bottom) / 2.0 * scale).toInt
+
   "A row drawn again" should "clear the pixel left of the text column that its glyphs can reach" in {
     val before  = proseState(cursorLine = 1)
     val after   = typedAt(before, proseLines, line = 1, text = "x")
@@ -41,7 +55,7 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
 
     val columnLeftPx = math.round(cellMetrics.toPixelX(layout.contentRect.x) * scale).toInt
     val topPx        = math.round(cellMetrics.toPixelY(layout.contentRect.y) * scale).toInt
-    val editedRowY   = topPx + 70
+    val editedRowY   = redrawnBandMidY(before, after, columnLeftPx)
     val keptRowY     = topPx + 700
     val image        = session.pendingImage
     image.stamp(columnLeftPx - 1, editedRowY, sentinel)
