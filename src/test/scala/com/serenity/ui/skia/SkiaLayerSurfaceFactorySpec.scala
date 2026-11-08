@@ -87,22 +87,23 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     def rasterPixels(frames: List[((Int, Int, Int, Int), RenderColor)]): Array[Int] =
       val rasterCaches = RenderCaches.create()
       val image        = new BufferedImage(100, 60, BufferedImage.TYPE_INT_RGB)
-      frames.foreach { case ((x, y, w, h), color) =>
-        val surface = SkiaRasterSurfaceFactory.create(
-          FrameSurfaceRequest(
-            CellMetrics(8, 16, 12),
-            new Font(Font.MONOSPACED, Font.PLAIN, 12),
-            SwingCanvasGeometry.of(canvas),
-            SwingPresentationSite(canvas),
-            _ => (),
-            (_, _, _) => image,
-            rasterCaches.surfaceText,
-            rasterCaches.backendCaches,
-            () => None
+      frames.foreach {
+        case ((x, y, w, h), color) =>
+          val surface = SkiaRasterSurfaceFactory.create(
+            FrameSurfaceRequest(
+              CellMetrics(8, 16, 12),
+              new Font(Font.MONOSPACED, Font.PLAIN, 12),
+              SwingCanvasGeometry.of(canvas),
+              SwingPresentationSite(canvas),
+              _ => (),
+              (_, _, _) => image,
+              rasterCaches.surfaceText,
+              rasterCaches.backendCaches,
+              () => None
+            )
           )
-        )
-        surface.pixels.fillPixelRect(x, y, w, h, color)
-        surface.flush()
+          surface.pixels.fillPixelRect(x, y, w, h, color)
+          surface.flush()
       }
       image.getRGB(0, 0, 100, 60, null, 0, 100).map(_ & 0xffffff)
 
