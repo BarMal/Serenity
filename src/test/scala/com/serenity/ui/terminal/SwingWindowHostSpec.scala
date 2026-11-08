@@ -3,12 +3,17 @@ package com.serenity.ui.terminal
 import java.awt.GraphicsEnvironment
 import java.util.Locale
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{MenuBarMode, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
-import com.serenity.input.FileDropHandler
-import com.serenity.ui.host.WindowHost
+import com.serenity.input.{FileDropHandler, InputRouter}
+import com.serenity.keystroke.events.{Event, InsertChar}
+import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.ui.host.{InputSettings, WindowHost}
+import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,3 +53,14 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
 
   it should "take a file-drop handler through the control, not only on the Swing window" in
     withHost(host => noException should be thrownBy host.control.installFileDrop(FileDropHandler(_ => (), _ => ())))
+
+  it should "queue a typed character into the input handler it built, for the start-up probe" in
+    withHost { host =>
+      val router  = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+      val metrics = () => CellMetrics(8, 16, 13)
+      val handler = host.inputHandler(router, InputSettings(metrics, metrics, 3, FrameTimings(), None)).unsafeRunSync()
+
+      host.typeCharacter('a').unsafeRunSync()
+
+      handler.eventStream.take(1L).compile.toList.unsafeRunTimed(10.seconds) shouldBe Some(List(InsertChar('a')))
+    }
