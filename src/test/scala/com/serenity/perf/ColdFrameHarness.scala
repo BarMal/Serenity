@@ -1,6 +1,6 @@
 package com.serenity.perf
 
-import java.awt.Font
+import java.awt.{Font, Rectangle}
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
@@ -69,6 +69,22 @@ trait ColdFrameHarness:
     private val screen     = ScreenIdentity(this)
     private val drawn      = AtomicInteger(0)
     private val lastOutput = AtomicReference(FrameOutput(screen, new AtomicReference(None)))
+    private val slotPixels = AtomicReference(Vector.fill(images.length)(Array.empty[Int]))
+    private val lastSlot   = AtomicInteger(0)
+    private val lastShown  = AtomicReference[Option[List[Rectangle]]](None)
+    private val lastPaint  = AtomicReference(List.empty[Rectangle])
+
+    /** What each image of the pool held after its latest frame, the latest frame's image first. */
+    def imagesNewestFirst: Vector[Array[Int]] =
+      val held = slotPixels.get
+      val last = lastSlot.get
+      held.indices.map(i => held((last - i + held.length) % held.length)).toVector
+
+    /** The rects the latest frame presented, `None` meaning the whole frame. */
+    def presentedAreas: Option[List[Rectangle]] = lastShown.get
+
+    /** The rects the latest frame's recorded paint covers. */
+    def paintedAreas: List[Rectangle] = lastPaint.get
 
     /** What the planner drew and kept for the latest frame. */
     def lastPlan: Option[FramePlan] = lastOutput.get.lastPlan.get
@@ -77,7 +93,8 @@ trait ColdFrameHarness:
 
     /** Draws the frame and returns the pixels the window shows, which later frames draw over. */
     def renderFrame(state: AppState, damage: Damage): FramePixels =
-      val image = images(drawn.getAndIncrement() % images.length)
+      val slot  = drawn.getAndIncrement() % images.length
+      val image = images(slot)
       val surface = referenceFrames.surfaceOver(
         image,
         cellMetrics,
@@ -108,6 +125,10 @@ trait ColdFrameHarness:
         damage,
         caches = caches
       )
+      lastSlot.set(slot)
+      slotPixels.updateAndGet(_.updated(slot, image.rgbPixels.clone()))
+      lastPaint.set(image.recordedPaint)
+      lastShown.set(PresentAreas.of(repaintRegion.get(), image.recordedPaint, scale, image.widthPx, image.heightPx))
       present(image, repaintRegion.get())
       screenImage
 
@@ -194,6 +215,7 @@ trait ColdFrameHarness:
     private val onScreen  = AtomicReference(frames.renderFrame(shown.get, Damage.Everything).rgbPixels)
     private val built     = AtomicInteger(0)
     private val seenPlan  = AtomicReference[Option[FramePlan]](None)
+    private val priorCold = AtomicReference(Array.empty[Int])
 
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
@@ -225,13 +247,16 @@ trait ColdFrameHarness:
       act
       val after = stateManager.getCurrentState.unsafeRunSync()
       shown.set(after)
-      val drawn        = frames.renderFrame(after, DamageProducer.forTransition(before, after)).rgbPixels
+      val drawn        = frames.renderFrame(after, DamageProducer.forTransition(before, after)).rgbPixels.clone()
       val previousPlan = seenPlan.getAndSet(frames.lastPlan)
-      onScreen.set(drawn)
+      val previousScreen = onScreen.getAndSet(drawn)
+      val previousCold   = priorCold.get
       val n = stepCount.incrementAndGet()
       coldFramePixelsWith(after, scale) { cold =>
-        val diff = FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
-        if diff.nonEmpty then
+        priorCold.set(cold.clone())
+        val diff0 = FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
+        val diff  = if diff0.isEmpty && sys.props.contains("probe.force") then Seq((20, 20)) else diff0
+        if diff.nonEmpty || sys.props.contains("probe.force") then
           val full = reported.incrementAndGet() <= FullReports
           val report =
             if full then
@@ -241,7 +266,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -268,6 +293,32 @@ trait ColdFrameHarness:
         s"incremental vs persisting first frame: ${summary(drawnVsFresh)}; " +
         s"owners ${FramePlanReport.owners(frames.lastPlan, previousPlan, diff, scale)}; " +
         s"previous ${FramePlanReport.describe(previousPlan)}"
+
+    /** For the first differing pixels, who last wrote them: whether the screen was already wrong there after the step
+      * before, what this frame's image and the other image of the pool held, and whether the frame painted and
+      * presented that pixel.
+      */
+    private def lastWriter(
+      diff: Seq[(Int, Int)],
+      drawn: Array[Int],
+      cold: Array[Int],
+      previousScreen: Array[Int],
+      previousCold: Array[Int]
+    ): String =
+      val width  = deviceWidthPx(scale)
+      val held   = frames.imagesNewestFirst
+      def hex(a: Array[Int], i: Int): String = if i < a.length then f"${a(i) & 0xffffff}%06x" else "none"
+      def within(rects: List[Rectangle], x: Int, y: Int) = rects.exists(r => r.contains(x, y))
+      val lines = diff.take(3).map { (x, y) =>
+        val i       = y * width + x
+        val wrongBefore = previousScreen.length > i && previousCold.length > i && previousScreen(i) != previousCold(i)
+        val presented = frames.presentedAreas.fold("whole frame")(rs => within(rs, x, y).toString)
+        s"($x,$y): cold ${hex(cold, i)} screen ${hex(drawn, i)} image-now ${hex(held.head, i)} " +
+          s"image-other ${held.drop(1).headOption.fold("none")(hex(_, i))} screen-before ${hex(previousScreen, i)} " +
+          s"cold-before ${hex(previousCold, i)} wrong-before $wrongBefore presented $presented " +
+          s"painted ${within(frames.paintedAreas, x, y)}"
+      }
+      s" LASTWRITER ${lines.mkString(" | ")}"
 
     /** What a cold frame draws for the state as it now stands. */
     def coldFrame(): BufferedImage =
