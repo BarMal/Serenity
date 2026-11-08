@@ -5,6 +5,7 @@ import java.util.concurrent.{ConcurrentLinkedQueue, Executor, Semaphore, TimeUni
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters.*
 import scala.util.Random
 
@@ -91,17 +92,20 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
       heard.add(paneId): Unit
       arrived.release()
 
-  /** Draws `state` until every one of its panes shows a bar, waiting on the notices between draws. */
+  /** Draws `state` until every one of its panes shows a bar, waiting on the notices between draws. A notice says some
+    * text's count ended, not that this one's did, so it is only a reason to draw again: the wait ends when the bars
+    * land, when ten seconds pass with no notice, or at `deadline`.
+    */
   @tailrec private def barsLand(
     scene: AuthoritativeUiScene,
     notices: Notices,
     state: AppState,
     size: ViewportSize,
-    waits: Int
+    deadline: Long
   ): Boolean =
     scene.forState(state, size).paneScrolls.keySet == panes(state).toSet ||
-      (waits > 0 && notices.arrived
-        .tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, waits - 1))
+      (System.nanoTime < deadline && notices.arrived
+        .tryAcquire(10, TimeUnit.SECONDS) && barsLand(scene, notices, state, size, deadline))
 
   /** Waits until every pane has been told its bar is counted, then checks none is told twice. A bar can show in a scene
     * as soon as its rows are measured, before the run that measured them has told every pane, so the notices are what
@@ -160,9 +164,33 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
           (sized, size)
       }
 
-      barsLand(scene, notices, last, lastSize, waits = 40) shouldBe true
+      barsLand(scene, notices, last, lastSize, deadline = System.nanoTime + 400.seconds.toNanos) shouldBe true
       scene.forState(last, lastSize).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(last, lastSize)
     }
+
+  "Bars whose notices came from earlier texts" should "still be waited on until the last text's bar lands" in {
+    val pool    = new HoldableExecutor(ScrollCountExecutor.pool(1))
+    val notices = new Notices
+    val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
+    val first   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+    val edits =
+      (1 to 40).scanLeft(first)((before, round) => edited(before, BufferId(1), prose(s"round $round", 300)))
+
+    edits.init.zipWithIndex.foreach { (state, edit) =>
+      scene.forState(state, viewport)
+      val told = panes(state).size + edit
+      notices.arrived.tryAcquire(told, 60, TimeUnit.SECONDS) shouldBe true
+      notices.arrived.release(told)
+    }
+    val last = edits.last
+    pool.hold()
+    scene.forState(last, viewport)
+    pool.stopHolding()
+    pool.releaseAfter(2.seconds)
+
+    barsLand(scene, notices, last, viewport, deadline = System.nanoTime + 400.seconds.toNanos) shouldBe true
+    scene.forState(last, viewport).paneScrolls.view.mapValues(_.extent).toMap shouldBe extents(last)
+  }
 
   "Panes whose rows share an index" should "start one count between them and tell every pane" in {
     val executor = new ByHand
