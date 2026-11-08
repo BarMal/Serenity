@@ -218,6 +218,7 @@ com.serenity.ContextualToolbarLayoutSpec	1	0.196
 com.serenity.SessionPackageRestoreSpec	1	0.196
 com.serenity.perf.EnglishProseSpec	1	0.191
 com.serenity.FileHandlingSpec	1	0.19
+com.serenity.bsp.BspProtocolSpec	2	0.189
 com.serenity.command.CommandRunnerGroupTraversalGuardSpec	1	0.188
 com.serenity.MouseClickCursorSpec	1	0.187
 com.serenity.StateManagerDefaultDocumentModeSpec	1	0.184

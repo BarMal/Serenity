@@ -60,6 +60,8 @@ class PrivacyStatementSpec extends AnyFlatSpec with Matchers:
       "com/serenity/app/WaylandSocket.scala",
       // Reads the `file:` URIs a drag carries into paths; java.net.URI is only a parser here and nothing connects.
       "com/serenity/input/DroppedPaths.scala",
+      // Parses the `file:` URIs a build server sends over a local process's stdin/stdout (#2522 B1); nothing connects.
+      "com/serenity/bsp/BspProtocol.scala",
       "com/serenity/io/ExternalBrowser.scala",
       "com/serenity/io/ReleasesPage.scala",
       "com/serenity/state/manager/ReleasesPageEffect.scala",
