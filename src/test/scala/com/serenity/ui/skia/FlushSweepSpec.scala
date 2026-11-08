@@ -61,6 +61,25 @@ class FlushSweepSpec extends AnyFlatSpec with Matchers:
     lines.mkString("\n") should include("1.00 ms per row")
   }
 
+  "FlushSweep.vsync" should "read on and off, and nothing else, from the argument" in {
+    vsyncRequested(Some("on")) shouldBe Right(true)
+    vsyncRequested(Some("off")) shouldBe Right(false)
+    vsyncRequested(None) shouldBe Right(false)
+    vsyncRequested(Some("maybe")).isLeft shouldBe true
+  }
+
+  it should "set Skiko's property the way the app does at startup, off unless asked" in {
+    vsyncProperty(enabled = false, env = Map.empty, properties = Map.empty) shouldBe
+      Some("skiko.vsync.enabled" -> "false")
+    vsyncProperty(enabled = true, env = Map.empty, properties = Map.empty) shouldBe
+      Some("skiko.vsync.enabled" -> "true")
+  }
+
+  it should "leave a value the user already set, in the property or the environment" in {
+    vsyncProperty(enabled = false, env = Map.empty, properties = Map("skiko.vsync.enabled" -> "true")) shouldBe None
+    vsyncProperty(enabled = false, env = Map("SKIKO_VSYNC_ENABLED" -> "1"), properties = Map.empty) shouldBe None
+  }
+
   "FlushSweep.scene" should "draw more ops for more rows" in {
     val few  = opCount(scene(rows = 2, variant = Variant.Same, drawIndex = 0, widthPx = 400, heightPx = 300))
     val many = opCount(scene(rows = 12, variant = Variant.Same, drawIndex = 0, widthPx = 400, heightPx = 300))
