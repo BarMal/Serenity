@@ -228,7 +228,7 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
 
   "FrameTimingSummary.logLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
     val skia = FrameTimings(() => 0L, backend = "skia")
-    skia.drain().logLine should startWith("[FRAME] backend=skia presented=render-callback-end window=")
+    skia.drain().logLine should startWith("[FRAME] backend=skia presented=draw-cycle-end window=")
 
     val java2d = FrameTimings(() => 0L, backend = "java2d")
     java2d.drain().logLine should startWith("[FRAME] backend=java2d presented=paint-end window=")
@@ -241,8 +241,8 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     FrameTimings(() => 0L).drain().logLine should startWith("[FRAME] window=")
   }
 
-  "PresentPoint.of" should "call the end of Skiko's render callback the presentation of the Skia layer, and the end of a canvas paint everything else" in {
-    PresentPoint.of("skia") shouldBe "render-callback-end"
+  "PresentPoint.of" should "call the end of Skiko's draw cycle (our callback, the replay on the GPU canvas, the flush and the swap) the presentation of the Skia layer, and the end of a canvas paint everything else" in {
+    PresentPoint.of("skia") shouldBe "draw-cycle-end"
     PresentPoint.of("skia-raster") shouldBe "paint-end"
     PresentPoint.of("java2d") shouldBe "paint-end"
   }
