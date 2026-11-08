@@ -223,10 +223,14 @@ class SwingWindow(
     val stamps = new LayerPresentStamps(frameTimings)
     presenter.onPublished(() => stamps.published())
     presenter.onDrawStarted(() => stamps.drawStarted())
-    presenter.onRendered { () =>
-      stamps.drawFinished()
-      framePresentedRef.get().foreach(_.apply())
-    }
+    if presenter.tellsWhenDrawsEnd then
+      presenter.onDrawEnded(() => stamps.drawFinished())
+      presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+    else
+      presenter.onRendered { () =>
+        stamps.drawFinished()
+        framePresentedRef.get().foreach(_.apply())
+      }
 
   private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
 

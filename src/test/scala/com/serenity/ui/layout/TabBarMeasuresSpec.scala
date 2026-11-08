@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.layout
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance

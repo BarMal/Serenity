@@ -1,8 +1,7 @@
 package com.serenity.ui.tui
 
 import com.serenity.state.models.{AppState, BufferId, CloseWorkflowState, SurfaceContent}
-import com.serenity.ui.layout.{LayoutEngine, TabBarSurfaceComposition}
-import com.serenity.ui.renderer.TabBarLayoutSettings
+import com.serenity.ui.layout.{LayoutEngine, TabBarLayoutSettings, TabBarSurfaceComposition}
 
 import TuiScenarios.*
 

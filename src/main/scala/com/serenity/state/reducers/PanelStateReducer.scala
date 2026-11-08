@@ -2,7 +2,7 @@ package com.serenity.state.reducers
 
 import com.serenity.state.models.*
 import com.serenity.state.undo.{EditGrouping, HistoryEntry}
-import com.serenity.ui.layout.{DirectoryTreeData, PanelContent, PanelPosition, PanelTarget}
+import com.serenity.ui.layout.{ChromeFrame, DirectoryTreeData, PanelContent, PanelPosition, PanelTarget}
 
 object PanelStateReducer:
 
@@ -23,7 +23,7 @@ object PanelStateReducer:
     val panel                    = UiSurface.fromPanelContent(surfaceId, content)
     val workspaceTree = stateWithId.persisted.layout.workspaceTree.flatMap { tree =>
       val (splitId, leafId) = tree.nextDockIds(surfaceId)
-      tree.dockSized(surfaceId, position, splitId, leafId, size, stateWithId.panelViewportSize)
+      tree.dockSized(surfaceId, position, splitId, leafId, size, ChromeFrame.panelViewportSize(stateWithId))
     }
     ReducerResult.withEffect(
       stateWithId.copy(
@@ -81,14 +81,14 @@ object PanelStateReducer:
     * surface -- rather than any size carried on the surface itself.
     */
   def currentSize(surfaceId: SurfaceId, state: AppState): Option[Int] =
-    state.persisted.layout.workspaceTree.flatMap(_.currentSize(surfaceId, state.panelViewportSize))
+    state.persisted.layout.workspaceTree.flatMap(_.currentSize(surfaceId, ChromeFrame.panelViewportSize(state)))
 
   def resize(surfaceId: SurfaceId, newSize: Int, state: AppState): ReducerResult =
     state.surfaceById(surfaceId).filter(isPinned) match
       case Some(_) =>
         val resizedTree = for
           tree    <- state.persisted.layout.workspaceTree
-          ratio   <- tree.allocationRatio(surfaceId, newSize, state.panelViewportSize)
+          ratio   <- tree.allocationRatio(surfaceId, newSize, ChromeFrame.panelViewportSize(state))
           resized <- tree.resizeSurface(surfaceId, ratio)
         yield resized
         resizedTree match
@@ -160,7 +160,7 @@ object PanelStateReducer:
         val movedTree = state.persisted.layout.workspaceTree.flatMap { tree =>
           tree.moveSurface(surfaceId, position, tree.nextDockIds(surfaceId)._1).map { moved =>
             previousSize
-              .flatMap(size => moved.allocationRatio(surfaceId, size, state.panelViewportSize))
+              .flatMap(size => moved.allocationRatio(surfaceId, size, ChromeFrame.panelViewportSize(state)))
               .flatMap(ratio => moved.resizeSurface(surfaceId, ratio))
               .getOrElse(moved)
           }
@@ -225,7 +225,14 @@ object PanelStateReducer:
       .map { panel =>
         val tree = state.persisted.layout.workspaceTree.flatMap { workspaceTree =>
           val (splitId, leafId) = workspaceTree.nextDockIds(panel.id)
-          workspaceTree.dockSized(panel.id, position, splitId, leafId, PeekToPinDefaultSize, state.panelViewportSize)
+          workspaceTree.dockSized(
+            panel.id,
+            position,
+            splitId,
+            leafId,
+            PeekToPinDefaultSize,
+            ChromeFrame.panelViewportSize(state)
+          )
         }
         ReducerResult.noEffects(
           state.copy(

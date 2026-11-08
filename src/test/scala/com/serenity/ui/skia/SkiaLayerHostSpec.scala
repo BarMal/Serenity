@@ -186,6 +186,23 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  it should "tell when a draw cycle has ended, on the event thread and after the render callback that began it" in {
+    val events = new java.util.concurrent.ConcurrentLinkedQueue[String]()
+    withWindow { window =>
+      window.host.tellsWhenDrawsEnd shouldBe true
+      window.host.onRendered(() => events.add("rendered"): Unit)
+      window.host.onDrawEnded(() =>
+        events.add(if SwingUtilities.isEventDispatchThread then "ended" else "ended-off-edt"): Unit
+      )
+      window.host.publish(record(scene))
+      eventually("a render callback followed by the end of a draw cycle") {
+        val seen = events.toArray.toList
+        seen.dropWhile(_ != "rendered").contains("ended")
+      }
+      events.toArray.toList should not contain "ended-off-edt"
+    }
+  }
+
   it should "draw the carets over the retained picture without recording the picture again" in
     withWindow { window =>
       window.host.publish(record(scene))
