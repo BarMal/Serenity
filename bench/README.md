@@ -133,7 +133,7 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
 ```
 
-The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's render callback, **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
+The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's draw cycle on the event thread (our callback, the replay on the GPU canvas, the flush and the swap), **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
 
 ## Scaling with many open files and split panes (#2478)
 

@@ -398,7 +398,7 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
   "LatencyWindow.summaryLine" should "name the backend and where it counts a frame as presented, once the backend is known" in {
     val skia = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "skia")
     skia.summaryLine shouldBe
-      "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+      "[LATENCY] summary backend=skia presented=draw-cycle-end window=5.0s keys=0 unpainted=0 | no keystrokes"
 
     val java2d = LatencyWindow(5000.0, Vector.empty, unpainted = 0, backend = "java2d")
     java2d.summaryLine shouldBe
@@ -411,5 +411,5 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     trace.setEnabled(true)
 
     trace.drain().backend shouldBe "skia"
-    trace.drain().summaryLine should include("backend=skia presented=render-callback-end")
+    trace.drain().summaryLine should include("backend=skia presented=draw-cycle-end")
   }

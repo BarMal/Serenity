@@ -6,7 +6,8 @@ import com.serenity.diagnostics.FrameTimings
 
 /** Gives the Skia layer's draws the marks a canvas paint leaves in [[FrameTimings]], so `[FRAME] input-to-paint` and
   * `[LATENCY]` complete for keystrokes the layer shows. A frame is published when the layer is handed its picture; a
-  * draw starts and ends in Skiko's render callback, which is the layer's presentation (see `PresentPoint`).
+  * draw starts in Skiko's render callback and ends with Skiko's draw cycle, after the replay, the flush and the swap
+  * (see `PresentPoint`).
   *
   * Draws run one at a time on the event thread, so one start mark is enough.
   */
