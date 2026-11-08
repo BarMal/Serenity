@@ -164,19 +164,29 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     )
     settle()
 
+  private def pixelsOf(image: BufferedImage): Array[Int] =
+    image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth).map(_ & 0xffffff)
+
+  /** A stale glyph differs by hundreds of pixels; a few may differ where a repainted row meets a kept one and the two
+    * frames blend the one pixel they share differently (the artefact `SkiaRasterWindowSpec` forgives).
+    */
+  private val MostPixelsDiffering = 8
+
+  private def differing(a: BufferedImage, b: BufferedImage): Int =
+    pixelsOf(a).zip(pixelsOf(b)).count(_ != _)
+
   /** The screen once it differs from `before` and has stopped changing: two captures in a row agree. */
   @tailrec
   private def settledScreen(
     window: SwingWindow,
-    before: Vector[Boolean],
-    previous: Option[Vector[Boolean]],
+    before: Option[BufferedImage],
+    previous: Option[BufferedImage],
     deadlineNanos: Long
   ): BufferedImage =
     val shot = onScreen(window)
-    val ink  = inkMap(shot)
-    if ink != before && previous.contains(ink) then shot
+    if before.forall(differing(_, shot) > 0) && previous.exists(differing(_, shot) == 0) then shot
     else if System.nanoTime() >= deadlineNanos then fail("the layer's frame never settled on a new picture")
-    else settledScreen(window, before, Some(ink), deadlineNanos)
+    else settledScreen(window, before, Some(shot), deadlineNanos)
 
   it should "show, frame for frame, what a window drawing every frame from scratch shows, through typing, undo and scroll" in {
     val first  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
@@ -193,26 +203,24 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     )
     val scratch = withWindow { window =>
       steps
-        .foldLeft((Vector.empty[(String, BufferedImage)], Vector.empty[Boolean])) {
-          case ((done, before), (name, state, _)) =>
+        .foldLeft(Vector.empty[(String, BufferedImage)]) {
+          case (done, (name, state, _)) =>
             present(window, state, Damage.Everything, RenderCaches.create())
-            val shot = settledScreen(window, before, None, System.nanoTime() + 15_000_000_000L)
-            (done :+ (name -> shot), inkMap(shot))
+            val shot = settledScreen(window, done.lastOption.map(_._2), None, System.nanoTime() + 15_000_000_000L)
+            done :+ (name -> shot)
         }
-        ._1
     }
     withWindow { window =>
       val caches = RenderCaches.create()
       steps.zip(scratch).foreach {
         case ((name, state, damage), (_, expected)) =>
           present(window, state, damage, caches)
-          val wanted = inkMap(expected)
-          val outcome = awaited(inkMap(onScreen(window)) == wanted, System.nanoTime() + 15_000_000_000L)
-          val shown   = onScreen(window)
+          val agreed = awaited(differing(onScreen(window), expected) <= MostPixelsDiffering, System.nanoTime() + 15_000_000_000L)
+          val shown  = onScreen(window)
           keep(s"sequence-$name-incremental", shown)
           keep(s"sequence-$name-scratch", expected)
-          withClue(s"after $name, cells whose ink differs from a frame drawn from scratch: ") {
-            (outcome, inkMap(shown).zip(wanted).count(_ != _)) shouldBe (true, 0)
+          withClue(s"after $name, pixels differing from a frame drawn from scratch: ") {
+            (agreed, differing(shown, expected) <= MostPixelsDiffering) shouldBe (true, true)
           }
       }
     }
