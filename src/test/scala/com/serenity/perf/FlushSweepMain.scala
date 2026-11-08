@@ -2,8 +2,8 @@ package com.serenity.perf
 
 import com.serenity.ui.skia.FlushSweep
 
-/** `sbt "app/Test/runMain com.serenity.perf.FlushSweepMain [rows=1,5,15,30,50] [draws=60] [variants=same,changed]"`
-  * on a machine with a display: prints the table and the fit, to be pasted into the issue.
+/** `sbt "app/Test/runMain com.serenity.perf.FlushSweepMain [rows=1,5,15,30,50] [draws=60] [variants=same,changed]"` on
+  * a machine with a display: prints the table and the fit, to be pasted into the issue.
   */
 object FlushSweepMain:
   import FlushSweep.*
