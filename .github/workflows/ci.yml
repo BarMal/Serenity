@@ -150,8 +150,10 @@ jobs:
             scripts.test_aot_cache_scripts \
             scripts.test_aot_macos_workflow \
             scripts.test_aot_workflow \
+            scripts.test_bench_artifacts_workflow \
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
+            scripts.test_build_outputs \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_jobs_workflow \
@@ -184,6 +186,7 @@ jobs:
             scripts.test_summarize_test_durations \
             scripts.test_summarize_test_failures \
             scripts.test_ttfw \
+            scripts.test_workflow_sbt_project_scope \
             scripts.test_workflow_timeouts \
             -v
 

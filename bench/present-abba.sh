@@ -4,7 +4,7 @@
 # Java2D against the Skia raster path, end to end through the real surface factories (see PresentBenchmarks.scala).
 # A config is <logical height>_<scale>, e.g. 1080_2 for a 1920x1080 window at 2x; 1440 means 2560x1440. For each config
 # the runs go A B B A A B B A (A = Java2D, B = Skia), one JVM each, so drift falls on both alike. The JVM flags are the
-# packaged app's. Needs the Test classpath in $PRESENT_CP (e.g. from `sbt "export Test/fullClasspath"`); without
+# packaged app's. Needs the Test classpath in $PRESENT_CP (e.g. from `sbt "export app/Test/fullClasspath"`); without
 # $DISPLAY the runs go through xvfb-run. Rows are filtered by $PRESENT_ROWS (a name suffix prefix, default all).
 #
 # Results land in <out-dir>/<config>-{java2d,skia}-{1..4}.csv, the same layout as the benchmark CSVs; the table is

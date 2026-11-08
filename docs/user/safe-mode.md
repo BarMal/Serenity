@@ -17,7 +17,7 @@ Serenity starts in safe mode by itself after two starts in a row that did not re
 normal restart. The count lives in `~/.serenity/startup-in-progress`.
 
 With the app images, pass the flag to the launcher (`Serenity/bin/Serenity --safe-mode` on Linux, `Serenity.exe
---safe-mode` on Windows). From source: `sbt "run --safe-mode"`.
+--safe-mode` on Windows). From source: `sbt "app/run --safe-mode"`.
 
 ## Resets
 
