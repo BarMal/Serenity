@@ -202,12 +202,13 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       )
       val seen = events.toArray.toList
       seen should not contain "ended-off-edt"
+      // A draw already under way when the callbacks were set ends without a render callback of ours to precede it.
       seen
         .scanLeft((0, 0)) {
           case ((rendered, ended), "rendered") => (rendered + 1, ended)
           case ((rendered, ended), _)          => (rendered, ended + 1)
         }
-        .forall { case (rendered, ended) => ended <= rendered } shouldBe true
+        .forall { case (rendered, ended) => ended <= rendered + 1 } shouldBe true
     }
   }
 
