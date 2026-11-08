@@ -18,11 +18,14 @@ class LspFolderTrustedReducerSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val root    = Path.of("/tmp/serenity-trust-spec/app")
+  // A leading slash names no drive on Windows, and the reducer makes paths absolute, so the spec does the same.
+  private def absolute(path: String): Path = Path.of(path).toAbsolutePath.normalize()
+
+  private val root    = absolute("/tmp/serenity-trust-spec/app")
   private val inside  = root.resolve("src/Main.scala")
   private val nested  = root.resolve("modules/core/Core.scala")
-  private val outside = Path.of("/tmp/serenity-trust-spec/other/Other.scala")
-  private val prefix  = Path.of("/tmp/serenity-trust-spec/app-sibling/Sibling.scala")
+  private val outside = absolute("/tmp/serenity-trust-spec/other/Other.scala")
+  private val prefix  = absolute("/tmp/serenity-trust-spec/app-sibling/Sibling.scala")
 
   private def buffer(id: Int, path: Path): (BufferId, Buffer) =
     BufferId(id) -> Buffer(
