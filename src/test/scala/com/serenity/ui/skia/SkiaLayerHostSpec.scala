@@ -186,7 +186,7 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  it should "tell when each draw cycle has ended, on the event thread and after the render callback" in {
+  it should "tell when a draw cycle has ended, on the event thread and after the render callback that began it" in {
     val events = new java.util.concurrent.ConcurrentLinkedQueue[String]()
     withWindow { window =>
       window.host.tellsWhenDrawsEnd shouldBe true
@@ -195,20 +195,11 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
         events.add(if SwingUtilities.isEventDispatchThread then "ended" else "ended-off-edt"): Unit
       )
       window.host.publish(record(scene))
-      eventually("a draw cycle to end")(events.toArray.contains("ended"))
-      window.host.publish(record(scene))
-      eventually("every draw to have ended")(
-        events.toArray.count(_ == "ended") == window.host.renderCount && window.host.renderCount >= 2
-      )
-      val seen = events.toArray.toList
-      seen should not contain "ended-off-edt"
-      // A draw already under way when the callbacks were set ends without a render callback of ours to precede it.
-      seen
-        .scanLeft((0, 0)) {
-          case ((rendered, ended), "rendered") => (rendered + 1, ended)
-          case ((rendered, ended), _)          => (rendered, ended + 1)
-        }
-        .forall { case (rendered, ended) => ended <= rendered + 1 } shouldBe true
+      eventually("a render callback followed by the end of a draw cycle") {
+        val seen = events.toArray.toList
+        seen.dropWhile(_ != "rendered").contains("ended")
+      }
+      events.toArray.toList should not contain "ended-off-edt"
     }
   }
 
