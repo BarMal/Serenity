@@ -76,6 +76,33 @@ class AllocationThresholdTest(unittest.TestCase):
         self.assertEqual(abba.compare(_runs("x", [1.0] * 4), _runs("x", [1.0] * 4)), [])
 
 
+def _all_threads_runs(name: str, own: int, all_threads: int | None) -> list[dict]:
+    return [{name: abba.Row(name, 1.0, 1.0, own, own, None, all_threads, all_threads)} for _ in range(4)]
+
+
+class AllThreadsAllocationTest(unittest.TestCase):
+    def test_a_row_reporting_every_thread_is_compared_on_that_column(self):
+        found = abba.compare(_all_threads_runs("x", 2_000, 100_000), _all_threads_runs("x", 2_000, 120_000))
+        self.assertEqual([f.metric for f in found], ["allocation_all_threads_p50_bytes"])
+
+    def test_the_callers_share_alone_does_not_block_such_a_row(self):
+        found = abba.compare(_all_threads_runs("x", 100_000, 500_000), _all_threads_runs("x", 200_000, 500_000))
+        self.assertEqual(found, [])
+
+    def test_a_baseline_without_the_column_is_not_compared_on_it(self):
+        found = abba.compare(_all_threads_runs("x", 2_000, None), _all_threads_runs("x", 2_000, 900_000))
+        self.assertEqual(found, [])
+
+    def test_the_rows_skipped_for_it_are_named(self):
+        skipped = abba.rows_missing_all_threads(_all_threads_runs("x", 2_000, None), _all_threads_runs("x", 2_000, 900_000))
+        self.assertEqual(skipped, ["x"])
+
+    def test_a_row_without_the_column_on_either_side_keeps_the_callers_share(self):
+        found = abba.compare(_all_threads_runs("x", 100_000, None), _all_threads_runs("x", 120_000, None))
+        self.assertEqual([f.metric for f in found], ["allocation_p50_bytes"])
+        self.assertEqual(abba.rows_missing_all_threads(_all_threads_runs("x", 1, None), _all_threads_runs("x", 1, None)), [])
+
+
 class RetainedThresholdTest(unittest.TestCase):
     def test_more_than_ten_percent_blocks(self):
         found = abba.compare(
