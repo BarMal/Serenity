@@ -78,7 +78,9 @@ jobs:
         if: steps.previous.outputs.skip != 'true'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
-      # perf-assembly.sbt is copied in, not committed, exactly as bench-artifacts.yml does, so any commit builds.
+      # perf-assembly.sbt is copied in, not committed, exactly as bench-artifacts.yml does, so any commit builds. A ref
+      # from before the module split (#2502) has one root project that holds the sources; a later one has an `app`
+      # project, and the test assembly has to be aimed at it (the aggregate root packs nothing).
       - name: Build serenity-perf.jar for both commits
         if: steps.previous.outputs.skip != 'true'
         shell: bash
@@ -88,8 +90,13 @@ jobs:
           set -euo pipefail
           git worktree add --detach "$RUNNER_TEMP/previous" "$PREVIOUS_SHA"
           for dir in . "$RUNNER_TEMP/previous"; do
-            cp bench/ci/perf-assembly.sbt "$dir/perf-assembly.sbt"
-            (cd "$dir" && sbt -v "Test / assembly")
+            if grep -Eq '^lazy val app\b' "$dir/build.sbt"; then
+              cp bench/ci/perf-assembly-app.sbt "$dir/perf-assembly.sbt"
+              (cd "$dir" && sbt -v "app/Test / assembly")
+            else
+              cp bench/ci/perf-assembly.sbt "$dir/perf-assembly.sbt"
+              (cd "$dir" && sbt -v "Test / assembly")
+            fi
           done
 
       - name: Run the ABBA on the excluded rows
@@ -98,8 +105,9 @@ jobs:
         run: |
           set -uo pipefail
           mapfile -t prefixes < <(python3 scripts/perf_nightly.py prefixes scripts/perf-gate-excluded-rows.txt)
+          perf_jar() { ls "$1"/modules/app/target/scala-*/serenity-perf.jar "$1"/target/scala-*/serenity-perf.jar 2>/dev/null | head -n 1; }
           status=0
-          bash bench/abba.sh "$RUNNER_TEMP"/previous/target/scala-*/serenity-perf.jar target/scala-*/serenity-perf.jar abba-runs "${prefixes[@]}" || status=$?
+          bash bench/abba.sh "$(perf_jar "$RUNNER_TEMP/previous")" "$(perf_jar .)" abba-runs "${prefixes[@]}" || status=$?
           python3 scripts/perf_nightly.py verdict "$status" --exclude-file scripts/perf-gate-excluded-rows.txt
 
       - name: Archive ABBA results
