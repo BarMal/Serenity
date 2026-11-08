@@ -80,16 +80,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/SurfaceTextContractSpec.scala"
   )
 
-  /** Suites that stay on Java2D because Skia still leaves their incremental frames different from the cold ones
-    * (#2380); each flips by deleting its `referenceFrames` override. The column paging, focused rich-text, raised
-    * letter and virtual drop cap suites are pinned on macOS only, where Skia leaves a few pixels of one row different.
-    */
-  private val pinnedBySkiaGap: Set[String] = Set(
-    "perf/ColumnPagingFramesSpec.scala",
-    "perf/FocusedRichTextFrameSpec.scala",
-    "perf/RaisedLetterIncrementalFrameSpec.scala",
-    "perf/VirtualDropCapIncrementalFrameSpec.scala"
-  )
+  private val pinnedBySkiaGap: Set[String] = Set.empty
 
   /** Window specs that still use Java2D as the reference for what Skia paints; the list only shrinks. */
   private val windowSpecsNotYetMoved: Set[String] = Set(
