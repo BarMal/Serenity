@@ -10,7 +10,7 @@ import scala.annotation.tailrec
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.input.ImeRequestsHost
-import com.serenity.state.manager.RenderCaches
+import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.color.RenderColor
@@ -142,6 +142,81 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
           )
       }
     }
+
+  /** The layer with image frames, as `auto` now makes it, whatever the property says. */
+  private val imageLayer =
+    new LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas), new RasterThenJava2D(SkiaRasterSurfaceFactory), LayerFrames.Image)
+
+  private def present(window: SwingWindow, state: AppState, damage: Damage, caches: RenderCaches): Unit =
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      window,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
+      uiMetrics,
+      None,
+      repaintOnFlush = true,
+      damage,
+      caches,
+      imageLayer
+    )
+    settle()
+
+  /** The screen once it differs from `before` and has stopped changing: two captures in a row agree. */
+  @tailrec
+  private def settledScreen(
+    window: SwingWindow,
+    before: Vector[Boolean],
+    previous: Option[Vector[Boolean]],
+    deadlineNanos: Long
+  ): BufferedImage =
+    val shot = onScreen(window)
+    val ink  = inkMap(shot)
+    if ink != before && previous.contains(ink) then shot
+    else if System.nanoTime() >= deadlineNanos then fail("the layer's frame never settled on a new picture")
+    else settledScreen(window, before, Some(ink), deadlineNanos)
+
+  it should "show, frame for frame, what a window drawing every frame from scratch shows, through typing, undo and scroll" in {
+    val first  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
+    val second = typedAt(first, proseLines, line = 4, text = "x")
+    val third  = typedAt(second, proseLines, line = 20, text = "yz")
+    val moved  = scrolledTo(third, 12)
+    val steps = List(
+      ("open", first, Damage.Everything),
+      ("type", second, DamageProducer.forTransition(first, second)),
+      ("type-2", third, DamageProducer.forTransition(second, third)),
+      ("undo", second, DamageProducer.forTransition(third, second)),
+      ("scroll", moved, DamageProducer.forTransition(second, moved)),
+      ("back", second, DamageProducer.forTransition(moved, second))
+    )
+    val scratch = withWindow { window =>
+      steps
+        .foldLeft((Vector.empty[(String, BufferedImage)], Vector.empty[Boolean])) {
+          case ((done, before), (name, state, _)) =>
+            present(window, state, Damage.Everything, RenderCaches.create())
+            val shot = settledScreen(window, before, None, System.nanoTime() + 15_000_000_000L)
+            (done :+ (name -> shot), inkMap(shot))
+        }
+        ._1
+    }
+    withWindow { window =>
+      val caches = RenderCaches.create()
+      steps.zip(scratch).foreach {
+        case ((name, state, damage), (_, expected)) =>
+          present(window, state, damage, caches)
+          val wanted = inkMap(expected)
+          val outcome = awaited(inkMap(onScreen(window)) == wanted, System.nanoTime() + 15_000_000_000L)
+          val shown   = onScreen(window)
+          keep(s"sequence-$name-incremental", shown)
+          keep(s"sequence-$name-scratch", expected)
+          withClue(s"after $name, cells whose ink differs from a frame drawn from scratch: ") {
+            (outcome, inkMap(shown).zip(wanted).count(_ != _)) shouldBe (true, 0)
+          }
+      }
+    }
+  }
 
   it should "draw the caret over the retained frame, and decline the caret-only path only until a frame exists" in
     withWindow { window =>
