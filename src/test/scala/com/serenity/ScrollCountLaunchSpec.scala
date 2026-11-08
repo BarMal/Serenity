@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.util.concurrent.{CountDownLatch, Executors}
+
 import scala.concurrent.duration.*
 
 import cats.effect.unsafe.implicits.global
