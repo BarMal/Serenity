@@ -178,13 +178,13 @@ object AppRuntime:
   ): IO[Unit] =
     (
       ShutdownTrace.traced("callback dispatcher")(Dispatcher.parallel[IO]),
-      ShutdownTrace.traced("timer supervisor")(Supervisor[IO](await = false))
-    ).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
+      ShutdownTrace.traced("timer supervisor")(Supervisor[IO](await = false)),
+      ScrollCountNotice.scoped
+    ).tupled.use { (resizeCallbackDispatcher, timerSupervisor, scrollCountNotice) =>
       for
         _ <- logger.info("Starting Serenity text editor")
         themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
         dictionaryCache   = DictionaryCache()
-        scrollCountNotice = new ScrollCountNotice
         scrollCounting =
           ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
         stateManager <- makeStateManager.getOrElse((logger, counting) =>
