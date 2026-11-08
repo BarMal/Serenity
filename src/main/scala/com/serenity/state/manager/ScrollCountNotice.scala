@@ -3,7 +3,6 @@ package com.serenity.state.manager
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.locks.ReentrantLock
 
-import cats.effect.{IO, Resource}
 import com.serenity.state.models.PaneId
 
 /** Where a background count says that a pane's rows are all measured. The state manager is built before the render loop
@@ -33,7 +32,3 @@ final class ScrollCountNotice:
 object ScrollCountNotice:
 
   private val nobody: PaneId => Unit = _ => ()
-
-  /** A notice that is closed when the resource is released, so acquire it after what its listener depends on. */
-  val scoped: Resource[IO, ScrollCountNotice] =
-    Resource.make(IO(new ScrollCountNotice))(notice => IO(notice.close()))

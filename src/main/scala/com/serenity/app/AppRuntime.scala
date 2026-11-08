@@ -135,6 +135,11 @@ object AppRuntime:
       val damage = DamageProducer.forTransition(before, after)
       IO.whenA(damage != Damage.Nothing)(emitDamage(damage))
 
+  /** Owned by the run that listens, and acquired after what the listener uses, so it is closed before that is released.
+    */
+  private[serenity] def scrollCountNoticeResource: Resource[IO, ScrollCountNotice] =
+    Resource.make(IO(new ScrollCountNotice))(notice => IO(notice.close()))
+
   /** A pane whose rows a background count has finished measuring has a bar to draw: tell the render loop. */
   private[serenity] def damageOnScrollCounted(
     notice: ScrollCountNotice,
@@ -179,7 +184,7 @@ object AppRuntime:
     (
       ShutdownTrace.traced("callback dispatcher")(Dispatcher.parallel[IO]),
       ShutdownTrace.traced("timer supervisor")(Supervisor[IO](await = false)),
-      ScrollCountNotice.scoped
+      scrollCountNoticeResource
     ).tupled.use { (resizeCallbackDispatcher, timerSupervisor, scrollCountNotice) =>
       for
         _ <- logger.info("Starting Serenity text editor")

@@ -141,7 +141,7 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
       Dispatcher
         .parallel[IO]
         .use(dispatcher =>
-          ScrollCountNotice.scoped
+          AppRuntime.scrollCountNoticeResource
             .use(notice => AppRuntime.damageOnScrollCounted(notice, _ => IO.unit, dispatcher).as(notice))
         )
         .unsafeRunSync()
