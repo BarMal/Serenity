@@ -89,6 +89,7 @@ final class SkiaLayerHost private (
     canvas.repaint()
 
   private def render(surface: Canvas): Unit =
+    DrawOrderLog.note("render-start")
     redraw.drawStarted()
     onDrawStart.get().foreach(_.apply())
     val _           = renders.incrementAndGet()
@@ -140,6 +141,7 @@ final class SkiaLayerHost private (
       )
     )
     listener.get().foreach(_.apply())
+    DrawOrderLog.note("render-end")
     if apiReported.compareAndSet(false, true) then report(s"[RENDER] skia layer renderApi=$renderApi")
 
   def baseAvailable: Boolean = published.get()
@@ -176,6 +178,7 @@ final class SkiaLayerHost private (
   def publishImage(image: Image): Unit = offer(LayerFrame.Rasterized(image))
 
   private def offer(frame: LayerFrame): Unit =
+    DrawOrderLog.note("publish")
     val _ = awaiting.compareAndSet(0L, System.nanoTime())
     slot.publish(frame)
     published.set(true)
@@ -184,6 +187,7 @@ final class SkiaLayerHost private (
     redraw.afterPublish()
 
   def showCarets(shown: List[SwingWindow.CaretPaint]): Unit =
+    DrawOrderLog.note("carets")
     carets.set(shown)
     val _ = caretSetAt.compareAndSet(0L, System.nanoTime())
     redraw.afterCaretsChanged()
@@ -344,8 +348,18 @@ object SkiaLayerHost:
         deviceName: String
       ): SkiaLayerAnalytics.DeviceAnalytics =
         new SkiaLayerAnalytics.DeviceAnalytics:
+          override def beforeFrameRender(): Unit = DrawOrderLog.note("skiko-before")
+
           override def afterFrameRender(): Unit =
-            drawEnd.get().foreach(callback => SwingUtilities.invokeLater(() => callback()))
+            DrawOrderLog.note("skiko-after")
+            drawEnd
+              .get()
+              .foreach(callback =>
+                SwingUtilities.invokeLater { () =>
+                  DrawOrderLog.note("draw-end-edt")
+                  callback()
+                }
+              )
 
   // Skiko's accessibility hook is a Kotlin function parameter whose default is "none".
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
