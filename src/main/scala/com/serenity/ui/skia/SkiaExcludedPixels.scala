@@ -3,7 +3,7 @@ package com.serenity.ui.skia
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.{PanelOutlineDrawing, PreservedPixels}
+import com.serenity.ui.renderer.{PanelOutlineDrawing, PreservedPixels, SurfaceActivity}
 import org.jetbrains.skia.{Canvas, Rect}
 
 /** Keeps drawing off the pixels a frame holds correct, so a redrawn row's antialiased ink cannot land on a kept row's
@@ -15,17 +15,22 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
   protected def canvas: Canvas
 
+  def activity: SurfaceActivity
+
   /** Where the canvas has been moved to from the pixels the kept rects are in. */
   protected def translationPx: (Double, Double)
 
-  private val keptRects = AtomicReference[List[PixelRect]](Nil)
+  /** The width and height of the canvas, which is all the pixels there are to paint. */
+  protected def extentPx: (Int, Int)
+
+  private val keptReach = AtomicReference(KeptReach(Nil))
 
   override def keepsOffPixels: Boolean = true
 
   override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
-    val before = keptRects.getAndSet(kept)
+    val before = keptReach.getAndSet(KeptReach(kept))
     try render
-    finally keptRects.set(before)
+    finally keptReach.set(before)
 
   /** Runs `draw`, whose ink stays within a line's height of the box `left, top, right, bottom` (in the canvas's own
     * coordinates, as [[SkiaRenderSurface]] records a run's reach), off the kept rects that ink can reach: once for each
@@ -34,8 +39,8 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
     * draw out of reach of all of them is not clipped at all.
     */
   private[skia] def awayFromKept(left: Float, top: Float, right: Float, bottom: Float)(draw: => Unit): Unit =
-    val kept = keptRects.get
-    if kept.isEmpty then draw
+    val kept = keptReach.get
+    if kept.rects.isEmpty then draw
     else
       val (shiftX, shiftY) = translationPx
       val boxLeft          = math.floor(left + shiftX).toInt
@@ -43,12 +48,21 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
       val boxRight         = math.ceil(right + shiftX).toInt
       val boxBottom        = math.ceil(bottom + shiftY).toInt
       val margin           = (boxBottom - boxTop).max(4)
-      val near             = PreservedPixels.near(kept, boxLeft, boxTop, boxRight, boxBottom, margin)
+      val near             = PreservedPixels.near(kept.rects, boxLeft, boxTop, boxRight, boxBottom, margin)
       if near.isEmpty then draw
       else
         val reach =
           PixelRect(boxLeft - margin, boxTop - margin, boxRight - boxLeft + 2 * margin, boxBottom - boxTop + 2 * margin)
-        PixelRect.uncoveredWithin(reach, near).foreach { piece =>
+        val (width, height) = extentPx
+        val visible = PixelRect(
+          math.floor(shiftX).toInt,
+          math.floor(shiftY).toInt,
+          width + 1,
+          height + 1
+        )
+        val pieces = kept.uncoveredWithin(reach, visible, () => activity.clipSwept())
+        activity.clipDrawn(pieces.size)
+        pieces.foreach { piece =>
           val saved = canvas.save()
           try
             val _ = canvas.clipRect(

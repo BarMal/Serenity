@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.CommandRegistry
 import com.serenity.config.{AppConfig, StatusLinePlacement, TabStripMode}
-import com.serenity.diagnostics.FrameCounter
+import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
@@ -112,6 +112,8 @@ trait ColdFrameHarness:
       screenImage
 
     def rowsDrawn: Long = caches.frameCounters.lastFrame(FrameCounter.RowsDrawn)
+
+    def counts: FrameCounts = caches.frameCounters.lastFrame
 
     private def present(image: FramePixels, region: Option[List[PixelRect]]): Unit =
       PresentAreas.of(region, image.recordedPaint, scale, image.widthPx, image.heightPx) match
@@ -247,6 +249,9 @@ trait ColdFrameHarness:
       Pooled(scale, persists = false).render(shown.get, Damage.Everything)
 
     def currentState: AppState = shown.get
+
+    /** What the latest frame counted. */
+    def lastFrameCounts: FrameCounts = frames.counts
 
     /** What the planner drew and kept for the latest frame. */
     def planOfLastFrame: Option[FramePlan] = frames.lastPlan
