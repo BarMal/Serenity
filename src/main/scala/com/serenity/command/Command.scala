@@ -63,6 +63,9 @@ enum RichTextIntent:
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ConvertToRichText(andThen: Option[RichTextIntent])
 
+  /** Removes the direct formatting headings carry as a whole, so the heading styles show (#2628). */
+  case ReformatHeadings
+
 enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
@@ -308,6 +311,10 @@ enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
   case SetUiOutlineThicknessPx(thickness: Int)
+  case SetUiCornerRadiusPx(radius: Int)
+  case SetTabMaxWidth(width: Int)
+  case SetDockedCornerStyle(style: DockedCornerStyle)
+  case SetPaneHeaderCorners(corners: PaneHeaderCorners)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetMenuBarMode(mode: MenuBarMode)

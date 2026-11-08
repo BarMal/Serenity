@@ -49,7 +49,7 @@ object MarkdownPreviewWindow:
       imageRef
         .get()
         .foreach(image =>
-          g.drawImage(image, 0, 0, getWidth, getHeight, com.serenity.ui.renderer.Java2DRenderSurface.NoOpImageObserver)
+          g.drawImage(image, 0, 0, getWidth, getHeight, com.serenity.ui.renderer.SurfaceSizing.NoOpImageObserver)
         )
 
   private def runOnEdt(action: => Unit): IO[Unit] =

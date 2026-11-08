@@ -1,6 +1,7 @@
 package com.serenity.rope
 
 import com.serenity.perf.SettledAllocation
+import com.serenity.testkit.HeapMeasurementTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,21 +22,18 @@ class RopeDiffAllocationSpec extends AnyFlatSpec with Matchers:
     val boundary = firstChildWeight(before)
     (before, before.insert(boundary, "x").getOrElse(before))
 
-  "Finding an insertion at the end of a subtree" should "cost the same in a 1 MB rope as in a 10 KB one" in {
+  "Finding an insertion at the end of a subtree" should "cost the same in a 1 MB rope as in a 10 KB one" taggedAs HeapMeasurementTest in {
     val (before, after) = endOfLeftSubtreeEdit(1024 * 1024)
     withClue("the edit must land on the end of the left subtree: ") {
       RopeDiff.changedOffsetRange(before, after).map(_._1) shouldBe Some(firstChildWeight(before))
     }
     val (smallBefore, smallAfter) = endOfLeftSubtreeEdit(10 * 1024)
-    SettledAllocation.perCall(
+    val (small, large) = SettledAllocation.perCallRequired(
       () => RopeDiff.changedOffsetRange(smallBefore, smallAfter),
       () => RopeDiff.changedOffsetRange(before, after)
-    ) match
-      case Some((small, large)) =>
-        info(s"10 KB rope allocated ${small}B, 1 MB rope allocated ${large}B")
-        withClue(s"10 KB rope allocated ${small}B, 1 MB rope allocated ${large}B: ")(large should be < small * 2L)
-      case None =>
-        info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
+    )
+    info(s"10 KB rope allocated ${small}B, 1 MB rope allocated ${large}B")
+    withClue(s"10 KB rope allocated ${small}B, 1 MB rope allocated ${large}B: ")(large should be < small * 2L)
   }
   private def chunked(text: String, size: Int): Rope =
     Rope.fromLeafValues(text.grouped(size).toVector)
@@ -45,18 +43,15 @@ class RopeDiffAllocationSpec extends AnyFlatSpec with Matchers:
     val middle = text.length / 2
     (chunked(text, 100), chunked(text.take(middle) + "x" + text.drop(middle), 64))
 
-  "Finding an edit between ropes of different shapes" should "allocate no more than its answer, however large they are" in {
+  "Finding an edit between ropes of different shapes" should "allocate no more than its answer, however large they are" taggedAs HeapMeasurementTest in {
     val (before, after) = misalignedShapes(1024 * 1024)
     val middle          = before.weight / 2
     RopeDiff.changedOffsetRange(before, after) shouldBe Some((middle, middle + 1))
     val (smallBefore, smallAfter) = misalignedShapes(10 * 1024)
-    SettledAllocation.perCall(
+    val (small, large) = SettledAllocation.perCallRequired(
       () => RopeDiff.changedOffsetRange(smallBefore, smallAfter),
       () => RopeDiff.changedOffsetRange(before, after)
-    ) match
-      case Some((small, large)) =>
-        withClue(s"10 KB ropes allocated ${small}B, 1 MB ropes allocated ${large}B: ")(large should be <= 256L)
-      case None =>
-        info("JVM per-thread allocation counter unsupported on this runtime -- skipping the allocation assertion")
+    )
+    withClue(s"10 KB ropes allocated ${small}B, 1 MB ropes allocated ${large}B: ")(large should be <= 256L)
   }
 end RopeDiffAllocationSpec

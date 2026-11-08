@@ -146,7 +146,7 @@ def _median_int(values: list[int | None]) -> int | None:
 
 
 def median_rows(runs: list[dict[str, Row]]) -> dict[str, Row]:
-    """Each benchmark's median p50, p95, allocation and retained heap across the runs that measured it."""
+    """Each benchmark's median p50, p95, allocation (own thread and all threads) and retained heap across the runs that measured it."""
     rows: dict[str, Row] = {}
     for name in sorted(set().union(*[set(run) for run in runs])):
         seen = [run[name] for run in runs if name in run]
@@ -157,6 +157,8 @@ def median_rows(runs: list[dict[str, Row]]) -> dict[str, Row]:
             _median_int([r.allocation_p50_bytes for r in seen]),
             _median_int([r.allocation_p95_bytes for r in seen]),
             _median_int([r.retained_bytes for r in seen]),
+            _median_int([r.allocation_all_threads_p50_bytes for r in seen]),
+            _median_int([r.allocation_all_threads_p95_bytes for r in seen]),
         )
     return rows
 

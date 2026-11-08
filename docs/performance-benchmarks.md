@@ -41,28 +41,55 @@ Scenarios cover:
   X pixmap, so that benchmark skipped the upload a real frame pays and timed only how far the client ran ahead of
   Xvfb -- bimodal within one run (0.02 vs 0.4 ms on CI), and a 7x p50 spread across five local runs.
 
+- `index.walk.{cold,warm}.100k`: `ProjectFileIndex.listing` over a synthetic 100,000-file, 10,000-directory tree
+  (`SyntheticProjectTree`), from a fresh index (full walk) and from a walked one (revalidation). Allocation is tracked
+  for the `index.walk.` prefix. The tree's depth and spread are fitted to four measured real trees; its ignored-file
+  counts are assumptions. Details in `bench/README.md`.
+- `startup.{cold,warm}.first_frame` and `startup.*.interactive` come from `bench/startup.py`, not
+  `PerformanceBenchmarks`: they launch a packaged image, so they run from the Desktop Package Check image, track a trend
+  on CI (within-run CV 2 to 3.5%, between-run about 4 to 5% on the runner, so no hard gate) and are judged on the laptop
+  with `bench/abba-startup.sh`. Its 100 ms floor is a guess pending an A/A run on the laptop. The interactive rows use
+  the hidden `--startup-probe` flag, which injects one key after the first frame and is refused unless `--safe-mode` or
+  an isolated home (`.serenity-startup-probe-home`) is set, so it cannot type into a real profile. Its 30 s ceiling is
+  a hang guard, not a target.
+- Typing while a project is indexed is a measurement (`TypingWhileIndexingProfile`), not a row: no threshold has a
+  basis yet.
+
 - `laptop.input.state_manager.typing_random_letters`: seeded-random letters (about one in six a space) typed at the
   prose cursor, so nearly every keystroke misses the wrap cache that `continuous_typing`'s cyclic a..z and
   `type_and_delete`'s re-typed text hit.
 - `laptop.input.state_manager.typing_long_paragraph`: the same typing into one 4000-character paragraph with no
   newlines, to show per-keystroke cost against paragraph length.
 
+- `skia.compare.{skia_raster,java2d}.{system_monospace,bundled_ligature_font}.*` (#2575): the typing frame, the
+  3-line scroll frame and a random-letter typing frame, each drawn by Skia's CPU raster surface
+  (`Surface.makeRasterN32Premul`, no window, no GL) and by Java2D into the same 1500x1000 logical window at 2x, with
+  every frame told its damage and the surface caches kept from frame to frame (`SkiaFrameBenchmarks`). Skia is the
+  default renderer, so these are the only rows that time it. They say what the surface's CPU-side work costs, not what
+  a GL frame costs, and a standard runner has no GPU to time that. The prefix `skia` is in
+  `scripts/perf-gate-excluded-rows.txt`: the per-PR gate measures and prints the rows, marked as excluded, and never
+  fails on them; the nightly ABBA (#2572, `.github/workflows/perf-nightly-abba.yml`, which turns that file into the prefixes it
+  runs) judges them. Run them alone with `xvfb-run -a sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks skia."`,
+  or the same rows without the rest of the suite via `app/Test/runMain com.serenity.perf.SkiaFrameBenchmarks`.
+
 Pass name prefixes to run only some scenarios, e.g. `sbt "app/Test/runMain com.serenity.perf.PerformanceBenchmarks laptop."`.
 
 ## Memory metrics: footprint and allocation
 
-The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent.
+The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent. Two more columns follow, `allocation_all_threads_p50_bytes` and `allocation_all_threads_p95_bytes`, filled only by rows that call `measuringAllThreads`; older files without them still parse.
 
 **Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Because of that discard, process-wide caches never show up in a `footprint.*` figure; see [Footprint rows and static caches](#footprint-rows-and-static-caches). Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`, and the `prose_frame.*` rows that draw a frame so the caches have something to hold. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "app/Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
 
 **Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
+
+**All-threads allocation** is for a row whose work runs on threads other than the benchmark's own (the `StateManager` runtime, the Swing event thread, the project walk's workers), where the columns above see only the caller. A row opts in with `measuringAllThreads`; its pass sums every live thread's `getThreadAllocatedBytes` before and after each batch (`BenchmarkRunner.allocatedAcrossThreads`). A thread that ends mid-batch is lost, so a row that spawns short-lived threads under-reports; threads that outlive the batch, such as pool workers, are counted whole. Anything else running in the process during the batch is counted too, so read it as an upper bound on the row's own work. The allocation check and the ABBA read this column for such a row instead of `allocation_p50_bytes`. A baseline (or an ABBA side A) built before the column existed has no value to compare with, so that row is skipped for allocation with a `::notice::` until the baseline is rebuilt; it is not compared on the caller's share, which measures something else.
 
 **CI gate (`scripts/check_perf_regression.py`)**
 
 | Metric | Condition | Effect |
 | --- | --- | --- |
 | `retained_bytes` | current > 1.25x baseline AND delta > 1 MiB | fails the build |
-| `allocation_p50_bytes` | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
+| `allocation_p50_bytes` (`allocation_all_threads_p50_bytes` for a row that reports it) | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
 
 Thresholds are `--retained-threshold`, `--min-retained-delta-bytes`, `--allocation-threshold` and `--min-allocation-delta-bytes`. A baseline without the columns is skipped with a `::notice::` instead of failing. `combine_perf_runs.py` carries the columns through and keeps the largest retained value for a baseline (`--pick slowest`) and the smallest for a head.
 
@@ -153,7 +180,7 @@ The run-to-run spread on the sub-millisecond boundary rows is up to about 12%, s
 
 `-Dserenity.bench.warmup.rowCapSeconds=` and `runCapSeconds=` change the caps for a study, and `-Dserenity.bench.warmup=off` turns the extension off. Rows with `fixedSampleCount` (those that grow the state they time, such as `prose.markdown_enter.renumber`, which adds a line per call) are not extended: extra calls would change their p50 instead of settling it. That is why `prose.markdown_enter.renumber` read 3.97x slower in the first experiment.
 
-**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 45% of the rows and the rest, a split from one run of per-row times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only.
+**Order is part of the measurement.** The budget is spent in list order, and the first 36 to 44 rows are extended; the other rows, which are not, still improved, plausibly because the early warm-up compiled shared code (inference, not isolated). `PerformanceBenchmarksOrderSpec` pins the first 40 row names so that a reorder is a deliberate change; it reads them with `PerformanceBenchmarks.names`, which builds no window and no fixture, because a benchmark is declared as its name and settings and the runner builds its fixture just before it verifies, warms up and times it. The 2x HiDPI job runs the suite as two shards (`--shard=1/2`, `--shard=2/2`: the first 40% of the rows and the rest, a split from measured job times that moves as rows are added); each shard is a separate JVM with its own 90 s budget, and the retained-heap rows run in the first shard only. The 2x job (`perf-2x` in `ci.yml`) runs nightly on master and on pull requests that carry the `perf` label, not on merge trains or unlabelled pull requests (#2618); a failed nightly run is also written on #2643.
 
 **Measured** (12 full runs with the extension against 12 without, 4-core container; container figures):
 
@@ -200,7 +227,7 @@ A benchmark **blocks** the change when B is worse than A by:
 | Metric | Blocks when |
 | --- | --- |
 | time (`p50_ms`) | the four-run p50 ranges do not overlap (B's fastest run is slower than A's slowest), B's median is at least 5% slower, **and** at least 0.03 ms slower |
-| allocation (`allocation_p50_bytes`) | B's median is at least 5% **and** at least 8 KiB above A's |
+| allocation (`allocation_p50_bytes`, or `allocation_all_threads_p50_bytes` for a row that reports it on both sides) | B's median is at least 5% **and** at least 8 KiB above A's |
 | footprint (`retained_bytes`) | B's median is more than 10% above A's |
 
 The 5% and 0.03 ms floors are separate guards on purpose, as in the CI gate: the ratio alone over-fires on microsecond rows and the delta alone on multi-millisecond ones. Overlapping ranges never block however far the medians are, because the eight runs could not tell the builds apart. A blocked benchmark needs either a fix or a note in the PR that explains it (the `stable_text` footprint rows above are the expected case); `abba_compare.py` exits 1 and prints one `::error::` line per blocking metric.
@@ -234,7 +261,11 @@ wrote, escape sequences included; a caret flush made after a frame's content flu
 Only counters that were ever non-zero are listed. A typing frame that lists `rows-drawn max=` far above a handful, or a
 `present-px` near the whole window, is over-repainting however fast it happens to be. The `laptop.render.typing_frame_2x`
 and `scroll_frame_2x` benchmarks assert a ceiling on `rows-drawn` while verifying their frames (`MaxTypingRowsDrawn`,
-`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it.
+`MaxScrollRowsDrawn` in `LaptopFrameBenchmarks`), so lost row reuse fails the benchmark rather than only slowing it. `skia.laptop.render.typing_frame_2x` and `skia.laptop.render.scroll_frame_2x` draw the same frames on Skia's CPU
+raster surface (`PersistingFrames` takes a `FrameBackend`) and run the same check before they are timed: the same row
+ceilings, and pixel equality with a frame Skia draws from scratch. They have the `skia.` prefix, so the per-PR gate
+does not judge them once `scripts/perf-gate-excluded-rows.txt` lists it; the other `laptop.render.*` rows differ from
+these two only in their fixtures and have no Skia twin.
 
 This remains a manual comparison tool for local before/after investigation. CI additionally runs this harness on every
 push/PR and gates on it: `scripts/check_perf_regression.py` compares the run's p50 against a stored baseline and

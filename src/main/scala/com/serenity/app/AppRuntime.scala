@@ -11,7 +11,14 @@ import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
 import com.serenity.config.{AppConfig, RenderFpsTarget}
-import com.serenity.diagnostics.{EdtLagTrace, FrameTimingReport, FrameTimings, KeyLatencyReport}
+import com.serenity.diagnostics.{
+  EdtLagTrace,
+  FrameTimingReport,
+  FrameTimings,
+  KeyLatencyReport,
+  ShutdownLedger,
+  ShutdownTrace
+}
 import com.serenity.frontend.{Frontend, FrontendRuntime}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
@@ -19,7 +26,8 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, Damage, PointerShape}
+import com.serenity.state.models.{AppState, Damage, Notice, NoticeLevel, PointerShape}
+import com.serenity.trust.{ProjectTrustService, ProjectTrustStore}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -160,9 +168,18 @@ object AppRuntime:
     onFirstFrame: IO[Unit] = IO.unit,
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
     quitRequests: Stream[IO, QuitResponse] = Stream.empty,
-    fileOrFolderOpen: Boolean = false
-  )(using logger: Logger[IO], loggerFactory: LoggerFactory[IO], balance: com.serenity.rope.Balance): IO[Unit] =
-    (Dispatcher.parallel[IO], Supervisor[IO](await = false)).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
+    fileOrFolderOpen: Boolean = false,
+    afterEditorShutdown: IO[Unit] = IO.unit
+  )(using
+    logger: Logger[IO],
+    loggerFactory: LoggerFactory[IO],
+    balance: com.serenity.rope.Balance,
+    ledger: ShutdownLedger
+  ): IO[Unit] =
+    (
+      ShutdownTrace.traced("callback dispatcher")(Dispatcher.parallel[IO]),
+      ShutdownTrace.traced("timer supervisor")(Supervisor[IO](await = false))
+    ).tupled.use { (resizeCallbackDispatcher, timerSupervisor) =>
       for
         _ <- logger.info("Starting Serenity text editor")
         themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
@@ -271,7 +288,7 @@ object AppRuntime:
         )
         inputLoop = runInputLoop(stateManager, inputHandler.inputBatches.through(inputFunnel))
         _ <-
-          Resource.make(inputLoop.start)(_.cancel).use { inputFiber =>
+          ShutdownTrace.traced("input loop")(Resource.make(inputLoop.start)(_.cancel)).use { inputFiber =>
             runtime.renderFull(initialState, true, None, Damage.Everything, stateManager.renderCaches) >>
               onFirstFrame >>
               logger.info("Initial render completed, starting main loop") >>
@@ -317,29 +334,32 @@ object AppRuntime:
 
                   val renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
 
-                  com.serenity.io.FileChangeWatcher.create.use(watcher =>
-                    runRuntimeLoops(
-                      stateManager,
-                      inputHandler,
-                      inputFiber.joinWithNever,
-                      renderLoop,
-                      watcher,
-                      awaitExternalQuit,
-                      appConfig,
-                      runtime.frameTimings,
-                      frameTimingEnabled,
-                      latencyTraceEnabled,
-                      frontend.eventThread,
-                      watchInputs.discrete.as(()),
-                      windowFocused,
-                      forwardedOpens,
-                      quitRequests,
-                      recovery.crashRecorder
+                  ShutdownTrace
+                    .traced("file watcher")(com.serenity.io.FileChangeWatcher.create)
+                    .use(watcher =>
+                      runRuntimeLoops(
+                        stateManager,
+                        inputHandler,
+                        inputFiber.joinWithNever,
+                        renderLoop,
+                        watcher,
+                        awaitExternalQuit,
+                        appConfig,
+                        runtime.frameTimings,
+                        frameTimingEnabled,
+                        latencyTraceEnabled,
+                        frontend.eventThread,
+                        watchInputs.discrete.as(()),
+                        windowFocused,
+                        forwardedOpens,
+                        quitRequests,
+                        recovery.crashRecorder
+                      )
                     )
-                  )
                 }
           }
         _ <- logger.info("Serenity editor shutdown complete")
+        _ <- afterEditorShutdown
       yield ()
     }
 
@@ -378,13 +398,18 @@ object AppRuntime:
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
       AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
-        LspManager.run(
-          stateManager.lspEffectSource.lspEffectStream,
-          stateManager.applyEvent,
-          logger,
-          appConfig.languageToolsConfig.lspUserConfig,
-          stateManager.lspEffectSource.notices
-        )
+        ProjectTrustService.load(ProjectTrustStore.defaultPath).flatMap { loaded =>
+          loaded.problem
+            .traverse_(problem => stateManager.lspEffectSource.notices.show(unreadableTrustNotice(problem))) >>
+            LspManager.run(
+              stateManager.lspEffectSource.lspEffectStream,
+              stateManager.applyEvent,
+              logger,
+              loaded.service,
+              appConfig.languageToolsConfig.lspUserConfig,
+              stateManager.lspEffectSource.notices
+            )
+        }
       ),
       AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
         externalChangeWatchLoop(
@@ -446,38 +471,49 @@ object AppRuntime:
     * The warm-up needs a frontend that can draw off-screen and `startup.warm_up` on; the preload needs the
     * `dictionaryCache` the editor's own state manager reads from.
     */
+  /** Fails closed: with the file unreadable no folder is trusted, so this says why language servers stay off. */
+  private[app] def unreadableTrustNotice(problem: String): Notice =
+    Notice(
+      NoticeLevel.Warning,
+      s"Could not read the trusted folders in ${ProjectTrustStore.defaultPath}, so no folder is trusted: $problem"
+    )
+
   private def startupWarmUp(
     runtime: FrontendRuntime,
     initialState: AppState,
     viewport: ViewportSize,
     firstInput: Deferred[IO, Unit],
     dictionaryCache: Option[DictionaryCache]
-  )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Resource[IO, Unit] =
+  )(using logger: Logger[IO], balance: com.serenity.rope.Balance, ledger: ShutdownLedger): Resource[IO, Unit] =
     val config = initialState.persisted.config
     val preload = dictionaryCache.fold(Resource.unit[IO])(cache =>
-      StartupWarmUp
-        .preloadSpellDictionary(config, cache)
-        .handleErrorWith(error => logger.warn(error)("[WARMUP] Spell dictionary preload failed"))
-        .background
-        .map(_ => ())
+      ShutdownTrace.traced("spell dictionary preload")(
+        StartupWarmUp
+          .preloadSpellDictionary(config, cache)
+          .handleErrorWith(error => logger.warn(error)("[WARMUP] Spell dictionary preload failed"))
+          .background
+          .map(_ => ())
+      )
     )
     val warmUp = runtime.offscreenFrames.filter(_ => config.surfaceConfig.startupWarmUpEnabled) match
       case None => Resource.unit[IO]
       case Some(frames) =>
-        StartupWarmUp
-          .run(
-            config,
-            initialState.persisted.theme,
-            viewport,
-            frames,
-            firstInput,
-            dictionaryCache = dictionaryCache.getOrElse(DictionaryCache())
-          )
-          .timed
-          .flatMap((elapsed, outcome) => logger.info(s"[WARMUP] $outcome after ${elapsed.toMillis}ms"))
-          .handleErrorWith(error => logger.warn(error)("[WARMUP] Startup warm-up failed"))
-          .background
-          .map(_ => ())
+        ShutdownTrace.traced("startup warm-up")(
+          StartupWarmUp
+            .run(
+              config,
+              initialState.persisted.theme,
+              viewport,
+              frames,
+              firstInput,
+              dictionaryCache = dictionaryCache.getOrElse(DictionaryCache())
+            )
+            .timed
+            .flatMap((elapsed, outcome) => logger.info(s"[WARMUP] $outcome after ${elapsed.toMillis}ms"))
+            .handleErrorWith(error => logger.warn(error)("[WARMUP] Startup warm-up failed"))
+            .background
+            .map(_ => ())
+        )
     preload.flatMap(_ => warmUp)
 
   private def runInputLoop(stateManager: StateManager, inputLoop: Stream[IO, Unit])(using

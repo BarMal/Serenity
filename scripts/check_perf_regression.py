@@ -17,7 +17,8 @@ actually fail the build.
 
 Memory: `footprint.*` rows carry `retained_bytes` (heap held by a built state after GC) and fail when current exceeds
 1.25x baseline AND grows by more than 1 MiB. `allocation_p50_bytes` regressions past 1.5x with a delta over 64 KiB are
-printed as warnings only, unless `--gate-allocation` is passed. A baseline lacking these columns is skipped with a note.
+printed as warnings only, unless `--gate-allocation` is passed. A row that reports `allocation_all_threads_p50_bytes` is
+checked on that column instead. A baseline lacking the column a row is checked on is skipped with a note.
 
 A missing baseline (a cache-cold run: cache eviction, or a branch with none yet) fails loudly by default rather than
 silently passing with nothing compared -- that silence was the second gap an audit of #1503 found. Pass
@@ -50,6 +51,8 @@ class Row:
     allocation_p50_bytes: int | None = None
     allocation_p95_bytes: int | None = None
     retained_bytes: int | None = None
+    allocation_all_threads_p50_bytes: int | None = None
+    allocation_all_threads_p95_bytes: int | None = None
 
 
 def _optional_bytes(fields: list[str], index: int) -> int | None:
@@ -84,6 +87,8 @@ def parse_csv(path: str) -> dict[str, Row]:
                 _optional_bytes(fields, 8),
                 _optional_bytes(fields, 9),
                 _optional_bytes(fields, 10),
+                _optional_bytes(fields, 11),
+                _optional_bytes(fields, 12),
             )
     return rows
 
@@ -168,11 +173,20 @@ def _exceeds(baseline: int, current: int, ratio: float, min_delta: int) -> bool:
     return baseline > 0 and current / baseline > ratio and current - baseline > min_delta
 
 
+def _report_allocation(name: str, label: str, before: int, now: int, args: argparse.Namespace) -> int:
+    """Prints a regression of one allocation column and returns the failures it counts: none unless gated."""
+    if not _exceeds(before, now, args.allocation_threshold, args.min_allocation_delta_bytes):
+        return 0
+    level = "error" if args.gate_allocation else "warning"
+    print(f"::{level}::{name}: {label} {before} -> {now} bytes/invocation ({now / before:.2f}x)")
+    return 1 if args.gate_allocation else 0
+
+
 def check_memory(baseline: dict[str, Row], current: dict[str, Row], args: argparse.Namespace) -> int:
     """Gates retained heap and reports allocation; returns the number of failures. A side without the column is
     skipped with a note, so an old baseline cannot crash or fail the check."""
     failures = 0
-    skipped_retained = skipped_allocation = 0
+    skipped_retained = skipped_allocation = skipped_all_threads = 0
     for name, now in sorted(current.items()):
         before = baseline.get(name)
         if before is None:
@@ -186,22 +200,33 @@ def check_memory(baseline: dict[str, Row], current: dict[str, Row], args: argpar
                     f"::error::{name}: retained heap {before.retained_bytes} -> {now.retained_bytes} bytes "
                     f"({now.retained_bytes / before.retained_bytes:.2f}x, +{now.retained_bytes - before.retained_bytes} bytes)"
                 )
-        if now.allocation_p50_bytes is not None:
+        if now.allocation_all_threads_p50_bytes is not None:
+            if before.allocation_all_threads_p50_bytes is None:
+                skipped_all_threads += 1
+            else:
+                failures += _report_allocation(
+                    name,
+                    "allocation (all threads) p50",
+                    before.allocation_all_threads_p50_bytes,
+                    now.allocation_all_threads_p50_bytes,
+                    args,
+                )
+        elif now.allocation_p50_bytes is not None:
             if before.allocation_p50_bytes is None:
                 skipped_allocation += 1
-            elif _exceeds(
-                before.allocation_p50_bytes, now.allocation_p50_bytes, args.allocation_threshold, args.min_allocation_delta_bytes
-            ):
-                level = "error" if args.gate_allocation else "warning"
-                failures += 1 if args.gate_allocation else 0
-                print(
-                    f"::{level}::{name}: allocation p50 {before.allocation_p50_bytes} -> {now.allocation_p50_bytes} "
-                    f"bytes/invocation ({now.allocation_p50_bytes / before.allocation_p50_bytes:.2f}x)"
+            else:
+                failures += _report_allocation(
+                    name, "allocation p50", before.allocation_p50_bytes, now.allocation_p50_bytes, args
                 )
     if skipped_retained:
         print(f"::notice::{skipped_retained} footprint row(s) skipped: baseline has no retained_bytes column/value.")
     if skipped_allocation:
         print(f"::notice::{skipped_allocation} row(s) skipped for allocation: baseline has no allocation value.")
+    if skipped_all_threads:
+        print(
+            f"::notice::{skipped_all_threads} row(s) skipped for all-threads allocation: "
+            "baseline has no allocation_all_threads_p50_bytes value."
+        )
     return failures
 
 

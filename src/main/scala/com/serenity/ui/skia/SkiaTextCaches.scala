@@ -1,6 +1,7 @@
 package com.serenity.ui.skia
 
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches}
+import org.jetbrains.skia.Typeface
 
 /** What a Skia surface paints text and images through. Their owner shares one set across every frame and layer it
   * draws, as it does for a Java2D surface ([[com.serenity.ui.renderer.SurfaceTextCaches]]).
@@ -24,6 +25,20 @@ object SkiaTextCaches:
       new SkiaShapedTextCache(warmup = warmup),
       new SkiaImageCache(),
       warmup = warmup
+    )
+
+  /** Makes `owner`'s set with faces looked up through `resolve`, for a spec's fixture font. It must come before the
+    * first use of the set: an owner that already has one keeps it.
+    */
+  private[skia] def withTypefaces(owner: BackendCaches, resolve: SkiaTypefaces.TypefaceKey => Typeface): Unit =
+    val warmup = new WarmupStats()
+    val _ = owner.getOrCreate(Key)(
+      SkiaTextCaches(
+        new SkiaFontCache(warmup = warmup, resolveTypeface = resolve),
+        new SkiaShapedTextCache(warmup = warmup),
+        new SkiaImageCache(),
+        warmup = warmup
+      )
     )
 
   /** The set `owner` draws with, made the first time it is asked for. */

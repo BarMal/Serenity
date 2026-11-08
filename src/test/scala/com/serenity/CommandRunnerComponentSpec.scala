@@ -27,6 +27,15 @@ class CommandRunnerComponentSpec extends AnyFlatSpec with Matchers:
       )
     )
 
+  private def stateAfter(result: ComponentResult, before: AppState): AppState = result match
+    case ComponentResult.StateChange(update) => update(before)
+    case ComponentResult.ReducerUpdate(done) => done.state
+    case ComponentResult.Composite(results)  => results.foldLeft(before)((state, next) => stateAfter(next, state))
+    case _                                   => before
+
+  private def runnerIn(state: AppState): Option[CommandRunner] =
+    state.commandRunnerSurface.collect { case UiSurface(_, SurfaceContent.CommandPalette(runner), _, _) => runner }
+
   "CommandRunnerComponent" should "activate command runner on hotkey" in {
     val component    = new CommandRunnerComponent()
     val initialState = AppState.empty
@@ -43,7 +52,7 @@ class CommandRunnerComponentSpec extends AnyFlatSpec with Matchers:
     val result = component.processEvent(InsertChar('s'), activeState)
 
     result shouldNot be(ComponentResult.noChange)
-    // Should update search term and filter commands
+    runnerIn(stateAfter(result, activeState)).map(_.searchTerm) shouldBe Some("s")
   }
 
   it should "handle escape to close runner" in {
@@ -53,7 +62,7 @@ class CommandRunnerComponentSpec extends AnyFlatSpec with Matchers:
     val result = component.processEvent(com.serenity.keystroke.events.Escape, activeState)
 
     result shouldNot be(ComponentResult.noChange)
-    // Should deactivate command runner and restore focus
+    runnerIn(stateAfter(result, activeState)).exists(_.isActive) shouldBe false
   }
 
   it should "handle enter to execute selected command" in {

@@ -7,7 +7,7 @@ import scala.concurrent.duration.*
 import cats.effect.IO
 import cats.syntax.apply.*
 import cats.syntax.foldable.*
-import com.serenity.io.CheckedFileStamps
+import com.serenity.io.{CheckedFileStamps, WatchedChanges}
 import com.serenity.state.manager.ConfigFileWatch
 import com.serenity.state.models.{AppState, BufferId, BufferMapChanges}
 import fs2.Stream
@@ -66,17 +66,20 @@ private[serenity] object AppRuntimeExternalChanges:
         paths.keySet.flatMap(path => Option(path.getParent)) ++ dictionaryDirectories ++ explorerDirectories ++
           configWatch.flatMap(watch => Option(watch.file.getParent))
     }
+    // An overflowed directory lost its individual reports, so everything in it counts as changed (#2531).
     val react = (checkedStamps: CheckedFileStamps) =>
-      (changed: Set[Path]) =>
+      (changes: WatchedChanges) =>
         (openBufferPaths, dictionaryWatchDirectories, explorerWatchDirectories).mapN {
           (paths, dictionaryDirectories, explorerDirectories) =>
-            val changedDirectories = changed.flatMap(path => Option(path.getParent))
+            def changed(path: Path) =
+              changes.files.contains(path) || Option(path.getParent).exists(changes.overflowed.contains)
+            val changedDirectories = changes.files.flatMap(path => Option(path.getParent)) ++ changes.overflowed
             val staleExplorers     = changedDirectories.intersect(explorerDirectories)
-            val buffers            = changed.toList.flatMap(path => paths.get(path).map(path -> _))
+            val buffers            = paths.toList.filter((path, _) => changed(path))
             checkedStamps.claimChanged(buffers).flatMap(_.traverse_(checkBufferForExternalChanges)) >>
               IO.whenA(changedDirectories.exists(dictionaryDirectories.contains))(refreshDictionaryFingerprints) >>
               IO.whenA(staleExplorers.nonEmpty)(markExplorerDirectoriesStale(staleExplorers)) >>
-              configWatch.filter(watch => changed.contains(watch.file)).traverse_(_.reload)
+              configWatch.filter(watch => changed(watch.file)).traverse_(_.reload)
         }.flatten
     def syncWatched(watching: SignallingRef[IO, Boolean]) =
       watched.flatMap(directories => watcher.sync(directories) >> watching.set(directories.nonEmpty))

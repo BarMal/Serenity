@@ -14,9 +14,15 @@ object FrameMismatchDump:
   private val counter   = new AtomicInteger(0)
 
   /** Writes `actual`, `expected` and a mask of the differing pixels as PNGs, and returns a line naming them and the
-    * colours at the first differing pixels.
+    * colours at the first differing pixels, then `plan` (see [[FramePlanReport]]) when the caller has one.
     */
-  def write(label: String, actual: BufferedImage, expected: BufferedImage, differing: Seq[(Int, Int)]): String =
+  def write(
+    label: String,
+    actual: BufferedImage,
+    expected: BufferedImage,
+    differing: Seq[(Int, Int)],
+    plan: Option[String] = None
+  ): String =
     val stem = f"${counter.incrementAndGet()}%03d-${label.replaceAll("[^A-Za-z0-9]+", "-").take(80)}"
     try
       Files.createDirectories(directory)
@@ -28,7 +34,8 @@ object FrameMismatchDump:
       .take(8)
       .map((x, y) => f"($x,$y) actual=${rgb(actual, x, y)}%06x expected=${rgb(expected, x, y)}%06x")
     val neighbourhoods = clusters(differing).take(3).map((x, y) => neighbourhood(actual, expected, x, y))
-    val line = (s"$stem: ${differing.size} px differ; ${samples.mkString("; ")}" +: neighbourhoods).mkString("\n")
+    val headline       = s"$stem: ${differing.size} px differ; ${samples.mkString("; ")}"
+    val line           = (headline +: (plan.toList ++ neighbourhoods)).mkString("\n")
     try Files.writeString(directory.resolve(s"$stem.txt"), line + "\n")
     catch case _: java.io.IOException => ()
     line

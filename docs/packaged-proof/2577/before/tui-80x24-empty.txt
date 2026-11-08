@@ -1,0 +1,24 @@
+                                   scratch.md                                   
+ 1                                                                              
+     ╭──────────────────────────────────────────────────────────────────────╮   
+     │search:                                                               │   
+     │Open Settings          Browse, search, inspect, and change applicat...│   
+     │                                                                      │   
+     │Export Manuscript...   Export the current document, or the book its...│   
+     │                                                                      │   
+     │Export Manuscript a... Export the current document, or the book its...│   
+     │                                                                      │   
+     │                                                                      │   
+     │↑↓ move • Enter run • Esc close                                       │   
+     │                                                                      │   
+     ╰──────────────────────────────────────────────────────────────────────╯   
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+                                                                                
+ Line 1, Col 1 | Markdown | scratch.md | Code                                   

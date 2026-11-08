@@ -5,12 +5,12 @@ import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{Files, LinkOption, Path}
 import java.util.Locale
 
-import scala.collection.immutable.Queue
 import scala.jdk.CollectionConverters.*
 import scala.util.{Try, Using}
 
 import cats.Monad
 import cats.effect.IO
+import cats.syntax.all.*
 
 /** The files under a project root, relative to it and sorted by path. `truncated` when files are left unlisted: the
   * walk stopped at its limit, or it is still running and this is what it had found so far.
@@ -80,19 +80,28 @@ object ProjectFileWalker:
   /** The root as a directory key; the empty path, so that `resolve` of a name gives just that name. */
   private[io] val RootDirectory: Path = Path.of("")
 
+  /** Directories a walk reads at once. A walk is bound by filesystem calls, and past the core count nothing more was
+    * gained: on 100k files in 10k directories, 4 workers on 4 cores beat 8 and 16, and virtual threads gained nothing
+    * (#2522, broadened Phase 1 §2.1).
+    */
+  val DefaultParallelism: Int = Runtime.getRuntime.availableProcessors.max(1)
+
   /** Breadth-first, so a walk cut short at `limit` keeps the files nearest the root. Only the root itself must be
     * readable: an unreadable directory below it is left out rather than failing the whole listing.
     */
-  def list(root: Path, limit: Int): IO[ProjectFileListing] =
+  def list(root: Path, limit: Int, parallelism: Int = DefaultParallelism): IO[ProjectFileListing] =
     IO.blocking(extraRules(root, Vector.empty)).flatMap { extras =>
-      build(root, readDirectory, Vector(RootDirectory -> extras.rules), limit, Int.MaxValue, _ => IO.unit).map { walked =>
-        ProjectFileListing(walked.files.take(limit).sortBy(_.toString), walked.truncated)
-      }
+      build(root, readDirectory, Vector(RootDirectory -> extras.rules), limit, Int.MaxValue, _ => IO.unit, parallelism)
+        .map(walked => ProjectFileListing(walked.files.take(limit).sortBy(_.toString), walked.truncated))
     }
 
   /** Walks from `starts` (directories relative to `root`, each with the rules inherited from above it). Calls
     * `onProgress` with the files found so far once `firstProgressAt` files are in, and again each time that count
     * doubles, so a huge tree can be shown while it is still being read.
+    *
+    * Each breadth-first level is read up to `parallelism` directories at once and then taken in order, so the result,
+    * the cut at `limit` and every progress report are exactly those of reading one directory at a time. Reading a whole
+    * level can read past the cut; those reads are discarded.
     */
   private[io] def build(
     root: Path,
@@ -100,32 +109,48 @@ object ProjectFileWalker:
     starts: Vector[(Path, IgnoreRules)],
     limit: Int,
     firstProgressAt: Int,
-    onProgress: Vector[Path] => IO[Unit]
+    onProgress: Vector[Path] => IO[Unit],
+    parallelism: Int
   ): IO[Walked] =
-    Monad[IO].tailRecM[Frontier, Walked](Frontier(Queue.from(starts), Vector.empty, 0, firstProgressAt)) { frontier =>
-      frontier.pending.dequeueOption match
-        case _ if frontier.files > limit => IO.pure(Right(Walked(frontier.done, truncated = true)))
-        case None                        => IO.pure(Right(Walked(frontier.done, truncated = false)))
-        case Some(((directory, inherited), rest)) =>
-          IO.blocking(scan(root, directory, inherited, read)).attempt.flatMap {
-            case Left(error) if directory == RootDirectory => IO.raiseError(error)
-            case Left(_)                                   => IO.pure(Left(frontier.copy(pending = rest)))
-            case Right((snapshot, rules)) =>
-              val children = snapshot.directories.map(name => directory.resolve(name) -> rules)
-              announce(
-                Frontier(
-                  rest.enqueueAll(children),
-                  frontier.done :+ (directory -> snapshot),
-                  frontier.files + snapshot.files.size,
-                  frontier.announceAt
-                ),
-                onProgress
-              ).map(Left(_))
-          }
+    Monad[IO].tailRecM[Frontier, Walked](Frontier(starts, Vector.empty, 0, firstProgressAt)) { frontier =>
+      if frontier.files > limit then IO.pure(Right(Walked(frontier.done, truncated = true)))
+      else if frontier.level.isEmpty then IO.pure(Right(Walked(frontier.done, truncated = false)))
+      else
+        IO.parTraverseN(parallelism.max(1))(frontier.level) { (directory, inherited) =>
+          IO.blocking(scan(root, directory, inherited, read)).attempt.map(directory -> _)
+        }.flatMap(taken(frontier.copy(level = Vector.empty), _, limit, onProgress))
     }
 
+  /** Takes one level's scans in order into `next`, whose `level` collects the level below. Stops, as reading one
+    * directory at a time would, as soon as more than `limit` files are in.
+    */
+  private def taken(
+    next: Frontier,
+    scans: Vector[(Path, Either[Throwable, (DirectorySnapshot, IgnoreRules)])],
+    limit: Int,
+    onProgress: Vector[Path] => IO[Unit]
+  ): IO[Either[Frontier, Walked]] =
+    scans
+      .foldLeftM[IO, Either[Walked, Frontier]](Right(next)) {
+        case (stopped @ Left(_), _)                       => IO.pure(stopped)
+        case (Right(current), _) if current.files > limit => IO.pure(Left(Walked(current.done, truncated = true)))
+        case (Right(_), (directory, Left(error))) if directory == RootDirectory => IO.raiseError(error)
+        case (Right(current), (_, Left(_)))                                     => IO.pure(Right(current))
+        case (Right(current), (directory, Right((snapshot, rules)))) =>
+          announce(
+            Frontier(
+              current.level ++ snapshot.directories.map(name => directory.resolve(name) -> rules),
+              current.done :+ (directory -> snapshot),
+              current.files + snapshot.files.size,
+              current.announceAt
+            ),
+            onProgress
+          ).map(Right(_))
+      }
+      .map(_.swap)
+
   final private case class Frontier(
-      pending: Queue[(Path, IgnoreRules)],
+      level: Vector[(Path, IgnoreRules)],
       done: Vector[(Path, DirectorySnapshot)],
       files: Int,
       announceAt: Int

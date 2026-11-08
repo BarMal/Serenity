@@ -2,7 +2,7 @@ package com.serenity.perf
 
 import java.awt.image.BufferedImage
 
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
+import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.terminal.SwingWindow
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

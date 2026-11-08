@@ -44,9 +44,9 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "perf/OracleImages.scala",
     "perf/PageDownRichDocumentFramesSpec.scala",
     "perf/PanelLayerGeometrySpec.scala",
-    "perf/PresentedFrames.scala",
     "perf/PresentedFramesSpec.scala",
     "perf/RenderBenchmarks.scala",
+    "perf/TabStripBenchmarks.scala",
     "state/manager/RenderCachesRendererOwnershipSpec.scala",
     "ui/renderer/FontFallbackPaintSpec.scala",
     "ui/renderer/FontSpecSpec.scala",
@@ -54,7 +54,6 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/Java2DClearViewportExceptSpec.scala",
     "ui/renderer/LabelSpritesSpec.scala",
     "ui/renderer/LigatureFontShapingSpec.scala",
-    "ui/renderer/PixelLiftingContractSpec.scala",
     "ui/renderer/RenderImageSpec.scala",
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/StyledFontCacheSpec.scala",
@@ -66,22 +65,29 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */
   private val bothRenderers: Set[String] = Set(
     "FrameBackend.scala",
+    "perf/GutterContinuationMarkSpec.scala",
+    "perf/LaptopFrameBenchmarks.scala",
+    "perf/PersistingFramesBackendSpec.scala",
     "perf/SkiaFrameBenchmarks.scala",
     "ui/renderer/Java2DRunPaintSpec.scala",
+    "ui/renderer/PanelTextSpacingRenderSpec.scala",
     "ui/renderer/PixelLiftingContractSpec.scala",
+    "ui/renderer/RoundedChromeRenderSpec.scala",
+    "ui/renderer/RoundedFillRepaintSpec.scala",
+    "ui/renderer/RoundedPanelDrawingSpec.scala",
+    "ui/renderer/RoundedTabStripRenderSpec.scala",
+    "ui/renderer/TabSeparatorRenderSpec.scala",
     "ui/renderer/SurfaceTextContractSpec.scala"
   )
 
   /** Suites that stay on Java2D because Skia still leaves their incremental frames different from the cold ones
-    * (#2380); each flips by deleting its `referenceFrames` override. The line number gutter and heading spacing suites
-    * are pinned on Windows only, and the focused rich-text and virtual drop cap suites on macOS only, where Skia leaves
-    * a few pixels of one row different; the raised letter and column paging suites are pinned everywhere.
+    * (#2380); each flips by deleting its `referenceFrames` override. The focused rich-text, raised letter and virtual
+    * drop cap suites are pinned on macOS only, where Skia leaves a few pixels of one row different; the column paging
+    * suite is pinned everywhere.
     */
   private val pinnedBySkiaGap: Set[String] = Set(
     "perf/ColumnPagingFramesSpec.scala",
     "perf/FocusedRichTextFrameSpec.scala",
-    "perf/HeadingSpacingFramesSpec.scala",
-    "perf/LineNumberGutterSpillSpec.scala",
     "perf/RaisedLetterIncrementalFrameSpec.scala",
     "perf/VirtualDropCapIncrementalFrameSpec.scala"
   )

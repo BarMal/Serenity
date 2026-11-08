@@ -77,13 +77,13 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
   "A session written before a setting was removed" should "still decode, ignoring the removed field" in
     assertSessionIgnores("postProcessingEffect" -> Json.fromString("Glow"))
 
-  "A config file naming the removed panel material, shadow and corner settings" should "load and report each once" in
+  // `ui.corner_radius` came back in #2389 (owner decision, reversing #1811's removal), so it is no longer listed here.
+  "A config file naming the removed panel material, shadow and blur settings" should "load and report each once" in
     assertRemovedAndIgnored(
       "ui.material"         -> "crystal",
       "ui.shadows"          -> "false",
       "ui.background_style" -> "glass-like",
-      "ui.blur_radius"      -> "0.42",
-      "ui.corner_radius"    -> "12"
+      "ui.blur_radius"      -> "0.42"
     )
 
   it should "treat their older spellings as removed too" in
@@ -95,18 +95,15 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "ui.background.style" -> "solid",
       "ui_background_style" -> "transparent",
       "ui.blur.radius"      -> "0.1",
-      "ui_blur_radius"      -> "0.2",
-      "ui.corner.radius"    -> "4",
-      "ui_corner_radius"    -> "6"
+      "ui_blur_radius"      -> "0.2"
     )
 
-  "A session saved with panel material, shadow and corner settings" should "still decode, ignoring them" in
+  "A session saved with panel material, shadow and blur settings" should "still decode, ignoring them" in
     assertSessionIgnores(
       "materialPreset"   -> Json.fromString("crystal"),
       "uiShadowsEnabled" -> Json.fromBoolean(false),
       "backgroundStyle"  -> Json.fromString("GlassLike"),
-      "blurRadius"       -> Json.fromDoubleOrNull(0.42),
-      "uiCornerRadiusPx" -> Json.fromInt(12)
+      "blurRadius"       -> Json.fromDoubleOrNull(0.42)
     )
 
   "A config file naming the removed companion sprite and visual flair settings" should "load and report each once" in
@@ -147,6 +144,34 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A session saved with window translucency" should "still decode, ignoring it" in
     assertSessionIgnores("window.translucent" -> Json.False)
+
+  "A config file naming the removed viewport width and height caps" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "window.viewport.width_max"  -> "120",
+      "window.viewport.height_max" -> "50"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "viewport.width.max"  -> "120",
+      "viewport_width_max"  -> "120",
+      "viewport.height.max" -> "50",
+      "viewport_height_max" -> "50"
+    )
+
+  "A config file naming the removed viewport width and height shares" should "load and report each once" in
+    assertRemovedAndIgnored(
+      "window.viewport.width_percent"  -> "80",
+      "window.viewport.height_percent" -> "90"
+    )
+
+  it should "treat their older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "viewport.width.percent"  -> "80",
+      "viewport_width_percent"  -> "80",
+      "viewport.height.percent" -> "90",
+      "viewport_height_percent" -> "90"
+    )
 
   // ---- the motion and animation settings -------------------------------------------------------------------------
 
@@ -260,12 +285,21 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString), ConfigManagerTestSupport.linuxPlan)
 
-    result.config shouldBe linuxWrittenDefault.withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
+    // The old default names `editor.column_target_width = 80`, which is now an opt-in target, not the default.
+    result.config shouldBe linuxWrittenDefault
+      .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
+      .withColumnTargetWidth(80)
     result.report.unknownKeys shouldBe Nil
     result.report.invalidEntries shouldBe Nil
     result.report.deprecatedEntries shouldBe Nil
     result.report.removedKeys should not be empty
-    all(result.report.removedKeys.map(key => key.startsWith("motion."))) shouldBe true
+    result.report.removedKeys.filterNot(_.startsWith("motion.")) should contain theSameElementsAs
+      List(
+        "window.viewport.width_percent",
+        "window.viewport.width_max",
+        "window.viewport.height_percent",
+        "window.viewport.height_max"
+      )
 
     val messageLines =
       ConfigMigrationWarning.message(Paths.get("config.conf"), result.report).value.linesIterator.toList
@@ -283,10 +317,12 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
     val hotkeysOfThisPlatform = AppConfig.default.inputConfig.hotkeyConfig
+    // The stored session names `columnTargetWidthCells: 80`, which is now an opt-in target, not the default.
     decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default.withOlderBuildsChrome
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
       .withWordWrap(false)
       .withLineNumbers(false)
+      .withColumnTargetWidth(80)
     decoded.config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.Save) shouldBe
       HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Save)
   }
