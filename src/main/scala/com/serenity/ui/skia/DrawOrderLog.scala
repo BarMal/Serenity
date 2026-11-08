@@ -2,8 +2,7 @@ package com.serenity.ui.skia
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths, StandardOpenOption}
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentLinkedQueue, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.jdk.CollectionConverters.*
@@ -35,15 +34,11 @@ private[skia] object DrawOrderLog:
       )
 
   path.foreach { file =>
-    val writer = new Thread(
-      () =>
-        while true do
-          Thread.sleep(2000)
-          flush(file)
-      ,
-      "draw-order-log"
-    )
-    writer.setDaemon(true)
-    writer.start()
+    val writer = Executors.newSingleThreadScheduledExecutor { task =>
+      val thread = new Thread(task, "draw-order-log")
+      thread.setDaemon(true)
+      thread
+    }
+    val _ = writer.scheduleAtFixedRate(() => flush(file), 2, 2, TimeUnit.SECONDS)
     Runtime.getRuntime.addShutdownHook(new Thread(() => flush(file)))
   }
