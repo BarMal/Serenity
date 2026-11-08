@@ -21,14 +21,21 @@ object FrameDiff:
       width == expected.getWidth && height == expected.getHeight,
       s"frames differ in size: ${width}x$height against ${expected.getWidth}x${expected.getHeight}"
     )
-    val (actualPixels, expectedPixels) = (pixels(drawn), pixels(expected))
-    val count                          = width * height
-    if firstDifference(actualPixels, expectedPixels, 0, count) < 0 then Vector.empty
+    differing(pixels(drawn), pixels(expected), width, height)
+
+  /** The same for frames already read as `0xAARRGGBB` pixels, one row after another. */
+  def differing(actual: Array[Int], expected: Array[Int], width: Int, height: Int): Seq[(Int, Int)] =
+    val count = width * height
+    require(
+      actual.length >= count && expected.length >= count,
+      s"a ${width}x$height frame needs $count pixels, got ${actual.length} and ${expected.length}"
+    )
+    if firstDifference(actual, expected, 0, count) < 0 then Vector.empty
     else
       for
         x <- 0 until width
         y <- 0 until height
-        if ((actualPixels(y * width + x) ^ expectedPixels(y * width + x)) & colour) != 0
+        if ((actual(y * width + x) ^ expected(y * width + x)) & colour) != 0
       yield (x, y)
 
   @tailrec

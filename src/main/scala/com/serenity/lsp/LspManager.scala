@@ -1,5 +1,7 @@
 package com.serenity.lsp
 
+import java.nio.file.Paths
+
 import scala.annotation.unused
 import scala.concurrent.duration.FiniteDuration
 
@@ -13,6 +15,7 @@ import com.serenity.lsp.client.{DocumentUri, LspConnection, LspMethod, LspProtoc
 import com.serenity.lsp.config.*
 import com.serenity.state.effects.{EffectLanes, Lane}
 import com.serenity.state.models.CursorPosition
+import com.serenity.trust.{CommandSource, ProjectTrustAccess}
 import fs2.Stream
 import org.typelevel.log4cats.Logger
 
@@ -72,21 +75,38 @@ object LspManager:
     /** Drop every cached resolution, for the editor letting every server go. No-op by default, like the above. */
     def evictAllResolutions: IO[Unit] = IO.unit
 
+  /** `trust` decides which workspace roots may start servers at all (#2526): an untrusted root keeps its servers off,
+    * and accepting the notice that says so announces the folder's open documents again.
+    */
   def run(
     effects: Stream[IO, LspEffect],
     applyEvent: Event => IO[Unit],
     logger: Logger[IO],
+    trust: ProjectTrustAccess,
     userConfig: LspUserConfig = LspUserConfig.empty,
     notices: LspNotices = LspNotices.ignoring
   ): IO[Unit] =
-    LspResolutionCache.empty.flatMap { resolutionCache =>
-      runWithProvider(
-        effects,
-        applyEvent,
-        logger,
-        connectionProvider(userConfig, logger, resolutionCache),
-        notices = notices
-      )
+    (LspResolutionCache.empty, LspServerNotices.create(notices)).tupled.flatMap { (resolutionCache, serverNotices) =>
+      Supervisor[IO].use { questions =>
+        LspTrustGate
+          .create(
+            trust,
+            serverNotices.ask,
+            questions,
+            key => resolutionCache.evictAll >> applyEvent(LspEvent.LspFolderTrusted(key.path))
+          )
+          .flatMap { gate =>
+            runWithServerNotices(
+              effects,
+              applyEvent,
+              logger,
+              connectionProvider(userConfig, logger, resolutionCache, gate),
+              LspSupervisionPolicy.Default,
+              serverNotices,
+              LspManagerSemanticTokens.DefaultDebounce
+            )
+          }
+      }
     }
 
   private[lsp] def runWithProvider(
@@ -98,10 +118,24 @@ object LspManager:
     notices: LspNotices = LspNotices.ignoring,
     semanticTokensDebounce: FiniteDuration = LspManagerSemanticTokens.DefaultDebounce
   ): IO[Unit] =
+    LspServerNotices
+      .create(notices)
+      .flatMap(
+        runWithServerNotices(effects, applyEvent, logger, connectionProvider, policy, _, semanticTokensDebounce)
+      )
+
+  private def runWithServerNotices(
+    effects: Stream[IO, LspEffect],
+    applyEvent: Event => IO[Unit],
+    logger: Logger[IO],
+    connectionProvider: ConnectionProvider,
+    policy: LspSupervisionPolicy,
+    serverNotices: LspServerNotices,
+    semanticTokensDebounce: FiniteDuration
+  ): IO[Unit] =
     (Supervisor[IO].allocated, EffectLanes.resource(logLaneFailure(logger)).allocated).tupled.flatMap {
       case ((supervisor, releaseRequests), (lanes, releaseLanes)) =>
         for
-          serverNotices    <- LspServerNotices.create(notices)
           documentVersions <- Ref.of[IO, Map[DocumentUri, Int]](Map.empty)
           openDocuments    <- Ref.of[IO, OpenDocument.Registry](Map.empty)
           requestContexts  <- Ref.of[IO, Map[RequestKey, RequestContext]](Map.empty)
@@ -493,7 +527,8 @@ object LspManager:
   private def connectionProvider(
     userConfig: LspUserConfig,
     logger: Logger[IO],
-    resolutionCache: LspResolutionCache
+    resolutionCache: LspResolutionCache,
+    gate: LspTrustGate
   ): ConnectionProvider =
     new ConnectionProvider:
       def resolve(
@@ -508,9 +543,16 @@ object LspManager:
                 logger.info(s"[LSP] No server available for ${languageId.id}").as(None)
               case Some(config) =>
                 val filePath = uriToPath(fileUri)
-                WorkspaceRootDetector.detect(filePath, languageId).map { rootOpt =>
+                WorkspaceRootDetector.detect(filePath, languageId).flatMap { rootOpt =>
                   val rootUri = rootOpt.map(r => WorkspaceRootUri(r.toUri.toString)).getOrElse(parentUri(fileUri))
-                  Some(config -> rootUri)
+                  val root    = rootOpt.orElse(Option(Paths.get(filePath).getParent)).getOrElse(Paths.get(filePath))
+                  val source =
+                    if userConfig.servers.exists(_.contains(languageId.id)) then CommandSource.UserLayer
+                    else CommandSource.BuiltIn
+                  gate.admit(root, config, source).flatMap { admitted =>
+                    if admitted then IO.pure(Some(config -> rootUri))
+                    else logger.info(s"[LSP] ${config.command} not started: $root is not trusted").as(None)
+                  }
                 }
             }
           }

@@ -26,7 +26,8 @@ import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.lsp.LspManager
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.*
-import com.serenity.state.models.{AppState, Damage, PointerShape}
+import com.serenity.state.models.{AppState, Damage, Notice, NoticeLevel, PointerShape}
+import com.serenity.trust.{ProjectTrustService, ProjectTrustStore}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import fs2.Stream
@@ -397,13 +398,18 @@ object AppRuntime:
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
       ),
       AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
-        LspManager.run(
-          stateManager.lspEffectSource.lspEffectStream,
-          stateManager.applyEvent,
-          logger,
-          appConfig.languageToolsConfig.lspUserConfig,
-          stateManager.lspEffectSource.notices
-        )
+        ProjectTrustService.load(ProjectTrustStore.defaultPath).flatMap { loaded =>
+          loaded.problem
+            .traverse_(problem => stateManager.lspEffectSource.notices.show(unreadableTrustNotice(problem))) >>
+            LspManager.run(
+              stateManager.lspEffectSource.lspEffectStream,
+              stateManager.applyEvent,
+              logger,
+              loaded.service,
+              appConfig.languageToolsConfig.lspUserConfig,
+              stateManager.lspEffectSource.notices
+            )
+        }
       ),
       AppRuntimeRenderLoops.superviseLoop("external change watch loop", lifecycle.forceQuit, recordCrash)(
         externalChangeWatchLoop(
@@ -465,6 +471,13 @@ object AppRuntime:
     * The warm-up needs a frontend that can draw off-screen and `startup.warm_up` on; the preload needs the
     * `dictionaryCache` the editor's own state manager reads from.
     */
+  /** Fails closed: with the file unreadable no folder is trusted, so this says why language servers stay off. */
+  private[app] def unreadableTrustNotice(problem: String): Notice =
+    Notice(
+      NoticeLevel.Warning,
+      s"Could not read the trusted folders in ${ProjectTrustStore.defaultPath}, so no folder is trusted: $problem"
+    )
+
   private def startupWarmUp(
     runtime: FrontendRuntime,
     initialState: AppState,
