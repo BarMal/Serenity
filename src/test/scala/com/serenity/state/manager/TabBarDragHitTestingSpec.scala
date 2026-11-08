@@ -6,8 +6,7 @@ import com.serenity.keystroke.events.{MouseDrag, MousePress}
 import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, TabBarSurfaceComposition, ViewportSize}
-import com.serenity.ui.renderer.TabBarLayoutSettings
+import com.serenity.ui.layout.{LayoutEngine, TabBarLayoutSettings, TabBarSurfaceComposition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

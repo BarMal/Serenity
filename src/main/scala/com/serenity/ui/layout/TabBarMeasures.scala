@@ -1,4 +1,4 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.layout
 
 import java.awt.font.TextLayout
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 
 /** What the tab strip's layout measures, remembered across frames: the code font's cell width, once per font settings,
   * and each title's advance in the UI font, for as many distinct titles as [[TabBarMeasures.TitleCapacity]].

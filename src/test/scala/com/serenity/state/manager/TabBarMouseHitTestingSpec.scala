@@ -9,11 +9,11 @@ import com.serenity.ui.layout.{
   LayoutEngine,
   LayoutRect,
   SurfaceHitRegion,
+  TabBarLayoutSettings,
   TabBarSettings,
   TabBarSurfaceComposition,
   ViewportSize
 }
-import com.serenity.ui.renderer.TabBarLayoutSettings
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

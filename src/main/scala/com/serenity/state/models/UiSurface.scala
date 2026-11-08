@@ -195,7 +195,7 @@ object StartupPage:
   private val StatusMarginCells = 2
 
   private[models] def statusRows(message: String, widthCells: Int): List[String] =
-    val rows = TextWrapping.wrap(message, math.max(1, widthCells - 2 * StatusMarginCells))
+    val rows = CellWrapping.wrapCells(message, math.max(1, widthCells - 2 * StatusMarginCells))
     if rows.size == 1 then List(message) else rows
 
 final case class ContextMenuItem(

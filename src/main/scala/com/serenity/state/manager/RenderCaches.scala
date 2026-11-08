@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{ScrollRowsReporter, WrappedLineCache}
+import com.serenity.ui.layout.{ScrollRowsReporter, TabBarMeasures, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
   GraphemeSegmentationCache,
@@ -12,8 +12,7 @@ import com.serenity.ui.renderer.{
   RendererFrameState,
   ShapedTextCache,
   StyledFontCache,
-  SurfaceTextCaches,
-  TabBarMeasures
+  SurfaceTextCaches
 }
 import com.serenity.ui.theme.ThemeHighlightCache
 

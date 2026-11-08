@@ -51,6 +51,13 @@ object ChromeFrame:
     val tabBarHeight = if LayoutEngine.showsTabBar(state) then LayoutEngine.TabBarHeight else 0
     ChromeFrame(inset(state), tabBarHeight, gutterHeight, viewport)
 
+  /** The window extent a docked panel's size is converted to and from a split ratio against, so a size asked for lands
+    * as that many cells: the viewport less what the floating chrome's inset takes, or the viewport itself when the
+    * chrome is flush.
+    */
+  def panelViewportSize(state: AppState): Option[ViewportSize] =
+    state.runtime.viewportSize.map(viewport => of(state, viewport).panelViewport)
+
   /** The margin the chrome keeps round itself, in cells: 0 unless the docked corner style is floating on a pixel
     * surface.
     */

@@ -237,7 +237,7 @@ private[manager] object MouseTargetLayoutKey:
         tree.dockedSurfaceIds.flatMap { id =>
           for
             position <- tree.positionForSurface(id)
-            size     <- tree.currentSize(id, state.panelViewportSize)
+            size     <- tree.currentSize(id, ChromeFrame.panelViewportSize(state))
           yield (id, position, size)
         }
       },
