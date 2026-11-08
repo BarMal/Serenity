@@ -5,8 +5,7 @@ import com.serenity.keystroke.events.MouseClick
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, BufferId, CloseScope, PointerHitTarget, SurfaceContent, TabListEntry}
 import com.serenity.state.reducers.{AppEffect, Transition, WorkflowEffect}
-import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarSettings, TabBarSurfaceComposition}
-import com.serenity.ui.renderer.TabBarLayoutSettings
+import com.serenity.ui.layout.{LayoutEngine, LayoutRect, TabBarLayoutSettings, TabBarSettings, TabBarSurfaceComposition}
 
 /** Per-tab hit regions for the always-visible tab strip (issue #1075: Foundation; close affordance, #1078), and
   * resolving a primary click against them into a buffer switch (issue #1077) or, via the trailing new-tab (+)

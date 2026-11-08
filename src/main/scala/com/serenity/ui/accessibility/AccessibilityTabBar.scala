@@ -2,7 +2,6 @@ package com.serenity.ui.accessibility
 
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.TabBarLayoutSettings
 
 private[accessibility] object AccessibilityTabBar:
 
