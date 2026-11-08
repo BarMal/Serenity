@@ -216,6 +216,7 @@ trait ColdFrameHarness:
     private val built     = AtomicInteger(0)
     private val seenPlan  = AtomicReference[Option[FramePlan]](None)
     private val priorCold = AtomicReference(Array.empty[Int])
+    private val freshPaint = AtomicReference(List.empty[Rectangle])
 
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
@@ -286,7 +287,9 @@ trait ColdFrameHarness:
       previousPlan: Option[FramePlan]
     ): String =
       val (width, height) = (deviceWidthPx(scale), deviceHeightPx(scale))
-      val fresh           = Pooled(scale).renderFrame(state, Damage.Everything).rgbPixels
+      val freshFrames     = Pooled(scale)
+      val fresh           = freshFrames.renderFrame(state, Damage.Everything).rgbPixels
+      freshPaint.set(freshFrames.paintedAreas)
       val freshVsCold     = FrameDiff.differing(fresh, cold, width, height)
       val drawnVsFresh    = FrameDiff.differing(drawn, fresh, width, height)
       s"PROBE step $n ($label) at ${scale}x: persisting first frame vs cold: ${summary(freshVsCold)}; " +
@@ -318,7 +321,24 @@ trait ColdFrameHarness:
           s"cold-before ${hex(previousCold, i)} wrong-before $wrongBefore presented $presented " +
           s"painted ${within(frames.paintedAreas, x, y)}"
       }
-      s" LASTWRITER ${lines.mkString(" | ")}"
+      s" LASTWRITER ${lines.mkString(" | ")}" + drawHistory(diff)
+
+    private def rectText(r: Rectangle): String = s"${r.x},${r.y} ${r.width}x${r.height}"
+
+    /** Which recorded paint of the cold-equivalent frame and of the incremental frame reaches each differing pixel or
+      * lies within three device pixels of it, and which bands of the plan sit around it.
+      */
+    private def drawHistory(diff: Seq[(Int, Int)]): String =
+      def near(r: Rectangle, x: Int, y: Int) = r.intersects(Rectangle(x - 3, y - 3, 7, 7))
+      val plan = frames.lastPlan
+      diff.take(3).map { (x, y) =>
+        val coldPaint = freshPaint.get.filter(near(_, x, y)).map(r => (if r.contains(x, y) then "*" else "") + rectText(r))
+        val incPaint = frames.paintedAreas.filter(near(_, x, y)).map(r => (if r.contains(x, y) then "*" else "") + rectText(r))
+        val bandsAround = plan.fold(List.empty[String])(p =>
+          p.keptBands.filter(b => near(Rectangle((b.xPx * scale).toInt, (b.yPx * scale).toInt, (b.widthPx * scale).toInt, (b.heightPx * scale).toInt), x, y)).map(b => s"kept ${b.xPx},${b.yPx} ${b.widthPx}x${b.heightPx}")
+        )
+        s" DRAWS ($x,$y): cold-frame paint [${coldPaint.mkString("; ")}] incremental paint [${incPaint.mkString("; ")}] bands [${bandsAround.mkString("; ")}]"
+      }.mkString
 
     /** What a cold frame draws for the state as it now stands. */
     def coldFrame(): BufferedImage =
