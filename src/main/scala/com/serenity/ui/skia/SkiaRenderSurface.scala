@@ -382,6 +382,8 @@ final class SkiaRenderSurface(
 
   override protected def translationPx: (Double, Double) = translation.get()
 
+  override protected def extentPx: (Int, Int) = (logicalWidthPx, logicalHeightPx)
+
   override def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
     val saved    = canvas.save()
     val previous = translation.getAndUpdate((shiftX, shiftY) => (shiftX + xPx, shiftY + yPx))

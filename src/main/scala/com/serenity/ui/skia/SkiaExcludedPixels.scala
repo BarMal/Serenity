@@ -20,6 +20,9 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
   /** Where the canvas has been moved to from the pixels the kept rects are in. */
   protected def translationPx: (Double, Double)
 
+  /** The width and height of the canvas, which is all the pixels there are to paint. */
+  protected def extentPx: (Int, Int)
+
   private val keptReach = AtomicReference(KeptReach(Nil))
 
   override def keepsOffPixels: Boolean = true
@@ -50,7 +53,14 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
       else
         val reach =
           PixelRect(boxLeft - margin, boxTop - margin, boxRight - boxLeft + 2 * margin, boxBottom - boxTop + 2 * margin)
-        val pieces = kept.uncoveredWithin(reach, () => activity.clipSwept())
+        val (width, height) = extentPx
+        val visible = PixelRect(
+          math.floor(shiftX).toInt,
+          math.floor(shiftY).toInt,
+          width + 1,
+          height + 1
+        )
+        val pieces = kept.uncoveredWithin(reach, visible, () => activity.clipSwept())
         activity.clipDrawn(pieces.size)
         pieces.foreach { piece =>
           val saved = canvas.save()

@@ -16,17 +16,18 @@ final private[skia] class KeptReach(val rects: List[PixelRect]):
 
   private val uncovered = AtomicReference(Option.empty[List[PixelRect]])
 
-  /** The rectangles within `reach` that no kept row covers, as disjoint rectangles. `onSweep` is called when the
-    * uncovered part of the surface had to be worked out, which is for the first draw of the frame near kept rows.
+  /** The rectangles within `reach` that no kept row covers, as disjoint rectangles, and on the part of the surface that
+    * `visible` names: a draw has no pixels to paint outside it. `onSweep` is called when the uncovered part of the
+    * surface had to be worked out, which is for the first draw of the frame near kept rows.
     */
-  def uncoveredWithin(reach: PixelRect, onSweep: () => Unit): List[PixelRect] =
+  def uncoveredWithin(reach: PixelRect, visible: PixelRect, onSweep: () => Unit): List[PixelRect] =
     val whole = uncovered.get.getOrElse {
       onSweep()
       val found = PixelRect.uncoveredWithin(PixelRect(-Unbounded, -Unbounded, 2 * Unbounded, 2 * Unbounded), rects)
       uncovered.set(Some(found))
       found
     }
-    PixelRect.joinedVertically(whole.flatMap(PixelRect.clippedTo(reach)))
+    PixelRect.joinedVertically(whole.flatMap(PixelRect.clippedTo(reach)).flatMap(PixelRect.clippedTo(visible)))
 
 object KeptReach:
 
