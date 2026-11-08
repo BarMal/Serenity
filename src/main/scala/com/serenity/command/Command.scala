@@ -101,6 +101,10 @@ enum LspIntent:
   // submit, not here (#1467).
   case OpenRenameSymbolPrompt
 
+  /** Trust, or revoke trust for, the folder of the focused buffer's language server (#2526). */
+  case TrustFolder
+  case RevokeFolderTrust
+
 enum ThemeIntent:
   case ToggleTheme
   case ApplyTheme(name: String)

@@ -60,6 +60,12 @@ final private[lsp] class LspConnectionPool private (
   def evictResolution(languageId: LanguageId, uri: DocumentUri): IO[Unit] =
     provider.evictResolution(languageId, uri)
 
+  def trustFolderOf(languageId: LanguageId, uri: DocumentUri): IO[LspManager.TrustChange] =
+    provider.trustFolderOf(languageId, uri)
+
+  def revokeTrustOf(languageId: LanguageId, uri: DocumentUri): IO[LspManager.TrustChange] =
+    provider.revokeTrustOf(languageId, uri)
+
   /** The connection serving `uri`, starting one if its server is not running -- unless that server is down and still
     * inside the backoff or give-up its crashes earned, in which case the document waits for the restart.
     */
@@ -102,6 +108,25 @@ final private[lsp] class LspConnectionPool private (
         .getAndSet(Map.empty)
         .flatMap(_.toList.parTraverse_((identity, managed) => shutDown(identity, managed))) >>
       provider.evictAllResolutions).uncancelable
+
+  /** Stops every server whose workspace root lies in `root`, running or waiting out a restart, and forgets the
+    * documents they served, which it returns; servers for other roots are untouched. Resolutions are dropped so the
+    * next document opened there resolves afresh. Uncancelable for the reason [[releaseEverything]] is.
+    */
+  def releaseRoot(root: java.nio.file.Path): IO[List[DocumentUri]] =
+    val inRoot = (identity: ConnectionIdentity) => LspConnectionPool.rootPath(identity).startsWith(root)
+    (for
+      stopping <- connections.modify(live =>
+        (live.filterNot((id, _) => inRoot(id)), live.filter((id, _) => inRoot(id)))
+      )
+      served <- documents.modify { docs =>
+        val (theirs, others) = docs.partition((_, id) => inRoot(id))
+        (others, theirs.keys.toList)
+      }
+      _ <- idleSince.update(_.filterNot((id, _) => inRoot(id))) >> crashes.update(_.filterNot((id, _) => inRoot(id)))
+      _ <- stopping.toList.parTraverse_((identity, managed) => shutDown(identity, managed))
+      _ <- provider.evictAllResolutions
+    yield served).uncancelable
 
   private val onDiagnostics: (DocumentUri, List[Diagnostic]) => IO[Unit] =
     (uri, diagnostics) => applyEvent(LspEvent.LspDiagnosticsReceived(uri.value, diagnostics))
@@ -293,6 +318,13 @@ final private[lsp] class LspConnectionPool private (
     identity.serverConfig.languageId.displayName
 
 private[lsp] object LspConnectionPool:
+
+  /** The server's workspace root as a path: roots are file URIs, but a test's may be a bare path. */
+  private[lsp] def rootPath(identity: ConnectionIdentity): java.nio.file.Path =
+    val raw = identity.rootUri.value
+    scala.util
+      .Try(java.nio.file.Paths.get(java.net.URI.create(raw)))
+      .getOrElse(java.nio.file.Paths.get(raw.stripPrefix("file://")))
 
   def create(
     documentVersions: Ref[IO, Map[DocumentUri, Int]],

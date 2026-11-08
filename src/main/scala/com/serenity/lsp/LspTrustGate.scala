@@ -34,6 +34,13 @@ final private[lsp] class LspTrustGate private (
             .as(false)
     }
 
+  /** What accepting the notice does, asked for from the palette instead. */
+  def trustFolder(root: Path): IO[ProjectKey] =
+    ProjectKey.resolve(root).flatTap(key => trust.trustFolder(key) >> onTrusted(key))
+
+  def revokeCovering(root: Path): IO[List[ProjectKey]] =
+    ProjectKey.resolve(root).flatMap(trust.revokeCovering)
+
   private def offerTrust(key: ProjectKey, config: LspServerConfig): IO[Unit] =
     ask(config.command, LspTrustGate.question(key)).flatMap {
       case Some(0) => trust.trustFolder(key) >> onTrusted(key)

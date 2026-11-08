@@ -33,5 +33,10 @@ enum LspEvent:
     */
   case LspFolderTrusted(root: Path)
 
+  /** Trust for `roots` was revoked and their servers stopped; the documents open under them are announced again, to be
+    * refused, and their server data dropped.
+    */
+  case LspTrustRevoked(roots: List[Path])
+
   /** A server's `workspace/applyEdit`, keyed by document uri; applied to every open buffer it names. */
   case LspWorkspaceEditRequested(edits: Map[String, List[LspTextEdit]])
