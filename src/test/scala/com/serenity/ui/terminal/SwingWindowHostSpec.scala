@@ -1,6 +1,7 @@
 package com.serenity.ui.terminal
 
 import java.awt.GraphicsEnvironment
+import java.awt.event.MouseEvent
 import java.util.Locale
 
 import scala.concurrent.duration.*
@@ -9,7 +10,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{MenuBarMode, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
-import com.serenity.input.{FileDropHandler, InputRouter}
+import com.serenity.input.{FileDropHandler, InputHandler, InputRouter}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.ui.host.{InputSettings, WindowHost}
@@ -34,6 +35,12 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
       .use(host => IO(use(host)))
       .unsafeRunSync()
 
+  /** A real window's stream can carry pointer moves the test did not make, so the typed character is the first
+    * `InsertChar`, not the first event.
+    */
+  private def firstTyped(handler: InputHandler[IO]): Option[List[Event]] =
+    handler.eventStream.filter(_.isInstanceOf[InsertChar]).take(1L).compile.toList.unsafeRunTimed(10.seconds)
+
   "SwingWindowHost" should "serve one window as both the render target and the control" in
     withHost(host => host.target should be theSameInstanceAs host.control)
 
@@ -54,6 +61,23 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
   it should "take a file-drop handler through the control, not only on the Swing window" in
     withHost(host => noException should be thrownBy host.control.installFileDrop(FileDropHandler(_ => (), _ => ())))
 
+  it should "still queue the typed character when a pointer move reaches the stream first" in
+    withHost { host =>
+      val router  = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
+      val metrics = () => CellMetrics(8, 16, 13)
+      val handler = host.inputHandler(router, InputSettings(metrics, metrics, 3, FrameTimings(), None)).unsafeRunSync()
+      val canvas = host.control match
+        case window: SwingWindow => window.canvas
+        case other               => fail(s"expected a SwingWindow, got $other")
+
+      canvas.getMouseMotionListeners.foreach(
+        _.mouseMoved(MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 1L, 0, 8, 16, 0, false))
+      )
+      host.typeCharacter('a').unsafeRunSync()
+
+      firstTyped(handler) shouldBe Some(List(InsertChar('a')))
+    }
+
   it should "queue a typed character into the input handler it built, for the start-up probe" in
     withHost { host =>
       val router  = InputRouter.create[IO, Event](new TextEntryTranslator).unsafeRunSync()
@@ -62,5 +86,5 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
 
       host.typeCharacter('a').unsafeRunSync()
 
-      handler.eventStream.take(1L).compile.toList.unsafeRunTimed(10.seconds) shouldBe Some(List(InsertChar('a')))
+      firstTyped(handler) shouldBe Some(List(InsertChar('a')))
     }
