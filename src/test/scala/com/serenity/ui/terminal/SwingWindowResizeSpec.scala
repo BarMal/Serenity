@@ -53,7 +53,8 @@ class SwingWindowResizeSpec extends AnyFlatSpec with Matchers with Eventually:
   private def placeThenAsk(frame: Frame)(ask: => Unit): Unit =
     eventually {
       SwingUtilities.invokeAndWait(() => frame.setLocation(Elsewhere.x, Elsewhere.y))
-      Thread.sleep(MovePause.toMillis)
+      val movedAt = System.nanoTime()
+      eventually((System.nanoTime() - movedAt) should be >= MovePause.toNanos)
       frame.getLocation shouldBe Elsewhere
       ask
       eventually(timeout(Span(300, Millis)))((frame.getWidth, frame.getHeight) shouldBe (Target.width, Target.height))
