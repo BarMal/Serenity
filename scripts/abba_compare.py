@@ -6,7 +6,8 @@ A benchmark blocks when B is worse than A by all of:
 
 * time: the p50 ranges over each side's four runs do not overlap (B's fastest run is slower than A's slowest), B's median
   p50 is at least 5% slower, and at least 0.03 ms slower;
-* allocation: B's median `allocation_p50_bytes` is at least 5% and at least 8 KiB above A's;
+* allocation: B's median `allocation_p50_bytes` (`allocation_all_threads_p50_bytes` for a row that reports it on both
+  sides) is at least 5% and at least 8 KiB above A's;
 * footprint: B's median `retained_bytes` is more than 10% above A's.
 
 Usage:
@@ -61,13 +62,32 @@ def time_finding(
     return None
 
 
+def _has_all_threads(runs: list[dict[str, Row]], name: str) -> bool:
+    return bool(_values(runs, name, "allocation_all_threads_p50_bytes"))
+
+
+def rows_missing_all_threads(a: list[dict[str, Row]], b: list[dict[str, Row]]) -> list[str]:
+    """Rows one side reports for every thread and the other does not, so they cannot be compared on that column."""
+    names = sorted({name for run in a for name in run} & {name for run in b for name in run})
+    return [name for name in names if _has_all_threads(a, name) != _has_all_threads(b, name)]
+
+
 def allocation_finding(name: str, a: list[dict[str, Row]], b: list[dict[str, Row]]) -> Finding | None:
-    a_bytes, b_bytes = _values(a, name, "allocation_p50_bytes"), _values(b, name, "allocation_p50_bytes")
+    """A row that reports every thread's allocation is judged on that column; its caller's share would miss the work
+    done on other threads. When only one side has the column the row is not judged on allocation at all, since the
+    two columns measure different things."""
+    if _has_all_threads(a, name) or _has_all_threads(b, name):
+        if not (_has_all_threads(a, name) and _has_all_threads(b, name)):
+            return None
+        metric = "allocation_all_threads_p50_bytes"
+    else:
+        metric = "allocation_p50_bytes"
+    a_bytes, b_bytes = _values(a, name, metric), _values(b, name, metric)
     if not a_bytes or not b_bytes:
         return None
     a_median, b_median = statistics.median(a_bytes), statistics.median(b_bytes)
     if b_median >= a_median * ALLOCATION_RATIO and b_median - a_median >= ALLOCATION_DELTA_BYTES:
-        return Finding(name, "allocation_p50_bytes", f"A median {a_median:.0f}, B median {b_median:.0f} bytes")
+        return Finding(name, metric, f"A median {a_median:.0f}, B median {b_median:.0f} bytes")
     return None
 
 
@@ -128,6 +148,9 @@ def main_with_args(argv: list[str]) -> int:
         print(f"::{level}::The A and B runs share no benchmark.")
         return 0 if args.report_only else 2
     findings = compare(a_runs, b_runs, args.time_delta_ms)
+    skipped = rows_missing_all_threads(a_runs, b_runs)
+    if skipped:
+        print(f"::notice::{len(skipped)} row(s) not judged on allocation, one side lacks the all-threads column: {', '.join(skipped)}")
     for finding in findings:
         print(f"::{level}::{finding.name} {finding.metric}: {finding.detail}")
     print(f"{len(shared)} benchmarks compared, {len(findings)} blocking.")
