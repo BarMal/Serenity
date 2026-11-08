@@ -24,6 +24,8 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
     "lsp-hover",
     "lsp-references",
     "lsp-rename",
+    "lsp-trust-folder",
+    "lsp-revoke-folder-trust",
     "focus-diagnostics-panel",
     "focus-project-output-panel",
     "toggle-diagnostics-panel",
