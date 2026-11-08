@@ -5,7 +5,9 @@ enum LayerFrames:
   /** The frame's ops, replayed by the layer on the event thread. */
   case Picture
 
-  /** The frame's pixels, painted by Skia's CPU rasteriser off the event thread, which the layer then only copies. */
+  /** The frame's pixels, painted by Skia's CPU rasteriser off the event thread, which the layer then only copies. The
+    * rasteriser keeps its surface between frames, so a frame repaints only what changed.
+    */
   case Image
 
 object LayerFrames:
