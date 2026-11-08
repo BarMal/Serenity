@@ -36,6 +36,9 @@ final class SwingWindowHost private (val window: SwingWindow, menuInput: Deferre
     ).flatTap(menuInput.complete(_).void)
       .widen
 
+  override def typeCharacter(char: Char): IO[Unit] =
+    menuInput.get.flatMap(handler => IO(handler.submitTypedChar(char)))
+
   def menus(mode: MenuBarMode): Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] =
     Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", ""), mode))(
       SwingMenuBar.resource(window, menuInput.get, mode)

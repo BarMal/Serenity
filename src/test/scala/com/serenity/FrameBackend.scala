@@ -1,12 +1,15 @@
 package com.serenity
 
-import java.awt.Font
 import java.awt.image.BufferedImage
+import java.awt.{Font, Rectangle}
+import java.util.concurrent.atomic.AtomicReference
+
+import scala.annotation.unused
 
 import com.serenity.state.manager.RenderCaches
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
-import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
+import com.serenity.ui.skia.{PaintLog, SkiaRenderSurface, SkiaTextCaches}
 import org.jetbrains.skia.{
   Bitmap,
   BlendMode,
@@ -41,13 +44,24 @@ trait FramePixels:
     */
   def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit
 
+  /** The areas the surface painting this frame recorded painting, in device pixels: what a window copies to the screen
+    * beside the planner's rects. A renderer that does not record them reports none.
+    */
+  def recordedPaint: List[Rectangle] = Nil
+
   /** The frame as an image, for the dump a failed comparison writes. */
-  final def toImage: BufferedImage =
+  final def toImage: BufferedImage = FramePixels.image(widthPx, heightPx, rgbPixels)
+
+object FramePixels:
+
+  def image(widthPx: Int, heightPx: Int, pixels: Array[Int]): BufferedImage =
     val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
-    image.setRGB(0, 0, widthPx, heightPx, rgbPixels, 0, widthPx)
+    image.setRGB(0, 0, widthPx, heightPx, pixels, 0, widthPx)
     image
 
-/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. */
+/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. A Java2D
+  * surface reports to `onKeptOff` each set of rects it keeps pixels off; a Skia surface does not report them.
+  */
 trait FrameBackend:
   def newFrame(widthPx: Int, heightPx: Int): FramePixels
 
@@ -60,7 +74,8 @@ trait FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity] = None
+    screen: Option[ScreenIdentity] = None,
+    onKeptOff: List[PixelRect] => Unit = _ => ()
   ): RenderSurface
 
 object Java2DFrames extends FrameBackend:
@@ -101,7 +116,8 @@ object Java2DFrames extends FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity]
+    screen: Option[ScreenIdentity],
+    onKeptOff: List[PixelRect] => Unit
   ): RenderSurface =
     frame match
       case java2d: Java2DFrame =>
@@ -117,7 +133,10 @@ object Java2DFrames extends FrameBackend:
           contentPersists = persists,
           layerCacheOwnerOverride = screen.orElse(Some(ScreenIdentity(java2d.image))),
           textCaches = caches.surfaceText
-        )
+        ):
+          override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
+            onKeptOff(kept)
+            super.withoutPixels(kept)(render)
       case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
 
 /** The renderer the pixel specs paint with: a frame and a surface painting into it, read back as an image. */
@@ -173,8 +192,12 @@ object SkiaPixels:
 object SkiaFrames extends FrameBackend:
 
   final private class SkiaFrame(val surface: Surface) extends FramePixels:
+    val log: AtomicReference[Option[PaintLog]] = AtomicReference(None)
+
     def widthPx: Int  = surface.getWidth
     def heightPx: Int = surface.getHeight
+
+    override def recordedPaint: List[Rectangle] = log.get.fold(List.empty[Rectangle])(_.rects)
 
     def rgbAt(x: Int, y: Int): Int =
       val pixel = Bitmap()
@@ -215,12 +238,13 @@ object SkiaFrames extends FrameBackend:
     scale: Double,
     persists: Boolean,
     caches: RenderCaches,
-    screen: Option[ScreenIdentity]
+    screen: Option[ScreenIdentity],
+    @unused onKeptOff: List[PixelRect] => Unit
   ): RenderSurface =
     frame match
       case skia: SkiaFrame =>
         if persists then
-          SkiaRenderSurface.retaining(
+          val (surface, log) = PaintLog.retaining(
             skia.surface,
             metrics,
             FontSpec.fromAwt(font),
@@ -229,8 +253,10 @@ object SkiaFrames extends FrameBackend:
             scale,
             SkiaTextCaches.of(caches.backendCaches),
             caches.styledFonts,
-            layerCacheOwner = screen.orElse(Some(ScreenIdentity(skia)))
+            screen.getOrElse(ScreenIdentity(skia))
           )
+          skia.log.set(Some(log))
+          surface
         else
           SkiaRenderSurface.onCanvas(
             skia.surface.getCanvas,

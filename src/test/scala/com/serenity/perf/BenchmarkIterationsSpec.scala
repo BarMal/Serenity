@@ -41,7 +41,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
 
   "the laptop go-to-line scenario" should "use its own warmup and sample counts" in {
     import cats.effect.unsafe.implicits.global
-    val benchmarks = LaptopFrameBenchmarks.goToLineBenchmarks
+    val benchmarks = GoToLineBenchmarks.benchmarks
     benchmarks.map(_.name) shouldBe List("laptop.input.state_manager.go_to_line_3000_paragraphs")
     all(benchmarks.map(_.iterations)) shouldBe BenchmarkIterationCounts.GoToLine
     all(benchmarks.map(_.warmups)) shouldBe BenchmarkIterationCounts.GoToLineWarmups

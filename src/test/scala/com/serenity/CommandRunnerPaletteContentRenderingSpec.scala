@@ -5,7 +5,6 @@ import java.awt.Font
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
-import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
@@ -47,7 +46,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
   ): AppState =
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional)
+      .activate(registry, ChromeOn.config)
       .updateSearchTerm(searchTerm)(using registry)
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
@@ -55,7 +54,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
         editing = EditingState(cursors)
       )
 
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -171,7 +170,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val commands = List(Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)))
     val registry = CommandRegistry(commands)
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional)
+      .activate(registry, ChromeOn.config)
       .updateSearchTerm("open")(using registry)
     val content = (1 to 60).map(i => s"line $i").mkString("\n")
 
@@ -179,7 +178,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       val buffer = Buffer
         .fromString(bufferId, content)
         .copy(editing = EditingState(List(cursor)))
-      val initialState = AppState.initial(AppConfig.conventional.withFontConfig(MeasuredRows.driftingFontConfig))
+      val initialState = AppState.initial(ChromeOn.config.withFontConfig(MeasuredRows.driftingFontConfig))
       val state = initialState.copy(
         persisted = initialState.persisted.copy(
           buffers = Map(bufferId -> buffer),
@@ -239,14 +238,14 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry(commands)
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional.withShowAllSettingsRegardlessOfMode(true))
+      .activate(registry, ChromeOn.config.withShowAllSettingsRegardlessOfMode(true))
       .openSettings
     val buffer = Buffer
       .fromString(bufferId, "alpha\nbeta\ngamma")
       .copy(
         editing = EditingState(List(CursorPosition(1, 2)))
       )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -335,7 +334,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional)
+      .activate(registry, ChromeOn.config)
       .openSettings
       .enterSelectedGroup
     val buffer = Buffer
@@ -343,7 +342,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),
@@ -396,7 +395,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     val registry          = CommandRegistry.default
     given CommandRegistry = registry
     val runner = CommandRunner.empty
-      .activate(registry, AppConfig.conventional)
+      .activate(registry, ChromeOn.config)
       .updateSearchTerm("UI Outline Thickness")
       .enterSelectedGroup
     val buffer = Buffer
@@ -404,7 +403,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       .copy(
         editing = EditingState(List(CursorPosition(1, 1), CursorPosition(1, 2), CursorPosition(1, 3)))
       )
-    val initialState = AppState.initial(AppConfig.conventional)
+    val initialState = AppState.initial(ChromeOn.config)
     val state = initialState.copy(
       persisted = initialState.persisted.copy(
         buffers = Map(bufferId -> buffer),

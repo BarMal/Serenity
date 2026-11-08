@@ -72,7 +72,7 @@ class UiScenarioDriverSpec extends AnyFlatSpec with Matchers:
           startupDriver.stateManager.sessionStartupInfo,
           theme,
           narrowEnvironment.viewport,
-          appConfig = com.serenity.config.AppConfig.conventional
+          appConfig = com.serenity.ChromeOn.config
         )
         .unsafeRunSync()
       val startup = startupDriver.renderFrame("startup").unsafeRunSync()

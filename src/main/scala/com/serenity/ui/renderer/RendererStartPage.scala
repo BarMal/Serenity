@@ -116,7 +116,7 @@ object RendererStartPage:
     uiMetrics: CellMetrics
   ): Unit =
     surface.text.setFont(FontSpec.fromAwt(uiFont))
-    val lines         = page.renderLines
+    val lines         = page.renderLinesWithin(viewportSize.width)
     val lineHeightPx  = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
     val totalHeightPx = lines.size * lineHeightPx
     val startYPx      = math.max(0, ((viewportSize.height * cellMetrics.lineHeight) - totalHeightPx) / 2)

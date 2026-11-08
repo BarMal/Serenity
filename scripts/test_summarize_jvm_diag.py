@@ -60,6 +60,18 @@ class SummarizeJvmDiagTest(unittest.TestCase):
         self.assertIn("Heap after a collection: none logged.", output)
         self.assertIn("Heap after a Full GC: none logged.", output)
 
+    def test_summarises_os_memory_samples(self) -> None:
+        self.assertIn("OS memory: 4 samples over 90 s.", self.output)
+        self.assertIn("Lowest free memory: 8%.", self.output)
+        self.assertIn("Most swap in use: 2048.00 MB.", self.output)
+        self.assertIn("Swapouts: 1500 to 4200 pages (2700 during the run).", self.output)
+        self.assertIn("Most memory held by the compressor: 61000 pages (953 MB at 16384 bytes a page).", self.output)
+
+    def test_a_run_without_os_memory_samples_says_so(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            output = _summarize(Path(directory))
+        self.assertIn("No OS memory samples.", output)
+
     def test_missing_logs_are_reported_not_fatal(self) -> None:
         with tempfile.TemporaryDirectory() as empty:
             output = _summarize(Path(empty))

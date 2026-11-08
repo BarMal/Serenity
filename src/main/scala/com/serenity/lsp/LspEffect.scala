@@ -9,18 +9,19 @@ enum LspEffect:
   /** The document this effect is about; `None` for one that concerns the editor rather than any file. */
   def documentUri: Option[String] =
     this match
-      case FileOpened(uri, _, _)                   => Some(uri)
-      case FileChanged(uri, _, _, _, _)            => Some(uri)
-      case FileClosed(uri, _)                      => Some(uri)
-      case HoverRequested(uri, _, _, _, _)         => Some(uri)
-      case CompletionRequested(uri, _, _, _, _)    => Some(uri)
-      case DefinitionRequested(uri, _, _, _, _, _) => Some(uri)
-      case ReferencesRequested(uri, _, _, _, _, _) => Some(uri)
-      case RenameRequested(uri, _, _, _, _, _)     => Some(uri)
-      case SemanticTokensRequested(uri, _)         => Some(uri)
-      case VisibleRangeChanged(uri, _, _, _)       => Some(uri)
-      case MessageRequestAnswered(_, _)            => None
-      case ReleaseAll                              => None
+      case FileOpened(uri, _, _)                       => Some(uri)
+      case FileChanged(uri, _, _, _, _)                => Some(uri)
+      case FileClosed(uri, _)                          => Some(uri)
+      case HoverRequested(uri, _, _, _, _)             => Some(uri)
+      case CompletionRequested(uri, _, _, _, _)        => Some(uri)
+      case DefinitionRequested(uri, _, _, _, _, _)     => Some(uri)
+      case ReferencesRequested(uri, _, _, _, _, _)     => Some(uri)
+      case RenameRequested(uri, _, _, _, _, _)         => Some(uri)
+      case SemanticTokensRequested(uri, _)             => Some(uri)
+      case VisibleRangeChanged(uri, _, _, _)           => Some(uri)
+      case MessageRequestAnswered(_, _)                => None
+      case ReleaseAll                                  => None
+      case TrustFolder(_, _) | RevokeFolderTrust(_, _) => None
 
   // The text travels as the rope: the characters are only collected when a server is sent them.
   case FileOpened(uri: String, languageId: LanguageId, text: Rope)
@@ -83,3 +84,9 @@ enum LspEffect:
     * nothing is open or running; a document opened afterwards starts a server afresh.
     */
   case ReleaseAll
+
+  /** Trust the folder the server for `uri` would serve, as accepting the notice that it is untrusted does. */
+  case TrustFolder(uri: String, languageId: LanguageId)
+
+  /** Revoke trust for every folder holding the server root for `uri`, stopping the servers it allowed. */
+  case RevokeFolderTrust(uri: String, languageId: LanguageId)

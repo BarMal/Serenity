@@ -4,7 +4,7 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.layout.{BoundedRefCache, TextLayoutSnapshot}
 
 /** How far a string advances in a font, measured once and remembered.
   *

@@ -3,8 +3,6 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.FontRenderContext
 
-import scala.annotation.tailrec
-
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.renderer.{MeasuredTextAdvances, SurfaceTextInset}
@@ -42,54 +40,11 @@ object TextWrapping:
     * A paragraph's leading spaces indent every row it wraps to; an empty text is one empty row.
     */
   def wrap(text: String, widthCells: Int, measure: TextMeasure = TextMeasure.Cells): List[String] =
-    val fits   = fitsIn(math.max(1, widthCells), measure)
-    val indent = text.takeWhile(_ == ' ')
-    val prefix = if fits(indent + "x") then indent else ""
-    val rows = text
-      .split(' ')
-      .filter(_.nonEmpty)
-      .foldLeft(List.empty[String]) { (rows, word) =>
-        rows match
-          case current :: earlier if fits(s"$current $word") =>
-            s"$current $word" :: earlier
-          case _ => breakToFit(word, prefix, fits).reverse ::: rows
-      }
-      .reverse
-    if rows.isEmpty then List("") else rows
+    CellWrapping.wrap(text, fitsIn(math.max(1, widthCells), measure))
 
   private def fitsIn(widthCells: Int, measure: TextMeasure): String => Boolean =
     measure match
-      case TextMeasure.Cells => row => cellsOf(row) <= widthCells
+      case TextMeasure.Cells => CellWrapping.fitsCells(widthCells)
       case TextMeasure.Pixels(font, frc, cellPx, insetPx, advances) =>
         val limitPx = math.max(1.0, widthCells * cellPx - insetPx)
         row => advances.advanceOf(row, font, frc) <= limitPx
-
-  private def cellsOf(row: String): Int =
-    @tailrec
-    def sum(index: Int, cells: Int): Int =
-      if index >= row.length then cells
-      else
-        val end = CharWidth.clusterEnd(row, index)
-        sum(end, cells + CharWidth.ofCluster(row, index, end))
-    if row.forall(_ < NarrowBelow) then row.length else sum(0, 0)
-
-  // Nothing below U+0300 is wide, zero-width or extends a cluster, so the common case never reaches the ICU lookups.
-  private val NarrowBelow = 0x0300
-
-  /** `word` as rows, each starting with `prefix` and as long as still fits -- one grapheme cluster at least, so a row
-    * too narrow for any glyph still makes progress, and a row never ends inside a cluster.
-    */
-  private def breakToFit(word: String, prefix: String, fits: String => Boolean): List[String] =
-    @tailrec
-    def fittingEnd(rest: String, end: Int): Int =
-      if end >= rest.length then end
-      else
-        val next = CharWidth.clusterEnd(rest, end)
-        if fits(prefix + rest.substring(0, next)) then fittingEnd(rest, next) else end
-    @tailrec
-    def pieces(rest: String, done: List[String]): List[String] =
-      if rest.isEmpty then done.reverse
-      else
-        val end = math.max(CharWidth.clusterEnd(rest, 0), fittingEnd(rest, 0))
-        pieces(rest.substring(end), (prefix + rest.substring(0, end)) :: done)
-    pieces(word, Nil)

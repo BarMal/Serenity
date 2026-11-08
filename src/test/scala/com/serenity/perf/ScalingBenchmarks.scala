@@ -42,26 +42,28 @@ private[perf] object ScalingBenchmarks:
     yield switchColdFrame(kind, open)
 
   private def switchColdFrame(kind: Kind, open: Int): BenchmarkRunner.Benchmark =
-    val base = MultiBufferFixture.state(kind, open, MultiBufferFixture.LaptopSize)
+    lazy val base = MultiBufferFixture.state(kind, open, MultiBufferFixture.LaptopSize)
     // Every buffer but the first, one after another; the single buffer when only one is open.
-    val shown =
+    lazy val shown =
       if open == 1 then Vector(base)
       else (2 to open).map(index => MultiBufferFixture.switchTo(base, BufferId(index))).toVector
     val next                       = new AtomicInteger(0)
     def coldFrame(state: AppState) = LaptopFrameBenchmarks.renderedFrame(state, RenderCaches.create(), image)
-    BenchmarkRunner.Benchmark(
-      s"buffers.switch_cold_frame.open_$open.${kind.label}",
-      Warmups,
-      Iterations,
-      () =>
-        assert(shown.forall(_.focusedBufferId.isDefined), "a switch left no buffer shown")
-        assert(
-          shown.map(_.focusedBufferId).distinct.size == shown.size,
-          s"the switches did not each show a different buffer: ${shown.map(_.focusedBufferId)}"
-        )
-        assert(LaptopFrameBenchmarks.hasPixels(coldFrame(shown.head)), "the cold frame drew nothing")
-      ,
-      () => coldFrame(shown(next.getAndIncrement() % shown.size))
+    BenchmarkRunner.Benchmark.building(shown)(
+      BenchmarkRunner.Benchmark(
+        s"buffers.switch_cold_frame.open_$open.${kind.label}",
+        Warmups,
+        Iterations,
+        () =>
+          assert(shown.forall(_.focusedBufferId.isDefined), "a switch left no buffer shown")
+          assert(
+            shown.map(_.focusedBufferId).distinct.size == shown.size,
+            s"the switches did not each show a different buffer: ${shown.map(_.focusedBufferId)}"
+          )
+          assert(LaptopFrameBenchmarks.hasPixels(coldFrame(shown.head)), "the cold frame drew nothing")
+        ,
+        () => coldFrame(shown(next.getAndIncrement() % shown.size))
+      )
     )
 
   private val frames: List[(String, MultiPaneSession => (AppState, AppState))] =
@@ -82,16 +84,19 @@ private[perf] object ScalingBenchmarks:
     action: String,
     change: MultiPaneSession => (AppState, AppState)
   )(using IORuntime): BenchmarkRunner.Benchmark =
-    val name            = s"panes.split$panes.$action"
-    val session         = MultiPaneSession.open(panes, MultiBufferFixture.LaptopSize)
-    val (before, after) = change(session)
-    val transition      = LaptopFrameBenchmarks.AlternatingTransition(before, after)
-    BenchmarkRunner.Benchmark(
-      name,
-      Warmups,
-      Iterations,
-      () => verifySplitFrames(name, transition, before, after),
-      () => transition.nextFrame()
+    val name = s"panes.split$panes.$action"
+
+    lazy val session    = MultiPaneSession.open(panes, MultiBufferFixture.LaptopSize)
+    lazy val changed    = change(session)
+    lazy val transition = LaptopFrameBenchmarks.java2dTransition(changed._1, changed._2)
+    BenchmarkRunner.Benchmark.building(transition)(
+      BenchmarkRunner.Benchmark(
+        name,
+        Warmups,
+        Iterations,
+        () => verifySplitFrames(name, transition, changed._1, changed._2),
+        () => transition.nextFrame()
+      )
     )
 
   /** A damaged frame must match a cold one pixel for pixel. Where two panes share an edge, the five device columns
@@ -107,7 +112,7 @@ private[perf] object ScalingBenchmarks:
   ): Unit =
     List(after, before).foreach { expected =>
       val drawn   = transition.nextFrame()
-      val cold    = LaptopFrameBenchmarks.renderedFrame(expected, RenderCaches.create(), image, cursorVisible = false)
+      val cold    = LaptopFrameBenchmarks.java2dColdFrame(expected)
       val outside = outsideEdgeColumns(LaptopFrameBenchmarks.differingPixels(drawn, cold), sharedEdges(expected))
       assert(
         outside.isEmpty,
@@ -133,16 +138,18 @@ private[perf] object ScalingBenchmarks:
     panes.map(_.right).filter(lefts.contains).distinct.map(_ * cell)
 
   private def lateBars: BenchmarkRunner.Benchmark =
-    val state = ScrollbarTiming.withScrollbar(
+    lazy val state = ScrollbarTiming.withScrollbar(
       MultiBufferFixture.split(MultiBufferFixture.state(Kind.Prose, 4, MultiBufferFixture.LateCountSize), 4)
     )
-    BenchmarkRunner.Benchmark(
-      "scrollbar.four_panes.all_bars",
-      Warmups,
-      Iterations,
-      () =>
-        val waits = ScrollbarTiming.waits(state, ScrollCountExecutor.shared)
-        assert(waits.size == 4, s"only ${waits.size} of four bars were counted late")
-      ,
-      () => ScrollbarTiming.waits(state, ScrollCountExecutor.shared)
+    BenchmarkRunner.Benchmark.building(state)(
+      BenchmarkRunner.Benchmark(
+        "scrollbar.four_panes.all_bars",
+        Warmups,
+        Iterations,
+        () =>
+          val waits = ScrollbarTiming.waits(state, ScrollCountExecutor.shared)
+          assert(waits.size == 4, s"only ${waits.size} of four bars were counted late")
+        ,
+        () => ScrollbarTiming.waits(state, ScrollCountExecutor.shared)
+      )
     )

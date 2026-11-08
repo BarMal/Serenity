@@ -62,12 +62,23 @@ def write_csv(path: str, rows: dict[str, Row]) -> None:
                 "allocation_p50_bytes",
                 "allocation_p95_bytes",
                 "retained_bytes",
+                "allocation_all_threads_p50_bytes",
+                "allocation_all_threads_p95_bytes",
             ]
         )
         for name, row in sorted(rows.items()):
             writer.writerow(
                 [name, "", "", "", "", row.p50_ms, row.p95_ms, ""]
-                + ["" if v is None else v for v in (row.allocation_p50_bytes, row.allocation_p95_bytes, row.retained_bytes)]
+                + [
+                    "" if v is None else v
+                    for v in (
+                        row.allocation_p50_bytes,
+                        row.allocation_p95_bytes,
+                        row.retained_bytes,
+                        row.allocation_all_threads_p50_bytes,
+                        row.allocation_all_threads_p95_bytes,
+                    )
+                ]
             )
 
 

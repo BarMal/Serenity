@@ -2,16 +2,16 @@ package com.serenity.ui.terminal
 
 import javax.swing.JPanel
 
-import com.serenity.ui.renderer.Java2DRenderSurface.DeviceScale
-import com.serenity.ui.renderer.{Java2DRenderSurface, ScreenIdentity, SurfaceGeometry}
+import com.serenity.ui.display.DisplayScale.DeviceScale
+import com.serenity.ui.renderer.{ScreenIdentity, SurfaceGeometry, SurfaceSizing}
 
 /** The size, scale and identity of a Swing canvas, read the way the renderer needs them. */
 object SwingCanvasGeometry:
 
   def of(canvas: JPanel): SurfaceGeometry =
     SurfaceGeometry(
-      Java2DRenderSurface.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width),
-      Java2DRenderSurface.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height),
+      SurfaceSizing.logicalCanvasDimension(canvas.getWidth, canvas.getPreferredSize.width),
+      SurfaceSizing.logicalCanvasDimension(canvas.getHeight, canvas.getPreferredSize.height),
       deviceScaleOf(canvas),
       ScreenIdentity(canvas)
     )

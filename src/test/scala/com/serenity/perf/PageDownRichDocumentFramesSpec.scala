@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.ChromeOn
 import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, ProseMeasure, StatusLinePlacement, TabStripMode}
 import com.serenity.keystroke.events.PageDown
 import com.serenity.richtext.{
@@ -21,7 +22,7 @@ import com.serenity.richtext.{
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameMismatchDump
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,7 +33,12 @@ import org.scalatest.matchers.should.Matchers
   * only the rects each frame names for repainting, so a band the frame clears but never publishes stays stale on
   * screen, as it did below the last row once a scroll left the pane with fewer rows.
   */
-class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
+abstract class PageDownRichDocumentFramesSplit(part: Int, parts: Int) extends AnyFlatSpec with Matchers:
+
+  /** The grid below is 158 tests, and a suite runs them one after another; each suite of the split registers the tests
+    * whose name falls to its `part` of `parts`, so the parts run in parallel and between them hold every test once.
+    */
+  private def mine(name: String): Boolean = Math.floorMod(name.hashCode, parts) == part
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
@@ -208,13 +214,8 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     fringe: Boolean = false
   ): Seq[(Int, Int)] =
     oracleImages.lend(deviceWidthPx(window, scale), deviceHeightPx(window, scale), 1) { frames =>
-      val cold = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
-      val differing =
-        for
-          x <- 0 until drawn.getWidth
-          y <- 0 until drawn.getHeight
-          if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-        yield (x, y)
+      val cold      = Pooled(window, 1, scale, persists = false, fringe, frames).render(state, Damage.Everything)
+      val differing = FrameDiff.differing(drawn, cold)
       if differing.nonEmpty then
         System.err.println(
           FrameMismatchDump.write(s"PageDown-${window.width}x${window.height}-x$scale", drawn, cold, differing)
@@ -282,15 +283,17 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
   )
 
   for
-    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> AppConfig.conventional)
+    (layoutName, config)     <- List("minimal" -> AppConfig.default, "conventional" -> ChromeOn.config)
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- documents
     if scale == 1.0 || documentName.startsWith("six") || documentName.startsWith("Word")
   do
-    s"PageDown through $documentName in the $layoutName layout at ${scale}x" should
-      "draw what a cold frame draws at every step" in {
-        pagedThrough(config, fullHd, 2, scale, document) shouldBe empty
-      }
+    val name = s"PageDown through $documentName in the $layoutName layout at ${scale}x"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step" in {
+          pagedThrough(config, fullHd, 2, scale, document) shouldBe empty
+        }
 
   private val ownersConfig: AppConfig =
     AppConfig.default
@@ -351,28 +354,32 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     (windowName, window)     <- windows
     (documentName, document) <- chaptered
   do
-    s"PageDown through $documentName with $chromeName at ${scale}x in a $windowName window" should
-      "draw what a cold frame draws at every step, past the end too" in {
-        pagedThrough(config, window, 2, scale, document, pageDowns = 40) shouldBe empty
-      }
+    val name = s"PageDown through $documentName with $chromeName at ${scale}x in a $windowName window"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step, past the end too" in {
+          pagedThrough(config, window, 2, scale, document, pageDowns = 40) shouldBe empty
+        }
 
   for
     (shape, perFrame)        <- List(("one PageDown a frame", 1), ("three PageDowns a frame", 3))
     scale                    <- List(1.0, 2.0)
     (documentName, document) <- ("Word's sample" -> wordSample) :: chaptered.take(2)
   do
-    s"PageDown through $documentName with the owner's chrome at ${scale}x with $shape" should
-      "draw what a cold frame draws at every step" in {
-        pagedThrough(
-          ownersConfig,
-          fullHd,
-          2,
-          scale,
-          document,
-          pageDowns = 20,
-          perFrame = perFrame
-        ) shouldBe empty
-      }
+    val name = s"PageDown through $documentName with the owner's chrome at ${scale}x with $shape"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step" in {
+          pagedThrough(
+            ownersConfig,
+            fullHd,
+            2,
+            scale,
+            document,
+            pageDowns = 20,
+            perFrame = perFrame
+          ) shouldBe empty
+        }
 
   for
     scale <- List(1.0, 2.0)
@@ -386,10 +393,12 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       "chapters five and six" -> RichTextDocument(novel(6, 3).paragraphs.drop(0).takeRight(2 * (3 + 3 + 0)))
     )
   do
-    s"PageDown through $documentName with the focused text body dimmed at ${scale}x in a $windowName window" should
-      "draw what a cold frame draws at every step" in {
-        pagedThrough(ownersConfig.withFocusedTextBody(true), window, 2, scale, document, pageDowns = 6) shouldBe empty
-      }
+    val name = s"PageDown through $documentName with the focused text body dimmed at ${scale}x in a $windowName window"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step" in {
+          pagedThrough(ownersConfig.withFocusedTextBody(true), window, 2, scale, document, pageDowns = 6) shouldBe empty
+        }
 
   private val writingConfig: AppConfig =
     ownersConfig
@@ -412,52 +421,58 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       "plain chapters"     -> chapters(3, 3)
     )
   do
-    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window" should
-      "draw what a cold frame draws at every step" in {
-        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
-      }
+    val name =
+      s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step" in {
+          pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8) shouldBe empty
+        }
 
   for
     scale  <- List(1.0, 2.0)
     height <- List(560, 575, 593, 608, 623)
   do
-    s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x" should
-      "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
-        pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
-      }
+    val name = s"PageDown to the end of a spell-checked document in a window ${height}px tall at ${scale}x"
+    if mine(name) then
+      name should
+        "stop a misspelling's squiggle at the pane's bottom edge, as the row's text stops" in {
+          pagedThrough(AppConfig.default, Window(1920, height), 2, scale, chapters(6, 12)) shouldBe empty
+        }
 
-  "PageDown through a dimmed typewriter document" should "clear the pixel beside the text column of every row it draws again" in {
-    val document = novel(2, 4)
-    val window   = Window(800, 600)
-    val (stateManager, id) =
-      LaptopFrameBenchmarks.stateManagerHolding(document.plainText, writingConfig, grid = window.viewport)
-    stateManager
-      .updateState(state =>
-        state.copy(persisted =
-          state.persisted.copy(buffers =
-            state.persisted.buffers.updatedWith(id)(
-              _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+  if mine("PageDown through a dimmed typewriter document") then
+    "PageDown through a dimmed typewriter document" should "clear the pixel beside the text column of every row it draws again" in {
+      val document = novel(2, 4)
+      val window   = Window(800, 600)
+      val (stateManager, id) =
+        LaptopFrameBenchmarks.stateManagerHolding(document.plainText, writingConfig, grid = window.viewport)
+      stateManager
+        .updateState(state =>
+          state.copy(persisted =
+            state.persisted.copy(buffers =
+              state.persisted.buffers.updatedWith(id)(
+                _.map(b => b.copy(richText = b.richText.withSyncedDocument(Some(document), b.document.contentVersion)))
+              )
             )
           )
         )
-      )
-      .unsafeRunSync()
-    val frames = Pooled(window, 1, 1.0)
-    val first  = stateManager.getCurrentState.unsafeRunSync()
-    val _      = frames.render(first, Damage.Everything)
-    val (_, survivors) = (1 to 3).foldLeft((first, List.empty[String])) {
-      case ((before, found), step) =>
-        stateManager.applyEvent(PageDown).unsafeRunSync()
-        val after = stateManager.getCurrentState.unsafeRunSync()
-        val left  = frames.contentLeftPx.getOrElse(0) - 1
-        val ys    = (60 until 540 by 4).toList
-        frames.stampPooled(left, ys)
-        val _          = frames.render(after, DamageProducer.forTransition(before, after))
-        val drawnAgain = ys.filter(y => frames.drawnSpans.get().exists((top, height) => y >= top && y < top + height))
-        (after, found ++ drawnAgain.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+        .unsafeRunSync()
+      val frames = Pooled(window, 1, 1.0)
+      val first  = stateManager.getCurrentState.unsafeRunSync()
+      val _      = frames.render(first, Damage.Everything)
+      val (_, survivors) = (1 to 3).foldLeft((first, List.empty[String])) {
+        case ((before, found), step) =>
+          stateManager.applyEvent(PageDown).unsafeRunSync()
+          val after = stateManager.getCurrentState.unsafeRunSync()
+          val left  = frames.contentLeftPx.getOrElse(0) - 1
+          val ys    = (60 until 540 by 4).toList
+          frames.stampPooled(left, ys)
+          val _          = frames.render(after, DamageProducer.forTransition(before, after))
+          val drawnAgain = ys.filter(y => frames.drawnSpans.get().exists((top, height) => y >= top && y < top + height))
+          (after, found ++ drawnAgain.filter(y => frames.pooledIsStamped(left, y)).map(y => s"step $step: ($left, $y)"))
+      }
+      survivors.take(3) shouldBe empty
     }
-    survivors.take(3) shouldBe empty
-  }
 
   for
     scale <- List(1.0, 2.0)
@@ -468,10 +483,13 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
     )
     (documentName, document) <- List("two short chapters" -> novel(2, 4), "six chapters" -> novel(6, 6))
   do
-    s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window, a serif fringe beside the column" should
-      "draw what a cold frame draws at every step" in {
-        pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8, fringe = true) shouldBe empty
-      }
+    val name =
+      s"PageDown through $documentName with typewriter scrolling and dimming at ${scale}x in a $windowName window, a serif fringe beside the column"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws at every step" in {
+          pagedThrough(writingConfig, window, 2, scale, document, pageDowns = 8, fringe = true) shouldBe empty
+        }
 
   private def endingInAnEmptyChapter(chapterCount: Int, bodies: Int): RichTextDocument =
     RichTextDocument(
@@ -493,18 +511,29 @@ class PageDownRichDocumentFramesSpec extends AnyFlatSpec with Matchers:
       "a short empty last chapter" -> endingInAnEmptyChapter(2, 3)
     )
   do
-    s"PageDown through $documentName with $configName at ${scale}x in a $windowName window" should
-      "draw what a cold frame draws, with nothing left on the rows past the end" in {
-        pagedThrough(config, window, 2, scale, document, pageDowns = 12) shouldBe empty
-      }
+    val name = s"PageDown through $documentName with $configName at ${scale}x in a $windowName window"
+    if mine(name) then
+      name should
+        "draw what a cold frame draws, with nothing left on the rows past the end" in {
+          pagedThrough(config, window, 2, scale, document, pageDowns = 12) shouldBe empty
+        }
 
-  "A sweep of chapter shapes ending in an empty chapter" should "draw what a cold frame draws" in {
-    val failures = for
-      (configName, config) <- List("dimming" -> ownersConfig.withFocusedTextBody(true), "typewriter" -> writingConfig)
-      window               <- List(Window(1500, 1000), Window(800, 600))
-      count                <- 2 to 5
-      bodies               <- 1 to 7
-      found                <- pagedThrough(config, window, 2, 1.0, endingInAnEmptyChapter(count, bodies), pageDowns = 5)
-    yield s"$configName $window chapters=$count bodies=$bodies: $found"
-    failures shouldBe empty
-  }
+  if mine("A sweep of chapter shapes ending in an empty chapter") then
+    "A sweep of chapter shapes ending in an empty chapter" should "draw what a cold frame draws" in {
+      val failures = for
+        (configName, config) <- List("dimming" -> ownersConfig.withFocusedTextBody(true), "typewriter" -> writingConfig)
+        window               <- List(Window(1500, 1000), Window(800, 600))
+        count                <- 2 to 5
+        bodies               <- 1 to 7
+        found <- pagedThrough(config, window, 2, 1.0, endingInAnEmptyChapter(count, bodies), pageDowns = 5)
+      yield s"$configName $window chapters=$count bodies=$bodies: $found"
+      failures shouldBe empty
+    }
+
+final class PageDownRichDocumentFramesSpec extends PageDownRichDocumentFramesSplit(0, 4)
+
+final class PageDownRichDocumentFramesPart2Spec extends PageDownRichDocumentFramesSplit(1, 4)
+
+final class PageDownRichDocumentFramesPart3Spec extends PageDownRichDocumentFramesSplit(2, 4)
+
+final class PageDownRichDocumentFramesPart4Spec extends PageDownRichDocumentFramesSplit(3, 4)

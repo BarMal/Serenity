@@ -63,8 +63,9 @@ class FootprintBenchmarksSpec extends AnyFlatSpec with Matchers:
     val result = FootprintBenchmarks.measure(FootprintBenchmarks.scenarios.head)
     val fields = BenchmarkRunner.csvRow(result).split(",", -1)
     fields(0) shouldBe "footprint.empty_editor"
-    fields.length shouldBe 11
+    fields.length shouldBe 13
     fields(10).toLong should be >= 0L
+    fields.drop(11).toList shouldBe List("", "")
   }
 
   "retainedBytes" should "see the size of a held array and ignore garbage built along the way" taggedAs HeapMeasurementTest in {
