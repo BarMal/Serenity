@@ -9,18 +9,21 @@
 # Name prefixes limit the run, e.g. `layout.anchor_wrap. layout.cold_font. laptop.input.state_manager.two_runtimes.
 # footprint.`. With none, the whole suite runs. Without $DISPLAY the runs go through `xvfb-run`.
 #
-# Results land in <out-dir>/{a,b}-{1..4}.csv; exits with abba_compare.py's status (0 clean, 1 blocking, 2 no data).
+# Results land in <out-dir>/{a,b}-{1..4}.csv; exits with abba_compare.py's status (0 clean, 1 blocking, 2 no data); a
+# missing jar or arguments exit 2 too.
 
 set -euo pipefail
 
-A_JAR="${1:?Usage: abba.sh <A-perf-jar> <B-perf-jar> <out-dir> [name-prefix...]}"
-B_JAR="${2:?Usage: abba.sh <A-perf-jar> <B-perf-jar> <out-dir> [name-prefix...]}"
-OUT="${3:?Usage: abba.sh <A-perf-jar> <B-perf-jar> <out-dir> [name-prefix...]}"
+# Exit 2, not 1, for a setup failure: 1 means a benchmark blocks, and a missing jar must not read as one.
+[[ $# -ge 3 ]] || { echo "Usage: abba.sh <A-perf-jar> <B-perf-jar> <out-dir> [name-prefix...]" >&2; exit 2; }
+A_JAR="$1"
+B_JAR="$2"
+OUT="$3"
 shift 3
 PREFIXES=("$@")
 
 for jar in "$A_JAR" "$B_JAR"; do
-  [[ -f "$jar" ]] || { echo "ERROR: jar not found: $jar" >&2; exit 1; }
+  [[ -f "$jar" ]] || { echo "ERROR: jar not found: '$jar'" >&2; exit 2; }
 done
 mkdir -p "$OUT"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
