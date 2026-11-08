@@ -1,6 +1,7 @@
 package com.serenity.app
 
 import java.nio.file.Path
+import java.util.concurrent.Executor
 
 import scala.concurrent.duration.*
 
@@ -169,7 +170,8 @@ object AppRuntime:
     forwardedOpens: Stream[IO, List[Path]] = Stream.empty,
     quitRequests: Stream[IO, QuitResponse] = Stream.empty,
     fileOrFolderOpen: Boolean = false,
-    afterEditorShutdown: IO[Unit] = IO.unit
+    afterEditorShutdown: IO[Unit] = IO.unit,
+    scrollCountExecutor: Executor = ScrollCountExecutor.shared
   )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO],
@@ -186,7 +188,7 @@ object AppRuntime:
         dictionaryCache   = DictionaryCache()
         scrollCountNotice = new ScrollCountNotice
         scrollCounting =
-          ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
+          ScrollCounting.forFrontend(frontend.capabilities, scrollCountExecutor, scrollCountNotice)
         stateManager <- makeStateManager.getOrElse((logger, counting) =>
           StateManager.apply(
             logger,
