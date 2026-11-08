@@ -10,6 +10,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
@@ -103,11 +104,7 @@ class GuiCellGridClusterSelectionSpec extends AnyFlatSpec with Matchers:
       val text       = "a" + cluster + "b"
       val selected   = frame(text, Some(1 -> (1 + cluster.length)))
       val unselected = frame(text, None)
-      val changed = for
-        y <- 0 until selected.getHeight
-        x <- 0 until selected.getWidth
-        if (selected.getRGB(x, y) & 0xffffff) != (unselected.getRGB(x, y) & 0xffffff)
-      yield (x, y)
+      val changed    = FrameDiff.differing(selected, unselected)
       // The first row that changed is the text line's; whatever else a selection changes (a status line) is further down.
       val top    = changed.map(_._2).min
       val inLine = changed.collect { case (x, y) if y < top + cellMetrics.lineHeight => x }
