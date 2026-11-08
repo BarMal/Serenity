@@ -1,9 +1,11 @@
 package com.serenity.perf
 
+import com.serenity.app.SkiaVsync
 import com.serenity.ui.skia.FlushSweep
 
-/** `sbt "app/Test/runMain com.serenity.perf.FlushSweepMain [rows=1,5,15,30,50] [draws=60] [variants=same,changed]"` on
-  * a machine with a display: prints the table and the fit, to be pasted into the issue.
+/** `sbt "app/Test/runMain com.serenity.perf.FlushSweepMain [rows=1,5,15,30,50] [draws=60] [variants=same,changed]
+  * [vsync=off|on]"` on a machine with a display: prints the table and the fit, to be pasted into the issue. Vsync is
+  * off unless asked for, as the app runs.
   */
 object FlushSweepMain:
   import FlushSweep.*
@@ -22,6 +24,14 @@ object FlushSweepMain:
           case _         => None
         }
       )
+      vsyncRequested(setting(args, "vsync")) match
+        case Left(message) =>
+          Console.err.println(s"flush sweep failed: $message")
+          sys.exit(1)
+        case Right(enabled) =>
+          val chosen = Option(System.getProperty(SkiaVsync.Property)).map(SkiaVsync.Property -> _).toMap
+          vsyncProperty(enabled, sys.env, chosen).foreach((key, value) => System.setProperty(key, value))
+          println(s"vsync: ${Option(System.getProperty(SkiaVsync.Property)).getOrElse("unset")}")
       run(rows, draws, variants) match
         case Right((renderApi, summaries)) => report(renderApi, summaries).foreach(println)
         case Left(message) =>

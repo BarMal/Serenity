@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
 import java.util.concurrent.{CountDownLatch, FutureTask, TimeUnit}
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
+import com.serenity.app.SkiaVsync
 import com.serenity.testkit.DisplayExclusive
 import org.jetbrains.skia.{Font, Paint, Picture, PictureRecorder, Rect}
 
@@ -95,6 +96,23 @@ object FlushSweep:
       )
     )
     header :: columns :: body ::: fits
+
+  /** `on` or `off`, from the command line; off when absent, as the app runs. */
+  def vsyncRequested(argument: Option[String]): Either[String, Boolean] =
+    argument.map(_.trim.toLowerCase) match
+      case None | Some("off") => Right(false)
+      case Some("on")         => Right(true)
+      case Some(other)        => Left(s"vsync must be on or off, not '$other'")
+
+  /** What the app sets before its first layer is made (`GraphicsStartup`): with vsync on, a draw waits for the display
+    * and the sweep measures the wait. A value the user already set stays.
+    */
+  def vsyncProperty(
+      enabled: Boolean,
+      env: Map[String, String],
+      properties: Map[String, String]
+  ): Option[(String, String)] =
+    SkiaVsync.property(enabled, env, properties)
 
   private val LineHeightPx = 16f
 
