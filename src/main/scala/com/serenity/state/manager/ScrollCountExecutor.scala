@@ -14,10 +14,11 @@ object ScrollCountExecutor:
     */
   val MaxThreads: Int = 4
 
-  /** Cores left to the render and window threads. Counts are pure CPU, so a pool as wide as the machine would compete
-    * with the frame they follow.
+  /** Cores left to the render and window threads. None: pinned to four CPUs, four count threads typed no slower than
+    * three (typing-frame p50 4.1 against 5.0 ms, p95 5.9 against 6.8 ms) and the last bar came 27% sooner (#2496).
+    * Raise it if counting is ever seen to delay a frame on a small machine.
     */
-  val ReservedCores: Int = 1
+  val ReservedCores: Int = 0
 
   /** The system property that sets the number of count threads; for measuring a size, not a user setting. */
   val ThreadsProperty: String = "serenity.scroll_count.threads"

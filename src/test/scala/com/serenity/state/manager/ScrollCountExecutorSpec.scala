@@ -18,6 +18,13 @@ class ScrollCountExecutorSpec extends AnyFlatSpec with Matchers:
     ScrollCountExecutor.defaultThreads(cores = 6) shouldBe (6 - reserved).max(1).min(ScrollCountExecutor.MaxThreads)
   }
 
+  it should "use every core up to the cap, as the 4-CPU laptop run found no frame cost at four threads" in {
+    ScrollCountExecutor.defaultThreads(cores = 2) shouldBe 2
+    ScrollCountExecutor.defaultThreads(cores = 3) shouldBe 3
+    ScrollCountExecutor.defaultThreads(cores = 4) shouldBe 4
+    ScrollCountExecutor.defaultThreads(cores = 8) shouldBe 4
+  }
+
   "A configured number of count threads" should "win over the default, within one and the cap" in {
     ScrollCountExecutor.threadsFor(cores = 8, configured = Some("2")) shouldBe 2
     ScrollCountExecutor.threadsFor(cores = 2, configured = Some("4")) shouldBe 4
