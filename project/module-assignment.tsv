@@ -181,6 +181,7 @@ ui/fonts/Java2DGlyphCoverage.scala	base
 ui/fonts/LogicalFontFamilies.scala	base
 ui/layout/BoundaryScratch.scala	base
 ui/layout/CellMetrics.scala	base
+ui/layout/CellWrapping.scala	base
 ui/layout/CharWidth.scala	base
 ui/layout/DropCapWidths.scala	base
 ui/layout/FontLineExtents.scala	base
