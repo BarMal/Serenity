@@ -1,7 +1,7 @@
 package com.serenity.perf
 
-import java.awt.image.BufferedImage
 import java.awt.Font
+import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
