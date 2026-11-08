@@ -27,11 +27,11 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       val _ = cursors.updateAndGet(cursor :: _)
     def dispose(): Unit =
       val _ = disposed.incrementAndGet()
-    val rendered                               = new AtomicReference[Option[() => Unit]](None)
-    def onRendered(callback: () => Unit): Unit = rendered.set(Some(callback))
-    def renderApi: String                      = "FAKE"
-    val drawStarted                            = new AtomicReference[Option[() => Unit]](None)
-    val drawEnded                              = new AtomicReference[Option[() => Unit]](None)
+    val rendered                                           = new AtomicReference[Option[() => Unit]](None)
+    def onRendered(callback: () => Unit): Unit             = rendered.set(Some(callback))
+    def renderApi: String                                  = "FAKE"
+    val drawStarted                                        = new AtomicReference[Option[() => Unit]](None)
+    val drawEnded                                          = new AtomicReference[Option[() => Unit]](None)
     override def onDrawStarted(callback: () => Unit): Unit = drawStarted.set(Some(callback))
     override def tellsWhenDrawsEnd: Boolean                = reportsDrawEnd
     override def onDrawEnded(callback: () => Unit): Unit   = drawEnded.set(Some(callback))
@@ -118,10 +118,10 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
       presented.get should be > before
     }
 
-  private final class StepClock:
-    private val now                 = new java.util.concurrent.atomic.AtomicLong(0L)
-    def advanceMs(ms: Long): Unit   = now.addAndGet(ms * 1_000_000L): Unit
-    def read(): Long                = now.get()
+  final private class StepClock:
+    private val now               = new java.util.concurrent.atomic.AtomicLong(0L)
+    def advanceMs(ms: Long): Unit = now.addAndGet(ms * 1_000_000L): Unit
+    def read(): Long              = now.get()
 
   private def withTimedWindow[A](timings: com.serenity.diagnostics.FrameTimings)(body: SwingWindow => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A window needs a display")

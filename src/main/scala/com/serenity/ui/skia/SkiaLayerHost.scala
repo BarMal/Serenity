@@ -11,7 +11,15 @@ import scala.util.Try
 
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
 import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry, Rect}
-import org.jetbrains.skiko.{GraphicsApi, OS, RenderFactory, SkiaLayer, SkiaLayerAnalytics, SkiaLayerProperties, SkikoRenderDelegate}
+import org.jetbrains.skiko.{
+  GraphicsApi,
+  OS,
+  RenderFactory,
+  SkiaLayer,
+  SkiaLayerAnalytics,
+  SkiaLayerProperties,
+  SkikoRenderDelegate
+}
 import org.slf4j.LoggerFactory
 
 import SkiaLayerHost.LayerFrame
@@ -330,10 +338,10 @@ object SkiaLayerHost:
   private def drawEndAnalytics(drawEnd: AtomicReference[Option[() => Unit]]): SkiaLayerAnalytics =
     new SkiaLayerAnalytics:
       override def device(
-          skikoVersion: String,
-          os: OS,
-          api: GraphicsApi,
-          deviceName: String
+        skikoVersion: String,
+        os: OS,
+        api: GraphicsApi,
+        deviceName: String
       ): SkiaLayerAnalytics.DeviceAnalytics =
         new SkiaLayerAnalytics.DeviceAnalytics:
           override def afterFrameRender(): Unit =
