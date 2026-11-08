@@ -73,6 +73,8 @@ object Main extends IOApp:
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
       case Right(options) if options.showVersion =>
         IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(options) if StartupProbe.refusal(options, StartupProbe.userHome).nonEmpty =>
+        IO(StartupProbe.refusal(options, StartupProbe.userHome).foreach(System.err.println)).as(ExitCode.Error)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
       case Right(options) if options.renderBenchmark.isDefined =>
@@ -455,6 +457,18 @@ object Main extends IOApp:
                   .flatMap(snapshot => IO(host.control.updateAccessibility(snapshot)))
               }
 
+            val announceFirstFrame: IO[Unit] =
+              StartupProbe.firstFrame(
+                launchOptions,
+                smokeReady,
+                StartupProbe.run(
+                  inject = IO(frameTimings.keyLatency.setEnabled(true)) >> host.typeCharacter(StartupProbe.TypedChar),
+                  keyPainted = IO.fromCompletableFuture(IO(frameTimings.keyLatency.firstKeyPainted)),
+                  quit = smokeReady,
+                  timeout = StartupProbe.Timeout
+                )
+              )
+
             val frontendRuntime = FrontendRuntime(
               inputHandler = router =>
                 host.inputHandler(
@@ -521,8 +535,7 @@ object Main extends IOApp:
               configNotice = configNotice,
               recovery = startup.plan,
               afterEditorShutdown = watchdog.armHalt(),
-              onFirstFrame = startup.markStarted >> host.control.reportFirstPaints(logger) >>
-                IO.whenA(launchOptions.smokeTest)(SmokeTest.announceReady(smokeReady)),
+              onFirstFrame = startup.markStarted >> host.control.reportFirstPaints(logger) >> announceFirstFrame,
               makeStateManager = Some((logger, scrollCounting) =>
                 com.serenity.state.manager.StateManager.apply(
                   logger,
@@ -547,7 +560,8 @@ object Main extends IOApp:
                 )
               ),
               awaitExternalQuit =
-                if launchOptions.smokeTest then IO.race(host.control.awaitClose, smokeReady.get).void
+                if launchOptions.smokeTest || launchOptions.startupProbe then
+                  IO.race(host.control.awaitClose, smokeReady.get).void
                 else host.control.awaitClose,
               registerResizeCallback = cb => host.control.setOnResize(cb),
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),

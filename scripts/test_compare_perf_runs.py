@@ -139,6 +139,21 @@ class PairedGateTests(unittest.TestCase):
         self.assertAlmostEqual(verdicts[0].ratio, 2.2)
 
 
+class MedianRowsTests(unittest.TestCase):
+    def test_takes_the_median_of_the_all_threads_allocation_columns_across_runs(self) -> None:
+        def run(p50_bytes: int | None, p95_bytes: int | None) -> dict:
+            return {"x": compare_perf_runs.Row("x", 1.0, 1.5, 10, 11, None, p50_bytes, p95_bytes)}
+
+        medians = compare_perf_runs.median_rows([run(100, 150), run(300, 350), run(200, 250)])["x"]
+        self.assertEqual((medians.allocation_all_threads_p50_bytes, medians.allocation_all_threads_p95_bytes), (200, 250))
+        self.assertEqual((medians.allocation_p50_bytes, medians.allocation_p95_bytes), (10, 11))
+
+    def test_leaves_them_empty_when_no_run_measured_them(self) -> None:
+        run = {"x": compare_perf_runs.Row("x", 1.0, 1.5, 10, 11)}
+        medians = compare_perf_runs.median_rows([run, run])["x"]
+        self.assertEqual((medians.allocation_all_threads_p50_bytes, medians.allocation_all_threads_p95_bytes), (None, None))
+
+
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
 
