@@ -1,7 +1,7 @@
 package com.serenity
 
-import java.awt.{Font, Rectangle}
 import java.awt.image.BufferedImage
+import java.awt.{Font, Rectangle}
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.unused
