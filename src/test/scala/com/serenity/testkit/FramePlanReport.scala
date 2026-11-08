@@ -46,6 +46,37 @@ object FramePlanReport:
 
   private val ShownPixels = 6
 
+  /** For the first differing pixels, which band of the plan keeps them: a kept band belongs to the k-th row the plan
+    * did not draw, so its row number is read off the dirty rows.
+    */
+  def owners(
+    current: Option[FramePlan],
+    previous: Option[FramePlan],
+    differing: Seq[(Int, Int)],
+    scale: Double
+  ): String =
+    differing
+      .take(3)
+      .map((x, y) =>
+        s"($x,$y): current ${ownerIn(current, x / scale, y / scale)}; previous ${ownerIn(previous, x / scale, y / scale)}"
+      )
+      .mkString(" | ")
+
+  private def ownerIn(plan: Option[FramePlan], x: Double, y: Double): String =
+    plan.fold("no plan") { planned =>
+      val dirty   = planned.dirtyRowsByPane.values.flatten.toSet
+      val keptRow = LazyList.from(0).filterNot(dirty.contains)
+      planned.keptBands.zipWithIndex
+        .collectFirst {
+          case (rect, index)
+              if rect.xPx <= x && x < rect.xPx + rect.widthPx && rect.yPx <= y && y < rect.yPx + rect.heightPx =>
+            s"kept band #$index (row ${keptRow(index)} if the band is a row's) $rect of ${planned.keptBands.size} bands, ${dirty.size} dirty rows"
+        }
+        .getOrElse(
+          s"in no kept band (a dirty row or chrome); ${planned.keptBands.size} bands, ${dirty.size} dirty rows"
+        )
+    }
+
   /** Which of the differing pixels (device coordinates) lie in a rect the frame presented and which outside all of
     * them: a pixel outside was never given to the screen, whatever the frame drew there.
     */

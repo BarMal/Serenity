@@ -193,6 +193,7 @@ trait ColdFrameHarness:
     private val reported  = AtomicInteger(0)
     private val onScreen  = AtomicReference(frames.renderFrame(shown.get, Damage.Everything).rgbPixels)
     private val built     = AtomicInteger(0)
+    private val seenPlan  = AtomicReference[Option[FramePlan]](None)
 
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
@@ -224,7 +225,8 @@ trait ColdFrameHarness:
       act
       val after = stateManager.getCurrentState.unsafeRunSync()
       shown.set(after)
-      val drawn = frames.renderFrame(after, DamageProducer.forTransition(before, after)).rgbPixels
+      val drawn        = frames.renderFrame(after, DamageProducer.forTransition(before, after)).rgbPixels
+      val previousPlan = seenPlan.getAndSet(frames.lastPlan)
       onScreen.set(drawn)
       val n = stepCount.incrementAndGet()
       coldFramePixelsWith(after, scale) { cold =>
@@ -238,8 +240,34 @@ trait ColdFrameHarness:
               val coldImage       = FramePixels.image(width, height, cold)
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
-          failures.updateAndGet(_ :+ report)
+          val probe = scala.util
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan))
+            .fold(e => s"PROBE step $n failed: $e", identity)
+          println(probe)
+          failures.updateAndGet(_ :+ s"$probe\n$report")
       }
+
+    /** Why the frame differs: whether a first persisting frame of this state already differs from the cold one (a
+      * painting difference), whether the incremental frame differs from that persisting frame (an invalidation one),
+      * the plan of the step before and the bands that own the first differing pixels.
+      */
+    private def probeReport(
+      n: Int,
+      label: String,
+      state: AppState,
+      drawn: Array[Int],
+      cold: Array[Int],
+      diff: Seq[(Int, Int)],
+      previousPlan: Option[FramePlan]
+    ): String =
+      val (width, height) = (deviceWidthPx(scale), deviceHeightPx(scale))
+      val fresh           = Pooled(scale).renderFrame(state, Damage.Everything).rgbPixels
+      val freshVsCold     = FrameDiff.differing(fresh, cold, width, height)
+      val drawnVsFresh    = FrameDiff.differing(drawn, fresh, width, height)
+      s"PROBE step $n ($label) at ${scale}x: persisting first frame vs cold: ${summary(freshVsCold)}; " +
+        s"incremental vs persisting first frame: ${summary(drawnVsFresh)}; " +
+        s"owners ${FramePlanReport.owners(frames.lastPlan, previousPlan, diff, scale)}; " +
+        s"previous ${FramePlanReport.describe(previousPlan)}"
 
     /** What a cold frame draws for the state as it now stands. */
     def coldFrame(): BufferedImage =
