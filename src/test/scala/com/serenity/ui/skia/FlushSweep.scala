@@ -2,8 +2,8 @@ package com.serenity.ui.skia
 
 import java.awt.{Dimension, GraphicsEnvironment}
 import java.util.Locale
-import java.util.concurrent.{CountDownLatch, FutureTask, TimeUnit}
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference}
+import java.util.concurrent.{CountDownLatch, FutureTask, TimeUnit}
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import com.serenity.testkit.DisplayExclusive
@@ -66,17 +66,32 @@ object FlushSweep:
       Fit(meanY - slope * meanX, slope)
     }
 
-  private def formatted(pattern: String, values: Any*): String = String.format(Locale.ROOT, pattern, values.map(_.asInstanceOf[AnyRef])*)
+  private def formatted(pattern: String, values: Any*): String =
+    String.format(Locale.ROOT, pattern, values.map(_.asInstanceOf[AnyRef])*)
 
   def report(renderApi: String, summaries: List[Summary]): List[String] =
-    val header = s"Skia flush sweep: renderApi=$renderApi (draw start to the end of Skiko's draw cycle, milliseconds)"
+    val header  = s"Skia flush sweep: renderApi=$renderApi (draw start to the end of Skiko's draw cycle, milliseconds)"
     val columns = formatted("%5s  %-13s %6s %9s %9s %9s %9s", "rows", "variant", "draws", "min", "p50", "p95", "max")
     val body = summaries.sortBy(s => (s.variant.ordinal, s.rows)).map { s =>
-      formatted("%5d  %-13s %6d %9.2f %9.2f %9.2f %9.2f", s.rows, s.variant, s.draws, s.minMs, s.p50Ms, s.p95Ms, s.maxMs)
+      formatted(
+        "%5d  %-13s %6d %9.2f %9.2f %9.2f %9.2f",
+        s.rows,
+        s.variant,
+        s.draws,
+        s.minMs,
+        s.p50Ms,
+        s.p95Ms,
+        s.maxMs
+      )
     }
     val fits = Variant.values.toList.flatMap(variant =>
       fit(summaries, variant).map(found =>
-        formatted("fit %s: intercept %.2f ms + %.2f ms per row (line through the p50s)", variant, found.interceptMs, found.slopeMsPerRow)
+        formatted(
+          "fit %s: intercept %.2f ms + %.2f ms per row (line through the p50s)",
+          variant,
+          found.interceptMs,
+          found.slopeMsPerRow
+        )
       )
     )
     header :: columns :: body ::: fits
@@ -94,8 +109,8 @@ object FlushSweep:
       .find(face => face.getFamilyName == "Monaspace Neon" && !face.isBold)
       .fold(new Font())(new Font(_, 14f))
 
-  /** `rows` rows of a background fill and a line of text, as a picture; draw `drawIndex` of a variant that changes a row
-    * differs from the one before it.
+  /** `rows` rows of a background fill and a line of text, as a picture; draw `drawIndex` of a variant that changes a
+    * row differs from the one before it.
     */
   def scene(rows: Int, variant: Variant, drawIndex: Int, widthPx: Int, heightPx: Int): Picture =
     val recorder   = new PictureRecorder()
@@ -139,7 +154,11 @@ object FlushSweep:
       val draw = Pending(new AtomicLong(0L), new AtomicLong(0L), new CountDownLatch(1))
       pending.set(Some(draw))
       host.publish(picture)
-      Either.cond(draw.done.await(15, TimeUnit.SECONDS), draw.elapsedNanos.get() / 1e6, "no draw cycle ended within 15 s")
+      Either.cond(
+        draw.done.await(15, TimeUnit.SECONDS),
+        draw.elapsedNanos.get() / 1e6,
+        "no draw cycle ended within 15 s"
+      )
 
   private val Warmups = 5
 
@@ -149,15 +168,16 @@ object FlushSweep:
     task.get()
 
   private def measure(
-      timer: Timer,
-      rows: Int,
-      variant: Variant,
-      draws: Int,
-      size: Dimension
+    timer: Timer,
+    rows: Int,
+    variant: Variant,
+    draws: Int,
+    size: Dimension
   ): Either[String, Measurement] =
     def timed(index: Int): Either[String, Double] =
       timer.timedMs(scene(rows, variant, index, size.width, size.height))
-    (0 until Warmups).foldLeft[Either[String, Unit]](Right(()))((outcome, index) => outcome.flatMap(_ => timed(index).map(_ => ())))
+    (0 until Warmups)
+      .foldLeft[Either[String, Unit]](Right(()))((outcome, index) => outcome.flatMap(_ => timed(index).map(_ => ())))
       .flatMap(_ =>
         (0 until draws).foldLeft[Either[String, Vector[Double]]](Right(Vector.empty))((outcome, index) =>
           outcome.flatMap(done => timed(Warmups + index).map(done :+ _))
@@ -167,10 +187,10 @@ object FlushSweep:
 
   /** The render API the layer ended up with, and a summary for every row count and variant. */
   def run(
-      rowCounts: List[Int],
-      draws: Int,
-      variants: List[Variant],
-      size: Dimension = new Dimension(1000, 800)
+    rowCounts: List[Int],
+    draws: Int,
+    variants: List[Variant],
+    size: Dimension = new Dimension(1000, 800)
   ): Either[String, (String, List[Summary])] =
     if GraphicsEnvironment.isHeadless then Left("a hosted layer needs a display")
     else
@@ -212,7 +232,7 @@ object FlushSweepMain:
     args.collectFirst { case argument if argument.startsWith(s"$name=") => argument.drop(name.length + 1) }
 
   def main(args: Array[String]): Unit =
-    val rows = setting(args, "rows").fold(List(1, 5, 15, 30, 50))(_.split(',').toList.flatMap(_.trim.toIntOption))
+    val rows  = setting(args, "rows").fold(List(1, 5, 15, 30, 50))(_.split(',').toList.flatMap(_.trim.toIntOption))
     val draws = setting(args, "draws").flatMap(_.toIntOption).getOrElse(60)
     val variants = setting(args, "variants").fold(Variant.values.toList)(
       _.split(',').toList.flatMap {

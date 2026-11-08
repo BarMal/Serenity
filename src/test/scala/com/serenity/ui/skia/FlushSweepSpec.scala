@@ -23,8 +23,8 @@ class FlushSweepSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not depend on the order the draws were measured in" in {
-    val ascending  = Vector.tabulate(40)(i => (i + 1).toDouble)
-    val shuffled   = ascending.reverse.grouped(3).toVector.flatMap(_.reverse)
+    val ascending = Vector.tabulate(40)(i => (i + 1).toDouble)
+    val shuffled  = ascending.reverse.grouped(3).toVector.flatMap(_.reverse)
     summarise(Measurement(4, Variant.Same, shuffled)) shouldBe summarise(Measurement(4, Variant.Same, ascending))
   }
 
@@ -34,7 +34,7 @@ class FlushSweepSpec extends AnyFlatSpec with Matchers:
   }
 
   "FlushSweep.fit" should "recover the intercept and the cost per row of a straight line" in {
-    val line = List(1, 10, 20, 50).map(rows => summary(rows, 3.0 + 0.5 * rows))
+    val line  = List(1, 10, 20, 50).map(rows => summary(rows, 3.0 + 0.5 * rows))
     val found = fit(line).getOrElse(fail("no fit"))
     found.interceptMs shouldBe 3.0 +- 1e-9
     found.slopeMsPerRow shouldBe 0.5 +- 1e-9
@@ -78,7 +78,8 @@ class FlushSweepSpec extends AnyFlatSpec with Matchers:
 
   "FlushSweep.run" should "time every draw of every row count on a hosted layer" in {
     assume(!GraphicsEnvironment.isHeadless, "A hosted layer needs a display")
-    val outcome = FlushSweep.run(rowCounts = List(1, 3), draws = 3, variants = List(Variant.Same, Variant.OneRowChanged))
+    val outcome =
+      FlushSweep.run(rowCounts = List(1, 3), draws = 3, variants = List(Variant.Same, Variant.OneRowChanged))
     val (renderApi, summaries) = outcome.fold(message => fail(message), identity)
     renderApi should not be empty
     summaries.map(s => (s.rows, s.variant)).toSet shouldBe
