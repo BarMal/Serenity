@@ -7,8 +7,8 @@ import java.lang.management.ManagementFactory
   */
 object BenchmarkRunner:
 
-  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
-    * covered without being listed. The set below adds the individually chosen ones from other families.
+  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*`, `command_runner.*` or `skia.*`
+    * benchmark is covered without being listed. The set below adds the individually chosen ones from other families.
     */
   private val AllocationTrackedPrefixes =
     List(
@@ -19,7 +19,8 @@ object BenchmarkRunner:
       "layout.cold_font.",
       "text.boundary.",
       "text.counts.",
-      "index.walk."
+      "index.walk.",
+      "skia."
     )
 
   private[perf] def tracksAllocation(name: String): Boolean =
