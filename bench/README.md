@@ -60,7 +60,7 @@ The run's output records how the quit key was sent and how many `[STATE MODAL]` 
 
 ### Start-up as benchmark rows (#2420)
 
-`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
+`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. With `--interactive` it launches with the hidden `--startup-probe` flag instead: the app injects one key after its first frame and prints `SERENITY_PROBE_INTERACTIVE` once that key has been painted, so one launch yields `startup.*.first_frame` and `startup.*.interactive`. It uses `--safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
 
 ### How much start-up varies (#2420)
 
@@ -119,7 +119,7 @@ java \
 python3 bench/jfr-aggregate.py typing_random.jfr --top 20
 ```
 
-On a machine that does build, `-cp "$(sbt -batch "export Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
+On a machine that does build, `-cp "$(sbt -batch "export app/Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
 
 `TypingProfile` also prints `RESULT` lines (p50, p95, mean ms per event and allocated bytes per event); `cold_typing` prints the mean and p95 per keystroke bucket (1-50, 51-100, 101-200, 201-400, 401-600) and runs in a fresh JVM with no warm-up, for example `... TypingProfile cold_typing 300 --pace-ms=100 --warm-ms=1500`.
 

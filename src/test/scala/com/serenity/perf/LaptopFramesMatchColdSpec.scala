@@ -9,6 +9,7 @@ import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, SkiaFrames}
@@ -75,12 +76,8 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     state: AppState,
     plan: Option[EditorPaneRenderPlan]
   ): Seq[(Int, Int)] =
-    val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
-    val diffs = for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    val cold  = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
+    val diffs = FrameDiff.differing(drawn, cold)
     if diffs.nonEmpty then
       println(
         FrameDifferencePicture.of("damaged frame vs cold", drawn, cold, diffs) + FrameDifferencePicture.elementsAt(
