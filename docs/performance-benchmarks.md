@@ -82,14 +82,14 @@ The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,a
 
 **Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
 
-**All-threads allocation** is for a row whose work runs on threads other than the benchmark's own (the `StateManager` runtime, the Swing event thread, the project walk's workers), where the columns above see only the caller. A row opts in with `measuringAllThreads`; its pass sums every live thread's `getThreadAllocatedBytes` before and after each batch (`BenchmarkRunner.allocatedAcrossThreads`). A thread that ends mid-batch is lost, so a row that spawns short-lived threads under-reports; threads that outlive the batch, such as pool workers, are counted whole. Anything else running in the process during the batch is counted too, so read it as an upper bound on the row's own work. The column is reported only: the allocation check still reads `allocation_p50_bytes` until it is switched over.
+**All-threads allocation** is for a row whose work runs on threads other than the benchmark's own (the `StateManager` runtime, the Swing event thread, the project walk's workers), where the columns above see only the caller. A row opts in with `measuringAllThreads`; its pass sums every live thread's `getThreadAllocatedBytes` before and after each batch (`BenchmarkRunner.allocatedAcrossThreads`). A thread that ends mid-batch is lost, so a row that spawns short-lived threads under-reports; threads that outlive the batch, such as pool workers, are counted whole. Anything else running in the process during the batch is counted too, so read it as an upper bound on the row's own work. The allocation check and the ABBA read this column for such a row instead of `allocation_p50_bytes`. A baseline (or an ABBA side A) built before the column existed has no value to compare with, so that row is skipped for allocation with a `::notice::` until the baseline is rebuilt; it is not compared on the caller's share, which measures something else.
 
 **CI gate (`scripts/check_perf_regression.py`)**
 
 | Metric | Condition | Effect |
 | --- | --- | --- |
 | `retained_bytes` | current > 1.25x baseline AND delta > 1 MiB | fails the build |
-| `allocation_p50_bytes` | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
+| `allocation_p50_bytes` (`allocation_all_threads_p50_bytes` for a row that reports it) | current > 1.5x baseline AND delta > 64 KiB | `::warning::` only; `--gate-allocation` makes it fail |
 
 Thresholds are `--retained-threshold`, `--min-retained-delta-bytes`, `--allocation-threshold` and `--min-allocation-delta-bytes`. A baseline without the columns is skipped with a `::notice::` instead of failing. `combine_perf_runs.py` carries the columns through and keeps the largest retained value for a baseline (`--pick slowest`) and the smallest for a head.
 
@@ -227,7 +227,7 @@ A benchmark **blocks** the change when B is worse than A by:
 | Metric | Blocks when |
 | --- | --- |
 | time (`p50_ms`) | the four-run p50 ranges do not overlap (B's fastest run is slower than A's slowest), B's median is at least 5% slower, **and** at least 0.03 ms slower |
-| allocation (`allocation_p50_bytes`) | B's median is at least 5% **and** at least 8 KiB above A's |
+| allocation (`allocation_p50_bytes`, or `allocation_all_threads_p50_bytes` for a row that reports it on both sides) | B's median is at least 5% **and** at least 8 KiB above A's |
 | footprint (`retained_bytes`) | B's median is more than 10% above A's |
 
 The 5% and 0.03 ms floors are separate guards on purpose, as in the CI gate: the ratio alone over-fires on microsecond rows and the delta alone on multi-millisecond ones. Overlapping ranges never block however far the medians are, because the eight runs could not tell the builds apart. A blocked benchmark needs either a fix or a note in the PR that explains it (the `stable_text` footprint rows above are the expected case); `abba_compare.py` exits 1 and prints one `::error::` line per blocking metric.
