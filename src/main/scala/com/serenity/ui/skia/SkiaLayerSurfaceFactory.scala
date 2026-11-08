@@ -45,7 +45,9 @@ class LayerSurfaceFactory private[ui] (
   private def paint(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
     val geometry = request.geometry
     val scale    = geometry.deviceScale
-    val kept = Option.when(request.contentPersists)(request.backendCaches.getOrCreate(LayerImageKey)(new LayerImageFrames))
+    val kept = Option.when(request.contentPersists)(
+      request.backendCaches.getOrCreate(LayerSurfaceFactory.LayerImageKey)(new LayerImageFrames)
+    )
     val surface =
       kept.fold(Surface.Companion.makeRaster(RasterFrames.frameInfo(geometry.deviceWidthPx, geometry.deviceHeightPx)))(
         _.surfaceFor(geometry.deviceWidthPx, geometry.deviceHeightPx, scale.x)
@@ -118,7 +120,7 @@ object SynchronousSkiaLayerSurfaceFactory
 
 object LayerSurfaceFactory:
 
-  private val LayerImageKey = BackendCacheKey(classOf[LayerImageFrames])
+  private[skia] val LayerImageKey = BackendCacheKey(classOf[LayerImageFrames])
 
   private val log = LoggerFactory.getLogger(classOf[LayerSurfaceFactory])
 
