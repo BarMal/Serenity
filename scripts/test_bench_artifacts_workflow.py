@@ -39,5 +39,27 @@ class PerfAssemblyTests(unittest.TestCase):
         self.assertEqual(len(re.findall(r"cp \.\./workflow-src/bench/ci/perf-assembly(-app)?\.sbt perf-assembly\.sbt", _WORKFLOW)), 2)
 
 
+class SpikeAssemblyTests(unittest.TestCase):
+    """The spike jar takes its merge rules from the project that holds the sources: `root` before the split, `app` after."""
+
+    def test_both_layouts_have_their_own_spike_settings_file(self) -> None:
+        self.assertTrue((_ROOT / "bench" / "ci" / "spike-assembly.sbt").exists())
+        self.assertTrue((_ROOT / "bench" / "ci" / "spike-assembly-app.sbt").exists())
+
+    def test_each_spike_file_takes_the_merge_rules_of_its_own_project(self) -> None:
+        old = (_ROOT / "bench" / "ci" / "spike-assembly.sbt").read_text()
+        new = (_ROOT / "bench" / "ci" / "spike-assembly-app.sbt").read_text()
+        self.assertIn('LocalProject("root") / assembly / assemblyMergeStrategy', old)
+        self.assertIn('LocalProject("app") / assembly / assemblyMergeStrategy', new)
+        self.assertNotIn('LocalProject("root")', new)
+
+    def test_the_workflow_picks_the_spike_file_by_the_spike_checkout_s_layout(self) -> None:
+        step = _WORKFLOW.split("name: Build serenity-spike.jar", 1)[1].split("- name:", 1)[0]
+        self.assertRegex(step, r"grep -Eq '\^lazy val app\\b' build\.sbt")
+        self.assertIn("spike-assembly-app.sbt spike-assembly.sbt", step)
+        self.assertIn("spike-assembly.sbt spike-assembly.sbt", step)
+        self.assertIn("sbt -v spike/assembly", step)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -83,7 +83,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cp ../workflow-src/bench/ci/spike-assembly.sbt spike-assembly.sbt
+          if grep -Eq '^lazy val app\b' build.sbt; then
+            cp ../workflow-src/bench/ci/spike-assembly-app.sbt spike-assembly.sbt
+          else
+            cp ../workflow-src/bench/ci/spike-assembly.sbt spike-assembly.sbt
+          fi
           sbt -v spike/assembly
 
       - name: Assemble bundle
