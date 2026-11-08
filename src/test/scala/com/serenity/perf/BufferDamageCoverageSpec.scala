@@ -16,7 +16,7 @@ import com.serenity.keystroke.events.{
   ScrollUp
 }
 import com.serenity.state.manager.DamageProducer
-import com.serenity.state.models.{BufferId, Damage}
+import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFrameState, ScreenIdentity, SurfaceContentIdentity}
 import com.serenity.{MockRenderSurface, setCursorPosition}
@@ -110,6 +110,19 @@ class BufferDamageCoverageSpec extends AnyFlatSpec with Matchers with ScalaCheck
     yield Frame(transition, screen, drawnInto)
   )
 
+  /** A generated cursor move, kept inside the pane's document as it now stands: edits that join lines make it shorter
+    * than the one the move was generated for.
+    */
+  private def withinDocument(state: AppState, paneId: PaneId, line: Int, column: Int): (Int, Int) =
+    val lines = state.persisted.layout.editorPanes
+      .get(paneId)
+      .flatMap(_.bufferId)
+      .flatMap(state.persisted.buffers.get)
+      .map(_.document.content.toString.split("\n", -1))
+      .getOrElse(Array(""))
+    val lastLine = line.max(0).min(lines.length - 1)
+    (lastLine, column.max(0).min(lines(lastLine).length))
+
   /** The damage each frame's transition reports, from an editor that applies them in order. */
   private def damagesOf(frames: List[Frame]): List[Damage] =
     val (stateManager, _) = LaptopFrameBenchmarks.stateManagerHolding(document, grid = grid)
@@ -117,8 +130,10 @@ class BufferDamageCoverageSpec extends AnyFlatSpec with Matchers with ScalaCheck
     frames.map { frame =>
       val before = stateManager.getCurrentState.unsafeRunSync()
       frame.transition match
-        case Transition.Edit(event)      => stateManager.applyEvent(event).unsafeRunSync()
-        case Transition.MoveCursor(l, c) => stateManager.setCursorPosition(paneId, l, c).unsafeRunSync()
+        case Transition.Edit(event) => stateManager.applyEvent(event).unsafeRunSync()
+        case Transition.MoveCursor(l, c) =>
+          val (line, column) = withinDocument(stateManager.getCurrentState.unsafeRunSync(), paneId, l, c)
+          stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
         case Transition.Resize(cols, rws) =>
           stateManager.applyEvent(ResizeEvent(ViewportSize(cols, rws))).unsafeRunSync()
       DamageProducer.forTransition(before, stateManager.getCurrentState.unsafeRunSync())
@@ -184,6 +199,22 @@ class BufferDamageCoverageSpec extends AnyFlatSpec with Matchers with ScalaCheck
 
   "A buffer drawn into after sitting out frames" should "be handed all the damage those frames reported" in
     forAll(frames)(schedule => firstShortfall(realLedger(), schedule) shouldBe None)
+
+  "A cursor move generated for a line the document has since lost" should "land inside the document, not commit an invalid cursor" in {
+    // Found by the property (Init Seed -6689466932585694568): PageUp puts the cursor at column 0, so DeleteBackward
+    // joins two lines and the 120-line document shrinks to 118, and a move to line 118 then points past its end.
+    val shrunk = List(
+      Frame(Transition.MoveCursor(53, 36), 1, Some(0)),
+      Frame(Transition.Resize(68, 25), 0, Some(1)),
+      Frame(Transition.Edit(PageUp), 1, Some(2)),
+      Frame(Transition.Edit(DeleteBackward), 0, Some(0)),
+      Frame(Transition.Edit(PageUp), 0, None),
+      Frame(Transition.Edit(DeleteBackward), 0, Some(1)),
+      Frame(Transition.MoveCursor(118, 7), 1, Some(2))
+    )
+
+    damagesOf(shrunk) should have size shrunk.size.toLong
+  }
 
   "The coverage property" should "notice an accumulation that forgets a frame's damage" in
     intercept[TestFailedException] {

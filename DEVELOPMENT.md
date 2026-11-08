@@ -29,10 +29,34 @@ Project coding standards live in `docs/coding-standards.md`. Read that document
 before changing core reducers, runtime loops, configuration schema, rendering,
 or state-management code.
 
-Run the Scala checks before opening or updating a PR:
+### Fast local loop
+
+Keep one sbt shell open while you work, so the compiler and the test classes stay warm, and run only the specs you are
+changing. Measured on a 4-core Linux machine (#2557):
+
+| What | Time |
+|---|---:|
+| `testOnly` of one spec in a warm sbt shell | about 4 s |
+| The same from a fresh `sbt` after a one-line edit | about 23 s |
+| A cold compile of main and test | about 12 min |
+| The full `sbt test` | 15–26 min |
+
+```text
+sbt                                          # once; keep it open
+> testOnly com.serenity.rope.RopeBTreeSpec   # one spec
+> testOnly *RopeBTree* -- -z "split"         # tests whose name contains "split"
+> testQuick                                  # specs that failed last time or whose code changed
+> ~testOnly com.serenity.rope.RopeBTreeSpec  # re-run on every save
+```
+
+### Before a PR
+
+Run the Scala checks before opening or updating a PR. The full `sbt test` is left to CI: the merge train runs the whole
+suite on Linux, Windows and macOS for each batch before anything merges, so run the specs you changed (see the fast
+local loop above) rather than the 15–26 minute full run:
 
 ```bash
-sbt -v test assembly architectureCheck
+sbt -v assembly architectureCheck
 ```
 
 Run formatting and Scalafix before committing when changing Scala code:

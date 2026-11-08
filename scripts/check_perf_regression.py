@@ -50,6 +50,8 @@ class Row:
     allocation_p50_bytes: int | None = None
     allocation_p95_bytes: int | None = None
     retained_bytes: int | None = None
+    allocation_all_threads_p50_bytes: int | None = None
+    allocation_all_threads_p95_bytes: int | None = None
 
 
 def _optional_bytes(fields: list[str], index: int) -> int | None:
@@ -84,6 +86,8 @@ def parse_csv(path: str) -> dict[str, Row]:
                 _optional_bytes(fields, 8),
                 _optional_bytes(fields, 9),
                 _optional_bytes(fields, 10),
+                _optional_bytes(fields, 11),
+                _optional_bytes(fields, 12),
             )
     return rows
 

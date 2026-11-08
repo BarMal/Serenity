@@ -113,6 +113,16 @@ object PaneRowBands:
   object Row:
     given Ordering[Row] = Ordering.by(row => (row.line, row.row))
 
+  /** Lines `fromLine` until `fromLine + count` that a placement will reach, read from the rope in one pass rather than
+    * one lookup per line. A range past the document, or before its start, holds only the lines that exist.
+    */
+  final case class ReadAhead(fromLine: Int, count: Int):
+    def first: Int                 = math.max(0, fromLine)
+    def covers(line: Int): Boolean = count > 0 && line >= first && line < fromLine + count
+
+  object ReadAhead:
+    val None: ReadAhead = ReadAhead(0, 0)
+
   def forBuffer(
     buffer: Buffer,
     wrapWidthPx: Int,
@@ -122,7 +132,8 @@ object PaneRowBands:
     wordWrapEnabled: Boolean,
     richText: RichTextContext,
     wrapCache: WrappedLineCache,
-    fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
+    fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
+    readAhead: ReadAhead = ReadAhead.None
   ): PaneRowBands =
     val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
     val measuredLayout =
@@ -131,8 +142,16 @@ object PaneRowBands:
       if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
       else math.max(1, cellMetrics.lineHeight)
     val content = buffer.document.content
+    lazy val held: Vector[String] =
+      content
+        .linesIteratorFrom(readAhead.first)
+        .take(readAhead.fromLine + readAhead.count - readAhead.first)
+        .map(_._2)
+        .toVector
     def rowsOf(line: Int): Vector[TextVisualLine] =
-      val text = content.getLine(line).getOrElse("")
+      val text =
+        if readAhead.covers(line) then held.lift(line - readAhead.first).getOrElse("")
+        else content.getLine(line).getOrElse("")
       if wordWrapEnabled then
         LineLayout.placedWrappedLine(
           line,

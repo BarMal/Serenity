@@ -106,6 +106,25 @@ object ArchitectureChecks {
         "belongs to the Swing window in ui.terminal",
       mainOnly = true
     ),
+    // R3 (#2522): the server host runs in a process of its own, with no editor in it. Its pure core reads and writes
+    // values; the editor's state, windows and configuration are what a host must never need to load.
+    ImportRule(
+      "com/serenity/host",
+      Seq(
+        "java.awt",
+        "javax.swing",
+        "com.serenity.state",
+        "com.serenity.ui",
+        "com.serenity.app",
+        "com.serenity.config",
+        "com.serenity.command",
+        "com.serenity.session",
+        "com.serenity.document",
+        "com.serenity.frontend"
+      ),
+      "the server host is a headless process (#2522 R3): it must not load the editor, a window or its configuration",
+      mainOnly = true
+    ),
     ImportRule(
       "com/serenity/ui/host",
       Seq("javax.swing", "java.awt.Component", "java.awt.Window", "java.awt.Frame", "java.awt.Toolkit", "ui.terminal"),

@@ -1,5 +1,7 @@
 package com.serenity.ui.host
 
+import scala.annotation.unused
+
 import cats.effect.{IO, Resource}
 import com.serenity.config.MenuBarMode
 import com.serenity.diagnostics.FrameTimings
@@ -29,6 +31,12 @@ trait WindowHost:
 
   /** The handler for the window's keyboard, mouse and input-method events, feeding `router`. */
   def inputHandler(router: InputRouter[IO, Event], settings: InputSettings): IO[InputHandler[IO]]
+
+  /** Queues one typed character as if it had been typed in the window, for the start-up probe (#2420), which has no
+    * window focus to type into. A window system that cannot do this fails, and the probe reports that.
+    */
+  def typeCharacter(@unused char: Char): IO[Unit] =
+    IO.raiseError(new UnsupportedOperationException("This window host cannot inject a typed character."))
 
   /** The menu bar for `mode`, or `None` when this window system shows none. */
   def menus(mode: MenuBarMode): Option[FrontendRuntime.MenuHost => Resource[IO, Unit]]
