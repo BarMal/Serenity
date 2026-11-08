@@ -67,7 +67,9 @@ object PerformanceBenchmarks:
       IndexWalkBenchmarks.benchmarks() ++ SkiaFrameBenchmarks.benchmarks
     val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
     require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
-    all
+    val unlisted = AllThreadsRows.unknownIn(all.map(_.name))
+    require(unlisted.isEmpty, s"AllThreadsRows names no benchmark: ${unlisted.mkString(", ")}")
+    AllThreadsRows(all)
 
   private def benchmarks(cursorWindow: => SwingWindow, projectRoot: => Path): List[BenchmarkRunner.Benchmark] =
     ropeBenchmarks() ++

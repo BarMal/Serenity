@@ -1179,6 +1179,7 @@ com.serenity.state.manager.ProjectTaskOutputBatcherSpec	2	0.029
 com.serenity.AppRuntimeBackgroundCommitSpec	2	0.028
 com.serenity.RenderCursorOnlySpec	2	0.028
 com.serenity.perf.BenchmarkRunnerSamplingSpec	2	0.028
+com.serenity.perf.AllThreadsRowsSpec	2	0.01
 com.serenity.KeywordHighlightRenderingSpec	2	0.027
 com.serenity.LayoutEngineGeometrySpec	2	0.027
 com.serenity.SummonedChromeFrameSpec	2	0.027
