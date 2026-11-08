@@ -65,13 +65,12 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
       "layout.cold_font.glyph_advances"
     ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
 
-  it should "cover the skia rows by prefix, whose names do not start with laptop." in {
+  it should "cover the skia rows by prefix, whose names do not start with laptop." in
     List(
       "skia.laptop.render.typing_frame_2x",
       "skia.compare.skia_raster.system_monospace.typing_frame_2x",
       "skia.compare.java2d.system_monospace.typing_new_letter_2x"
     ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
-  }
 
   it should "track every skia row the suite declares" in {
     val skia = PerformanceBenchmarks.names.filter(_.startsWith("skia."))
