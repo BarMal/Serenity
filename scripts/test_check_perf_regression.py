@@ -250,6 +250,20 @@ class MemoryMetricTests(unittest.TestCase):
         self.assertEqual(self._run(), 1)
 
 
+    def test_parse_csv_reads_the_all_threads_allocation_columns_after_retained_bytes(self) -> None:
+        with open(self.current_path, "w") as handle:
+            handle.write(
+                "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+                "allocation_p95_bytes,retained_bytes,allocation_all_threads_p50_bytes,allocation_all_threads_p95_bytes\n"
+            )
+            handle.write("a,1,1,1,0,1.0,1.5,0,10,11,,500,600\n")
+            handle.write("b,1,1,1,0,1.0,1.5,0,10,11,\n")
+        rows = check_perf_regression.parse_csv(self.current_path)
+        self.assertEqual((rows["a"].allocation_all_threads_p50_bytes, rows["a"].allocation_all_threads_p95_bytes), (500, 600))
+        self.assertEqual((rows["a"].allocation_p50_bytes, rows["a"].retained_bytes), (10, None))
+        self.assertEqual((rows["b"].allocation_all_threads_p50_bytes, rows["b"].allocation_all_threads_p95_bytes), (None, None))
+
+
 if __name__ == "__main__":
     sys.path.insert(0, str(_MODULE_PATH.parent.parent))
     unittest.main()

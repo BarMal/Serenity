@@ -76,11 +76,13 @@ Pass name prefixes to run only some scenarios, e.g. `sbt "app/Test/runMain com.s
 
 ## Memory metrics: footprint and allocation
 
-The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent.
+The CSV ends with a `retained_bytes` column (header: `...,allocation_p50_bytes,allocation_p95_bytes,retained_bytes`). Older ten-column files still parse; a missing value is treated as absent. Two more columns follow, `allocation_all_threads_p50_bytes` and `allocation_all_threads_p95_bytes`, filled only by rows that call `measuringAllThreads`; older files without them still parse.
 
 **Footprint (`footprint.*`)** is heap the app keeps resident. `FootprintBenchmarks` builds a real `AppState`, drops everything else, runs `System.gc()` until three consecutive used-heap readings agree (within 64 KiB), and records the growth over a baseline settled before the build, holding the state strongly reachable across the reading. One build is discarded to pay for static caches, and the median of three trials is reported. Because of that discard, process-wide caches never show up in a `footprint.*` figure; see [Footprint rows and static caches](#footprint-rows-and-static-caches). Scenarios: `empty_editor`, `plain_document_15k_lines`, `rich_document`, `after_1000_edits` (undo history), `ten_buffers`, and the `prose_frame.*` rows that draw a frame so the caches have something to hold. Their timing columns are zero, so the latency gate ignores them. Run only these with `sbt "app/Test / runMain com.serenity.perf.FootprintBenchmarks"` or pass the `footprint.` prefix to `PerformanceBenchmarks`.
 
 **Allocation** (`allocation_p50_bytes`, `allocation_p95_bytes`) is bytes allocated per invocation, measured in a separate pass with `ThreadMXBean.getThreadAllocatedBytes`. Every benchmark whose name starts with `laptop.`, `render.` or `command_runner.` is tracked by prefix; others opt in through `AllocationTracked` in `BenchmarkRunner`.
+
+**All-threads allocation** is for a row whose work runs on threads other than the benchmark's own (the `StateManager` runtime, the Swing event thread, the project walk's workers), where the columns above see only the caller. A row opts in with `measuringAllThreads`; its pass sums every live thread's `getThreadAllocatedBytes` before and after each batch (`BenchmarkRunner.allocatedAcrossThreads`). A thread that ends mid-batch is lost, so a row that spawns short-lived threads under-reports; threads that outlive the batch, such as pool workers, are counted whole. Anything else running in the process during the batch is counted too, so read it as an upper bound on the row's own work. The column is reported only: the allocation check still reads `allocation_p50_bytes` until it is switched over.
 
 **CI gate (`scripts/check_perf_regression.py`)**
 
