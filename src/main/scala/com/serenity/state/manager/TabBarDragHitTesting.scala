@@ -6,8 +6,7 @@ import com.serenity.keystroke.events.{MouseButton, MouseDrag, MousePress}
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.{AppState, BufferId, SurfaceContent, TabDragSession}
 import com.serenity.state.reducers.{ReducerResult, Transition}
-import com.serenity.ui.layout.LayoutEngine
-import com.serenity.ui.renderer.TabBarLayoutSettings
+import com.serenity.ui.layout.{LayoutEngine, TabBarLayoutSettings}
 
 /** State the event pipeline exposes for dragging a tab to reorder it, as a capability record rather than a trait --
   * nothing here breaks a construction-order cycle (#1389), so mockability is the only reason this needs an interface at

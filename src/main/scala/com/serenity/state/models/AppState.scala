@@ -4,15 +4,7 @@ import com.serenity.config.*
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.markdown.MarkdownBlockLens
 import com.serenity.text.TextStatistics
-import com.serenity.ui.layout.{
-  ChromeFrame,
-  Layout,
-  SpacingScale,
-  ViewportSize,
-  WorkspaceNode,
-  WorkspaceNodeId,
-  WorkspaceTree
-}
+import com.serenity.ui.layout.{Layout, SpacingScale, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.theme.{HeadingSettings, Theme}
 
 final case class AppState(
@@ -89,13 +81,6 @@ final case class AppState(
     persisted.config.uiElementGap.getOrElse(
       if runtime.capabilities.isCellGrid then 0.0 else effectiveUiElementGapDefaultCells
     )
-
-  /** The window extent a docked panel's size is converted to and from a split ratio against: the viewport less what the
-    * floating chrome's inset takes ([[com.serenity.ui.layout.ChromeFrame]]), so a size asked for lands as that many
-    * cells. The viewport itself when the chrome is flush.
-    */
-  def panelViewportSize: Option[ViewportSize] =
-    runtime.viewportSize.map(viewport => ChromeFrame.of(this, viewport).panelViewport)
 
   /** The heading settings for this state's surface. A level left on auto is today's look on a pixel surface and the
     * terminal's ladder of weight, slant, underline and colour on a cell grid, where size cannot tell the levels apart.

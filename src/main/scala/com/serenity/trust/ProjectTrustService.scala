@@ -12,6 +12,9 @@ trait ProjectTrustAccess:
   def current: IO[ProjectTrust]
   def trustFolder(root: ProjectKey): IO[Unit]
 
+  /** Revokes every trusted folder `root` lies in, so it is untrusted afterwards however it came to be trusted. */
+  def revokeCovering(root: ProjectKey): IO[List[ProjectKey]]
+
 /** The running application's trust, read from and written through to [[ProjectTrustStore]]. */
 final class ProjectTrustService private (state: Ref[IO, ProjectTrust], writes: Mutex[IO], file: Path)
     extends ProjectTrustAccess:
@@ -26,6 +29,19 @@ final class ProjectTrustService private (state: Ref[IO, ProjectTrust], writes: M
       Clock[IO].realTimeInstant
         .flatMap(at => state.updateAndGet(_.trust(root, at)))
         .flatMap(ProjectTrustStore.save(file, _))
+    )
+
+  override def revokeCovering(root: ProjectKey): IO[List[ProjectKey]] =
+    writes.lock.surround(
+      state
+        .modify { trust =>
+          val covering = trust.covering(root)
+          (covering.foldLeft(trust)(_.revoke(_)), covering)
+        }
+        .flatMap { covering =>
+          if covering.isEmpty then IO.pure(Nil)
+          else state.get.flatMap(ProjectTrustStore.save(file, _)).as(covering)
+        }
     )
 
 object ProjectTrustService:

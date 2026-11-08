@@ -5,8 +5,13 @@ import com.serenity.rope.Balance
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ReducerResult, Transition, WorkflowEffect}
-import com.serenity.ui.layout.{LayoutEngine, SurfaceHitRegion, TabBarSurfaceComposition, ViewportSize}
-import com.serenity.ui.renderer.TabBarLayoutSettings
+import com.serenity.ui.layout.{
+  LayoutEngine,
+  SurfaceHitRegion,
+  TabBarLayoutSettings,
+  TabBarSurfaceComposition,
+  ViewportSize
+}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

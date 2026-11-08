@@ -50,6 +50,19 @@ final private[manager] class StateManagerProjectLspEffects(
         requestLspReferences(state)
       case LspIntent.OpenRenameSymbolPrompt =>
         openRenameSymbolPrompt(state)
+      case LspIntent.TrustFolder =>
+        folderTrust(state)(LspEffect.TrustFolder(_, _))
+      case LspIntent.RevokeFolderTrust =>
+        folderTrust(state)(LspEffect.RevokeFolderTrust(_, _))
+
+  private def folderTrust(state: AppState)(effect: (String, LanguageId) => LspEffect): IO[Unit] =
+    activeLspRequestTarget(state) match
+      case Some((uri, languageId, _, _)) => lspQueue.enqueue(effect(uri, languageId))
+      case None =>
+        showPeek(
+          com.serenity.ui.layout.PeekContent.QuickInfo("Folder trust needs a saved file with a language mode open."),
+          state.activeCursorPosition.getOrElse(CursorPosition(0, 0))
+        )
 
   private def runProjectTask(state: AppState, kind: ProjectTaskKind): IO[Unit] =
     if !state.editingContext.hasCodeTooling then pinProjectTerminal(ProjectTaskTerminal.notAvailableInProseMode(kind))

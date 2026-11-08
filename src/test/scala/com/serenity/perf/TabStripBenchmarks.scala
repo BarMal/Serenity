@@ -7,12 +7,11 @@ import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Buffer, BufferId, TabListEntry, UiSurface}
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, TabBarSurfaceComposition}
+import com.serenity.ui.layout.{CellMetrics, LayoutRect, TabBarLayoutSettings, TabBarSurfaceComposition}
 import com.serenity.ui.renderer.{
   Java2DRenderSurface,
   MeasuredTextAdvances,
   ShapedTextCache,
-  TabBarLayoutSettings,
   TextOverlayRenderer,
   TextOverlayView
 }

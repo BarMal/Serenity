@@ -177,6 +177,20 @@ private[command] object CommandRegistryNavigationCommands:
       CommandCategory.Edit,
       label = "Rename Symbol"
     ),
+    Command.typed(
+      "lsp-trust-folder",
+      "Trust the focused file's project folder, so its language servers and builds may run.",
+      CommandIntent.Lsp(LspIntent.TrustFolder),
+      CommandCategory.Project,
+      label = "Trust This Folder"
+    ),
+    Command.typed(
+      "lsp-revoke-folder-trust",
+      "Revoke trust for the focused file's project folder, stopping its language servers.",
+      CommandIntent.Lsp(LspIntent.RevokeFolderTrust),
+      CommandCategory.Project,
+      label = "Revoke Folder Trust"
+    ),
     // #1531: adds the word flagged by the spell-check diagnostic at the cursor to the persisted custom-words
     // dictionary, without requiring a trip through Settings to hand-edit the comma-separated list.
     Command.typed(
