@@ -43,7 +43,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 `BENCH_JAVA_OPTS` passes JVM options to every launch and is recorded in the conditions file, for example
 `BENCH_JAVA_OPTS="-Xlog:gc:file=$PWD/gc-%p.log:uptime -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"`
-(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). `-Dserenity.skia.layerFrames=image` makes the Skia layer draw CPU-painted images instead of replaying recorded pictures on the event thread; compare it with the default by the `edt-lag` and `key_to_screen` figures. Each run's whole app log and stdout are
+(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). `-Dserenity.skia.layerFrames=picture` makes the Skia layer replay recorded pictures on the event thread instead of drawing CPU-painted images (the default since #2618); compare it with the default by the `edt-lag` and `key_to_screen` figures. Each run's whole app log and stdout are
 kept beside its run file as `<label>-run<N>.applog` and `.stdout`, so the per-key `[LATENCY]` lines and anything Skiko
 prints are there afterwards. A JVM that is still alive after the quit key (it has been seen to log `Quitting` and then never exit) is thread-dumped to
 `<label>-run<N>.threads`, sent SIGTERM and, after `BENCH_QUIT_GRACE` seconds (15), killed, so one hang costs seconds and
