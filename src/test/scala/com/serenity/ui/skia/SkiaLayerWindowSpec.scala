@@ -206,7 +206,10 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
         .foldLeft(Vector.empty[(String, BufferedImage)]) {
           case (done, (name, state, _)) =>
             present(window, state, Damage.Everything, RenderCaches.create())
-            val shot = settledScreen(window, done.lastOption.map(_._2), None, System.nanoTime() + 15_000_000_000L)
+            val shot = withClue(s"scratch frame after $name: ")(
+              settledScreen(window, done.lastOption.map(_._2), None, System.nanoTime() + 15_000_000_000L)
+            )
+            keep(s"sequence-$name-scratch", shot)
             done :+ (name -> shot)
         }
     }
