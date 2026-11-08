@@ -542,7 +542,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             # The release notes are the tag's own CHANGELOG section; the step fails, and nothing is published, when
             # that section is missing, empty or the changelog is malformed.
-            sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md ${GITHUB_REF_NAME#v} dist/release-notes.md"
+            sbt "app/Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md ${GITHUB_REF_NAME#v} dist/release-notes.md"
             exit 0
           fi
           BUILD_SHA="$(git rev-parse HEAD)"

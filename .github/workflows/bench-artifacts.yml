@@ -61,14 +61,21 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
-      # perf-assembly.sbt is copied in, not committed, so the main jar's build is exactly the ref's own.
+      # perf-assembly.sbt is copied in, not committed, so the main jar's build is exactly the ref's own. A ref from before
+      # the module split (#2502) has one root project that holds the sources; a later one has an `app` project, and the
+      # test assembly has to be aimed at it.
       - name: Build Serenity.jar and serenity-perf.jar
         working-directory: serenity
         shell: bash
         run: |
           set -euo pipefail
-          cp ../workflow-src/bench/ci/perf-assembly.sbt perf-assembly.sbt
-          sbt -v assembly "Test / assembly"
+          if grep -Eq '^lazy val app\b' build.sbt; then
+            cp ../workflow-src/bench/ci/perf-assembly-app.sbt perf-assembly.sbt
+            sbt -v assembly "app/Test / assembly"
+          else
+            cp ../workflow-src/bench/ci/perf-assembly.sbt perf-assembly.sbt
+            sbt -v assembly "Test / assembly"
+          fi
 
       - name: Build serenity-spike.jar
         if: inputs.spike_ref != ''

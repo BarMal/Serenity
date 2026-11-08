@@ -10,6 +10,7 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, Java2DRenderSurface, RendererFramePlanner, ScreenIdentity}
@@ -87,11 +88,7 @@ class FontFallbackColdFrameSpec extends AnyFlatSpec with Matchers:
   private def coldFrame(state: AppState): BufferedImage = PersistingImage().render(state, Damage.Everything)
 
   private def differences(a: BufferedImage, b: BufferedImage): Seq[(Int, Int)] =
-    for
-      x <- 0 until a.getWidth
-      y <- 0 until a.getHeight
-      if (a.getRGB(x, y) & 0xffffff) != (b.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    FrameDiff.differing(a, b)
 
   private def differing(a: BufferedImage, b: BufferedImage): Int = differences(a, b).size
 

@@ -130,6 +130,14 @@ jobs:
             echo "::warning::The restored build output did not match, so this shard recompiled; see the compiling lines above."
           fi
 
+      # Whether a slow macOS run was paging is not visible in the JVM's own logs: the 7 GB runner holds the heap, metaspace
+      # and Skia's native memory, and nothing else records free memory or swap. Detached so it outlives this step; the
+      # runner removes it when the job ends. Windows and Linux runners have 16 GB and are left alone.
+      - name: Sample OS memory
+        if: runner.os == 'macOS'
+        shell: bash
+        run: nohup bash .github/scripts/sample-os-memory.sh loop jvm-diag 30 > /dev/null 2>&1 &
+
       - name: Run tests
         shell: bash
         # Fails with a thread dump after HANG_MINUTES instead of holding the runner for 6 hours on a hang. The script's

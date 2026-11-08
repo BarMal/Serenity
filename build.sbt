@@ -14,37 +14,80 @@ Global / excludeLintKeys ++= Set(bomFileName, projectType)
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 
-Compile / scalacOptions ++= Seq(
-  "-Wunused:all",
-  "-Wvalue-discard",
-  "-Wnonunit-statement",
-  // Exhaustivity on a sealed hierarchy is only a warning, so without -Werror, sealing an ADT still lets a missing
-  // case compile. Turning it on is the natural completion of the sealing work. (-Xfatal-warnings is the historical
-  // alias and is deprecated as of Scala 3.8; -Werror is the spelling to use.)
-  //
-  // This used to be deferred behind a backlog of 150 warnings -- 105 staged WartRemover findings, 36 unused symbols,
-  // 4 non-exhaustive matches, 2 potential-issue, 1 deprecation. That backlog is gone: a clean compile now reports
-  // zero warnings, so -Werror holds a line already reached rather than demanding a migration first.
-  //
-  // One consequence to know: under -Werror, whether a wart is registered as an error or a warning only changes the
-  // message, not the outcome -- both fail the build. The four warts that used to be staged as warnings (#1449:
-  // Wart.Null, Wart.Throw, Wart.OptionPartial, Wart.IterableOps) have since been promoted to wartremoverErrors
-  // outright, once an audit confirmed their only usage sits inside the packages wartremoverExcluded already drops
-  // from wart checking entirely.
-  "-Werror"
+// Settings every project shares: compiler flags, the manifest and assembly rules, and the SBOM identity.
+lazy val commonSettings: Seq[Setting[?]] = Seq(
+  // The rules live at the repository root; the project's base directory is not.
+  scalafixConfig := Some((ThisBuild / baseDirectory).value / ".scalafix.conf"),
+  Compile / scalacOptions ++= Seq(
+    "-Wunused:all",
+    "-Wvalue-discard",
+    "-Wnonunit-statement",
+    // Exhaustivity on a sealed hierarchy is only a warning, so without -Werror, sealing an ADT still lets a missing
+    // case compile. Turning it on is the natural completion of the sealing work. (-Xfatal-warnings is the historical
+    // alias and is deprecated as of Scala 3.8; -Werror is the spelling to use.)
+    //
+    // This used to be deferred behind a backlog of 150 warnings -- 105 staged WartRemover findings, 36 unused symbols,
+    // 4 non-exhaustive matches, 2 potential-issue, 1 deprecation. That backlog is gone: a clean compile now reports
+    // zero warnings, so -Werror holds a line already reached rather than demanding a migration first.
+    //
+    // One consequence to know: under -Werror, whether a wart is registered as an error or a warning only changes the
+    // message, not the outcome -- both fail the build. The four warts that used to be staged as warnings (#1449:
+    // Wart.Null, Wart.Throw, Wart.OptionPartial, Wart.IterableOps) have since been promoted to wartremoverErrors
+    // outright, once an audit confirmed their only usage sits inside the packages wartremoverExcluded already drops
+    // from wart checking entirely.
+    "-Werror"
+  ),
+  Test / scalacOptions --= Seq(
+    "-Wunused:all",
+    "-Wvalue-discard",
+    "-Wnonunit-statement"
+  ),
+  Test / scalacOptions ++= Seq(
+    "-Wunused:imports"
+  ),
+  Compile / run / fork := true,
+  // The CycloneDX SBOM shipped with each release (#2017). The project has no Runtime-only dependencies, so the
+  // default Compile scope is exactly the runtime classpath that ends up in the assembled jar. Serial number and
+  // timestamp stay off (the plugin default) so the same dependency graph always yields byte-identical output.
+  organization := "io.github.barmal",
+  // sbt-sbom writes under <project base>/target whatever `target` says, so aim it at the repository's target/, where
+  // desktop-publish.yml reads the SBOM.
+  bomFileName := (baseDirectory.value / "target").toPath
+    .relativize(((ThisBuild / baseDirectory).value / "target" / "Serenity.cdx.json").toPath)
+    .toString,
+  // The path above goes through <project base>/target, which sbt-sbom does not create.
+  makeBom                    := makeBom.dependsOn(Def.task(IO.createDirectory(baseDirectory.value / "target"))).value,
+  projectType                := "application",
+  Compile / mainClass        := Some("Main"),
+  assembly / mainClass       := Some("Main"),
+  assembly / assemblyJarName := "Serenity.jar",
+  // JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native access
+  // is granted. An executable jar grants it from its manifest, so `java -jar Serenity.jar` needs this even though the
+  // packages also pass --enable-native-access (desktop-publish.yml, desktop-release.yml).
+  assembly / packageOptions += Package.ManifestAttributes("Enable-Native-Access" -> "ALL-UNNAMED"),
+  assembly / assemblyMergeStrategy := {
+    case PathList("META-INF", "serenity", _*) => MergeStrategy.first
+    case PathList("META-INF", "services", _*) => MergeStrategy.concat
+    // Multi-release module descriptors (slf4j-api, commons-logging via FontBox): meaningless in a fat jar.
+    case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
+    case x @ PathList("META-INF", xs @ _*) =>
+      xs.map(_.toLowerCase) match {
+        case "manifest.mf" :: Nil  => MergeStrategy.discard
+        case "index.list" :: Nil   => MergeStrategy.discard
+        case "dependencies" :: Nil => MergeStrategy.discard
+        case name :: Nil
+            if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec") =>
+          MergeStrategy.discard
+        case _ => (assembly / assemblyMergeStrategy).value(x)
+      }
+    case PathList("module-info.class") => MergeStrategy.discard
+    // Skiko natives sit at the root of their runtime jar; a build that puts two runtime jars on the classpath
+    // (the macOS jars both carry the same two dylibs) would otherwise fail on the duplicate entries.
+    case PathList(name) if name == "icudtl.dat" || name.matches("(lib)?skiko-.*\\.(so|dylib|dll)(\\.sha256)?") =>
+      MergeStrategy.first
+    case x => (assembly / assemblyMergeStrategy).value(x)
+  }
 )
-
-Test / scalacOptions --= Seq(
-  "-Wunused:all",
-  "-Wvalue-discard",
-  "-Wnonunit-statement"
-)
-
-Test / scalacOptions ++= Seq(
-  "-Wunused:imports"
-)
-
-Compile / run / fork := true
 
 // Structural checks the compiler and WartRemover cannot express: method length, file length, and the
 // layering rules the package structure implies. Both size checks are ratchets against a checked-in
@@ -79,7 +122,10 @@ lazy val checkThirdPartyNotices =
 // `sbt test` is split into this many CI jobs per OS (#2484); a job picks its share with SERENITY_TEST_SHARD=index/of. The
 // split follows project/test-shards.tsv (project/TestShards.scala).
 lazy val checkTestShards =
-  taskKey[Unit]("Fail if project/test-shards.tsv lists a suite that no longer exists or the shards do not cover every suite")
+  taskKey[Unit](
+    "Fail if project/test-shards.tsv lists a suite that no longer exists or the shards do not cover every suite"
+  )
+
 lazy val generateTestShards =
   taskKey[Unit]("Rewrite project/test-shards.tsv from the JUnit reports of the last full test run")
 val TestShardCount = 2
@@ -96,65 +142,175 @@ def gitOutput(root: File, args: String*): Option[String] =
     .toOption
     .filter(_.nonEmpty)
 
-lazy val root = (project in file("."))
+ThisBuild / gitDescribe := gitOutput(
+  baseDirectory.value,
+  "describe",
+  "--tags",
+  "--long",
+  "--abbrev=8",
+  "--match",
+  "v[0-9]*",
+  "--always",
+  "--dirty"
+).getOrElse("")
+
+ThisBuild / packageVersion := PackageVersion.fromDescribe(
+  gitDescribe.value,
+  sys.env.get("SERENITY_NIGHTLY").contains("true")
+)
+
+lazy val appDependencies: Seq[Setting[?]] = Seq(
+  libraryDependencies ++= Seq(
+    "org.typelevel" %% "cats-effect" % "3.7.1",
+    "co.fs2"        %% "fs2-core"    % "3.13.0",
+    "co.fs2"        %% "fs2-io"      % "3.13.0",
+    "org.scalatest" %% "scalatest"   % "3.2.19" % "test",
+    // Drives IO programs on a mocked scheduler/clock for deterministic tests of timing-dependent code (timeouts,
+    // intervals, idle cadence) -- see com.serenity.testkit.VirtualTime.
+    "org.typelevel" %% "cats-effect-testkit" % "3.7.1" % "test",
+    // Property and law testing, test scope only -- the assembled JAR is unchanged.
+    // scalatestplus is pinned to the release matching ScalaTest 3.2.19 and brings ScalaCheck with it.
+    // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.1 already resolves, so no eviction.
+    "org.scalatestplus" %% "scalacheck-1-18"      % "3.2.19.0" % "test",
+    "org.typelevel"     %% "cats-laws"            % "2.13.0"   % "test",
+    "org.typelevel"     %% "discipline-scalatest" % "2.3.0"    % "test",
+    // Independent oracle for the golden rich-document specs (Apache-2.0): every DOCX Serenity writes must open in XWPF.
+    // Test scope only, so the assembled JAR and startup are unchanged.
+    "org.apache.poi"         % "poi-ooxml"       % "5.4.1" % "test",
+    "com.github.pureconfig" %% "pureconfig-core" % "0.17.10",
+    // Launch-argument parsing. decline-effect is only for its cats-effect glue; the command itself is plain decline,
+    // so `LaunchOptions.parse` stays a pure function over args that specs can call directly.
+    "com.monovore" %% "decline"        % "2.6.2",
+    "com.monovore" %% "decline-effect" % "2.6.2"
+  ),
+  libraryDependencies ++= Seq(
+    "io.circe" %% "circe-core"    % circeVersion,
+    "io.circe" %% "circe-generic" % circeVersion,
+    "io.circe" %% "circe-parser"  % circeVersion
+  ),
+  libraryDependencies ++= Seq(
+    "org.typelevel"   %% "log4cats-core"   % log4CatsVersion,
+    "org.typelevel"   %% "log4cats-slf4j"  % log4CatsVersion,
+    "ch.qos.logback"   % "logback-classic" % "1.5.38",
+    "net.java.dev.jna" % "jna-platform"    % "5.19.1"
+  ),
+  libraryDependencies ++= Seq(
+    "org.commonmark"    % "commonmark"                     % commonMarkVersion,
+    "org.commonmark"    % "commonmark-ext-gfm-tables"      % commonMarkVersion,
+    "org.commonmark"    % "commonmark-ext-task-list-items" % commonMarkVersion,
+    "org.xhtmlrenderer" % "flying-saucer-core"             % "10.5.0"
+  ),
+  libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl"),
+  externalResolvers += "Serenity Skiko natives" at skikoNativesRepository,
+  libraryDependencies ++= Seq(
+    "org.jetbrains.skiko" % "skiko-awt"                       % skikoVersion,
+    ("io.github.barmal"   % s"skiko-awt-runtime-$skikoTarget" % skikoNativesVersion).intransitive()
+  ),
+  libraryDependencies ++= Seq(
+    "org.jline" % "jline-terminal"     % jlineVersion,
+    "org.jline" % "jline-terminal-jni" % jlineVersion
+  ),
+  libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3",
+  libraryDependencies ++= Seq(
+    "org.apache.pdfbox" % "fontbox" % "3.0.8",
+    "org.apache.pdfbox" % "pdfbox"  % "3.0.8"
+  )
+)
+
+val circeVersion = "0.14.16"
+
+val log4CatsVersion = "2.8.0"
+
+val commonMarkVersion = "0.30.0"
+
+// EPUBCheck (W3C, BSD-3-Clause, so compatible with this project's GPL) validates the exported EPUB in specs only.
+// Test scope: it is never on the runtime classpath and never reaches the assembled JAR.
+// xercesImpl is excluded because it takes over the JVM's default XML parser and then rejects the hardening flags
+// RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
+
+// Skia render backend (#2028). Each OS build ships only its own Skiko natives, so the runtime artifact is picked per
+// target: detected from the build host, or forced with -Dserenity.skiko.target / SERENITY_SKIKO_TARGET so CI can
+// assemble any target from any host. The Skiko API jar and its Kotlin dependencies are not loaded on the TUI and
+// headless paths; that is enforced at runtime, not here.
+val skikoVersion = "0.153.0"
+
+// The runtime natives are not JetBrains' jars: those carry the Adobe DNG SDK, whose licence conflicts with this project's
+// GPL. CI rebuilds them without it from the pinned upstream sources (.github/workflows/skiko-natives.yml, ci/skiko) and
+// publishes them as a Maven repository, which is why the version here is its own. Another repository, such as a local
+// mirror, can stand in with -Dserenity.skiko.natives.repo or SERENITY_SKIKO_NATIVES_REPO.
+val skikoNativesVersion = "0.153.0-dngfree.2"
+
+val skikoNativesRepository: String = sys.props
+  .get("serenity.skiko.natives.repo")
+  .orElse(sys.env.get("SERENITY_SKIKO_NATIVES_REPO"))
+  .map(_.trim)
+  .filter(_.nonEmpty)
+  .getOrElse("https://barmal.github.io/Serenity/")
+
+val skikoTargets = Set("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
+
+val skikoTarget: String = {
+  def hostOs: String =
+    sys.props.getOrElse("os.name", "").toLowerCase match {
+      case name if name.contains("win")                            => "windows"
+      case name if name.contains("mac") || name.contains("darwin") => "macos"
+      case _                                                       => "linux"
+    }
+  def hostArch: String =
+    sys.props.getOrElse("os.arch", "").toLowerCase match {
+      case "aarch64" | "arm64" => "arm64"
+      case _                   => "x64"
+    }
+  val target = sys.props
+    .get("serenity.skiko.target")
+    .orElse(sys.env.get("SERENITY_SKIKO_TARGET"))
+    .map(_.trim)
+    .filter(_.nonEmpty)
+    .getOrElse(s"$hostOs-$hostArch")
+  if (!skikoTargets.contains(target))
+    sys.error(s"Unknown Skiko target '$target'; expected one of ${skikoTargets.toList.sorted.mkString(", ")}")
+  target
+}
+
+// Last in the list, so only what Maven Central lacks, these natives, is ever asked of it. The POM Skiko generates for a
+// runtime jar depends on skiko-awt at the jar's own version, which is not published, hence intransitive.
+
+val jlineVersion = "3.30.16"
+
+// TUI shell (#1107): raw mode, alternate screen, resize signals, terminal size. jline-terminal-jni is the modern
+// pure-JNI native provider (no external jna/jansi native libs to manage) -- jline-reader is deliberately not a
+// dependency, since this codebase does its own raw terminal I/O rather than JLine's line-editing/completion stack.
+
+// Unifies grapheme-cluster, line-break and East-Asian-Width segmentation on one versioned Unicode table (#1277),
+// replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
+// Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
+
+// FontBox reads the bundled fonts' hmtx/hhea tables, so the paginator measures the very files the PDF will embed and
+// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it. PDFBox paints the PagedDocument into
+// the PDF, embedding those same files.
+
+// The application. Its sources are still under the repository's src/; they move into modules/app/ later (#2502).
+lazy val app = (project in file("modules/app"))
+  .settings(commonSettings)
+  .settings(appDependencies)
   .settings(
+    name := "Serenity",
+    // Every output keeps its path: Serenity.jar, serenity-perf.jar, test-reports, the SBOM and the package version.
+    target                                 := (ThisBuild / baseDirectory).value / "target",
+    Compile / unmanagedSourceDirectories   := Seq((ThisBuild / baseDirectory).value / "src" / "main" / "scala"),
+    Compile / unmanagedResourceDirectories := Seq((ThisBuild / baseDirectory).value / "src" / "main" / "resources"),
+    Test / unmanagedSourceDirectories      := Seq((ThisBuild / baseDirectory).value / "src" / "test" / "scala"),
+    Test / unmanagedResourceDirectories    := Seq((ThisBuild / baseDirectory).value / "src" / "test" / "resources"),
     // The package version module is build code under project/; compile it into the tests too so a spec can reach it.
     Test / unmanagedSources ++= Seq(
-      baseDirectory.value / "project" / "PackageVersion.scala",
-      baseDirectory.value / "project" / "TestShards.scala"
+      (ThisBuild / baseDirectory).value / "project" / "PackageVersion.scala",
+      (ThisBuild / baseDirectory).value / "project" / "TestShards.scala"
     ),
-    checkTestShards := {
-      val table = TestShards.parseTable(IO.readLines(baseDirectory.value / "project" / "test-shards.tsv")).fold(sys.error, identity)
-      TestShards.check(table, (Test / definedTestNames).value, TestShardCount) match {
-        case Left(errors) => sys.error(errors.mkString("\n"))
-        case Right(summary) =>
-          streams.value.log.info(
-            "checkTestShards: " + (1 to TestShardCount).map(s => s"shard $s has ${summary.suites(s)} suites, ${summary.seconds(s).round} s listed").mkString("; ")
-          )
-      }
-    },
-    generateTestShards := {
-      val reports = IO.listFiles(baseDirectory.value / "target" / "test-reports").toList.filter(_.getName.endsWith(".xml"))
-      val defined = (Test / definedTestNames).value.toSet
-      val seconds = TestShards.secondsFromReports(reports.map(IO.read(_))).filter { case (suite, _) => defined.contains(suite) }
-      val assigned = TestShards.balance(seconds, TestShardCount)
-      IO.write(
-        baseDirectory.value / "project" / "test-shards.tsv",
-        "# Suite, shard, seconds: regenerate with `sbt generateTestShards` after a full `sbt test` (#2484).\n" +
-          TestShards.render(seconds.map { case (suite, t) => suite -> TestShards.Entry(assigned(suite), t) })
-      )
-    },
     Test / testOptions ++= sys.env.get("SERENITY_TEST_SHARD").filter(_.nonEmpty).toList.map { spec =>
       val shard = TestShards.parseShard(spec).fold(sys.error, identity)
       val table = TestShards.parseTable(IO.readLines(file("project") / "test-shards.tsv")).fold(sys.error, identity)
       Tests.Filter(TestShards.select(table, shard, _))
     },
-    gitDescribe := gitOutput(
-      baseDirectory.value,
-      "describe",
-      "--tags",
-      "--long",
-      "--abbrev=8",
-      "--match",
-      "v[0-9]*",
-      "--always",
-      "--dirty"
-    ).getOrElse(""),
-    packageVersion := PackageVersion.fromDescribe(gitDescribe.value, sys.env.get("SERENITY_NIGHTLY").contains("true")),
-    writePackageVersion := {
-      val result = packageVersion.value.fold(sys.error(_), identity)
-      val out    = target.value / "package" / "app-version.txt"
-      IO.write(out, result.numeric)
-      streams.value.log.info(s"package version ${result.numeric} (${result.channel.label}) written to $out")
-      out
-    },
-    name := "Serenity",
-    // The CycloneDX SBOM shipped with each release (#2017). The project has no Runtime-only dependencies, so the
-    // default Compile scope is exactly the runtime classpath that ends up in the assembled jar. Serial number and
-    // timestamp stay off (the plugin default) so the same dependency graph always yields byte-identical output.
-    organization := "io.github.barmal",
-    bomFileName := "Serenity.cdx.json",
-    projectType := "application",
     // WartRemover encodes rules docs/coding-standards.md and CLAUDE.md already state in prose.
     // Main sources only: tests legitimately use throw/null/partial access to build failure fixtures,
     // mirroring how Test / scalacOptions already relaxes the -W flags above.
@@ -204,86 +360,17 @@ lazy val root = (project in file("."))
     // Java/AWT interop and byte-level protocol framing genuinely need the escape hatches above.
     // Set unscoped: the plugin reads this outside the Compile scope.
     wartremoverExcluded ++= Seq(
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "terminal",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "accessibility",
-      baseDirectory.value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client"
+      (ThisBuild / baseDirectory).value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "terminal",
+      (ThisBuild / baseDirectory).value / "src" / "main" / "scala" / "com" / "serenity" / "ui" / "accessibility",
+      (ThisBuild / baseDirectory).value / "src" / "main" / "scala" / "com" / "serenity" / "lsp" / "client"
     ),
-    architectureBaselineFile := baseDirectory.value / "project" / "architecture-baseline.tsv",
-    architectureChecksSelfTest := {
-      ArchitectureChecks.selfTest()
-      streams.value.log.info("architectureChecksSelfTest: ratchet's own matching still catches FQN evasion")
-    },
-    architectureCheck := {
-      architectureChecksSelfTest.value
-      val log = streams.value.log
-      ArchitectureChecks.check(baseDirectory.value / "src", architectureBaselineFile.value) match {
-        case None =>
-          log.info("architectureCheck: ratchet holds")
-        case Some(report) =>
-          sys.error(
-            s"""architectureCheck failed.
-               |
-               |$report
-               |
-               |Targets: method <= ${ArchitectureChecks.MaxMethodLines} lines, file <= ${ArchitectureChecks.MaxFileLines} lines.
-               |Split the offending code, or if you deliberately accept it, run `sbt writeArchitectureBaseline`
-               |and explain the new entry in review.""".stripMargin
-          )
-      }
-    },
-    writeArchitectureBaseline := {
-      val violations = ArchitectureChecks.collect(baseDirectory.value / "src")
-      ArchitectureChecks.writeBaseline(architectureBaselineFile.value, violations)
-      streams.value.log.info(
-        s"architecture baseline written: ${violations.size} entries at ${architectureBaselineFile.value}"
-      )
-    },
-    moduleGraphBaselineFile := baseDirectory.value / "project" / "module-graph-baseline.tsv",
-    moduleGraphSelfTest := {
-      ModuleGraphSelfTest.run()
-      streams.value.log.info("moduleGraphSelfTest: decoder, graph, cycles and ratchet behave")
-    },
-    moduleGraph := {
-      moduleGraphSelfTest.value
-      (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      val report    = ModuleGraph.report(documents)
-      IO.write(target.value / "module-graph.txt", report)
-      streams.value.log.info(report)
-    },
-    moduleGraphCheck := {
-      moduleGraphSelfTest.value
-      (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      ModuleGraph.check(documents, ModuleGraph.readBaseline(moduleGraphBaselineFile.value)) match {
-        case None => streams.value.log.info("moduleGraphCheck: no new upward module edges")
-        case Some(report) =>
-          sys.error(
-            s"""moduleGraphCheck failed.
-               |
-               |$report
-               |
-               |Break the edge, or if you deliberately accept it, run `sbt writeModuleGraphBaseline`
-               |and explain the new entry in review.""".stripMargin
-          )
-      }
-    },
-    writeModuleGraphBaseline := {
-      (Compile / compile).value
-      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
-      val edges     = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(documents))
-      ModuleGraph.writeBaseline(moduleGraphBaselineFile.value, edges)
-      streams.value.log.info(
-        s"module-graph baseline written: ${edges.size} entries at ${moduleGraphBaselineFile.value}"
-      )
-    },
     // Build identity, generated into a source file so anything that reports it -- `--version`, an about surface --
     // reads one value rather than inventing its own. commitTime is the commit's date, not the wall clock, so the
     // same commit always generates the same file. Outside a git checkout every git-derived field falls back
     // ("unknown", 1.0.0/dev) rather than failing the build; only writePackageVersion is strict.
     Compile / sourceGenerators += Def.task {
       val generated  = (Compile / sourceManaged).value / "com" / "serenity" / "BuildInfo.scala"
-      val root       = baseDirectory.value
+      val root       = (ThisBuild / baseDirectory).value
       val log        = streams.value.log
       val commit     = gitOutput(root, "rev-parse", "HEAD").getOrElse("unknown")
       val commitTime = gitOutput(root, "log", "-1", "--format=%cI").getOrElse("unknown")
@@ -310,26 +397,18 @@ lazy val root = (project in file("."))
       Seq(generated)
     }.taskValue,
     thirdPartyNotices := ThirdPartyNotices
-      .render(baseDirectory.value.toPath, ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value))
+      .render(
+        (ThisBuild / baseDirectory).value.toPath,
+        ThirdPartyNotices.runtimeModulesOf((Runtime / managedClasspath).value)
+      )
       .fold(sys.error(_), identity),
-    generateThirdPartyNotices := {
-      val target = baseDirectory.value / "THIRD-PARTY-NOTICES.md"
-      IO.write(target, thirdPartyNotices.value)
-      streams.value.log.info(s"wrote $target")
-    },
-    checkThirdPartyNotices := {
-      val committed = IO.read(baseDirectory.value / "THIRD-PARTY-NOTICES.md")
-      if (committed != thirdPartyNotices.value)
-        sys.error("THIRD-PARTY-NOTICES.md is out of date. Run `sbt generateThirdPartyNotices` and commit the result.")
-      streams.value.log.info("checkThirdPartyNotices: notices cover every runtime module")
-    },
     // Packaged under META-INF/serenity so the licence reaches the classpath, the assembled JAR and the About
     // command from one copy; the root files stay the single source.
     Compile / resourceGenerators += Def.task {
       val dir = (Compile / resourceManaged).value / "META-INF" / "serenity"
-      IO.copyFile(baseDirectory.value / "LICENSE", dir / "LICENSE")
+      IO.copyFile((ThisBuild / baseDirectory).value / "LICENSE", dir / "LICENSE")
       IO.write(dir / "THIRD-PARTY-NOTICES.md", thirdPartyNotices.value)
-      IO.copyFile(baseDirectory.value / "docs" / "PRIVACY.md", dir / "PRIVACY.md")
+      IO.copyFile((ThisBuild / baseDirectory).value / "docs" / "PRIVACY.md", dir / "PRIVACY.md")
       Seq(dir / "LICENSE", dir / "THIRD-PARTY-NOTICES.md", dir / "PRIVACY.md")
     }.taskValue,
     // The runtime module list the notices spec checks the shipped notices against.
@@ -357,50 +436,21 @@ lazy val root = (project in file("."))
     }.taskValue,
     // The attributes `sbt assembly` writes into Serenity.jar's manifest, for AssemblyManifestSpec.
     Test / resourceGenerators += Def.task {
-      val file  = (Test / resourceManaged).value / "assembly" / "manifest-attributes.txt"
-      val lines = (assembly / packageOptions).value.collect { case Package.ManifestAttributes(entries @ _*) =>
-        entries.map { case (name, value) => s"${name.toString}: $value" }
+      val file = (Test / resourceManaged).value / "assembly" / "manifest-attributes.txt"
+      val lines = (assembly / packageOptions).value.collect {
+        case Package.ManifestAttributes(entries @ _*) =>
+          entries.map { case (name, value) => s"${name.toString}: $value" }
       }.flatten
       IO.write(file, lines.mkString("\n"))
       Seq(file)
     }.taskValue,
-    Compile / mainClass        := Some("Main"),
-    assembly / mainClass       := Some("Main"),
-    assembly / assemblyJarName := "Serenity.jar",
-    // JDK 24+ warns on every native library load (Skiko, JNA, JLine) and a later JDK will block it unless native access
-    // is granted. An executable jar grants it from its manifest, so `java -jar Serenity.jar` needs this even though the
-    // packages also pass --enable-native-access (desktop-publish.yml, desktop-release.yml).
-    assembly / packageOptions += Package.ManifestAttributes("Enable-Native-Access" -> "ALL-UNNAMED"),
-    assembly / assemblyMergeStrategy := {
-      case PathList("META-INF", "serenity", _*) => MergeStrategy.first
-      case PathList("META-INF", "services", _*) => MergeStrategy.concat
-      // Multi-release module descriptors (slf4j-api, commons-logging via FontBox): meaningless in a fat jar.
-      case PathList("META-INF", "versions", _, "module-info.class") => MergeStrategy.discard
-      case x @ PathList("META-INF", xs @ _*) =>
-        xs.map(_.toLowerCase) match {
-          case "manifest.mf" :: Nil  => MergeStrategy.discard
-          case "index.list" :: Nil   => MergeStrategy.discard
-          case "dependencies" :: Nil => MergeStrategy.discard
-          case name :: Nil
-              if name.endsWith(".sf") || name.endsWith(".rsa") || name.endsWith(".dsa") || name.endsWith(".ec") =>
-            MergeStrategy.discard
-          case _ => (assembly / assemblyMergeStrategy).value(x)
-        }
-      case PathList("module-info.class") => MergeStrategy.discard
-      // Skiko natives sit at the root of their runtime jar; a build that puts two runtime jars on the classpath
-      // (the macOS jars both carry the same two dylibs) would otherwise fail on the duplicate entries.
-      case PathList(name) if name == "icudtl.dat" || name.matches("(lib)?skiko-.*\\.(so|dylib|dll)(\\.sha256)?") =>
-        MergeStrategy.first
-      case x => (assembly / assemblyMergeStrategy).value(x)
-    },
     Test / testOptions ++= Seq(
       // One folder per test run holds everything the suites create (`TestTemp`, and the session folder of every
       // `StateManager` built without an explicit one). Removing it here is what stops a run leaving thousands of
       // entries in the system temp directory, whether the suites passed, failed or were cancelled.
       Tests.Setup(() => System.setProperty("serenity.test.tempRoot", IO.createTemporaryDirectory.getAbsolutePath)),
-      Tests.Cleanup { () =>
-        Option(System.clearProperty("serenity.test.tempRoot")).foreach(root => IO.delete(file(root)))
-      },
+      Tests
+        .Cleanup(() => Option(System.clearProperty("serenity.test.tempRoot")).foreach(root => IO.delete(file(root)))),
       // Full stack traces on every failure (ScalaTest's default reporter otherwise truncates them). #1213's
       // macOS-arm64/windows-x64 CI failures show only a bare "Failed tests:" summary line -- no assertion message, no
       // stack trace, for either the failed or the canceled test alongside it -- which makes them undiagnosable from
@@ -442,7 +492,158 @@ lazy val root = (project in file("."))
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeapMeasurementTest"),
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.SdlNativeTest"),
       Tests.Argument(TestFrameworks.ScalaTest, "-l", "com.serenity.testkit.HeadlessAwtTest")
-    )
+    ),
+    checkTestShards := {
+      val table = TestShards
+        .parseTable(IO.readLines((ThisBuild / baseDirectory).value / "project" / "test-shards.tsv"))
+        .fold(sys.error, identity)
+      TestShards.check(table, (Test / definedTestNames).value, TestShardCount) match {
+        case Left(errors) => sys.error(errors.mkString("\n"))
+        case Right(summary) =>
+          streams.value.log.info(
+            "checkTestShards: " + (1 to TestShardCount)
+              .map(s => s"shard $s has ${summary.suites(s)} suites, ${summary.seconds(s).round} s listed")
+              .mkString("; ")
+          )
+      }
+    },
+    generateTestShards := {
+      val reports = IO
+        .listFiles((ThisBuild / baseDirectory).value / "target" / "test-reports")
+        .toList
+        .filter(_.getName.endsWith(".xml"))
+      val defined = (Test / definedTestNames).value.toSet
+      val seconds =
+        TestShards.secondsFromReports(reports.map(IO.read(_))).filter { case (suite, _) => defined.contains(suite) }
+      val assigned = TestShards.balance(seconds, TestShardCount)
+      IO.write(
+        (ThisBuild / baseDirectory).value / "project" / "test-shards.tsv",
+        "# Suite, shard, seconds: regenerate with `sbt generateTestShards` after a full `sbt test` (#2484).\n" +
+          TestShards.render(seconds.map { case (suite, t) => suite -> TestShards.Entry(assigned(suite), t) })
+      )
+    },
+    writePackageVersion := {
+      val result = packageVersion.value.fold(sys.error(_), identity)
+      val out    = target.value / "package" / "app-version.txt"
+      IO.write(out, result.numeric)
+      streams.value.log.info(s"package version ${result.numeric} (${result.channel.label}) written to $out")
+      out
+    },
+    name                     := "Serenity",
+    architectureBaselineFile := (ThisBuild / baseDirectory).value / "project" / "architecture-baseline.tsv",
+    architectureChecksSelfTest := {
+      ArchitectureChecks.selfTest()
+      streams.value.log.info("architectureChecksSelfTest: ratchet's own matching still catches FQN evasion")
+    },
+    architectureCheck := {
+      architectureChecksSelfTest.value
+      val log = streams.value.log
+      ArchitectureChecks.check((ThisBuild / baseDirectory).value / "src", architectureBaselineFile.value) match {
+        case None =>
+          log.info("architectureCheck: ratchet holds")
+        case Some(report) =>
+          sys.error(
+            s"""architectureCheck failed.
+               |
+               |$report
+               |
+               |Targets: method <= ${ArchitectureChecks.MaxMethodLines} lines, file <= ${ArchitectureChecks.MaxFileLines} lines.
+               |Split the offending code, or if you deliberately accept it, run `sbt writeArchitectureBaseline`
+               |and explain the new entry in review.""".stripMargin
+          )
+      }
+    },
+    writeArchitectureBaseline := {
+      val violations = ArchitectureChecks.collect((ThisBuild / baseDirectory).value / "src")
+      ArchitectureChecks.writeBaseline(architectureBaselineFile.value, violations)
+      streams.value.log.info(
+        s"architecture baseline written: ${violations.size} entries at ${architectureBaselineFile.value}"
+      )
+    },
+    moduleGraphBaselineFile := (ThisBuild / baseDirectory).value / "project" / "module-graph-baseline.tsv",
+    moduleGraphSelfTest := {
+      ModuleGraphSelfTest.run()
+      streams.value.log.info("moduleGraphSelfTest: decoder, graph, cycles and ratchet behave")
+    },
+    moduleGraph := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val report    = ModuleGraph.report(documents)
+      IO.write(target.value / "module-graph.txt", report)
+      streams.value.log.info(report)
+    },
+    moduleGraphCheck := {
+      moduleGraphSelfTest.value
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      ModuleGraph.check(documents, ModuleGraph.readBaseline(moduleGraphBaselineFile.value)) match {
+        case None => streams.value.log.info("moduleGraphCheck: no new upward module edges")
+        case Some(report) =>
+          sys.error(
+            s"""moduleGraphCheck failed.
+               |
+               |$report
+               |
+               |Break the edge, or if you deliberately accept it, run `sbt writeModuleGraphBaseline`
+               |and explain the new entry in review.""".stripMargin
+          )
+      }
+    },
+    writeModuleGraphBaseline := {
+      (Compile / compile).value
+      val documents = ModuleGraph.readDocuments(crossTarget.value / "meta" / "META-INF" / "semanticdb")
+      val edges     = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(documents))
+      ModuleGraph.writeBaseline(moduleGraphBaselineFile.value, edges)
+      streams.value.log.info(
+        s"module-graph baseline written: ${edges.size} entries at ${moduleGraphBaselineFile.value}"
+      )
+    },
+    generateThirdPartyNotices := {
+      val target = (ThisBuild / baseDirectory).value / "THIRD-PARTY-NOTICES.md"
+      IO.write(target, thirdPartyNotices.value)
+      streams.value.log.info(s"wrote $target")
+    },
+    checkThirdPartyNotices := {
+      val committed = IO.read((ThisBuild / baseDirectory).value / "THIRD-PARTY-NOTICES.md")
+      if (committed != thirdPartyNotices.value)
+        sys.error("THIRD-PARTY-NOTICES.md is out of date. Run `sbt generateThirdPartyNotices` and commit the result.")
+      streams.value.log.info("checkThirdPartyNotices: notices cover every runtime module")
+    },
+    realBoundaryTest := (Test / testOnly)
+      .toTask(
+        " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
+      )
+      .value,
+    sdlNativeTest := (Test / testOnly)
+      .toTask(" com.serenity.ui.sdl.SdlNativeSuite")
+      .value,
+    heapMeasurementTest := (Test / testOnly)
+      .toTask(
+        " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
+          " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
+      )
+      .value,
+    headlessAwtTest := (Test / testOnly)
+      .toTask(" com.serenity.ui.display.DisplayScaleSpec -- -n com.serenity.testkit.HeadlessAwtTest")
+      .value
+  )
+
+// The aggregate: it has no sources and no outputs of its own, and `app` is the project that owns every artifact. A
+// task defined only on `app` still runs from here (aggregation); an input task such as `Test / runMain` does not, so
+// say `app/Test/runMain`. Later modules join the aggregate.
+lazy val root = (project in file("."))
+  .aggregate(app)
+  .disablePlugins(sbtassembly.AssemblyPlugin, com.github.sbt.sbom.BomSbtPlugin)
+  .settings(
+    name   := "serenity-root",
+    target := (ThisBuild / baseDirectory).value / "target" / "root",
+    // It sits at the repository root, where sbt would otherwise find src/ and compile it a second time, without the
+    // dependencies.
+    Compile / unmanagedSourceDirectories   := Nil,
+    Compile / unmanagedResourceDirectories := Nil,
+    Test / unmanagedSourceDirectories      := Nil,
+    Test / unmanagedResourceDirectories    := Nil
   )
 
 // Runs only the two real-OS-boundary specs (a real loopback socket, a real OS signal delivered via
@@ -451,11 +652,9 @@ lazy val root = (project in file("."))
 // apply to `testOnly`.
 lazy val realBoundaryTest = taskKey[Unit]("Run the real-OS-boundary integration specs excluded from `sbt test`")
 
-realBoundaryTest := (Test / testOnly)
-  .toTask(
-    " com.serenity.lsp.LspConnectionRealSocketIntegrationSpec com.serenity.ui.tui.TerminalShellRealSignalIntegrationSpec"
-  )
-  .value
+// Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
+// stalls on their forced collections while they measure.
+lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
 
 // Runs the specs that load the real libSDL3 through the FFM binding (#2380): on SDL's dummy video driver, and, for the GL
 // specs, on its offscreen driver, which needs Mesa's EGL. The library is a build product
@@ -463,157 +662,6 @@ realBoundaryTest := (Test / testOnly)
 // `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
 lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
 
-sdlNativeTest := (Test / testOnly)
-  .toTask(" com.serenity.ui.sdl.SdlNativeSuite")
-  .value
-
-// Runs the specs that read the whole JVM heap (see HeapMeasurementTest) on their own, so no other suite allocates or
-// stalls on their forced collections while they measure.
-lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs excluded from `sbt test`")
-
-heapMeasurementTest := (Test / testOnly)
-  .toTask(
-    " com.serenity.perf.FootprintBenchmarksSpec com.serenity.rope.RopeDiffAllocationSpec" +
-      " com.serenity.rope.RopeEqualityAllocationSpec com.serenity.spellcheck.AffixedWordListBuildAllocationSpec"
-  )
-  .value
-
 // Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
 // of it has a display. Start sbt with -Djava.awt.headless=true; the tests fail, not cancel, on a JVM that is not.
 lazy val headlessAwtTest = taskKey[Unit]("Run the headless-AWT specs excluded from `sbt test`")
-
-headlessAwtTest := (Test / testOnly)
-  .toTask(" com.serenity.ui.display.DisplayScaleSpec -- -n com.serenity.testkit.HeadlessAwtTest")
-  .value
-
-libraryDependencies ++= Seq(
-  "org.typelevel" %% "cats-effect" % "3.7.1",
-  "co.fs2"        %% "fs2-core"    % "3.13.0",
-  "co.fs2"        %% "fs2-io"      % "3.13.0",
-  "org.scalatest" %% "scalatest"   % "3.2.19" % "test",
-  // Drives IO programs on a mocked scheduler/clock for deterministic tests of timing-dependent code (timeouts,
-  // intervals, idle cadence) -- see com.serenity.testkit.VirtualTime.
-  "org.typelevel" %% "cats-effect-testkit" % "3.7.1" % "test",
-  // Property and law testing, test scope only -- the assembled JAR is unchanged.
-  // scalatestplus is pinned to the release matching ScalaTest 3.2.19 and brings ScalaCheck with it.
-  // cats-laws tracks the cats-core 2.13.0 that cats-effect 3.7.1 already resolves, so no eviction.
-  "org.scalatestplus"     %% "scalacheck-1-18"      % "3.2.19.0" % "test",
-  "org.typelevel"         %% "cats-laws"            % "2.13.0"   % "test",
-  "org.typelevel"         %% "discipline-scalatest" % "2.3.0"    % "test",
-  // Independent oracle for the golden rich-document specs (Apache-2.0): every DOCX Serenity writes must open in XWPF.
-  // Test scope only, so the assembled JAR and startup are unchanged.
-  "org.apache.poi"         % "poi-ooxml"            % "5.4.1"    % "test",
-  "com.github.pureconfig" %% "pureconfig-core"      % "0.17.10",
-  // Launch-argument parsing. decline-effect is only for its cats-effect glue; the command itself is plain decline,
-  // so `LaunchOptions.parse` stays a pure function over args that specs can call directly.
-  "com.monovore" %% "decline"        % "2.6.2",
-  "com.monovore" %% "decline-effect" % "2.6.2"
-)
-
-val circeVersion = "0.14.16"
-
-libraryDependencies ++= Seq(
-  "io.circe" %% "circe-core"    % circeVersion,
-  "io.circe" %% "circe-generic" % circeVersion,
-  "io.circe" %% "circe-parser"  % circeVersion
-)
-
-val log4CatsVersion = "2.8.0"
-
-libraryDependencies ++= Seq(
-  "org.typelevel"   %% "log4cats-core"   % log4CatsVersion,
-  "org.typelevel"   %% "log4cats-slf4j"  % log4CatsVersion,
-  "ch.qos.logback"   % "logback-classic" % "1.5.38",
-  "net.java.dev.jna" % "jna-platform"    % "5.19.1"
-)
-
-val commonMarkVersion = "0.30.0"
-
-libraryDependencies ++= Seq(
-  "org.commonmark"    % "commonmark"                     % commonMarkVersion,
-  "org.commonmark"    % "commonmark-ext-gfm-tables"      % commonMarkVersion,
-  "org.commonmark"    % "commonmark-ext-task-list-items" % commonMarkVersion,
-  "org.xhtmlrenderer" % "flying-saucer-core"             % "10.5.0"
-)
-
-// EPUBCheck (W3C, BSD-3-Clause, so compatible with this project's GPL) validates the exported EPUB in specs only.
-// Test scope: it is never on the runtime classpath and never reaches the assembled JAR.
-// xercesImpl is excluded because it takes over the JVM's default XML parser and then rejects the hardening flags
-// RichTextXmlParser sets, which would break every DOCX/ODT spec sharing this test classpath.
-libraryDependencies += ("org.w3c" % "epubcheck" % "5.4.0" % Test).exclude("xerces", "xercesImpl")
-
-// Skia render backend (#2028). Each OS build ships only its own Skiko natives, so the runtime artifact is picked per
-// target: detected from the build host, or forced with -Dserenity.skiko.target / SERENITY_SKIKO_TARGET so CI can
-// assemble any target from any host. The Skiko API jar and its Kotlin dependencies are not loaded on the TUI and
-// headless paths; that is enforced at runtime, not here.
-val skikoVersion = "0.153.0"
-
-// The runtime natives are not JetBrains' jars: those carry the Adobe DNG SDK, whose licence conflicts with this project's
-// GPL. CI rebuilds them without it from the pinned upstream sources (.github/workflows/skiko-natives.yml, ci/skiko) and
-// publishes them as a Maven repository, which is why the version here is its own. Another repository, such as a local
-// mirror, can stand in with -Dserenity.skiko.natives.repo or SERENITY_SKIKO_NATIVES_REPO.
-val skikoNativesVersion = "0.153.0-dngfree.2"
-
-val skikoNativesRepository: String = sys.props
-  .get("serenity.skiko.natives.repo")
-  .orElse(sys.env.get("SERENITY_SKIKO_NATIVES_REPO"))
-  .map(_.trim)
-  .filter(_.nonEmpty)
-  .getOrElse("https://barmal.github.io/Serenity/")
-
-val skikoTargets = Set("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
-
-val skikoTarget: String = {
-  def hostOs: String =
-    sys.props.getOrElse("os.name", "").toLowerCase match {
-      case name if name.contains("win")                            => "windows"
-      case name if name.contains("mac") || name.contains("darwin") => "macos"
-      case _                                                       => "linux"
-    }
-  def hostArch: String =
-    sys.props.getOrElse("os.arch", "").toLowerCase match {
-      case "aarch64" | "arm64" => "arm64"
-      case _                   => "x64"
-    }
-  val target = sys.props
-    .get("serenity.skiko.target")
-    .orElse(sys.env.get("SERENITY_SKIKO_TARGET"))
-    .map(_.trim)
-    .filter(_.nonEmpty)
-    .getOrElse(s"$hostOs-$hostArch")
-  if (!skikoTargets.contains(target))
-    sys.error(s"Unknown Skiko target '$target'; expected one of ${skikoTargets.toList.sorted.mkString(", ")}")
-  target
-}
-
-// Last in the list, so only what Maven Central lacks, these natives, is ever asked of it. The POM Skiko generates for a
-// runtime jar depends on skiko-awt at the jar's own version, which is not published, hence intransitive.
-externalResolvers += "Serenity Skiko natives" at skikoNativesRepository
-
-libraryDependencies ++= Seq(
-  "org.jetbrains.skiko" % "skiko-awt" % skikoVersion,
-  ("io.github.barmal" % s"skiko-awt-runtime-$skikoTarget" % skikoNativesVersion).intransitive()
-)
-
-val jlineVersion = "3.30.16"
-
-// TUI shell (#1107): raw mode, alternate screen, resize signals, terminal size. jline-terminal-jni is the modern
-// pure-JNI native provider (no external jna/jansi native libs to manage) -- jline-reader is deliberately not a
-// dependency, since this codebase does its own raw terminal I/O rather than JLine's line-editing/completion stack.
-libraryDependencies ++= Seq(
-  "org.jline" % "jline-terminal"     % jlineVersion,
-  "org.jline" % "jline-terminal-jni" % jlineVersion
-)
-
-// Unifies grapheme-cluster, line-break and East-Asian-Width segmentation on one versioned Unicode table (#1277),
-// replacing three independent hand-rolled approximations that could (and did, see #1271) disagree with each other.
-// Dependency only in this step -- see #1277 step 1 for the assembled-JAR size measurement that gated this addition.
-libraryDependencies += "com.ibm.icu" % "icu4j" % "78.3"
-
-// FontBox reads the bundled fonts' hmtx/hhea tables, so the paginator measures the very files the PDF will embed and
-// no AWT is involved (#1206, #2006). pdfbox-io and commons-logging come with it. PDFBox paints the PagedDocument into
-// the PDF, embedding those same files.
-libraryDependencies ++= Seq(
-  "org.apache.pdfbox" % "fontbox" % "3.0.8",
-  "org.apache.pdfbox" % "pdfbox"  % "3.0.8"
-)

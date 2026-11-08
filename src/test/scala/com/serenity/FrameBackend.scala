@@ -44,9 +44,13 @@ trait FramePixels:
   def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit
 
   /** The frame as an image, for the dump a failed comparison writes. */
-  final def toImage: BufferedImage =
+  final def toImage: BufferedImage = FramePixels.image(widthPx, heightPx, rgbPixels)
+
+object FramePixels:
+
+  def image(widthPx: Int, heightPx: Int, pixels: Array[Int]): BufferedImage =
     val image = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
-    image.setRGB(0, 0, widthPx, heightPx, rgbPixels, 0, widthPx)
+    image.setRGB(0, 0, widthPx, heightPx, pixels, 0, widthPx)
     image
 
 /** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. A Java2D
