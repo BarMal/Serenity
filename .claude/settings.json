@@ -29,7 +29,11 @@
       "mcp__github__list_pull_requests",
       "mcp__github__list_commits",
       "mcp__github__list_branches",
-      "mcp__github__add_issue_comment"
+      "mcp__github__add_issue_comment",
+      "mcp__claude-code-remote__send_later",
+      "mcp__Claude_Code_Remote__send_later",
+      "Artifact",
+      "ArtifactData"
     ]
   }
 }

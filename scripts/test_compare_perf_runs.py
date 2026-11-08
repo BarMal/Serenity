@@ -20,6 +20,8 @@ import unittest
 from pathlib import Path
 
 _SCRIPTS = Path(__file__).resolve().parent
+sys.path.insert(0, str(_SCRIPTS))
+from captured_stdout import capture_stdout  # noqa: E402
 
 
 def _load(name: str):
@@ -40,6 +42,7 @@ class PairedGateTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
 
     def _write(self, name: str, p50: float, retained: int | None = None) -> str:
         path = os.path.join(self._tmpdir.name, name)
@@ -136,13 +139,29 @@ class PairedGateTests(unittest.TestCase):
         self.assertAlmostEqual(verdicts[0].ratio, 2.2)
 
 
+class MedianRowsTests(unittest.TestCase):
+    def test_takes_the_median_of_the_all_threads_allocation_columns_across_runs(self) -> None:
+        def run(p50_bytes: int | None, p95_bytes: int | None) -> dict:
+            return {"x": compare_perf_runs.Row("x", 1.0, 1.5, 10, 11, None, p50_bytes, p95_bytes)}
+
+        medians = compare_perf_runs.median_rows([run(100, 150), run(300, 350), run(200, 250)])["x"]
+        self.assertEqual((medians.allocation_all_threads_p50_bytes, medians.allocation_all_threads_p95_bytes), (200, 250))
+        self.assertEqual((medians.allocation_p50_bytes, medians.allocation_p95_bytes), (10, 11))
+
+    def test_leaves_them_empty_when_no_run_measured_them(self) -> None:
+        run = {"x": compare_perf_runs.Row("x", 1.0, 1.5, 10, 11)}
+        medians = compare_perf_runs.median_rows([run, run])["x"]
+        self.assertEqual((medians.allocation_all_threads_p50_bytes, medians.allocation_all_threads_p95_bytes), (None, None))
+
+
 class ConfirmBeforeFailingTests(unittest.TestCase):
     """The CI path: a first pass of three pairs that only flags, then fresh pairs of just the flagged benchmarks."""
 
     def setUp(self) -> None:
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
-        self.flagged = os.path.join(self._tmpdir.name, "flagged.txt")
+        self.stdout = capture_stdout(self)
+        self.flagged =os.path.join(self._tmpdir.name, "flagged.txt")
 
     def _run(self, prefix: str, side: str, p50s: dict[str, float]) -> str:
         path = os.path.join(self._tmpdir.name, f"{prefix}-{side}.csv")
@@ -320,6 +339,15 @@ class ExcludedRowTests(unittest.TestCase):
             self.assertTrue(compare_perf_runs.is_excluded(row, listed), row)
         self.assertTrue(compare_perf_runs.is_excluded("laptop.render.typing_frame_2x.ligature_font", listed))
         self.assertFalse(compare_perf_runs.is_excluded("render.markdown.inline_lens", listed))
+
+    def test_the_skia_rows_are_off_the_gate(self) -> None:
+        listed = compare_perf_runs.load_excluded(str(_SCRIPTS / "perf-gate-excluded-rows.txt"))
+        for row in (
+            "skia.compare.skia_raster.system_monospace.typing_frame_2x",
+            "skia.compare.java2d.bundled_ligature_font.scroll_frame_2x",
+        ):
+            self.assertTrue(compare_perf_runs.is_excluded(row, listed), row)
+        self.assertFalse(compare_perf_runs.is_excluded("skiable.row", listed))
 
     def test_the_default_exclusion_file_is_the_checked_in_one(self) -> None:
         self.assertEqual(compare_perf_runs.DEFAULT_EXCLUDE_FILE, str(_SCRIPTS / "perf-gate-excluded-rows.txt"))

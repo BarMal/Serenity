@@ -1,6 +1,7 @@
 package com.serenity.diagnostics
 
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 /** One keystroke's journey to the screen, in pipeline order. Each stage ends at the point its label names the start of
@@ -50,6 +51,9 @@ final case class KeyLatency(seq: Long, whenToEdtMs: Long, stageNanos: Vector[Lon
 
   def stage(stage: LatencyStage): Long = stageNanos.lift(stage.ordinal).getOrElse(0L)
 
+  /** What the user waited: `total` starts when the event thread receives the key, so the gap before that is added. */
+  def keyToScreenNanos: Long = totalNanos + whenToEdtMs * 1_000_000L
+
   def logLine: String =
     val stages = LatencyStage.values.toList.map(stage => s"${stage.label}=${KeyLatency.millis(this.stage(stage))}")
     s"[LATENCY] seq=$seq when_to_edt=$whenToEdtMs ${stages.mkString(" ")} total=${KeyLatency.millis(totalNanos)} ms"
@@ -93,7 +97,10 @@ final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpa
     else
       ("when_to_edt" -> PhaseStats.of(keys.map(_.whenToEdtMs * NanosPerMs))) ::
         LatencyStage.values.toList.map(stage => stage.label -> PhaseStats.of(keys.map(_.stage(stage)))) :::
-        List("total" -> PhaseStats.of(keys.map(_.totalNanos)))
+        List(
+          "total"         -> PhaseStats.of(keys.map(_.totalNanos)),
+          "key_to_screen" -> PhaseStats.of(keys.map(_.keyToScreenNanos))
+        )
 
   def summaryLine: String =
     val window = String.format(Locale.ROOT, "%.1f", elapsedMs / 1000.0)
@@ -230,6 +237,11 @@ final class KeyLatencyTrace(
 
   def isEnabled: Boolean = enabled.get()
 
+  /** Completes when a paint that shows a traced keystroke has finished, and stays complete (the start-up probe, #2420,
+    * waits on it). It is decided from the state that paint produced, so draining the window cannot lose it.
+    */
+  val firstKeyPainted: CompletableFuture[Unit] = new CompletableFuture[Unit]()
+
   /** Starts from an empty trace either way, so nothing half-recorded before a toggle is reported after it. */
   def setEnabled(on: Boolean): Unit =
     state.set(KeyLatencyState.start(clock()))
@@ -256,7 +268,11 @@ final class KeyLatencyTrace(
   def framePublished(): Unit         = if enabled.get() then update(_.framePublished(_))
   def frameEnded(): Unit             = if enabled.get() then update((current, _) => current.frameEnded)
   def paintStarted(): Unit           = if enabled.get() then update(_.paintStarted(_))
-  def paintFinished(): Unit          = if enabled.get() then update(_.paintFinished(_))
+
+  def paintFinished(): Unit =
+    if enabled.get() then
+      val now = clock()
+      if state.updateAndGet(_.paintFinished(now)).completed.nonEmpty then firstKeyPainted.complete(()): Unit
 
   private[serenity] def pendingKeys: Vector[KeyStamps] = state.get().keys
 

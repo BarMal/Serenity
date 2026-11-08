@@ -82,6 +82,9 @@ final case class InterfaceConfig(
     // `AppState.effectiveUiElementGap`. `Some` is honoured on both surfaces unchanged.
     elementGap: Option[Double] = None,
     outlineThicknessPx: Int = 2,
+    cornerRadiusPx: Int = 12,
+    dockedCornerStyle: DockedCornerStyle = DockedCornerStyle.Floating,
+    paneHeaderCorners: PaneHeaderCorners = PaneHeaderCorners.Rounded,
     menuBar: MenuBarMode = MenuBarMode.Hidden,
     fileDialog: FileDialogMode = FileDialogMode.Auto,
     // The field's own default is the conventional layout, like the chrome settings it stands for; what a fresh install
@@ -92,7 +95,8 @@ final case class InterfaceConfig(
   def normalized: InterfaceConfig =
     copy(
       elementGap = elementGap.map(AppConfig.clampUiElementGap),
-      outlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(outlineThicknessPx)
+      outlineThicknessPx = AppConfig.clampUiOutlineThicknessPx(outlineThicknessPx),
+      cornerRadiusPx = AppConfig.clampUiCornerRadiusPx(cornerRadiusPx)
     )
 
 final case class InputConfig(

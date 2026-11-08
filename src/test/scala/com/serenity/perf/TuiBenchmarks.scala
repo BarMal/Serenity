@@ -49,31 +49,37 @@ private[perf] object TuiBenchmarks:
     List(typingFrame(), idleFlush(), clearPreservedRows())
 
   private def typingFrame(): BenchmarkRunner.Benchmark =
-    val surface = paintedSurface()
-    val texts   = Vector.tabulate(TextVariants)(rowText(EditedRow, _))
-    val counter = new java.util.concurrent.atomic.AtomicInteger(0)
-    BenchmarkRunner.Benchmark(
-      "tui.flush.typing_frame.200x60",
-      Warmups,
-      Iterations,
-      () => (),
-      () =>
-        surface.clearViewportExcept(black, otherRows)
-        surface.setForegroundColor(if EditedRow % 2 == 0 then white else grey)
-        surface.putString(0, EditedRow, texts(counter.getAndIncrement() % TextVariants))
-        surface.flush()
+    lazy val surface = paintedSurface()
+    lazy val texts   = Vector.tabulate(TextVariants)(rowText(EditedRow, _))
+    val counter      = new java.util.concurrent.atomic.AtomicInteger(0)
+    BenchmarkRunner.Benchmark.building((surface, texts))(
+      BenchmarkRunner.Benchmark(
+        "tui.flush.typing_frame.200x60",
+        Warmups,
+        Iterations,
+        () => (),
+        () =>
+          surface.clearViewportExcept(black, otherRows)
+          surface.setForegroundColor(if EditedRow % 2 == 0 then white else grey)
+          surface.putString(0, EditedRow, texts(counter.getAndIncrement() % TextVariants))
+          surface.flush()
+      )
     )
 
   private def idleFlush(): BenchmarkRunner.Benchmark =
-    val surface = paintedSurface()
-    BenchmarkRunner.Benchmark("tui.flush.idle.200x60", Warmups, Iterations, () => (), () => surface.flush())
+    lazy val surface = paintedSurface()
+    BenchmarkRunner.Benchmark.building(surface)(
+      BenchmarkRunner.Benchmark("tui.flush.idle.200x60", Warmups, Iterations, () => (), () => surface.flush())
+    )
 
   private def clearPreservedRows(): BenchmarkRunner.Benchmark =
-    val surface = paintedSurface()
-    BenchmarkRunner.Benchmark(
-      "tui.clear.preserved_rows.200x60",
-      Warmups,
-      Iterations,
-      () => (),
-      () => surface.clearViewportExcept(black, otherRows)
+    lazy val surface = paintedSurface()
+    BenchmarkRunner.Benchmark.building(surface)(
+      BenchmarkRunner.Benchmark(
+        "tui.clear.preserved_rows.200x60",
+        Warmups,
+        Iterations,
+        () => (),
+        () => surface.clearViewportExcept(black, otherRows)
+      )
     )

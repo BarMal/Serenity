@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.WrappedLineCache
+import com.serenity.ui.layout.{ScrollRowsReporter, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
   GraphemeSegmentationCache,
@@ -12,7 +12,8 @@ import com.serenity.ui.renderer.{
   RendererFrameState,
   ShapedTextCache,
   StyledFontCache,
-  SurfaceTextCaches
+  SurfaceTextCaches,
+  TabBarMeasures
 }
 import com.serenity.ui.theme.ThemeHighlightCache
 
@@ -49,9 +50,11 @@ final class RenderCaches private (
     val styledFonts: StyledFontCache,
     val labelSprites: LabelSprites,
     val measuredAdvances: MeasuredTextAdvances,
+    val tabBarMeasures: TabBarMeasures,
     val compositionRevisions: CompositionRevisions,
     val backendCaches: BackendCaches,
-    val framePhases: FramePhaseClock
+    val framePhases: FramePhaseClock,
+    val scrollRows: ScrollRowsReporter
 ):
 
   /** What a Java2D surface drawing for this owner paints text through. */
@@ -83,7 +86,9 @@ object RenderCaches:
       styledFonts,
       LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
+      new TabBarMeasures,
       new CompositionRevisions,
       new BackendCaches,
-      new FramePhaseClock()
+      new FramePhaseClock(),
+      ScrollRowsReporter.fromSystemProperty()
     )

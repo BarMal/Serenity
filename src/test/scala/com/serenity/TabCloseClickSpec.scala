@@ -11,6 +11,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.TabBarLayoutSettings
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -70,12 +71,27 @@ class TabCloseClickSpec extends AnyFlatSpec with Matchers:
       case other                                                => fail(s"Expected a tab bar, got $other")
     val rect = LayoutEngine.calculateLayoutWithUI(state, viewport).tabBarRect.getOrElse(fail("Expected a tab bar rect"))
     val region = TabBarSurfaceComposition
-      .closeAffordances(entries, activeBufferId, rect)
+      .closeAffordances(entries, activeBufferId, rect, TabBarLayoutSettings.of(state))
       .find(region => TabBarSurfaceComposition.closeBufferIdOf(region.focusId).contains(bufferId))
       .getOrElse(fail(s"Expected a close affordance for $bufferId"))
     (region.rect.x.toInt, region.rect.y.toInt)
 
+  /** Where `bufferId`'s close box would be if it were showing: the layout never depends on which boxes show. */
+  private def revealedClosePoint(state: AppState, bufferId: BufferId): (Int, Int) =
+    val (entries, activeBufferId) = state.tabBarSurface.map(_.content) match
+      case Some(SurfaceContent.TabBar(entries, activeBufferId)) => (entries, activeBufferId)
+      case other                                                => fail(s"Expected a tab bar, got $other")
+    val rect = LayoutEngine.calculateLayoutWithUI(state, viewport).tabBarRect.getOrElse(fail("Expected a tab bar rect"))
+    val region = TabBarSurfaceComposition
+      .closeAffordances(entries, activeBufferId, rect, TabBarLayoutSettings.of(state, revealAll = true))
+      .find(region => TabBarSurfaceComposition.closeBufferIdOf(region.focusId).contains(bufferId))
+      .getOrElse(fail(s"Expected a close affordance for $bufferId"))
+    (region.rect.x.toInt, region.rect.y.toInt)
+
+  /** Points at the tab as a user does, which shows an inactive tab's close box, then clicks the box. */
   private def clickClose(sm: StateManager, bufferId: BufferId): Unit =
+    val (hoverCol, hoverRow) = revealedClosePoint(sm.getCurrentState.unsafeRunSync(), bufferId)
+    sm.applyEvent(MouseMove(hoverCol, hoverRow)).unsafeRunSync()
     val (col, row) = closeAffordancePoint(sm.getCurrentState.unsafeRunSync(), bufferId)
     sm.applyEvent(MouseClick(col, row)).unsafeRunSync()
 

@@ -78,6 +78,7 @@ object RendererGutter:
     val railRect = ColumnRails.railRect(contentRect, placement)
     val snapshot = placement.snapshot
     val kept     = ColumnRails.keptBands(context, railRect, snapshot, rows)
+    val cells    = context.cellMetrics
 
     surface.setBackgroundColor(gutterBackground(state))
     surface.setForegroundColor(state.persisted.theme.muted)
@@ -95,7 +96,7 @@ object RendererGutter:
           if shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
             val numberWidth = math.max(1, railRect.width - 1)
             (visualLine.bufferLine + 1).toString.reverse.padTo(numberWidth, ' ').reverse + " "
-          else continuationIndicatorText(railRect.width)
+          else ContinuationMark.text(context, railRect.width)
         if RendererPaneSetup.usesMeasuredDrawing(snapshot, context) then
           surface.text.drawLabelPx(
             context.cellMetrics.toPixelX(railRect.x).toFloat,
@@ -106,6 +107,12 @@ object RendererGutter:
             text
           )
         else surface.putString(railRect.x, rowMetrics.screenRow(rowIndex), text)
+        if !shouldRenderLineNumberForVisualLine(visualLine, wordWrapEnabled) then
+          val measured = RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+          val topPx =
+            if measured then rowMetrics.lineTopPx(rowIndex) else cells.toPixelY(rowMetrics.screenRow(rowIndex))
+          val heightPx = if measured then snapshot.lineHeightPx else cells.lineHeight
+          ContinuationMark.paint(context, railRect, topPx, heightPx, 0, state.persisted.theme.muted)
       case _ => ()
     }
 
@@ -182,6 +189,31 @@ object RendererGutter:
     else
       counterRowBands(state, context, snapshot, lineRect).toList.zipWithIndex.collect {
         case (band, row) if !rows.includes(row) => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach)
+      }
+
+  /** The top [[InkSpillPx]] of each band of `lineRect` that `rows` keeps directly below a band it repaints: the ink a
+    * repainted number spills downward reaches only there, and a frame drawn from scratch paints the row below over it.
+    * The bands are as wide as [[keptRowBands]].
+    */
+  private[renderer] def spillGuardBands(
+    state: AppState,
+    context: RenderContext,
+    snapshot: TextLayoutSnapshot,
+    lineRect: LayoutRect,
+    rows: Repaint[Int]
+  ): List[PixelRect] =
+    if rows.everything then Nil
+    else
+      val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
+      val bands = counterRowBands(state, context, snapshot, lineRect)
+      bands.indices.toList.collect {
+        case row if row > 0 && !rows.includes(row) && rows.includes(row - 1) =>
+          val band = bands(row)
+          band.copy(
+            xPx = band.xPx - reach,
+            widthPx = band.widthPx + 2 * reach,
+            heightPx = band.heightPx.min(InkSpillPx)
+          )
       }
 
   /** The pixels each of `snapshot`'s rows owns in the counter: from where its number is drawn to where the next row's
@@ -318,7 +350,7 @@ object RendererGutter:
         // The single spacer cell falls on the divider's own column: trailing for a left counter, leading for a right
         // one, so digits always sit against the panel edge and the divider always against the content.
         if dividerOnLeft then " " + rightAligned else rightAligned + " "
-      else continuationIndicatorText(lineRect.width)
+      else ContinuationMark.text(context, lineRect.width)
     if paintsNumber then
       measuredFont match
         case Some(measured) =>
@@ -357,6 +389,13 @@ object RendererGutter:
           }
           surface.text.setFont(FontSpec.fromAwt(context.uiFont))
         case None => surface.putString(lineRect.x, rowY, lineNumberText)
+    if paintsNumber && !rendersLineNumber then
+      val measured = measuredFont.isDefined
+      val topPx    = if measured then lineTopPx else context.cellMetrics.toPixelY(rowY)
+      val heightPx = if measured then snapshot.lineHeightPx else context.cellMetrics.lineHeight
+      val insetPx  = if measured then SurfaceTextInset.px(state.persisted.config) else 0.0
+      val shiftPx  = math.round(if dividerOnLeft then -insetPx else insetPx).toInt
+      ContinuationMark.paint(context, lineRect, topPx, heightPx, shiftPx, state.persisted.theme.muted)
     if rendersLineNumber then
       for
         bufferId   <- pane.bufferId.toList
@@ -426,11 +465,6 @@ object RendererGutter:
   private def shouldRenderLineNumberForVisualLine(visualLine: TextVisualLine, wordWrapEnabled: Boolean): Boolean =
     !wordWrapEnabled || visualLine.startColumn == 0
 
-  private def continuationIndicatorText(width: Int): String =
-    val safeWidth = math.max(1, width)
-    val leftWidth = (safeWidth - 1) / 2
-    " " * leftWidth + "│" + " " * (safeWidth - leftWidth - 1)
-
   /** A row's diagnostic marker, and where its row is when the counter is measured: the marker sits on that row's own
     * band, not on the cell grid, which a measured row's band does not follow.
     */
@@ -469,9 +503,32 @@ object RendererGutter:
       val surface = context.surface
       val colors  = state.persisted.config.statusLine.colors
 
-      surface.setBackgroundColor(colors.background.fold(gutterBackground(state))(RenderColor.fromAwt))
+      val background = colors.background.fold(gutterBackground(state))(RenderColor.fromAwt)
+      surface.setBackgroundColor(background)
       surface.setForegroundColor(colors.foreground.fold(state.persisted.theme.panel.foreground)(RenderColor.fromAwt))
-      surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
+      val window = context.windowSize(state)
+      val corners =
+        CornerRounding.corners(
+          ChromeElement.StatusBar,
+          gutterRect,
+          window,
+          state.persisted.config.dockedCornerStyle,
+          state.persisted.config.paneHeaderCorners
+        )
+      val fillGutter = () => surface.fillRect(gutterRect.x, gutterRect.y, gutterRect.width, gutterRect.height, ' ')
+      val roundedFill = surface.panelOutlines.exists(
+        _.fillRoundRect(
+          gutterRect.x,
+          gutterRect.y,
+          gutterRect.width,
+          gutterRect.height,
+          corners,
+          state.persisted.config.scaledUiCornerRadiusPx,
+          background,
+          CornerUnderlay.over(gutterRect, corners, contract, state.persisted.theme)
+        )
+      )
+      if !roundedFill then fillGutter()
 
       val content = s" ${state.statusLineText.getOrElse(emptyWorkspaceStatus(state))} "
       val displayContent =

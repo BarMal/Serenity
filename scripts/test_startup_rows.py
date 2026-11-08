@@ -55,6 +55,92 @@ def _load_module():
     return module
 
 
+# The probe flag makes the real app print the ready line at its first frame and, once an injected key is painted, the
+# interactive line. The args file shows which flags the harness passed.
+_PROBE_LAUNCHER = """#!/usr/bin/env bash
+image="$(cd "$(dirname "$0")/.." && pwd)"
+echo "$@" >> "$image/../args"
+if [ -f "$image/lib/app/serenity.aot" ]; then sleep 0.05; else sleep 0.3; fi
+echo SERENITY_SMOKE_READY
+if [[ " $* " == *" --startup-probe "* ]]; then
+  sleep 0.1
+  echo {probe_result}
+fi
+"""
+
+
+def _probe_image(root: Path, probe_result: str = "SERENITY_PROBE_INTERACTIVE") -> Path:
+    image = root / "Serenity"
+    (image / "bin").mkdir(parents=True)
+    (image / "lib" / "app").mkdir(parents=True)
+    launcher = image / "bin" / "Serenity"
+    launcher.write_text(_PROBE_LAUNCHER.format(probe_result=probe_result))
+    launcher.chmod(0o755)
+    (image / "lib" / "app" / "serenity.aot").write_text("cache")
+    return image
+
+
+class InteractiveRowsTest(unittest.TestCase):
+    def test_interactive_mode_writes_first_frame_and_interactive_rows_for_both_modes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            result = _run(str(_probe_image(root) / "bin" / "Serenity"), "2", "--interactive", "--csv", str(csv))
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rows = check_perf_regression.parse_csv(str(csv))
+            self.assertEqual(
+                sorted(rows),
+                [
+                    "startup.cold.first_frame",
+                    "startup.cold.interactive",
+                    "startup.warm.first_frame",
+                    "startup.warm.interactive",
+                ],
+            )
+            for mode in ("cold", "warm"):
+                self.assertGreater(rows[f"startup.{mode}.interactive"].p50_ms, rows[f"startup.{mode}.first_frame"].p50_ms)
+
+    def test_interactive_mode_launches_with_the_probe_flag_and_the_default_mode_does_not(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            image = _probe_image(root)
+            _run(str(image / "bin" / "Serenity"), "1", "--discard", "0", "--csv", str(root / "a.csv"))
+            plain = (root / "args").read_text()
+            (root / "args").unlink()
+            _run(str(image / "bin" / "Serenity"), "1", "--discard", "0", "--interactive", "--csv", str(root / "b.csv"))
+            probing = (root / "args").read_text()
+            self.assertNotIn("--startup-probe", plain)
+            self.assertIn("--smoke-test", plain)
+            self.assertIn("--startup-probe", probing)
+            self.assertIn("--safe-mode", probing)
+
+    def test_default_mode_writes_no_interactive_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            _run(str(_probe_image(root) / "bin" / "Serenity"), "1", "--csv", str(csv))
+            self.assertNotIn("interactive", csv.read_text())
+
+    def test_fails_without_writing_rows_when_the_key_is_never_painted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            image = _probe_image(root, probe_result="SERENITY_PROBE_TIMED_OUT")
+            result = _run(str(image / "bin" / "Serenity"), "1", "--discard", "0", "--interactive", "--csv", str(csv))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(csv.exists())
+            self.assertIn("interactive", result.stderr)
+
+    def test_records_the_discarded_interactive_times_as_context_lines(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            csv = root / "startup.csv"
+            _run(str(_probe_image(root) / "bin" / "Serenity"), "2", "--interactive", "--discard", "1", "--csv", str(csv))
+            text = csv.read_text()
+            self.assertIn("context,discarded_warm_interactive_ms,", text)
+            self.assertIn("context,discarded_cold_interactive_ms,", text)
+
+
 class StartupRowsTest(unittest.TestCase):
     def test_writes_a_cold_and_a_warm_row_the_perf_scripts_can_parse(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

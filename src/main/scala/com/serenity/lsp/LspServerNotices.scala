@@ -65,6 +65,10 @@ final private[lsp] class LspServerNotices private (
   def answer(id: NoticePromptId, choice: Option[Int]): IO[Unit] =
     questions.get.flatMap(_.get(id).traverse_(_.complete(choice).void))
 
+  /** Says what one of the user's own LSP commands did. */
+  def told(text: String): IO[Unit] =
+    notices.show(Notice(NoticeLevel.Info, text))
+
   def stopped(server: String): IO[Unit] =
     notices.show(status(server, s"The $server language server stopped. Restarting it."))
 

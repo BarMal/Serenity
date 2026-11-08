@@ -23,8 +23,8 @@ The app images carry their own Java runtime.
 Install JDK 25 and [sbt](https://www.scala-sbt.org/), then from a checkout:
 
 ```bash
-sbt run                    # start the editor
-sbt "run notes.md"         # open a file
+sbt app/run                # start the editor
+sbt "app/run notes.md"     # open a file
 sbt assembly               # build target/scala-*/Serenity.jar
 ```
 
@@ -52,6 +52,9 @@ Serenity keeps everything under `.serenity` in your home folder on every OS (`~/
 | `~/.serenity/session-index.json`, `~/.serenity/sessions/` | The saved session and your named sessions. |
 | `~/.serenity/serenity.log` | The application log. It rolls at 5 MB and keeps 14 days, 50 MB at most. |
 | `~/.serenity/logs/` | Language-server logs. |
+
+The log and the console record user-relevant events at INFO. To see every command and dialog change as well, start
+Serenity with the environment variable `SERENITY_LOG_LEVEL=DEBUG`; `WARN` keeps only problems.
 
 Serenity's own code makes no network connections, and has no telemetry or update check. Your files, settings,
 sessions and logs stay on your machine. Language servers are separate programs that Serenity starts when you work in a

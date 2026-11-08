@@ -28,8 +28,6 @@ class MeasuredLineRunsAllocationSpec extends AnyFlatSpec with Matchers:
 
   "MeasuredLineRuns.of" should "not allocate attribute objects for every grapheme of a line" in {
     runsOf().map(_.text).mkString shouldBe text
-    SettledAllocation.perCall(() => runsOf(), () => runsOf()) match
-      case Some((bytes, _)) =>
-        withClue(s"$bytes bytes for ${spans.length} graphemes: ")(bytes.toDouble / spans.length should be < 40.0)
-      case None => info("per-thread allocation counter unsupported -- skipping")
+    val (bytes, _) = SettledAllocation.perCallRequired(() => runsOf(), () => runsOf())
+    withClue(s"$bytes bytes for ${spans.length} graphemes: ")(bytes.toDouble / spans.length should be < 40.0)
   }

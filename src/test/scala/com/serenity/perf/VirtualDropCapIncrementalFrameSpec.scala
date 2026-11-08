@@ -15,6 +15,7 @@ import com.serenity.keystroke.events.{
 }
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.models.AppState
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningOverride, OpeningRules, OpeningSettings}
 import com.serenity.{FrameBackend, Java2DFrames, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -263,12 +264,7 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
       baseConfig.withOpeningsConfig(on.copy(enabled = false, letterMode = LetterMode.Hybrid, smallCapsFirstLine = true))
     ).foreach { config =>
       val frame = coldFrame(config, document)
-      val differs = for
-        x <- 0 until before.getWidth
-        y <- 0 until before.getHeight
-        if before.getRGB(x, y) != frame.getRGB(x, y)
-      yield (x, y)
-      differs shouldBe empty
+      FrameDiff.differing(before, frame) shouldBe empty
     }
   }
 
@@ -277,11 +273,7 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
     val before   = coldFrame(openingsOff, document)
     val after    = coldFrame(openingsOn, document)
 
-    (for
-      x <- 0 until before.getWidth
-      y <- 0 until before.getHeight
-      if before.getRGB(x, y) != after.getRGB(x, y)
-    yield (x, y)) should not be empty
+    FrameDiff.differing(before, after) should not be empty
   }
 
   "A cold frame with a raised or hybrid letter" should "differ from one without openings and from a drop cap's" in {
@@ -290,12 +282,7 @@ class VirtualDropCapIncrementalFrameSpec extends AnyFlatSpec with Matchers with 
       List(LetterMode.Raised, LetterMode.Hybrid).map(mode =>
         coldFrame(baseConfig.withOpeningsConfig(on.copy(letterMode = mode)), document)
       )
-    def differs(a: BufferedImage, b: BufferedImage): Boolean =
-      (for
-        x <- 0 until a.getWidth
-        y <- 0 until a.getHeight
-        if a.getRGB(x, y) != b.getRGB(x, y)
-      yield (x, y)).nonEmpty
+    def differs(a: BufferedImage, b: BufferedImage): Boolean = FrameDiff.differing(a, b).nonEmpty
 
     frames.combinations(2).foreach(pair => differs(pair.head, pair(1)) shouldBe true)
   }

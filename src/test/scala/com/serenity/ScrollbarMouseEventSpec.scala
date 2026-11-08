@@ -1,42 +1,21 @@
 package com.serenity
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
-import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{AuthoritativeUiScene, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** The scrollbar driven by real mouse events through the whole event pipeline: a thumb taken hold of and dragged, a
   * track clicked, and neither of them reaching the text beside the bar.
   */
-class ScrollbarMouseEventSpec extends AnyFlatSpec with Matchers:
-
-  given Balance = Balance.default
+class ScrollbarMouseEventSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val viewportSize = ViewportSize(100, 30)
-
-  private def makeStateManager() =
-    given LoggerFactory[IO] = Slf4jFactory.create[IO]
-    val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    StateManager
-      .apply(
-        logger,
-        dictionaryCache = SharedDictionary.default,
-        initialConfig = com.serenity.config.AppConfig.conventional
-      )(using
-        com.serenity.rope.Balance.default,
-        LoggerFactory[IO]
-      )
-      .unsafeRunSync()
 
   final private case class Rig(stateManager: StateManager, bufferId: BufferId):
     def state: AppState          = stateManager.getCurrentState.unsafeRunSync()
@@ -67,7 +46,7 @@ class ScrollbarMouseEventSpec extends AnyFlatSpec with Matchers:
       MouseClick(press.col, press.row, press.pixelX, press.pixelY)
 
   private def openLongDocument(): Rig =
-    val stateManager = makeStateManager()
+    val stateManager = createStateManager("ScrollbarMouseEventSpec")
     val bufferId =
       stateManager.createBuffer((0 until 400).map(line => s"line $line").mkString("\n"), None).unsafeRunSync()
     stateManager.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()

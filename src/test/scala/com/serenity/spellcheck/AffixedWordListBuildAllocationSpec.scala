@@ -1,6 +1,7 @@
 package com.serenity.spellcheck
 
 import com.serenity.perf.SettledAllocation
+import com.serenity.testkit.HeapMeasurementTest
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,10 +23,8 @@ class AffixedWordListBuildAllocationSpec extends AnyFlatSpec with Matchers:
     (stems("word0").head: AnyRef) should be theSameInstanceAs stems("word7").head
   }
 
-  it should "allocate little beyond the stem table it returns" in {
-    SettledAllocation.perCall(() => build(), () => build()) match
-      case Some((bytes, _)) =>
-        val perEntry = bytes.toDouble / entries.length
-        withClue(s"$perEntry bytes per entry: ")(perEntry should be < 450.0)
-      case None => info("per-thread allocation counter unsupported -- skipping")
+  it should "allocate little beyond the stem table it returns" taggedAs HeapMeasurementTest in {
+    val (bytes, _) = SettledAllocation.perCallRequired(() => build(), () => build())
+    val perEntry   = bytes.toDouble / entries.length
+    withClue(s"$perEntry bytes per entry: ")(perEntry should be < 450.0)
   }

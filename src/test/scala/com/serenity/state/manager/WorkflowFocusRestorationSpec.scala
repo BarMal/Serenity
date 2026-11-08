@@ -2,30 +2,23 @@ package com.serenity.state.manager
 
 import java.nio.file.{Files, Path, Paths}
 
-import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Enter, Event, ModalDismiss, ModalSubmit, PeekInputEvent}
-import com.serenity.rope.Balance
 import com.serenity.session.{SessionId, SessionMetadata}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalEventReducer, ModalStateReducer, PeekStateReducer}
-import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.{PanelPosition, PeekContent}
-import com.serenity.{DockedPanelFixtures, TestTemp}
+import com.serenity.{DockedPanelFixtures, StateManagerTestSupport, TestTemp}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import org.typelevel.log4cats.slf4j.Slf4jFactory
-import org.typelevel.log4cats.{LoggerFactory, LoggerName}
 
 /** Where focus goes when a workflow opened over a focused pinned panel ends: a workflow whose result is a buffer on
   * show hands focus to the editor and forgets the panel; every other workflow, submitted or cancelled, returns to the
   * panel.
   */
-class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
-
-  given Balance           = Balance.default
-  given LoggerFactory[IO] = Slf4jFactory.create[IO]
+class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers with StateManagerTestSupport:
 
   private val outlineId  = SurfaceId("outline")
   private val panelFocus = Focus.Surface(outlineId)
@@ -35,13 +28,7 @@ class WorkflowFocusRestorationSpec extends AnyFlatSpec with Matchers:
     docked.copy(persisted = docked.persisted.copy(focus = panelFocus))
 
   private def createStateManager(): StateManager =
-    StateManager
-      .apply(
-        LoggerFactory[IO].getLogger(using LoggerName("WorkflowFocusRestorationSpec")),
-        sessionRootOverride = Some(TestTemp.directory("workflow-focus-restoration-sessions")),
-        dictionaryCache = SharedDictionary.default
-      )
-      .unsafeRunSync()
+    createStateManager("WorkflowFocusRestorationSpec", initialConfig = AppConfig.default)
 
   /** A state manager whose pinned panel is focused, with `open` applied over it. */
   private def openedOverPanel(open: AppState => AppState): StateManager =

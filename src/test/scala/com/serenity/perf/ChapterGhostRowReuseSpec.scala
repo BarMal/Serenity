@@ -13,6 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.testkit.FrameDiff
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -108,11 +109,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
     val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
-    for
-      x <- 0 until drawn.getWidth
-      y <- 0 until drawn.getHeight
-      if (drawn.getRGB(x, y) & 0xffffff) != (cold.getRGB(x, y) & 0xffffff)
-    yield (x, y)
+    FrameDiff.differing(drawn, cold)
 
   private def summary(differences: Seq[(Int, Int)]): String =
     val xs = differences.map(_._1).distinct.sorted

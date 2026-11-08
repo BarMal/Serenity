@@ -63,6 +63,9 @@ enum RichTextIntent:
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ConvertToRichText(andThen: Option[RichTextIntent])
 
+  /** Removes the direct formatting headings carry as a whole, so the heading styles show (#2628). */
+  case ReformatHeadings
+
 enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
@@ -97,6 +100,10 @@ enum LspIntent:
   // time. Opens the rename-symbol `TextPrompt` for the new name; the rename itself is requested on that modal's
   // submit, not here (#1467).
   case OpenRenameSymbolPrompt
+
+  /** Trust, or revoke trust for, the folder of the focused buffer's language server (#2526). */
+  case TrustFolder
+  case RevokeFolderTrust
 
 enum ThemeIntent:
   case ToggleTheme
@@ -308,6 +315,10 @@ enum InterfaceChromeIntent:
   case SetCommandRunnerShowKeyHints(enabled: Boolean)
   case SetUiElementGap(gap: Double)
   case SetUiOutlineThicknessPx(thickness: Int)
+  case SetUiCornerRadiusPx(radius: Int)
+  case SetTabMaxWidth(width: Int)
+  case SetDockedCornerStyle(style: DockedCornerStyle)
+  case SetPaneHeaderCorners(corners: PaneHeaderCorners)
   case SetInterfaceDensity(density: InterfaceDensity)
   case SetWindowChromeMode(mode: WindowChromeMode)
   case SetMenuBarMode(mode: MenuBarMode)
@@ -348,6 +359,8 @@ enum SpellingIntent:
 /** Settings with no more specific home: render tuning and the settings surface's own open/save commands. */
 enum GeneralSettingsIntent:
   case OpenSettings
+  // Picked from a settings hit in the command picker: the settings view, searched for `query`, drilled to the hit.
+  case OpenSettingsAt(groupId: String, itemId: Option[String], query: String)
   case SaveConfig
   // Moves config.conf aside to a timestamped backup, then restores every setting to its default.
   case ResetSettings

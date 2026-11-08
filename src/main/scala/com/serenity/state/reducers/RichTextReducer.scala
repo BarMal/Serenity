@@ -27,6 +27,8 @@ object RichTextReducer:
     activeEditorBuffer(state).fold(RichTextRoute.Apply) { buffer =>
       EditingContext.bufferKind(buffer) match
         case BufferKind.Code(_) => RichTextRoute.Refuse("Formatting isn't available in code files.")
+        case BufferKind.PlainText if intent == RichTextIntent.ReformatHeadings =>
+          RichTextRoute.Refuse("Plain-text files have no headings.")
         case BufferKind.PlainText =>
           (intent, buffer.document.filePath) match
             case (RichTextIntent.ConvertToRichText(_), _) | (_, None) => RichTextRoute.Apply
@@ -105,6 +107,41 @@ object RichTextReducer:
         updateParagraphs(state)((document, range) => document.setParagraphRole(range, role))
       case RichTextIntent.SetRichTextParagraphAlignment(alignment) =>
         updateParagraphs(state)((document, range) => document.setParagraphAlignment(range, alignment))
+      case RichTextIntent.ReformatHeadings =>
+        reformatHeadings(state)
+
+  /** The headings of the selection, or of the whole document when nothing is selected. */
+  private def reformatHeadings(state: AppState): AppState =
+    activeEditorBuffer(state).fold(state) { buffer =>
+      val result = reformattedHeadings(buffer)
+      if result.report.isEmpty then state
+      else
+        withEditedBuffer(
+          state,
+          buffer,
+          buffer.richText.withSyncedDocument(Some(result.document), buffer.document.contentVersion)
+        )
+    }
+
+  /** What reformatting the active buffer's headings does to them, so a caller can say so before it applies. */
+  def headingReformatReport(state: AppState): HeadingReformat.Report =
+    activeEditorBuffer(state).fold(HeadingReformat.Report.none)(reformattedHeadings(_).report)
+
+  private def reformattedHeadings(buffer: Buffer): HeadingReformat.Result =
+    val start = HeadingReformat.Result(currentDocument(buffer), HeadingReformat.Report.none)
+    selectionRanges(buffer) match
+      case Nil => start.document.reformatHeadings()
+      case ranges =>
+        ranges.foldLeft(start) { (result, range) =>
+          val next = result.document.reformatHeadings(Some(range))
+          HeadingReformat.Result(
+            next.document,
+            HeadingReformat.Report(
+              result.report.headings + next.report.headings,
+              result.report.attributes + next.report.attributes
+            )
+          )
+        }
 
   private def convert(state: AppState): AppState =
     activeEditorBuffer(state).fold(state) { buffer =>
