@@ -35,6 +35,13 @@ enum FrameCounter(val label: String):
   /** Bytes the terminal frontend wrote, UTF-8, escape sequences included. */
   case TuiBytes extends FrameCounter("tui-bytes")
 
+  /** Times a draw near rows the frame keeps worked out which pixels it may touch, so it is clipped off the kept ones.
+    */
+  case ClipSweeps extends FrameCounter("clip-sweeps")
+
+  /** Clipped draws those sweeps led to: a draw is made once for each rectangle left. */
+  case ClipPieces extends FrameCounter("clip-pieces")
+
 /** The counters of one finished frame. */
 final case class FrameCounts(values: Map[FrameCounter, Long]):
   def apply(counter: FrameCounter): Long = values.getOrElse(counter, 0L)

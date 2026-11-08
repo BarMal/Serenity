@@ -18,6 +18,8 @@ final class SurfaceActivity:
   private val composites  = new AtomicInteger(0)
   private val flushBytes  = new AtomicLong(0)
   private val layerPixels = new AtomicLong(0)
+  private val clipSweeps  = new AtomicInteger(0)
+  private val clipPieces  = new AtomicInteger(0)
 
   def runDrawn(): Unit =
     val _ = runs.incrementAndGet()
@@ -36,6 +38,11 @@ final class SurfaceActivity:
     shaped(traffic.shapings - shapedBefore)
     promoted(traffic.promotions - promotedBefore)
     answer
+
+  /** A draw near kept pixels worked out the `pieces` rectangles it may paint in. */
+  def clipSwept(pieces: Int): Unit =
+    val _ = clipSweeps.incrementAndGet()
+    val _ = clipPieces.addAndGet(pieces)
 
   def layerComposited(): Unit =
     val _ = composites.incrementAndGet()
@@ -57,6 +64,8 @@ final class SurfaceActivity:
     counters.add(FrameCounter.LayerComposites, composites.getAndSet(0).toLong)
     counters.add(FrameCounter.LayerBufferPx, layerPixels.getAndSet(0))
     counters.add(FrameCounter.TuiBytes, flushBytes.getAndSet(0))
+    counters.add(FrameCounter.ClipSweeps, clipSweeps.getAndSet(0).toLong)
+    counters.add(FrameCounter.ClipPieces, clipPieces.getAndSet(0).toLong)
 
 object SurfaceActivity:
 

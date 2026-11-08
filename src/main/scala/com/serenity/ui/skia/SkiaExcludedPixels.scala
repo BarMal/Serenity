@@ -3,7 +3,7 @@ package com.serenity.ui.skia
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.{PanelOutlineDrawing, PreservedPixels}
+import com.serenity.ui.renderer.{PanelOutlineDrawing, PreservedPixels, SurfaceActivity}
 import org.jetbrains.skia.{Canvas, Rect}
 
 /** Keeps drawing off the pixels a frame holds correct, so a redrawn row's antialiased ink cannot land on a kept row's
@@ -14,6 +14,8 @@ import org.jetbrains.skia.{Canvas, Rect}
 private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
   protected def canvas: Canvas
+
+  def activity: SurfaceActivity
 
   /** Where the canvas has been moved to from the pixels the kept rects are in. */
   protected def translationPx: (Double, Double)
@@ -48,7 +50,9 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
       else
         val reach =
           PixelRect(boxLeft - margin, boxTop - margin, boxRight - boxLeft + 2 * margin, boxBottom - boxTop + 2 * margin)
-        PixelRect.uncoveredWithin(reach, near).foreach { piece =>
+        val pieces = PixelRect.uncoveredWithin(reach, near)
+        activity.clipSwept(pieces.size)
+        pieces.foreach { piece =>
           val saved = canvas.save()
           try
             val _ = canvas.clipRect(
