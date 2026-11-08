@@ -111,4 +111,31 @@ else
   echo "No $stall_log."
 fi
 
+echo
+
+mem_log="$dir/os-mem.log"
+if [ -s "$mem_log" ]; then
+  # Records are: epoch, page bytes, free pages, compressor pages, swapouts, swap used MB, free memory % (see
+  # sample-os-memory.sh). Only macOS runners write this file.
+  awk -F '\t' '
+    NF >= 7 {
+      samples++
+      if (samples == 1) { first = $1; firstSwapouts = $5; lowestFree = $7; mostSwap = $6; mostCompressed = $4 }
+      last = $1; lastSwapouts = $5; page = $2
+      if ($7 + 0 < lowestFree + 0) lowestFree = $7
+      if ($6 + 0 > mostSwap + 0) mostSwap = $6
+      if ($4 + 0 > mostCompressed + 0) mostCompressed = $4
+    }
+    END {
+      printf "OS memory: %d samples over %d s.\n", samples, last - first
+      printf "Lowest free memory: %s%%.\n", lowestFree
+      printf "Most swap in use: %s MB.\n", mostSwap
+      printf "Swapouts: %s to %s pages (%d during the run).\n", firstSwapouts, lastSwapouts, lastSwapouts - firstSwapouts
+      printf "Most memory held by the compressor: %s pages (%d MB at %s bytes a page).\n", mostCompressed, mostCompressed * page / 1048576, page
+    }
+  ' "$mem_log"
+else
+  echo "No OS memory samples."
+fi
+
 exit 0
