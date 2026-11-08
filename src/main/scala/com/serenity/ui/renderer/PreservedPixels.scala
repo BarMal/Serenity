@@ -7,31 +7,36 @@ import com.serenity.ui.layout.{DirtyLineDiff, PixelRect}
   * past its band; where the row beside it is kept or copied, that ink would land on pixels that already carry it, and a
   * partly covered edge composited twice is not what a frame drawn from scratch shows.
   */
-final class PreservedPixels private (context: RenderContext, kept: List[PixelRect], copiesRows: Boolean):
+final class PreservedPixels private (context: RenderContext, kept: List[PixelRect]):
 
   private def clipping: Option[PanelOutlineDrawing] =
-    context.surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => kept.nonEmpty && context.surface.addressesPixels)
+    PreservedPixels.clipper(context.surface).filter(_ => kept.nonEmpty)
 
   def apply(paint: => Unit): Unit = clipping.fold(paint)(_.withoutPixels(kept)(paint))
 
-  /** The rows to paint for `dirtyRows`. In a frame that copies rows, the kept rows beside the redrawn ones are painted
-    * too, under the clip: a copied row carries its neighbour's ink, but the band a redrawn row cleared has lost the ink
-    * its kept neighbour put there. A frame that copies nothing keeps its rows where they were, and paints `dirtyRows`;
-    * so does a surface that cannot clip, as those rows would be painted over pixels that are kept.
+  /** The rows to paint for `dirtyRows`. Where the surface can clip, the kept rows beside the redrawn ones are painted
+    * too, under the clip, whether or not the frame copies rows: a redrawn band is cleared, so it has lost the ink its
+    * kept neighbour put there (a glyph's tail a pixel past its row), and the clip keeps that repaint off the pixels
+    * that are kept. A surface that cannot clip paints `dirtyRows`, as those rows would be painted over pixels that are
+    * kept.
     */
   def rowsToPaint(dirtyRows: Map[PaneId, Set[Int]]): Map[PaneId, Set[Int]] =
-    if clipping.isEmpty || !copiesRows then dirtyRows
+    if clipping.isEmpty then dirtyRows
     else dirtyRows.view.mapValues(DirtyLineDiff.dilate(_, Int.MaxValue)).toMap
 
 object PreservedPixels:
 
+  private def clipper(surface: RenderSurface): Option[PanelOutlineDrawing] =
+    surface.panelOutlines.filter(_.keepsOffPixels).filter(_ => surface.addressesPixels)
+
+  /** Whether `surface` can keep painting off the pixels a frame holds, so that the planner need not clear the rows
+    * beside a redrawn one and repaint them whole.
+    */
+  def clipsKeptPixels(surface: RenderSurface): Boolean = clipper(surface).isDefined
+
   /** A frame redrawing only some rows keeps the others; chrome it keeps is left out, as ink beside it is a row's. */
   def of(context: RenderContext, framePlan: Option[FramePlan]): PreservedPixels =
-    new PreservedPixels(
-      context,
-      joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptBands)),
-      framePlan.exists(_.blits.nonEmpty)
-    )
+    new PreservedPixels(context, joinedRows(framePlan.fold(List.empty[PixelRect])(_.keptBands)))
 
   /** Kept rows are one rect each and mostly adjacent, so a clip of them all is the same few rects, not one per row. */
   private[renderer] def joinedRows(rects: List[PixelRect]): List[PixelRect] =

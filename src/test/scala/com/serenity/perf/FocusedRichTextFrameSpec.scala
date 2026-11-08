@@ -16,7 +16,8 @@ import org.scalatest.matchers.should.Matchers
 class FocusedRichTextFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
 
   // macOS only: on Skia the dimmed rows of steps 4 to 7 differ from the cold frame by 6 to 20 pixels on one or two rows
-  // (CI on #2402); Linux and Windows pass. It stays on Java2D there until the rich-text gap is fixed (#2380).
+  // (CI on #2402); Linux and Windows pass. The pixels lie outside the repaint rects, where a window also copies the paint
+  // the surface recorded, so it stays on Java2D there until the specs present that too (#2674).
   override protected def referenceFrames: FrameBackend =
     if System.getProperty("os.name", "").toLowerCase.contains("mac") then Java2DFrames else SkiaFrames
 
