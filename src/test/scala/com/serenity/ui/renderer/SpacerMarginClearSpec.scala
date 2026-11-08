@@ -41,7 +41,7 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
 
     val columnLeftPx = math.round(cellMetrics.toPixelX(layout.contentRect.x) * scale).toInt
     val topPx        = math.round(cellMetrics.toPixelY(layout.contentRect.y) * scale).toInt
-    val editedRowY   = topPx + 40
+    val editedRowY   = topPx + 70
     val keptRowY     = topPx + 700
     val image        = session.pendingImage
     image.stamp(columnLeftPx - 1, editedRowY, sentinel)
