@@ -53,6 +53,11 @@ sealed abstract class VisualRowCounts:
   /** Measures each line nobody has measured yet, one at a time, and stops before the next one once `stop` says so. */
   def measureRest(stop: () => Boolean): Unit
 
+  /** What these counts refine as they measure: counts with equal identities are over one index of one text, so
+    * measuring for one measures for them all. `None` when nothing is shared.
+    */
+  private[serenity] def sharedIndex: Option[AnyRef]
+
 /** What a line's visual row count depends on besides its text. The buffer's rich-text styling and the way its inline
   * Markdown is restyled are the other inputs: they change without the text changing, so they stamp the index instead
   * (see [[VisualLineIndexStore]]) -- a new document or a caret on another line would otherwise leave a new key behind
@@ -199,6 +204,8 @@ object VisualRowCounts:
 
     def measureRest(stop: () => Boolean): Unit = ()
 
+    private[serenity] def sharedIndex: Option[AnyRef] = None
+
     @tailrec
     private def below(line: Int, consumedRows: Int, targetRow: Int): Option[(Int, Int)] =
       if line >= lineCount then None
@@ -295,6 +302,8 @@ object VisualRowCounts:
 
     def allMeasured: Boolean = store.indexFor(key, content, stamp, revision).firstUnmeasuredFrom(0).isEmpty
 
+    private[serenity] def sharedIndex: Option[AnyRef] = Some(IndexIdentity(store, key, content, stamp))
+
     @tailrec
     def measureRest(stop: () => Boolean): Unit =
       if !stop() then
@@ -334,6 +343,27 @@ object VisualRowCounts:
         case Some(unmeasured) if index.rowsBetween(line, unmeasured) <= rows =>
           measuredBelow(index.measured(unmeasured, measure(unmeasured)), line, rows)
         case _ => index
+
+/** The index of one text under one key in one store, by the identity of the store and the text. */
+final private class IndexIdentity(
+    private val store: AnyRef,
+    private val key: Any,
+    private val content: AnyRef,
+    private val stamp: AnyRef
+):
+
+  override def equals(other: Any): Boolean =
+    other match
+      case that: IndexIdentity =>
+        (store eq that.store) && (content eq that.content) && key == that.key && stamp == that.stamp
+      case _ => false
+
+  override def hashCode(): Int =
+    31 * (31 * System.identityHashCode(store) + System.identityHashCode(content)) + key.hashCode
+
+private object IndexIdentity:
+  def apply(store: AnyRef, key: Any, content: AnyRef, stamp: AnyRef): IndexIdentity =
+    new IndexIdentity(store, key, content, stamp)
 
 /** What a document's text was at `version`, and how to reach it from earlier ones: lets a cached per-line measurement
   * follow an edit from the change that made it instead of comparing the old and new text.
