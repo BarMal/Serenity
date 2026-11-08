@@ -183,8 +183,8 @@ object AppRuntime:
     ).tupled.use { (resizeCallbackDispatcher, timerSupervisor, scrollCountNotice) =>
       for
         _ <- logger.info("Starting Serenity text editor")
-        themeManager      = com.serenity.ui.theme.config.AppThemeManager.create
-        dictionaryCache   = DictionaryCache()
+        themeManager    = com.serenity.ui.theme.config.AppThemeManager.create
+        dictionaryCache = DictionaryCache()
         scrollCounting =
           ScrollCounting.forFrontend(frontend.capabilities, ScrollCountExecutor.shared, scrollCountNotice)
         stateManager <- makeStateManager.getOrElse((logger, counting) =>

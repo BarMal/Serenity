@@ -60,6 +60,12 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
     )
     LayoutEngine.syncViewportDimensions(state, viewportSize)
 
+  @tailrec private def awaitSettled(thread: Thread): Unit =
+    val settled = Set(Thread.State.WAITING, Thread.State.TIMED_WAITING, Thread.State.BLOCKED, Thread.State.TERMINATED)
+    if !settled.contains(thread.getState) then
+      Thread.onSpinWait()
+      awaitSettled(thread)
+
   "The notice to the render loop" should "drop a pane counted before anyone listens" in {
     val notice = new ScrollCountNotice
     val heard  = mutable.ListBuffer.empty[PaneId]
@@ -104,11 +110,10 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "make close wait for a delivery that is already handing off" in {
-    val notice   = new ScrollCountNotice
-    val inside   = new CountDownLatch(1)
-    val letGo    = new CountDownLatch(1)
-    val order    = new ConcurrentLinkedQueue[String]
-    val settled  = Set(Thread.State.WAITING, Thread.State.TIMED_WAITING, Thread.State.BLOCKED, Thread.State.TERMINATED)
+    val notice = new ScrollCountNotice
+    val inside = new CountDownLatch(1)
+    val letGo  = new CountDownLatch(1)
+    val order  = new ConcurrentLinkedQueue[String]
     notice.listen { _ =>
       inside.countDown()
       letGo.await()
@@ -123,7 +128,7 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
     delivering.start()
     inside.await()
     closing.start()
-    while !settled.contains(closing.getState) do Thread.onSpinWait()
+    awaitSettled(closing)
     letGo.countDown()
     delivering.join()
     closing.join()
@@ -136,9 +141,8 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
       Dispatcher
         .parallel[IO]
         .use(dispatcher =>
-          ScrollCountNotice.scoped.use(notice =>
-            AppRuntime.damageOnScrollCounted(notice, _ => IO.unit, dispatcher).as(notice)
-          )
+          ScrollCountNotice.scoped
+            .use(notice => AppRuntime.damageOnScrollCounted(notice, _ => IO.unit, dispatcher).as(notice))
         )
         .unsafeRunSync()
 
