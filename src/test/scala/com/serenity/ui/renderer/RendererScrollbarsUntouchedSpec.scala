@@ -63,7 +63,8 @@ class RendererScrollbarsUntouchedSpec extends AnyFlatSpec with Matchers:
       val before = bean.getThreadAllocatedBytes(id)
       (1 to 200).foreach(_ => work)
       bean.getThreadAllocatedBytes(id) - before
-    val whole  = allocated(PixelRect.uncoveredWithin(thumb, plan.preserved))
     val banded = allocated(RendererScrollbars.untouchedRects(bands, Some(plan)))
-    banded should be < whole / 4
+    // 200 calls take 1.15 MB today. Reading the preserved rectangles once per band took 5.6 MB or more, and a quarter of
+    // a whole call's cost was 2.07 MB when this was last a ratio, so the budget is as strict as that was.
+    banded should be < 2000000L
   }

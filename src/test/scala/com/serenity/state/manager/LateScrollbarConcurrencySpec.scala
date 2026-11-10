@@ -3,6 +3,7 @@ package com.serenity.state.manager
 import java.util.concurrent.{Executors, Semaphore, TimeUnit}
 
 import scala.annotation.tailrec
+import scala.concurrent.duration.DurationInt
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
@@ -65,11 +66,48 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
     states.foreach(state => scene.forState(state, viewportSize))
 
     val last = states.last
-    @tailrec def barLands(waits: Int): Boolean =
-      scene.forState(last, viewportSize).paneScrolls.contains(paneId) ||
-        (waits > 0 && counts.tryAcquire(10, TimeUnit.SECONDS) && barLands(waits - 1))
-    barLands(waits = 12) shouldBe true
+    barLands(scene, last, counts, deadline = System.nanoTime + 120.seconds.toNanos) shouldBe true
     executor.shutdown()
     scene.forState(last, viewportSize).paneScrolls(paneId).extent shouldBe
       AuthoritativeUiScene().forState(last, viewportSize).paneScrolls(paneId).extent
   }
+
+  it should "wait for the last text's bar however many earlier texts were announced first" in {
+    val inner = Executors.newSingleThreadExecutor { runnable =>
+      val thread = new Thread(runnable, "late-scrollbar-spec")
+      thread.setDaemon(true)
+      thread
+    }
+    val executor = new HoldableExecutor(inner)
+    val counts   = new Semaphore(0)
+    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
+    val states   = (1 to 25).scanLeft(stateOf(text(0)))((before, round) => replaced(before, text(round)))
+
+    states.init.zipWithIndex.foreach { (state, announced) =>
+      scene.forState(state, viewportSize)
+      counts.tryAcquire(announced + 1, 10, TimeUnit.SECONDS) shouldBe true
+      counts.release(announced + 1)
+    }
+    val last = states.last
+    executor.hold()
+    scene.forState(last, viewportSize)
+    executor.stopHolding()
+    executor.releaseAfter(1.second)
+
+    barLands(scene, last, counts, deadline = System.nanoTime + 120.seconds.toNanos) shouldBe true
+    inner.shutdown()
+    scene.forState(last, viewportSize).paneScrolls(paneId).extent shouldBe
+      AuthoritativeUiScene().forState(last, viewportSize).paneScrolls(paneId).extent
+  }
+
+  /** A notice says some text's count ended, not that the last text's did, so a notice is only a reason to look again:
+    * the wait ends when the bar lands, when ten seconds pass with no notice, or at `deadline`.
+    */
+  @tailrec private def barLands(
+    scene: AuthoritativeUiScene,
+    last: AppState,
+    counts: Semaphore,
+    deadline: Long
+  ): Boolean =
+    scene.forState(last, viewportSize).paneScrolls.contains(paneId) ||
+      (System.nanoTime < deadline && counts.tryAcquire(10, TimeUnit.SECONDS) && barLands(scene, last, counts, deadline))
