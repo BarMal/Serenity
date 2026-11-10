@@ -108,9 +108,9 @@ object FlushSweep:
     * and the sweep measures the wait. A value the user already set stays.
     */
   def vsyncProperty(
-      enabled: Boolean,
-      env: Map[String, String],
-      properties: Map[String, String]
+    enabled: Boolean,
+    env: Map[String, String],
+    properties: Map[String, String]
   ): Option[(String, String)] =
     SkiaVsync.property(enabled, env, properties)
 
