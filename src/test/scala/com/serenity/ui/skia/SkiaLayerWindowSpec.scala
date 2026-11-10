@@ -192,6 +192,22 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     else if System.nanoTime() >= deadlineNanos then fail("the layer's frame never settled on a new picture")
     else settledScreen(window, before, Some(shot), deadlineNanos)
 
+  /** Captures the screen until one capture is within [[MostPixelsDiffering]] of `expected`, or time runs out, and
+    * returns the closest capture with its distance: the one asserted on is the one that was measured.
+    */
+  @tailrec
+  private def closestScreen(
+    window: SwingWindow,
+    expected: BufferedImage,
+    best: Option[(Int, BufferedImage)],
+    deadlineNanos: Long
+  ): (Int, BufferedImage) =
+    val shot     = onScreen(window)
+    val distance = differing(shot, expected)
+    val closest  = best.filter(_._1 <= distance).getOrElse((distance, shot))
+    if closest._1 <= MostPixelsDiffering || System.nanoTime() >= deadlineNanos then closest
+    else closestScreen(window, expected, Some(closest), deadlineNanos)
+
   it should "show, frame for frame, what a window drawing every frame from scratch shows, through typing, undo and scroll" in {
     val first  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
     val second = typedAt(first, proseLines, line = 4, text = "x")
@@ -222,14 +238,12 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       steps.zip(scratch).foreach {
         case ((name, state, damage), (_, expected)) =>
           present(window, state, damage, caches)
-          val agreed =
-            awaited(differing(onScreen(window), expected) <= MostPixelsDiffering, System.nanoTime() + 15_000_000_000L)
-          val shown = onScreen(window)
+          val (distance, shown) = closestScreen(window, expected, None, System.nanoTime() + 15_000_000_000L)
           keep(s"sequence-$name-incremental", shown)
           keep(s"sequence-$name-scratch", expected)
-          withClue(s"after $name, pixels differing from a frame drawn from scratch: ") {
-            (agreed, differing(shown, expected) <= MostPixelsDiffering) shouldBe (true, true)
-          }
+          withClue(s"after $name, pixels differing from a frame drawn from scratch: ")(
+            distance should be <= MostPixelsDiffering
+          )
       }
     }
   }
