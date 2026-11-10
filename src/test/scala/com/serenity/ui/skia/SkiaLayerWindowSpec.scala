@@ -145,7 +145,11 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
 
   /** The layer with image frames, as `auto` now makes it, whatever the property says. */
   private val imageLayer =
-    new LayerSurfaceFactory(canvas => SkiaLayerHost.create(canvas), new RasterThenJava2D(SkiaRasterSurfaceFactory), LayerFrames.Image)
+    new LayerSurfaceFactory(
+      canvas => SkiaLayerHost.create(canvas),
+      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      LayerFrames.Image
+    )
 
   private def present(window: SwingWindow, state: AppState, damage: Damage, caches: RenderCaches): Unit =
     RendererEntryPoints.render(
@@ -218,8 +222,9 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       steps.zip(scratch).foreach {
         case ((name, state, damage), (_, expected)) =>
           present(window, state, damage, caches)
-          val agreed = awaited(differing(onScreen(window), expected) <= MostPixelsDiffering, System.nanoTime() + 15_000_000_000L)
-          val shown  = onScreen(window)
+          val agreed =
+            awaited(differing(onScreen(window), expected) <= MostPixelsDiffering, System.nanoTime() + 15_000_000_000L)
+          val shown = onScreen(window)
           keep(s"sequence-$name-incremental", shown)
           keep(s"sequence-$name-scratch", expected)
           withClue(s"after $name, pixels differing from a frame drawn from scratch: ") {
