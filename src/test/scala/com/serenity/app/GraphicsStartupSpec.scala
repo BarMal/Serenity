@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RenderBackendSelection.Probe
-import com.serenity.config.{RenderBackendSetting, RenderStartupSettings, WaylandRender}
+import com.serenity.config.{RenderBackendSetting, RenderStartupSettings, SkiaFrames, WaylandRender}
 import com.serenity.ui.renderer.FrameSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
