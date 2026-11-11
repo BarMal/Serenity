@@ -2,9 +2,9 @@ package com.serenity.app
 
 import cats.effect.IO
 import com.serenity.app.RenderBackendSelection.{Decision, Inputs, Probe}
-import com.serenity.config.{RenderBackendPeek, RenderBackendSetting, RenderStartupSettings, WaylandRender}
+import com.serenity.config.{RenderBackendPeek, RenderBackendSetting, RenderStartupSettings, SkiaFrames, WaylandRender}
 import com.serenity.ui.renderer.FrameSurfaceFactory
-import com.serenity.ui.skia.SkiaProbe
+import com.serenity.ui.skia.{LayerFrames, SkiaProbe}
 
 /** Settles the AWT toolkit and the renderer together, before any java.awt class loads and before any window exists.
   *
@@ -25,7 +25,8 @@ object GraphicsStartup:
       toolkit: ToolkitSelection.Decision,
       backend: Decision,
       surfaces: FrameSurfaceFactory,
-      skiaVsync: Boolean = false
+      skiaVsync: Boolean = false,
+      skiaFrames: SkiaFrames = SkiaFrames.Image
   )
 
   def launchOf(options: LaunchOptions): Launch =
@@ -54,6 +55,7 @@ object GraphicsStartup:
       )
       .flatTap(resolved => ToolkitSelection(resolved.toolkit))
       .flatTap(resolved => applySkiaVsync(resolved))
+      .flatTap(resolved => applySkiaFrames(resolved))
 
   private def applySkiaVsync(resolved: Resolved): IO[Unit] =
     IO.whenA(resolved.backend.backend == RenderBackend.Skia)(
@@ -65,6 +67,19 @@ object GraphicsStartup:
       }
     )
 
+  private def applySkiaFrames(resolved: Resolved): IO[Unit] =
+    IO.whenA(resolved.backend.backend == RenderBackend.Skia)(
+      IO {
+        val explicit = Option(System.getProperty(LayerFrames.Property)).map(LayerFrames.Property -> _).toMap
+        SkiaFramesProperty
+          .property(resolved.skiaFrames, explicit)
+          .foreach((key, value) => System.setProperty(key, value))
+      }
+    )
+
+  /** What a launch that reads no config leaves the render settings at: vsync off, images. */
+  private val Unchosen: (Boolean, SkiaFrames) = (false, SkiaFrames.Image)
+
   def resolve(
     launch: Launch,
     environment: ToolkitSelection.Environment,
@@ -73,16 +88,16 @@ object GraphicsStartup:
     probe: IO[Probe]
   ): IO[Resolved] =
     val base = ToolkitSelection.choose(environment)
-    val settled: IO[(ToolkitSelection.Decision, Decision, Boolean)] =
-      if !launch.windowed then IO.pure((base, javaOnly("terminal or headless launch"), false))
-      else if launch.safeMode then IO.pure((base, javaOnly("safe mode"), false))
+    val settled: IO[(ToolkitSelection.Decision, Decision, (Boolean, SkiaFrames))] =
+      if !launch.windowed then IO.pure((base, javaOnly("terminal or headless launch"), Unchosen))
+      else if launch.safeMode then IO.pure((base, javaOnly("safe mode"), Unchosen))
       else
         configured.flatMap(settings =>
           settleWindowed(launch, environment, catalogue, base, settings, probe)
-            .map((toolkit, decision) => (toolkit, decision, settings.skiaVsync))
+            .map((toolkit, decision) => (toolkit, decision, (settings.skiaVsync, settings.skiaFrames)))
         )
-    settled.map((toolkit, decision, vsync) =>
-      Resolved(toolkit, decision, catalogue.factoryFor(decision.backend), vsync)
+    settled.map((toolkit, decision, (vsync, frames)) =>
+      Resolved(toolkit, decision, catalogue.factoryFor(decision.backend), vsync, frames)
     )
 
   private def settleWindowed(

@@ -370,6 +370,7 @@ object ConfigGenerators:
       backend          <- oneOfEnum(RenderBackendSetting.values)
       waylandRender    <- oneOfEnum(WaylandRender.values)
       skiaVsync        <- Gen.oneOf(true, false)
+      skiaFrames       <- oneOfEnum(SkiaFrames.values)
       insets           <- genTextAreaInsets
       lineNumberLayout <- genLineNumberLayout
       frameStateCacheCapacity <- Gen.choose(
@@ -417,6 +418,7 @@ object ConfigGenerators:
       renderBackend = backend,
       renderWayland = waylandRender,
       renderSkiaVsync = skiaVsync,
+      renderSkiaFrames = skiaFrames,
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
