@@ -36,17 +36,28 @@ object RendererCursorGlyphs:
           case Some((visualLine, caret)) if shouldRenderCursor =>
             if RendererPaneContent.visualLineVisible(rect, visualLine, context, snapshot)
             then
-              context.surface.pixels.fillPixelRect(
+              context.surface.pixels.fillCaret(
                 caret.xPx,
                 caret.yPx,
                 caret.widthPx,
                 caret.heightPx,
-                cursorColorFor(config, theme, context, isPrimaryCursor)
+                cursorColorFor(config, theme, context, isPrimaryCursor),
+                caretStyleAt(buffer, cursor.position, snapshot)
               )
               List(caret)
             else Nil
           case _ => Nil
     }
+
+  /** The formatting the caret at `position` shows: Markdown emphasis and strikethrough on a Markdown buffer, the rich
+    * text style at the caret on a prose buffer, and none anywhere else.
+    */
+  private def caretStyleAt(buffer: Buffer, position: CursorPosition, snapshot: TextLayoutSnapshot): CaretStyle =
+    val view = snapshot.markdownInline
+    if view.isActive then
+      val line = buffer.document.content.getLine(position.line).getOrElse("")
+      CaretStyle.forMarkdownRuns(view.runsOn(position.line, line), position.column)
+    else CaretStyle.forRichText(buffer, position)
 
   /** Where a caret at `position` is drawn within `rect`, and on which visual row: the pixel rect it fills, clipped to
     * the pane. Shared by painting and by anything that must hang off the painted caret (a floating surface's anchor),

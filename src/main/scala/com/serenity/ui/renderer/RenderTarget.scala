@@ -3,12 +3,26 @@ package com.serenity.ui.renderer
 import java.awt.image.BufferedImage
 import java.awt.{Color, Rectangle}
 
+import com.serenity.state.models.CaretStyle
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.LayerPresenter
 
-/** A caret to fill over a presented frame. */
-final case class CaretPaint(rect: Rectangle, color: Color)
+/** A caret to fill over a presented frame. `rect` is what a repaint of the caret has to cover; for a styled caret
+  * that is wider than the rect the layout placed, which stays in `body`. A plain caret is `rect` alone.
+  */
+final case class CaretPaint(
+    rect: Rectangle,
+    color: Color,
+    style: CaretStyle = CaretStyle.Plain,
+    body: Option[Rectangle] = None
+)
+
+object CaretPaint:
+
+  def styled(body: Rectangle, color: Color, style: CaretStyle): CaretPaint =
+    if style.isPlain then CaretPaint(body, color)
+    else CaretPaint(CaretGeometry.bounds(body, style), color, style, Some(body))
 
 /** What a target tells the renderer about the surface it paints: its size in logical pixels, the device scale between
   * those and the pixels it shows, and the identity that frames of one surface share their cached layers under.
