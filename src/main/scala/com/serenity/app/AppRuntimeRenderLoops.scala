@@ -99,9 +99,8 @@ private[serenity] object AppRuntimeRenderLoops:
             windowFocused,
             cursorIdleInterval,
             interval =>
-              (inputAt, IO.monotonic).mapN((at, now) =>
-                CaretBlinkSchedule.waitUntilNextTick(at, now, interval, lastTickOf(seen, at))
-              )
+              (inputAt, IO.monotonic)
+                .mapN((at, now) => CaretBlinkSchedule.waitUntilNextTick(at, now, interval, lastTickOf(seen, at)))
           )
           at     <- inputAt
           now    <- IO.monotonic
