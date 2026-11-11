@@ -20,7 +20,7 @@ import org.scalatest.matchers.should.Matchers
 class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
 
   private val body   = new Rectangle(20, 10, 2, 20)
-  private val edgePx   = 60
+  private val edgePx = 60
   private val black  = 0xff000000
   private val white  = 0xffffffff
   private val italic = CaretStyle(italic = true)
@@ -52,7 +52,8 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   backends.foreach { (name, paint) =>
     s"$name" should "paint a plain caret as its rect, byte for byte" in {
       val pixel = paint(List(CaretPaint(body, Color.WHITE)))
-      for x <- 0 until edgePx; y <- 0 until edgePx do pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
+      for x <- 0 until edgePx; y <- 0 until edgePx do
+        pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
     }
 
     it should "slant an italic caret to the right at the top, about its base" in {

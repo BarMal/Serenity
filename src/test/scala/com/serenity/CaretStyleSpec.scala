@@ -3,12 +3,15 @@ package com.serenity
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.markdown.MarkdownInlineSpans.{Run, Style}
 import com.serenity.richtext.{InlineMark, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
+import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The formatting the caret shows is the formatting the next typed character would get. */
 class CaretStyleSpec extends AnyFlatSpec with Matchers:
+
+  given Balance = Balance.default
 
   private def run(text: String, marks: InlineMark*): RichTextRun =
     RichTextRun(text, RichTextStyle(marks = marks.toSet))
