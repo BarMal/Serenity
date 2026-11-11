@@ -10,7 +10,7 @@ import scala.annotation.tailrec
 
 import com.serenity.config.WindowChromeMode
 import com.serenity.input.ImeRequestsHost
-import com.serenity.state.manager.RenderCaches
+import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.color.RenderColor
@@ -142,6 +142,111 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
           )
       }
     }
+
+  /** The layer with image frames, as `auto` now makes it, whatever the property says. */
+  private val imageLayer =
+    new LayerSurfaceFactory(
+      canvas => SkiaLayerHost.create(canvas),
+      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      LayerFrames.Image
+    )
+
+  private def present(window: SwingWindow, state: AppState, damage: Damage, caches: RenderCaches): Unit =
+    RendererEntryPoints.render(
+      state,
+      cursorVisible = false,
+      window,
+      FontSpec.fromAwt(codeFont),
+      FontSpec.fromAwt(textFont),
+      FontSpec.fromAwt(uiFont),
+      uiMetrics,
+      None,
+      repaintOnFlush = true,
+      damage,
+      caches,
+      imageLayer
+    )
+    settle()
+
+  private def pixelsOf(image: BufferedImage): Array[Int] =
+    image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth).map(_ & 0xffffff)
+
+  /** A stale glyph differs by hundreds of pixels; a few may differ where a repainted row meets a kept one and the two
+    * frames blend the one pixel they share differently (the artefact `SkiaRasterWindowSpec` forgives).
+    */
+  private val MostPixelsDiffering = 8
+
+  private def differing(a: BufferedImage, b: BufferedImage): Int =
+    pixelsOf(a).zip(pixelsOf(b)).count(_ != _)
+
+  /** The screen once it differs from `before` and has stopped changing: two captures in a row agree. */
+  @tailrec
+  private def settledScreen(
+    window: SwingWindow,
+    before: Option[BufferedImage],
+    previous: Option[BufferedImage],
+    deadlineNanos: Long
+  ): BufferedImage =
+    val shot = onScreen(window)
+    if before.forall(differing(_, shot) > 0) && previous.exists(differing(_, shot) == 0) then shot
+    else if System.nanoTime() >= deadlineNanos then fail("the layer's frame never settled on a new picture")
+    else settledScreen(window, before, Some(shot), deadlineNanos)
+
+  /** Captures the screen until one capture is within [[MostPixelsDiffering]] of `expected`, or time runs out, and
+    * returns the closest capture with its distance: the one asserted on is the one that was measured.
+    */
+  @tailrec
+  private def closestScreen(
+    window: SwingWindow,
+    expected: BufferedImage,
+    best: Option[(Int, BufferedImage)],
+    deadlineNanos: Long
+  ): (Int, BufferedImage) =
+    val shot     = onScreen(window)
+    val distance = differing(shot, expected)
+    val closest  = best.filter(_._1 <= distance).getOrElse((distance, shot))
+    if closest._1 <= MostPixelsDiffering || System.nanoTime() >= deadlineNanos then closest
+    else closestScreen(window, expected, Some(closest), deadlineNanos)
+
+  it should "show, frame for frame, what a window drawing every frame from scratch shows, through typing, undo and scroll" in {
+    val first  = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
+    val second = typedAt(first, proseLines, line = 4, text = "x")
+    val third  = typedAt(second, proseLines, line = 6, text = "yz")
+    val moved  = scrolledTo(third, 12)
+    val steps = List(
+      ("open", first, Damage.Everything),
+      ("type", second, DamageProducer.forTransition(first, second)),
+      ("type-2", third, DamageProducer.forTransition(second, third)),
+      ("undo", second, DamageProducer.forTransition(third, second)),
+      ("scroll", moved, DamageProducer.forTransition(second, moved)),
+      ("back", second, DamageProducer.forTransition(moved, second))
+    )
+    val scratch = withWindow { window =>
+      steps
+        .foldLeft(Vector.empty[(String, BufferedImage)]) {
+          case (done, (name, state, _)) =>
+            present(window, state, Damage.Everything, RenderCaches.create())
+            val shot = withClue(s"scratch frame after $name: ")(
+              settledScreen(window, done.lastOption.map(_._2), None, System.nanoTime() + 15_000_000_000L)
+            )
+            keep(s"sequence-$name-scratch", shot)
+            done :+ (name -> shot)
+        }
+    }
+    withWindow { window =>
+      val caches = RenderCaches.create()
+      steps.zip(scratch).foreach {
+        case ((name, state, damage), (_, expected)) =>
+          present(window, state, damage, caches)
+          val (distance, shown) = closestScreen(window, expected, None, System.nanoTime() + 15_000_000_000L)
+          keep(s"sequence-$name-incremental", shown)
+          keep(s"sequence-$name-scratch", expected)
+          withClue(s"after $name, pixels differing from a frame drawn from scratch: ")(
+            distance should be <= MostPixelsDiffering
+          )
+      }
+    }
+  }
 
   it should "draw the caret over the retained frame, and decline the caret-only path only until a frame exists" in
     withWindow { window =>

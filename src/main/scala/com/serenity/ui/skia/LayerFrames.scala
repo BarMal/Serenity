@@ -16,7 +16,7 @@ object LayerFrames:
 
   def parse(setting: Option[String]): LayerFrames =
     setting.map(_.trim.toLowerCase) match
-      case Some("image") => Image
-      case _             => Picture
+      case Some("picture") => Picture
+      case _               => Image
 
   def configured: LayerFrames = parse(Option(System.getProperty(Property)))
