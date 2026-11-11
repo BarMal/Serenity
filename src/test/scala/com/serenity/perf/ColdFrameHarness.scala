@@ -275,7 +275,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -315,6 +315,29 @@ trait ColdFrameHarness:
       val earlier = divergedSince.get.getOrElse(slot, Map.empty)
       divergedSince.updateAndGet(_.updated(slot, differs.map(i => i -> earlier.getOrElse(i, n)).toMap))
       stepRecords.updateAndGet(_ :+ StepRecord(n, label, slot, frames.lastPlan, frames.paintedAreas))
+
+    /** Where the differing pixel sits against this frame's copies: each blit's source and destination, and the kept
+      * bands within 40 logical px of it, numbered by row, with whether each lies in a blit's destination.
+      */
+    private def adjacency(diff: Seq[(Int, Int)]): String =
+      frames.lastPlan.fold(" ADJ no plan") { plan =>
+        val dirty    = plan.dirtyRowsByPane.values.flatten.toSet
+        val keptRows = LazyList.from(0).filterNot(dirty.contains)
+        val blits = plan.blits.map { b =>
+          s"[src ${b.from.xPx},${b.from.yPx} ${b.from.widthPx}x${b.from.heightPx} dy ${b.dyPx} -> dest y ${b.from.yPx + b.dyPx}..${b.from.bottomPx + b.dyPx}]"
+        }
+        def inDest(band: PixelRect): Boolean =
+          plan.blits.exists(b =>
+            band.yPx >= b.from.yPx + b.dyPx && band.bottomPx <= b.from.bottomPx + b.dyPx && band.xPx < b.from.rightPx && b.from.xPx < band.rightPx
+          )
+        diff.take(3).map { (x, y) =>
+          val ly = y / scale
+          val bands = plan.keptBands.zipWithIndex
+            .filter((b, _) => b.bottomPx >= ly - 40 && b.yPx <= ly + 40 && b.xPx <= x / scale && x / scale < b.rightPx)
+            .map((b, i) => s"row${keptRows(i)} y${b.yPx}..${b.bottomPx}${if inDest(b) then " moved" else " stayed"}")
+          s" ADJ ($x,$y) logical y $ly blits ${blits.mkString(" ")} dirtyRows ${dirty.toList.sorted.mkString(",")} keptNear [${bands.mkString("; ")}]"
+        }.mkString
+      }
 
     /** For each differing pixel: per pool image, the step since which that image has held it differently from cold,
       * and what that step drew near it.
