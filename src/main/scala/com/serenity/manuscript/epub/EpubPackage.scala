@@ -170,4 +170,7 @@ private[epub] object EpubPackage:
       |.underline {
       |  text-decoration: underline;
       |}
+      |.shadow {
+      |  text-shadow: 1px 1px 2px #888888;
+      |}
       |""".stripMargin

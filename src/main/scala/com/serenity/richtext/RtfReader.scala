@@ -278,7 +278,8 @@ private[richtext] object RtfReader:
       marks = Set(
         Option.when(format.bold.contains(true))(InlineMark.Bold),
         Option.when(format.italic.contains(true))(InlineMark.Italic),
-        Option.when(format.underline.contains(true))(InlineMark.Underline)
+        Option.when(format.underline.contains(true))(InlineMark.Underline),
+        Option.when(format.shadow.contains(true))(InlineMark.Shadow)
       ).flatten,
       fontFamily = format.font.flatMap(header.fonts.get).map(_.name).filter(_.nonEmpty),
       fontSize = format.halfPoints.filter(_ > 0).map(_ / 2.0f),
