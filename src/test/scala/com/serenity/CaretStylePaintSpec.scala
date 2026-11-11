@@ -20,7 +20,7 @@ import org.scalatest.matchers.should.Matchers
 class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
 
   private val body   = new Rectangle(20, 10, 2, 20)
-  private val size   = 60
+  private val edgePx   = 60
   private val black  = 0xff000000
   private val white  = 0xffffffff
   private val italic = CaretStyle(italic = true)
@@ -30,17 +30,17 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   private val metrics = CellMetrics.fromFont(font)
 
   private def java2d(carets: List[CaretPaint]): Int => Int => Int =
-    val base   = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB)
-    val target = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB)
+    val base   = new BufferedImage(edgePx, edgePx, BufferedImage.TYPE_INT_RGB)
+    val target = new BufferedImage(edgePx, edgePx, BufferedImage.TYPE_INT_RGB)
     val g      = target.createGraphics()
     try
-      g.setClip(0, 0, size, size)
-      SwingWindow.paintPresentedFrame(g, Some(base), carets, size, size)
+      g.setClip(0, 0, edgePx, edgePx)
+      SwingWindow.paintPresentedFrame(g, Some(base), carets, edgePx, edgePx)
     finally g.dispose()
     x => y => target.getRGB(x, y) | black
 
   private def skia(carets: List[CaretPaint], scale: Float = 1f): Int => Int => Int =
-    val surface = Surface.Companion.makeRasterN32Premul(size, size)
+    val surface = Surface.Companion.makeRasterN32Premul(edgePx, edgePx)
     surface.getCanvas.clear(black)
     SkiaCaretInk.draw(surface.getCanvas, carets, scale)
     val bitmap = Bitmap.Companion.makeFromImage(surface.makeImageSnapshot())
@@ -52,7 +52,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   backends.foreach { (name, paint) =>
     s"$name" should "paint a plain caret as its rect, byte for byte" in {
       val pixel = paint(List(CaretPaint(body, Color.WHITE)))
-      for x <- 0 until size; y <- 0 until size do pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
+      for x <- 0 until edgePx; y <- 0 until edgePx do pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
     }
 
     it should "slant an italic caret to the right at the top, about its base" in {
@@ -83,7 +83,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
         val caret  = CaretPaint.styled(body, Color.WHITE, style)
         val pixel  = paint(List(caret))
         val bounds = caret.rect
-        for x <- 0 until size; y <- 0 until size if !bounds.contains(x, y) do pixel(x)(y) shouldBe black
+        for x <- 0 until edgePx; y <- 0 until edgePx if !bounds.contains(x, y) do pixel(x)(y) shouldBe black
       }
   }
 
