@@ -8,8 +8,8 @@ import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.terminal.LayerPresenter
 
-/** A caret to fill over a presented frame. `rect` is what a repaint of the caret has to cover; for a styled caret
-  * that is wider than the rect the layout placed, which stays in `body`. A plain caret is `rect` alone.
+/** A caret to fill over a presented frame. `rect` is what a repaint of the caret has to cover; for a styled caret that
+  * is wider than the rect the layout placed, which stays in `body`. A plain caret is `rect` alone.
   */
 final case class CaretPaint(
     rect: Rectangle,

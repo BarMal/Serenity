@@ -19,12 +19,13 @@ import org.scalatest.matchers.should.Matchers
   */
 class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
 
-  private val body    = new Rectangle(20, 10, 2, 20)
-  private val size    = 60
-  private val black   = 0xff000000
-  private val white   = 0xffffffff
-  private val italic  = CaretStyle(italic = true)
-  private val styles  = List(italic, CaretStyle(bold = true), CaretStyle(underline = true), CaretStyle(strikethrough = true))
+  private val body   = new Rectangle(20, 10, 2, 20)
+  private val size   = 60
+  private val black  = 0xff000000
+  private val white  = 0xffffffff
+  private val italic = CaretStyle(italic = true)
+  private val styles =
+    List(italic, CaretStyle(bold = true), CaretStyle(underline = true), CaretStyle(strikethrough = true))
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
   private val metrics = CellMetrics.fromFont(font)
 
@@ -51,8 +52,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   backends.foreach { (name, paint) =>
     s"$name" should "paint a plain caret as its rect, byte for byte" in {
       val pixel = paint(List(CaretPaint(body, Color.WHITE)))
-      for x <- 0 until size; y <- 0 until size do
-        pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
+      for x <- 0 until size; y <- 0 until size do pixel(x)(y) shouldBe (if body.contains(x, y) then white else black)
     }
 
     it should "slant an italic caret to the right at the top, about its base" in {
@@ -78,14 +78,13 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
       struck(16)(29) shouldBe black
     }
 
-    it should "paint nothing outside the bounds a styled caret reports" in {
+    it should "paint nothing outside the bounds a styled caret reports" in
       styles.foreach { style =>
         val caret  = CaretPaint.styled(body, Color.WHITE, style)
         val pixel  = paint(List(caret))
         val bounds = caret.rect
         for x <- 0 until size; y <- 0 until size if !bounds.contains(x, y) do pixel(x)(y) shouldBe black
       }
-    }
   }
 
   "CaretPaint" should "report the bounds of a styled caret as its rect, so a repaint of it covers every pixel" in {

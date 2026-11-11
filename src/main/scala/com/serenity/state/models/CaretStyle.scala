@@ -16,8 +16,8 @@ object CaretStyle:
 
   val Plain: CaretStyle = CaretStyle()
 
-  /** A rich-text buffer's style at `position`: the style toggled for the next character if there is one, otherwise
-    * that of the text before the caret. Plain for a buffer with no rich text, or whose rich text no longer matches its
+  /** A rich-text buffer's style at `position`: the style toggled for the next character if there is one, otherwise that
+    * of the text before the caret. Plain for a buffer with no rich text, or whose rich text no longer matches its
     * content.
     */
   def forRichText(buffer: Buffer, position: CursorPosition): CaretStyle =

@@ -48,7 +48,7 @@ class CaretStyleSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show plain when the toggle switched the surrounding style off" in {
-    val buffer = proseBuffer(run("ab", InlineMark.Italic))
+    val buffer  = proseBuffer(run("ab", InlineMark.Italic))
     val toggled = buffer.copy(richText = buffer.richText.copy(insertionRichTextStyle = Some(RichTextStyle.empty)))
 
     CaretStyle.forRichText(toggled, at(1)) shouldBe CaretStyle.Plain

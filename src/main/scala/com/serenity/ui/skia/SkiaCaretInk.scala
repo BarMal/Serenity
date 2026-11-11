@@ -1,7 +1,7 @@
 package com.serenity.ui.skia
 
 import com.serenity.ui.renderer.{CaretGeometry, CaretPaint}
-import org.jetbrains.skia.{Canvas, Paint, Path, Rect}
+import org.jetbrains.skia.{Canvas, Paint, Rect}
 
 /** Draws carets over a layer: a plain caret as the rect it always was, a styled one as the shapes of [[CaretGeometry]]
   * with their edges smoothed, so a slant is not stair-stepped.
@@ -32,12 +32,5 @@ private[serenity] object SkiaCaretInk:
     finally ink.close()
 
   private def drawPolygon(canvas: Canvas, polygon: CaretGeometry.Polygon, scale: Float, ink: Paint): Unit =
-    val path = new Path()
-    try
-      polygon.points.zipWithIndex.foreach {
-        case ((x, y), 0) => val _ = path.moveTo((x * scale).toFloat, (y * scale).toFloat)
-        case ((x, y), _) => val _ = path.lineTo((x * scale).toFloat, (y * scale).toFloat)
-      }
-      val _ = path.closePath()
-      canvas.drawPath(path, ink)
-    finally path.close()
+    val coordinates = polygon.points.flatMap((x, y) => Vector((x * scale).toFloat, (y * scale).toFloat)).toArray
+    val _           = canvas.drawPolygon(coordinates, ink)
