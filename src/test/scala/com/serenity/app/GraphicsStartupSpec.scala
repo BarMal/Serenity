@@ -91,6 +91,28 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     ).skiaVsync shouldBe true
   }
 
+  it should "carry the configured Skia frame form, images by default, for a windowed launch" in {
+    resolve(new Counters).skiaFrames shouldBe SkiaFrames.Image
+    resolve(
+      new Counters,
+      configured = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+    ).skiaFrames shouldBe SkiaFrames.Picture
+  }
+
+  it should "leave the Skia frame form at images for a terminal or safe-mode launch whatever the config says" in {
+    val pictures = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = false, safeMode = false),
+      configured = pictures
+    ).skiaFrames shouldBe SkiaFrames.Image
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = true, safeMode = true),
+      configured = pictures
+    ).skiaFrames shouldBe SkiaFrames.Image
+  }
+
   it should "leave Skia vsync off for a terminal or safe-mode launch whatever the config says" in {
     val on = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
     resolve(
