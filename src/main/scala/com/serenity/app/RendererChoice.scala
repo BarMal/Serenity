@@ -59,7 +59,7 @@ object RendererChoice:
     Measure(
       candidate,
       median(typing),
-      typing.max - typing.min,
+      (for highest <- typing.maxOption; lowest <- typing.minOption yield highest - lowest).getOrElse(0.0),
       rowNames.map(name => name -> median(workloads.flatMap(_.fullWindowMs.get(name)))).toMap
     )
 
