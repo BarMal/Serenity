@@ -173,7 +173,7 @@ class AppRuntimeCaretPauseSpec extends AnyFlatSpec with Matchers:
       _      <- IO.sleep(1300.millis) >> r.userInput
       _      <- IO.sleep(1.second)
       before <- r.painted.get
-      _      <- IO.sleep(2200.millis)
+      _      <- IO.sleep(1900.millis)
       frames <- r.painted.get
       _      <- fiber.cancel
     yield

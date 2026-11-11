@@ -92,26 +92,31 @@ private[serenity] object AppRuntimeRenderLoops:
       def lastTickOf(seen: Option[(FiniteDuration, Long)], at: FiniteDuration): Long =
         seen.collect { case (seenAt, tick) if seenAt == at => tick }.getOrElse(0L)
 
-      Stream.unfoldEval(Option.empty[(FiniteDuration, Long)]) { seen =>
+      def nextBlink(seen: Option[(FiniteDuration, Long)]): IO[Option[(IdleTick, Option[(FiniteDuration, Long)])]] =
         for
           _ <- AppRuntime.awaitFocusedIdleTick(
             loadModel.map(_.app),
             windowFocused,
             cursorIdleInterval,
             interval =>
-              (inputAt, IO.monotonic)
-                .mapN((at, now) => CaretBlinkSchedule.waitUntilNextTick(at, now, interval, lastTickOf(seen, at)))
+              (inputAt, IO.monotonic).mapN((at, now) =>
+                CaretBlinkSchedule.waitUntilNextTick(at, now, interval, lastTickOf(seen, at))
+              )
           )
           at     <- inputAt
           now    <- IO.monotonic
           config <- loadModel.map(_.app.persisted.config)
-        yield cursorIdleInterval(config).flatMap { interval =>
-          val tick = CaretBlinkSchedule.ticksElapsed(at, now, interval)
-          Option.when(tick > 0 && AppRuntime.keepsBlinking(config, interval, tick))(
-            IdleTick.Blink(CaretBlinkSchedule.visibleAt(tick)) -> Some(at -> tick)
-          )
-        }
-      }
+          next <- cursorIdleInterval(config) match
+            case None => IO.pure(None)
+            case Some(interval) =>
+              val tick = CaretBlinkSchedule.ticksElapsed(at, now, interval)
+              if tick <= lastTickOf(seen, at) then nextBlink(seen)
+              else if AppRuntime.keepsBlinking(config, interval, tick) then
+                IO.pure(Some(IdleTick.Blink(CaretBlinkSchedule.visibleAt(tick)) -> Some(at -> tick)))
+              else IO.pure(None)
+        yield next
+
+      Stream.unfoldEval(Option.empty[(FiniteDuration, Long)])(nextBlink)
     }
 
   /** Paints the caret visible if the last blink left it hidden, so it stays solid while the phase waits. Like a blink
