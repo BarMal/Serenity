@@ -34,5 +34,6 @@ private[serenity] object SkiaCaretInk:
   private def drawPolygon(canvas: Canvas, polygon: CaretGeometry.Polygon, scale: Float, ink: Paint): Unit =
     val corners = polygon.points.map((x, y) => new Point((x * scale).toFloat, (y * scale).toFloat)).toArray
     val path    = Path.Companion.Polygon(corners, true, PathFillMode.WINDING, false)
-    try canvas.drawPath(path, ink)
+    try
+      val _ = canvas.drawPath(path, ink)
     finally path.close()
