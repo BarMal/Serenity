@@ -38,10 +38,12 @@ object CaretGeometry:
   /** The smallest rect covering every shape of `style`, which a repaint of the caret has to cover. */
   def bounds(body: Rectangle, style: CaretStyle): Rectangle =
     val points = polygons(body, style).flatMap(_.points)
-    val minX   = math.floor(points.map(_._1).min).toInt
-    val maxX   = math.ceil(points.map(_._1).max).toInt
-    val minY   = math.floor(points.map(_._2).min).toInt
-    val maxY   = math.ceil(points.map(_._2).max).toInt
+    val xs     = points.map(_._1)
+    val ys     = points.map(_._2)
+    val minX   = math.floor(xs.foldLeft(Double.PositiveInfinity)(math.min)).toInt
+    val maxX   = math.ceil(xs.foldLeft(Double.NegativeInfinity)(math.max)).toInt
+    val minY   = math.floor(ys.foldLeft(Double.PositiveInfinity)(math.min)).toInt
+    val maxY   = math.ceil(ys.foldLeft(Double.NegativeInfinity)(math.max)).toInt
     new Rectangle(minX, minY, maxX - minX, maxY - minY)
 
   private def rect(left: Int, top: Int, right: Int, bottom: Int): Polygon =
