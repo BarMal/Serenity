@@ -321,12 +321,12 @@ private[perf] object PresentBenchmarks:
       case other         => Left(s"present.backend must be java2d, skia or layer-image, not '$other'")
 
   def benchmarks(using IORuntime): Rows =
-    val backend  = sys.props.getOrElse("present.backend", "java2d")
-    val widthPx  = sys.props.getOrElse("present.width", "1920").toInt
-    val heightPx = sys.props.getOrElse("present.height", "1080").toInt
-    val scale    = sys.props.getOrElse("present.scale", "1").toDouble
-    val label    = s"${heightPx}p_${scale.toInt}x"
-    val factory  = factoryFor(backend).fold(message => throw IllegalArgumentException(message), identity)
+    val backend   = sys.props.getOrElse("present.backend", "java2d")
+    val widthPx   = sys.props.getOrElse("present.width", "1920").toInt
+    val heightPx  = sys.props.getOrElse("present.height", "1080").toInt
+    val scale     = sys.props.getOrElse("present.scale", "1").toDouble
+    val label     = s"${heightPx}p_${scale.toInt}x"
+    val factory   = factoryFor(backend).fold(message => throw IllegalArgumentException(message), identity)
     val scenarios = Scenarios(factory, widthPx, heightPx, scale)
     import scenarios.{codeFull, codeWin, longShown, longWindow, proseFull, proseWin, scroll, scrollDown, typing}
 

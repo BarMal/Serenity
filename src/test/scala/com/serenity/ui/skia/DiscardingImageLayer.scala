@@ -7,9 +7,9 @@ import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.terminal.SwingWindow
 import org.jetbrains.skia.{Bitmap, Image, Picture}
 
-/** The GPU layer's image frames without a GL layer: [[LayerSurfaceFactory]] paints each frame on the persistent
-  * surface and hands the snapshot to a stub that keeps only the latest, so a benchmark times what the window's frame
-  * costs (the painting and the snapshot) without a display or a readback into an AWT image.
+/** The GPU layer's image frames without a GL layer: [[LayerSurfaceFactory]] paints each frame on the persistent surface
+  * and hands the snapshot to a stub that keeps only the latest, so a benchmark times what the window's frame costs (the
+  * painting and the snapshot) without a display or a readback into an AWT image.
   */
 private[serenity] object DiscardingImageLayer:
 
