@@ -7,7 +7,6 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfig
-import com.serenity.config.AppConfigOps.*
 import com.serenity.frontend.{Frontend, GuiFrontend, TuiFrontend}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
@@ -193,14 +192,14 @@ class AppRuntimeCaretPauseSpec extends AnyFlatSpec with Matchers:
         .compile
         .drain
         .start
-      _       <- IO.sleep(1700.millis)
-      hidden  <- r.cursorVisible.get
-      _       <- r.nonInputDamage
-      _       <- IO.sleep(50.millis)
-      stayed  <- r.cursorVisible.get
-      _       <- IO.sleep(2000.millis)
-      frames  <- r.painted.get
-      _       <- fiber.cancel
+      _      <- IO.sleep(1700.millis)
+      hidden <- r.cursorVisible.get
+      _      <- r.nonInputDamage
+      _      <- IO.sleep(50.millis)
+      stayed <- r.cursorVisible.get
+      _      <- IO.sleep(2000.millis)
+      frames <- r.painted.get
+      _      <- fiber.cancel
     yield
       hidden shouldBe false
       stayed shouldBe false
@@ -235,10 +234,10 @@ class AppRuntimeCaretPauseSpec extends AnyFlatSpec with Matchers:
 
   it should "wait out a fresh pause delay once the window regains focus" in {
     val program = for
-      r      <- rig(focused = false)
-      fiber  <- idlePhase(r, neverTimingOut).compile.drain.start
-      _      <- IO.sleep(5.seconds)
-      _      <- AppRuntime.onWindowFocusChanged(
+      r     <- rig(focused = false)
+      fiber <- idlePhase(r, neverTimingOut).compile.drain.start
+      _     <- IO.sleep(5.seconds)
+      _ <- AppRuntime.onWindowFocusChanged(
         focused = true,
         windowFocused = r.windowFocused,
         cursorVisible = r.cursorVisible,
