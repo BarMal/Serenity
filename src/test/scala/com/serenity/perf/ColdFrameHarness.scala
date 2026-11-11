@@ -80,6 +80,8 @@ trait ColdFrameHarness:
       val last = lastSlot.get
       held.indices.map(i => held((last - i + held.length) % held.length)).toVector
 
+    def lastSlotIndex: Int = lastSlot.get
+
     /** The rects the latest frame presented, `None` meaning the whole frame. */
     def presentedAreas: Option[List[Rectangle]] = lastShown.get
 
@@ -218,6 +220,11 @@ trait ColdFrameHarness:
     private val priorCold = AtomicReference(Array.empty[Int])
     private val freshPaint = AtomicReference(List.empty[Rectangle])
 
+    private case class StepRecord(n: Int, label: String, slot: Int, plan: Option[FramePlan], paint: List[Rectangle])
+
+    private val stepRecords   = AtomicReference(Vector.empty[StepRecord])
+    private val divergedSince = AtomicReference(Map.empty[Int, Map[Int, Int]])
+
     def placeCursor(line: Int, column: Int): Unit =
       val before = shown.get
       stateManager.setCursorPosition(paneId, line, column).unsafeRunSync()
@@ -255,6 +262,7 @@ trait ColdFrameHarness:
       val n = stepCount.incrementAndGet()
       coldFramePixelsWith(after, scale) { cold =>
         priorCold.set(cold.clone())
+        trackImage(n, label, cold)
         val diff0 = FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
         val diff  = if diff0.isEmpty && sys.props.contains("probe.force") then Seq((20, 20)) else diff0
         if diff.nonEmpty || sys.props.contains("probe.force") then
@@ -267,7 +275,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -296,6 +304,45 @@ trait ColdFrameHarness:
         s"incremental vs persisting first frame: ${summary(drawnVsFresh)}; " +
         s"owners ${FramePlanReport.owners(frames.lastPlan, previousPlan, diff, scale)}; " +
         s"previous ${FramePlanReport.describe(previousPlan)}"
+
+    /** Records which pixels the image this step drew into holds differently from cold, and since which step each
+      * has, per image of the pool.
+      */
+    private def trackImage(n: Int, label: String, cold: Array[Int]): Unit =
+      val slot  = frames.lastSlotIndex
+      val image = frames.imagesNewestFirst.head
+      val differs = (0 until math.min(image.length, cold.length)).filter(i => image(i) != cold(i))
+      val earlier = divergedSince.get.getOrElse(slot, Map.empty)
+      divergedSince.updateAndGet(_.updated(slot, differs.map(i => i -> earlier.getOrElse(i, n)).toMap))
+      stepRecords.updateAndGet(_ :+ StepRecord(n, label, slot, frames.lastPlan, frames.paintedAreas))
+
+    /** For each differing pixel: per pool image, the step since which that image has held it differently from cold,
+      * and what that step drew near it.
+      */
+    private def imageHistory(diff: Seq[(Int, Int)]): String =
+      val width = deviceWidthPx(scale)
+      diff.take(3).map { (x, y) =>
+        val i = y * width + x
+        val perSlot = divergedSince.get.toList.sortBy(_._1).map { (slot, pixels) =>
+          pixels.get(i) match
+            case None => s"image $slot: matches cold"
+            case Some(since) =>
+              val record = stepRecords.get.find(r => r.n == since)
+              val near = record.fold("no record")(r =>
+                val paintNear = r.paint.filter(_.intersects(Rectangle(x - 3, y - 3, 7, 7))).map(rectText).mkString("; ")
+                val plan = r.plan.fold("no plan") { p =>
+                  val bands = p.keptBands.filter(b =>
+                    Rectangle((b.xPx * scale).toInt, (b.yPx * scale).toInt, (b.widthPx * scale).toInt, (b.heightPx * scale).toInt)
+                      .intersects(Rectangle(x - 3, y - 3, 7, 7))
+                  ).map(b => s"${b.xPx},${b.yPx} ${b.widthPx}x${b.heightPx}")
+                  s"dirty rows ${p.dirtyRowsByPane.values.flatten.toList.sorted.mkString(",")}; kept bands near [${bands.mkString("; ")}]"
+                }
+                s"label '${r.label}', $plan, paint near [$paintNear]"
+              )
+              s"image $slot: differs since step $since ($near)"
+        }
+        s" HISTORY ($x,$y) now at step ${stepCount.get}: ${perSlot.mkString(" | ")}"
+      }.mkString
 
     /** For the first differing pixels, who last wrote them: whether the screen was already wrong there after the step
       * before, what this frame's image and the other image of the pool held, and whether the frame painted and
