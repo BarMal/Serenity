@@ -7,6 +7,7 @@ import java.time.Instant
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.unsafe.implicits.global
+import com.serenity.TestTemp
 import com.serenity.app.RendererBenchmarkResult.{Key, Standing, Stored}
 import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,7 +39,7 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
 
   private val stored = Stored(machine, Instant.parse("2026-11-11T17:30:00Z"), results)
 
-  private def tempDir(): Path = Files.createTempDirectory("render-benchmark-spec")
+  private def tempDir(): Path = TestTemp.directory("render-benchmark-spec")
 
   "RendererBenchmarkResult" should "read back exactly what it wrote, measured and failed runs alike" in {
     RendererBenchmarkResult.decode(RendererBenchmarkResult.encode(stored)) shouldBe Some(stored)
