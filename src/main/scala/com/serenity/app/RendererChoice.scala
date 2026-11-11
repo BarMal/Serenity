@@ -26,8 +26,8 @@ object RendererChoice:
   final case class CandidateRuns(candidate: Candidate, runs: List[Outcome])
 
   enum Recommendation:
-    case Switch(to: Candidate, evidence: List[String])
-    case Keep(why: String, evidence: List[String])
+    case Switch(to: Candidate, lines: List[String])
+    case Keep(why: String, lines: List[String])
 
     def reason: String = this match
       case Switch(to, _) => s"${to.label} is clearly faster here"
