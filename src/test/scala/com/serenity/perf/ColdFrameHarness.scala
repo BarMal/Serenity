@@ -82,6 +82,11 @@ trait ColdFrameHarness:
 
     def lastSlotIndex: Int = lastSlot.get
 
+    private val preDraw = AtomicReference(Array.empty[Int])
+
+    /** What the image the latest frame drew into held just before that frame started. */
+    def pixelsBeforeLastFrame: Array[Int] = preDraw.get
+
     def cachesInUse: RenderCaches = caches
 
     /** The rects the latest frame presented, `None` meaning the whole frame. */
@@ -99,6 +104,7 @@ trait ColdFrameHarness:
     def renderFrame(state: AppState, damage: Damage): FramePixels =
       val slot  = drawn.getAndIncrement() % images.length
       val image = images(slot)
+      preDraw.set(image.rgbPixels.clone())
       val surface = referenceFrames.surfaceOver(
         image,
         cellMetrics,
@@ -277,7 +283,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff) + warmReport(after, drawn, cold, diff))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff) + warmReport(after, drawn, cold, diff) + beforeAfter(diff, cold))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -336,6 +342,25 @@ trait ColdFrameHarness:
       }
       s" WARM warm-full vs cold: ${summary(FrameDiff.differing(warm, cold, width, height))}; " +
         s"warm-full vs incremental: ${summary(FrameDiff.differing(warm, drawn, width, height))}; ${pixels.mkString(" | ")}"
+
+    /** Before and after the frame in the image it drew into, beside cold, at each differing pixel, and the value the
+      * image held before at the source line of every blit whose destination covers the pixel.
+      */
+    private def beforeAfter(diff: Seq[(Int, Int)], cold: Array[Int]): String =
+      val width  = deviceWidthPx(scale)
+      val before = frames.pixelsBeforeLastFrame
+      val after  = frames.imagesNewestFirst.head
+      def hex(a: Array[Int], i: Int): String = if i >= 0 && i < a.length then f"${a(i) & 0xffffff}%06x" else "none"
+      diff.take(3).map { (x, y) =>
+        val i = y * width + x
+        val sources = frames.lastPlan.toList.flatMap(_.blits).collect {
+          case b if y >= (b.from.yPx + b.dyPx) * scale && y < (b.from.bottomPx + b.dyPx) * scale =>
+            val sourceY = y - (b.dyPx * scale).toInt
+            s"blit dy ${b.dyPx} source y $sourceY before ${hex(before, sourceY * width + x)}"
+        }
+        s" BEFORE ($x,$y) image-before ${hex(before, i)} image-after ${hex(after, i)} cold ${hex(cold, i)} " +
+          s"[${sources.mkString("; ")}]"
+      }.mkString
 
     /** Where the differing pixel sits against this frame's copies: each blit's source and destination, and the kept
       * bands within 40 logical px of it, numbered by row, with whether each lies in a blit's destination.
