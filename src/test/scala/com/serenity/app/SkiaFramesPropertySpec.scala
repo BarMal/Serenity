@@ -23,8 +23,7 @@ class SkiaFramesPropertySpec extends AnyFlatSpec with Matchers:
       Some("serenity.skia.layerFrames" -> "picture")
   }
 
-  it should "use the key the layer parses" in {
+  it should "use the key the layer parses" in
     SkiaFrames.values.foreach { frames =>
       com.serenity.ui.skia.LayerFrames.parse(Some(frames.configKey)).toString shouldBe frames.toString
     }
-  }

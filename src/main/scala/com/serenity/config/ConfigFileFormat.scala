@@ -418,7 +418,9 @@ object ConfigFileFormat:
     comment("-Dskiko.vsync.enabled beat this. Needs a restart."),
     field("ui.render.skia_vsync"),
     comment("What Skia's GPU layer is handed for each frame. image paints the frame on a CPU surface that keeps its"),
-    comment("pixels, so a typing frame repaints only what changed, and the layer draws the result; picture records the"),
+    comment(
+      "pixels, so a typing frame repaints only what changed, and the layer draws the result; picture records the"
+    ),
     comment("frame and has the layer replay it. image was about four times faster to the screen on the reference"),
     comment("laptop (#2618). -Dserenity.skia.layerFrames beats this. Needs a restart."),
     field("ui.render.skia_frames"),

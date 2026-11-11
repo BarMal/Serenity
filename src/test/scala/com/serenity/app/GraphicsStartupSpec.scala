@@ -95,12 +95,14 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     resolve(new Counters).skiaFrames shouldBe SkiaFrames.Image
     resolve(
       new Counters,
-      configured = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+      configured =
+        RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
     ).skiaFrames shouldBe SkiaFrames.Picture
   }
 
   it should "leave the Skia frame form at images for a terminal or safe-mode launch whatever the config says" in {
-    val pictures = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+    val pictures =
+      RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
     resolve(
       new Counters,
       launch = GraphicsStartup.Launch(windowed = false, safeMode = false),

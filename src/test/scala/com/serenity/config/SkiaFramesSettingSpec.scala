@@ -16,12 +16,11 @@ class SkiaFramesSettingSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.surfaceConfig.renderSkiaFrames shouldBe SkiaFrames.Image
   }
 
-  "ui.render.skia_frames" should "round-trip through the config file" in {
+  "ui.render.skia_frames" should "round-trip through the config file" in
     SkiaFrames.values.foreach { frames =>
-      val text   = ConfigManager.configToString(AppConfig.default.withRenderSkiaFrames(frames))
+      val text = ConfigManager.configToString(AppConfig.default.withRenderSkiaFrames(frames))
       text should include(s"ui.render.skia_frames = ${frames.configKey}")
     }
-  }
 
   it should "be a registered setting under its documented names" in {
     ConfigRegistry.find("ui.render.skia_frames").map(_.key) shouldBe Some("ui.render.skia_frames")

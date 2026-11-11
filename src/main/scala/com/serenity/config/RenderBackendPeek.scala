@@ -21,7 +21,8 @@ final case class RenderStartupSettings(
   */
 object RenderBackendPeek:
 
-  private val SettingKeys = Set("ui.render.backend", "ui.render.wayland", "ui.render.skia_vsync", "ui.render.skia_frames")
+  private val SettingKeys =
+    Set("ui.render.backend", "ui.render.wayland", "ui.render.skia_vsync", "ui.render.skia_frames")
 
   private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
 
