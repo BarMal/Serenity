@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 
 class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
 
-  private val key = Key(
+  private val machine = Key(
     glRenderer = "Mesa Intel(R) UHD Graphics 620 (KBL GT2)",
     os = "Linux 6.18",
     toolkit = "wayland",
@@ -36,7 +36,7 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
     CandidateRuns(Candidate.LayerPicture, List(Outcome.Failed("every typing sample timed out (150)")))
   )
 
-  private val stored = Stored(key, Instant.parse("2026-11-11T17:30:00Z"), results)
+  private val stored = Stored(machine, Instant.parse("2026-11-11T17:30:00Z"), results)
 
   private def tempDir(): Path = Files.createTempDirectory("render-benchmark-spec")
 
@@ -64,22 +64,22 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
   }
 
   "RendererBenchmarkResult.standing" should "be absent when nothing was stored" in {
-    RendererBenchmarkResult.standing(key, None) shouldBe Standing.Absent
+    RendererBenchmarkResult.standing(machine, None) shouldBe Standing.Absent
   }
 
   it should "apply a result stored under the same key" in {
-    RendererBenchmarkResult.standing(key, Some(stored)) shouldBe Standing.Applies(stored)
+    RendererBenchmarkResult.standing(machine, Some(stored)) shouldBe Standing.Applies(stored)
   }
 
   it should "read a result as stale, naming what changed, when any part of the key changed" in {
     val changed = List(
-      "GL renderer"  -> key.copy(glRenderer = "llvmpipe"),
-      "OS"           -> key.copy(os = "Linux 6.19"),
-      "toolkit"      -> key.copy(toolkit = "x11"),
-      "display"      -> key.copy(display = "1920x1080@1.0"),
-      "JVM"          -> key.copy(jvm = "25.0.6+7"),
-      "Skiko"        -> key.copy(skiko = "0.154.0"),
-      "power state"  -> key.copy(powerState = "battery")
+      "GL renderer"  -> machine.copy(glRenderer = "llvmpipe"),
+      "OS"           -> machine.copy(os = "Linux 6.19"),
+      "toolkit"      -> machine.copy(toolkit = "x11"),
+      "display"      -> machine.copy(display = "1920x1080@1.0"),
+      "JVM"          -> machine.copy(jvm = "25.0.6+7"),
+      "Skiko"        -> machine.copy(skiko = "0.154.0"),
+      "power state"  -> machine.copy(powerState = "battery")
     )
     changed.foreach { (what, current) =>
       withClue(what)(RendererBenchmarkResult.standing(current, Some(stored)) shouldBe Standing.Stale(stored, List(what)))
@@ -87,7 +87,7 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "name every part that changed, in a fixed order" in {
-    val current = key.copy(skiko = "0.154.0", glRenderer = "llvmpipe", powerState = "battery")
+    val current = machine.copy(skiko = "0.154.0", glRenderer = "llvmpipe", powerState = "battery")
     RendererBenchmarkResult.standing(current, Some(stored)) shouldBe
       Standing.Stale(stored, List("GL renderer", "Skiko", "power state"))
   }
