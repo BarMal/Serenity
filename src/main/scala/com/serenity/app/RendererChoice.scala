@@ -5,9 +5,9 @@ import java.util.Locale
 /** What `serenity --optimize-renderer` recommends from what it measured (#2618): switch to a mode only when it is
   * clearly better at typing and not clearly worse at changing the whole window, and otherwise say so.
   *
-  * A mode wins against another when its typing median is at least 15% lower, none of the full-window rows both
-  * measured is more than 15% higher, and the typing gap is more than twice the spread between either mode's own runs.
-  * A mode must win against every other mode that was measured. A mode with any failed run is reported, never chosen.
+  * A mode wins against another when its typing median is at least 15% lower, none of the full-window rows both measured
+  * is more than 15% higher, and the typing gap is more than twice the spread between either mode's own runs. A mode
+  * must win against every other mode that was measured. A mode with any failed run is reported, never chosen.
   */
 object RendererChoice:
 
@@ -54,7 +54,7 @@ object RendererChoice:
     if sorted.size % 2 == 1 then sorted(middle) else (sorted(middle - 1) + sorted(middle)) / 2.0
 
   private def summarise(candidate: Candidate, workloads: List[Workload]): Measure =
-    val typing = workloads.map(_.typingP50Ms)
+    val typing   = workloads.map(_.typingP50Ms)
     val rowNames = workloads.flatMap(_.fullWindowMs.keys).distinct
     Measure(
       candidate,
@@ -75,7 +75,8 @@ object RendererChoice:
   /** Why `winner` does not clearly beat `other`, if it does not. */
   private def notClearlyBetter(winner: Measure, other: Measure): Option[String] =
     val worseRows = winner.rowsMs.toList.sortBy(_._1).collect {
-      case (name, value) if other.rowsMs.get(name).exists(theirs => value * 100.0 > theirs * RowMayBeUpToPercent) => name
+      case (name, value) if other.rowsMs.get(name).exists(theirs => value * 100.0 > theirs * RowMayBeUpToPercent) =>
+        name
     }
     if winner.typingMs * 100.0 > other.typingMs * WinnerMustBeBelowPercent then
       Some(s"${winner.candidate.label} is within 15% of ${other.candidate.label} at typing")
