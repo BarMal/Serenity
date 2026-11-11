@@ -227,6 +227,7 @@ trait ColdFrameHarness:
     private val seenPlan  = AtomicReference[Option[FramePlan]](None)
     private val priorCold = AtomicReference(Array.empty[Int])
     private val freshPaint = AtomicReference(List.empty[Rectangle])
+    private val coldHistory = AtomicReference(Vector.empty[(Int, Array[Int])])
 
     private case class StepRecord(n: Int, label: String, slot: Int, plan: Option[FramePlan], paint: List[Rectangle])
 
@@ -270,6 +271,7 @@ trait ColdFrameHarness:
       val n = stepCount.incrementAndGet()
       coldFramePixelsWith(after, scale) { cold =>
         priorCold.set(cold.clone())
+        coldHistory.updateAndGet(h => (h :+ (n -> cold.clone())).takeRight(4))
         trackImage(n, label, cold)
         val diff0 = FrameDiff.differing(drawn, cold, deviceWidthPx(scale), deviceHeightPx(scale))
         val diff  = if diff0.isEmpty && sys.props.contains("probe.force") then Seq((20, 20)) else diff0
@@ -283,7 +285,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff) + warmReport(after, drawn, cold, diff) + beforeAfter(diff, cold))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff) + warmReport(after, drawn, cold, diff) + beforeAfter(diff, cold) + positionReport(diff, n, frames.pixelsBeforeLastFrame))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -360,6 +362,31 @@ trait ColdFrameHarness:
         }
         s" BEFORE ($x,$y) image-before ${hex(before, i)} image-after ${hex(after, i)} cold ${hex(cold, i)} " +
           s"[${sources.mkString("; ")}]"
+      }.mkString
+
+    /** For each differing pixel a blit covers: what a cold frame of the old states held at the blit's source line, what
+      * the image held there, and what the cold frame of this state holds at the destination, with the line's offset in
+      * the row pitch and the scale.
+      */
+    private def positionReport(diff: Seq[(Int, Int)], n: Int, imageBefore: Array[Int]): String =
+      val width = deviceWidthPx(scale)
+      def hex(a: Array[Int], i: Int): String = if i >= 0 && i < a.length then f"${a(i) & 0xffffff}%06x" else "none"
+      def coldAt(step: Int, i: Int): String =
+        coldHistory.get.find(_._1 == step).fold("n/a")(c => hex(c._2, i))
+      val plan = frames.lastPlan
+      diff.take(3).map { (x, y) =>
+        val covering = plan.toList.flatMap(_.blits).filter(b =>
+          y >= (b.from.yPx + b.dyPx) * scale && y < (b.from.bottomPx + b.dyPx) * scale
+        )
+        val perBlit = covering.map { b =>
+          val sourceY = y - (b.dyPx * scale).toInt
+          val si = sourceY * width + x
+          val di = y * width + x
+          s"dy ${b.dyPx} src y $sourceY (mod19 ${(sourceY / scale).toInt % 19}) dst y $y (mod19 ${(y / scale).toInt % 19}) " +
+            s"cold(n-2)@src ${coldAt(n - 2, si)} cold(n-1)@src ${coldAt(n - 1, si)} image-before@src ${hex(imageBefore, si)} " +
+            s"cold(n)@dst ${coldAt(n, di)} cold(n-1)@dst ${coldAt(n - 1, di)}"
+        }
+        s" POS ($x,$y) scale $scale step $n [${perBlit.mkString("; ")}]"
       }.mkString
 
     /** Where the differing pixel sits against this frame's copies: each blit's source and destination, and the kept
