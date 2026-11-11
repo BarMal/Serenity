@@ -65,7 +65,7 @@ class CaretGeometrySpec extends AnyFlatSpec with Matchers:
 
   it should "scale its rules with the caret, never thinner than a pixel" in {
     val tall = new Rectangle(0, 0, 8, 100)
-    CaretGeometry.bounds(tall, CaretStyle(underline = true)).getWidth shouldBe 50.0 +- 0.0
+    CaretGeometry.bounds(tall, CaretStyle(underline = true)).getWidth shouldBe 50.0
     CaretGeometry.bounds(new Rectangle(0, 0, 1, 2), CaretStyle(underline = true)).getHeight shouldBe 2.0
   }
 end CaretGeometrySpec
