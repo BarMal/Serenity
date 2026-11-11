@@ -93,7 +93,7 @@ trait PixelDrawing:
     widthPx: Int,
     heightPx: Int,
     color: RenderColor,
-    style: com.serenity.state.models.CaretStyle
+    @unused style: com.serenity.state.models.CaretStyle
   ): Unit =
     fillPixelRect(xPx, yPx, widthPx, heightPx, color)
 
