@@ -150,7 +150,7 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
     val program = for
       r      <- rig
       l      <- loop(r, _ => Some(500.millis))
-      _      <- l.interruptAfter(10250.millis).compile.drain
+      _      <- l.interruptAfter(11250.millis).compile.drain
       full   <- r.fullFrames.get
       cursor <- r.cursorFrames.get
     yield

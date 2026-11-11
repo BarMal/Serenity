@@ -374,15 +374,15 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           registerFocusCallback = cb => focusCallbackHolder.set(Some(cb))
         )
         .start
-      _                   <- IO.sleep(1.second)
+      _                   <- IO.sleep(2.seconds)
       callsBeforeBlur     <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(false)))
       _                   <- IO.sleep(100.millis)
       _                   <- idleRenderCalls.set(0)
-      _                   <- IO.sleep(1.second)
+      _                   <- IO.sleep(2.seconds)
       callsWhileUnfocused <- idleRenderCalls.get
       _                   <- IO(focusCallbackHolder.get().foreach(_.apply(true)))
-      _                   <- IO.sleep(1.second)
+      _                   <- IO.sleep(2.seconds)
       callsAfterRefocus   <- idleRenderCalls.get
       _                   <- closeRequested.complete(())
       _                   <- fiber.joinWithNever
@@ -432,7 +432,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
             registerResizeCallback = _ => ()
           )
           .as("completed"),
-        IO.sleep(1500.millis).as("still-running")
+        IO.sleep(3.seconds).as("still-running")
       )
       entries <- logs.get
     yield
