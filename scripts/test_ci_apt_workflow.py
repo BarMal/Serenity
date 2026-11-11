@@ -37,7 +37,7 @@ class CiAptWorkflowTest(unittest.TestCase):
     def test_the_downloaded_packages_are_cached_before_the_install_step(self) -> None:
         job = _sdl_native_job()
         cache = job.index("actions/cache@v4")
-        install = job.index("ci/apt/install-packages.sh")
+        install = job.index("run: ci/apt/install-packages.sh")
         self.assertLess(cache, install)
 
     def test_the_cache_key_names_the_runner_image_and_the_package_list(self) -> None:
@@ -50,9 +50,9 @@ class CiAptWorkflowTest(unittest.TestCase):
 
     def test_the_cache_and_the_script_agree_on_the_archive_directory(self) -> None:
         job = _sdl_native_job()
-        path = re.search(r"path:\s*(\S+)", job[job.index("actions/cache@v4") :])
+        path = re.search(r"path:\s*~/(\S+?)/\*\.deb", job[job.index("actions/cache@v4") :])
         self.assertIsNotNone(path)
-        self.assertIn(path.group(1), job[job.index("ci/apt/install-packages.sh") :])
+        self.assertIn(f'"$HOME/{path.group(1)}"', job[job.index("run: ci/apt/install-packages.sh") :])
 
     def test_the_script_is_executable_by_the_job(self) -> None:
         script = _ROOT / "ci" / "apt" / "install-packages.sh"
