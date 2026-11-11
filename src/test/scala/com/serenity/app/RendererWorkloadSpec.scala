@@ -46,7 +46,7 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
     RendererWorkload.script(Plan(0, 0, 0, 80.millis, 400.millis)) shouldBe empty
   }
 
-  private final class RecordingWindow(answer: Step => Option[Double] = _ => Some(1.0)):
+  final private class RecordingWindow(answer: Step => Option[Double] = _ => Some(1.0)):
     private val seen = Ref.unsafe[IO, Vector[(Step, FiniteDuration)]](Vector.empty)
 
     val window: RendererWorkload.Window = step =>
@@ -63,7 +63,7 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
   it should "hold the typing pace between keystrokes and the settle time after every other step" in {
     val recording = new RecordingWindow()
     val performed = runVirtual(RendererWorkload.run(plan, recording.window) *> recording.performed)
-    val gaps      = performed.sliding(2).collect { case Vector((before, at), (_, next)) => before -> (next - at) }.toVector
+    val gaps = performed.sliding(2).collect { case Vector((before, at), (_, next)) => before -> (next - at) }.toVector
     gaps.collect { case (_: Step.Type, gap) => gap }.distinct shouldBe Vector(80.millis)
     gaps.collect { case (step, gap) if !step.isInstanceOf[Step.Type] => gap }.distinct shouldBe Vector(400.millis)
   }

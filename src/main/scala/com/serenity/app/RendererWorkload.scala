@@ -67,9 +67,7 @@ object RendererWorkload:
 
   def run(plan: Plan, window: Window): IO[Result] =
     script(plan)
-      .traverse { step =>
-        window.perform(step).flatTap(_ => IO.sleep(wait(plan, step))).map(step -> _)
-      }
+      .traverse(step => window.perform(step).flatTap(_ => IO.sleep(wait(plan, step))).map(step -> _))
       .map { answers =>
         def samples(kind: Kind): Samples =
           val ofKind = answers.filter((step, _) => step.kind == kind).map(_._2)
