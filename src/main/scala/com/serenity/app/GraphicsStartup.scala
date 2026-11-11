@@ -96,9 +96,9 @@ object GraphicsStartup:
           settleWindowed(launch, environment, catalogue, base, settings, probe)
             .map((toolkit, decision) => (toolkit, decision, (settings.skiaVsync, settings.skiaFrames)))
         )
-    settled.map((toolkit, decision, (vsync, frames)) =>
+    settled.map { case (toolkit, decision, (vsync, frames)) =>
       Resolved(toolkit, decision, catalogue.factoryFor(decision.backend), vsync, frames)
-    )
+    }
 
   private def settleWindowed(
     launch: Launch,
