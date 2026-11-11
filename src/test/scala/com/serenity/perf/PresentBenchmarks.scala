@@ -24,7 +24,7 @@ import com.serenity.ui.renderer.{
   RendererFramePlanner,
   ScreenIdentity
 }
-import com.serenity.ui.skia.{PresentPhase, SkiaRasterSurfaceFactory}
+import com.serenity.ui.skia.{DiscardingImageLayer, PresentPhase, SkiaRasterSurfaceFactory}
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 
@@ -98,6 +98,12 @@ private[perf] object PresentBenchmarks:
       val copied = SkiaRasterSurfaceFactory.lastCopiedPixels(caches.backendCaches).fold("")(px => s" copiedPx=$px")
       counts + copied
 
+    /** Whether the frame just drawn drew anything: from the image it handed back, or, on the layer's image frames,
+      * which hand back none, from the frame the layer was given.
+      */
+    def drew(image: BufferedImage): Boolean =
+      if factory eq DiscardingImageLayer.factory then DiscardingImageLayer.latestHasInk else hasPixels(image)
+
     def render(state: AppState, damage: Damage): BufferedImage =
       val repaintRegion = new AtomicReference[Option[List[com.serenity.ui.layout.PixelRect]]](None)
       val surface = factory.create(
@@ -132,7 +138,10 @@ private[perf] object PresentBenchmarks:
         damage,
         caches = caches
       )
-      published.get
+      Option(published.get).getOrElse(NoReadback)
+
+  /** What a frame's window hands back where the frame leaves no image to read: the layer's image frames. */
+  private val NoReadback = new BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB)
 
   private def hasPixels(image: BufferedImage): Boolean =
     val row = image.getHeight / 2
@@ -157,6 +166,8 @@ private[perf] object PresentBenchmarks:
     def next(): BufferedImage =
       val (state, damage) = steps.next()
       window.render(state, damage)
+
+    def drew(image: BufferedImage): Boolean = window.drew(image)
 
   /** The prose window's states a benchmark shows: the typing pair, and the same document scrolled three lines at a
     * time. The scroll states are three, not two, because the window's pool hands out two images in turn: two states
@@ -301,17 +312,21 @@ private[perf] object PresentBenchmarks:
 
     def trafficOf(name: String): Option[PresentReport.ShapeTrafficStats] = logs.get(name).map(_.traffic)
 
+  /** The frame surfaces a `present.backend` names: Java2D, the Skia raster surface, or the GPU layer's image frames. */
+  private[perf] def factoryFor(backend: String): Either[String, FrameSurfaceFactory] =
+    backend match
+      case "java2d"      => Right(FrameSurfaceFactory.Java2D)
+      case "skia"        => Right(SkiaRasterSurfaceFactory)
+      case "layer-image" => Right(DiscardingImageLayer.factory)
+      case other         => Left(s"present.backend must be java2d, skia or layer-image, not '$other'")
+
   def benchmarks(using IORuntime): Rows =
-    val backend  = sys.props.getOrElse("present.backend", "java2d")
-    val widthPx  = sys.props.getOrElse("present.width", "1920").toInt
-    val heightPx = sys.props.getOrElse("present.height", "1080").toInt
-    val scale    = sys.props.getOrElse("present.scale", "1").toDouble
-    val label    = s"${heightPx}p_${scale.toInt}x"
-    val factory =
-      backend match
-        case "java2d" => FrameSurfaceFactory.Java2D
-        case "skia"   => SkiaRasterSurfaceFactory
-        case other    => throw IllegalArgumentException(s"present.backend must be java2d or skia, not $other")
+    val backend   = sys.props.getOrElse("present.backend", "java2d")
+    val widthPx   = sys.props.getOrElse("present.width", "1920").toInt
+    val heightPx  = sys.props.getOrElse("present.height", "1080").toInt
+    val scale     = sys.props.getOrElse("present.scale", "1").toDouble
+    val label     = s"${heightPx}p_${scale.toInt}x"
+    val factory   = factoryFor(backend).fold(message => throw IllegalArgumentException(message), identity)
     val scenarios = Scenarios(factory, widthPx, heightPx, scale)
     import scenarios.{codeFull, codeWin, longShown, longWindow, proseFull, proseWin, scroll, scrollDown, typing}
 
@@ -336,7 +351,7 @@ private[perf] object PresentBenchmarks:
         60,
         () =>
           val before = longShown.get
-          assert(hasPixels(scrollDown()), "scroll down drew nothing")
+          assert(longWindow.drew(scrollDown()), "scroll down drew nothing")
           assert(longShown.get != before, "scroll down did not scroll")
         ,
         log.timing(() => scrollDown()),
@@ -349,7 +364,7 @@ private[perf] object PresentBenchmarks:
         PhaseSource.of(typing),
         () =>
           assert(typing.forwardDamage != Damage.Everything, "typing damaged the whole frame")
-          assert(hasPixels(typing.next()), "typing frame drew nothing")
+          assert(typing.drew(typing.next()), "typing frame drew nothing")
         ,
         () => typing.next()
       ),
@@ -358,7 +373,7 @@ private[perf] object PresentBenchmarks:
         PhaseSource.of(scroll),
         () =>
           assert(scroll.forwardDamage != Damage.Everything, "scrolling damaged the whole frame")
-          assert(hasPixels(scroll.next()), "scroll frame drew nothing")
+          assert(scroll.drew(scroll.next()), "scroll frame drew nothing")
         ,
         () => scroll.next()
       ),
@@ -366,13 +381,13 @@ private[perf] object PresentBenchmarks:
       row(
         "full_prose_frame",
         PhaseSource.of(proseWin),
-        () => assert(hasPixels(proseWin.render(proseFull, Damage.Everything)), "prose frame drew nothing"),
+        () => assert(proseWin.drew(proseWin.render(proseFull, Damage.Everything)), "prose frame drew nothing"),
         () => proseWin.render(proseFull, Damage.Everything)
       ),
       row(
         "full_code_frame",
         PhaseSource.of(codeWin),
-        () => assert(hasPixels(codeWin.render(codeFull, Damage.Everything)), "code frame drew nothing"),
+        () => assert(codeWin.drew(codeWin.render(codeFull, Damage.Everything)), "code frame drew nothing"),
         () => codeWin.render(codeFull, Damage.Everything)
       )
     )

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Summarises the CSVs `bench/present-abba.sh` writes: per config and row, the median across runs of each backend's p50
-and p95, the spread of the p50s, the allocation per frame, and Skia's ratio to Java2D. When the CSVs carry the present
+and p95, the spread of the p50s, the allocation per frame, and each later backend's ratio to the first present one (Java2D, else Skia raster). When the CSVs carry the present
 phases (the five columns after `retained_bytes`), a second table gives the median of each phase per row and backend.
 
 Usage:
@@ -11,14 +11,26 @@ from __future__ import annotations
 
 import glob
 import os
+import re
 import statistics
 import sys
+
+BACKENDS = ("java2d", "skia", "layer-image")
+CSV_NAME = re.compile(r"^(?P<config>[^-]+)-(?P<backend>.+)-(?P<run>\d+)\.csv$")
+
+
+def split_name(path: str) -> tuple[str, str]:
+    """The config and the backend of `<config>-<backend>-<run>.csv`; a backend's name may itself hold hyphens."""
+    match = CSV_NAME.match(os.path.basename(path))
+    if match is None:
+        raise ValueError(f"not a present-abba CSV name: {path}")
+    return match.group("config"), match.group("backend")
 
 
 def read(out_dir: str) -> dict[tuple[str, str, str], list[tuple[float, float, float]]]:
     rows: dict[tuple[str, str, str], list[tuple[float, float, float]]] = {}
     for path in sorted(glob.glob(os.path.join(out_dir, "*.csv"))):
-        config, backend, _ = os.path.basename(path)[:-4].rsplit("-", 2)
+        config, backend = split_name(path)
         with open(path) as handle:
             for line in handle:
                 if line.startswith("render.present"):
@@ -38,7 +50,7 @@ def read_phases(out_dir: str) -> dict[tuple[str, str, str], list[list[float]]]:
     """Per (config, row, backend), one list of the five phase times (ms) for each run whose CSV has them."""
     phases: dict[tuple[str, str, str], list[list[float]]] = {}
     for path in sorted(glob.glob(os.path.join(out_dir, "*.csv"))):
-        config, backend, _ = os.path.basename(path)[:-4].rsplit("-", 2)
+        config, backend = split_name(path)
         with open(path) as handle:
             for line in handle:
                 fields = line.strip().split(",")
@@ -66,7 +78,7 @@ def main(out_dir: str) -> None:
     print("config | row | backend | p50 ms median [min-max] | p95 ms median | alloc MB | runs")
     for config, row in sorted({(c, r) for c, r, _ in rows}):
         medians: dict[str, tuple[float, float]] = {}
-        for backend in ("java2d", "skia"):
+        for backend in BACKENDS:
             runs = rows.get((config, row, backend), [])
             if not runs:
                 continue
@@ -78,10 +90,12 @@ def main(out_dir: str) -> None:
                 f"{config} | {row} | {backend} | {medians[backend][0]:.2f} [{min(p50s):.2f}-{max(p50s):.2f}]"
                 f" | {medians[backend][1]:.2f} | {allocated:.2f} | {len(runs)}"
             )
-        if len(medians) == 2:
-            p50 = medians["skia"][0] / medians["java2d"][0]
-            p95 = medians["skia"][1] / medians["java2d"][1]
-            print(f"{config} | {row} | skia / java2d | p50 {p50:.2f}x | p95 {p95:.2f}x")
+        present = [backend for backend in BACKENDS if backend in medians]
+        for backend in present[1:]:
+            baseline = present[0]
+            p50 = medians[backend][0] / medians[baseline][0]
+            p95 = medians[backend][1] / medians[baseline][1]
+            print(f"{config} | {row} | {backend} / {baseline} | p50 {p50:.2f}x | p95 {p95:.2f}x")
     print_phases(out_dir)
 
 

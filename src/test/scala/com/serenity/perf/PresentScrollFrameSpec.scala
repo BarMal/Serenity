@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.rope.Balance
 import com.serenity.ui.renderer.FrameSurfaceFactory
-import com.serenity.ui.skia.SkiaRasterSurfaceFactory
+import com.serenity.ui.skia.{DiscardingImageLayer, SkiaRasterSurfaceFactory}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -16,7 +16,11 @@ class PresentScrollFrameSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val backends = List("Java2D" -> FrameSurfaceFactory.Java2D, "Skia raster" -> SkiaRasterSurfaceFactory)
+  private val backends = List(
+    "Java2D"                    -> FrameSurfaceFactory.Java2D,
+    "Skia raster"               -> SkiaRasterSurfaceFactory,
+    "Skia layer (image frames)" -> DiscardingImageLayer.factory
+  )
 
   for (name, factory) <- backends do
     s"The scroll_frame row on $name" should "draw rows in every frame it measures" in {
