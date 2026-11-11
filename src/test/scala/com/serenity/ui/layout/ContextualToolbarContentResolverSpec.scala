@@ -154,8 +154,10 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
 
     val boldSegment = resolved.rows.flatMap(_.segments).find(_.text.contains("Bold"))
     boldSegment.map(_.trailingSeparator) shouldBe Some(false)
-    // "underline" is the last item of formatting group 0 before "font-family" (group 1) -- it must carry the
-    // group-boundary separator (ContextualToolbar.hasTrailingGroupSeparator).
+    // "shadow" is the last item of formatting group 0 before "font-family" (group 1) -- it must carry the
+    // group-boundary separator (ContextualToolbar.hasTrailingGroupSeparator), and "underline" before it must not.
     val underlineSegment = resolved.rows.flatMap(_.segments).find(_.text.contains("Underline"))
-    underlineSegment.map(_.trailingSeparator) shouldBe Some(true)
+    underlineSegment.map(_.trailingSeparator) shouldBe Some(false)
+    val shadowSegment = resolved.rows.flatMap(_.segments).find(_.text.contains("Shadow"))
+    shadowSegment.map(_.trailingSeparator) shouldBe Some(true)
   }

@@ -115,9 +115,9 @@ private[richtext] object DocxProperties:
 
   def runXml(kind: String, value: String): String =
     kind match
-      case "b" => "<w:b/>"
-      case "i" => "<w:i/>"
-      case "u" => """<w:u w:val="single"/>"""
+      case "b"      => "<w:b/>"
+      case "i"      => "<w:i/>"
+      case "u"      => """<w:u w:val="single"/>"""
       case "shadow" => "<w:shadow/>"
       case "rFonts" =>
         s"""<w:rFonts w:ascii="${XmlDom.escapeAttribute(value)}" w:hAnsi="${XmlDom.escapeAttribute(value)}"/>"""

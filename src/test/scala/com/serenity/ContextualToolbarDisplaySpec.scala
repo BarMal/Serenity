@@ -162,6 +162,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       "bold"             -> "",
       "italic"           -> "",
       "underline"        -> "",
+      "shadow"           -> "",
       "font-family"      -> "",
       "font-family-text" -> "",
       "font-size"        -> "",

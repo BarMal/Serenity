@@ -33,8 +33,8 @@ private[epub] object EpubXml:
     ManuscriptText.plainText(runs)
 
   private def run(run: RichTextRun): String =
-    val marks = run.style.marks
-    val text  = escape(run.text).replace("\n", "<br/>")
+    val marks    = run.style.marks
+    val text     = escape(run.text).replace("\n", "<br/>")
     val shadowed = if marks.contains(InlineMark.Shadow) then s"""<span class="shadow">$text</span>""" else text
     val underlined =
       if marks.contains(InlineMark.Underline) then s"""<span class="underline">$shadowed</span>""" else shadowed
