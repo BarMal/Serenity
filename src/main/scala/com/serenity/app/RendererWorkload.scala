@@ -23,6 +23,16 @@ object RendererWorkload:
     case PageDown
     case FullRedraw(how: Redraw)
 
+    def kind: Kind = this match
+      case _: Type       => Kind.Typing
+      case PageDown      => Kind.PageDown
+      case _: FullRedraw => Kind.FullRedraw
+
+  enum Kind:
+    case Typing
+    case PageDown
+    case FullRedraw
+
   /** `typingPace` separates keystrokes; `settle` is the wait after every other step, so a page or a redraw is never
     * still painting when the next one starts.
     */
@@ -61,13 +71,13 @@ object RendererWorkload:
         window.perform(step).flatTap(_ => IO.sleep(wait(plan, step))).map(step -> _)
       }
       .map { answers =>
-        def samples(kind: Step => Boolean): Samples =
-          val ofKind = answers.filter((step, _) => kind(step)).map(_._2)
+        def samples(kind: Kind): Samples =
+          val ofKind = answers.filter((step, _) => step.kind == kind).map(_._2)
           Samples(ofKind.flatten, ofKind.count(_.isEmpty))
         Result(
-          typing = samples(_.isInstanceOf[Step.Type]),
-          pageDown = samples(_ == Step.PageDown),
-          fullRedraw = samples(_.isInstanceOf[Step.FullRedraw])
+          typing = samples(Kind.Typing),
+          pageDown = samples(Kind.PageDown),
+          fullRedraw = samples(Kind.FullRedraw)
         )
       }
 
