@@ -6,8 +6,8 @@ import java.time.Instant
 
 import cats.effect.IO
 import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
-import io.circe.{Decoder, HCursor, Json}
 import io.circe.syntax.*
+import io.circe.{Decoder, HCursor, Json}
 
 /** What `serenity --optimize-renderer` measured on this machine, kept beside the config so the next run can say whether
   * it still applies (#2618).
