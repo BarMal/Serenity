@@ -9,8 +9,8 @@ import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workl
 import io.circe.{Decoder, HCursor, Json}
 import io.circe.syntax.*
 
-/** What `serenity --optimize-renderer` measured on this machine, kept beside the config so the next run can say
-  * whether it still applies (#2618).
+/** What `serenity --optimize-renderer` measured on this machine, kept beside the config so the next run can say whether
+  * it still applies (#2618).
   *
   * A result is only as good as the setup it was measured on: it is read as stale as soon as any part of the [[Key]]
   * differs, and a stale result is shown, never applied. A file that cannot be read back is the same as no file.
@@ -27,6 +27,7 @@ object RendererBenchmarkResult:
       skiko: String,
       powerState: String
   ):
+
     def differencesFrom(other: Key): List[String] =
       List(
         "GL renderer" -> (glRenderer != other.glRenderer),
@@ -101,9 +102,8 @@ object RendererBenchmarkResult:
     Right(text).flatMap(raw => scala.util.Try(Instant.parse(raw)).toEither.left.map(_ => s"not a time: $raw"))
   )
 
-  private given Decoder[Candidate] = Decoder.decodeString.emap(label =>
-    Candidate.values.find(_.label == label).toRight(s"not a candidate: $label")
-  )
+  private given Decoder[Candidate] =
+    Decoder.decodeString.emap(label => Candidate.values.find(_.label == label).toRight(s"not a candidate: $label"))
 
   private given Decoder[Outcome] = (cursor: HCursor) =>
     cursor.downField("failed").as[Option[String]].flatMap {

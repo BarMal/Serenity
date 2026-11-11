@@ -73,16 +73,18 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
 
   it should "read a result as stale, naming what changed, when any part of the key changed" in {
     val changed = List(
-      "GL renderer"  -> machine.copy(glRenderer = "llvmpipe"),
-      "OS"           -> machine.copy(os = "Linux 6.19"),
-      "toolkit"      -> machine.copy(toolkit = "x11"),
-      "display"      -> machine.copy(display = "1920x1080@1.0"),
-      "JVM"          -> machine.copy(jvm = "25.0.6+7"),
-      "Skiko"        -> machine.copy(skiko = "0.154.0"),
-      "power state"  -> machine.copy(powerState = "battery")
+      "GL renderer" -> machine.copy(glRenderer = "llvmpipe"),
+      "OS"          -> machine.copy(os = "Linux 6.19"),
+      "toolkit"     -> machine.copy(toolkit = "x11"),
+      "display"     -> machine.copy(display = "1920x1080@1.0"),
+      "JVM"         -> machine.copy(jvm = "25.0.6+7"),
+      "Skiko"       -> machine.copy(skiko = "0.154.0"),
+      "power state" -> machine.copy(powerState = "battery")
     )
     changed.foreach { (what, current) =>
-      withClue(what)(RendererBenchmarkResult.standing(current, Some(stored)) shouldBe Standing.Stale(stored, List(what)))
+      withClue(what)(
+        RendererBenchmarkResult.standing(current, Some(stored)) shouldBe Standing.Stale(stored, List(what))
+      )
     }
   }
 
