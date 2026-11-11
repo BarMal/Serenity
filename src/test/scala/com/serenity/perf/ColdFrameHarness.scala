@@ -82,6 +82,8 @@ trait ColdFrameHarness:
 
     def lastSlotIndex: Int = lastSlot.get
 
+    def cachesInUse: RenderCaches = caches
+
     /** The rects the latest frame presented, `None` meaning the whole frame. */
     def presentedAreas: Option[List[Rectangle]] = lastShown.get
 
@@ -275,7 +277,7 @@ trait ColdFrameHarness:
               failureReport(n, label, drawnImage, coldImage, diff, frames.lastPlan, scale)
             else failureLine(n, label, diff, frames.lastPlan)
           val probe = scala.util
-            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff))
+            .Try(probeReport(n, label, after, drawn, cold, diff, previousPlan) + lastWriter(diff, drawn, cold, previousScreen, previousCold) + imageHistory(diff) + adjacency(diff) + warmReport(after, drawn, cold, diff))
             .fold(e => s"PROBE step $n failed: $e", identity)
           println(probe)
           failures.updateAndGet(_ :+ s"$probe\n$report")
@@ -315,6 +317,25 @@ trait ColdFrameHarness:
       val earlier = divergedSince.get.getOrElse(slot, Map.empty)
       divergedSince.updateAndGet(_.updated(slot, differs.map(i => i -> earlier.getOrElse(i, n)).toMap))
       stepRecords.updateAndGet(_ :+ StepRecord(n, label, slot, frames.lastPlan, frames.paintedAreas))
+
+    /** The same state drawn as a full frame through this session's own, warmed caches into an image of its own,
+      * compared with the cold frame and with what the incremental frame drew.
+      */
+    private def warmReport(state: AppState, drawn: Array[Int], cold: Array[Int], diff: Seq[(Int, Int)]): String =
+      val (width, height) = (deviceWidthPx(scale), deviceHeightPx(scale))
+      val warm = Pooled(
+        scale,
+        persists = false,
+        FrameImages(width, height, imagePoolSize(persists = false), referenceFrames),
+        frames.cachesInUse
+      ).renderFrame(state, Damage.Everything).rgbPixels.clone()
+      def hex(a: Array[Int], i: Int) = f"${a(i) & 0xffffff}%06x"
+      val pixels = diff.take(3).map { (x, y) =>
+        val i = y * width + x
+        s"($x,$y) cold ${hex(cold, i)} warm-full ${hex(warm, i)} incremental ${hex(drawn, i)}"
+      }
+      s" WARM warm-full vs cold: ${summary(FrameDiff.differing(warm, cold, width, height))}; " +
+        s"warm-full vs incremental: ${summary(FrameDiff.differing(warm, drawn, width, height))}; ${pixels.mkString(" | ")}"
 
     /** Where the differing pixel sits against this frame's copies: each blit's source and destination, and the kept
       * bands within 40 logical px of it, numbered by row, with whether each lies in a blit's destination.
