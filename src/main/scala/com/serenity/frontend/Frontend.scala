@@ -92,9 +92,10 @@ case object GuiFrontend extends Frontend:
   */
 final case class TuiFrontend(
     keyboardFidelityTier: KeyboardFidelityTier,
-    markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable
+    markdownPreviewWindow: MarkdownPreviewWindowAvailability = MarkdownPreviewWindowAvailability.Unavailable,
+    hasDisplay: Boolean = false
 ) extends Frontend:
-  val capabilities: FrontendCapabilities    = FrontendCapabilities.tui(keyboardFidelityTier)
+  val capabilities: FrontendCapabilities    = FrontendCapabilities.tui(keyboardFidelityTier, hasDisplay)
   val logRouting: LogRouting                = Frontend.tuiLogRouting
   val eventThread: Option[Runnable => Unit] = None
 

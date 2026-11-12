@@ -59,8 +59,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     "ui/renderer/ShapedTextPaintSpec.scala",
     "ui/renderer/StyledFontCacheSpec.scala",
     "ui/renderer/SurfaceActivitySpec.scala",
-    "ui/skia/LayerSurfaceFactorySiteSpec.scala",
-    "ui/skia/SkiaLayerSurfaceFactorySpec.scala"
+    "ui/skia/LayerSurfaceFactorySiteSpec.scala"
   )
 
   /** Run the same assertions on both renderers, so they name `Java2DFrames` on purpose. */

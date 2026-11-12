@@ -415,8 +415,8 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 
 `auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
-itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
-Java2D only if that cannot make a surface either. If the native library does not load before the window opens, a launch
+itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and if that cannot make a
+surface either (`SkiaRasterUnavailable`) the run ends through the crash path, with a crash report naming the size asked for and why it failed. If the native library does not load before the window opens, a launch
 from a terminal runs the terminal interface instead, with a one-row header on the top edge (Esc or a click dismisses it; it shows again on the next launch) and a `[RENDER]` log line that say why. A
 launch with no terminal (from a desktop launcher), or one that asked for the window (`--gui`, `--smoke-test`,
 `--startup-probe`), stops with an error dialog and a non-zero exit instead. `skia` and `auto` differ only in the reason

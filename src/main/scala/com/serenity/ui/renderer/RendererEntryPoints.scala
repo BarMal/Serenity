@@ -68,7 +68,7 @@ object RendererEntryPoints:
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create(),
-    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    surfaces: FrameSurfaceFactory
   ): Unit =
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rects) for a
     // repaint bounded to the rects this frame actually changed.

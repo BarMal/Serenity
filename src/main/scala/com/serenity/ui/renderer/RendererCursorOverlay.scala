@@ -341,7 +341,7 @@ object RendererCursorOverlay:
     cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create(),
-    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    surfaces: FrameSurfaceFactory
   ): Boolean =
     val viewportSize = target.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the

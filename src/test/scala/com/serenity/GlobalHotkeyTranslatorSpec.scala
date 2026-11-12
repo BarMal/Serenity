@@ -38,11 +38,11 @@ class GlobalHotkeyTranslatorSpec extends AnyFlatSpec with Matchers:
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }
 
-  // F2 stays genuinely unbound by default (see TextEntryTranslatorCompositionSpec), so this holds regardless of the
+  // F4 stays genuinely unbound by default (see TextEntryTranslatorCompositionSpec), so this holds regardless of the
   // host OS the default AppConfig resolves hotkeys for.
   it should "fall back to AppConfig.default when constructed without one" in {
     new GlobalHotkeyTranslator()
-      .translate(KeyStrokeInfo(InputKey.F2, None, Set.empty))
+      .translate(KeyStrokeInfo(InputKey.F4, None, Set.empty))
       .isInstanceOf[UnhandledEvent[?]] shouldBe true
   }
 

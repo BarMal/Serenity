@@ -29,7 +29,22 @@ class FrontendCapabilitiesSpec extends AnyFlatSpec with Matchers:
     FrontendCapabilities.tui().opensFileOrFolder shouldBe false
   }
 
-  "FrontendCapabilities.tui" should "measure on the terminal's fixed cell grid" in {
+  it should "open a folder in the file manager, since it has a window to open it on" in {
+    FrontendCapabilities.gui.opensFolderInFileManager shouldBe true
+  }
+
+  "FrontendCapabilities.tui" should "open a folder in the file manager only where the terminal has a display" in {
+    FrontendCapabilities.tui(hasDisplay = true).opensFolderInFileManager shouldBe true
+    FrontendCapabilities.tui(hasDisplay = false).opensFolderInFileManager shouldBe false
+    FrontendCapabilities.tui().opensFolderInFileManager shouldBe false
+  }
+
+  it should "carry the display through a TuiFrontend" in {
+    TuiFrontend(KeyboardFidelityTier.Full, hasDisplay = true).capabilities.opensFolderInFileManager shouldBe true
+    TuiFrontend(KeyboardFidelityTier.Full).capabilities.opensFolderInFileManager shouldBe false
+  }
+
+  it should "measure on the terminal's fixed cell grid" in {
     FrontendCapabilities.tui().grid shouldBe MetricGrid.Cells
     FrontendCapabilities.tui().isCellGrid shouldBe true
   }

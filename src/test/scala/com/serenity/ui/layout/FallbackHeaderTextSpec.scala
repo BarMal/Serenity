@@ -12,7 +12,7 @@ class FallbackHeaderTextSpec extends AnyFlatSpec with Matchers:
   private val message = "Skia could not load: no raster surface. Running in the terminal."
 
   "FallbackHeaderText.fit" should "say the message and then the hint when both fit" in {
-    FallbackHeaderText.fit(message, hint, 80) shouldBe s"$message  $hint"
+    FallbackHeaderText.fit(message, hint, 120) shouldBe s"$message  $hint"
   }
 
   it should "fit exactly at the width the two need" in {
@@ -48,12 +48,17 @@ class FallbackHeaderTextSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave a short message whole, and give a hint that fits after it" in {
-    FallbackHeaderText.fit("Short.", hint, 40) shouldBe s"Short.  $hint"
+    FallbackHeaderText.fit("Short.", hint, 60) shouldBe s"Short.  $hint"
     FallbackHeaderText.fit("Short.", hint, 6) shouldBe "Short."
   }
 
   "FallbackHeaderText.Hint" should "name Escape as what dismisses the header" in {
     hint should include("Esc")
+  }
+
+  it should "name F2 as what opens the logs" in {
+    hint should include("F2")
+    hint should include("logs")
   }
 
 end FallbackHeaderTextSpec
