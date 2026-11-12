@@ -230,7 +230,13 @@ jobs:
 
       - name: Run tests
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
-        run: xvfb-run -a -s "-screen 0 1920x1200x24" bash .github/scripts/run-tests-with-hang-dump.sh sbt -v clean test
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v writeFrameCountBaseline
+
+      - name: Upload regenerated baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: frame-counts-linux
+          path: src/test/resources/perf/frame-counts.tsv
 
       # The console log names only the failing suites (see the -u note in build.sbt), so the failing tests and their
       # messages go into the step summary and one annotation each (#2557).
