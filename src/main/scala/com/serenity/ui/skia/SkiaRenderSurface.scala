@@ -132,6 +132,7 @@ final class SkiaRenderSurface(
   private val translation   = AtomicReference((0.0, 0.0))
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
+  private val shadowRef     = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
   private val pixelMover =
     SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
@@ -303,10 +304,17 @@ final class SkiaRenderSurface(
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
-          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(drawGlyphs)
+          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(
+            drawShadowed(boundedLeft, boundedTop, boundedWidth, boundedHeight)(drawGlyphs)
+          )
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+
+  /** A shadowed run's glyphs are drawn once more first, as [[SkiaTextShadow]] has them. */
+  private def drawShadowed(left: Int, top: Int, width: Int, height: Int)(drawGlyphs: => Unit): Unit =
+    if shadowRef.get() then SkiaTextShadow.pass(canvas, fgRef, deviceScaleX)(left, top, width, height)(drawGlyphs)
+    drawGlyphs
 
   private def clipTo(x: Int, y: Int, width: Int, height: Int): Unit =
     val _ = canvas.clipRect(rect(x.toFloat, y.toFloat, width.toFloat, height.toFloat), false)
@@ -402,10 +410,12 @@ final class SkiaRenderSurface(
 
   def enableStyle(style: TextStyle): Unit =
     underlineRef.set(style.isUnderlined)
+    shadowRef.set(style.isShadowed)
     currentFontRef.set(styledFonts.fontFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     underlineRef.set(false)
+    shadowRef.set(false)
     currentFontRef.set(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =

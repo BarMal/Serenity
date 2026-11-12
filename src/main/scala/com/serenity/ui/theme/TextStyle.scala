@@ -14,7 +14,8 @@ final case class TextStyle(
     isUnderlined: Boolean = false,
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
-    isStrikethrough: Boolean = false
+    isStrikethrough: Boolean = false,
+    isShadowed: Boolean = false
 ):
 
   def combine(other: TextStyle): TextStyle =
@@ -24,7 +25,8 @@ final case class TextStyle(
       isUnderlined = other.isUnderlined || this.isUnderlined,
       fontFamily = other.fontFamily.orElse(this.fontFamily),
       fontSize = other.fontSize.orElse(this.fontSize),
-      isStrikethrough = other.isStrikethrough || this.isStrikethrough
+      isStrikethrough = other.isStrikethrough || this.isStrikethrough,
+      isShadowed = other.isShadowed || this.isShadowed
     )
 
   def fontMode: Int =
