@@ -417,7 +417,7 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load before the window opens, a launch
-from a terminal runs the terminal interface instead, with a start-page notice and a `[RENDER]` log line that say why. A
+from a terminal runs the terminal interface instead, with a one-row header on the top edge (Esc or a click dismisses it; it shows again on the next launch) and a `[RENDER]` log line that say why. A
 launch with no terminal (from a desktop launcher), or one that asked for the window (`--gui`, `--smoke-test`,
 `--startup-probe`), stops with an error dialog and a non-zero exit instead. `skia` and `auto` differ only in the reason
 logged; `skia-raster` forces the Skia CPU raster on any display and toolkit (it still needs the native library, and
@@ -448,11 +448,11 @@ The renderer and the toolkit are settled together before any AWT class loads, so
 #### Skia on NixOS
 
 Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
-cannot find them. The native probe then fails and Serenity runs in the terminal. The start page says so, naming the
+cannot find them. The native probe then fails and Serenity runs in the terminal. The header says so, naming the
 missing library, and the log carries the failure:
 `[RENDER] backend=terminal reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
 (Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
-`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads.
+`UnsatisfiedLinkError` that Skiko wraps, which the header reads.
 
 The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
 set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:

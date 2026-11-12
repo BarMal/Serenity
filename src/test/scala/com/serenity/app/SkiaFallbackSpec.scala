@@ -7,6 +7,8 @@ import org.scalatest.matchers.should.Matchers
 
 class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
 
+  given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+
   private val missingLibGl =
     "UnsatisfiedLinkError: /home/me/.skiko/abc/libskiko-linux-x64.so: libGL.so.1: " +
       "cannot open shared object file: No such file or directory"
@@ -71,45 +73,57 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
     SkiaFallback.failure(looping).detail shouldBe None
   }
 
-  it should "give a notice that names the library the loader could not find" in {
+  it should "give a header that names the library the loader could not find" in {
     val text = SkiaFallback
-      .notice(RenderBackendSelection.choose(failedInputs(SkiaFallback.failure(skikoLoadFailure))))
-      .getOrElse(fail("a failed probe must produce a notice"))
+      .header(RenderBackendSelection.choose(failedInputs(SkiaFallback.failure(skikoLoadFailure))))
+      .getOrElse(fail("a failed probe must produce a header"))
     text should include("libGL.so.1")
-    text should include("LD_LIBRARY_PATH")
   }
 
-  "SkiaFallback.notice" should "stay silent when Skia was never expected to run" in {
-    SkiaFallback.notice(Decision(RenderBackend.Terminal, "terminal or headless launch")) shouldBe None
-    SkiaFallback.notice(Decision(RenderBackend.Skia, "native probe passed")) shouldBe None
+  "SkiaFallback.header" should "stay silent when Skia was never expected to run" in {
+    SkiaFallback.header(Decision(RenderBackend.Terminal, "terminal or headless launch")) shouldBe None
+    SkiaFallback.header(Decision(RenderBackend.Skia, "native probe passed")) shouldBe None
   }
 
-  it should "say why Skia fell back and how to fix a missing library" in {
-    val text = SkiaFallback.notice(failed(missingLibGl)).getOrElse(fail("a failed probe must produce a notice"))
-    text should include("terminal")
-    text should not include "Java2D"
-    text should include("libGL.so.1")
-    text should include("LD_LIBRARY_PATH")
-    text should include("Skia on NixOS")
-    text should not include "java2d"
+  it should "say that Skia could not load and that Serenity is running in the terminal, naming a missing library" in {
+    SkiaFallback.header(failed(missingLibGl)) shouldBe
+      Some("Skia could not load: the system library libGL.so.1 is missing. Running in the terminal.")
   }
 
   it should "quote the cause when no missing library can be named" in {
-    val text = SkiaFallback.notice(failed("no raster surface")).getOrElse(fail("a failed probe must produce a notice"))
-    text should include("no raster surface")
-    text should include("[RENDER]")
-    text should not include "LD_LIBRARY_PATH"
+    SkiaFallback.header(failed("no raster surface")) shouldBe
+      Some("Skia could not load: no raster surface. Running in the terminal.")
   }
 
-  "StartupRecovery.Plan.withSkiaFallback" should "put the Skia notice on the start page after the earlier notices" in {
-    val plan  = StartupRecovery.Plan(safeMode = false, notices = List("Earlier notice."))
-    val skia  = SkiaFallback.notice(failed(missingLibGl)).getOrElse(fail("a failed probe must produce a notice"))
-    val shown = plan.withSkiaFallback(failed(missingLibGl)).noticeWith(Some("Config notice."))
-    shown shouldBe Some(s"Earlier notice. $skia Config notice.")
+  it should "be one line, whatever the cause says" in {
+    SkiaFallback
+      .header(failed("first line\nsecond line"))
+      .getOrElse(fail("a failed probe must produce a header")) should
+      not include "\n"
+  }
+
+  "StartupRecovery.Plan.withSkiaFallback" should "carry the header, and leave the start-page notices alone" in {
+    val plan   = StartupRecovery.Plan(safeMode = false, notices = List("Earlier notice."))
+    val withIt = plan.withSkiaFallback(failed(missingLibGl))
+    withIt.fallbackHeader shouldBe SkiaFallback.header(failed(missingLibGl))
+    withIt.noticeWith(Some("Config notice.")) shouldBe Some("Earlier notice. Config notice.")
   }
 
   it should "add nothing when Skia was not expected to run or loaded" in {
     val plan = StartupRecovery.Plan(safeMode = false, notices = Nil)
     plan.withSkiaFallback(Decision(RenderBackend.Terminal, "terminal or headless launch")) shouldBe plan
     plan.withSkiaFallback(Decision(RenderBackend.Skia, "native probe passed")) shouldBe plan
+  }
+
+  "StartupRecovery.Plan.appliedTo" should "show the header as one floating top-edge surface, and nothing without one" in {
+    val base = com.serenity.state.models.AppState.initial
+    val shown =
+      StartupRecovery.Plan(safeMode = false, notices = Nil).withSkiaFallback(failed(missingLibGl)).appliedTo(base)
+    shown.runtime.uiSurfaces.map(_.content) shouldBe
+      List(
+        com.serenity.state.models.SurfaceContent.FallbackHeader(
+          SkiaFallback.header(failed(missingLibGl)).getOrElse(fail("a failed probe must produce a header"))
+        )
+      )
+    StartupRecovery.Plan.normal.appliedTo(base).runtime.uiSurfaces shouldBe Nil
   }

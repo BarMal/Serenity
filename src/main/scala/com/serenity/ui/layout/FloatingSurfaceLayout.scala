@@ -319,7 +319,7 @@ object FloatingSurfaceLayout:
           if fitsBelow then preferredBelowY else if fitsAbove then preferredAboveY else clamped
         case SurfacePlacement.AboveCursor =>
           if fitsAbove then preferredAboveY else if fitsBelow then preferredBelowY else clamped
-        case SurfacePlacement.Corner(_) =>
+        case SurfacePlacement.Corner(_) | SurfacePlacement.TopEdge =>
           // Never actually reached: `resolveFrozenCursorPeekStack` is only ever called with the cursor-peek
           // prototype's own AboveCursor/BelowCursor placement (`surfaceConfig.commandRunnerCursorPeekPlacement`).
           // Kept exhaustive, with the same fallback as BelowCursor, rather than partial.

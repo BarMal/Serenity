@@ -300,6 +300,9 @@ enum SurfaceContent:
   case FilePreview(path: Path, content: String)
   case SymbolDefinition(symbol: String, location: Location)
   case StatusLine(text: String)
+
+  /** The one row a terminal launch shows when Skia could not load, over the top edge until dismissed. */
+  case FallbackHeader(message: String)
   case DirectoryListing(path: Path, entries: List[DirEntry], selectedPath: Option[Path] = None)
 
   /** `scroll` is where the list is scrolled to, kept apart from the selection -- see [[ListScroll]]. */
@@ -382,6 +385,7 @@ final case class UiSurface(
       case SurfaceContent.CommentLens(lens) if lens.mode == CommentLensMode.ReadOnly => SurfaceFocusPolicy.Peek
       case SurfaceContent.Notice(notice, _) if notice.prompt.isDefined               => SurfaceFocusPolicy.Focusable
       case SurfaceContent.Notice(_, _)                                               => SurfaceFocusPolicy.Peek
+      case SurfaceContent.FallbackHeader(_)                                          => SurfaceFocusPolicy.Peek
       case SurfaceContent.CommandPalette(_) | SurfaceContent.ModalWorkflow(_) | SurfaceContent.ThemeCreator(_) =>
         SurfaceFocusPolicy.Modal
       case _ if isFloatingPeek => SurfaceFocusPolicy.Peek
