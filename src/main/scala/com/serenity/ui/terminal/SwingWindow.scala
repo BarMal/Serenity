@@ -411,6 +411,8 @@ class SwingWindow(
     if SwingUtilities.isEventDispatchThread then showWindow.run()
     else SwingUtilities.invokeAndWait(showWindow)
 
+  def hide(): Unit = SwingUtilities.invokeLater(() => frame.setVisible(false))
+
   def stop(): Unit =
     val dispose: Runnable = () =>
       layerPresenterRef.getAndSet(None).foreach(_.dispose())

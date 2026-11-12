@@ -563,6 +563,7 @@ object Main extends IOApp:
                 if launchOptions.smokeTest || launchOptions.startupProbe then
                   IO.race(host.control.awaitClose, smokeReady.get).void
                 else host.control.awaitClose,
+              hideWindow = IO(host.control.hide()),
               registerResizeCallback = cb => host.control.setOnResize(cb),
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),
               openPath = launchOptions.openPath,

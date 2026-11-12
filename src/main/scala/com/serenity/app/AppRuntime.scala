@@ -180,6 +180,7 @@ object AppRuntime:
     quitRequests: Stream[IO, QuitResponse] = Stream.empty,
     fileOrFolderOpen: Boolean = false,
     afterEditorShutdown: IO[Unit] = IO.unit,
+    hideWindow: IO[Unit] = IO.unit,
     scrollCountExecutor: Executor = ScrollCountExecutor.shared
   )(using
     logger: Logger[IO],
@@ -362,6 +363,7 @@ object AppRuntime:
                         renderLoop,
                         watcher,
                         awaitExternalQuit,
+                        hideWindow,
                         appConfig,
                         runtime.frameTimings,
                         frameTimingEnabled,
@@ -388,6 +390,7 @@ object AppRuntime:
     renderLoop: Stream[IO, Unit],
     fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
+    hideWindow: IO[Unit],
     appConfig: AppConfig,
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
@@ -414,6 +417,9 @@ object AppRuntime:
       ),
       AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
         shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
+      ),
+      AppRuntimeRenderLoops.superviseLoop("window hide", lifecycle.forceQuit, recordCrash)(
+        hideWindowAfterQuit(lifecycle.awaitQuit, hideWindow)
       ),
       AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         ProjectTrustService.load(ProjectTrustStore.defaultPath).flatMap { loaded =>
@@ -470,7 +476,7 @@ object AppRuntime:
       AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit, recordCrash)(
         DesktopHooks.serveQuitRequests(quitRequests.interruptWhen(quitSignal), lifecycle.requestQuit)
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _, _) => ())
 
   /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
     * folder becomes the Explorer root, as Open Folder makes it.
@@ -548,6 +554,9 @@ object AppRuntime:
     awaitQuit: IO[Unit]
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
+
+  private[serenity] def hideWindowAfterQuit(awaitQuit: IO[Unit], hideWindow: IO[Unit]): IO[Unit] =
+    awaitQuit >> hideWindow
 
   private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
     awaitQuit >> shutdownInput
