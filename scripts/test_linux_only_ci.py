@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Checks on the repository variable CROSS_OS_CI, the one switch that turns Windows and macOS CI off (#2618, [linux-only-ci]):
+
+    python3 -m unittest scripts.test_linux_only_ci -v
+
+Unset (or anything but "off") means every job runs exactly as before. "off" means Linux only: the Windows and macOS jobs
+are skipped, the merge train and Auto Squash Merge stop waiting for them, and Desktop Publish builds and publishes the
+Linux jar and zip. The jobs themselves are not deleted, so deleting the variable turns them all back on.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import unittest
+from pathlib import Path
+
+_ROOT = Path(__file__).resolve().parent.parent
+_WORKFLOWS = _ROOT / ".github" / "workflows"
+_OFF = "vars.CROSS_OS_CI != 'off'"
+
+
+def _workflow(name: str) -> str:
+    return (_WORKFLOWS / name).read_text()
+
+
+def _job(text: str, name: str) -> str:
+    lines = text.splitlines()
+    start = next(i for i, line in enumerate(lines) if line == f"  {name}:")
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^  [A-Za-z0-9_-]+:\s*$", lines[i])), len(lines))
+    return "\n".join(lines[start:end])
+
+
+def _steps(job: str) -> list[str]:
+    return re.split(r"(?m)^      - name: ", job)[1:]
+
+
+def _step(job: str, name: str) -> str:
+    return next(step for step in _steps(job) if step.startswith(name))
+
+
+def _matrix_choice(job: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """The matrix include list when CROSS_OS_CI is off, and when it is not."""
+    match = re.search(r"include: \$\{\{ fromJSON\(vars\.CROSS_OS_CI == 'off' && '(\[.*?\])' \|\| '(\[.*?\])'\) \}\}", job)
+    assert match is not None, "the matrix is not chosen by CROSS_OS_CI"
+    return json.loads(match.group(1)), json.loads(match.group(2))
+
+
+class CrossOsTestsTests(unittest.TestCase):
+    _text = _workflow("cross-os-tests.yml")
+
+    def test_every_windows_and_macos_job_is_skipped_when_the_switch_is_off(self) -> None:
+        for name in ("shards-windows", "shards-macos", "test-windows", "test-macos"):
+            with self.subTest(job=name):
+                self.assertIn(f"&& {_OFF}\n", _job(self._text, name) + "\n")
+
+    def test_the_wake_job_is_not_switched_off_so_a_train_still_hears_a_run_finish(self) -> None:
+        self.assertNotIn("CROSS_OS_CI", _job(self._text, "wake-train"))
+
+
+class OtherOsJobsTests(unittest.TestCase):
+    def test_the_package_check_builds_only_linux_when_off_and_the_three_os_matrix_otherwise(self) -> None:
+        off, on = _matrix_choice(_job(_workflow("desktop-release.yml"), "build"))
+        self.assertEqual(["ubuntu-latest"], [entry["os"] for entry in off])
+        self.assertEqual(["ubuntu-latest", "windows-latest", "macos-latest"], [entry["os"] for entry in on])
+        self.assertEqual(["linux-x64", "windows-x64", "macos-arm64"], [entry["artifact_suffix"] for entry in on])
+
+    def test_the_ligature_oracle_keeps_its_linux_leg_when_off(self) -> None:
+        off, on = _matrix_choice(_job(_workflow("ligature-oracle.yml"), "ligature-oracle"))
+        self.assertEqual(["linux"], [entry["label"] for entry in off])
+        self.assertEqual(["linux", "windows", "macos"], [entry["label"] for entry in on])
+        self.assertEqual(["ubuntu-latest", "windows-latest", "macos-latest"], [entry["os"] for entry in on])
+
+    def test_the_skia_natives_probe_and_the_non_linux_skiko_builds_are_skipped_when_off(self) -> None:
+        self.assertIn(f"    if: {_OFF}\n", _job(_workflow("skia-natives-probe.yml"), "windows") + "\n")
+        skiko = _workflow("skiko-natives.yml")
+        for name, group in (("build-macos", "macos"), ("build-windows", "windows")):
+            with self.subTest(job=name):
+                self.assertIn(
+                    f"    if: needs.plan.outputs.{group} == 'true' && {_OFF}\n", _job(skiko, name) + "\n"
+                )
+
+    def test_the_linux_skiko_builds_are_untouched(self) -> None:
+        for name in ("build-linux-x64", "build-linux-arm64"):
+            with self.subTest(job=name):
+                self.assertNotIn("CROSS_OS_CI", _job(_workflow("skiko-natives.yml"), name))
+
+
+class MergeGateTests(unittest.TestCase):
+    def test_the_train_workflow_hands_the_switch_to_the_train(self) -> None:
+        self.assertIn("CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}", _workflow("merge-train.yml"))
+
+    def test_auto_squash_merge_requires_the_cross_os_checks_only_when_the_switch_is_not_off(self) -> None:
+        text = _workflow("auto-squash-merge.yml")
+        self.assertIn("CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}", text)
+        self.assertRegex(
+            text,
+            r'if \[ "\$\{CROSS_OS_CI:-\}" = "off" \]; then\s+required_checks=\(\)\s+else\s+'
+            r'required_checks=\("Cross-OS Tests: Test \(windows\)" "Cross-OS Tests: Test \(macos\)"\)\s+fi',
+        )
+
+
+class DesktopPublishTests(unittest.TestCase):
+    _text = _workflow("desktop-publish.yml")
+
+    def test_the_build_matrix_is_linux_only_when_off(self) -> None:
+        off, on = _matrix_choice(_job(self._text, "build"))
+        self.assertEqual([{"os": "ubuntu-latest", "artifact_suffix": "linux-x64"}], off)
+        self.assertEqual(
+            [
+                {"os": "ubuntu-latest", "artifact_suffix": "linux-x64"},
+                {"os": "windows-latest", "artifact_suffix": "windows-x64"},
+                {"os": "macos-latest", "artifact_suffix": "macos-arm64"},
+            ],
+            on,
+        )
+
+    def test_the_cross_os_nightly_gate_is_skipped_when_off_so_the_ref_itself_is_built(self) -> None:
+        gate = _job(self._text, "gate")
+        for name in ("Check out the gate script", "Require a green Cross-OS nightly"):
+            with self.subTest(step=name):
+                self.assertIn(f"if: github.ref == 'refs/heads/master' && {_OFF}", _step(gate, name))
+        self.assertIn("ref: ${{ needs.gate.outputs.sha || github.ref }}", _job(self._text, "build"))
+
+    def test_the_checksums_the_release_and_the_nightly_name_only_linux_assets_when_off(self) -> None:
+        publish = _job(self._text, "publish")
+        for name in ("Write SHA256SUMS", "Publish versioned release", "Publish nightly desktop build"):
+            with self.subTest(step=name):
+                step = _step(publish, name)
+                self.assertIn("CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}", step)
+                self.assertRegex(step, r'if \[ "\$\{CROSS_OS_CI:-\}" = "off" \]; then')
+                self.assertIn("Serenity-linux-x64.jar", step)
+                self.assertIn("Serenity-linux-x64.zip", step)
+
+    def test_existing_windows_and_macos_assets_are_never_deleted(self) -> None:
+        self.assertNotIn("gh release delete-asset", self._text)
+        self.assertNotIn("--clobber=false", self._text)
+        self.assertIn("gh release upload desktop-latest", self._text)
+
+    def test_the_nightly_notes_say_which_assets_a_build_carries(self) -> None:
+        notes = _step(_job(self._text, "build"), "Generate release notes")
+        self.assertIn('"${CROSS_OS_CI:-}" = "off"', notes)
+        self.assertIn("Linux only", notes)
+
+
+class DocumentationTests(unittest.TestCase):
+    def test_development_md_names_the_switch(self) -> None:
+        text = (_ROOT / "DEVELOPMENT.md").read_text()
+        self.assertIn("CROSS_OS_CI", text)
+        self.assertIn("off", text[text.index("CROSS_OS_CI") :][:1500])
+
+
+if __name__ == "__main__":
+    unittest.main()
