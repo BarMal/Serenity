@@ -235,7 +235,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
     )
 
     resolved.rows.head.segments.filter(_.trailingSeparator).map(_.text) shouldBe List(
-      ContextualToolbar.displayText(toolbarButton(state, "underline"), ToolbarDisplayMode.IconOnly),
+      ContextualToolbar.displayText(toolbarButton(state, "shadow"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "font-size"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarInput(state, "color-hex"), ToolbarDisplayMode.IconOnly),
       ContextualToolbar.displayText(toolbarDropdown(state, "paragraph-role"), ToolbarDisplayMode.IconOnly)
@@ -319,7 +319,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
     moveToolbarFocusTo(stateManager, "color-hex")
 
     val state = stateManager.getCurrentState.unsafeRunSync()
-    toolbarContentWidth(state) shouldBe 55
+    toolbarContentWidth(state) shouldBe 59
 
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val surface = new MockRenderSurface(viewport.width, viewport.height)
