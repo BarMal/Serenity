@@ -1,9 +1,9 @@
 package com.serenity
 
-import com.serenity.richtext.InlineMark
-import com.serenity.session.given
 import _root_.io.circe.parser.decode
 import _root_.io.circe.syntax.*
+import com.serenity.richtext.InlineMark
+import com.serenity.session.given
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
