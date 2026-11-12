@@ -15,15 +15,17 @@ object MarkdownSelection:
       SourceRange(anchor, focus)
     }
 
-  def emphasisOf(mark: InlineMark): Emphasis =
+  /** `None` for a mark Markdown has no syntax for, such as a shadow. */
+  def emphasisOf(mark: InlineMark): Option[Emphasis] =
     mark match
-      case InlineMark.Bold      => Emphasis.Bold
-      case InlineMark.Italic    => Emphasis.Italic
-      case InlineMark.Underline => Emphasis.Underline
+      case InlineMark.Bold      => Some(Emphasis.Bold)
+      case InlineMark.Italic    => Some(Emphasis.Italic)
+      case InlineMark.Underline => Some(Emphasis.Underline)
+      case InlineMark.Shadow    => None
 
   def marksAt(buffer: Buffer): Set[InlineMark] =
     val emphasis = MarkdownFormatting.emphasisAt(buffer.document.content, ranges(buffer))
-    InlineMark.values.toSet.filter(mark => emphasis.contains(emphasisOf(mark)))
+    InlineMark.values.toSet.filter(mark => emphasisOf(mark).exists(emphasis.contains))
 
   def headingLevelAt(buffer: Buffer): Int =
     MarkdownFormatting.headingLevelAt(buffer.document.content, ranges(buffer))

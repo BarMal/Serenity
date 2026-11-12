@@ -5,6 +5,7 @@ enum InlineMark:
   case Bold
   case Italic
   case Underline
+  case Shadow
 
 /** Content that occupies one character of paragraph text without being text. The character in the rope is
   * [[RichTextRun.AtomCharacter]]; the payload lives on the run, so undo and copy carry it with the text.

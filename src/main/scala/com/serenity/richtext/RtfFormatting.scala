@@ -7,6 +7,7 @@ final private[richtext] case class RtfCharFormat(
     bold: Option[Boolean] = None,
     italic: Option[Boolean] = None,
     underline: Option[Boolean] = None,
+    shadow: Option[Boolean] = None,
     font: Option[Int] = None,
     halfPoints: Option[Int] = None,
     color: Option[Int] = None
@@ -17,6 +18,7 @@ final private[richtext] case class RtfCharFormat(
       bold = top.bold.orElse(bold),
       italic = top.italic.orElse(italic),
       underline = top.underline.orElse(underline),
+      shadow = top.shadow.orElse(shadow),
       font = top.font.orElse(font),
       halfPoints = top.halfPoints.orElse(halfPoints),
       color = top.color.orElse(color)
@@ -27,6 +29,7 @@ final private[richtext] case class RtfCharFormat(
     name match
       case "b"                                                 => Some(copy(bold = Some(isOn(parameter))))
       case "i"                                                 => Some(copy(italic = Some(isOn(parameter))))
+      case "shad"                                              => Some(copy(shadow = Some(isOn(parameter))))
       case "ulnone"                                            => Some(copy(underline = Some(false)))
       case word if RtfCharFormat.UnderlineWords.contains(word) => Some(copy(underline = Some(isOn(parameter))))
       case "f"                                                 => parameter.map(index => copy(font = Some(index)))

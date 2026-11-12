@@ -218,6 +218,7 @@ given Decoder[InlineMark] = Decoder.decodeString.emap {
   case "Bold"      => Right(InlineMark.Bold)
   case "Italic"    => Right(InlineMark.Italic)
   case "Underline" => Right(InlineMark.Underline)
+  case "Shadow"    => Right(InlineMark.Shadow)
   case other       => Left(s"Unknown InlineMark: $other")
 }
 

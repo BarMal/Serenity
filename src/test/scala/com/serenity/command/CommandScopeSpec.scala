@@ -59,6 +59,7 @@ class CommandScopeSpec extends AnyFlatSpec with Matchers:
     "paragraph-drop-cap",
     "previous-placeholder",
     "restore-darling",
+    "shadow",
     "underline"
   )
 

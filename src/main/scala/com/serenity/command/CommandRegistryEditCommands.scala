@@ -135,6 +135,13 @@ private[command] object CommandRegistryEditCommands:
       CommandCategory.Edit,
       label = "Underline"
     ),
+    Command.typed(
+      "shadow",
+      "Toggle shadow formatting on the active selection.",
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(com.serenity.richtext.InlineMark.Shadow)),
+      CommandCategory.Edit,
+      label = "Shadow"
+    ),
     // Named "text size" rather than "font size" deliberately: CommandRegistrySpec reserves the "increase-font-size"/
     // "decrease-font-size" names (removed as redundant *global* typography toggles), and keeping "font" out of these
     // selection-scoped commands avoids disrupting the "font" settings-search ranking. Presentation is minimal pending

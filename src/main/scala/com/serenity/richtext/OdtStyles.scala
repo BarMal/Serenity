@@ -102,7 +102,8 @@ private[richtext] object OdtStyles:
       marks = List(
         Option.when(isBold(element))(InlineMark.Bold),
         Option.when(attribute(element, FoNs, "font-style").contains("italic"))(InlineMark.Italic),
-        Option.when(isUnderlined(element))(InlineMark.Underline)
+        Option.when(isUnderlined(element))(InlineMark.Underline),
+        Option.when(attribute(element, FoNs, "text-shadow").exists(_ != "none"))(InlineMark.Shadow)
       ).flatten.toSet,
       fontFamily = attribute(element, StyleNs, "font-name").orElse(attribute(element, FoNs, "font-family")),
       fontSize = attribute(element, FoNs, "font-size").flatMap(parsePointSize),
@@ -140,6 +141,7 @@ private[richtext] object OdtStyles:
       Option.when(style.marks.contains(InlineMark.Bold))("""fo:font-weight="bold""""),
       Option.when(style.marks.contains(InlineMark.Italic))("""fo:font-style="italic""""),
       Option.when(style.marks.contains(InlineMark.Underline))("""style:text-underline-style="solid""""),
+      Option.when(style.marks.contains(InlineMark.Shadow))("""fo:text-shadow="1pt 1pt""""),
       style.fontFamily.map(value =>
         s"""style:font-name="${escapeAttribute(value)}" fo:font-family="${escapeAttribute(value)}""""
       ),

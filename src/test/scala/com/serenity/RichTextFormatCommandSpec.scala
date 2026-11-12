@@ -185,6 +185,29 @@ class RichTextFormatCommandSpec extends AnyFlatSpec with Matchers with StateMana
     )
   }
 
+  it should "register a shadow command that toggles the shadow mark" in {
+    CommandRegistry.withToggleUI.findCommand("shadow").map(_.intent) shouldBe Some(
+      CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Shadow))
+    )
+  }
+
+  it should "apply shadow to the active selection" in {
+    val (stateManager, bufferId) =
+      selectedStateManager(
+        "alpha beta",
+        Selection(com.serenity.state.models.CursorPosition(0, 6), com.serenity.state.models.CursorPosition(0, 10))
+      )
+    val command = CommandRegistry.withToggleUI.findCommand("shadow").getOrElse(fail("missing shadow"))
+
+    stateManager.executeCommand(command).unsafeRunSync()
+
+    val buffer = stateManager.getCurrentState.unsafeRunSync().persisted.buffers(bufferId)
+    buffer.richText.richTextDocument
+      .flatMap(_.paragraphs.headOption)
+      .flatMap(_.runs.find(_.text == "beta"))
+      .map(_.style.marks) shouldBe Some(Set(InlineMark.Shadow))
+  }
+
   it should "apply the drop cap role to the active cursor paragraph" in {
     val stateManager = createStateManager()
     val bufferId     = stateManager.createBuffer("Chapter One\nBody", None).unsafeRunSync()
