@@ -326,6 +326,13 @@ object OverlayStackLayout:
       calculateCornerOverlayStack(position, slots, inset, gapRows).stack
     }
 
+  /** The whole top row, for each surface that takes it: not inset like a corner, since it covers the row. */
+  private[layout] def calculateTopEdgeOverlays(state: AppState, viewport: ViewportSize): List[(SurfaceId, LayoutRect)] =
+    state.floatingSurfaces.collect {
+      case UiSurface(id, _, SurfacePresentation.Floating(_, SurfacePlacement.TopEdge), _) =>
+        id -> LayoutRect(0, 0, viewport.width, 1)
+    }
+
   /** Lays out every panel assigned to one screen corner as a vertical list (issue #1310, mode 3), stacking from the
     * corner outward -- the first slot sits closest to the corner itself. Unlike `stackBelowCursorSurfaces`, which
     * shrinks each surface to fit, panels here either fit at their preferred height or collapse: once a slot's

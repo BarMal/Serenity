@@ -233,7 +233,9 @@ final private[manager] class StateManagerEventPipeline(
       EventPipelineTransitions.commandRunnerFocusNormalized(rawState)
     )
     val handleEvent: cats.effect.IO[Unit] =
-      if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
+      if FallbackHeaderReducer.isShown(prevState) && takenByFallbackHeader(event) then
+        dismissOrConsumeFallbackHeader(event, prevState)
+      else if prevState.hasBlockingModal && !allowedWhileBlockingModal(event) then cats.effect.IO.unit
       else Trace.timed(s"$eventLabel.dispatch")(dispatchEvent(event, prevState))
     handleEvent >>
       Trace.timed(s"$eventLabel.enqueueChangedLspDocuments")(
@@ -296,6 +298,19 @@ final private[manager] class StateManagerEventPipeline(
     modelCommit.commitValidated(start.app)(_ => centred) >>
       lspDocumentSync.enqueueChangedLspDocuments(start.app) >>
       scheduleMarkdownPreviewCommits(start.app)
+
+  /** Escape and a mouse event on the header's row are the header's, ahead of the modal gate and any peek. */
+  private def takenByFallbackHeader(event: Event): Boolean =
+    event match
+      case Escape            => true
+      case click: MouseClick => click.row == 0
+      case press: MousePress => press.row == 0
+      case _                 => false
+
+  private def dismissOrConsumeFallbackHeader(event: Event, prevState: AppState): cats.effect.IO[Unit] =
+    event match
+      case _: MousePress => cats.effect.IO.unit
+      case _             => modelCommit.commitState(FallbackHeaderReducer.dismissed(prevState), prevState)
 
   private def allowedWhileBlockingModal(event: Event): Boolean =
     event match

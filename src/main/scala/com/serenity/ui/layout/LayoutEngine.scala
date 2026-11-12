@@ -330,7 +330,8 @@ object LayoutEngine:
       belowCursorOverlayRect = belowLayout.stack.headOption.map(_._2),
       aboveCursorOverlayStack = aboveCursorOverlayStack,
       belowCursorOverlayStack = belowLayout.stack,
-      cornerOverlayStack = OverlayStackLayout.calculateCornerOverlays(state, editorPanelRect),
+      cornerOverlayStack = OverlayStackLayout.calculateCornerOverlays(state, editorPanelRect) ++
+        OverlayStackLayout.calculateTopEdgeOverlays(state, viewportSize),
       collapsedFloatingSurfaceIds = aboveLayout.collapsedSurfaceIds ++ belowLayout.collapsedSurfaceIds,
       floatingOverlayOffsetRows = floatingOffsets
     )
