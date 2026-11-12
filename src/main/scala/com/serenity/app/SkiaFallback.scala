@@ -2,8 +2,8 @@ package com.serenity.app
 
 import com.serenity.app.RenderBackendSelection.{Decision, Probe}
 
-/** The notice for the one fallback a user cannot see: Skia was wanted, its native library would not load, and the
-  * window quietly paints with Java2D.
+/** The notice for the fallback a user did not ask for: Skia was wanted, its native library would not load, and the
+  * window became the terminal.
   */
 object SkiaFallback:
 
@@ -11,7 +11,7 @@ object SkiaFallback:
 
   def notice(decision: Decision): Option[String] =
     decision.skiaFailure.map { cause =>
-      val lead = "Skia could not load, so Serenity is painting with Java2D."
+      val lead = "Skia could not load, so Serenity is running in the terminal."
       val detail = missingLibrary(cause) match
         case Some(library) =>
           s"The dynamic loader cannot find $library. Put the directories that hold it on LD_LIBRARY_PATH before " +

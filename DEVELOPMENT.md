@@ -392,7 +392,7 @@ on JBR too, but keep a separate archive per runtime or each switch will rewrite 
 
 ### Renderer selection and Wayland
 
-Serenity paints with Java2D, or with Skia (Skiko) where it can load. Each setting below can be given as a launch flag,
+Serenity paints with Skia (Skiko). Each setting below can be given as a launch flag,
 an environment variable or a config key; the flag wins over the variable, which wins over the file, which wins over the
 default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
 `SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
@@ -416,13 +416,16 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 `auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
-Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `skia-raster` forces the
-Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
-the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
+Java2D only if that cannot make a surface either. If the native library does not load before the window opens, a launch
+from a terminal runs the terminal interface instead, with a start-page notice and a `[RENDER]` log line that say why. A
+launch with no terminal (from a desktop launcher), or one that asked for the window (`--gui`, `--smoke-test`,
+`--startup-probe`), stops with an error dialog and a non-zero exit instead. `skia` and `auto` differ only in the reason
+logged; `skia-raster` forces the Skia CPU raster on any display and toolkit (it still needs the native library, and
+takes the same fallback, saying why, if the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
 the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
-(#2489); `ui.render.wayland` is then ignored. Terminal and safe-mode launches
-never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
+(#2489); `ui.render.wayland` is then ignored. Terminal launches never load Skia; safe mode loads it like any
+window launch, with the default render settings. The startup log records the outcome as
+`[RENDER] backend=<skia|skia-raster|terminal> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
 
 The layer is handed each frame as an image by default: the frame is painted on a Skia CPU surface off the event thread,
@@ -437,7 +440,7 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 
 | Value | Effect |
 | --- | --- |
-| `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
+| `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to the terminal if the native library does not load |
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.
@@ -445,12 +448,11 @@ The renderer and the toolkit are settled together before any AWT class loads, so
 #### Skia on NixOS
 
 Skiko's native library links against system libraries, and NixOS has no global library directory, so the dynamic loader
-cannot find them. The native probe then fails and the window paints with Java2D. The start page says so, naming the
+cannot find them. The native probe then fails and Serenity runs in the terminal. The start page says so, naming the
 missing library, and the log carries the failure:
-`[RENDER] backend=java2d reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
+`[RENDER] backend=terminal reason=ui.render.backend=skia could not load: LibraryLoadException: Failed to loade library .../libskiko-linux-x64.so`
 (Skiko's own spelling). The log line names only Skiko's file; the library that is actually missing is in the
-`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads. Setting `ui.render.backend = java2d` ends the
-notice.
+`UnsatisfiedLinkError` that Skiko wraps, which the start-page notice reads.
 
 The loader reads `LD_LIBRARY_PATH` when the process starts, so it has to be set before the JVM launches; the app cannot
 set it for itself. `ldd` on the extracted native (Skiko unpacks it into `~/.skiko/` on first load) lists what is missing:

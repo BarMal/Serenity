@@ -18,13 +18,11 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
       x11Display = true,
       probe = probe,
       setting = RenderBackendSetting.Auto,
-      skiaSurfaceAvailable = true,
-      waylandRender = WaylandRender.SkiaRaster,
-      rasterSurfaceAvailable = true
+      waylandRender = WaylandRender.SkiaRaster
     )
 
   private def failed(cause: String): Decision =
-    Decision(RenderBackend.Java2D, s"native probe failed: $cause", skiaFailure = Some(cause))
+    Decision(RenderBackend.Terminal, s"native probe failed: $cause", skiaFailure = Some(cause))
 
   "SkiaFallback.missingLibrary" should "name the library the dynamic loader could not find" in {
     SkiaFallback.missingLibrary(missingLibGl) shouldBe Some("libGL.so.1")
@@ -82,15 +80,14 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
   }
 
   "SkiaFallback.notice" should "stay silent when Skia was never expected to run" in {
-    SkiaFallback.notice(Decision(RenderBackend.Java2D, "native probe not run")) shouldBe None
-    SkiaFallback.notice(Decision(RenderBackend.Java2D, "skia surface unavailable")) shouldBe None
-    SkiaFallback.notice(Decision(RenderBackend.Java2D, "safe mode")) shouldBe None
+    SkiaFallback.notice(Decision(RenderBackend.Terminal, "terminal or headless launch")) shouldBe None
     SkiaFallback.notice(Decision(RenderBackend.Skia, "native probe passed")) shouldBe None
   }
 
   it should "say why Skia fell back and how to fix a missing library" in {
     val text = SkiaFallback.notice(failed(missingLibGl)).getOrElse(fail("a failed probe must produce a notice"))
-    text should include("Java2D")
+    text should include("terminal")
+    text should not include "Java2D"
     text should include("libGL.so.1")
     text should include("LD_LIBRARY_PATH")
     text should include("Skia on NixOS")
@@ -113,6 +110,6 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
 
   it should "add nothing when Skia was not expected to run or loaded" in {
     val plan = StartupRecovery.Plan(safeMode = false, notices = Nil)
-    plan.withSkiaFallback(Decision(RenderBackend.Java2D, "native probe not run")) shouldBe plan
+    plan.withSkiaFallback(Decision(RenderBackend.Terminal, "terminal or headless launch")) shouldBe plan
     plan.withSkiaFallback(Decision(RenderBackend.Skia, "native probe passed")) shouldBe plan
   }

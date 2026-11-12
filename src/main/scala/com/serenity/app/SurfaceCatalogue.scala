@@ -3,24 +3,20 @@ package com.serenity.app
 import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.{SkiaLayerSurfaceFactory, SkiaRasterSurfaceFactory}
 
-/** The surface factories this build can offer. Each Skia slot is a thunk so that building the factory, and with it
-  * loading Skiko and Kotlin classes, happens only when that backend was chosen. `skia` paints through a Skiko layer;
-  * `skiaRaster` paints on the CPU into an image that the Java2D canvas presents.
+/** The surface factories this build offers. Each is a thunk so that building the factory, and with it loading Skiko and
+  * Kotlin classes, happens only when that backend was chosen. `skia` paints through a Skiko layer; `skiaRaster` paints
+  * on the CPU into an image that the Java2D canvas presents.
   */
-final case class SurfaceCatalogue(
-    skia: Option[() => FrameSurfaceFactory],
-    skiaRaster: Option[() => FrameSurfaceFactory] = None
-):
+final case class SurfaceCatalogue(skia: () => FrameSurfaceFactory, skiaRaster: () => FrameSurfaceFactory):
 
-  def factoryFor(backend: RenderBackend): FrameSurfaceFactory =
+  /** `None` for the terminal, which paints no window. */
+  def factoryFor(backend: RenderBackend): Option[FrameSurfaceFactory] =
     backend match
-      case RenderBackend.Java2D     => FrameSurfaceFactory.Java2D
-      case RenderBackend.Skia       => skia.fold(FrameSurfaceFactory.Java2D)(build => build())
-      case RenderBackend.SkiaRaster => skiaRaster.fold(FrameSurfaceFactory.Java2D)(build => build())
+      case RenderBackend.Terminal   => None
+      case RenderBackend.Skia       => Some(skia())
+      case RenderBackend.SkiaRaster => Some(skiaRaster())
 
 object SurfaceCatalogue:
-  val Java2DOnly: SurfaceCatalogue = SurfaceCatalogue(None)
 
   /** What a release offers: the GPU layer, and the CPU rasteriser a Wayland launch can ask for. */
-  val Available: SurfaceCatalogue =
-    SurfaceCatalogue(Some(() => SkiaLayerSurfaceFactory), Some(() => SkiaRasterSurfaceFactory))
+  val Available: SurfaceCatalogue = SurfaceCatalogue(() => SkiaLayerSurfaceFactory, () => SkiaRasterSurfaceFactory)
