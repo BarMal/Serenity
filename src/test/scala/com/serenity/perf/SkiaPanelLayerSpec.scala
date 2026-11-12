@@ -1,6 +1,7 @@
 package com.serenity.perf
 
 import java.awt.Font
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
@@ -11,7 +12,6 @@ import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity, SurfaceSizing}
 import com.serenity.{DockedPanelFixtures, SkiaFrames}
-import java.util.concurrent.atomic.AtomicReference
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
