@@ -153,7 +153,7 @@ class HotkeyOverridesSpec extends AnyFlatSpec with Matchers with OptionValues:
   // Migration
 
   "the config version" should "have moved past the format that wrote every hotkey" in {
-    ConfigVersion.Current shouldBe ConfigVersion(2)
+    ConfigVersion.Current shouldBe ConfigVersion(3)
   }
 
   "a file written before Ctrl+Shift+Z was added to redo" should "load with the current redo bindings" in {

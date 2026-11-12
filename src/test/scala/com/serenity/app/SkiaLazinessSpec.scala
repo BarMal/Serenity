@@ -52,28 +52,8 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
 
   private val cases = List(
     ("a terminal launch", "terminal", Nil),
-    ("safe mode", "safe", Nil),
-    ("a window with ui.render.backend = java2d", "window", List("ui.render.backend = java2d"))
+    ("safe mode", "safe", Nil)
   )
-
-  private val waylandEnvironment = Map("WAYLAND_DISPLAY" -> "wayland-1", "DISPLAY" -> ":0")
-
-  "Resolving the renderer with --wayland-render=java2d on a Wayland session" should
-    "not load any Skiko or Kotlin class, even when the config asks for xwayland" in {
-      assume(
-        System.getProperty("os.name", "").toLowerCase.contains("linux"),
-        "a Wayland session exists only on Linux; elsewhere auto loads Skia, which the test for auto covers"
-      )
-      val run = runChild(
-        "wayland-java2d",
-        List("ui.render.wayland = xwayland"),
-        waylandEnvironment,
-        List("-Dawt.toolkit.name=WLToolkit")
-      )
-      run.exitCode shouldBe 0
-      run.output.exists(_.startsWith("resolved backend=java2d")) shouldBe true
-      loadedForbidden(run) shouldBe Nil
-    }
 
   cases.foreach { (description, kind, config) =>
     s"Resolving the renderer for $description" should "not load any Skiko or Kotlin class" in {

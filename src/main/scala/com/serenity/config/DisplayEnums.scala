@@ -41,7 +41,6 @@ enum RenderBackendSetting(val configKey: String):
   case Auto       extends RenderBackendSetting("auto")
   case Skia       extends RenderBackendSetting("skia")
   case SkiaRaster extends RenderBackendSetting("skia-raster")
-  case Java2D     extends RenderBackendSetting("java2d")
 
 object RenderBackendSetting:
 
@@ -50,15 +49,13 @@ object RenderBackendSetting:
       case "auto"                                   => Some(Auto)
       case "skia" | "skiko"                         => Some(Skia)
       case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
-      case "java2d" | "java"                        => Some(Java2D)
       case _                                        => None
 
-/** What a Wayland session does when the window would otherwise be painted by Skia. `Java2D` keeps the native Wayland
-  * toolkit and Java2D; `SkiaRaster` keeps the toolkit and paints Skia on the CPU into an image Java2D presents;
-  * `XWayland` swaps to the X11 toolkit so that Skia's GLX layer can run.
+/** What a Wayland session does when the window would otherwise be painted by Skia. `SkiaRaster` keeps the native
+  * Wayland toolkit and paints Skia on the CPU into an image Java2D presents; `XWayland` swaps to the X11 toolkit so
+  * that Skia's GLX layer can run.
   */
 enum WaylandRender(val configKey: String):
-  case Java2D     extends WaylandRender("java2d")
   case SkiaRaster extends WaylandRender("skia-raster")
   case XWayland   extends WaylandRender("xwayland")
 
@@ -66,7 +63,6 @@ object WaylandRender:
 
   def fromConfigKey(value: String): Option[WaylandRender] =
     value.trim.toLowerCase match
-      case "java2d" | "java"                        => Some(Java2D)
       case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
       case "xwayland" | "x11"                       => Some(XWayland)
       case _                                        => None

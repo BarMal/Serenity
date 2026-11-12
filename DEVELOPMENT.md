@@ -397,12 +397,14 @@ an environment variable or a config key; the flag wins over the variable, which 
 default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
 `SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
 config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
-its default.
+its default. `java2d` is not a choice any more: a config file written before config version 3 that still says
+`java2d` for either setting is read as that setting's default (`auto` for the renderer, `skia-raster` for the Wayland
+render), with a migration note, and anywhere else it is an unrecognised value.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
-| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
 `ui.render.skia_vsync` makes Skia's GPU layer wait for the display's vertical blank before presenting. It is off by default: on
@@ -415,7 +417,7 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+log says why. `skia` and `auto` differ only in the reason logged; `skia-raster` forces the
 Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
 the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
 the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
@@ -436,7 +438,6 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 | Value | Effect |
 | --- | --- |
 | `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
-| `java2d` | Keep `WLToolkit` and use Java2D |
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.

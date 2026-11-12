@@ -12,7 +12,7 @@ import com.typesafe.config.{Config, ConfigValueFactory}
 opaque type ConfigVersion = Int
 
 object ConfigVersion:
-  val Current: ConfigVersion = ConfigVersion(2)
+  val Current: ConfigVersion = ConfigVersion(3)
 
   def apply(value: Int): ConfigVersion = value
 
@@ -170,13 +170,17 @@ object ConfigMigrations:
   /** `osName` is the platform whose hotkey defaults the file is written against. */
   final case class Plan(steps: List[Step], target: ConfigVersion, osName: String = HotkeyOverrides.runningOs)
 
-  val steps: List[Step] = List(droppingDefaultHotkeys(HotkeyOverrides.runningOs))
+  val steps: List[Step] = List(droppingDefaultHotkeys(HotkeyOverrides.runningOs), withoutJava2DRenderer)
 
   val installed: Plan = Plan(steps, ConfigVersion.Current)
 
   /** Version 1 to 2: `config.conf` records only the hotkeys the user changed (see [[HotkeyMigration]]). */
   def droppingDefaultHotkeys(osName: String): Step =
     Step(ConfigVersion(1), HotkeyMigration.withoutDefaultBindings(osName))
+
+  /** Version 2 to 3: Java2D is no longer a renderer (see [[RenderBackendMigration]]). */
+  def withoutJava2DRenderer: Step =
+    Step(ConfigVersion(2), RenderBackendMigration.withoutJava2D, RenderBackendMigration.notes)
 
   def versionOf(source: Config): ConfigVersion =
     ConfigVersionStatus.declared(source).getOrElse(ConfigVersionStatus.legacy)
