@@ -230,9 +230,9 @@ jobs:
 
       - name: Run tests
         # Fails with a thread dump after 40 minutes instead of holding the runner for 6 hours on a hang.
-        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v writeFrameCountBaseline
+        run: xvfb-run -a -s "-screen 0 1920x1200x24" sbt -v "testOnly com.serenity.perf.FrameCountRatchetSpec"
 
-      - name: Upload regenerated baseline
+      - name: Upload regenerated baseline (unused)
         uses: actions/upload-artifact@v4
         with:
           name: frame-counts-linux
