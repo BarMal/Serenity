@@ -144,6 +144,18 @@ class InstallPackagesTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertEqual(0, len([call for call in self._calls() if " install" in call]), self._calls())
 
+    def test_it_says_whether_the_cache_was_used_so_a_run_log_shows_a_miss_then_a_hit(self) -> None:
+        self._cached("a.deb", "b.deb")
+        hit = self._run("true")
+        self.assertIn("cache hit: installing 2 cached packages", hit.stderr)
+        self._cached()
+        for stale in self.archive.glob("*.deb"):
+            stale.unlink()
+        miss = self._run("false")
+        self.assertIn("cache miss: fetching libegl1 sway", miss.stderr)
+        empty = self._run("true")
+        self.assertIn("cache miss: fetching libegl1 sway", empty.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
