@@ -147,7 +147,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   private val imageLayer =
     new LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas),
-      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      SkiaRasterSurfaceFactory,
       LayerFrames.Image
     )
 
