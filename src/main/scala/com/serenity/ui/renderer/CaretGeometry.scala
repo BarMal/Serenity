@@ -30,13 +30,15 @@ object CaretGeometry:
       }
     bodyPolygon(body, style) :: underline.toList ::: strike.toList
 
-  /** The caret's own shape, slanted and widened as styled, moved by [[TextShadow]]'s offset: what a shadowed caret draws
-    * first, in the shadow's colour. The rules are not shadowed, as an underline is not in the text.
+  /** The caret's own shape, slanted and widened as styled, moved by [[TextShadow]]'s offset: what a shadowed caret
+    * draws first, in the shadow's colour. The rules are not shadowed, as an underline is not in the text.
     */
   def shadowPolygons(body: Rectangle, style: CaretStyle): List[Polygon] =
     val offset = TextShadow.offsetOf(1.0)
     Option
-      .when(style.shadow)(bodyPolygon(body, style).copy(points = bodyPolygon(body, style).points.map((x, y) => (x + offset, y + offset))))
+      .when(style.shadow)(
+        bodyPolygon(body, style).copy(points = bodyPolygon(body, style).points.map((x, y) => (x + offset, y + offset)))
+      )
       .toList
 
   /** The smallest rect covering every shape of `style`, which a repaint of the caret has to cover. */

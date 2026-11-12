@@ -24,6 +24,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   private val black  = 0xff000000
   private val white  = 0xffffffff
   private val italic = CaretStyle(italic = true)
+
   private val styles =
     List(
       italic,
@@ -33,6 +34,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
       CaretStyle(shadow = true),
       CaretStyle(italic = true, shadow = true)
     )
+
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
   private val metrics = CellMetrics.fromFont(font)
 
@@ -87,7 +89,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
     }
 
     it should "paint a shadowed caret's shadow one pixel down and to the right at 40%, under the caret" in {
-      val pixel = paint(List(CaretPaint.styled(body, Color.WHITE, CaretStyle(shadow = true))))
+      val pixel               = paint(List(CaretPaint.styled(body, Color.WHITE, CaretStyle(shadow = true))))
       def red(argb: Int): Int = (argb >> 16) & 0xff
 
       pixel(21)(20) shouldBe white
