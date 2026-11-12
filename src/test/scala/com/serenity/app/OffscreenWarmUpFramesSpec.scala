@@ -1,6 +1,7 @@
 package com.serenity.app
 
 import java.awt.Font
+import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
@@ -11,7 +12,6 @@ import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.FakeRenderTarget
 import com.serenity.ui.skia.SkiaTextCaches
-import java.util.concurrent.atomic.AtomicReference
 import org.jetbrains.skia.Surface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
