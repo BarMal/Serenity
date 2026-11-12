@@ -1,6 +1,6 @@
 package com.serenity.ui.skia
 
-import com.serenity.ui.renderer.{CaretGeometry, CaretPaint}
+import com.serenity.ui.renderer.{CaretGeometry, CaretPaint, TextShadow}
 import org.jetbrains.skia.{Canvas, Paint, Path, PathFillMode, Point, Rect}
 
 /** Draws carets over a layer: a plain caret as the rect it always was, a styled one as the shapes of [[CaretGeometry]]
@@ -16,7 +16,10 @@ private[serenity] object SkiaCaretInk:
         caret.body match
           case Some(body) if !caret.style.isPlain =>
             ink.setAntiAlias(true)
-            CaretGeometry.polygons(body, caret.style).foreach(polygon => drawPolygon(canvas, polygon, scale, ink))
+            ink.setColor(TextShadow.colorOf(caret.color).getRGB)
+            CaretGeometry.shadowPolygons(body, caret.style).foreach(drawPolygon(canvas, _, scale, ink))
+            ink.setColor(caret.color.getRGB)
+            CaretGeometry.polygons(body, caret.style).foreach(drawPolygon(canvas, _, scale, ink))
             ink.setAntiAlias(false)
           case _ =>
             canvas.drawRect(

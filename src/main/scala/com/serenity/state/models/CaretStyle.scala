@@ -8,9 +8,10 @@ final case class CaretStyle(
     italic: Boolean = false,
     bold: Boolean = false,
     underline: Boolean = false,
-    strikethrough: Boolean = false
+    strikethrough: Boolean = false,
+    shadow: Boolean = false
 ):
-  def isPlain: Boolean = !(italic || bold || underline || strikethrough)
+  def isPlain: Boolean = !(italic || bold || underline || strikethrough || shadow)
 
 object CaretStyle:
 
@@ -41,7 +42,8 @@ object CaretStyle:
     CaretStyle(
       italic = style.marks.contains(InlineMark.Italic),
       bold = style.marks.contains(InlineMark.Bold),
-      underline = style.marks.contains(InlineMark.Underline)
+      underline = style.marks.contains(InlineMark.Underline),
+      shadow = style.marks.contains(InlineMark.Shadow)
     )
 
   private def fromMarkdown(style: Style): CaretStyle =
