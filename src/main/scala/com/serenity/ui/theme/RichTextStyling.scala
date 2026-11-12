@@ -132,6 +132,7 @@ object RichTextStyling:
         isBold = style.marks.contains(InlineMark.Bold),
         isItalic = style.marks.contains(InlineMark.Italic),
         isUnderlined = style.marks.contains(InlineMark.Underline),
+        isShadowed = style.marks.contains(InlineMark.Shadow),
         fontFamily = style.fontFamily,
         fontSize = style.fontSize
       )
@@ -191,6 +192,7 @@ object RichTextStyling:
             isBold = true,
             isItalic = firstCharacterStyle.marks.contains(InlineMark.Italic),
             isUnderlined = firstCharacterStyle.marks.contains(InlineMark.Underline),
+            isShadowed = firstCharacterStyle.marks.contains(InlineMark.Shadow),
             fontFamily = firstCharacterStyle.fontFamily,
             fontSize = Some(glyphFontSizePx)
           )

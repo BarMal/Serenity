@@ -24,7 +24,8 @@ import com.serenity.ui.renderer.{
   SurfaceActivity,
   SurfaceContentIdentity,
   SurfaceSizing,
-  TextDrawing
+  TextDrawing,
+  TextShadow
 }
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
@@ -132,6 +133,7 @@ final class SkiaRenderSurface(
   private val translation   = AtomicReference((0.0, 0.0))
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
+  private val shadowRef     = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
   private val pixelMover =
     SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
@@ -303,10 +305,27 @@ final class SkiaRenderSurface(
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
-          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(drawGlyphs)
+          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(
+            drawShadowed(drawGlyphs)
+          )
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+
+  /** A shadowed run's glyphs are drawn once more first, as [[TextShadow]] has them, inside the clip the run has. */
+  private def drawShadowed(drawGlyphs: => Unit): Unit =
+    if shadowRef.get() then
+      val foreground = fgRef.get()
+      val offset     = TextShadow.offsetOf(deviceScaleX).toFloat
+      fgRef.set(TextShadow.colorOf(foreground))
+      val saved = canvas.save()
+      try
+        val _ = canvas.translate(offset, offset)
+        drawGlyphs
+      finally
+        restoreTo(saved)
+        fgRef.set(foreground)
+    drawGlyphs
 
   private def clipTo(x: Int, y: Int, width: Int, height: Int): Unit =
     val _ = canvas.clipRect(rect(x.toFloat, y.toFloat, width.toFloat, height.toFloat), false)
@@ -402,10 +421,12 @@ final class SkiaRenderSurface(
 
   def enableStyle(style: TextStyle): Unit =
     underlineRef.set(style.isUnderlined)
+    shadowRef.set(style.isShadowed)
     currentFontRef.set(styledFonts.fontFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     underlineRef.set(false)
+    shadowRef.set(false)
     currentFontRef.set(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =
