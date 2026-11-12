@@ -65,6 +65,21 @@ Run formatting and Scalafix before committing when changing Scala code:
 sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ```
 
+### Turning Windows and macOS CI off (Linux only)
+
+The repository variable `CROSS_OS_CI` is the one switch (Settings, Secrets and variables, Actions, Variables). Unset, or any
+value but `off`, every job runs as usual. At `off` (#2618) the Windows and macOS jobs are skipped:
+
+- Cross-OS Tests: its four jobs are skipped, so the required checks `Test (windows)` and `Test (macos)` report skipped,
+  which branch protection counts as passing.
+- The merge train gates on `ci.yml` alone (`scripts/merge_train.py`, `required_workflows`) and no longer dispatches or
+  waits for Cross-OS Tests; Auto Squash Merge stops requiring the two Cross-OS checks.
+- Desktop Package Check, Ligature Oracle, Skia Natives Probe and the macOS and Windows Skiko builds run Linux only.
+- Desktop Publish skips the Cross-OS nightly gate, builds the Linux jar and zip, and publishes only those (the checksum
+  file and the release notes name them); Windows and macOS assets already on a release are left as they are.
+
+Delete the variable to turn everything back on; no job was removed. A change to a workflow file is merged by hand.
+
 ### Build layout
 
 The build has an aggregate `root` project with no sources and an `app` project that holds the whole application (#2502).

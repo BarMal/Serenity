@@ -38,6 +38,7 @@ jobs:
           PR_NUMBER: ${{ github.event.workflow_run.pull_requests[0].number }}
           REPO: ${{ github.repository }}
           WORKFLOW_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         shell: bash
         run: |
           set -euo pipefail
@@ -72,7 +73,12 @@ jobs:
           # CI finishing is what starts this job, but the Cross-OS jobs run beside it and must also have passed. A check
           # that has not been created yet is not a passing one, so these are waited for by name, for a few minutes, and
           # then fail the merge rather than letting a pull request through without Windows and macOS (#2016).
-          required_checks=("Cross-OS Tests: Test (windows)" "Cross-OS Tests: Test (macos)")
+          # With the repository variable CROSS_OS_CI at "off" (Linux only, #2618) there are no Windows or macOS checks.
+          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+            required_checks=()
+          else
+            required_checks=("Cross-OS Tests: Test (windows)" "Cross-OS Tests: Test (macos)")
+          fi
           missing_polls=0
 
           while true; do

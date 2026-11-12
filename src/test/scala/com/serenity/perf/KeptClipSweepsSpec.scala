@@ -8,8 +8,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** A frame that keeps rows clips each draw near them off the kept pixels, and for that works out the rectangles it may
   * paint in. The rows a draw lies in are the same for every run in a row, so a frame should work them out once for each
-  * row it draws, not once for each run and fill in it. What gets painted is the cold frame's, as in the other frame
-  * specs.
+  * row it draws, not once for each run and fill in it. What gets painted is compared with a cold frame in
+  * [[KeptClipFramesSpec]], so that these counts are of the Skia path on every platform.
   */
 class KeptClipSweepsSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
 
@@ -26,5 +26,4 @@ class KeptClipSweepsSpec extends AnyFlatSpec with Matchers with ColdFrameHarness
         counts(FrameCounter.RowsDrawn) should be > 0L
         counts(FrameCounter.ClipSweeps) should be <= counts(FrameCounter.RowsDrawn)
       }
-      session.mismatches shouldBe empty
     }
