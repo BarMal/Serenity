@@ -32,6 +32,7 @@ if [[ "$cache_hit" == "true" ]]; then
   cached=("$archive"/*.deb)
   shopt -u nullglob
   if ((${#cached[@]} > 0)); then
+    echo "cache hit: installing ${#cached[@]} cached packages" >&2
     if $privileged dpkg -i "${cached[@]}"; then
       exit 0
     fi
@@ -39,6 +40,7 @@ if [[ "$cache_hit" == "true" ]]; then
   fi
 fi
 
+echo "cache miss: fetching $packages" >&2
 for attempt in $(seq 1 "$attempts"); do
   # shellcheck disable=SC2086 # the package list is meant to split
   if $privileged apt-get update -q "${options[@]}" &&
