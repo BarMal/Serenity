@@ -400,7 +400,9 @@ object ConfigFileFormat:
     ),
     comment("monospaced buffers only, falling back to rows for proportional or ligature-shaped text"),
     field("ui.render.damage_granularity"),
-    comment("Renderer for the window: auto uses Skia's GPU layer where it loads, falling back to Skia on the CPU if the"),
+    comment(
+      "Renderer for the window: auto uses Skia's GPU layer where it loads, falling back to Skia on the CPU if the"
+    ),
     comment("layer cannot be made; skia or skia-raster (Skia on the CPU, any display) forces one."),
     comment("SERENITY_RENDER_BACKEND overrides this. Needs a restart."),
     field("ui.render.backend"),
