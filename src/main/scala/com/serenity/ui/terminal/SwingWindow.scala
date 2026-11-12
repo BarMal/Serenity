@@ -21,7 +21,6 @@ import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{CaretCanvases, CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
-import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.theme.Theme
 import org.typelevel.log4cats.Logger
 
@@ -507,11 +506,9 @@ class SwingWindow(
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
 
-  def geometry: SurfaceGeometry = SwingCanvasGeometry.of(canvas)
-
+  def geometry: SurfaceGeometry                   = SwingCanvasGeometry.of(canvas)
   override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
-
-  override def caretCanvases: CaretCanvases = SkiaCaretCanvases
+  override def caretCanvases: CaretCanvases       = com.serenity.ui.skia.SkiaCaretCanvases
 
   override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 
