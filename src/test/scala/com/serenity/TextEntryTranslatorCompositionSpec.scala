@@ -169,9 +169,9 @@ class TextEntryTranslatorCompositionSpec extends AnyFlatSpec with Matchers:
 
   it should "leave unmatched text hotkey partial functions undefined" in {
     val converter = TextHotkeyConverters.hotkeyConverter()
-    // F2 rather than F1: F1 is now bound to Toggle Shortcuts Help (issue #1247) by default, so it is no longer an
-    // unmatched key for this converter -- F2 stays genuinely unbound.
-    val unmatched = KeyStrokeInfo(InputKey.F2, None, Set.empty)
+    // F4 rather than F1 or F2: F1 is bound to Toggle Shortcuts Help (issue #1247) and F2 to Open Logs Folder by
+    // default, so neither is an unmatched key for this converter -- F4 stays genuinely unbound.
+    val unmatched = KeyStrokeInfo(InputKey.F4, None, Set.empty)
 
     converter.isDefinedAt(unmatched) shouldBe false
     converter.applyOrElse[KeyStrokeInfo, Any](unmatched, _ => "fallback") shouldBe "fallback"
