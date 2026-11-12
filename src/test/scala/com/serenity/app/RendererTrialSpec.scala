@@ -10,10 +10,10 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
   private val measured = Outcome.Measured(Workload(31.5, Map("page-down" -> 12.25, "full-redraw" -> 40.0)))
 
   private def report(
-      requested: Candidate = Candidate.LayerImage,
-      backend: RenderBackend = RenderBackend.Skia,
-      renderApi: Option[String] = Some("OPENGL"),
-      outcome: Outcome = measured
+    requested: Candidate = Candidate.LayerImage,
+    backend: RenderBackend = RenderBackend.Skia,
+    renderApi: Option[String] = Some("OPENGL"),
+    outcome: Outcome = measured
   ) = Report(requested, backend, renderApi, outcome)
 
   "RendererTrial.line" should "be one line that starts with the marker the coordinator looks for" in {
@@ -32,7 +32,7 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
     reports.foreach(r => RendererTrial.read(RendererTrial.line(r)) shouldBe Some(r))
   }
 
-  "RendererTrial.read" should "find nothing in a line that is not a trial line or cannot be decoded" in {
+  "RendererTrial.read" should "find nothing in a line that is not a trial line or cannot be decoded" in
     List(
       "",
       "RENDERER_TRIAL",
@@ -41,7 +41,6 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
       "RENDERER_TRIAL {\"requested\":\"layer+nonsense\"}",
       "something else {\"requested\":\"layer+image\"}"
     ).foreach(text => withClue(text)(RendererTrial.read(text) shouldBe None))
-  }
 
   "RendererTrial.outcomeOf" should "take the measured outcome of the one trial line in a child's output" in {
     val output = s"""starting the window
@@ -71,12 +70,15 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail a child that measured a different mode from the one it was asked for" in {
-    RendererTrial.outcomeOf(RendererTrial.line(report(Candidate.SkiaRaster, RenderBackend.SkiaRaster)), Candidate.LayerImage) match
+    RendererTrial.outcomeOf(
+      RendererTrial.line(report(Candidate.SkiaRaster, RenderBackend.SkiaRaster)),
+      Candidate.LayerImage
+    ) match
       case Outcome.Failed(reason) => reason should (include("skia-raster") and include("layer+image"))
       case other                  => fail(s"expected a failure, got $other")
   }
 
-  it should "report a mode that fell back to Java2D as failed, not as a measurement of that mode" in {
+  it should "report a mode that fell back to Java2D as failed, not as a measurement of that mode" in
     List(Candidate.LayerImage, Candidate.LayerPicture, Candidate.SkiaRaster).foreach { candidate =>
       withClue(candidate.label) {
         val fellBack = report(candidate, RenderBackend.Java2D, None)
@@ -85,10 +87,12 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
           case other                  => fail(s"expected a failure, got $other")
       }
     }
-  }
 
   it should "report a layer mode that ended on the wrong backend as failed, and keep a failed run's own reason" in {
-    RendererTrial.outcomeOf(RendererTrial.line(report(Candidate.LayerImage, RenderBackend.SkiaRaster)), Candidate.LayerImage) match
+    RendererTrial.outcomeOf(
+      RendererTrial.line(report(Candidate.LayerImage, RenderBackend.SkiaRaster)),
+      Candidate.LayerImage
+    ) match
       case Outcome.Failed(reason) => reason should include("skia-raster")
       case other                  => fail(s"expected a failure, got $other")
     val failed = report(outcome = Outcome.Failed("every page-down sample timed out (20)"))

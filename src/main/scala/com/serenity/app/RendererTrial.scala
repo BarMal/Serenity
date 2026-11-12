@@ -19,20 +19,18 @@ object RendererTrial:
 
   def line(report: Report): String =
     val json = Json.obj(
-      "requested"  -> report.requested.label.asJson,
-      "backend"    -> report.backend.configKey.asJson,
-      "renderApi"  -> report.renderApi.asJson,
-      "outcome"    -> RendererBenchmarkResult.outcomeJson(report.outcome)
+      "requested" -> report.requested.label.asJson,
+      "backend"   -> report.backend.configKey.asJson,
+      "renderApi" -> report.renderApi.asJson,
+      "outcome"   -> RendererBenchmarkResult.outcomeJson(report.outcome)
     )
     s"$Marker ${json.noSpaces}"
 
-  private given Decoder[Candidate] = Decoder.decodeString.emap(label =>
-    Candidate.values.find(_.label == label).toRight(s"not a candidate: $label")
-  )
+  private given Decoder[Candidate] =
+    Decoder.decodeString.emap(label => Candidate.values.find(_.label == label).toRight(s"not a candidate: $label"))
 
-  private given Decoder[RenderBackend] = Decoder.decodeString.emap(key =>
-    RenderBackend.values.find(_.configKey == key).toRight(s"not a backend: $key")
-  )
+  private given Decoder[RenderBackend] =
+    Decoder.decodeString.emap(key => RenderBackend.values.find(_.configKey == key).toRight(s"not a backend: $key"))
 
   private given Decoder[Report] = (cursor: HCursor) =>
     for
@@ -57,7 +55,8 @@ object RendererTrial:
     output.linesIterator.filter(_.startsWith(Marker)).toList match
       case Nil => Outcome.Failed(s"the child printed no $Marker line")
       case line :: Nil =>
-        read(line).fold(Outcome.Failed(s"the child's $Marker line is unreadable: ${line.take(200)}"))(verdict(_, expected))
+        read(line)
+          .fold(Outcome.Failed(s"the child's $Marker line is unreadable: ${line.take(200)}"))(verdict(_, expected))
       case _ => Outcome.Failed(s"the child printed more than one $Marker line")
 
   private def verdict(report: Report, expected: Candidate): Outcome =

@@ -28,12 +28,11 @@ class RendererRunOrderSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  it should "give every candidate at least two runs, so the spread between a mode's own runs is real" in {
+  it should "give every candidate at least two runs, so the spread between a mode's own runs is real" in
     List(false, true).foreach { thorough =>
       val order = RendererRunOrder.order(thorough)
       RendererRunOrder.candidates(thorough).foreach(c => order.count(_ == c) shouldBe 2)
     }
-  }
 
   "RendererRunOrder.minutes" should "say how long a run takes, at about two minutes per trial" in {
     RendererRunOrder.minutes(thorough = false) shouldBe 8
