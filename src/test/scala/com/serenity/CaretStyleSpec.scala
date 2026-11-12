@@ -34,6 +34,22 @@ class CaretStyleSpec extends AnyFlatSpec with Matchers:
     CaretStyle.forRichText(buffer, at(3)) shouldBe CaretStyle(bold = true, underline = true)
   }
 
+  it should "show the Shadow mark of the run before the caret, beside its other marks" in {
+    val buffer = proseBuffer(run("ab", InlineMark.Shadow), run("cd", InlineMark.Italic, InlineMark.Shadow))
+
+    CaretStyle.forRichText(buffer, at(1)) shouldBe CaretStyle(shadow = true)
+    CaretStyle.forRichText(buffer, at(3)) shouldBe CaretStyle(italic = true, shadow = true)
+  }
+
+  it should "show a Shadow toggled for the next character before anything is typed" in {
+    val buffer = proseBuffer(run("ab"))
+    val toggled = buffer.copy(richText =
+      buffer.richText.copy(insertionRichTextStyle = Some(RichTextStyle(marks = Set(InlineMark.Shadow))))
+    )
+
+    CaretStyle.forRichText(toggled, at(1)) shouldBe CaretStyle(shadow = true)
+  }
+
   it should "be plain after plain text and at the start of an empty line" in {
     val buffer = proseBuffer(run("ab", InlineMark.Italic), run("cd"))
 
@@ -83,5 +99,6 @@ class CaretStyleSpec extends AnyFlatSpec with Matchers:
   "CaretStyle.isPlain" should "hold only when no flag is set" in {
     CaretStyle.Plain.isPlain shouldBe true
     CaretStyle(strikethrough = true).isPlain shouldBe false
+    CaretStyle(shadow = true).isPlain shouldBe false
   }
 end CaretStyleSpec

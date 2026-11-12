@@ -24,8 +24,17 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   private val black  = 0xff000000
   private val white  = 0xffffffff
   private val italic = CaretStyle(italic = true)
+
   private val styles =
-    List(italic, CaretStyle(bold = true), CaretStyle(underline = true), CaretStyle(strikethrough = true))
+    List(
+      italic,
+      CaretStyle(bold = true),
+      CaretStyle(underline = true),
+      CaretStyle(strikethrough = true),
+      CaretStyle(shadow = true),
+      CaretStyle(italic = true, shadow = true)
+    )
+
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
   private val metrics = CellMetrics.fromFont(font)
 
@@ -79,6 +88,29 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
       struck(16)(29) shouldBe black
     }
 
+    it should "paint a shadowed caret's shadow one pixel down and to the right at 40%, under the caret" in {
+      val pixel               = paint(List(CaretPaint.styled(body, Color.WHITE, CaretStyle(shadow = true))))
+      def red(argb: Int): Int = (argb >> 16) & 0xff
+
+      pixel(21)(20) shouldBe white
+      pixel(20)(10) shouldBe white
+      red(pixel(22)(20)) should (be >= 99 and be <= 105)
+      red(pixel(21)(30)) should (be >= 99 and be <= 105)
+      pixel(20)(30) shouldBe black
+      pixel(23)(20) shouldBe black
+      pixel(22)(10) shouldBe black
+    }
+
+    it should "paint a shadowed slanted caret's shadow along the slant" in {
+      val plain   = paint(List(CaretPaint.styled(body, Color.WHITE, italic)))
+      val shadowy = paint(List(CaretPaint.styled(body, Color.WHITE, CaretStyle(italic = true, shadow = true))))
+      def red(argb: Int): Int = (argb >> 16) & 0xff
+
+      shadowy(24)(12) shouldBe white
+      plain(26)(12) shouldBe black
+      red(shadowy(26)(12)) should (be >= 20 and be <= 105)
+    }
+
     it should "paint nothing outside the bounds a styled caret reports" in
       styles.foreach { style =>
         val caret  = CaretPaint.styled(body, Color.WHITE, style)
@@ -90,6 +122,8 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
 
   "CaretPaint" should "report the bounds of a styled caret as its rect, so a repaint of it covers every pixel" in {
     CaretPaint.styled(body, Color.WHITE, italic).rect shouldBe CaretGeometry.bounds(body, italic)
+    CaretPaint.styled(body, Color.WHITE, CaretStyle(shadow = true)).rect shouldBe
+      CaretGeometry.bounds(body, CaretStyle(shadow = true))
     CaretPaint.styled(body, Color.WHITE, CaretStyle.Plain) shouldBe CaretPaint(body, Color.WHITE)
   }
 
