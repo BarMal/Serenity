@@ -425,7 +425,7 @@ windowed launch loads the native library to find out, which took about 0.33 s on
 
 The layer is handed each frame as an image by default: the frame is painted on a Skia CPU surface off the event thread,
 which keeps its pixels between frames so a typing frame repaints only the rows it changed, and the layer only draws the
-resulting image. With `-Dserenity.skia.layerFrames=picture` it is handed the frame as a recorded Skia `Picture`
+resulting image. `ui.render.skia_frames = image|picture` sets this in the config file (read at startup, needs a restart); `-Dserenity.skia.layerFrames` beats it. With `picture` it is handed the frame as a recorded Skia `Picture`
 instead, which it replays on the event thread; any other value keeps images. Pictures were the default until a timing
 run on the reference laptop (#2618: key-to-pixels p50 about 32 ms for images against about 133 ms for pictures, the
 event thread at 2% CPU against 20%) said otherwise. It is a property, not a setting.

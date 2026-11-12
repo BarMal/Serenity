@@ -60,6 +60,9 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.renderSkiaVsync,
       (config, value) => config.withRenderSkiaVsync(value)
     ),
+    named("ui.render.skia_frames", "renderSkiaFrames", "render.skia_frames", "render_skia_frames")(
+      enumerated(SkiaFrames.fromConfigKey, _.configKey, text => SkiaFrames.values.find(_.toString == text))
+    )(_.surfaceConfig.renderSkiaFrames, (config, value) => config.withRenderSkiaFrames(value)),
     field("ui.render.frame_timing", "render.frame_timing", "render_frame_timing")(boolean)(
       _.surfaceConfig.frameTimingEnabled,
       (config, value) => config.withFrameTiming(value)

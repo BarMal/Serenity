@@ -71,6 +71,22 @@ object WaylandRender:
       case "xwayland" | "x11"                       => Some(XWayland)
       case _                                        => None
 
+/** What Skia's GPU layer is handed for each frame. `Image` paints the frame on a CPU surface that keeps its pixels
+  * between frames, so a typing frame repaints only what changed, and the layer draws the result; `Picture` records the
+  * frame's ops and has the layer replay them on the event thread.
+  */
+enum SkiaFrames(val configKey: String):
+  case Image   extends SkiaFrames("image")
+  case Picture extends SkiaFrames("picture")
+
+object SkiaFrames:
+
+  def fromConfigKey(value: String): Option[SkiaFrames] =
+    value.trim.toLowerCase match
+      case "image"   => Some(Image)
+      case "picture" => Some(Picture)
+      case _         => None
+
 enum CursorMode(val configKey: String):
   case Blink  extends CursorMode("blink")
   case Steady extends CursorMode("steady")

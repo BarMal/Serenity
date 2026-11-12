@@ -12,7 +12,8 @@ import cats.effect.IO
 final case class RenderStartupSettings(
     backend: RenderBackendSetting,
     wayland: WaylandRender,
-    skiaVsync: Boolean = false
+    skiaVsync: Boolean = false,
+    skiaFrames: SkiaFrames = SkiaFrames.Image
 )
 
 /** Reads the render startup settings alone, because they are needed before the full config is loaded: they can decide
@@ -20,7 +21,8 @@ final case class RenderStartupSettings(
   */
 object RenderBackendPeek:
 
-  private val SettingKeys = Set("ui.render.backend", "ui.render.wayland", "ui.render.skia_vsync")
+  private val SettingKeys =
+    Set("ui.render.backend", "ui.render.wayland", "ui.render.skia_vsync", "ui.render.skia_frames")
 
   private val Defaults = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
 
@@ -48,5 +50,6 @@ object RenderBackendPeek:
     RenderStartupSettings(
       applied.surfaceConfig.renderBackend,
       applied.surfaceConfig.renderWayland,
-      applied.surfaceConfig.renderSkiaVsync
+      applied.surfaceConfig.renderSkiaVsync,
+      applied.surfaceConfig.renderSkiaFrames
     )
