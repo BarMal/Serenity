@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory
   */
 class LayerSurfaceFactory private[ui] (
     buildHost: JPanel => LayerHost,
-    fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D,
+    fallback: FrameSurfaceFactory,
     frames: LayerFrames = LayerFrames.Picture
 ) extends FrameSurfaceFactory:
 
@@ -93,19 +93,11 @@ class LayerSurfaceFactory private[ui] (
       layerCacheOwner = Some(geometry.identity)
     )
 
-/** Frames for a window whose layer could not be made: painted by Skia on the CPU, and by Java2D only if that cannot
-  * make a surface either.
-  */
-final class RasterThenJava2D(raster: FrameSurfaceFactory) extends FrameSurfaceFactory:
-
-  def create(request: FrameSurfaceRequest): RenderSurface =
-    Try(raster.create(request)).getOrElse(FrameSurfaceFactory.Java2D.create(request))
-
 /** The factory a window uses: a Skiko layer made on its canvas, with the Skia raster surface behind it. */
 object SkiaLayerSurfaceFactory
     extends LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas),
-      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      SkiaRasterSurfaceFactory,
       LayerFrames.configured
     )
 
@@ -115,7 +107,8 @@ object SkiaLayerSurfaceFactory
 object SynchronousSkiaLayerSurfaceFactory
     extends LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas, syncGpu = true),
-      frames = LayerFrames.configured
+      SkiaRasterSurfaceFactory,
+      LayerFrames.configured
     )
 
 object LayerSurfaceFactory:

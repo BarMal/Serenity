@@ -12,6 +12,7 @@ import com.serenity.state.models.Damage
 import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay}
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -62,7 +63,8 @@ class StartupModalFirstFramePresentSpec extends AnyFlatSpec with Matchers with S
           CellMetrics(8, 16, 13),
           None,
           Damage.Everything,
-          RenderCaches.create()
+          RenderCaches.create(),
+          SkiaRasterSurfaceFactory
         )
         settle()
         timings.drain().phases.get(FramePhase.Paint).fold(0)(_.count)

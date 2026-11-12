@@ -6,6 +6,7 @@ import com.serenity.PersistedFrameFixture
 import com.serenity.state.models.{AppState, CursorPosition}
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,7 +30,8 @@ class RenderTargetRenderSpec extends AnyFlatSpec with Matchers with PersistedFra
       FontSpec.fromAwt(uiFont),
       CellMetrics.fromFont(uiFont),
       None,
-      repaintOnFlush = true
+      repaintOnFlush = true,
+      surfaces = SkiaRasterSurfaceFactory
     )
 
   "RendererEntryPoints.render" should "publish one opaque frame at the target's device size" in {
@@ -68,7 +70,8 @@ class RenderTargetRenderSpec extends AnyFlatSpec with Matchers with PersistedFra
       FontSpec.fromAwt(textFont),
       FontSpec.fromAwt(uiFont),
       CellMetrics.fromFont(uiFont),
-      None
+      None,
+      surfaces = SkiaRasterSurfaceFactory
     )
 
     rendered shouldBe true

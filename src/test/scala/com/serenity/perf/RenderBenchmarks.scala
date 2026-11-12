@@ -26,6 +26,7 @@ import com.serenity.ui.renderer.{
   RendererCursorOverlay,
   RendererEntryPoints
 }
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
 
@@ -322,7 +323,8 @@ private[perf] object RenderBenchmarks:
       uiMetrics,
       cursorColor = None,
       repaintOnFlush = false,
-      caches = caches
+      caches = caches,
+      surfaces = SkiaRasterSurfaceFactory
     )
 
   private def renderedCursorOverlay(state: AppState, window: SwingWindow, caches: RenderCaches): Boolean =
