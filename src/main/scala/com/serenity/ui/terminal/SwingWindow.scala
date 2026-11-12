@@ -408,8 +408,7 @@ class SwingWindow(
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
-    if SwingUtilities.isEventDispatchThread then showWindow.run()
-    else SwingUtilities.invokeAndWait(showWindow)
+    onEventDispatchThread(showWindow)
 
   def hide(): Unit = SwingUtilities.invokeLater(() => frame.setVisible(false))
 
@@ -418,8 +417,7 @@ class SwingWindow(
       layerPresenterRef.getAndSet(None).foreach(_.dispose())
       frame.setVisible(false)
       frame.dispose()
-    if SwingUtilities.isEventDispatchThread then dispose.run()
-    else SwingUtilities.invokeAndWait(dispose)
+    onEventDispatchThread(dispose)
 
   def viewportSize: ViewportSize =
     val d = pixelSize.get()
