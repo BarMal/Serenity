@@ -683,6 +683,13 @@ lazy val heapMeasurementTest = taskKey[Unit]("Run the heap-measurement specs exc
 // `sbt -Dserenity.sdl3.library.path=<dir> sdlNativeTest`.
 lazy val sdlNativeTest = taskKey[Unit]("Run the specs that load the real libSDL3, excluded from `sbt test`")
 
+// Rewrites src/test/resources/perf/frame-counts.tsv, the counts FrameCountRatchetSpec compares every run with. The spec
+// never writes the file; changing a count is this explicit command, committed with the change that moved it.
+addCommandAlias(
+  "writeFrameCountBaseline",
+  "app/Test/runMain com.serenity.perf.FrameCountBaseline ../../src/test/resources/perf/frame-counts.tsv"
+)
+
 // Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
 // of it has a display. Start sbt with -Djava.awt.headless=true; the tests fail, not cancel, on a JVM that is not.
 lazy val headlessAwtTest = taskKey[Unit]("Run the headless-AWT specs excluded from `sbt test`")

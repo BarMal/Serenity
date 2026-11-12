@@ -273,6 +273,26 @@ fails the build when a benchmark both exceeds the ratio threshold (default 2x) a
 p50 delta floor (default 0.05ms) -- see that script's module docstring for the full rationale, including why both
 guards are required together.
 
+## Frame-count ratchet -- issue #2575
+
+`FrameCountRatchetSpec` runs in the ordinary `sbt test` on every PR and takes about 8 seconds per pass. It drives fixed
+scenarios through `RendererFramePlanner` on Skia CPU raster (no window, no GPU) and, for the last, a real TUI session,
+then compares the `FrameCounter` values with the checked-in `src/test/resources/perf/frame-counts.tsv`, one
+`scenario.counter` per line. The scenarios are: `first_frame`, `idle_frame`, `type_one_char`, `scroll_1_line`,
+`scroll_3_lines`, `page_down`, `cold_frame` and `warm_frame` (shapings only, via `ShapingTraffic`), and
+`tui_typing_frame` (the typed frame and the one after it, whose `tui-bytes` include the caret flush). Every font is the
+bundled Inter subset, so the cell grid and wraps do not depend on the platform's logical fonts.
+
+It catches what a timing cannot see in one run: a damaged frame that redraws a row it used to keep (`rows-drawn`,
+`rows-preserved`), extra text runs, extra shaping, a larger published area (`present-px`), chrome repainted when it need
+not be, and more terminal bytes. An idle frame must draw, shape and present nothing whatever the file says. Counts the
+spec leaves out: `promotions`, `layer-composites`, `layer-px` and `overlay-models`, which no scenario here has a use for.
+
+Any difference fails, up or down, with a table of scenario, counter, baseline and now. A count that fell is reuse
+gained, and the baseline should record it so it cannot be lost again. To update it in a PR, run
+`sbt writeFrameCountBaseline`, commit the rewritten file, and say in the PR description why the counts moved. The spec
+itself never writes the file.
+
 ## Iteration-count derivation: false-positive audit -- 2026-09-18
 
 An audit of CI's regression gate (`scripts/check_perf_regression.py`, #1453/#1503) found five spurious "regression"
