@@ -5,8 +5,7 @@ import com.serenity.frontend.FrontendRuntime
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FontSpec, RenderTarget, RendererCursorOverlay, RendererEntryPoints, ScreenIdentity}
-import com.serenity.ui.skia.{SkiaRasterSurfaceFactory, SkiaRenderSurface, SkiaTextCaches}
-import org.jetbrains.skia.Surface
+import com.serenity.ui.skia.{OffscreenRaster, SkiaRenderSurface, SkiaTextCaches}
 
 /** Window-sized frames for the startup warm-up, painted on a Skia raster of their own that is never presented. */
 object OffscreenWarmUpFrames:
@@ -19,7 +18,7 @@ object OffscreenWarmUpFrames:
     target: RenderTarget,
     viewportSize: () => ViewportSize,
     display: () => RuntimeDisplayState.Snapshot,
-    rasterFor: (Int, Int) => Surface = SkiaRasterSurfaceFactory.newSurface
+    rasterFor: (Int, Int) => OffscreenRaster = OffscreenRaster.make
   ): Resource[IO, FrontendRuntime.OffscreenFrames] =
     val geometry = target.geometry
     val scale    = geometry.deviceScale
@@ -28,8 +27,7 @@ object OffscreenWarmUpFrames:
       .make(IO(rasterFor(geometry.deviceWidthPx, geometry.deviceHeightPx)))(raster => IO(raster.close()))
       .map { raster =>
         def surface(snapshot: RuntimeDisplayState.Snapshot, caches: RenderCaches): SkiaRenderSurface =
-          SkiaRenderSurface.retaining(
-            raster,
+          raster.surface(
             snapshot.codeMetrics,
             FontSpec.fromAwt(snapshot.codeFont),
             geometry.logicalWidthPx,
@@ -37,7 +35,7 @@ object OffscreenWarmUpFrames:
             scale.x,
             SkiaTextCaches.of(caches.backendCaches),
             caches.surfaceText.styledFonts,
-            layerCacheOwner = Some(screen)
+            screen
           )
 
         FrontendRuntime.OffscreenFrames(

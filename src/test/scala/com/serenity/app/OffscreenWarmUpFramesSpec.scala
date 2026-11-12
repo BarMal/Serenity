@@ -11,8 +11,7 @@ import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.FakeRenderTarget
-import com.serenity.ui.skia.SkiaTextCaches
-import org.jetbrains.skia.Surface
+import com.serenity.ui.skia.{OffscreenRaster, SkiaTextCaches}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,18 +38,18 @@ class OffscreenWarmUpFramesSpec extends AnyFlatSpec with Matchers:
   final private case class Run(
       target: FakeRenderTarget,
       requested: Vector[(Int, Int)],
-      rasters: Vector[Surface],
+      rasters: Vector[OffscreenRaster],
       caches: RenderCaches,
       closedInside: Vector[Boolean]
   )
 
   private def draw: Run =
     val requested = new AtomicReference(Vector.empty[(Int, Int)])
-    val rasters   = new AtomicReference(Vector.empty[Surface])
+    val rasters   = new AtomicReference(Vector.empty[OffscreenRaster])
     val caches    = RenderCaches.create()
     val fake      = target
     val makeRaster = (width: Int, height: Int) =>
-      val raster = Surface.Companion.makeRasterN32Premul(width, height)
+      val raster = OffscreenRaster.make(width, height)
       val _      = requested.updateAndGet(_ :+ (width -> height))
       val _      = rasters.updateAndGet(_ :+ raster)
       raster

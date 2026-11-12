@@ -6,15 +6,14 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.state.models.CaretStyle
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.ui.skia.{SkiaRenderSurface, SkiaTextCaches}
-import org.jetbrains.skia.Surface
+import com.serenity.ui.skia.SkiaCaretCanvas
 
 /** A canvas-shaped surface that records caret fills instead of painting them, so the window can fill carets straight
   * over its presented frame rather than compositing a full-window overlay image. Everything else is the Skia surface it
   * wraps, drawn on a canvas of one pixel that nothing reads: carets are only ever drawn with `fillPixelRect` and
   * `fillCaret`, and the geometry the cursor path measures against is the canvas's own.
   */
-final class CaretRecordingSurface private (inner: SkiaRenderSurface, raster: Surface) extends RenderSurface:
+final class CaretRecordingSurface private (inner: RenderSurface, release: () => Unit) extends RenderSurface:
   private val fills = new AtomicReference(Vector.empty[CaretRecordingSurface.CaretFill])
 
   private object Recording extends PixelDrawing:
@@ -86,7 +85,7 @@ final class CaretRecordingSurface private (inner: SkiaRenderSurface, raster: Sur
   /** Releases the one-pixel raster the frame was never going to read; the fills stay. */
   def flush(): Unit =
     inner.flush()
-    if !raster.isClosed then raster.close()
+    release()
 
   def recordedFills: List[CaretRecordingSurface.CaretFill] = fills.get().toList
 
@@ -95,18 +94,5 @@ object CaretRecordingSurface:
   final case class CaretFill(rect: PixelRect, color: Color, style: CaretStyle = CaretStyle.Plain)
 
   def forGeometry(metrics: CellMetrics, font: FontSpec, geometry: SurfaceGeometry): CaretRecordingSurface =
-    val raster = Surface.Companion.makeRasterN32Premul(1, 1)
-    val inner = new SkiaRenderSurface(
-      raster.getCanvas,
-      metrics,
-      font,
-      () => (),
-      geometry.logicalWidthPx,
-      geometry.logicalHeightPx,
-      geometry.deviceScale.x,
-      geometry.deviceScale.y,
-      retainedSurface = Some(raster),
-      caches = SkiaTextCaches.fresh(),
-      styledFonts = new StyledFontCache()
-    )
-    new CaretRecordingSurface(inner, raster)
+    val canvas = SkiaCaretCanvas.forGeometry(metrics, font, geometry)
+    new CaretRecordingSurface(canvas.surface, () => canvas.release())
