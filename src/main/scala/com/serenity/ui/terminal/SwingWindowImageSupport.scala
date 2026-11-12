@@ -2,12 +2,14 @@ package com.serenity.ui.terminal
 
 import java.awt.*
 import java.awt.event.{ContainerAdapter, ContainerEvent}
+import java.awt.geom.Path2D
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JComponent
 
+import com.serenity.state.models.CaretStyle
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.RenderTarget
+import com.serenity.ui.renderer.{CaretGeometry, RenderTarget}
 
 /** Frame-buffer pooling and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that class's companion object
   * so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to keep `SwingWindow.scala`
@@ -227,8 +229,26 @@ private[terminal] trait SwingWindowImageSupport:
     base.foreach(image => drawImageRegion(g, image, clip, panelWidth, panelHeight))
     carets.filter(_.rect.intersects(clip)).foreach { caret =>
       g.setColor(caret.color)
-      g.fillRect(caret.rect.x, caret.rect.y, caret.rect.width.max(1), caret.rect.height.max(1))
+      caret.body match
+        case Some(body) if !caret.style.isPlain => fillStyledCaret(g, body, caret.style)
+        case _ => g.fillRect(caret.rect.x, caret.rect.y, caret.rect.width.max(1), caret.rect.height.max(1))
     }
+
+  /** The shapes of [[CaretGeometry]], with smoothed edges so a slant is not stair-stepped. */
+  private def fillStyledCaret(g: Graphics2D, body: Rectangle, style: CaretStyle): Unit =
+    val smooth = g.create().asInstanceOf[Graphics2D]
+    try
+      smooth.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
+      CaretGeometry.polygons(body, style).foreach { polygon =>
+        val path = new Path2D.Double()
+        polygon.points.zipWithIndex.foreach {
+          case ((x, y), 0) => path.moveTo(x, y)
+          case ((x, y), _) => path.lineTo(x, y)
+        }
+        path.closePath()
+        smooth.fill(path)
+      }
+    finally smooth.dispose()
 
   /** Scaling `g` to image pixels keeps the image-to-panel mapping exact even when the scale is fractional. */
   private def drawImageRegion(
