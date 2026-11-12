@@ -37,13 +37,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_suffix: linux-x64
-          - os: windows-latest
-            artifact_suffix: windows-x64
-          - os: macos-latest
-            artifact_suffix: macos-arm64
+        # The repository variable CROSS_OS_CI at "off" builds Linux only (#2618); unset builds all three.
+        include: ${{ fromJSON(vars.CROSS_OS_CI == 'off' && '[{"os":"ubuntu-latest","artifact_suffix":"linux-x64"}]' || '[{"os":"ubuntu-latest","artifact_suffix":"linux-x64"},{"os":"windows-latest","artifact_suffix":"windows-x64"},{"os":"macos-latest","artifact_suffix":"macos-arm64"}]') }}
 
     steps:
       - name: Check out repository

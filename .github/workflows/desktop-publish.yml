@@ -31,6 +31,8 @@ jobs:
   # build and publish jobs check out exactly that commit. It is the nightly's commit rather than master's head because
   # GitHub can delay a scheduled run by hours while master moves on, so requiring the two to match would rarely publish.
   # Tag builds and dispatches from other branches have no nightly to lean on, so they run the suite themselves.
+  # With the repository variable CROSS_OS_CI at "off" (Linux only, #2618) there is no Cross-OS nightly: the gate passes
+  # without checking it, outputs no commit, and the build and publish jobs use the ref itself.
   gate:
     name: Require green Cross-OS nightly
     runs-on: ubuntu-latest
@@ -39,7 +41,7 @@ jobs:
       sha: ${{ steps.nightly.outputs.sha }}
     steps:
       - name: Check out the gate script
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && vars.CROSS_OS_CI != 'off'
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
@@ -47,7 +49,7 @@ jobs:
 
       - name: Require a green Cross-OS nightly
         id: nightly
-        if: github.ref == 'refs/heads/master'
+        if: github.ref == 'refs/heads/master' && vars.CROSS_OS_CI != 'off'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -69,13 +71,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_suffix: linux-x64
-          - os: windows-latest
-            artifact_suffix: windows-x64
-          - os: macos-latest
-            artifact_suffix: macos-arm64
+        # The repository variable CROSS_OS_CI at "off" builds Linux only (#2618); unset builds all three.
+        include: ${{ fromJSON(vars.CROSS_OS_CI == 'off' && '[{"os":"ubuntu-latest","artifact_suffix":"linux-x64"}]' || '[{"os":"ubuntu-latest","artifact_suffix":"linux-x64"},{"os":"windows-latest","artifact_suffix":"windows-x64"},{"os":"macos-latest","artifact_suffix":"macos-arm64"}]') }}
 
     steps:
       - name: Check out repository
@@ -536,6 +533,8 @@ jobs:
       - name: Generate release notes
         if: runner.os == 'Linux'
         shell: bash
+        env:
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -552,10 +551,16 @@ jobs:
             echo "Built from branch \`${GITHUB_REF_NAME}\`."
             echo
             echo "### Assets"
-            echo "- Serenity-linux-x64.jar, Serenity-windows-x64.jar, Serenity-macos-arm64.jar: runnable JVM fat JARs, each with the Skia natives of its own OS only"
-            echo "- Serenity-linux-x64.zip: Linux app image"
-            echo "- Serenity-windows-x64.zip: Windows app image"
-            echo "- Serenity-macos-arm64.zip: macOS Apple Silicon app image"
+            if [ "${CROSS_OS_CI:-}" = "off" ]; then
+              echo "- Serenity-linux-x64.jar: runnable JVM fat JAR with the Linux Skia natives only"
+              echo "- Serenity-linux-x64.zip: Linux app image"
+              echo "- Linux only for now: any Windows or macOS assets attached to this release are from an earlier build"
+            else
+              echo "- Serenity-linux-x64.jar, Serenity-windows-x64.jar, Serenity-macos-arm64.jar: runnable JVM fat JARs, each with the Skia natives of its own OS only"
+              echo "- Serenity-linux-x64.zip: Linux app image"
+              echo "- Serenity-windows-x64.zip: Windows app image"
+              echo "- Serenity-macos-arm64.zip: macOS Apple Silicon app image"
+            fi
             echo "- Serenity.cdx.json: CycloneDX software bill of materials for the runtime dependencies"
             echo "- SHA256SUMS: SHA-256 checksums of the files above"
             echo
@@ -611,13 +616,21 @@ jobs:
 
       - name: Write SHA256SUMS
         shell: bash
+        env:
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         run: |
           set -euo pipefail
           cd dist
-          ASSETS=(
-            Serenity-linux-x64.jar Serenity-windows-x64.jar Serenity-macos-arm64.jar
-            Serenity-linux-x64.zip Serenity-windows-x64.zip Serenity-macos-arm64.zip
-          )
+          # With CROSS_OS_CI at "off" (Linux only, #2618) only the Linux assets were built; older Windows and macOS
+          # assets on the release are left as they are.
+          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+            ASSETS=(Serenity-linux-x64.jar Serenity-linux-x64.zip)
+          else
+            ASSETS=(
+              Serenity-linux-x64.jar Serenity-windows-x64.jar Serenity-macos-arm64.jar
+              Serenity-linux-x64.zip Serenity-windows-x64.zip Serenity-macos-arm64.zip
+            )
+          fi
           if [ -f Serenity.cdx.json ]; then
             ASSETS+=(Serenity.cdx.json)
           elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
@@ -633,6 +646,7 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         shell: bash
         run: |
           set -euo pipefail
@@ -645,13 +659,16 @@ jobs:
           if [[ "$VERSION" == *-* ]]; then
             CHANNEL_FLAGS=(--prerelease)
           fi
+          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+            RELEASE_ASSETS=(dist/Serenity-linux-x64.jar dist/Serenity-linux-x64.zip)
+          else
+            RELEASE_ASSETS=(
+              dist/Serenity-linux-x64.jar dist/Serenity-windows-x64.jar dist/Serenity-macos-arm64.jar
+              dist/Serenity-linux-x64.zip dist/Serenity-windows-x64.zip dist/Serenity-macos-arm64.zip
+            )
+          fi
           gh release create "$GITHUB_REF_NAME" \
-            dist/Serenity-linux-x64.jar \
-            dist/Serenity-windows-x64.jar \
-            dist/Serenity-macos-arm64.jar \
-            dist/Serenity-linux-x64.zip \
-            dist/Serenity-windows-x64.zip \
-            dist/Serenity-macos-arm64.zip \
+            "${RELEASE_ASSETS[@]}" \
             dist/Serenity.cdx.json \
             dist/SHA256SUMS \
             --title "Serenity $VERSION" \
@@ -665,16 +682,21 @@ jobs:
         if: github.ref == 'refs/heads/master'
         env:
           GH_TOKEN: ${{ github.token }}
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PUBLISH_SHA="$(git rev-parse HEAD)"
-          ASSETS=(
-            dist/Serenity-linux-x64.jar dist/Serenity-windows-x64.jar dist/Serenity-macos-arm64.jar
-            dist/Serenity-linux-x64.zip dist/Serenity-windows-x64.zip dist/Serenity-macos-arm64.zip
-          )
+          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+            ASSETS=(dist/Serenity-linux-x64.jar dist/Serenity-linux-x64.zip)
+          else
+            ASSETS=(
+              dist/Serenity-linux-x64.jar dist/Serenity-windows-x64.jar dist/Serenity-macos-arm64.jar
+              dist/Serenity-linux-x64.zip dist/Serenity-windows-x64.zip dist/Serenity-macos-arm64.zip
+            )
+          fi
           if [ -f dist/Serenity.cdx.json ]; then
             ASSETS+=(dist/Serenity.cdx.json)
           fi

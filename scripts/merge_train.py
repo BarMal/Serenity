@@ -56,6 +56,13 @@ from pathlib import Path
 from typing import Callable, Iterable, Protocol, Sequence
 
 REQUIRED_WORKFLOWS: tuple[str, ...] = (".github/workflows/ci.yml", ".github/workflows/cross-os-tests.yml")
+
+
+def required_workflows(cross_os_ci: str | None) -> tuple[str, ...]:
+    """The tier a train runs: the repository variable CROSS_OS_CI at "off" drops Cross-OS Tests (Linux only, #2618)."""
+    return REQUIRED_WORKFLOWS[:1] if (cross_os_ci or "").strip().lower() == "off" else REQUIRED_WORKFLOWS
+
+
 MAX_TRAIN_AGE = timedelta(hours=6)
 HAND_MERGE_LABEL = "hand-merge-next"
 DEFAULT_HOLD_MINUTES = 20
@@ -242,6 +249,7 @@ def decide(
     master: str,
     now: datetime,
     max_age: timedelta = MAX_TRAIN_AGE,
+    required: Sequence[str] = REQUIRED_WORKFLOWS,
 ) -> Action:
     if master != manifest.base:
         return Abandon(f"master moved from {manifest.base[:8]} to {master[:8]}")
@@ -252,7 +260,7 @@ def decide(
         return Abandon(f"not finished within {max_age}")
 
     latest: list[Run] = []
-    for path in REQUIRED_WORKFLOWS:
+    for path in required:
         of_path = [r for r in runs if r.path == path]
         if not of_path:
             return Wait(f"{path} has not started")
@@ -439,7 +447,9 @@ class Train:
         hold_minutes: int = DEFAULT_HOLD_MINUTES,
         summary: Callable[[str], None] = lambda _text: None,
         sleep: Callable[[float], None] = time.sleep,
+        required: Sequence[str] = REQUIRED_WORKFLOWS,
     ) -> None:
+        self.required = tuple(required)
         self.github, self.git, self.batch, self.dry_run = github, git, batch, dry_run
         self.flake_issue, self.now, self.log = flake_issue, now, log
         self.hold, self.summary, self.sleep = timedelta(minutes=hold_minutes), summary, sleep
@@ -459,14 +469,14 @@ class Train:
         runs = self._runs_of(branch)
         heads = {p.number: self.github.head_of(p.number) for p in manifest.prs}
         master = self.git.master()
-        action = decide(manifest, runs, heads=heads, master=master, now=self.now())
+        action = decide(manifest, runs, heads=heads, master=master, now=self.now(), required=self.required)
         looks = 0
         while isinstance(action, Wait) and looks < WAKE_POLL_TRIES and self._only_wake_jobs_unfinished(runs):
             looks += 1
             self.log(f"{branch}: only the wake job is unfinished; looking again in {WAKE_POLL_SECONDS:.0f} s ({looks}/{WAKE_POLL_TRIES})")
             self.sleep(WAKE_POLL_SECONDS)
             runs = self._runs_of(branch)
-            action = decide(manifest, runs, heads=heads, master=master, now=self.now())
+            action = decide(manifest, runs, heads=heads, master=master, now=self.now(), required=self.required)
         self.log(f"{branch} ({_numbers(manifest.prs)}): {action}")
         owners = self._owners_of_failures(manifest, runs) if isinstance(action, (Rerun, Bisect, Eject)) else {}
         for number, hits in owners.items():
@@ -506,7 +516,7 @@ class Train:
     def _not_failed_by_the_wake_job(self, runs: list[Run]) -> list[Run]:
         latest = {
             path: max(of_path, key=lambda r: r.id)
-            for path in REQUIRED_WORKFLOWS
+            for path in self.required
             if (of_path := [r for r in runs if r.path == path])
         }
         passed: list[Run] = []
@@ -524,7 +534,7 @@ class Train:
         wake jobs is seconds from done; a run with anything else unfinished is simply still working."""
         running = [
             max(of_path, key=lambda r: r.id)
-            for path in REQUIRED_WORKFLOWS
+            for path in self.required
             if (of_path := [r for r in runs if r.path == path])
         ]
         running = [r for r in running if r.status != "completed"]
@@ -535,7 +545,7 @@ class Train:
     def _owners_of_failures(self, manifest: Manifest, runs: list[Run]) -> dict[int, list[OwnedFailure]]:
         latest = [
             max(of_path, key=lambda r: r.id)
-            for path in REQUIRED_WORKFLOWS
+            for path in self.required
             if (of_path := [r for r in runs if r.path == path])
         ]
         failed = [r for r in latest if r.status == "completed" and r.conclusion != "success"]
@@ -587,7 +597,7 @@ class Train:
             return frozenset()
         branch = f"{_BRANCH_PREFIX}{created:%Y%m%d-%H%M%S}"
         self.git.push(built.tip, branch)
-        for path in REQUIRED_WORKFLOWS:
+        for path in self.required:
             self.github.dispatch(Path(path).name, branch)
         self.log(f"Started {branch}: {_numbers(built.included)} on master {base[:8]}.")
         for pr in built.included:
@@ -891,6 +901,7 @@ def main(argv: Sequence[str]) -> int:
         log=print,
         hold_minutes=int(os.environ.get("MERGE_TRAIN_HOLD_MINUTES") or DEFAULT_HOLD_MINUTES),
         summary=_step_summary,
+        required=required_workflows(os.environ.get("CROSS_OS_CI")),
     )
     try:
         train.tick()

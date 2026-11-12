@@ -63,6 +63,7 @@ _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_reques
 # Once the merge train is live it runs Windows and macOS once per batch instead (#2553 item 3).
 _TRAIN_GATE = (
     "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))"
+    " && vars.CROSS_OS_CI != 'off'"
 )
 _CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 _PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()

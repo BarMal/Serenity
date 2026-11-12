@@ -24,13 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - os: ubuntu-latest
-            label: linux
-          - os: windows-latest
-            label: windows
-          - os: macos-latest
-            label: macos
+        # The repository variable CROSS_OS_CI at "off" runs the Linux leg only (#2618); unset runs all three.
+        include: ${{ fromJSON(vars.CROSS_OS_CI == 'off' && '[{"os":"ubuntu-latest","label":"linux"}]' || '[{"os":"ubuntu-latest","label":"linux"},{"os":"windows-latest","label":"windows"},{"os":"macos-latest","label":"macos"}]') }}
 
     steps:
       - name: Check out repository
