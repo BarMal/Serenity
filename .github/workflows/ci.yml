@@ -150,12 +150,14 @@ jobs:
             scripts.test_aot_cache_scripts \
             scripts.test_aot_macos_workflow \
             scripts.test_aot_workflow \
+            scripts.test_apt_install \
             scripts.test_bench_artifacts_workflow \
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
             scripts.test_build_outputs \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
+            scripts.test_ci_apt_workflow \
             scripts.test_ci_jobs_workflow \
             scripts.test_ci_log_is_quiet \
             scripts.test_ci_workflow \
@@ -303,8 +305,25 @@ jobs:
           "$RUNNER_TEMP/sdl3-layout" | diff -u src/test/resources/sdl3/layout.txt -
 
       # The GL specs run on SDL's offscreen driver, which makes an EGL context from Mesa's software rasteriser.
+      # The runner cannot always resolve the Ubuntu mirrors (#2618, [ci-apt]): the downloaded packages are cached per runner
+      # image and package list, and a miss fetches with retries and timeouts (ci/apt/install-packages.sh).
+      - name: Name the Mesa EGL packages and the runner image
+        id: mesa
+        run: |
+          packages="libegl1 libgl1 libgl1-mesa-dri libgles2 sway"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "packages-hash=$(printf '%s' "$packages" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Mesa EGL packages
+        id: mesa-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives/*.deb
+          key: mesa-egl-${{ steps.mesa.outputs.image }}-${{ steps.mesa.outputs.packages-hash }}
+
       - name: Install Mesa EGL for the GL specs
-        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1 libgl1-mesa-dri libgles2 sway
+        run: ci/apt/install-packages.sh "$HOME/apt-archives" "${{ steps.mesa-cache.outputs.cache-hit }}" ${{ steps.mesa.outputs.packages }}
 
       # `sbt test` excludes these specs (they load the library built above, on SDL's dummy and offscreen drivers).
       - name: Run the SDL native specs
