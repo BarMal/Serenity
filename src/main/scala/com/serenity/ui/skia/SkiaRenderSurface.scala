@@ -24,8 +24,7 @@ import com.serenity.ui.renderer.{
   SurfaceActivity,
   SurfaceContentIdentity,
   SurfaceSizing,
-  TextDrawing,
-  TextShadow
+  TextDrawing
 }
 import com.serenity.ui.theme.TextStyle
 import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, PaintStrokeJoin, Rect, Surface}
@@ -312,22 +311,9 @@ final class SkiaRenderSurface(
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
 
-  /** A shadowed run's glyphs are drawn once more first, as [[TextShadow]] has them, and only inside the run's own box:
-    * that is all a repaint of the run clears, so a shadow past it would be left behind when the text changes.
-    */
-  private def drawShadowed(boxLeft: Int, boxTop: Int, boxWidth: Int, boxHeight: Int)(drawGlyphs: => Unit): Unit =
-    if shadowRef.get() then
-      val foreground = fgRef.get()
-      val offset     = TextShadow.offsetOf(deviceScaleX).toFloat
-      fgRef.set(TextShadow.colorOf(foreground))
-      val saved = canvas.save()
-      try
-        clipTo(boxLeft, boxTop, boxWidth, boxHeight)
-        val _ = canvas.translate(offset, offset)
-        drawGlyphs
-      finally
-        restoreTo(saved)
-        fgRef.set(foreground)
+  /** A shadowed run's glyphs are drawn once more first, as [[SkiaTextShadow]] has them. */
+  private def drawShadowed(left: Int, top: Int, width: Int, height: Int)(drawGlyphs: => Unit): Unit =
+    if shadowRef.get() then SkiaTextShadow.pass(canvas, fgRef, deviceScaleX)(left, top, width, height)(drawGlyphs)
     drawGlyphs
 
   private def clipTo(x: Int, y: Int, width: Int, height: Int): Unit =
