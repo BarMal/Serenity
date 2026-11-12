@@ -43,6 +43,7 @@ Run `sbt "app/Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite
 | Go to line | `go_to_line` | `Ctrl+G` | `Cmd+G` |
 | Save as | `save_as` | `Ctrl+Shift+S` | `Cmd+Shift+S` |
 | Toggle shortcuts help | `toggle_shortcuts_help` | `F1` | `F1` |
+| Open logs folder | `open_logs_folder` | `F2` | `F2` |
 | Focus left | `focus_left` | `Alt+Left` | `Alt+Left` |
 | Focus right | `focus_right` | `Alt+Right` | `Alt+Right` |
 | Focus up | `focus_up` | `Alt+Up` | `Alt+Up` |

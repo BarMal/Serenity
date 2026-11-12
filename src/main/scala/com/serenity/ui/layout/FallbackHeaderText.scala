@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 object FallbackHeaderText:
 
-  val Hint: String = "Esc dismisses"
+  val Hint: String = "Esc dismisses · F2 opens the logs"
 
   private val Gap      = "  "
   private val Ellipsis = "…"

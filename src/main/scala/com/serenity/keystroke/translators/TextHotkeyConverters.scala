@@ -35,6 +35,7 @@ object TextHotkeyConverters:
     HotkeyAction.GoToLine                 -> OpenGotoLine,
     HotkeyAction.SaveAs                   -> SaveAsFile,
     HotkeyAction.ToggleShortcutsHelp      -> ToggleShortcutsHelp,
+    HotkeyAction.OpenLogsFolder           -> RunCommand("open-logs-folder"),
     HotkeyAction.FocusLeft                -> FocusInDirection(Direction.Left),
     HotkeyAction.FocusRight               -> FocusInDirection(Direction.Right),
     HotkeyAction.FocusUp                  -> FocusInDirection(Direction.Up),

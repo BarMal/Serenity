@@ -97,7 +97,8 @@ object TuiRuntime:
           accessibilityBridge = new TuiAccessibilityBridge(writeToTerminal(terminalShell))
           frontend = TuiFrontend(
             keyboardFidelityTier(terminalShell.keyboardProtocolTier),
-            markdownPreviewWindow = previewWindowAvailability
+            markdownPreviewWindow = previewWindowAvailability,
+            hasDisplay = hasDisplay
           )
           frontendRuntime = FrontendRuntime(
             inputHandler = router =>

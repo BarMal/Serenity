@@ -58,6 +58,7 @@ object CommandKeyBindings:
       case HotkeyAction.FocusUp                 => Some(CommandId("focus-up"))
       case HotkeyAction.FocusDown               => Some(CommandId("focus-down"))
       case HotkeyAction.ToggleShortcutsHelp     => Some(CommandId("toggle-shortcuts-help"))
+      case HotkeyAction.OpenLogsFolder          => Some(CommandId("open-logs-folder"))
       case HotkeyAction.ToggleContextualToolbar => Some(CommandId("toggle-contextual-toolbar"))
       case HotkeyAction.ToggleSyntaxHighlighting | HotkeyAction.ToggleCommandRunner | HotkeyAction.MoveTabLeft |
           HotkeyAction.MoveTabRight =>
