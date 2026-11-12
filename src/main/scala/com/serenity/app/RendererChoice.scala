@@ -48,7 +48,7 @@ object RendererChoice:
       rowsMs: Map[String, Double]
   )
 
-  private def median(values: List[Double]): Double =
+  private[app] def median(values: List[Double]): Double =
     val sorted = values.sorted
     val middle = sorted.size / 2
     if sorted.size % 2 == 1 then sorted(middle) else (sorted(middle - 1) + sorted(middle)) / 2.0
