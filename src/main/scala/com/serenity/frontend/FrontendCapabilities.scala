@@ -33,7 +33,10 @@ final case class FrontendCapabilities(
     // The keyboard wire protocol actually negotiated (issue #1194/#1320) -- `Full` unconditionally in GUI mode, since
     // a focused Swing window decodes AWT key events directly with no protocol to negotiate.
     keyboardFidelityTier: KeyboardFidelityTier,
-    opensFileOrFolder: Boolean = false
+    opensFileOrFolder: Boolean = false,
+    // Whether starting the platform's file manager shows the user anything: a window always has a screen, a
+    // terminal only has one when it runs on a display (over SSH `open`/`xdg-open` would act on the remote machine).
+    opensFolderInFileManager: Boolean = false
 ):
   def isCellGrid: Boolean = grid == MetricGrid.Cells
 
@@ -44,15 +47,20 @@ object FrontendCapabilities:
     FrontendCapabilities(
       grid = MetricGrid.Pixels,
       typography = true,
-      keyboardFidelityTier = KeyboardFidelityTier.Full
+      keyboardFidelityTier = KeyboardFidelityTier.Full,
+      opensFolderInFileManager = true
     )
 
   /** Every TUI session's capabilities -- `keyboardFidelityTier` is the one field that actually varies per session,
     * following whatever wire protocol `TerminalShell` negotiated with the real terminal.
     */
-  def tui(keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full): FrontendCapabilities =
+  def tui(
+    keyboardFidelityTier: KeyboardFidelityTier = KeyboardFidelityTier.Full,
+    hasDisplay: Boolean = false
+  ): FrontendCapabilities =
     FrontendCapabilities(
       grid = MetricGrid.Cells,
       typography = false,
-      keyboardFidelityTier = keyboardFidelityTier
+      keyboardFidelityTier = keyboardFidelityTier,
+      opensFolderInFileManager = hasDisplay
     )

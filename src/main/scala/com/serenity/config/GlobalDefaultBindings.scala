@@ -17,6 +17,11 @@ private[config] object GlobalDefaultBindings:
       HotkeyAction.FocusDown  -> InputKey.ArrowDown
     ).view.mapValues(key => List(HotkeyTrigger(key, None, Set(Modifier.Alt)))).toMap
 
+  // Plain F2, like F1's help: delivered identically by every terminal and by AWT, so it needs no per-platform
+  // modifier. A terminal launch that fell back from Skia points the user here.
+  def openLogsFolder: Map[HotkeyAction, List[HotkeyTrigger]] =
+    Map(HotkeyAction.OpenLogsFolder -> List(HotkeyTrigger(InputKey.F2, None, Set.empty)))
+
   // Ctrl+G is Go to Line, so the chapter-note keys live on the shifted letters. None of them is Ctrl+Shift+H/I/J/M,
   // which collapse into Backspace/Tab/Enter on terminals that cannot tell Ctrl+Shift+letter from Ctrl+letter.
   // Ctrl+Shift+L is left to Select All Occurrences, as in VS Code and Sublime Text, so the notes pin sits on Alt.
