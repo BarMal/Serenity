@@ -21,8 +21,8 @@ private[skia] object SkiaTextShadow:
     val saved = canvas.save()
     try
       val offset = TextShadow.offsetOf(deviceScale).toFloat
-      val _      = canvas.clipRect(Rect.Companion.makeXYWH(left.toFloat, top.toFloat, width.toFloat, height.toFloat), false)
-      val _      = canvas.translate(offset, offset)
+      val _ = canvas.clipRect(Rect.Companion.makeXYWH(left.toFloat, top.toFloat, width.toFloat, height.toFloat), false)
+      val _ = canvas.translate(offset, offset)
       draw
     finally
       val _ = canvas.restoreToCount(saved)
