@@ -82,7 +82,7 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
   }
 
   "SkiaFallback.notice" should "stay silent when Skia was never expected to run" in {
-    SkiaFallback.notice(Decision(RenderBackend.Java2D, "ui.render.backend=java2d")) shouldBe None
+    SkiaFallback.notice(Decision(RenderBackend.Java2D, "native probe not run")) shouldBe None
     SkiaFallback.notice(Decision(RenderBackend.Java2D, "skia surface unavailable")) shouldBe None
     SkiaFallback.notice(Decision(RenderBackend.Java2D, "safe mode")) shouldBe None
     SkiaFallback.notice(Decision(RenderBackend.Skia, "native probe passed")) shouldBe None
@@ -94,7 +94,7 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
     text should include("libGL.so.1")
     text should include("LD_LIBRARY_PATH")
     text should include("Skia on NixOS")
-    text should include("ui.render.backend = java2d")
+    text should not include "java2d"
   }
 
   it should "quote the cause when no missing library can be named" in {
@@ -113,6 +113,6 @@ class SkiaFallbackSpec extends AnyFlatSpec with Matchers:
 
   it should "add nothing when Skia was not expected to run or loaded" in {
     val plan = StartupRecovery.Plan(safeMode = false, notices = Nil)
-    plan.withSkiaFallback(Decision(RenderBackend.Java2D, "ui.render.backend=java2d")) shouldBe plan
+    plan.withSkiaFallback(Decision(RenderBackend.Java2D, "native probe not run")) shouldBe plan
     plan.withSkiaFallback(Decision(RenderBackend.Skia, "native probe passed")) shouldBe plan
   }

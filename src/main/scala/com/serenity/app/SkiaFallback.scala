@@ -17,7 +17,7 @@ object SkiaFallback:
           s"The dynamic loader cannot find $library. Put the directories that hold it on LD_LIBRARY_PATH before " +
             "launching (see \"Skia on NixOS\" in DEVELOPMENT.md)."
         case None => s"Cause: $cause. The [RENDER] line in the log has the same detail."
-      s"$lead $detail Set ui.render.backend = java2d to stop this notice."
+      s"$lead $detail"
     }
 
   /** Skiko reports a library the dynamic loader cannot resolve as a wrapper that names only its own file; the library
