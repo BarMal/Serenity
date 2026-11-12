@@ -69,6 +69,7 @@ final case class SurfaceConfig(
     renderBackend: RenderBackendSetting = RenderBackendSetting.Auto,
     renderWayland: WaylandRender = WaylandRender.SkiaRaster,
     renderSkiaVsync: Boolean = false,
+    renderSkiaFrames: SkiaFrames = SkiaFrames.Image,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
     // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
     // insets above.

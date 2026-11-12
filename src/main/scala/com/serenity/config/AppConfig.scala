@@ -296,6 +296,9 @@ final case class AppConfig(
   def withRenderSkiaVsync(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(renderSkiaVsync = enabled))
 
+  def withRenderSkiaFrames(frames: SkiaFrames): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(renderSkiaFrames = frames))
+
   def withFrameTiming(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(frameTimingEnabled = enabled))
 

@@ -2,8 +2,10 @@ package com.serenity
 
 import java.nio.file.Files
 
+import scala.concurrent.duration.*
+
 import cats.effect.unsafe.implicits.global
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.frontend.FrontendRuntime
@@ -136,6 +138,68 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
 
     HangBound.unsafeRunTimed(program) shouldBe defined
     shutdownObserved.get.unsafeRunSync() shouldBe true
+  }
+
+  it should "hide the window once quit is confirmed, before the rest of shutdown completes" in {
+    val program = for
+      quit   <- Deferred[IO, Unit]
+      hidden <- Ref.of[IO, Int](0)
+      fiber  <- AppRuntime.afterQuitConfirmed(quit.get, hidden.update(_ + 1)).start
+      before <- hidden.get
+      _      <- quit.complete(())
+      _      <- fiber.joinWithNever
+      after  <- hidden.get
+    yield (before, after)
+
+    HangBound.unsafeRunTimed(program) shouldBe Some((0, 1))
+  }
+
+  it should "not hide the window while quit is still waiting on a prompt" in {
+    val program = for
+      hidden <- Ref.of[IO, Int](0)
+      _      <- AppRuntime.afterQuitConfirmed(IO.never, hidden.update(_ + 1)).timeoutTo(50.millis, IO.unit)
+      count  <- hidden.get
+    yield count
+
+    HangBound.unsafeRunTimed(program) shouldBe Some(0)
+  }
+
+  it should "hide the window before the editor's shutdown finishes" in {
+    given org.typelevel.log4cats.Logger[IO] =
+      LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeHideWindowSpec"))
+
+    val hiddenWhenShutdownFinished = Ref.of[IO, Option[Boolean]](None).unsafeRunSync()
+    val hidden                     = Ref.of[IO, Boolean](false).unsafeRunSync()
+
+    val program = AppRuntime.run(
+      initialViewportSize = ViewportSize(120, 40),
+      checkResize = IO.pure(None),
+      runtime = FrontendRuntime(
+        inputHandler = _ => IO.pure(new SilentInputHandler),
+        renderFull = (
+          _: AppState,
+          _: Boolean,
+          _: Option[RenderColor],
+          _: Damage,
+          _: com.serenity.state.manager.RenderCaches
+        ) => IO.unit,
+        renderCursorOnly = (
+          _: AppState,
+          _: Boolean,
+          _: Option[RenderColor],
+          _: Damage,
+          _: com.serenity.state.manager.RenderCaches
+        ) => IO.unit
+      ),
+      appConfig = AppConfig.default,
+      awaitExternalQuit = IO.unit,
+      registerResizeCallback = _ => (),
+      hideWindow = hidden.set(true),
+      afterEditorShutdown = hidden.get.flatMap(h => hiddenWhenShutdownFinished.set(Some(h)))
+    )
+
+    HangBound.unsafeRunTimed(program) shouldBe defined
+    hiddenWhenShutdownFinished.get.unsafeRunSync() shouldBe Some(true)
   }
 
   it should "terminate after external close even when app-close session persistence fails" in {

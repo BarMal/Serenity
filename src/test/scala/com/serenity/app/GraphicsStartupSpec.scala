@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RenderBackendSelection.Probe
-import com.serenity.config.{RenderBackendSetting, RenderStartupSettings, WaylandRender}
+import com.serenity.config.{RenderBackendSetting, RenderStartupSettings, SkiaFrames, WaylandRender}
 import com.serenity.ui.renderer.FrameSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -89,6 +89,30 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
       new Counters,
       configured = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaVsync = true)
     ).skiaVsync shouldBe true
+  }
+
+  it should "carry the configured Skia frame form, images by default, for a windowed launch" in {
+    resolve(new Counters).skiaFrames shouldBe SkiaFrames.Image
+    resolve(
+      new Counters,
+      configured =
+        RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+    ).skiaFrames shouldBe SkiaFrames.Picture
+  }
+
+  it should "leave the Skia frame form at images for a terminal or safe-mode launch whatever the config says" in {
+    val pictures =
+      RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.Java2D, skiaFrames = SkiaFrames.Picture)
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = false, safeMode = false),
+      configured = pictures
+    ).skiaFrames shouldBe SkiaFrames.Image
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = true, safeMode = true),
+      configured = pictures
+    ).skiaFrames shouldBe SkiaFrames.Image
   }
 
   it should "leave Skia vsync off for a terminal or safe-mode launch whatever the config says" in {

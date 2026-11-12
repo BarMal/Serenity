@@ -179,7 +179,9 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   private def differing(a: BufferedImage, b: BufferedImage): Int =
     pixelsOf(a).zip(pixelsOf(b)).count(_ != _)
 
-  /** The screen once it differs from `before` and has stopped changing: two captures in a row agree. */
+  /** The screen once it shows something, differs from `before` and has stopped changing: two captures in a row agree. A
+    * layer that has not painted yet is a stable blank, so a picture without ink is never taken as settled.
+    */
   @tailrec
   private def settledScreen(
     window: SwingWindow,
@@ -187,8 +189,9 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
     previous: Option[BufferedImage],
     deadlineNanos: Long
   ): BufferedImage =
-    val shot = onScreen(window)
-    if before.forall(differing(_, shot) > 0) && previous.exists(differing(_, shot) == 0) then shot
+    val shot  = onScreen(window)
+    val inked = inkMap(shot).count(identity) > 20
+    if inked && before.forall(differing(_, shot) > 0) && previous.exists(differing(_, shot) == 0) then shot
     else if System.nanoTime() >= deadlineNanos then fail("the layer's frame never settled on a new picture")
     else settledScreen(window, before, Some(shot), deadlineNanos)
 
