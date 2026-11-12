@@ -6,7 +6,6 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.state.models.CaretStyle
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.ui.skia.SkiaCaretCanvas
 
 /** A canvas-shaped surface that records caret fills instead of painting them, so the window can fill carets straight
   * over its presented frame rather than compositing a full-window overlay image. Everything else is the Skia surface it
@@ -93,6 +92,11 @@ object CaretRecordingSurface:
 
   final case class CaretFill(rect: PixelRect, color: Color, style: CaretStyle = CaretStyle.Plain)
 
-  def forGeometry(metrics: CellMetrics, font: FontSpec, geometry: SurfaceGeometry): CaretRecordingSurface =
-    val canvas = SkiaCaretCanvas.forGeometry(metrics, font, geometry)
-    new CaretRecordingSurface(canvas.surface, () => canvas.release())
+  def forGeometry(
+    canvases: CaretCanvases,
+    metrics: CellMetrics,
+    font: FontSpec,
+    geometry: SurfaceGeometry
+  ): CaretRecordingSurface =
+    val canvas = canvases.forGeometry(metrics, font, geometry)
+    new CaretRecordingSurface(canvas.surface, canvas.release)

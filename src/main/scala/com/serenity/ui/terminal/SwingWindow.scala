@@ -20,7 +20,8 @@ import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySna
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
+import com.serenity.ui.renderer.{CaretCanvases, CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
+import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.theme.Theme
 import org.typelevel.log4cats.Logger
 
@@ -509,6 +510,8 @@ class SwingWindow(
   def geometry: SurfaceGeometry = SwingCanvasGeometry.of(canvas)
 
   override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
+
+  override def caretCanvases: CaretCanvases = SkiaCaretCanvases
 
   override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 

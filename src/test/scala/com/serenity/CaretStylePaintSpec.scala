@@ -8,6 +8,7 @@ import com.serenity.state.models.CaretStyle
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{CaretGeometry, CaretPaint, CaretRecordingSurface, FontSpec}
+import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.skia.SkiaCaretInk
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingWindow}
 import org.jetbrains.skia.{Bitmap, Surface}
@@ -137,7 +138,12 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
   "CaretRecordingSurface" should "record the style of a caret fill beside its placed rect" in {
     val canvas = JPanel()
     canvas.setSize(Dimension(400, 300))
-    val surface = CaretRecordingSurface.forGeometry(metrics, FontSpec.fromAwt(font), SwingCanvasGeometry.of(canvas))
+    val surface = CaretRecordingSurface.forGeometry(
+      SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
     surface.pixels.fillCaret(10, 20, 2, 14, RenderColor.fromAwt(Color.WHITE), italic)
     surface.pixels.fillPixelRect(50, 60, 2, 14, RenderColor.fromAwt(Color.WHITE))
 
