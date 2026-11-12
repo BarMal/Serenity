@@ -90,10 +90,15 @@ class SkiaGuiCellGridFallbackPaintSpec extends AnyFlatSpec with Matchers:
     inkColumns(image, 4, 5) should not be empty
   }
 
+  // What the fallback font draws for 中 is a solid box 0.9 em wide, so a glyph that is both that wide and that solid was
+  // drawn by it. Without a fallback, Skia draws whatever the system offers for the glyph, which differs by machine: a
+  // real CJK glyph where a CJK font is installed (wide, not solid), the primary's own box where none is (a cell wide).
   it should "not be drawn in the fallback font when no fallback is passed" in {
     val image = painted("a中b", None)
     info(s"ink width ${inkWidth(image, 2, 4)}, fill ${fillRatio(image, 2, 4)}")
-    fillRatio(image, 2, 4) should be < 0.95
+    val asWideAsTheFallbackBox  = inkWidth(image, 2, 4) >= (0.8f * sizePx).toInt
+    val asSolidAsTheFallbackBox = fillRatio(image, 2, 4) > 0.95
+    (asWideAsTheFallbackBox && asSolidAsTheFallbackBox) shouldBe false
   }
 
   "A one-cell symbol the primary font lacks" should "take exactly one cell, so the next character stays on the grid" in {
