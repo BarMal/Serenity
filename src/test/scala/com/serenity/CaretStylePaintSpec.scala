@@ -8,8 +8,7 @@ import com.serenity.state.models.CaretStyle
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{CaretGeometry, CaretPaint, CaretRecordingSurface, FontSpec}
-import com.serenity.ui.skia.SkiaCaretCanvases
-import com.serenity.ui.skia.SkiaCaretInk
+import com.serenity.ui.skia.{SkiaCaretCanvases, SkiaCaretInk}
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingWindow}
 import org.jetbrains.skia.{Bitmap, Surface}
 import org.scalatest.flatspec.AnyFlatSpec
