@@ -15,9 +15,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     x11Display = true,
     probe = Probe.Loaded,
     setting = RenderBackendSetting.Skia,
-    skiaSurfaceAvailable = true,
-    waylandRender = WaylandRender.SkiaRaster,
-    rasterSurfaceAvailable = true
+    waylandRender = WaylandRender.SkiaRaster
   )
 
   private val onWayland = healthyLinux.copy(toolkit = ToolkitSelection.Choice.Wayland)
@@ -42,52 +40,38 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
         Decision(RenderBackend.Skia, "native probe passed")
   }
 
-  it should "need the native probe whenever a passing probe would choose a Skia backend" in {
-    val unprobed = healthyLinux.copy(probe = Probe.NotRun)
-    RenderBackendSelection.probeNeeded(unprobed.copy(setting = RenderBackendSetting.Auto)) shouldBe true
-    RenderBackendSelection.probeNeeded(unprobed) shouldBe true
-    RenderBackendSelection.probeNeeded(
-      onWayland.copy(probe = Probe.NotRun, waylandRender = WaylandRender.SkiaRaster)
-    ) shouldBe true
-  }
-
   it should "paint with the Skia raster under WLToolkit on Linux by default" in {
     val decision = RenderBackendSelection.choose(onWayland.copy(waylandRender = WaylandRender.SkiaRaster))
     decision shouldBe Decision(RenderBackend.SkiaRaster, "ui.render.wayland=skia-raster")
   }
 
-  it should "use the Skia raster on Linux without an X11 display, and Java2D where there is no raster surface" in {
+  it should "use the Skia raster on Linux without an X11 display" in {
     val decision = RenderBackendSelection.choose(healthyLinux.copy(x11Display = false))
     decision.backend shouldBe RenderBackend.SkiaRaster
     decision.reason should include("X11 display")
-    val without = RenderBackendSelection.choose(healthyLinux.copy(x11Display = false, rasterSurfaceAvailable = false))
-    without.backend shouldBe RenderBackend.Java2D
-    without.reason should include("X11 display")
   }
 
-  it should "use Java2D when the native probe failed, naming the cause" in {
+  it should "fall back to the terminal when the native probe failed, naming the cause" in {
     val decision = RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.Failed("libGL.so.1 missing")))
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.Terminal
     decision.reason should include("libGL.so.1 missing")
   }
 
-  it should "log an explicit skia setting that cannot load as a Java2D fallback with the cause" in {
+  it should "log an explicit skia setting that cannot load as a terminal fallback with the cause" in {
     val decision = RenderBackendSelection.choose(
       healthyLinux.copy(setting = RenderBackendSetting.Skia, probe = Probe.Failed("no libGL"))
     )
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.Terminal
     decision.reason should (include("ui.render.backend=skia") and include("no libGL"))
   }
 
-  it should "carry the probe's cause on a Java2D decision only when the probe failed" in {
+  it should "carry the probe's cause on a terminal decision only when the probe failed" in {
     val failed = RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.Failed("libGL.so.1 missing")))
     failed.skiaFailure shouldBe Some("libGL.so.1 missing")
     RenderBackendSelection
       .choose(healthyLinux.copy(setting = RenderBackendSetting.Skia, probe = Probe.Failed("no libGL")))
       .skiaFailure shouldBe Some("no libGL")
     RenderBackendSelection.choose(healthyLinux).skiaFailure shouldBe None
-    RenderBackendSelection.choose(healthyLinux.copy(skiaSurfaceAvailable = false)).skiaFailure shouldBe None
-    RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.NotRun)).skiaFailure shouldBe None
   }
 
   it should "carry the wrapped causes with the failure, and keep them out of the reason and the log line" in {
@@ -99,22 +83,17 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     )
     decision.skiaFailure shouldBe Some("Wrapper: failed (Inner: libGL.so.1)")
     decision.reason shouldBe "native probe failed: Wrapper: failed"
-    decision.logLine shouldBe "backend=java2d reason=native probe failed: Wrapper: failed"
+    decision.logLine shouldBe "backend=terminal reason=native probe failed: Wrapper: failed"
   }
 
   it should "keep the log line identical whether or not a cause is carried" in {
     val failedProbe = Probe.Failed("libGL.so.1 missing")
     RenderBackendSelection
       .choose(healthyLinux.copy(setting = RenderBackendSetting.Auto, probe = failedProbe))
-      .logLine shouldBe "backend=java2d reason=native probe failed: libGL.so.1 missing"
+      .logLine shouldBe "backend=terminal reason=native probe failed: libGL.so.1 missing"
     RenderBackendSelection
       .choose(healthyLinux.copy(probe = failedProbe))
-      .logLine shouldBe "backend=java2d reason=ui.render.backend=skia could not load: libGL.so.1 missing"
-  }
-
-  it should "fall back with 'skia surface unavailable' while no Skia surface is built" in {
-    RenderBackendSelection.choose(healthyLinux.copy(skiaSurfaceAvailable = false)) shouldBe
-      Decision(RenderBackend.Java2D, "skia surface unavailable")
+      .logLine shouldBe "backend=terminal reason=ui.render.backend=skia could not load: libGL.so.1 missing"
   }
 
   it should "format the decision for the log" in {
@@ -136,17 +115,11 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       .backend shouldBe RenderBackend.SkiaRaster
   }
 
-  it should "fall back with 'skia raster surface unavailable' when no raster factory is registered" in {
-    RenderBackendSelection.choose(
-      onWayland.copy(waylandRender = WaylandRender.SkiaRaster, rasterSurfaceAvailable = false)
-    ) shouldBe Decision(RenderBackend.Java2D, "skia raster surface unavailable")
-  }
-
-  it should "fall back to Java2D when the raster probe fails" in {
+  it should "fall back to the terminal when the raster probe fails" in {
     val decision = RenderBackendSelection.choose(
       onWayland.copy(waylandRender = WaylandRender.SkiaRaster, probe = Probe.Failed("no natives"))
     )
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.Terminal
     decision.reason should include("no natives")
   }
 
@@ -154,9 +127,6 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     val decision = RenderBackendSelection.choose(onWayland.copy(waylandRender = WaylandRender.XWayland))
     decision.backend shouldBe RenderBackend.SkiaRaster
     decision.reason should include("xwayland")
-    RenderBackendSelection
-      .choose(onWayland.copy(waylandRender = WaylandRender.XWayland, rasterSurfaceAvailable = false))
-      .backend shouldBe RenderBackend.Java2D
   }
 
   it should "choose Skia for xwayland once the toolkit is X11" in {
@@ -189,20 +159,15 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
         RenderBackend.SkiaRaster
   }
 
-  it should "fall back to Java2D, saying so, when skia-raster is requested and there is no raster surface" in {
-    RenderBackendSelection.choose(explicitRaster.copy(rasterSurfaceAvailable = false)) shouldBe
-      Decision(RenderBackend.Java2D, "skia raster surface unavailable")
-  }
-
   it should "name skia-raster and the cause when its native library will not load" in {
     val decision = RenderBackendSelection.choose(explicitRaster.copy(probe = Probe.Failed("no libGL")))
-    decision.backend shouldBe RenderBackend.Java2D
+    decision.backend shouldBe RenderBackend.Terminal
     decision.reason should (include("ui.render.backend=skia-raster") and include("no libGL"))
   }
 
-  it should "need the native probe for skia-raster, and never choose the raster unless the probe loaded" in {
-    RenderBackendSelection.probeNeeded(explicitRaster.copy(probe = Probe.NotRun)) shouldBe true
-    RenderBackendSelection.choose(explicitRaster.copy(probe = Probe.NotRun)).backend shouldBe RenderBackend.Java2D
+  it should "never choose the raster for skia-raster unless the probe loaded" in {
+    RenderBackendSelection.choose(explicitRaster.copy(probe = Probe.Failed("boom"))).backend shouldBe
+      RenderBackend.Terminal
   }
 
   private val inputsGen: Gen[Inputs] =
@@ -210,12 +175,10 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       os      <- Gen.oneOf("Linux", "Windows 11", "Mac OS X")
       toolkit <- Gen.oneOf(ToolkitSelection.Choice.values.toSeq)
       display <- Gen.oneOf(true, false)
-      probe   <- Gen.oneOf(Probe.Loaded, Probe.Failed("boom"), Probe.NotRun)
+      probe   <- Gen.oneOf(Probe.Loaded, Probe.Failed("boom"))
       setting <- Gen.oneOf(RenderBackendSetting.values.toSeq)
-      surface <- Gen.oneOf(true, false)
       wayland <- Gen.oneOf(WaylandRender.values.toSeq)
-      raster  <- Gen.oneOf(true, false)
-    yield Inputs(os, toolkit, display, probe, setting, surface, wayland, raster)
+    yield Inputs(os, toolkit, display, probe, setting, wayland)
 
   it should "decide every backend setting x wayland render x toolkit combination without a gap" in {
     val combinations = for
@@ -230,7 +193,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
 
   it should "never choose a Skia backend unless the probe loaded" in
     forAll(inputsGen) { inputs =>
-      if RenderBackendSelection.choose(inputs).backend != RenderBackend.Java2D then inputs.probe shouldBe Probe.Loaded
+      if RenderBackendSelection.choose(inputs).backend != RenderBackend.Terminal then inputs.probe shouldBe Probe.Loaded
     }
 
   it should "never choose direct Skia on Linux under WLToolkit or without an X11 display" in
@@ -240,23 +203,17 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
         RenderBackendSelection.choose(inputs).backend should not be RenderBackend.Skia
     }
 
-  it should "choose the raster backend only on Linux, with a raster factory, for WLToolkit or no X11 display" in
+  it should "choose the raster backend only on Linux, for WLToolkit or no X11 display" in
     forAll(inputsGen) { inputs =>
       if inputs.setting != RenderBackendSetting.SkiaRaster &&
           RenderBackendSelection.choose(inputs).backend == RenderBackend.SkiaRaster
       then
         val wayland = inputs.toolkit == ToolkitSelection.Choice.Wayland
-        (inputs.osName, inputs.rasterSurfaceAvailable, wayland || !inputs.x11Display) shouldBe ("Linux", true, true)
+        (inputs.osName, wayland || !inputs.x11Display) shouldBe ("Linux", true)
     }
 
   it should "always give a reason" in
     forAll(inputsGen)(inputs => RenderBackendSelection.choose(inputs).reason should not be empty)
-
-  "RenderBackendSelection.probeNeeded" should "ask for a probe exactly when a passing probe would choose Skia" in
-    forAll(inputsGen.map(_.copy(probe = Probe.NotRun))) { inputs =>
-      RenderBackendSelection.probeNeeded(inputs) shouldBe
-        (RenderBackendSelection.choose(inputs.copy(probe = Probe.Loaded)).backend != RenderBackend.Java2D)
-    }
 
   "RenderBackendSelection.requested" should "let the environment variable override the setting" in {
     RenderBackendSelection.requested(RenderBackendSetting.Skia, Map(variable -> " Skia-Raster "), None) shouldBe

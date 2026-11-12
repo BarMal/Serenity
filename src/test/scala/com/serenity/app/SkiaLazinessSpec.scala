@@ -51,21 +51,27 @@ class SkiaLazinessSpec extends AnyFlatSpec with Matchers:
     run.output.filter(line => Forbidden.exists(prefix => line.contains(s" $prefix") || line.contains(s"[$prefix")))
 
   private val cases = List(
-    ("a terminal launch", "terminal", Nil),
-    ("safe mode", "safe", Nil)
+    ("a terminal launch", "terminal", Nil)
   )
 
   cases.foreach { (description, kind, config) =>
     s"Resolving the renderer for $description" should "not load any Skiko or Kotlin class" in {
       val run = runChild(kind, config)
       run.exitCode shouldBe 0
-      run.output.exists(_.startsWith("resolved backend=java2d")) shouldBe true
+      run.output.exists(_.startsWith("resolved backend=terminal")) shouldBe true
       loadedForbidden(run) shouldBe Nil
     }
   }
 
   "Resolving the renderer for a window under auto" should "load Skiko once and choose a Skia backend" in {
     val run = runChild("window", Nil)
+    run.exitCode shouldBe 0
+    run.output.exists(_.startsWith("resolved backend=skia")) shouldBe true
+    loadedForbidden(run) should not be empty
+  }
+
+  "Resolving the renderer for safe mode" should "load Skiko once and choose a Skia backend, like any window" in {
+    val run = runChild("safe", Nil)
     run.exitCode shouldBe 0
     run.output.exists(_.startsWith("resolved backend=skia")) shouldBe true
     loadedForbidden(run) should not be empty

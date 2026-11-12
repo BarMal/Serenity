@@ -34,9 +34,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     launch: GraphicsStartup.Launch = GraphicsStartup.Launch(windowed = true, safeMode = false),
     environment: ToolkitSelection.Environment = x11Env,
     configured: RenderStartupSettings = RenderStartupSettings(RenderBackendSetting.Skia, WaylandRender.SkiaRaster),
-    probe: Probe = Probe.Loaded,
-    hasSkiaSurface: Boolean = true,
-    hasRasterSurface: Boolean = true
+    probe: Probe = Probe.Loaded
   ): GraphicsStartup.Resolved =
     def factory(): FrameSurfaceFactory =
       counters.built.incrementAndGet()
@@ -45,7 +43,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
       .resolve(
         launch,
         environment,
-        SurfaceCatalogue(Option.when(hasSkiaSurface)(() => factory()), Option.when(hasRasterSurface)(() => factory())),
+        SurfaceCatalogue(() => factory(), () => factory()),
         IO(counters.peeks.incrementAndGet()).as(configured),
         IO(counters.probes.incrementAndGet()).as(probe)
       )
@@ -58,6 +56,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     val counters = new Counters
     val resolved = resolve(counters)
     resolved.backend.backend shouldBe RenderBackend.Skia
+    resolved.display shouldBe a[GraphicsStartup.Display.Window]
     counters.probes.get shouldBe 1
     counters.built.get shouldBe 1
   }
@@ -71,16 +70,50 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.built.get shouldBe 1
   }
 
-  it should "fall back to Java2D under auto when the probe fails, naming the cause and building nothing" in {
+  it should "fall back to the terminal under auto when the probe fails, naming the cause and building nothing" in {
     val counters = new Counters
     val resolved = resolve(
       counters,
       configured = RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster),
       probe = Probe.Failed("no libGL")
     )
-    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.backend shouldBe RenderBackend.Terminal
     resolved.backend.reason should include("no libGL")
+    resolved.backend.skiaFailure shouldBe Some("no libGL")
+    resolved.display shouldBe GraphicsStartup.Display.Terminal
+    resolved.windowed shouldBe false
     counters.built.get shouldBe 0
+  }
+
+  it should "fail a window launch with no terminal when the probe fails, naming the cause" in {
+    val counters = new Counters
+    val launch   = GraphicsStartup.Launch(windowed = true, safeMode = false, terminalAvailable = false)
+    val failure =
+      intercept[GraphicsStartup.SkiaUnavailable](resolve(counters, launch = launch, probe = Probe.Failed("no libGL")))
+    failure.getMessage should (include("Skia could not load") and include("no libGL"))
+    counters.built.get shouldBe 0
+  }
+
+  it should "fail a forced window, whatever the terminal, when the probe fails" in {
+    for terminal <- List(true, false) do
+      val launch =
+        GraphicsStartup.Launch(windowed = true, safeMode = false, forcedWindow = true, terminalAvailable = terminal)
+      intercept[GraphicsStartup.SkiaUnavailable](
+        resolve(new Counters, launch = launch, probe = Probe.Failed("no libGL"))
+      )
+  }
+
+  it should "give a forced window its Skia surfaces when the probe loads" in {
+    val launch = GraphicsStartup.Launch(windowed = true, safeMode = false, forcedWindow = true)
+    resolve(new Counters, launch = launch).display shouldBe a[GraphicsStartup.Display.Window]
+  }
+
+  it should "keep a terminal launch on the terminal whatever the probe would say" in {
+    val counters = new Counters
+    val launch   = GraphicsStartup.Launch(windowed = false, safeMode = false, terminalAvailable = false)
+    resolve(counters, launch = launch, probe = Probe.Failed("no libGL")).display shouldBe
+      GraphicsStartup.Display.Terminal
+    counters.probes.get shouldBe 0
   }
 
   it should "carry the configured Skia vsync, off by default, for a windowed launch" in {
@@ -132,7 +165,8 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
   it should "not probe, read the config or build Skia for a terminal launch" in {
     val counters = new Counters
     val resolved = resolve(counters, launch = GraphicsStartup.Launch(windowed = false, safeMode = false))
-    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.backend shouldBe RenderBackend.Terminal
+    resolved.display shouldBe GraphicsStartup.Display.Terminal
     (counters.probes.get, counters.peeks.get, counters.built.get) shouldBe (0, 0, 0)
   }
 
@@ -145,11 +179,20 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
   }
 
-  it should "stay on Java2D in safe mode without probing" in {
+  it should "probe Skia in safe mode like any window launch, without reading the config" in {
     val counters = new Counters
     val resolved = resolve(counters, launch = GraphicsStartup.Launch(windowed = true, safeMode = true))
-    resolved.backend.backend shouldBe RenderBackend.Java2D
-    counters.probes.get shouldBe 0
+    resolved.backend.backend shouldBe RenderBackend.Skia
+    resolved.display shouldBe a[GraphicsStartup.Display.Window]
+    (counters.probes.get, counters.peeks.get) shouldBe (1, 0)
+  }
+
+  it should "fall back to the terminal in safe mode when the probe fails" in {
+    resolve(
+      new Counters,
+      launch = GraphicsStartup.Launch(windowed = true, safeMode = true),
+      probe = Probe.Failed("no libGL")
+    ).display shouldBe GraphicsStartup.Display.Terminal
   }
 
   it should "use the raster surface, probing once, when there is no X11 display" in {
@@ -159,25 +202,12 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.probes.get shouldBe 1
   }
 
-  it should "stay on Java2D without probing when there is no X11 display and no raster surface" in {
-    val counters = new Counters
-    resolve(counters, environment = x11Env.copy(env = Map.empty), hasRasterSurface = false).backend.backend shouldBe
-      RenderBackend.Java2D
-    counters.probes.get shouldBe 0
-  }
-
-  it should "fall back to Java2D when the probe fails" in {
+  it should "fall back to the terminal when the probe fails" in {
     val counters = new Counters
     val resolved = resolve(counters, probe = Probe.Failed("no libGL"))
-    resolved.backend.backend shouldBe RenderBackend.Java2D
+    resolved.backend.backend shouldBe RenderBackend.Terminal
     resolved.backend.reason should include("no libGL")
     counters.built.get shouldBe 0
-  }
-
-  it should "fall back with 'skia surface unavailable' when no Skia surface exists" in {
-    val counters = new Counters
-    resolve(counters, hasSkiaSurface = false).backend.reason shouldBe "skia surface unavailable"
-    counters.probes.get shouldBe 0
   }
 
   it should "let the environment variable beat the configured setting" in {
@@ -234,18 +264,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
     val resolved = resolve(new Counters, environment = waylandEnv, configured = xwayland, probe = Probe.Failed("x"))
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
-    resolved.backend.backend shouldBe RenderBackend.Java2D
-  }
-
-  it should "not force XToolkit when no Skia surface exists" in {
-    val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.XWayland)
-    resolve(
-      new Counters,
-      environment = waylandEnv,
-      configured = xwayland,
-      hasSkiaSurface = false
-    ).toolkit.choice shouldBe
-      ToolkitSelection.Choice.Wayland
+    resolved.backend.backend shouldBe RenderBackend.Terminal
   }
 
   it should "not force XToolkit without an X11 display" in {
@@ -280,19 +299,27 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     counters.built.get shouldBe 1
   }
 
-  it should "fall back with 'skia raster surface unavailable' when no raster factory is registered" in {
-    val raster   = settings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
-    val counters = new Counters
-    val resolved = resolve(counters, environment = waylandEnv, configured = raster, hasRasterSurface = false)
-    resolved.toolkit.choice shouldBe ToolkitSelection.Choice.Wayland
-    resolved.backend.reason shouldBe "skia raster surface unavailable"
-    counters.probes.get shouldBe 0
-  }
-
   it should "ignore the wayland render on a session that is not on WLToolkit" in {
     val stockJdk = waylandEnv.copy(properties = Map.empty, waylandToolkitAvailable = false)
     val xwayland = settings(RenderBackendSetting.Skia, WaylandRender.SkiaRaster)
     val resolved = resolve(new Counters, environment = stockJdk, configured = xwayland)
     resolved.backend.backend shouldBe RenderBackend.Skia
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.PlatformDefault
+  }
+
+  "GraphicsStartup.launchOf" should "force the window for --gui, --smoke-test and --startup-probe, and for nothing else" in {
+    for options <- List(LaunchOptions(gui = true), LaunchOptions(smokeTest = true), LaunchOptions(startupProbe = true))
+    do GraphicsStartup.launchOf(options, stdoutIsTty = true).forcedWindow shouldBe true
+    for options <- List(LaunchOptions(), LaunchOptions(tui = true), LaunchOptions(safeMode = true)) do
+      GraphicsStartup.launchOf(options, stdoutIsTty = true).forcedWindow shouldBe false
+  }
+
+  it should "report whether there is a terminal to fall back to" in {
+    GraphicsStartup.launchOf(LaunchOptions(), stdoutIsTty = true).terminalAvailable shouldBe true
+    GraphicsStartup.launchOf(LaunchOptions(), stdoutIsTty = false).terminalAvailable shouldBe false
+  }
+
+  it should "keep asking for the window or the terminal as the command line does" in {
+    GraphicsStartup.launchOf(LaunchOptions(tui = true), stdoutIsTty = true).windowed shouldBe false
+    GraphicsStartup.launchOf(LaunchOptions(gui = true), stdoutIsTty = true).windowed shouldBe true
   }
