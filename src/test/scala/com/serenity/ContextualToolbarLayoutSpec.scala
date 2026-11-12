@@ -235,9 +235,9 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
       .map(_.map(_.id))
 
     rowGroups shouldBe List(
-      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
-      List("color", "color-hex", "paragraph-role"),
-      List("align-left", "align-center", "align-right", "align-justify")
+      List("bold", "italic", "underline", "shadow"),
+      List("font-family", "font-family-text", "font-size", "color", "color-hex"),
+      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
     )
   }
 
