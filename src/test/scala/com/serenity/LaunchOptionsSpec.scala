@@ -90,6 +90,20 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
   }
 
+  it should "recognise --startup-probe and leave it off by default" in {
+    parsed(List("--startup-probe")).startupProbe shouldBe true
+    parsed(List("notes.md")).startupProbe shouldBe false
+  }
+
+  it should "use the window for --startup-probe even where the terminal would be chosen" in {
+    val options = parsed(List("--startup-probe"))
+    LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
+  }
+
+  it should "keep --startup-probe out of --help, as it is a benchmark hook and not a feature" in {
+    LaunchOptions.command.showHelp.toString should not include "startup-probe"
+  }
+
   it should "start normally, without safe mode or any reset, when none is asked for" in {
     val options = parsed(List("notes.md"))
     (options.safeMode, options.resetConfig, options.resetSession) shouldBe (false, false, false)
@@ -323,7 +337,7 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
 
   it should "accept --renderer=<value> in both spellings of the flag" in {
     parsed(List("--renderer=skia")).renderer shouldBe Some(RenderBackendSetting.Skia)
-    parsed(List("--renderer", "java2d")).renderer shouldBe Some(RenderBackendSetting.Java2D)
+    parsed(List("--renderer", "skia-raster")).renderer shouldBe Some(RenderBackendSetting.SkiaRaster)
     parsed(List("--renderer=auto", "notes.md")).renderer shouldBe Some(RenderBackendSetting.Auto)
   }
 
@@ -334,21 +348,30 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
   it should "accept --wayland-render=<value>" in {
     parsed(List("--wayland-render=xwayland")).waylandRender shouldBe Some(WaylandRender.XWayland)
     parsed(List("--wayland-render=skia-raster")).waylandRender shouldBe Some(WaylandRender.SkiaRaster)
-    parsed(List("--wayland-render", "java2d")).waylandRender shouldBe Some(WaylandRender.Java2D)
   }
 
   it should "fail fast on an invalid renderer, naming the value and the choices" in {
     val result = LaunchOptions.parse(List("--renderer=vulkan"))
     val errors = result.left.toOption.map(_.errors).getOrElse(Nil)
     errors should not be empty
-    errors.mkString(" ") should (include("vulkan") and include("auto") and include("skia-raster") and include("java2d"))
+    errors.mkString(" ") should (include("vulkan") and include("auto") and include("skia-raster"))
+  }
+
+  it should "reject java2d as a renderer with the message any unknown value gets" in {
+    LaunchOptions.parse(List("--renderer=java2d")).left.toOption.map(_.errors) shouldBe
+      Some(List("Unknown renderer 'java2d'; expected auto, skia or skia-raster."))
+  }
+
+  it should "reject java2d as a wayland render with the message any unknown value gets" in {
+    LaunchOptions.parse(List("--wayland-render=java2d")).left.toOption.map(_.errors) shouldBe
+      Some(List("Unknown Wayland render 'java2d'; expected skia-raster or xwayland."))
   }
 
   it should "fail fast on an invalid wayland render, naming the value and the choices" in {
     val result = LaunchOptions.parse(List("--wayland-render=wl"))
     val errors = result.left.toOption.map(_.errors).getOrElse(Nil)
     errors should not be empty
-    errors.mkString(" ") should (include("wl") and include("java2d") and include("skia-raster") and include("xwayland"))
+    errors.mkString(" ") should (include("wl") and include("skia-raster") and include("xwayland"))
   }
 
   it should "describe both flags in --help" in {

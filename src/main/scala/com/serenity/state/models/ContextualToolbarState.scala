@@ -153,6 +153,7 @@ object ContextualToolbar:
     "bold"             -> 0,
     "italic"           -> 0,
     "underline"        -> 0,
+    "shadow"           -> 0,
     "font-family"      -> 1,
     "font-family-text" -> 1,
     "font-size"        -> 1,
@@ -340,7 +341,7 @@ object ContextualToolbar:
     val currentColorText = currentColor.getOrElse("#202020")
     val paragraphRole    = paragraph.map(_.role).getOrElse(ParagraphRole.Body)
 
-    markButtons(style.marks) ++ fontFamilyItems(currentFamily, currentFontSize)
+    markButtons(style.marks, withShadow = true) ++ fontFamilyItems(currentFamily, currentFontSize)
       ++ colorItems(currentColor, currentColorText)
       ++ paragraphRoleItems(paragraphRole)
       ++ List(
@@ -381,7 +382,7 @@ object ContextualToolbar:
     markButtons(MarkdownSelection.marksAt(buffer)) ++
       paragraphRoleItems(if level == 0 then ParagraphRole.Body else ParagraphRole.Heading(level), withDropCap = false)
 
-  private def markButtons(marks: Set[InlineMark]): List[ContextualToolbarItem] =
+  private def markButtons(marks: Set[InlineMark], withShadow: Boolean = false): List[ContextualToolbarItem] =
     List(
       ContextualToolbarItem.Button(
         "bold",
@@ -404,7 +405,17 @@ object ContextualToolbar:
         "\ue765",
         selected = marks.contains(InlineMark.Underline)
       )
-    )
+    ) ++ Option
+      .when(withShadow)(
+        ContextualToolbarItem.Button(
+          "shadow",
+          "Shadow",
+          CommandIntent.RichText(RichTextIntent.ToggleRichTextMark(InlineMark.Shadow)),
+          "\ue25e",
+          selected = marks.contains(InlineMark.Shadow)
+        )
+      )
+      .toList
 
   private def fontFamilyItems(currentFamily: String, currentFontSize: Float): List[ContextualToolbarItem] =
     val familyOptions = normalizedFontFamilies(currentFamily).map(family =>

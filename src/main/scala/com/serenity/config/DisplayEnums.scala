@@ -41,7 +41,6 @@ enum RenderBackendSetting(val configKey: String):
   case Auto       extends RenderBackendSetting("auto")
   case Skia       extends RenderBackendSetting("skia")
   case SkiaRaster extends RenderBackendSetting("skia-raster")
-  case Java2D     extends RenderBackendSetting("java2d")
 
 object RenderBackendSetting:
 
@@ -50,15 +49,13 @@ object RenderBackendSetting:
       case "auto"                                   => Some(Auto)
       case "skia" | "skiko"                         => Some(Skia)
       case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
-      case "java2d" | "java"                        => Some(Java2D)
       case _                                        => None
 
-/** What a Wayland session does when the window would otherwise be painted by Skia. `Java2D` keeps the native Wayland
-  * toolkit and Java2D; `SkiaRaster` keeps the toolkit and paints Skia on the CPU into an image Java2D presents;
-  * `XWayland` swaps to the X11 toolkit so that Skia's GLX layer can run.
+/** What a Wayland session does when the window would otherwise be painted by Skia. `SkiaRaster` keeps the native
+  * Wayland toolkit and paints Skia on the CPU into an image Java2D presents; `XWayland` swaps to the X11 toolkit so
+  * that Skia's GLX layer can run.
   */
 enum WaylandRender(val configKey: String):
-  case Java2D     extends WaylandRender("java2d")
   case SkiaRaster extends WaylandRender("skia-raster")
   case XWayland   extends WaylandRender("xwayland")
 
@@ -66,10 +63,25 @@ object WaylandRender:
 
   def fromConfigKey(value: String): Option[WaylandRender] =
     value.trim.toLowerCase match
-      case "java2d" | "java"                        => Some(Java2D)
       case "skia-raster" | "skia_raster" | "raster" => Some(SkiaRaster)
       case "xwayland" | "x11"                       => Some(XWayland)
       case _                                        => None
+
+/** What Skia's GPU layer is handed for each frame. `Image` paints the frame on a CPU surface that keeps its pixels
+  * between frames, so a typing frame repaints only what changed, and the layer draws the result; `Picture` records the
+  * frame's ops and has the layer replay them on the event thread.
+  */
+enum SkiaFrames(val configKey: String):
+  case Image   extends SkiaFrames("image")
+  case Picture extends SkiaFrames("picture")
+
+object SkiaFrames:
+
+  def fromConfigKey(value: String): Option[SkiaFrames] =
+    value.trim.toLowerCase match
+      case "image"   => Some(Image)
+      case "picture" => Some(Picture)
+      case _         => None
 
 enum CursorMode(val configKey: String):
   case Blink  extends CursorMode("blink")

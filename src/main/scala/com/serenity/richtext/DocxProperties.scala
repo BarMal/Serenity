@@ -85,7 +85,7 @@ private[richtext] object DocxProperties:
     "pPrChange"
   )
 
-  val RunKinds: List[String]       = List("b", "i", "u", "rFonts", "sz", "color")
+  val RunKinds: List[String]       = List("b", "i", "u", "shadow", "rFonts", "sz", "color")
   val ParagraphKinds: List[String] = List("pStyle", "framePr", "jc")
 
   /** Properties in schema order; names the schema does not list (extensions) keep their order, after the rest. */
@@ -107,6 +107,7 @@ private[richtext] object DocxProperties:
       case "b"      => Option.when(style.marks.contains(InlineMark.Bold))("on")
       case "i"      => Option.when(style.marks.contains(InlineMark.Italic))("on")
       case "u"      => Option.when(style.marks.contains(InlineMark.Underline))("on")
+      case "shadow" => Option.when(style.marks.contains(InlineMark.Shadow))("on")
       case "rFonts" => style.fontFamily
       case "sz"     => style.fontSize.map(_.toString)
       case "color"  => style.color
@@ -114,9 +115,10 @@ private[richtext] object DocxProperties:
 
   def runXml(kind: String, value: String): String =
     kind match
-      case "b" => "<w:b/>"
-      case "i" => "<w:i/>"
-      case "u" => """<w:u w:val="single"/>"""
+      case "b"      => "<w:b/>"
+      case "i"      => "<w:i/>"
+      case "u"      => """<w:u w:val="single"/>"""
+      case "shadow" => "<w:shadow/>"
       case "rFonts" =>
         s"""<w:rFonts w:ascii="${XmlDom.escapeAttribute(value)}" w:hAnsi="${XmlDom.escapeAttribute(value)}"/>"""
       case "sz"    => s"""<w:sz w:val="${(value.toFloat * 2).round}"/>"""

@@ -16,7 +16,7 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     probe = Probe.Loaded,
     setting = RenderBackendSetting.Skia,
     skiaSurfaceAvailable = true,
-    waylandRender = WaylandRender.Java2D,
+    waylandRender = WaylandRender.SkiaRaster,
     rasterSurfaceAvailable = true
   )
 
@@ -46,22 +46,14 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     val unprobed = healthyLinux.copy(probe = Probe.NotRun)
     RenderBackendSelection.probeNeeded(unprobed.copy(setting = RenderBackendSetting.Auto)) shouldBe true
     RenderBackendSelection.probeNeeded(unprobed) shouldBe true
-    RenderBackendSelection.probeNeeded(unprobed.copy(setting = RenderBackendSetting.Java2D)) shouldBe false
     RenderBackendSelection.probeNeeded(
       onWayland.copy(probe = Probe.NotRun, waylandRender = WaylandRender.SkiaRaster)
     ) shouldBe true
-    RenderBackendSelection.probeNeeded(onWayland.copy(probe = Probe.NotRun)) shouldBe false
   }
 
   it should "paint with the Skia raster under WLToolkit on Linux by default" in {
     val decision = RenderBackendSelection.choose(onWayland.copy(waylandRender = WaylandRender.SkiaRaster))
     decision shouldBe Decision(RenderBackend.SkiaRaster, "ui.render.wayland=skia-raster")
-  }
-
-  it should "keep Java2D under WLToolkit when ui.render.wayland asks for it, under auto and skia alike" in {
-    for setting <- List(RenderBackendSetting.Auto, RenderBackendSetting.Skia) do
-      RenderBackendSelection.choose(onWayland.copy(setting = setting)) shouldBe
-        Decision(RenderBackend.Java2D, "ui.render.wayland=java2d")
   }
 
   it should "use the Skia raster on Linux without an X11 display, and Java2D where there is no raster surface" in {
@@ -94,7 +86,6 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       .choose(healthyLinux.copy(setting = RenderBackendSetting.Skia, probe = Probe.Failed("no libGL")))
       .skiaFailure shouldBe Some("no libGL")
     RenderBackendSelection.choose(healthyLinux).skiaFailure shouldBe None
-    RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.Java2D)).skiaFailure shouldBe None
     RenderBackendSelection.choose(healthyLinux.copy(skiaSurfaceAvailable = false)).skiaFailure shouldBe None
     RenderBackendSelection.choose(healthyLinux.copy(probe = Probe.NotRun)).skiaFailure shouldBe None
   }
@@ -121,11 +112,6 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       .logLine shouldBe "backend=java2d reason=ui.render.backend=skia could not load: libGL.so.1 missing"
   }
 
-  it should "honour an explicit java2d setting" in {
-    RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.Java2D)) shouldBe
-      Decision(RenderBackend.Java2D, "ui.render.backend=java2d")
-  }
-
   it should "fall back with 'skia surface unavailable' while no Skia surface is built" in {
     RenderBackendSelection.choose(healthyLinux.copy(skiaSurfaceAvailable = false)) shouldBe
       Decision(RenderBackend.Java2D, "skia surface unavailable")
@@ -133,18 +119,11 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
 
   it should "format the decision for the log" in {
     RenderBackendSelection.choose(healthyLinux).logLine should startWith("backend=skia reason=")
-    RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.Java2D)).logLine shouldBe
-      "backend=java2d reason=ui.render.backend=java2d"
+    RenderBackendSelection.choose(healthyLinux.copy(setting = RenderBackendSetting.SkiaRaster)).logLine shouldBe
+      "backend=skia-raster reason=ui.render.backend=skia-raster"
   }
 
-  "RenderBackendSelection.choose on Wayland" should "keep WLToolkit and Java2D for wayland render java2d" in {
-    for setting <- List(RenderBackendSetting.Auto, RenderBackendSetting.Skia) do
-      RenderBackendSelection
-        .choose(onWayland.copy(setting = setting, waylandRender = WaylandRender.Java2D))
-        .backend shouldBe RenderBackend.Java2D
-  }
-
-  it should "choose the raster backend for wayland render skia-raster once the probe loaded" in {
+  "RenderBackendSelection.choose on Wayland" should "choose the raster backend for wayland render skia-raster once the probe loaded" in {
     val raster = onWayland.copy(waylandRender = WaylandRender.SkiaRaster)
     for setting <- List(RenderBackendSetting.Auto, RenderBackendSetting.Skia) do
       RenderBackendSelection.choose(raster.copy(setting = setting)).backend shouldBe RenderBackend.SkiaRaster
@@ -169,13 +148,6 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     )
     decision.backend shouldBe RenderBackend.Java2D
     decision.reason should include("no natives")
-  }
-
-  it should "stay on Java2D for an explicit java2d setting whatever the wayland render" in {
-    for mode <- WaylandRender.values do
-      RenderBackendSelection
-        .choose(onWayland.copy(setting = RenderBackendSetting.Java2D, waylandRender = mode))
-        .backend shouldBe RenderBackend.Java2D
   }
 
   it should "use the Skia raster for xwayland when WLToolkit is still in force, because the toolkit was named explicitly" in {
@@ -251,16 +223,10 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       mode    <- WaylandRender.values.toList
       toolkit <- ToolkitSelection.Choice.values.toList
     yield RenderBackendSelection.choose(healthyLinux.copy(setting = setting, waylandRender = mode, toolkit = toolkit))
-    combinations should have size 36
+    combinations should have size
+      (RenderBackendSetting.values.length * WaylandRender.values.length * ToolkitSelection.Choice.values.length)
     combinations.foreach(_.reason should not be empty)
   }
-
-  it should "never choose a Skia backend for an explicit java2d setting" in
-    forAll(inputsGen)(inputs =>
-      RenderBackendSelection
-        .choose(inputs.copy(setting = RenderBackendSetting.Java2D))
-        .backend shouldBe RenderBackend.Java2D
-    )
 
   it should "never choose a Skia backend unless the probe loaded" in
     forAll(inputsGen) { inputs =>
@@ -281,7 +247,6 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
       then
         val wayland = inputs.toolkit == ToolkitSelection.Choice.Wayland
         (inputs.osName, inputs.rasterSurfaceAvailable, wayland || !inputs.x11Display) shouldBe ("Linux", true, true)
-        if wayland then inputs.waylandRender should not be WaylandRender.Java2D
     }
 
   it should "always give a reason" in
@@ -294,9 +259,9 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     }
 
   "RenderBackendSelection.requested" should "let the environment variable override the setting" in {
-    RenderBackendSelection.requested(RenderBackendSetting.Skia, Map(variable -> " Java2D "), None) shouldBe
-      RenderBackendSetting.Java2D
-    RenderBackendSelection.requested(RenderBackendSetting.Java2D, Map(variable -> "skia"), None) shouldBe
+    RenderBackendSelection.requested(RenderBackendSetting.Skia, Map(variable -> " Skia-Raster "), None) shouldBe
+      RenderBackendSetting.SkiaRaster
+    RenderBackendSelection.requested(RenderBackendSetting.SkiaRaster, Map(variable -> "skia"), None) shouldBe
       RenderBackendSetting.Skia
   }
 
@@ -304,8 +269,8 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
     RenderBackendSelection.requested(
       RenderBackendSetting.Skia,
       Map(variable -> "skia"),
-      Some(RenderBackendSetting.Java2D)
-    ) shouldBe RenderBackendSetting.Java2D
+      Some(RenderBackendSetting.SkiaRaster)
+    ) shouldBe RenderBackendSetting.SkiaRaster
   }
 
   it should "ignore an unrecognised or empty override" in {
@@ -316,10 +281,10 @@ class RenderBackendSelectionSpec extends AnyFlatSpec with Matchers with ScalaChe
   }
 
   "RenderBackendSelection.requestedWayland" should "apply flag, then environment variable, then file" in {
-    val fromFile = WaylandRender.Java2D
-    RenderBackendSelection.requestedWayland(fromFile, Map.empty, None) shouldBe WaylandRender.Java2D
-    RenderBackendSelection.requestedWayland(fromFile, Map(waylandVariable -> " XWayland "), None) shouldBe
-      WaylandRender.XWayland
+    val fromFile = WaylandRender.XWayland
+    RenderBackendSelection.requestedWayland(fromFile, Map.empty, None) shouldBe WaylandRender.XWayland
+    RenderBackendSelection.requestedWayland(fromFile, Map(waylandVariable -> " Skia-Raster "), None) shouldBe
+      WaylandRender.SkiaRaster
     RenderBackendSelection.requestedWayland(
       fromFile,
       Map(waylandVariable -> "xwayland"),

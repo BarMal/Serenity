@@ -43,7 +43,7 @@ Results land in `bench/bench-results/<label>-*.txt`. Keep the CPU governor and p
 
 `BENCH_JAVA_OPTS` passes JVM options to every launch and is recorded in the conditions file, for example
 `BENCH_JAVA_OPTS="-Xlog:gc:file=$PWD/gc-%p.log:uptime -Dskiko.fps.longFrames.show=true -Dskiko.fps.longFrames.millis=20"`
-(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). `-Dserenity.skia.layerFrames=image` makes the Skia layer draw CPU-painted images instead of replaying recorded pictures on the event thread; compare it with the default by the `edt-lag` and `key_to_screen` figures. Each run's whole app log and stdout are
+(`%p` is the JVM's process id, so each run gets its own GC log; without it the JVM rotates the previous run's log away). `-Dserenity.skia.layerFrames=picture` makes the Skia layer replay recorded pictures on the event thread instead of drawing CPU-painted images (the default since #2618); compare it with the default by the `edt-lag` and `key_to_screen` figures. Each run's whole app log and stdout are
 kept beside its run file as `<label>-run<N>.applog` and `.stdout`, so the per-key `[LATENCY]` lines and anything Skiko
 prints are there afterwards. A JVM that is still alive after the quit key (it has been seen to log `Quitting` and then never exit) is thread-dumped to
 `<label>-run<N>.threads`, sent SIGTERM and, after `BENCH_QUIT_GRACE` seconds (15), killed, so one hang costs seconds and
@@ -60,7 +60,7 @@ The run's output records how the quit key was sent and how many `[STATE MODAL]` 
 
 ### Start-up as benchmark rows (#2420)
 
-`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. It uses `--smoke-test --safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
+`bench/startup.py <launcher> <runs> [--discard N] [--csv out.csv]` writes `startup.cold.first_frame` and `startup.warm.first_frame` in the `PerformanceBenchmarks` CSV layout, so `check_perf_regression.py`, `compare_perf_runs.py` and `abba_compare.py` read them like any other row. Warm starts the image with its AOT cache, cold with the cache moved aside (the OS file cache is warm for both); launches alternate so drift falls on both. The first `--discard` launches per mode (default 1) are not in the rows; their count is recorded as `context,discarded_runs,N` and their times as `context,discarded_warm_ms,...` and `context,discarded_cold_ms,...`, so a first-launch penalty stays visible. With `--interactive` it launches with the hidden `--startup-probe` flag instead: the app injects one key after its first frame and prints `SERENITY_PROBE_INTERACTIVE` once that key has been painted, so one launch yields `startup.*.first_frame` and `startup.*.interactive`. It uses `--safe-mode` like `ttfw.py`, so it is the floor for first frame: session restore, language servers and the dictionary are not on this path.
 
 ### How much start-up varies (#2420)
 
@@ -119,7 +119,7 @@ java \
 python3 bench/jfr-aggregate.py typing_random.jfr --top 20
 ```
 
-On a machine that does build, `-cp "$(sbt -batch "export Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
+On a machine that does build, `-cp "$(sbt -batch "export app/Test/fullClasspath" | tail -1)"` replaces `-cp serenity-perf.jar`.
 
 `TypingProfile` also prints `RESULT` lines (p50, p95, mean ms per event and allocated bytes per event); `cold_typing` prints the mean and p95 per keystroke bucket (1-50, 51-100, 101-200, 201-400, 401-600) and runs in a fresh JVM with no warm-up, for example `... TypingProfile cold_typing 300 --pace-ms=100 --warm-ms=1500`.
 
@@ -133,7 +133,7 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
 ```
 
-The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's render callback, **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
+The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's draw cycle on the event thread (our callback, the replay on the GPU canvas, the flush and the swap), **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
 
 ## Scaling with many open files and split panes (#2478)
 

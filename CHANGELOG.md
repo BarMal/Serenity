@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### 2026-11-11
+
+- Added `ui.render.skia_frames` (`image` or `picture`, default `image`): what Skia's GPU window layer is handed for each frame. `image` is the default since 2026-11-08; `picture` brings back the recorded-picture replay. It is read at startup, so a change needs a restart, and `-Dserenity.skia.layerFrames` beats it (#2618).
+
+### 2026-11-08
+
+- Made the GPU window layer draw CPU-painted images by default instead of replaying recorded pictures on the event thread. On the reference laptop a keystroke reached the screen in about 32 ms (median) against about 133 ms, and the event thread went from about 20% CPU to about 2% (#2618). `-Dserenity.skia.layerFrames=picture` brings the earlier behaviour back.
+
 ### 2026-11-01
 
 - Added `editor.tab_max_width` (cells, 8 to 60, default 28): the widest a tab in the tab strip may be. A width outside the range is clamped to the nearest bound and reported. It is also in the palette's Look settings, under Advanced.

@@ -47,5 +47,31 @@ class PhasesTest(unittest.TestCase):
         self.assertIn("1080_2 | typing_frame | skia | 8.00", text)
 
 
+class BackendsTest(unittest.TestCase):
+    def test_reads_a_backend_name_that_has_a_hyphen_and_compares_it_with_java2d(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "1080_2-java2d-1.csv", PLAIN.format(p50=2.0))
+            _write(directory, "1080_2-layer-image-1.csv", PLAIN.format(p50=3.0))
+            text = _summarise(directory)
+        self.assertIn("1080_2 | typing_frame | layer-image | 3.00", text)
+        self.assertIn("1080_2 | typing_frame | layer-image / java2d | p50 1.50x", text)
+
+    def test_compares_the_layer_with_skia_raster_when_there_is_no_java2d_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "1080_2-skia-1.csv", PLAIN.format(p50=4.0))
+            _write(directory, "1080_2-layer-image-1.csv", PLAIN.format(p50=3.0))
+            text = _summarise(directory)
+        self.assertIn("1080_2 | typing_frame | layer-image / skia | p50 0.75x", text)
+
+    def test_keeps_the_skia_to_java2d_line_when_all_three_ran(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            _write(directory, "1080_2-java2d-1.csv", PLAIN.format(p50=2.0))
+            _write(directory, "1080_2-skia-1.csv", PLAIN.format(p50=4.0))
+            _write(directory, "1080_2-layer-image-1.csv", PLAIN.format(p50=3.0))
+            text = _summarise(directory)
+        self.assertIn("1080_2 | typing_frame | skia / java2d | p50 2.00x", text)
+        self.assertIn("1080_2 | typing_frame | layer-image / java2d | p50 1.50x", text)
+
+
 if __name__ == "__main__":
     unittest.main()

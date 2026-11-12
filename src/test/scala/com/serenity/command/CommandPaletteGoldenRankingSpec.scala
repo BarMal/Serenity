@@ -97,16 +97,16 @@ class CommandPaletteGoldenRankingSpec extends AnyFlatSpec with Matchers:
     "run tests" -> List(
       "command:project-test",
       "command:show-build-details",
+      "command:lsp-trust-folder",
       "command:toggle-project-output-panel",
-      "command:lsp-completion",
-      "command:toggle-block-comment"
+      "command:lsp-completion"
     ),
     "build" -> List(
       "command:project-build",
       "command:show-build-details",
       "command:toggle-project-output-panel",
-      "command:about",
-      "command:export-manuscript"
+      "command:lsp-trust-folder",
+      "command:about"
     ),
     "theme" -> List(
       "command:theme-chooser",
@@ -281,7 +281,7 @@ class CommandPaletteGoldenRankingSpec extends AnyFlatSpec with Matchers:
       "command:restore-darling",
       "command:split-pane-horizontal",
       "command:split-pane-vertical",
-      "command:apply-review-preset"
+      "command:reformat-headings"
     ),
     "theme" -> List(
       "command:theme-chooser",

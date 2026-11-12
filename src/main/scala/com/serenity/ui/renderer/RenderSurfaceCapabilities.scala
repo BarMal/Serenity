@@ -84,6 +84,19 @@ trait TextDrawing:
 trait PixelDrawing:
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit
 
+  /** Fill the rect a caret was placed in. A surface that can show the formatting at the caret draws `style` too; every
+    * other fills the plain rect.
+    */
+  def fillCaret(
+    xPx: Int,
+    yPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    color: RenderColor,
+    @unused style: com.serenity.state.models.CaretStyle
+  ): Unit =
+    fillPixelRect(xPx, yPx, widthPx, heightPx, color)
+
   /** Fill each rect of `rects`, four ints (x, y, width, height) apiece, with `color`: the picture [[fillPixelRect]]
     * makes for each in turn. A surface where every fill is a call into native code draws them as one.
     */

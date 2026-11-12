@@ -250,6 +250,75 @@ class MemoryMetricTests(unittest.TestCase):
         self.assertEqual(self._run(), 1)
 
 
+    def test_parse_csv_reads_the_all_threads_allocation_columns_after_retained_bytes(self) -> None:
+        with open(self.current_path, "w") as handle:
+            handle.write(
+                "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+                "allocation_p95_bytes,retained_bytes,allocation_all_threads_p50_bytes,allocation_all_threads_p95_bytes\n"
+            )
+            handle.write("a,1,1,1,0,1.0,1.5,0,10,11,,500,600\n")
+            handle.write("b,1,1,1,0,1.0,1.5,0,10,11,\n")
+        rows = check_perf_regression.parse_csv(self.current_path)
+        self.assertEqual((rows["a"].allocation_all_threads_p50_bytes, rows["a"].allocation_all_threads_p95_bytes), (500, 600))
+        self.assertEqual((rows["a"].allocation_p50_bytes, rows["a"].retained_bytes), (10, None))
+        self.assertEqual((rows["b"].allocation_all_threads_p50_bytes, rows["b"].allocation_all_threads_p95_bytes), (None, None))
+
+
+def _write_all_threads_csv(path: str, rows: list[tuple[str, int, int | None]]) -> None:
+    """Rows are (name, allocation_p50_bytes, allocation_all_threads_p50_bytes); the latter is left out when None."""
+    with open(path, "w") as handle:
+        handle.write(
+            "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+            "allocation_p95_bytes,retained_bytes,allocation_all_threads_p50_bytes,allocation_all_threads_p95_bytes\n"
+        )
+        for name, own, all_threads in rows:
+            shared = "" if all_threads is None else all_threads
+            handle.write(f"{name},0,0,0,0,1.0,1.0,0,{own},{own},,{shared},{shared}\n")
+
+
+class AllThreadsAllocationTests(unittest.TestCase):
+    """A row that reports every thread's allocation is checked on that column, not on the caller's share (#2618)."""
+
+    def setUp(self) -> None:
+        self._tmpdir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmpdir.cleanup)
+        self.stdout = capture_stdout(self)
+        self.baseline_path = os.path.join(self._tmpdir.name, "baseline.csv")
+        self.current_path = os.path.join(self._tmpdir.name, "current.csv")
+
+    def _run(self, argv: list[str] | None = None) -> int:
+        return check_perf_regression.main_with_args([self.baseline_path, self.current_path, *(argv or [])])
+
+    def test_growth_on_the_other_threads_is_reported_though_the_callers_share_is_flat(self) -> None:
+        _write_all_threads_csv(self.baseline_path, [("laptop.input.x", 2 * KIB, 100 * KIB)])
+        _write_all_threads_csv(self.current_path, [("laptop.input.x", 2 * KIB, 400 * KIB)])
+        self.assertEqual(self._run(), 0)
+        self.assertIn("::warning::laptop.input.x: allocation (all threads) p50", self.stdout.getvalue())
+
+    def test_growth_on_the_other_threads_fails_when_gated(self) -> None:
+        _write_all_threads_csv(self.baseline_path, [("laptop.input.x", 2 * KIB, 100 * KIB)])
+        _write_all_threads_csv(self.current_path, [("laptop.input.x", 2 * KIB, 400 * KIB)])
+        self.assertEqual(self._run(["--gate-allocation"]), 1)
+
+    def test_a_flat_all_threads_column_does_not_warn_when_the_callers_share_grows(self) -> None:
+        _write_all_threads_csv(self.baseline_path, [("laptop.input.x", 100 * KIB, 500 * KIB)])
+        _write_all_threads_csv(self.current_path, [("laptop.input.x", 400 * KIB, 500 * KIB)])
+        self.assertEqual(self._run(["--gate-allocation"]), 0)
+        self.assertNotIn("::warning::", self.stdout.getvalue())
+
+    def test_a_baseline_without_the_column_is_skipped_with_a_notice(self) -> None:
+        _write_all_threads_csv(self.baseline_path, [("laptop.input.x", 2 * KIB, None)])
+        _write_all_threads_csv(self.current_path, [("laptop.input.x", 400 * KIB, 400 * KIB)])
+        self.assertEqual(self._run(["--gate-allocation"]), 0)
+        self.assertIn("::notice::1 row(s) skipped for all-threads allocation", self.stdout.getvalue())
+        self.assertNotIn("::error::", self.stdout.getvalue())
+
+    def test_a_row_without_the_column_is_still_checked_on_the_callers_share(self) -> None:
+        _write_all_threads_csv(self.baseline_path, [("laptop.frame", 100 * KIB, None)])
+        _write_all_threads_csv(self.current_path, [("laptop.frame", 400 * KIB, None)])
+        self.assertEqual(self._run(["--gate-allocation"]), 1)
+
+
 if __name__ == "__main__":
     sys.path.insert(0, str(_MODULE_PATH.parent.parent))
     unittest.main()

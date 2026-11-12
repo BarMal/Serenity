@@ -20,7 +20,10 @@ private[reducers] object MarkdownFormattingReducer:
   def syntaxFor(intent: RichTextIntent): Either[String, MarkdownSyntax] =
     intent match
       case RichTextIntent.ToggleRichTextMark(mark) =>
-        Right(MarkdownSyntax.Emphasize(MarkdownSelection.emphasisOf(mark)))
+        MarkdownSelection
+          .emphasisOf(mark)
+          .map(MarkdownSyntax.Emphasize(_))
+          .toRight("Markdown has no syntax for a text shadow.")
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body)           => Right(MarkdownSyntax.Heading(0))
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)) => Right(MarkdownSyntax.Heading(level))
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.DropCap(_)) =>
@@ -31,6 +34,7 @@ private[reducers] object MarkdownFormattingReducer:
       case RichTextIntent.SetRichTextColor(_)              => Left("Markdown has no syntax for text colour.")
       case RichTextIntent.SetRichTextParagraphAlignment(_) => Left("Markdown has no syntax for paragraph alignment.")
       case RichTextIntent.ConvertToRichText(_) => Left("Markdown files keep their formatting as Markdown syntax.")
+      case RichTextIntent.ReformatHeadings     => Left("Markdown headings take the heading styles already.")
 
   def reduce(intent: RichTextIntent, state: AppState, paneId: PaneId, buffer: Buffer): ReducerResult =
     syntaxFor(intent).fold(

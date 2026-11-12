@@ -65,6 +65,12 @@ final private[ui] class RasterFrames:
       )
     )
 
+  /** Closes the frame [[surfaceFor]] opened without copying it into an image, for a frame whose pixels leave the
+    * surface another way.
+    */
+  def release(): Unit =
+    val _ = state.updateAndGet(_.copy(inFlight = false))
+
   /** The surface frames are painted on, for a test to compare with what was presented. */
   private[serenity] def retainedSurface: Option[Surface] = state.get().held.map(_.surface)
 

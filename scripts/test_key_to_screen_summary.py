@@ -11,7 +11,7 @@ import key_to_screen_summary as summary  # noqa: E402
 
 
 def latency_line(backend, keys, p50, p95, unpainted=0, presented=None, key_to_screen=None):
-    presented = presented or ("render-callback-end" if backend == "skia" else "paint-end")
+    presented = presented or ("draw-cycle-end" if backend == "skia" else "paint-end")
     tail = "" if key_to_screen is None else f" | key_to_screen p50={key_to_screen[0]:.2f} p95={key_to_screen[1]:.2f}"
     return (
         f"[LATENCY] summary backend={backend} presented={presented} window=5.0s keys={keys} unpainted={unpainted} | "
@@ -30,7 +30,7 @@ class ParseTests(unittest.TestCase):
     def test_reads_the_total_of_a_tagged_latency_summary(self):
         window = summary.parse_latency(latency_line("skia", 12, 8.5, 14.25, unpainted=2))
         self.assertEqual(window.backend, "skia")
-        self.assertEqual(window.presented, "render-callback-end")
+        self.assertEqual(window.presented, "draw-cycle-end")
         self.assertEqual((window.keys, window.unpainted), (12, 2))
         self.assertEqual((window.p50, window.p95), (8.5, 14.25))
 
@@ -45,7 +45,7 @@ class ParseTests(unittest.TestCase):
         self.assertEqual((window.key_to_screen_p50, window.key_to_screen_p95), (None, None))
 
     def test_ignores_a_window_without_keystrokes(self):
-        line = "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+        line = "[LATENCY] summary backend=skia presented=draw-cycle-end window=5.0s keys=0 unpainted=0 | no keystrokes"
         self.assertIsNone(summary.parse_latency(line))
 
     def test_ignores_per_keystroke_lines_and_untagged_summaries(self):
@@ -73,14 +73,14 @@ class SummaryTests(unittest.TestCase):
         self.assertEqual(java2d.runs, 2)
         skia = result["skia"]
         self.assertEqual((skia.p50, skia.p95), (4.5, 6.5))
-        self.assertEqual(skia.presented, "render-callback-end")
+        self.assertEqual(skia.presented, "draw-cycle-end")
 
     def test_counts_the_keystrokes_and_the_unpainted_ones(self):
         result = summary.summarise({"r": [latency_line("skia", 10, 4.0, 6.0, unpainted=1), latency_line("skia", 5, 4.0, 6.0, unpainted=2)]})
         self.assertEqual((result["skia"].keys, result["skia"].unpainted), (15, 3))
 
     def test_a_backend_with_no_keystroke_windows_is_not_reported(self):
-        empty = "[LATENCY] summary backend=skia presented=render-callback-end window=5.0s keys=0 unpainted=0 | no keystrokes"
+        empty = "[LATENCY] summary backend=skia presented=draw-cycle-end window=5.0s keys=0 unpainted=0 | no keystrokes"
         self.assertEqual(summary.summarise({"r": [empty]}), {})
 
     def test_takes_key_to_screen_the_same_way_and_leaves_it_empty_for_runs_that_lack_it(self):
@@ -113,8 +113,11 @@ class SummaryTests(unittest.TestCase):
         table = summary.table(result)
         self.assertIn("java2d", table)
         self.assertIn("paint-end", table)
-        self.assertIn("render-callback-end", table)
+        self.assertIn("draw-cycle-end", table)
+        self.assertIn("replay", table)
+        self.assertIn("swap", table)
         self.assertIn("not GPU completion", table)
+        self.assertNotIn("render callback", table)
 
 
 class CommandLineTests(unittest.TestCase):

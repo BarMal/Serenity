@@ -17,6 +17,7 @@ object ConfigRestart:
     "ui.render.backend"              -> (_.surfaceConfig.renderBackend),
     "ui.render.wayland"              -> (_.surfaceConfig.renderWayland),
     "ui.render.skia_vsync"           -> (_.surfaceConfig.renderSkiaVsync),
+    "ui.render.skia_frames"          -> (_.surfaceConfig.renderSkiaFrames),
     "performance.memory.compact"     -> (_.surfaceConfig.memoryCompactionEnabled)
   )
 

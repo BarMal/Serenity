@@ -185,7 +185,8 @@ private[richtext] object DocxParagraphReader:
       marks = List(
         Option.when(toggleEnabled(properties, "b"))(InlineMark.Bold),
         Option.when(toggleEnabled(properties, "i"))(InlineMark.Italic),
-        Option.when(underlineEnabled(properties))(InlineMark.Underline)
+        Option.when(underlineEnabled(properties))(InlineMark.Underline),
+        Option.when(toggleEnabled(properties, "shadow"))(InlineMark.Shadow)
       ).flatten.toSet,
       fontFamily = childElement(properties, WNs, "rFonts")
         .flatMap(fonts => attribute(fonts, WNs, "ascii").orElse(attribute(fonts, WNs, "hAnsi"))),

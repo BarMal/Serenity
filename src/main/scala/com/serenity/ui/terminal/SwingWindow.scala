@@ -223,10 +223,14 @@ class SwingWindow(
     val stamps = new LayerPresentStamps(frameTimings)
     presenter.onPublished(() => stamps.published())
     presenter.onDrawStarted(() => stamps.drawStarted())
-    presenter.onRendered { () =>
-      stamps.drawFinished()
-      framePresentedRef.get().foreach(_.apply())
-    }
+    if presenter.tellsWhenDrawsEnd then
+      presenter.onDrawEnded(() => stamps.drawFinished())
+      presenter.onRendered(() => framePresentedRef.get().foreach(_.apply()))
+    else
+      presenter.onRendered { () =>
+        stamps.drawFinished()
+        framePresentedRef.get().foreach(_.apply())
+      }
 
   private[serenity] def layerPresenter: Option[LayerPresenter] = layerPresenterRef.get()
 
@@ -404,16 +408,16 @@ class SwingWindow(
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
-    if SwingUtilities.isEventDispatchThread then showWindow.run()
-    else SwingUtilities.invokeAndWait(showWindow)
+    onEventDispatchThread(showWindow)
+
+  def hide(): Unit = SwingUtilities.invokeLater(() => frame.setVisible(false))
 
   def stop(): Unit =
     val dispose: Runnable = () =>
       layerPresenterRef.getAndSet(None).foreach(_.dispose())
       frame.setVisible(false)
       frame.dispose()
-    if SwingUtilities.isEventDispatchThread then dispose.run()
-    else SwingUtilities.invokeAndWait(dispose)
+    onEventDispatchThread(dispose)
 
   def viewportSize: ViewportSize =
     val d = pixelSize.get()

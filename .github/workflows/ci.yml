@@ -112,6 +112,21 @@ jobs:
             fi
           fi
 
+      # Reads the compiler's semanticdb output, so it reuses the classes the style step compiled. It fails on an edge from a
+      # lower layer to a higher one that project/module-graph-baseline.tsv does not list (#2502).
+      - name: Check module-graph ratchet
+        if: ${{ !cancelled() }}
+        run: sbt -v moduleGraphCheck
+
+      - name: Require justification for module-graph baseline growth
+        if: github.event_name == 'pull_request' && !cancelled()
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          git fetch --depth=1 origin "$BASE_SHA"
+          python3 -m scripts.module_graph_baseline_growth "$BASE_SHA"
+
       # Fails when a runtime dependency has no entry in third-party/modules.tsv, or THIRD-PARTY-NOTICES.md is stale (#2019).
       - name: Check third-party notices cover every runtime dependency
         if: ${{ !cancelled() }}
@@ -135,10 +150,14 @@ jobs:
             scripts.test_aot_cache_scripts \
             scripts.test_aot_macos_workflow \
             scripts.test_aot_workflow \
+            scripts.test_apt_install \
+            scripts.test_bench_artifacts_workflow \
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
+            scripts.test_build_outputs \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
+            scripts.test_ci_apt_workflow \
             scripts.test_ci_jobs_workflow \
             scripts.test_ci_log_is_quiet \
             scripts.test_ci_workflow \
@@ -152,13 +171,16 @@ jobs:
             scripts.test_hang_dump_script \
             scripts.test_hyprland_float \
             scripts.test_key_to_screen_summary \
+            scripts.test_linux_only_ci \
             scripts.test_merge_train \
+            scripts.test_module_graph_baseline_growth \
             scripts.test_perf_matrix \
             scripts.test_perf_nightly \
             scripts.test_present_abba_summary \
             scripts.test_pull_nightly \
             scripts.test_regenerate_base_cds_archive \
             scripts.test_run_perf_benchmark \
+            scripts.test_sample_os_memory \
             scripts.test_smoke_test_app_image \
             scripts.test_startup_rows \
             scripts.test_startup_spread \
@@ -168,6 +190,7 @@ jobs:
             scripts.test_summarize_test_durations \
             scripts.test_summarize_test_failures \
             scripts.test_ttfw \
+            scripts.test_workflow_sbt_project_scope \
             scripts.test_workflow_timeouts \
             -v
 
@@ -283,8 +306,25 @@ jobs:
           "$RUNNER_TEMP/sdl3-layout" | diff -u src/test/resources/sdl3/layout.txt -
 
       # The GL specs run on SDL's offscreen driver, which makes an EGL context from Mesa's software rasteriser.
+      # The runner cannot always resolve the Ubuntu mirrors (#2618, [ci-apt]): the downloaded packages are cached per runner
+      # image and package list, and a miss fetches with retries and timeouts (ci/apt/install-packages.sh).
+      - name: Name the Mesa EGL packages and the runner image
+        id: mesa
+        run: |
+          packages="libegl1 libgl1 libgl1-mesa-dri libgles2 sway"
+          echo "packages=$packages" >> "$GITHUB_OUTPUT"
+          echo "packages-hash=$(printf '%s' "$packages" | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+          echo "image=${ImageOS:-unknown}-${ImageVersion:-unknown}" >> "$GITHUB_OUTPUT"
+
+      - name: Cache the Mesa EGL packages
+        id: mesa-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-archives/*.deb
+          key: mesa-egl-${{ steps.mesa.outputs.image }}-${{ steps.mesa.outputs.packages-hash }}
+
       - name: Install Mesa EGL for the GL specs
-        run: sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libegl1 libgl1 libgl1-mesa-dri libgles2 sway
+        run: ci/apt/install-packages.sh "$HOME/apt-archives" "${{ steps.mesa-cache.outputs.cache-hit }}" ${{ steps.mesa.outputs.packages }}
 
       # `sbt test` excludes these specs (they load the library built above, on SDL's dummy and offscreen drivers).
       - name: Run the SDL native specs

@@ -63,6 +63,9 @@ enum RichTextIntent:
   case SetRichTextParagraphAlignment(alignment: ParagraphAlignment)
   case ConvertToRichText(andThen: Option[RichTextIntent])
 
+  /** Removes the direct formatting headings carry as a whole, so the heading styles show (#2628). */
+  case ReformatHeadings
+
 enum CommentsIntent:
   case ToggleCommentLens
   case AddDocumentComment(text: String)
@@ -97,6 +100,10 @@ enum LspIntent:
   // time. Opens the rename-symbol `TextPrompt` for the new name; the rename itself is requested on that modal's
   // submit, not here (#1467).
   case OpenRenameSymbolPrompt
+
+  /** Trust, or revoke trust for, the folder of the focused buffer's language server (#2526). */
+  case TrustFolder
+  case RevokeFolderTrust
 
 enum ThemeIntent:
   case ToggleTheme

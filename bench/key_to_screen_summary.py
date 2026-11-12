@@ -25,8 +25,9 @@ GAP_NOTE = (
 )
 
 PRESENTED_NOTE = (
-    "presented: paint-end is the end of the canvas paint; render-callback-end is the end of Skiko's render callback "
-    "(the Skia layer), not GPU completion and not display scan-out."
+    "presented: paint-end is the end of the canvas paint; draw-cycle-end is the end of Skiko's draw cycle on the event "
+    "thread (our callback, the replay on the GPU canvas, the flush and the swap), not GPU completion and not display "
+    "scan-out."
 )
 
 

@@ -29,10 +29,34 @@ Project coding standards live in `docs/coding-standards.md`. Read that document
 before changing core reducers, runtime loops, configuration schema, rendering,
 or state-management code.
 
-Run the Scala checks before opening or updating a PR:
+### Fast local loop
+
+Keep one sbt shell open while you work, so the compiler and the test classes stay warm, and run only the specs you are
+changing. Measured on a 4-core Linux machine (#2557):
+
+| What | Time |
+|---|---:|
+| `testOnly` of one spec in a warm sbt shell | about 4 s |
+| The same from a fresh `sbt` after a one-line edit | about 23 s |
+| A cold compile of main and test | about 12 min |
+| The full `sbt test` | 15–26 min |
+
+```text
+sbt                                          # once; keep it open
+> testOnly com.serenity.rope.RopeBTreeSpec   # one spec
+> testOnly *RopeBTree* -- -z "split"         # tests whose name contains "split"
+> testQuick                                  # specs that failed last time or whose code changed
+> ~testOnly com.serenity.rope.RopeBTreeSpec  # re-run on every save
+```
+
+### Before a PR
+
+Run the Scala checks before opening or updating a PR. The full `sbt test` is left to CI: the merge train runs the whole
+suite on Linux, Windows and macOS for each batch before anything merges, so run the specs you changed (see the fast
+local loop above) rather than the 15–26 minute full run:
 
 ```bash
-sbt -v test assembly architectureCheck
+sbt -v assembly architectureCheck
 ```
 
 Run formatting and Scalafix before committing when changing Scala code:
@@ -40,6 +64,34 @@ Run formatting and Scalafix before committing when changing Scala code:
 ```bash
 sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ```
+
+### Turning Windows and macOS CI off (Linux only)
+
+The repository variable `CROSS_OS_CI` is the one switch (Settings, Secrets and variables, Actions, Variables). Unset, or any
+value but `off`, every job runs as usual. At `off` (#2618) the Windows and macOS jobs are skipped:
+
+- Cross-OS Tests: its four jobs are skipped, so the required checks `Test (windows)` and `Test (macos)` report skipped,
+  which branch protection counts as passing.
+- The merge train gates on `ci.yml` alone (`scripts/merge_train.py`, `required_workflows`) and no longer dispatches or
+  waits for Cross-OS Tests; Auto Squash Merge stops requiring the two Cross-OS checks.
+- Desktop Package Check, Ligature Oracle, Skia Natives Probe and the macOS and Windows Skiko builds run Linux only.
+- Desktop Publish skips the Cross-OS nightly gate, builds the Linux jar and zip, and publishes only those (the checksum
+  file and the release notes name them); Windows and macOS assets already on a release are left as they are.
+
+Delete the variable to turn everything back on; no job was removed. A change to a workflow file is merged by hand.
+
+### Build layout
+
+The build has an aggregate `root` project with no sources and an `app` project that holds the whole application (#2502).
+Its sources are still under `src/`; they move into `modules/<name>/` in a later step. Every output keeps its path:
+`target/scala-*/Serenity.jar`, `serenity-perf.jar`, `target/test-reports`, `target/Serenity.cdx.json`.
+
+- Tasks (`test`, `compile`, `clean`, `assembly`, `makeBom`, `architectureCheck`, `moduleGraphCheck`, ...) run from `root`
+  and reach `app` through aggregation.
+- Input tasks do not aggregate, so name the project: `sbt app/run`, `sbt "app/testOnly com.serenity.SomeSpec"`,
+  `sbt "app/Test/runMain ..."`, `sbt "export app/Test/fullClasspath"`. Run unqualified from `root`, they run nothing.
+- A checkout from before the split has one root project; scripts that must handle both (`run-perf-benchmark.sh`,
+  `bench-artifacts.yml`) look for `lazy val app` in `build.sbt`.
 
 ### Licence notices
 
@@ -85,8 +137,8 @@ release workflow publishes the matching section as the release notes and fails i
 a version, or for the unreleased section, to a file (the release workflow publishes that file):
 
 ```bash
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
-sbt "Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
+sbt "app/Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md 1.2.0 notes.md"
+sbt "app/Test/runMain com.serenity.release.ChangelogNotes CHANGELOG.md --unreleased notes.md"
 ```
 
 ## Automated standards
@@ -216,7 +268,7 @@ python3 bench/ttfw.py dist/Serenity/bin/Serenity 10 aot
 The packaged app runs with `-XX:+UseG1GC -XX:MaxRAMPercentage=25 -XX:G1PeriodicGCInterval=60000` on every OS. The heap
 is capped at a quarter of physical memory, and G1 (named explicitly, since the JVM picks Serial on small machines) runs
 a collection after 60 s idle so freed heap goes back to the OS. They are set beside the AppCDS flags in
-`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt run` is unaffected.
+`.github/workflows/desktop-publish.yml` and `desktop-release.yml`; `sbt app/run` is unaffected.
 
 What the app actually holds, and what each flag does to it, is measured in [docs/memory-footprint.md](docs/memory-footprint.md);
 `scripts/measure-footprint.sh` reproduces it against an assembled jar.
@@ -298,8 +350,8 @@ does) and travels in the Linux packages as `app/natives/libSDL3.so.0`; the launc
   is one present. A resize or a scale change makes new surfaces, which is the renderer's cue for a cold frame. The
   scroll move (`copyPixels`) does not yet work on a GPU surface, because `PixelMove` needs CPU pixels.
 - `SkiaGlFrameBenchmarks` times the real renderer on that thread over the GL surface and over Skia's CPU raster surface
-  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set Test / javaOptions +=
-  "-Dserenity.sdl3.library.path=<directory>"' "Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
+  (typing, idle and cold frames at 2x). It is not part of the perf gate: `sbt 'set app / Test / javaOptions +=
+  "-Dserenity.sdl3.library.path=<directory>"' "app / Test / runMain com.serenity.perf.SkiaGlFrameBenchmarks"`; on the
   `offscreen` driver the GL is Mesa's software rasteriser, so the numbers are not a GPU's.
 
 ### JetBrains Runtime and native Wayland
@@ -345,12 +397,14 @@ an environment variable or a config key; the flag wins over the variable, which 
 default. An unrecognised flag value, or an unrecognised `SERENITY_RENDER_BACKEND`, `SERENITY_WAYLAND_RENDER` or
 `SERENITY_TOOLKIT`, stops the launch with a message naming the variable, the value and the choices. An unrecognised
 config value is reported by the usual config warning (log and start page) with the same choices, and the setting uses
-its default.
+its default. `java2d` is not a choice any more: a config file written before config version 3 that still says
+`java2d` for either setting is read as that setting's default (`auto` for the renderer, `skia-raster` for the Wayland
+render), with a migration note, and anywhere else it is an unrecognised value.
 
 | Config key | Values | Default | Environment variable | Flag |
 | --- | --- | --- | --- | --- |
-| `ui.render.backend` | `auto`, `skia`, `skia-raster`, `java2d` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
-| `ui.render.wayland` | `java2d`, `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
+| `ui.render.backend` | `auto`, `skia`, `skia-raster` | `auto` | `SERENITY_RENDER_BACKEND` | `--renderer=<value>` |
+| `ui.render.wayland` | `skia-raster`, `xwayland` | `skia-raster` | `SERENITY_WAYLAND_RENDER` | `--wayland-render=<value>` |
 | `ui.render.skia_vsync` | `true`, `false` | `false` | `SKIKO_VSYNC_ENABLED` (Skiko's own) | `-Dskiko.vsync.enabled=<value>` (Skiko's own) |
 
 `ui.render.skia_vsync` makes Skia's GPU layer wait for the display's vertical blank before presenting. It is off by default: on
@@ -363,7 +417,7 @@ Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a re
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
 itself cannot be made at run time (no GL context, a native failure) the window paints with the Skia CPU raster, and with
 Java2D only if that cannot make a surface either. If the native library does not load, Java2D is used and the startup
-log says why. `skia` and `auto` differ only in the reason logged; `java2d` forces Java2D; `skia-raster` forces the
+log says why. `skia` and `auto` differ only in the reason logged; `skia-raster` forces the
 Skia CPU raster on any display and toolkit (it still needs the native library, and falls back to Java2D, saying why, if
 the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
 the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
@@ -371,10 +425,12 @@ the window, as Java2D does, so it is the way to compare against the GPU layer wh
 never load Skia. The startup log records the outcome as `[RENDER] backend=<skia|skia-raster|java2d> reason=...`. A
 windowed launch loads the native library to find out, which took about 0.33 s on the machine this was measured on.
 
-The layer is handed each frame as a recorded Skia `Picture` by default, which it replays on the event thread. With
-`-Dserenity.skia.layerFrames=image` the frame is painted on a Skia CPU surface off the event thread and the layer only
-draws the resulting image; any other value keeps pictures. It is a property, not a setting, until a timing run on real
-hardware says which should be the default.
+The layer is handed each frame as an image by default: the frame is painted on a Skia CPU surface off the event thread,
+which keeps its pixels between frames so a typing frame repaints only the rows it changed, and the layer only draws the
+resulting image. `ui.render.skia_frames = image|picture` sets this in the config file (read at startup, needs a restart); `-Dserenity.skia.layerFrames` beats it. With `picture` it is handed the frame as a recorded Skia `Picture`
+instead, which it replays on the event thread; any other value keeps images. Pictures were the default until a timing
+run on the reference laptop (#2618: key-to-pixels p50 about 32 ms for images against about 133 ms for pictures, the
+event thread at 2% CPU against 20%) said otherwise. It is a property, not a setting.
 
 Skia's window layer needs an X11 display, so on a Linux session where the native Wayland toolkit (`WLToolkit`) would be
 used, or where there is no X11 display, `ui.render.wayland` decides what happens:
@@ -382,7 +438,6 @@ used, or where there is no X11 display, `ui.render.wayland` decides what happens
 | Value | Effect |
 | --- | --- |
 | `skia-raster` (default) | Keep `WLToolkit`; Skia paints on the CPU into an image that Java2D presents. Falls back to Java2D with the reason `skia raster surface unavailable` while no raster surface is registered |
-| `java2d` | Keep `WLToolkit` and use Java2D |
 | `xwayland` | Switch to the X11 toolkit through XWayland so Skia can use the GPU. An explicit `SERENITY_TOOLKIT` or `-Dawt.toolkit.name` still wins, and the Skia raster is used instead |
 
 The renderer and the toolkit are settled together before any AWT class loads, so a config change needs a restart.

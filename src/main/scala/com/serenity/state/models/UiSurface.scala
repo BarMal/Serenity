@@ -3,7 +3,7 @@ package com.serenity.state.models
 import java.nio.file.Path
 
 import com.serenity.command.{Command, CommandRunner, SessionIntent}
-import com.serenity.config.{AppMode, CornerPosition}
+import com.serenity.config.AppMode
 import com.serenity.document.RenderedComment
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.config.ThemeCreatorState
@@ -195,7 +195,7 @@ object StartupPage:
   private val StatusMarginCells = 2
 
   private[models] def statusRows(message: String, widthCells: Int): List[String] =
-    val rows = TextWrapping.wrap(message, math.max(1, widthCells - 2 * StatusMarginCells))
+    val rows = CellWrapping.wrapCells(message, math.max(1, widthCells - 2 * StatusMarginCells))
     if rows.size == 1 then List(message) else rows
 
 final case class ContextMenuItem(
@@ -232,16 +232,6 @@ final case class ShortcutHelpGroup(title: String, entries: List[ShortcutHelpEntr
   * existing per-pane header title.
   */
 final case class TabListEntry(bufferId: BufferId, title: String, isDirty: Boolean, isPreview: Boolean = false)
-
-enum SurfacePlacement:
-  case AboveCursor
-  case BelowCursor
-
-  /** A screen corner, for a floating overlay panel assigned an edge/corner position (issue #1310, mode 3) rather than
-    * anchored to the cursor -- laid out by `LayoutEngine.calculateCornerOverlayStack`, stacking as a list when more
-    * than one surface shares the same corner.
-    */
-  case Corner(position: CornerPosition)
 
 enum SurfacePresentation:
   case Floating(anchor: Option[CursorPosition], placement: SurfacePlacement)

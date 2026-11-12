@@ -277,7 +277,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
       painted        <- Ref.of[IO, Vector[Boolean]](Vector.empty)
       idlePhase = recordingIdlePhase(neverTimingOut, fastModeSignal, cursorVisible, painted)
       fiber  <- idlePhase.compile.drain.start
-      _      <- IO.sleep(59900.millis)
+      _      <- IO.sleep(60900.millis)
       frames <- painted.get
       _      <- fiber.cancel
     yield frames should have size 119

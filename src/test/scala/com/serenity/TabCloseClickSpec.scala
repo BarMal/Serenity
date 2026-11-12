@@ -11,7 +11,6 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.TabBarLayoutSettings
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory

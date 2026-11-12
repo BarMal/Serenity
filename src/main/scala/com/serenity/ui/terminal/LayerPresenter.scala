@@ -22,6 +22,12 @@ trait LayerPresenter:
   /** `callback` is called, on the event thread, as each draw of the layer starts. */
   def onDrawStarted(callback: () => Unit): Unit = ()
 
+  /** Whether [[onDrawEnded]] is called. A layer that draws its frame after the render callback has returned says so. */
+  def tellsWhenDrawsEnd: Boolean = false
+
+  /** `callback` is called, on the event thread, once a draw's frame has been replayed, flushed and swapped. */
+  def onDrawEnded(callback: () => Unit): Unit = ()
+
   /** How many frames have been published to the layer, and how many of them its latest draw showed. */
   def publishedFrames: Int = 0
 

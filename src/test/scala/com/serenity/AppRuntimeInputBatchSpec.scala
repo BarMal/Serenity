@@ -55,7 +55,8 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
     emitDamage: Damage => IO[Unit] = _ => IO.unit,
     clipboard: SystemClipboard[IO] = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit),
     logEvent: (Event, Focus) => IO[Unit] = (_, _) => IO.unit,
-    frameTimings: FrameTimings = FrameTimings()
+    frameTimings: FrameTimings = FrameTimings(),
+    markUserInput: IO[Unit] = IO.unit
   ): IO[Unit] =
     for
       router          <- InputRouter.create[IO, Event](new TextEntryTranslator(AppConfig.default))
@@ -70,7 +71,8 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
         emitDamage,
         translatorCache,
         frameTimings,
-        logEvent = logEvent
+        logEvent = logEvent,
+        markUserInput = markUserInput
       )
       _ <- Stream
         .emits(batches.map(Chunk.from))
@@ -263,4 +265,19 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
 
     program.unsafeRunSync() shouldBe Some("a")
     timings.keyLatency.pendingKeys shouldBe empty
+  }
+
+  it should "mark each applied batch as user input, so the caret's pause restarts" in {
+    val program = for
+      marks        <- Ref.of[IO, Int](0)
+      stateManager <- editorWithEmptyBuffer()
+      _ <- runBatches(
+        stateManager,
+        List(List(key('a'), key('b')), List(key('c'))),
+        markUserInput = marks.update(_ + 1)
+      )
+      count <- marks.get
+    yield count
+
+    program.unsafeRunSync() shouldBe 2
   }

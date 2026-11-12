@@ -401,11 +401,11 @@ object ConfigFileFormat:
     comment("monospaced buffers only, falling back to rows for proportional or ligature-shaped text"),
     field("ui.render.damage_granularity"),
     comment("Renderer for the window: auto uses Skia's GPU layer where it loads, falling back to Skia on the CPU and"),
-    comment("then to Java2D; skia, skia-raster (Skia on the CPU, any display) or java2d forces one."),
+    comment("then to Java2D; skia or skia-raster (Skia on the CPU, any display) forces one."),
     comment("SERENITY_RENDER_BACKEND overrides this. Needs a restart."),
     field("ui.render.backend"),
-    comment("On a Wayland session on native Wayland: skia-raster, the default, paints Skia on the CPU; java2d keeps"),
-    comment("Java2D; xwayland switches to the X11 toolkit so Skia's GPU layer can run."),
+    comment("On a Wayland session on native Wayland: skia-raster, the default, paints Skia on the CPU; xwayland"),
+    comment("switches to the X11 toolkit so Skia's GPU layer can run."),
     comment("SERENITY_WAYLAND_RENDER overrides this. Needs a restart."),
     field("ui.render.wayland"),
     comment(
@@ -417,6 +417,13 @@ object ConfigFileFormat:
     comment("Turn it on if you see tearing, for example on X11 without a compositor. SKIKO_VSYNC_ENABLED or"),
     comment("-Dskiko.vsync.enabled beat this. Needs a restart."),
     field("ui.render.skia_vsync"),
+    comment("What Skia's GPU layer is handed for each frame. image paints the frame on a CPU surface that keeps its"),
+    comment(
+      "pixels, so a typing frame repaints only what changed, and the layer draws the result; picture records the"
+    ),
+    comment("frame and has the layer replay it. image was about four times faster to the screen on the reference"),
+    comment("laptop (#2618). -Dserenity.skia.layerFrames beats this. Needs a restart."),
+    field("ui.render.skia_frames"),
     comment("Per-cache capacity for the renderer's bounded frame-state caches (issue #1433). Default 64 suits a"),
     comment("single window; raise it for a session with many concurrently open surfaces."),
     field("ui.render.cache_capacity"),

@@ -10,7 +10,7 @@ its `Ctrl` form.
 ## Default bindings
 
 This table is generated from the default keymap by `KeyboardReferenceTable`, and a test fails when it is out of date.
-Run `sbt "Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it after a default changes.
+Run `sbt "app/Test/runMain com.serenity.docs.KeyboardReferenceTable"` to rewrite it after a default changes.
 
 <!-- keyboard-table:start -->
 | Action | Config key | Linux and Windows | macOS |

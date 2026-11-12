@@ -57,6 +57,10 @@ object ModuleGraphSelfTest {
     findsCycles()
     assignsModules()
     ratchetsUpwardEdges()
+    assignsCoreLayers()
+    ratchetsCoreLayering()
+    readsTheAssignmentTable()
+    ignoresDocumentsWhoseSourceIsGone()
   }
 
   private def decodesSemanticdb(): Unit = {
@@ -131,12 +135,12 @@ object ModuleGraphSelfTest {
       "src/main/scala/com/serenity/io/FileManager.scala"                    -> "app",
       "src/main/scala/com/serenity/lsp/model/Diagnostic.scala"              -> "lsp-protocol",
       "src/main/scala/com/serenity/lsp/client/LspFramer.scala"              -> "lsp-protocol",
-      "src/main/scala/com/serenity/lsp/LspManager.scala"                    -> "app",
+      "src/main/scala/com/serenity/lsp/LspManager.scala"                    -> "services",
       "src/main/scala/com/serenity/richtext/XmlDom.scala"                   -> "richtext",
       "src/main/scala/com/serenity/exporting/PdfExporter.scala"             -> "manuscript",
       "src/main/scala/com/serenity/ui/theme/Theme.scala"                    -> "theme",
-      "src/main/scala/com/serenity/ui/fonts/FontLoader.scala"               -> "app",
-      "src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala"       -> "app",
+      "src/main/scala/com/serenity/ui/fonts/FontLoader.scala"               -> "uibase",
+      "src/main/scala/com/serenity/ui/openings/ChapterOpenings.scala"       -> "uibase",
       "src/main/scala/com/serenity/ui/theme/config/AppThemeManager.scala"   -> "app",
       "src/main/scala/com/serenity/ui/theme/config/ThemeConfigLoader.scala" -> "theme",
       "src/main/scala/com/serenity/ui/theme/MarkdownInlineStyling.scala"    -> "markdown",
@@ -145,7 +149,7 @@ object ModuleGraphSelfTest {
       "src/main/scala/com/serenity/publish/ManuscriptExport.scala"          -> "app",
       "src/main/scala/com/serenity/manuscript/CompileSpec.scala"            -> "manuscript",
       "src/main/scala/com/serenity/markdown/BlockScan.scala"                -> "markdown",
-      "src/main/scala/com/serenity/state/models/AppState.scala"             -> "app",
+      "src/main/scala/com/serenity/state/models/AppState.scala"             -> "model",
       "src/main/scala/Main.scala"                                           -> "app",
       "target/scala-3.9.0/src_managed/main/com/serenity/BuildInfo.scala"    -> "app"
     )
@@ -176,7 +180,7 @@ object ModuleGraphSelfTest {
     val dirty  = doc(rope, Seq("com/serenity/rope/Rope#"), Seq("com/serenity/state/models/AppState#")) +: clean.tail
     val upward = ModuleGraph.upwardEdges(ModuleGraph.fileGraph(dirty))
     require(
-      upward == Seq(ModuleGraph.Edge(rope, "core-text", state, "app")),
+      upward == Seq(ModuleGraph.Edge(rope, "core-text", state, "model")),
       s"core-text referencing app must be flagged, got $upward"
     )
 
@@ -203,6 +207,109 @@ object ModuleGraphSelfTest {
       ModuleGraph.writeBaseline(file, upward)
       require(ModuleGraph.readBaseline(file) == accepted, "the baseline file round-trips")
     } finally file.delete()
+  }
+
+  private def assignsCoreLayers(): Unit = {
+    val expected = Seq(
+      "keystroke/events/Event.scala"    -> "base",
+      "ui/fonts/FontLoader.scala"       -> "uibase",
+      "config/AppConfig.scala"          -> "config",
+      "command/Command.scala"           -> "command",
+      "state/models/AppState.scala"     -> "model",
+      "ui/layout/Layout.scala"          -> "layout",
+      "state/manager/Model.scala"       -> "services",
+      "state/reducers/Reducer.scala"    -> "services",
+      "ui/renderer/RenderContext.scala" -> "render",
+      "io/FileManager.scala"            -> "app",
+      "ui/skia/SkiaRenderSurface.scala" -> "app"
+    )
+    expected.foreach {
+      case (relative, module) =>
+        val uri = main(relative)
+        require(ModuleGraph.moduleOf(uri) == module, s"$relative belongs to $module, got ${ModuleGraph.moduleOf(uri)}")
+    }
+    val table = ModuleGraph.Assignment(Map("ui/layout/PaneScroll.scala" -> "render"))
+    require(
+      ModuleGraph.moduleOf(main("ui/layout/PaneScroll.scala"), table) == "render",
+      "a file in the assignment table takes the module the table gives it"
+    )
+    require(
+      ModuleGraph.moduleOf(main("ui/layout/Layout.scala"), table) == "layout",
+      "a file the table does not list keeps its package's module"
+    )
+  }
+
+  private def ratchetsCoreLayering(): Unit = {
+    def edges(from: String, to: String, table: ModuleGraph.Assignment = ModuleGraph.Assignment.empty) =
+      ModuleGraph.upwardEdges(
+        ModuleGraph.fileGraph(
+          Seq(
+            doc(main(from), Seq("com/serenity/F#"), Seq("com/serenity/T#")),
+            doc(main(to), Seq("com/serenity/T#"), Nil)
+          )
+        ),
+        table
+      )
+    require(edges("state/models/A.scala", "command/B.scala").isEmpty, "model may use command: command is below model")
+    require(edges("command/A.scala", "state/models/B.scala").size == 1, "command using model is an upward edge")
+    require(edges("config/A.scala", "state/models/B.scala").size == 1, "config using model is an upward edge")
+    require(edges("ui/layout/A.scala", "ui/renderer/B.scala").size == 1, "layout using render is an upward edge")
+    require(
+      edges("command/A.scala", "io/B.scala").isEmpty,
+      "a core layer may use a file the core assignment does not manage (module app)"
+    )
+    require(edges("markdown/A.scala", "config/B.scala").size == 1, "a leaf module using a core layer is an upward edge")
+    require(edges("markdown/A.scala", "io/B.scala").size == 1, "a leaf module using module app is still an upward edge")
+    require(
+      edges(
+        "command/A.scala",
+        "state/models/B.scala",
+        ModuleGraph.Assignment(Map("command/A.scala" -> "model"))
+      ).isEmpty,
+      "moving the offending file to the same layer through the table removes the edge"
+    )
+  }
+
+  private def readsTheAssignmentTable(): Unit = {
+    val file = java.io.File.createTempFile("module-assignment", ".tsv")
+    try {
+      val table = ModuleGraph.Assignment(Map("ui/layout/B.scala" -> "render", "state/models/A.scala" -> "base"))
+      ModuleGraph.writeAssignment(file, table)
+      require(ModuleGraph.readAssignment(file) == table, "the assignment table round-trips")
+      java.nio.file.Files.write(file.toPath, "ui/layout/C.scala\tnot-a-module\n".getBytes("UTF-8"))
+      val unknown =
+        try { ModuleGraph.readAssignment(file); false }
+        catch { case _: IllegalArgumentException => true }
+      require(unknown, "a table entry naming a module that does not exist is rejected")
+    } finally file.delete()
+  }
+
+  private def ignoresDocumentsWhoseSourceIsGone(): Unit = {
+    val dir      = java.nio.file.Files.createTempDirectory("module-graph-sources").toFile
+    val semantic = new java.io.File(dir, "meta")
+    try {
+      val kept = new java.io.File(dir, "src/main/scala/com/serenity/rope/Kept.scala")
+      kept.getParentFile.mkdirs()
+      java.nio.file.Files.write(kept.toPath, "// source".getBytes("UTF-8"))
+      semantic.mkdirs()
+      java.nio.file.Files.write(
+        new java.io.File(semantic, "a.scala.semanticdb").toPath,
+        encode("src/main/scala/com/serenity/rope/Kept.scala", "com/serenity/rope/Kept#" -> Definition) ++
+          encode("src/main/scala/com/serenity/rope/Gone.scala", "com/serenity/rope/Gone#" -> Definition)
+      )
+      val read = ModuleGraph.readDocuments(semantic, dir).map(_.uri)
+      require(
+        read == Seq("src/main/scala/com/serenity/rope/Kept.scala"),
+        s"output left behind by a deleted or renamed source must not count, got $read"
+      )
+    } finally {
+      def delete(file: java.io.File): Unit = {
+        Option(file.listFiles).foreach(_.foreach(delete))
+        file.delete()
+        ()
+      }
+      delete(dir)
+    }
   }
 
 }

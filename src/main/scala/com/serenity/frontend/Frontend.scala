@@ -56,6 +56,9 @@ sealed trait Frontend:
 object Frontend:
   val BlinkInterval: FiniteDuration = 500.millis
 
+  /** How long input must pause before the GUI caret starts blinking; it stays solid while typing. */
+  val BlinkPauseDelay: FiniteDuration = 1000.millis
+
   /** The `LogRouting` a GUI launch configures the console filter with, before a `GuiFrontend` instance necessarily
     * exists yet -- `Main.launch` sets this ahead of the first SLF4J `getLogger` call, well before the Swing window (and
     * so the real `GuiFrontend`) is constructed. A `val`, not a case object member lookup, so reading it never requires

@@ -63,6 +63,7 @@ _DRAFT_GATE = "(github.event_name != 'pull_request' || !github.event.pull_reques
 # Once the merge train is live it runs Windows and macOS once per batch instead (#2553 item 3).
 _TRAIN_GATE = (
     "(github.event_name != 'pull_request' || (!github.event.pull_request.draft && vars.MERGE_TRAIN_MODE != 'live'))"
+    " && vars.CROSS_OS_CI != 'off'"
 )
 _CI = (_ROOT / ".github" / "workflows" / "ci.yml").read_text()
 _PACKAGE = (_ROOT / ".github" / "workflows" / "desktop-release.yml").read_text()
@@ -177,6 +178,17 @@ class ShardJobTests(unittest.TestCase):
 
     def test_the_shards_run_to_completion_independently(self) -> None:
         self.assertIn("fail-fast: false", _SHARDS)
+
+    def test_macos_shards_record_the_machine_memory_before_the_tests_start(self) -> None:
+        sampler = _SHARDS.index("sample-os-memory.sh")
+        self.assertLess(sampler, _SHARDS.index("Run tests"))
+        step = _SHARDS[_SHARDS.rindex("      - name:", 0, sampler) : sampler + 200]
+        self.assertIn("if: runner.os == 'macOS'", step)
+        self.assertIn("nohup bash .github/scripts/sample-os-memory.sh loop jvm-diag 30", step)
+        self.assertIn("&", step.split("sample-os-memory.sh", 1)[1].splitlines()[0])
+
+    def test_the_memory_samples_are_uploaded_with_the_other_diagnostics(self) -> None:
+        self.assertIn("path: jvm-diag/**", _SHARDS)
 
     def test_the_extra_jvm_options_still_reach_the_run(self) -> None:
         self.assertIn("jvm_opts: ${{ inputs.jvm_opts }}", _job(_CALLER, "shards-macos"))

@@ -1,8 +1,8 @@
-package com.serenity.ui.renderer
+package com.serenity.ui.layout
 
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.state.models.AppState
-import com.serenity.ui.layout.{CloseReveal, TabBarSettings, TabTitleMeasure}
+import com.serenity.ui.renderer.SurfaceTextInset
 
 /** The tab strip's layout settings for a state, built the same way for the renderer, accessibility, and click and drag
   * hit testing, so all four lay the strip out identically.

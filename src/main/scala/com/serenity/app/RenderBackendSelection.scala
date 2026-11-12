@@ -58,8 +58,7 @@ object RenderBackendSelection:
 
   def choose(inputs: Inputs): Decision =
     val linux = inputs.osName.toLowerCase(Locale.ROOT).contains("linux")
-    if inputs.setting == RenderBackendSetting.Java2D then java2d("ui.render.backend=java2d")
-    else if inputs.setting == RenderBackendSetting.SkiaRaster then
+    if inputs.setting == RenderBackendSetting.SkiaRaster then
       raster(inputs, "ui.render.backend=skia-raster", "skia raster surface unavailable")
     else if linux && inputs.toolkit == ToolkitSelection.Choice.Wayland then onWayland(inputs)
     else if !inputs.skiaSurfaceAvailable then java2d("skia surface unavailable")
@@ -70,7 +69,6 @@ object RenderBackendSelection:
   /** WLToolkit cannot host Skia's GLX layer, so what happens next is the Wayland render mode's call. */
   private def onWayland(inputs: Inputs): Decision =
     inputs.waylandRender match
-      case WaylandRender.Java2D => java2d("ui.render.wayland=java2d")
       case WaylandRender.XWayland =>
         raster(
           inputs,

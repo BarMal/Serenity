@@ -5,6 +5,8 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font, RenderingHints}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
+import com.serenity.ui.layout.BoundedRefCache
+
 /** The ink of short labels that repeat verbatim frame after frame -- line numbers -- rendered once and blitted.
   *
   * Laying a label out costs a `TextLayout` per draw, and a gutter redraws a few dozen of them whenever its rows change.

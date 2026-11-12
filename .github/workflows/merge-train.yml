@@ -59,4 +59,5 @@ jobs:
           MERGE_TRAIN_MODE: ${{ vars.MERGE_TRAIN_MODE }}
           MERGE_TRAIN_BATCH: ${{ vars.MERGE_TRAIN_BATCH }}
           MERGE_TRAIN_FLAKE_ISSUE: ${{ vars.MERGE_TRAIN_FLAKE_ISSUE }}
+          CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
         run: python3 scripts/merge_train.py tick

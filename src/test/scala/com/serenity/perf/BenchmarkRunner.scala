@@ -7,8 +7,8 @@ import java.lang.management.ManagementFactory
   */
 object BenchmarkRunner:
 
-  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*` or `command_runner.*` benchmark is
-    * covered without being listed. The set below adds the individually chosen ones from other families.
+  /** Every frame benchmark is tracked by prefix, so a new `laptop.*`, `render.*`, `command_runner.*` or `skia.*`
+    * benchmark is covered without being listed. The set below adds the individually chosen ones from other families.
     */
   private val AllocationTrackedPrefixes =
     List(
@@ -19,7 +19,8 @@ object BenchmarkRunner:
       "layout.cold_font.",
       "text.boundary.",
       "text.counts.",
-      "index.walk."
+      "index.walk.",
+      "skia."
     )
 
   private[perf] def tracksAllocation(name: String): Boolean =
@@ -89,8 +90,14 @@ object BenchmarkRunner:
       settleJit: Boolean = false,
       fixedSampleCount: Boolean = false,
       prepare: () => Unit = () => (),
-      strict: Option[() => Body] = None
-  )
+      strict: Option[() => Body] = None,
+      allThreads: Boolean = false
+  ):
+
+    /** Also reports what every thread allocated while the benchmark ran, for one whose work runs off the benchmark's
+      * own thread, where `allocation_p50_bytes` sees only the caller.
+      */
+    def measuringAllThreads: Benchmark = copy(allThreads = true)
 
   private[perf] object Benchmark:
 
@@ -153,7 +160,9 @@ object BenchmarkRunner:
       maxMs: Double,
       allocationP50Bytes: Option[Long],
       allocationP95Bytes: Option[Long],
-      retainedBytes: Option[Long] = None
+      retainedBytes: Option[Long] = None,
+      allocationAllThreadsP50Bytes: Option[Long] = None,
+      allocationAllThreadsP95Bytes: Option[Long] = None
   )
 
   /** Warm up until the JIT has had a fair chance rather than a fixed handful of invocations: HotSpot needs roughly 200
@@ -292,6 +301,16 @@ object BenchmarkRunner:
       Some(bean)
     case _ => None
 
+  /** Bytes allocated between two readings of every live thread's counter. A thread started in between counts whole; one
+    * that ended in between is lost, as its final count is no longer readable.
+    */
+  private[perf] def allocatedAcrossThreads(before: Map[Long, Long], after: Map[Long, Long]): Long =
+    after.map((threadId, allocated) => (allocated - before.getOrElse(threadId, 0L)).max(0L)).sum
+
+  private def allThreadsAllocation(bean: com.sun.management.ThreadMXBean): Map[Long, Long] =
+    val ids = bean.getAllThreadIds
+    ids.zip(bean.getThreadAllocatedBytes(ids)).filter(_._2 >= 0L).toMap
+
   /** Runs the benchmarks whose names start with any of `prefixes`, or all of them when there are none. */
   private[perf] def runMatching(
     prefixes: List[String],
@@ -316,22 +335,28 @@ object BenchmarkRunner:
       sink.addAndGet(settle(benchmark.run, System.nanoTime() + MaxSettleNanos, Vector.empty, 0L))
     val batch   = calibrate(benchmark.run, 1).max(benchmark.minBatch)
     val samples = sample(benchmark.run, batch, benchmark.iterations, !benchmark.fixedSampleCount)
-    val allocationSamples =
-      if tracksAllocation(benchmark.name) then
+    val tracked = tracksAllocation(benchmark.name)
+    val allocationPasses =
+      if tracked then
         allocationBean
           .map { bean =>
             val threadId = Thread.currentThread().threadId()
             (0 until benchmark.iterations).map { _ =>
+              val allBefore = if benchmark.allThreads then allThreadsAllocation(bean) else Map.empty[Long, Long]
               val started   = bean.getThreadAllocatedBytes(threadId)
               val observed  = repeat(batch, benchmark.run)
               val allocated = bean.getThreadAllocatedBytes(threadId) - started
+              val acrossAll =
+                if benchmark.allThreads then Some(allocatedAcrossThreads(allBefore, allThreadsAllocation(bean)))
+                else None
               sink.addAndGet(observed)
-              (allocated / batch).max(0L)
+              ((allocated / batch).max(0L), acrossAll.map(_ / batch))
             }
           }
-          .getOrElse(Vector.empty[Long])
-          .sorted
-      else Vector.empty[Long]
+          .getOrElse(Vector.empty)
+      else Vector.empty
+    val allocationSamples = allocationPasses.map(_._1).sorted
+    val allThreadsSamples = allocationPasses.flatMap(_._2).sorted
     BenchmarkResult(
       name = benchmark.name,
       iterations = samples.length,
@@ -342,7 +367,9 @@ object BenchmarkRunner:
       p95Ms = percentile(samples, 0.95),
       maxMs = samples.lastOption.getOrElse(0.0),
       allocationP50Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.50)),
-      allocationP95Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.95))
+      allocationP95Bytes = allocationSamples.headOption.map(_ => percentileLong(allocationSamples, 0.95)),
+      allocationAllThreadsP50Bytes = allThreadsSamples.headOption.map(_ => percentileLong(allThreadsSamples, 0.50)),
+      allocationAllThreadsP95Bytes = allThreadsSamples.headOption.map(_ => percentileLong(allThreadsSamples, 0.95))
     )
 
   private def percentile(samples: IndexedSeq[Double], percentile: Double): Double =
@@ -358,11 +385,13 @@ object BenchmarkRunner:
       samples(index.max(0).min(samples.length - 1))
 
   /** `retained_bytes` is filled only by the `footprint.*` rows, whose timing columns are zero; timed rows leave it
-    * empty. It comes last so a reader of the older ten-column layout still parses every row.
+    * empty. The all-threads allocation columns follow it, filled only by rows that ask for them; each column joined
+    * after the older layout, so a reader of that layout still parses every row.
     */
   private[perf] val csvHeader =
     "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms," +
-      "allocation_p50_bytes,allocation_p95_bytes,retained_bytes"
+      "allocation_p50_bytes,allocation_p95_bytes,retained_bytes," +
+      "allocation_all_threads_p50_bytes,allocation_all_threads_p95_bytes"
 
   private[perf] def printContext(): Unit =
     println("Serenity performance benchmarks")
@@ -380,5 +409,8 @@ object BenchmarkRunner:
     val allocationP50 = result.allocationP50Bytes.fold("")(_.toString)
     val allocationP95 = result.allocationP95Bytes.fold("")(_.toString)
     val retained      = result.retainedBytes.fold("")(_.toString)
+    val allThreads50  = result.allocationAllThreadsP50Bytes.fold("")(_.toString)
+    val allThreads95  = result.allocationAllThreadsP95Bytes.fold("")(_.toString)
     f"${result.name},${result.iterations},${result.warmupInvocations},${result.batch}," +
-      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95,$retained"
+      f"${result.minMs}%.7f,${result.p50Ms}%.7f,${result.p95Ms}%.7f,${result.maxMs}%.7f,$allocationP50,$allocationP95,$retained," +
+      s"$allThreads50,$allThreads95"

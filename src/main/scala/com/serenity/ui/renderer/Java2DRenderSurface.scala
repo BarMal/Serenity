@@ -121,6 +121,7 @@ class Java2DRenderSurface(
 
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
+  private val shadowRef     = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
 
   private val roundedOutlines =
@@ -195,10 +196,28 @@ class Java2DRenderSurface(
           try
             if clipGlyphToRun then g.clipRect(boundedLeft, boundedTop, boundedWidth, boundedHeight)
             else g.clipRect(0, 0, cellGridWidthPx, cellGridHeightPx)
-            drawGlyphs
+            drawShadowed(boundedLeft, boundedTop, boundedWidth, boundedHeight)(drawGlyphs)
           finally Java2DRenderSurface.restoreClip(g, savedClip)
           drawUnderline(boundedLeft, boundedWidth, yPx + ascentPx)
           painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+
+  /** A shadowed run's glyphs are drawn once more first, as [[TextShadow]] has them, and only inside the run's own box:
+    * that is all a repaint of the run clears, so a shadow past it would be left behind when the text changes.
+    */
+  private def drawShadowed(boxLeft: Int, boxTop: Int, boxWidth: Int, boxHeight: Int)(drawGlyphs: => Unit): Unit =
+    if shadowRef.get() then
+      val foreground = fgRef.get()
+      val offset     = TextShadow.offsetOf(deviceScaleX)
+      val savedClip  = Option(g.getClip)
+      g.clipRect(boxLeft, boxTop, boxWidth, boxHeight)
+      g.setColor(TextShadow.colorOf(foreground))
+      g.translate(offset, offset)
+      try drawGlyphs
+      finally
+        g.translate(-offset, -offset)
+        Java2DRenderSurface.restoreClip(g, savedClip)
+        g.setColor(foreground)
+    drawGlyphs
 
   private def runLeft(xPx: Float): Int = math.floor(xPx.toDouble).toInt.max(0).min(cellGridWidthPx)
 
@@ -363,10 +382,12 @@ class Java2DRenderSurface(
 
   def enableStyle(style: TextStyle): Unit =
     underlineRef.set(style.isUnderlined)
+    shadowRef.set(style.isShadowed)
     g.setFont(styledFonts.fontFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     underlineRef.set(false)
+    shadowRef.set(false)
     g.setFont(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =

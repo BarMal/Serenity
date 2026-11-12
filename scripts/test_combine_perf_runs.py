@@ -152,5 +152,28 @@ class CombinePerfRunsTests(unittest.TestCase):
         self.assertEqual(check_perf_regression.parse_csv(out)["x"].retained_bytes, 9_000_000)
 
 
+    def test_carries_the_all_threads_allocation_columns_of_the_row_it_keeps(self) -> None:
+        header = (
+            "name,iterations,warmup_invocations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,"
+            "allocation_p95_bytes,retained_bytes,allocation_all_threads_p50_bytes,allocation_all_threads_p95_bytes\n"
+        )
+        for run, p50, p50_bytes, p95_bytes in (("a", 2.0, 900, 950), ("b", 1.0, 700, 760)):
+            with open(self._path(f"{run}.csv"), "w") as handle:
+                handle.write(header)
+                handle.write(f"x,1,1,1,0,{p50},{p50},0,10,11,,{p50_bytes},{p95_bytes}\n")
+        out = self._path("out.csv")
+        self.assertEqual(combine_perf_runs.main_with_args([out, self._path("a.csv"), self._path("b.csv")]), 0)
+        row = check_perf_regression.parse_csv(out)["x"]
+        self.assertEqual((row.allocation_all_threads_p50_bytes, row.allocation_all_threads_p95_bytes), (700, 760))
+        self.assertEqual((row.allocation_p50_bytes, row.allocation_p95_bytes), (10, 11))
+
+    def test_leaves_the_all_threads_columns_empty_for_a_run_that_predates_them(self) -> None:
+        _write_csv(self._path("a.csv"), [("x", 1.0, 1.5)])
+        out = self._path("out.csv")
+        self.assertEqual(combine_perf_runs.main_with_args([out, self._path("a.csv")]), 0)
+        row = check_perf_regression.parse_csv(out)["x"]
+        self.assertEqual((row.allocation_all_threads_p50_bytes, row.allocation_all_threads_p95_bytes), (None, None))
+
+
 if __name__ == "__main__":
     unittest.main()

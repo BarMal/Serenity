@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage
 import java.awt.{Color, Font}
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.state.models.CaretStyle
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 
@@ -31,15 +32,29 @@ final class CaretRecordingSurface private (
   private val fills = new AtomicReference(Vector.empty[CaretRecordingSurface.CaretFill])
 
   override def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit =
+    fillCaret(xPx, yPx, widthPx, heightPx, color, CaretStyle.Plain)
+
+  override def fillCaret(
+    xPx: Int,
+    yPx: Int,
+    widthPx: Int,
+    heightPx: Int,
+    color: RenderColor,
+    style: CaretStyle
+  ): Unit =
     val _ = fills.updateAndGet(
-      _ :+ CaretRecordingSurface.CaretFill(PixelRect(xPx, yPx, widthPx.max(1), heightPx.max(1)), color.toAwt)
+      _ :+ CaretRecordingSurface.CaretFill(
+        PixelRect(xPx, yPx, widthPx.max(1), heightPx.max(1)),
+        color.toAwt,
+        style
+      )
     )
 
   def recordedFills: List[CaretRecordingSurface.CaretFill] = fills.get().toList
 
 object CaretRecordingSurface:
 
-  final case class CaretFill(rect: PixelRect, color: Color)
+  final case class CaretFill(rect: PixelRect, color: Color, style: CaretStyle = CaretStyle.Plain)
 
   def forGeometry(metrics: CellMetrics, font: Font, geometry: SurfaceGeometry): CaretRecordingSurface =
     new CaretRecordingSurface(

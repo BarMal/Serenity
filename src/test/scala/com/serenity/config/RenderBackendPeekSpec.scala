@@ -18,7 +18,12 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
 
   "RenderBackendPeek.read" should "read ui.render.backend from the config file" in {
     peek("ui.render.backend = skia\n") shouldBe RenderBackendSetting.Skia
-    peek("ui.render.backend = java2d\nui.render.fps = 60\n") shouldBe RenderBackendSetting.Java2D
+    peek("ui.render.backend = skia-raster\nui.render.fps = 60\n") shouldBe RenderBackendSetting.SkiaRaster
+  }
+
+  it should "take a file that still says java2d as the defaults, which is what its migration writes" in {
+    peekSettings("ui.render.backend = java2d\nui.render.wayland = java2d\n") shouldBe
+      RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
   }
 
   it should "default to auto when the key is absent, invalid or the file is unreadable" in {
@@ -66,8 +71,22 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
       RenderBackendPeek.read(file).unsafeRunSync().skiaVsync
   }
 
+  it should "read ui.render.skia_frames, images unless the file asks for pictures" in {
+    peekSettings("ui.render.skia_frames = picture\n").skiaFrames shouldBe SkiaFrames.Picture
+    peekSettings("ui.render.skia_frames = image\n").skiaFrames shouldBe SkiaFrames.Image
+    peekSettings("ui.render.backend = skia\n").skiaFrames shouldBe SkiaFrames.Image
+    peekSettings("ui.render.skia_frames = sometimes\n").skiaFrames shouldBe SkiaFrames.Image
+  }
+
+  it should "agree with the full config loader on the Skia frame form" in {
+    val file = TestTemp.file("serenity-render-frames-agree", ".conf")
+    Files.writeString(file, "ui.render.skia_frames = picture\n")
+    ConfigManagerTestSupport.loadConfig(Some(file.toString)).surfaceConfig.renderSkiaFrames shouldBe
+      RenderBackendPeek.read(file).unsafeRunSync().skiaFrames
+  }
+
   "A rendered default config" should "carry the backend setting" in {
     ConfigManager.configToString(AppConfig.default) should (include("ui.render.backend = auto") and
       include("ui.render.wayland = skia-raster") and
-      include("ui.render.skia_vsync = false"))
+      include("ui.render.skia_vsync = false") and include("ui.render.skia_frames = image"))
   }
