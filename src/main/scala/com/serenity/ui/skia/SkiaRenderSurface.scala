@@ -306,20 +306,23 @@ final class SkiaRenderSurface(
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
           awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(
-            drawShadowed(drawGlyphs)
+            drawShadowed(boundedLeft, boundedTop, boundedWidth, boundedHeight)(drawGlyphs)
           )
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
 
-  /** A shadowed run's glyphs are drawn once more first, as [[TextShadow]] has them, inside the clip the run has. */
-  private def drawShadowed(drawGlyphs: => Unit): Unit =
+  /** A shadowed run's glyphs are drawn once more first, as [[TextShadow]] has them, and only inside the run's own box:
+    * that is all a repaint of the run clears, so a shadow past it would be left behind when the text changes.
+    */
+  private def drawShadowed(boxLeft: Int, boxTop: Int, boxWidth: Int, boxHeight: Int)(drawGlyphs: => Unit): Unit =
     if shadowRef.get() then
       val foreground = fgRef.get()
       val offset     = TextShadow.offsetOf(deviceScaleX).toFloat
       fgRef.set(TextShadow.colorOf(foreground))
       val saved = canvas.save()
       try
+        clipTo(boxLeft, boxTop, boxWidth, boxHeight)
         val _ = canvas.translate(offset, offset)
         drawGlyphs
       finally

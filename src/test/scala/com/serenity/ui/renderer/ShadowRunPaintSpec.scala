@@ -83,11 +83,13 @@ abstract class ShadowRunPaintBehaviour extends AnyFlatSpec with Matchers:
     shadowOnly.max should (be >= full - 12 and be <= full + 2)
   }
 
-  it should "keep the shadow inside the run's own box" in {
-    val shadowed = inkedPixels(rendered(shadowedBold, text = "MMMMMMMM", runWidthPx = 56f))
+  it should "add nothing outside the run's own box, which is all a repaint of the run clears" in {
+    val plain    = rendered(plainBold, text = "MMMMMMMM", runWidthPx = 56f)
+    val shadowed = rendered(shadowedBold, text = "MMMMMMMM", runWidthPx = 56f)
+    val outside =
+      for y <- 0 until height; x <- 0 until width if !(x >= 14 && x < 70 && y >= 26 && y < 39) yield (x, y)
 
-    all(shadowed.map(_._1)) should (be >= 14 and be < 70)
-    all(shadowed.map(_._2)) should (be >= 26 and be < 39)
+    all(outside.map((x, y) => rgb(shadowed, x, y) - rgb(plain, x, y))) shouldBe 0
   }
 
   it should "leave the runs after it unshadowed once the style is switched off" in {
