@@ -95,7 +95,8 @@ class CaretFollowsCursorAcrossFramesSpec extends AnyFlatSpec with Matchers:
       surface.carets
 
     def cursorOnlyFrame(state: AppState): List[PixelRect] =
-      val surface = CaretRecordingSurface.forGeometry(metrics, codeFont, SwingCanvasGeometry.of(canvas))
+      val surface =
+        CaretRecordingSurface.forGeometry(metrics, FontSpec.fromAwt(codeFont), SwingCanvasGeometry.of(canvas))
       RendererCursorOverlay.renderCursorOnly(
         state,
         cursorVisible = true,
