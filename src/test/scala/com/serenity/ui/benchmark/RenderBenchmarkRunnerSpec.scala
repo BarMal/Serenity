@@ -168,8 +168,9 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
 
   it should "report the layer as unavailable, and still time Java2D, when the window fell back to Java2D" in {
     withDisplay()
-    val failing = new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"))
-    val report  = runExclusively(small, failing)
+    val failing =
+      new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"), SkiaRasterSurfaceFactory)
+    val report = runExclusively(small, failing)
     report.environment.skiaRenderApi.isLeft shouldBe true
     report.results.foreach(result => result.skia shouldBe None)
     report.environment.skiaLayers shouldBe None

@@ -9,7 +9,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, Java2DRenderSurface, SurfaceContentIdentity}
+import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, SurfaceContentIdentity}
 import com.serenity.ui.terminal.{LayerPresenter, SwingCanvasGeometry, SwingPresentationSite, SwingWindow}
 import org.jetbrains.skia.{Bitmap, Image, Picture}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -42,7 +42,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
 
   final private class Harness(
       buildHost: JPanel => LayerHost,
-      fallback: FrameSurfaceFactory = FrameSurfaceFactory.Java2D,
+      fallback: FrameSurfaceFactory = SkiaRasterSurfaceFactory,
       frames: LayerFrames = LayerFrames.Picture
   ):
     val canvas = new JPanel
@@ -159,7 +159,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     harness.shown.get should have size 3
   }
 
-  it should "fall back to Java2D, and show frames, when the layer cannot be created" in {
+  it should "fall back to the Skia raster, and show frames, when the layer cannot be created" in {
     val builds = new AtomicInteger(0)
     val harness = new Harness(_ =>
       builds.incrementAndGet(); throw new IllegalStateException("no GL context")
@@ -175,7 +175,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val created = new AtomicInteger(0)
     val counting: FrameSurfaceFactory = request =>
       created.incrementAndGet()
-      FrameSurfaceFactory.Java2D.create(request)
+      SkiaRasterSurfaceFactory.create(request)
     val harness = new Harness(_ => throw new IllegalStateException("no GL context"), counting)
     harness.frame()
     harness.frame()
@@ -306,23 +306,37 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     bitmap.getColor(45, 5) shouldBe 0xff1e1ec8
   }
 
-  "RasterThenJava2D" should "paint with the Skia raster surface when it can" in {
+  "SkiaRasterSurfaceFactory" should "paint with the Skia raster surface" in {
     val harness =
-      new Harness(_ => throw new IllegalStateException("no GL context"), RasterThenJava2D(SkiaRasterSurfaceFactory))
+      new Harness(_ => throw new IllegalStateException("no GL context"), SkiaRasterSurfaceFactory)
     harness.frame()
     harness.shown.get should have size 1
-    val surface = RasterThenJava2D(SkiaRasterSurfaceFactory).create(harness.rawRequest)
-    surface match
+    SkiaRasterSurfaceFactory.create(harness.rawRequest) match
       case _: SkiaRenderSurface => succeed
       case other                => fail(s"expected a Skia surface, got ${other.getClass.getName}")
   }
 
-  it should "paint with Java2D when the raster surface cannot be made" in {
-    val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
-    val harness                      = new Harness(_ => new FakeHost)
-    RasterThenJava2D(failing).create(harness.rawRequest) match
-      case _: Java2DRenderSurface => succeed
-      case other                  => fail(s"expected a Java2D surface, got ${other.getClass.getName}")
+  it should "report a raster it cannot make as SkiaRasterUnavailable, naming the device size and the cause" in {
+    val harness  = new Harness(_ => new FakeHost)
+    val cause    = new IllegalStateException("no image to paint into")
+    val request  = harness.rawRequest.copy(acquireImage = (_, _, _) => throw cause)
+    val geometry = request.geometry
+
+    val unavailable = intercept[SkiaRasterUnavailable](SkiaRasterSurfaceFactory.create(request))
+
+    unavailable.widthPx shouldBe geometry.deviceWidthPx
+    unavailable.heightPx shouldBe geometry.deviceHeightPx
+    unavailable.getCause shouldBe cause
+    unavailable.getMessage should include(s"${geometry.deviceWidthPx}x${geometry.deviceHeightPx}")
+    unavailable.getMessage should include("no image to paint into")
+  }
+
+  it should "not paint with another surface when the raster cannot be made" in {
+    val harness = new Harness(_ => throw new IllegalStateException("no GL context"), SkiaRasterSurfaceFactory)
+    val failing = harness.rawRequest.copy(acquireImage = (_, _, _) => throw new IllegalStateException("no image"))
+
+    an[SkiaRasterUnavailable] should be thrownBy harness.factory.create(failing)
+    harness.shown.get shouldBe empty
   }
 
   it should "keep its text caches in the owner's backend slot" in {
