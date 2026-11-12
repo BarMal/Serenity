@@ -171,6 +171,7 @@ jobs:
             scripts.test_hang_dump_script \
             scripts.test_hyprland_float \
             scripts.test_key_to_screen_summary \
+            scripts.test_linux_only_ci \
             scripts.test_merge_train \
             scripts.test_module_graph_baseline_growth \
             scripts.test_perf_matrix \

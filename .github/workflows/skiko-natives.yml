@@ -197,7 +197,7 @@ jobs:
   build-macos:
     name: Build macos
     needs: plan
-    if: needs.plan.outputs.macos == 'true'
+    if: needs.plan.outputs.macos == 'true' && vars.CROSS_OS_CI != 'off'
     runs-on: macos-15
     timeout-minutes: 360
     steps:
@@ -249,7 +249,7 @@ jobs:
   build-windows:
     name: Build windows
     needs: plan
-    if: needs.plan.outputs.windows == 'true'
+    if: needs.plan.outputs.windows == 'true' && vars.CROSS_OS_CI != 'off'
     runs-on: windows-2022
     timeout-minutes: 360
     defaults:
