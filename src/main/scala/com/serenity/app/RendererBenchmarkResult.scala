@@ -67,7 +67,7 @@ object RendererBenchmarkResult:
     "powerState" -> key.powerState.asJson
   )
 
-  private def outcomeJson(outcome: Outcome): Json = outcome match
+  private[app] def outcomeJson(outcome: Outcome): Json = outcome match
     case Outcome.Measured(workload) =>
       Json.obj("typingP50Ms" -> workload.typingP50Ms.asJson, "fullWindowMs" -> workload.fullWindowMs.asJson)
     case Outcome.Failed(reason) =>
@@ -105,7 +105,7 @@ object RendererBenchmarkResult:
   private given Decoder[Candidate] =
     Decoder.decodeString.emap(label => Candidate.values.find(_.label == label).toRight(s"not a candidate: $label"))
 
-  private given Decoder[Outcome] = (cursor: HCursor) =>
+  private[app] val outcomeDecoder: Decoder[Outcome] = (cursor: HCursor) =>
     cursor.downField("failed").as[Option[String]].flatMap {
       case Some(reason) => Right(Outcome.Failed(reason))
       case None =>
@@ -114,6 +114,8 @@ object RendererBenchmarkResult:
           rows   <- cursor.get[Map[String, Double]]("fullWindowMs")
         yield Outcome.Measured(Workload(typing, rows))
     }
+
+  private given Decoder[Outcome] = outcomeDecoder
 
   private given Decoder[CandidateRuns] = (cursor: HCursor) =>
     for
