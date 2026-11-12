@@ -217,8 +217,8 @@ abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
     hasFullInkRow(image, 52) shouldBe false
   }
 
-  private val shadowBlack = Color.BLACK.getRGB & 0xffffff
-  private val shadowInk   = new Color(200, 100, 50)
+  private val shadowBlack  = Color.BLACK.getRGB & 0xffffff
+  private val shadowInk    = new Color(200, 100, 50)
   private val shadowedBold = TextStyle(isBold = true, isShadowed = true)
   private val plainBold    = TextStyle(isBold = true)
 
