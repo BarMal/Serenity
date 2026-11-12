@@ -25,6 +25,7 @@ concurrency:
 jobs:
   windows:
     name: Probe Windows natives
+    if: vars.CROSS_OS_CI != 'off'
     runs-on: windows-latest
     # p90 4.1 min over 22 successful runs (longest 41489394461, 41545538560); the 10 min floor applies.
     timeout-minutes: 10

@@ -45,9 +45,12 @@ observation that a save or reload has since superseded. Events enqueued while a 
 replayed on the dispatcher by `drainPendingOperations`; code already on the dispatcher never offers-and-waits, which
 would deadlock. The state manager has no render tick: rendering is driven from outside it by `AppRuntimeRenderLoops`, which reads the
 model through `getModel`. While input or damage is pending, `fastRenderPhase`
-paints one frame per frame interval. Otherwise `idleRenderPhase` blinks the caret at the cursor idle interval until the
-cursor blink timeout passes, holds the caret solid, and then parks on `Stream.never` with no timer left; it wakes
-again only when `fastModeSignal` is raised by new damage. Every app-state commit, whichever fiber makes it, goes
+paints one frame per frame interval, with the caret as the blink left it. Otherwise `idleRenderPhase` holds the caret
+solid until user input has paused for `Frontend.BlinkPauseDelay`, blinks it at the cursor idle interval on the
+absolute deadlines of `CaretBlinkSchedule` until the cursor blink timeout (counted from the first blink) passes,
+holds it solid, and then parks on `Stream.never` with no timer left; it wakes again only when `fastModeSignal` is
+raised by new damage. Only input batches and focus gain move the schedule's anchor, so damage that isn't input
+resumes the blink where it was. Every app-state commit, whichever fiber makes it, goes
 through `ModelCommit` and is validated by the same `AppStateValidation`, so a surface dropped once its exit animation
 finishes can never commit a dangling reference unnoticed. File reads and writes
 (`StateManagerFilePersistence`) run on a `LaneKey.File` Sequential lane per canonical path and come back as

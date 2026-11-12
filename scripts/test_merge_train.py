@@ -1567,5 +1567,68 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn("scripts.test_merge_train", ci)
 
 
+class LinuxOnlyTests(TrainRig):
+    """With the repository variable CROSS_OS_CI at "off" the train gates on Linux CI alone (#2618, [linux-only-ci]): it
+    neither dispatches Cross-OS Tests nor waits for it, and unset means the full tier as before."""
+
+    def test_the_required_workflows_follow_the_variable(self) -> None:
+        both = (_CI, _XOS)
+        for value in (None, "", "on", "true", "anything"):
+            with self.subTest(value=value):
+                self.assertEqual(both, mt.required_workflows(value))
+        for value in ("off", "OFF", " off "):
+            with self.subTest(value=value):
+                self.assertEqual((_CI,), mt.required_workflows(value))
+
+    def test_a_green_ci_run_merges_a_train_that_has_no_cross_os_run(self) -> None:
+        manifest = _manifest(1)
+        action = mt.decide(
+            manifest,
+            [_run(_CI, "success", run_id=10)],
+            heads=_heads(manifest),
+            master=manifest.base,
+            now=_NOW,
+            required=(_CI,),
+        )
+        self.assertIsInstance(action, mt.Merge)
+
+    def test_the_same_train_still_waits_for_cross_os_when_the_variable_is_not_off(self) -> None:
+        manifest = _manifest(1)
+        action = mt.decide(
+            manifest, [_run(_CI, "success", run_id=10)], heads=_heads(manifest), master=manifest.base, now=_NOW
+        )
+        self.assertIsInstance(action, mt.Wait)
+
+    def test_a_red_cross_os_run_is_ignored_when_off_and_a_red_ci_run_still_counts(self) -> None:
+        manifest = _manifest(1)
+        runs = [_run(_CI, "success", run_id=10), _run(_XOS, "failure", attempt=2, run_id=11)]
+        action = mt.decide(
+            manifest, runs, heads=_heads(manifest), master=manifest.base, now=_NOW, required=(_CI,)
+        )
+        self.assertIsInstance(action, mt.Merge)
+        red = [_run(_CI, "failure", attempt=2, run_id=10)]
+        action = mt.decide(
+            manifest, red, heads=_heads(manifest), master=manifest.base, now=_NOW, required=(_CI,)
+        )
+        self.assertIsInstance(action, mt.Eject)
+
+    def test_a_train_dispatches_only_ci_when_off(self) -> None:
+        self.github.add_pr(1, "a.txt", "a\n")
+        train = mt.Train(
+            github=self.github,
+            git=mt.Git(self.clone),
+            batch=6,
+            dry_run=False,
+            flake_issue=99,
+            now=lambda: self.clock,
+            log=self.log.append,
+            required=(_CI,),
+        )
+        train.tick()
+        branch = self._live_branch()
+        assert branch is not None
+        self.assertEqual({("ci.yml", branch)}, set(self.github.dispatched))
+
+
 if __name__ == "__main__":
     unittest.main()
