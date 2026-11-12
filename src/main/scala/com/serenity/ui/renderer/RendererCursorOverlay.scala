@@ -433,4 +433,6 @@ object RendererCursorOverlay:
     }
 
   private def caretPaints(surface: CaretRecordingSurface): List[CaretPaint] =
-    surface.recordedFills.map(fill => CaretPaint(RendererFrameState.toAwtRectangle(fill.rect), fill.color))
+    surface.recordedFills.map(fill =>
+      CaretPaint.styled(RendererFrameState.toAwtRectangle(fill.rect), fill.color, fill.style)
+    )

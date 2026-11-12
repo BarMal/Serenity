@@ -10,7 +10,7 @@ import javax.swing.{JPanel, SwingUtilities}
 import scala.util.Try
 
 import com.serenity.ui.terminal.{LayerDrawStats, SwingWindow}
-import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry, Rect}
+import org.jetbrains.skia.{Canvas, Image, Paint, Picture, PixelGeometry}
 import org.jetbrains.skiko.{
   GraphicsApi,
   OS,
@@ -105,20 +105,7 @@ final class SkiaLayerHost private (
     if drawn then shown.set(version)
     val replayedAt = System.nanoTime()
     val scale      = layer.getContentScale
-    val ink        = new Paint()
-    carets.get().foreach { caret =>
-      ink.setColor(caret.color.getRGB)
-      surface.drawRect(
-        Rect.Companion.makeXYWH(
-          caret.rect.x * scale,
-          caret.rect.y * scale,
-          caret.rect.width * scale,
-          caret.rect.height * scale
-        ),
-        ink
-      )
-    }
-    ink.close()
+    SkiaCaretInk.draw(surface, carets.get(), scale)
     val inked = System.nanoTime()
     val synced = syncGpu && Option(surface.getRecordingContext).fold(false) { context =>
       val _ = context.flush()
