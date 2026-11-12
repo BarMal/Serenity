@@ -138,8 +138,8 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
     val canvas = JPanel()
     canvas.setSize(Dimension(400, 300))
     val surface = CaretRecordingSurface.forGeometry(metrics, FontSpec.fromAwt(font), SwingCanvasGeometry.of(canvas))
-    surface.fillCaret(10, 20, 2, 14, RenderColor.fromAwt(Color.WHITE), italic)
-    surface.fillPixelRect(50, 60, 2, 14, RenderColor.fromAwt(Color.WHITE))
+    surface.pixels.fillCaret(10, 20, 2, 14, RenderColor.fromAwt(Color.WHITE), italic)
+    surface.pixels.fillPixelRect(50, 60, 2, 14, RenderColor.fromAwt(Color.WHITE))
 
     surface.recordedFills shouldBe List(
       CaretRecordingSurface.CaretFill(PixelRect(10, 20, 2, 14), Color.WHITE, italic),
