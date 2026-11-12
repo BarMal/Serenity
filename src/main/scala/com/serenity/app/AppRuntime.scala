@@ -415,11 +415,8 @@ object AppRuntime:
       AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit, recordCrash)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
-        shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
-      ),
-      AppRuntimeRenderLoops.superviseLoop("window hide", lifecycle.forceQuit, recordCrash)(
-        hideWindowAfterQuit(lifecycle.awaitQuit, hideWindow)
+      AppRuntimeRenderLoops.superviseLoop("quit shutdown", lifecycle.forceQuit, recordCrash)(
+        afterQuitConfirmed(lifecycle.awaitQuit, hideWindow >> inputHandler.shutdown)
       ),
       AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         ProjectTrustService.load(ProjectTrustStore.defaultPath).flatMap { loaded =>
@@ -476,7 +473,7 @@ object AppRuntime:
       AppRuntimeRenderLoops.superviseLoop("desktop quit request loop", lifecycle.forceQuit, recordCrash)(
         DesktopHooks.serveQuitRequests(quitRequests.interruptWhen(quitSignal), lifecycle.requestQuit)
       )
-    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _, _) => ())
+    ).parMapN((_, _, _, _, _, _, _, _, _, _, _, _) => ())
 
   /** Opens what a later launch handed over (#2023). A path that fails to open must not take the editor down with it. A
     * folder becomes the Explorer root, as Open Folder makes it.
@@ -555,11 +552,8 @@ object AppRuntime:
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
 
-  private[serenity] def hideWindowAfterQuit(awaitQuit: IO[Unit], hideWindow: IO[Unit]): IO[Unit] =
-    awaitQuit >> hideWindow
-
-  private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
-    awaitQuit >> shutdownInput
+  private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
+    awaitQuit >> whenQuit
 
   /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
     *

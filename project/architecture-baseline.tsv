@@ -31,3 +31,6 @@ main/scala/com/serenity/project/ProjectTask.scala	process ownership: `ProcessBui
 main/scala/com/serenity/ui/benchmark/MachineState.scala	process ownership: `sys.process` outside the process service (#2508)	1
 main/scala/com/serenity/ui/fonts/LogicalFontFamilies.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	1
 main/scala/com/serenity/ui/theme/appearance/OsAppearanceDetector.scala	process ownership: `ProcessBuilder` outside the process service (#2508)	2
+# paydown: SwingWindow.scala was at exactly 600 lines on master; the quit-time window hide (#2618, quick close) adds
+# `WindowControl.hide()`, which only the Swing window implements, and the two lines it needs put the file at 602.
+main/scala/com/serenity/ui/terminal/SwingWindow.scala	file length	602

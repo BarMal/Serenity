@@ -144,7 +144,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
     val program = for
       quit   <- Deferred[IO, Unit]
       hidden <- Ref.of[IO, Int](0)
-      fiber  <- AppRuntime.hideWindowAfterQuit(quit.get, hidden.update(_ + 1)).start
+      fiber  <- AppRuntime.afterQuitConfirmed(quit.get, hidden.update(_ + 1)).start
       before <- hidden.get
       _      <- quit.complete(())
       _      <- fiber.joinWithNever
@@ -157,7 +157,7 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
   it should "not hide the window while quit is still waiting on a prompt" in {
     val program = for
       hidden <- Ref.of[IO, Int](0)
-      _      <- AppRuntime.hideWindowAfterQuit(IO.never, hidden.update(_ + 1)).timeoutTo(50.millis, IO.unit)
+      _      <- AppRuntime.afterQuitConfirmed(IO.never, hidden.update(_ + 1)).timeoutTo(50.millis, IO.unit)
       count  <- hidden.get
     yield count
 
