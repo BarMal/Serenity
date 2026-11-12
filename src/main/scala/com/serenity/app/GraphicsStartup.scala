@@ -41,6 +41,12 @@ object GraphicsStartup:
     case Window(surfaces: FrameSurfaceFactory)
     case Terminal
 
+    /** Every display is routed to one of the two, so a new one cannot be left out. */
+    def route[A](window: FrameSurfaceFactory => A, terminal: => A): A =
+      this match
+        case Window(surfaces) => window(surfaces)
+        case Terminal         => terminal
+
   final case class Resolved(
       toolkit: ToolkitSelection.Decision,
       backend: Decision,
@@ -49,10 +55,7 @@ object GraphicsStartup:
       skiaFrames: SkiaFrames = SkiaFrames.Image
   ):
 
-    def windowed: Boolean =
-      display match
-        case Display.Window(_) => true
-        case _                 => false
+    def windowed: Boolean = display.route(_ => true, false)
 
   def launchOf(options: LaunchOptions, stdoutIsTty: Boolean = System.console() != null): Launch =
     Launch(

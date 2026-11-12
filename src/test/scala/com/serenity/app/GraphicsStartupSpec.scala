@@ -307,6 +307,18 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
     resolved.toolkit.choice shouldBe ToolkitSelection.Choice.PlatformDefault
   }
 
+  "GraphicsStartup.Display.route" should "run only the window branch for a window, handing it the surfaces" in {
+    val surfaces = FrameSurfaceFactory.Java2D
+    GraphicsStartup.Display
+      .Window(surfaces)
+      .route(handed => handed eq surfaces, fail("the terminal branch ran")) shouldBe
+      true
+  }
+
+  it should "run only the terminal branch for the terminal" in {
+    GraphicsStartup.Display.Terminal.route(_ => fail("the window branch ran"), "terminal") shouldBe "terminal"
+  }
+
   "GraphicsStartup.launchOf" should "force the window for --gui, --smoke-test and --startup-probe, and for nothing else" in {
     for options <- List(LaunchOptions(gui = true), LaunchOptions(smokeTest = true), LaunchOptions(startupProbe = true))
     do GraphicsStartup.launchOf(options, stdoutIsTty = true).forcedWindow shouldBe true

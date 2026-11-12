@@ -321,10 +321,10 @@ object Main extends IOApp:
           Stream.emit(opens.root.toList ++ startupOptions.extraOpenPaths).filter(_.nonEmpty) ++ hooks.opensFor(role),
           hooks.quitRequests
         )
-        display match
-          case GraphicsStartup.Display.Window(surfaces) =>
-            runGui(appConfig, startupOptions, notice, startup, session, surfaces)
-          case _ => runTui(appConfig, startupOptions, notice, startup, session)
+        display.route(
+          surfaces => runGui(appConfig, startupOptions, notice, startup, session, surfaces),
+          runTui(appConfig, startupOptions, notice, startup, session)
+        )
       }
       _ <- startup.markStarted
     yield ()
