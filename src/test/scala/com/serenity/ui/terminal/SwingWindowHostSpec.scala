@@ -8,11 +8,11 @@ import scala.concurrent.duration.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.command.CommandId
+import com.serenity.command.menu.MenuDispatch
 import com.serenity.config.{MenuBarMode, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{FileDropHandler, InputHandler, InputRouter}
-import com.serenity.command.CommandId
-import com.serenity.command.menu.MenuDispatch
 import com.serenity.keystroke.events.{Event, InsertChar, PageDown}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.ui.host.{InputSettings, WindowHost}

@@ -2,12 +2,15 @@ package com.serenity.ui.terminal
 
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
+import com.serenity.command.CommandId
+import com.serenity.command.menu.MenuDispatch
 import com.serenity.config.{MenuBarMode, PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.frontend.FrontendRuntime
 import com.serenity.input.{InputHandler, InputRouter, SwingInputHandler}
 import com.serenity.io.{FileDialog, FileDialogSelection, SwingFileDialog}
 import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.ui.host.{InputSettings, WindowControl, WindowHost}
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.RenderTarget
@@ -38,6 +41,12 @@ final class SwingWindowHost private (val window: SwingWindow, menuInput: Deferre
 
   override def typeCharacter(char: Char): IO[Unit] =
     menuInput.get.flatMap(handler => IO(handler.submitTypedChar(char)))
+
+  override def pressPageDown: IO[Unit] =
+    menuInput.get.flatMap(handler => IO(handler.submitKey(KeyStrokeInfo(InputKey.PageDown, None, Set.empty))))
+
+  override def toggleTheme: IO[Unit] =
+    menuInput.get.flatMap(handler => IO(handler.submit(MenuDispatch.eventFor(CommandId("toggle-theme")))))
 
   def menus(mode: MenuBarMode): Option[FrontendRuntime.MenuHost => Resource[IO, Unit]] =
     Option.when(SwingMenuBar.enabledFor(System.getProperty("os.name", ""), mode))(
