@@ -50,7 +50,7 @@ object TextMeasureBaseline:
 
   def entries(): Vector[Entry] = TextMeasureCorpus.fonts.flatMap(measureFont)
 
-  private[layout] def measureFont(pinned: PinnedFont): Vector[Entry] =
+  private def measureFont(pinned: PinnedFont): Vector[Entry] =
     val frc         = TextLayoutSnapshot.defaultFontRenderContext()
     val metrics     = CellMetrics.fromFont(pinned.font)
     val measured    = TextLayoutSnapshot.shouldUseMeasuredLayout(pinned.font, frc, FontProbes())

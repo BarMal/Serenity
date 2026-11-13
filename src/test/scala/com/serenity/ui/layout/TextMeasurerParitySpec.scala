@@ -13,8 +13,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Writes where the Skia measurer differs from AWT, and asserts only what holds however large the differences are.
-  * Against the checked-in baseline for the bundled fonts, and against a live AWT measurement for the system fonts,
-  * which only say something about this host (`target/test-reports/text-measure-parity/`).
+  * Against the checked-in baseline for the bundled fonts (`target/test-reports/text-measure-parity/`). The system fonts
+  * have no baseline and AWT is not called for them: their rows are Skia's own absolute values, which only show that the
+  * measurer answers on this host and say little about parity.
   */
 class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
 
@@ -26,30 +27,26 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
     PinnedFont("system_serif", Font(Font.SERIF, Font.PLAIN, 14), FontFallback.Default)
   )
 
-  private def sectionFor(
-    title: String,
-    note: String,
-    fonts: Vector[PinnedFont],
-    reference: Vector[TextMeasureBaseline.Entry]
-  ) =
-    val skia                = fonts.flatMap(pinned => TextMeasureParity.skiaEntries(pinned, measurer))
-    val (compared, skipped) = TextMeasureParity.compare(reference, skia)
-    Section(title, note, compared, skipped)
-
   private lazy val sections: Vector[Section] =
-    val golden = TextMeasureBaseline.load().fold(reason => fail(reason), identity)
+    val golden              = TextMeasureBaseline.load().fold(reason => fail(reason), identity)
+    val skia                = TextMeasureCorpus.fonts.flatMap(pinned => TextMeasureParity.skiaEntries(pinned, measurer))
+    val (compared, skipped) = TextMeasureParity.compare(golden, skia)
     Vector(
-      sectionFor(
+      Section(
         "Bundled fonts against the checked-in baseline",
         "AWT numbers are `text-measure/baseline.tsv` (captured on CI). Floats in pixels at 14 pt.",
-        TextMeasureCorpus.fonts,
-        golden
-      ),
-      sectionFor(
-        "System fonts against a live AWT measurement (this host only)",
-        "No checked-in numbers: AWT is measured here and now, so this says nothing about other hosts.",
-        systemFonts,
-        systemFonts.flatMap(TextMeasureBaseline.measureFont)
+        compared,
+        skipped
+      )
+    )
+
+  private lazy val absolute: Vector[TextMeasureParity.Absolute] =
+    Vector(
+      TextMeasureParity.Absolute(
+        "System fonts: Skia's own values (informational, low value)",
+        "No baseline and no AWT call for these, so there is nothing to compare with: it only shows the measurer " +
+          "answers on this host. Host dependent.",
+        systemFonts.flatMap(pinned => TextMeasureParity.skiaEntries(pinned, measurer))
       )
     )
 
@@ -61,9 +58,14 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
       "Compared: cell metrics, the measured-layout decision, carets of one unwrapped row and one-row line heights",
       "Not compared before layout runs through the measurer (step D): wrap points, row counts, tabs, wide and emoji clusters, right-to-left carets"
     )
-    TextMeasureParity.write(directory, TextMeasureParity.summary(header, sections), TextMeasureParity.tsv(sections))
+    TextMeasureParity.write(
+      directory,
+      TextMeasureParity.summary(header, sections, absolute),
+      TextMeasureParity.tsv(sections)
+    )
 
     sections.foreach(section => section.compared should not be empty)
+    absolute.foreach(table => table.entries should not be empty)
     java.nio.file.Files.exists(directory.resolve("summary.md")) shouldBe true
     java.nio.file.Files.exists(directory.resolve("diffs.tsv")) shouldBe true
   }

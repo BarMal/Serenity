@@ -86,7 +86,20 @@ object TextMeasureParity:
 
   final case class Section(title: String, note: String, compared: Vector[Compared], skipped: Vector[Skipped])
 
-  def summary(header: Seq[String], sections: Seq[Section]): String =
+  /** Numbers with nothing to compare them with: Skia's own values for fonts the baseline does not pin. */
+  final case class Absolute(title: String, note: String, entries: Vector[Entry])
+
+  private def absoluteTable(absolute: Absolute): String =
+    val rows = absolute.entries.map { entry =>
+      val shown =
+        if entry.kind == "carets" then
+          s"${entry.values.length} stops, ends at ${entry.values.lastOption.getOrElse("-")}"
+        else entry.values.mkString(", ")
+      s"| ${entry.key} | $shown |"
+    }
+    s"\n## ${absolute.title}\n\n${absolute.note}\n\n| key | Skia value |\n|---|---|\n${rows.mkString("\n")}\n"
+
+  def summary(header: Seq[String], sections: Seq[Section], absolute: Seq[Absolute] = Nil): String =
     val out = new StringBuilder
     out.append("# Skia text measurer against AWT (step B, #2660 item 2)\n\n")
     header.foreach(line => out.append(s"- $line\n"))
@@ -108,6 +121,7 @@ object TextMeasureParity:
         out.append("\nNot compared:\n\n")
         reasons.foreach((reason, items) => out.append(s"- ${items.size} keys: $reason\n"))
     }
+    absolute.foreach(table => out.append(absoluteTable(table)))
     out.toString
 
   def tsv(sections: Seq[Section]): String =
