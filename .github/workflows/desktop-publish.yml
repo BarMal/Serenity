@@ -551,7 +551,7 @@ jobs:
             echo "Built from branch \`${GITHUB_REF_NAME}\`."
             echo
             echo "### Assets"
-            if [ "${CROSS_OS_CI:-}" = "off" ]; then
+            if [ "${CROSS_OS_CI,,}" = "off" ]; then
               echo "- Serenity-linux-x64.jar: runnable JVM fat JAR with the Linux Skia natives only"
               echo "- Serenity-linux-x64.zip: Linux app image"
               echo "- Linux only for now: any Windows or macOS assets attached to this release are from an earlier build"
@@ -623,7 +623,7 @@ jobs:
           cd dist
           # With CROSS_OS_CI at "off" (Linux only, #2618) only the Linux assets were built; older Windows and macOS
           # assets on the release are left as they are.
-          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+          if [ "${CROSS_OS_CI,,}" = "off" ]; then
             ASSETS=(Serenity-linux-x64.jar Serenity-linux-x64.zip)
           else
             ASSETS=(
@@ -659,7 +659,7 @@ jobs:
           if [[ "$VERSION" == *-* ]]; then
             CHANNEL_FLAGS=(--prerelease)
           fi
-          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+          if [ "${CROSS_OS_CI,,}" = "off" ]; then
             RELEASE_ASSETS=(dist/Serenity-linux-x64.jar dist/Serenity-linux-x64.zip)
           else
             RELEASE_ASSETS=(
@@ -689,7 +689,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           PUBLISH_SHA="$(git rev-parse HEAD)"
-          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+          if [ "${CROSS_OS_CI,,}" = "off" ]; then
             ASSETS=(dist/Serenity-linux-x64.jar dist/Serenity-linux-x64.zip)
           else
             ASSETS=(

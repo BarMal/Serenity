@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -37,6 +40,29 @@ def _steps(job: str) -> list[str]:
 
 def _step(job: str, name: str) -> str:
     return next(step for step in _steps(job) if step.startswith(name))
+
+
+def _run_block(step: str) -> str:
+    """The shell script of a step's `run: |` block."""
+    lines = step.splitlines()
+    start = next(i for i, line in enumerate(lines) if line.strip() == "run: |") + 1
+    body: list[str] = []
+    for line in lines[start:]:
+        if line.strip() and not line.startswith("          "):
+            break
+        body.append(line)
+    return textwrap.dedent("\n".join(body))
+
+
+def _bash(script: str, cwd: Path, **env: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
+        cwd=cwd,
+        env={"PATH": "/usr/bin:/bin", **env},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def _matrix_choice(job: str) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -95,9 +121,22 @@ class MergeGateTests(unittest.TestCase):
         self.assertIn("CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}", text)
         self.assertRegex(
             text,
-            r'if \[ "\$\{CROSS_OS_CI:-\}" = "off" \]; then\s+required_checks=\(\)\s+else\s+'
+            r'if \[ "\$\{CROSS_OS_CI,,\}" = "off" \]; then\s+required_checks=\(\)\s+else\s+'
             r'required_checks=\("Cross-OS Tests: Test \(windows\)" "Cross-OS Tests: Test \(macos\)"\)\s+fi',
         )
+
+
+class AutoSquashSwitchTests(unittest.TestCase):
+    def test_the_cross_os_checks_are_dropped_whatever_the_letter_case_of_off(self) -> None:
+        text = _workflow("auto-squash-merge.yml")
+        start = text.index('if [ "${CROSS_OS_CI')
+        snippet = text[start : text.index("\n          fi\n", start) + len("\n          fi\n")]
+        script = textwrap.dedent(snippet) + 'echo "${#required_checks[@]}"'
+        with tempfile.TemporaryDirectory() as tmp:
+            for value, expected in (("off", "0"), ("OFF", "0"), ("Off", "0"), ("", "2"), ("on", "2")):
+                with self.subTest(CROSS_OS_CI=value):
+                    result = _bash(script, Path(tmp), CROSS_OS_CI=value)
+                    self.assertEqual(expected, result.stdout.strip(), result.stderr)
 
 
 class DesktopPublishTests(unittest.TestCase):
@@ -128,9 +167,34 @@ class DesktopPublishTests(unittest.TestCase):
             with self.subTest(step=name):
                 step = _step(publish, name)
                 self.assertIn("CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}", step)
-                self.assertRegex(step, r'if \[ "\$\{CROSS_OS_CI:-\}" = "off" \]; then')
+                self.assertRegex(step, r'if \[ "\$\{CROSS_OS_CI,,\}" = "off" \]; then')
                 self.assertIn("Serenity-linux-x64.jar", step)
                 self.assertIn("Serenity-linux-x64.zip", step)
+
+    def test_the_checksums_are_written_for_the_linux_assets_whatever_the_letter_case_of_off(self) -> None:
+        script = _run_block(_step(_job(self._text, "publish"), "Write SHA256SUMS"))
+        for spelling in ("off", "OFF", "Off"):
+            with self.subTest(CROSS_OS_CI=spelling), tempfile.TemporaryDirectory() as tmp:
+                dist = Path(tmp) / "dist"
+                dist.mkdir()
+                for name in ("Serenity-linux-x64.jar", "Serenity-linux-x64.zip", "Serenity.cdx.json"):
+                    (dist / name).write_bytes(b"x")
+                result = _bash(script, Path(tmp), CROSS_OS_CI=spelling, GITHUB_REF_TYPE="branch")
+                self.assertEqual(0, result.returncode, result.stderr)
+                listed = [line.split()[-1] for line in (dist / "SHA256SUMS").read_text().splitlines()]
+                self.assertEqual(["Serenity-linux-x64.jar", "Serenity-linux-x64.zip", "Serenity.cdx.json"], listed)
+
+    def test_the_checksums_still_need_every_platform_when_the_switch_is_not_off(self) -> None:
+        script = _run_block(_step(_job(self._text, "publish"), "Write SHA256SUMS"))
+        for value in ("", "on", "offline"):
+            with self.subTest(CROSS_OS_CI=value), tempfile.TemporaryDirectory() as tmp:
+                dist = Path(tmp) / "dist"
+                dist.mkdir()
+                for name in ("Serenity-linux-x64.jar", "Serenity-linux-x64.zip"):
+                    (dist / name).write_bytes(b"x")
+                result = _bash(script, Path(tmp), CROSS_OS_CI=value, GITHUB_REF_TYPE="branch")
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn("Serenity-windows-x64.jar", result.stderr)
 
     def test_existing_windows_and_macos_assets_are_never_deleted(self) -> None:
         self.assertNotIn("gh release delete-asset", self._text)
@@ -139,7 +203,7 @@ class DesktopPublishTests(unittest.TestCase):
 
     def test_the_nightly_notes_say_which_assets_a_build_carries(self) -> None:
         notes = _step(_job(self._text, "build"), "Generate release notes")
-        self.assertIn('"${CROSS_OS_CI:-}" = "off"', notes)
+        self.assertIn('"${CROSS_OS_CI,,}" = "off"', notes)
         self.assertIn("Linux only", notes)
 
 
