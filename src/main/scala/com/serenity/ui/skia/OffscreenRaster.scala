@@ -23,7 +23,7 @@ final class OffscreenRaster private (raster: Surface):
     deviceScale: Double,
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
-    layerCacheOwner: ScreenIdentity
+    screen: ScreenIdentity
   ): SkiaRenderSurface =
     SkiaRenderSurface.retaining(
       raster,
@@ -34,7 +34,7 @@ final class OffscreenRaster private (raster: Surface):
       deviceScale,
       caches,
       styledFonts,
-      layerCacheOwner = Some(layerCacheOwner)
+      screen = Some(screen)
     )
 
 object OffscreenRaster:

@@ -54,7 +54,7 @@ final class SkiaRenderSurface(
     deviceScaleY: Double = 1.0,
     retainedSurface: Option[Surface] = None,
     opaque: Boolean = true,
-    layerCacheOwnerOverride: Option[ScreenIdentity] = None,
+    screenIdentityOverride: Option[ScreenIdentity] = None,
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     override val activity: SurfaceActivity = SurfaceActivity(),
@@ -94,7 +94,7 @@ final class SkiaRenderSurface(
 
   private val phases = changes.fold(new PresentPhases)(_.phases)
 
-  override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
+  override def screenIdentity: ScreenIdentity = screenIdentityOverride.getOrElse(super.screenIdentity)
 
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     retainedSurface.map(SurfaceContentIdentity(_))
@@ -538,7 +538,7 @@ object SkiaRenderSurface:
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
-    layerCacheOwner: Option[ScreenIdentity] = None
+    screen: Option[ScreenIdentity] = None
   ): SkiaRenderSurface =
     new SkiaRenderSurface(
       canvas,
@@ -549,7 +549,7 @@ object SkiaRenderSurface:
       logicalHeightPx,
       deviceScale,
       deviceScale,
-      layerCacheOwnerOverride = layerCacheOwner,
+      screenIdentityOverride = screen,
       caches = caches,
       styledFonts = styledFonts
     )
@@ -568,7 +568,7 @@ object SkiaRenderSurface:
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
-    layerCacheOwner: Option[ScreenIdentity] = None,
+    screen: Option[ScreenIdentity] = None,
     changes: Option[ChangeRecorder] = None
   ): SkiaRenderSurface =
     new SkiaRenderSurface(
@@ -581,7 +581,7 @@ object SkiaRenderSurface:
       deviceScale,
       deviceScale,
       retainedSurface = Some(surface),
-      layerCacheOwnerOverride = layerCacheOwner,
+      screenIdentityOverride = screen,
       caches = caches,
       styledFonts = styledFonts,
       changes = changes

@@ -66,7 +66,7 @@ class LayerSurfaceFactory private[ui] (
         kept.fold(surface.close())(_.release())
         host.publishImage(image)
       ,
-      layerCacheOwner = Some(geometry.identity)
+      screen = Some(geometry.identity)
     )
 
   private def record(request: FrameSurfaceRequest, host: LayerHost): RenderSurface =
@@ -90,7 +90,7 @@ class LayerSurfaceFactory private[ui] (
         recorder.close()
         host.publish(picture)
       ,
-      layerCacheOwner = Some(geometry.identity)
+      screen = Some(geometry.identity)
     )
 
 /** The factory a window uses: a Skiko layer made on its canvas, with the Skia raster surface behind it. */

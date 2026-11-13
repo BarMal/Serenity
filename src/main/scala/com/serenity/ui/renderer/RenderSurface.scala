@@ -28,10 +28,10 @@ trait RenderSurface:
     */
   def persistentContentKey: Option[SurfaceContentIdentity] = None
 
-  /** Whose cached modal/panel layers this surface may reuse. Successive frames of one window must agree on it even
-    * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
+  /** The screen this surface paints. Successive frames of one window must agree on it even though each frame is a fresh
+    * surface, or every frame starts a new entry in the per-screen records (#1798).
     */
-  def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
+  def screenIdentity: ScreenIdentity = ScreenIdentity(this)
 
   /** Whether this surface's pixel coordinates are real device pixels, finer than a cell. The renderer keeps and
     * repaints sub-cell bands of chrome and rows only on a surface that does; on one whose "pixel" is a cell it repaints

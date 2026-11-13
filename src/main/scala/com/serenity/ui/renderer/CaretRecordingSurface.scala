@@ -44,7 +44,7 @@ final class CaretRecordingSurface private (inner: RenderSurface) extends RenderS
   // A recorder keeps no pixels, so it offers no key: the renderer would store a whole prepared scene under the identity of
   // a surface that is new for every cursor frame, and never find it again.
   override def persistentContentKey: Option[SurfaceContentIdentity] = None
-  override def layerCacheOwner: ScreenIdentity                      = inner.layerCacheOwner
+  override def screenIdentity: ScreenIdentity                       = inner.screenIdentity
   override def addressesPixels: Boolean                             = inner.addressesPixels
   override def devicePixelScaleX: Double                            = inner.devicePixelScaleX
   override def devicePixelScaleY: Double                            = inner.devicePixelScaleY
