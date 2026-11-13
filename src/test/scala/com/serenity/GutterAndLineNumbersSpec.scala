@@ -417,7 +417,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val font     = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
     val snapshot = TextLayoutSnapshot.fromBuffer(
       buffer,
-      layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth,
+      ActivePane.textRect(state, layout).width * CellMetrics.fromFont(font).charWidth,
       font
     )
     val secondLineVisualRow =
@@ -471,7 +471,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       layout.gutterRect.get.y should be(viewportSize.height - 1)
 
       // Editor panel should have reduced height to accommodate gutter
-      layout.editorPanelRect.height should be < viewportSize.height
+      ActivePane.textRect(stateWithGutter, layout).height should be < viewportSize.height
 
       // Verify gutter styling would be black (this will be tested in rendering)
       checkGutterStyling() shouldBe "black_background"

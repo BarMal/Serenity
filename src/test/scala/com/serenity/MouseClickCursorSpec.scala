@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.testkit.ActivePane
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.TextAreaInsets
@@ -273,7 +274,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect    = ActivePane.textColumn(state, layout, PaneId(0))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
     val font = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     // Mouse pixels arrive in the screen grid's coordinates, and that grid is the code font's even for prose.
@@ -314,7 +315,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect    = ActivePane.textColumn(state, layout, PaneId(0))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     // One logical line, long enough to wrap into three visual rows on the cell grid: two full-width rows plus a

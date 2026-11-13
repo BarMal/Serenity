@@ -1,5 +1,6 @@
 package com.serenity.ui.layout
 
+import com.serenity.testkit.ActivePane
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -54,8 +55,8 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
     val synced = LayoutEngine.syncViewportDimensions(state, viewportSize)
     val buffer = synced.persisted.buffers.values.headOption.getOrElse(fail("expected a buffer"))
 
-    paneLayout(state).contentRect.width shouldBe layout.editorPanelRect.width
-    buffer.viewport.visibleColumns shouldBe layout.editorPanelRect.width
+    paneLayout(state).contentRect.width shouldBe ActivePane.textRect(state, layout).width
+    buffer.viewport.visibleColumns shouldBe ActivePane.textRect(state, layout).width
   }
 
   it should "be shown on a pane of the GUI" in {
@@ -109,7 +110,7 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
     val gui  = paneLayout(AppState.initial(com.serenity.config.AppConfig.conventional))
     val pane = paneLayout(tui)
 
-    val panel = LayoutEngine.calculateLayout(tui, viewportSize).editorPanelRect
+    val panel = ActivePane.textRect(tui, LayoutEngine.calculateLayout(tui, viewportSize))
 
     pane.scrollbarRect.width shouldBe ScrollbarLayout.terminalColumns(tui, panel.width)
     pane.scrollbarRect.width shouldBe 1
@@ -128,7 +129,7 @@ class ScrollbarLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap its text one column short, so the viewport is one column narrower" in {
     val synced = LayoutEngine.syncViewportDimensions(tui, viewportSize)
-    val panel  = LayoutEngine.calculateLayout(tui, viewportSize).editorPanelRect
+    val panel  = ActivePane.textRect(tui, LayoutEngine.calculateLayout(tui, viewportSize))
     val buffer = synced.persisted.buffers.values.headOption.getOrElse(fail("expected a buffer"))
 
     buffer.viewport.visibleColumns shouldBe panel.width - 1

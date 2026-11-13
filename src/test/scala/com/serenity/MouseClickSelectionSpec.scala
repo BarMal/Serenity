@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.testkit.ActivePane
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
@@ -76,7 +77,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
@@ -107,7 +108,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()
@@ -140,7 +141,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
@@ -175,7 +176,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 7, paneRect.y + 1, clickCount = 2)).unsafeRunSync()
 
@@ -205,7 +206,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2, clickCount = 3)).unsafeRunSync()
 
@@ -238,7 +239,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
 
@@ -271,7 +272,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 4, paneRect.y + 2, shiftDown = true)).unsafeRunSync()
     sm.applyEvent(MouseDrag(paneRect.x + 5, paneRect.y + 3, shiftDown = true)).unsafeRunSync()
@@ -311,7 +312,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MouseClick(paneRect.x + 2, paneRect.y + 2)).unsafeRunSync()
 
@@ -348,7 +349,7 @@ class MouseClickSelectionSpec extends AnyFlatSpec with Matchers with StateManage
 
     val state    = sm.getCurrentState.unsafeRunSync()
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
 
     sm.applyEvent(MousePress(paneRect.x + 1, paneRect.y + 1)).unsafeRunSync()
     sm.applyEvent(MouseDrag(paneRect.x + 3, paneRect.y + 2)).unsafeRunSync()

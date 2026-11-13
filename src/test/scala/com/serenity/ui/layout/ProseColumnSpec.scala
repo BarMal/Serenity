@@ -17,7 +17,7 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     initial.copy(runtime = initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
 
   private def textColumnWidth(state: AppState, viewportWidth: Int): Int =
-    LayoutEngine.calculateLayout(state, ViewportSize(viewportWidth, 40)).editorPanelRect.width
+    ActivePane.textRect(state, LayoutEngine.calculateLayout(state, ViewportSize(viewportWidth, 40))).width
 
   "A prose measure" should "hold the text column at the same number of characters however wide the window is" in {
     val state = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(60)))
@@ -30,7 +30,7 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
     ActivePane.of(state, layout).leftSpacerRect.width shouldBe 20
-    layout.editorPanelRect.x shouldBe 20
+    ActivePane.textRect(state, layout).x shouldBe 20
   }
 
   it should "give a window narrower than the measure its whole width" in {

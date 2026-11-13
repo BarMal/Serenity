@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.testkit.ActivePane
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.rope.Balance
@@ -45,27 +46,21 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
           ),
         runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
-    val compact = LayoutEngine.calculateLayout(
-      baseState.copy(persisted =
-        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Compact))
-      ),
-      ViewportSize(120, 30)
-    )
+    def withDensity(density: InterfaceDensity): AppState =
+      baseState.copy(persisted = baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(density)))
+    val compactState  = withDensity(InterfaceDensity.Compact)
+    val spaciousState = withDensity(InterfaceDensity.Spacious)
+    val compact       = LayoutEngine.calculateLayout(compactState, ViewportSize(120, 30))
     val comfortable = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
-    val spacious = LayoutEngine.calculateLayout(
-      baseState.copy(persisted =
-        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(InterfaceDensity.Spacious))
-      ),
-      ViewportSize(120, 30)
-    )
+    val spacious = LayoutEngine.calculateLayout(spaciousState, ViewportSize(120, 30))
 
-    compact.editorPanelRect shouldBe comfortable.editorPanelRect
+    ActivePane.textRect(compactState, compact) shouldBe ActivePane.textRect(baseState, comfortable)
     // Spacious widens the line-number gutter's left margin and padding by one cell each (issue #1542 re-scope:
     // `AppState.effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` now scale with `interfaceDensity`, the
     // same `SpacingScale.densityMultiplier` every other density-aware piece of UI chrome already uses), so the editor
     // panel's left edge sits two cells further in at Spacious than at Compact/Comfortable, and is that much narrower.
-    spacious.editorPanelRect.x shouldBe comfortable.editorPanelRect.x + 2
-    spacious.editorPanelRect.width shouldBe comfortable.editorPanelRect.width - 2
+    ActivePane.textRect(spaciousState, spacious).x shouldBe ActivePane.textRect(baseState, comfortable).x + 2
+    ActivePane.textRect(spaciousState, spacious).width shouldBe ActivePane.textRect(baseState, comfortable).width - 2
     compact.gutterRect.map(_.height) shouldBe Some(1)
     spacious.gutterRect.map(_.height) shouldBe Some(2)
     // The palette's frame follows the viewport (#1045); density decides how many items fit inside it.
