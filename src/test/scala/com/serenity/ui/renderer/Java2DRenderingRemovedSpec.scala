@@ -26,6 +26,12 @@ class Java2DRenderingRemovedSpec extends AnyFlatSpec with Matchers:
     "LayerSurfaces"
   )
 
+  /** Where the word legitimately stays: the migration that retires the `java2d` config values, and flying-saucer's own
+    * `Java2DRenderer`, which the markdown preview still renders through (epic #2660 item 3).
+    */
+  private val MayNameJava2D =
+    Set("ConfigMigration.scala", "RenderBackendMigration.scala", "MarkdownDocumentPreview.scala")
+
   private def mainSources: List[Path] =
     Using.resource(Files.walk(mainRoot)) { stream =>
       stream
@@ -41,6 +47,16 @@ class Java2DRenderingRemovedSpec extends AnyFlatSpec with Matchers:
       (line, number) <- Files.readAllLines(path).asScala.zipWithIndex
       name           <- Retired.filter(line.contains)
     yield s"${mainRoot.relativize(path)}:${number + 1} $name"
+
+    offenders shouldBe Nil
+  }
+
+  it should "not call anything Java2D outside the migration and the markdown preview, in code or in comments" in {
+    val offenders = for
+      path           <- mainSources.filterNot(path => MayNameJava2D.contains(path.getFileName.toString))
+      (line, number) <- Files.readAllLines(path).asScala.zipWithIndex
+      if line.contains("Java2D")
+    yield s"${mainRoot.relativize(path)}:${number + 1} ${line.trim}"
 
     offenders shouldBe Nil
   }

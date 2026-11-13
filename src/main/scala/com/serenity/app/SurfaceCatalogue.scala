@@ -5,7 +5,7 @@ import com.serenity.ui.skia.{SkiaLayerSurfaceFactory, SkiaRasterSurfaceFactory}
 
 /** The surface factories this build offers. Each is a thunk so that building the factory, and with it loading Skiko and
   * Kotlin classes, happens only when that backend was chosen. `skia` paints through a Skiko layer; `skiaRaster` paints
-  * on the CPU into an image that the Java2D canvas presents.
+  * on the CPU into an image that the Swing canvas presents.
   */
 final case class SurfaceCatalogue(skia: () => FrameSurfaceFactory, skiaRaster: () => FrameSurfaceFactory):
 

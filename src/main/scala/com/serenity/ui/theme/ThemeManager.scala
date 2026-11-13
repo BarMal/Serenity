@@ -171,7 +171,7 @@ object ThemeManager:
 
 /** Bounded LRU syntax-highlight memo on the per-row paint path, delegating the actual highlighting logic to
   * [[ThemeManager.computeHighlightLine]]. `highlightLine` stays a plain synchronous `def`: it's called from deep inside
-  * the Java2D/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than
+  * the GUI/terminal paint loop (`CharacterRenderer`, `RendererPaneContent`), which owns its own thread rather than
   * running inside an IO fiber, so making it return `IO` would mean threading `IO` through the entire rendering call
   * graph -- well beyond this package (#1431, #1434). Storage is a hashed [[BoundedLruCache]] (#1843): an immutable
   * `ListMap` made every lookup a linear walk of up to 4096 keys.

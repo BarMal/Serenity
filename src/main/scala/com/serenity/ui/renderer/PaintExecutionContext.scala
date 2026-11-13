@@ -6,7 +6,7 @@ import scala.concurrent.ExecutionContext
 
 import cats.effect.{IO, Resource}
 
-/** A dedicated single-thread execution context for CPU-bound Swing/Java2D paint work.
+/** A dedicated single-thread execution context for CPU-bound Swing paint work.
   *
   * IO.blocking hands work to Cats Effect's unbounded, cached blocking thread pool -- meant for calls that actually
   * block (file/socket I/O), not synchronous CPU-bound painting. Routing that work onto IO's default compute pool

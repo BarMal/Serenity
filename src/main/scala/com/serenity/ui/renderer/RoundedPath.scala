@@ -4,7 +4,7 @@ import java.awt.geom.Path2D
 
 import com.serenity.ui.layout.RoundedCorners
 
-/** The outline of a rectangle with some corners rounded, as a Java2D path: a quarter circle (as a cubic) at each
+/** The outline of a rectangle with some corners rounded, as an AWT `Path2D`: a quarter circle (as a cubic) at each
   * rounded corner and a square corner at the others.
   */
 object RoundedPath:

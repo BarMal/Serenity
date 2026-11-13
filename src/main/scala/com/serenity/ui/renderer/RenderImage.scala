@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 /** A raster image a [[RenderSurface]] draws: Markdown preview images. Owned by the render seam so renderers pass images
   * around without naming `java.awt` (#1812).
   *
-  * Every image is still produced by Java2D (ImageIO decoding, preview rasterising), so the handle is the
+  * Every image is still produced through AWT (ImageIO decoding, preview rasterising), so the handle is the
   * `BufferedImage` itself: wrapping and unwrapping cost nothing per frame. A backend that rasterises elsewhere changes
   * only this representation and the `Awt` conversions.
   */

@@ -4,8 +4,8 @@ package com.serenity.ui.color
   * neither the theme nor a surface backend has to construct a `java.awt.Color` (#1812). It lives outside `ui.renderer`
   * so the theme can hold it without depending on the render seam.
   *
-  * The `Awt` conversions are for the boundaries that genuinely speak AWT: the Java2D surface, Swing window chrome, and
-  * app config colours that are still `java.awt.Color`.
+  * The `Awt` conversions are for the boundaries that genuinely speak AWT: the Swing present path, Swing window chrome,
+  * and app config colours that are still `java.awt.Color`.
   */
 opaque type RenderColor = Int
 
