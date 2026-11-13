@@ -116,6 +116,23 @@ class Nightly2xReportTests(unittest.TestCase):
         self.assertNotIn("issues: write", one_x)
 
 
+class StyleJobOrderTests(unittest.TestCase):
+    """sbt-scalafix drops -Werror from scalacOptions while scalafix runs, so a plain compile after it recompiles every
+    source in a fresh JVM (#2618). A compile first leaves scalafix with nothing to rebuild."""
+
+    def test_the_shard_table_is_checked_before_scalafmt_and_scalafix_run(self) -> None:
+        names = re.findall(r"(?m)^      - name: (.+)$", _job("checks"))
+        self.assertIn("Check the test shard table", names)
+        self.assertIn("Apply scalafmt and scalafix", names)
+        self.assertLess(names.index("Check the test shard table"), names.index("Apply scalafmt and scalafix"))
+
+    def test_the_style_diff_check_still_runs_after_both(self) -> None:
+        names = re.findall(r"(?m)^      - name: (.+)$", _job("checks"))
+        after = names.index("Check style tasks did not change files")
+        self.assertGreater(after, names.index("Apply scalafmt and scalafix"))
+        self.assertGreater(after, names.index("Check the test shard table"))
+
+
 class ScriptTestsJobTests(unittest.TestCase):
     def test_script_tests_run_on_every_pull_request_including_drafts(self) -> None:
         job = _job("scripts")
