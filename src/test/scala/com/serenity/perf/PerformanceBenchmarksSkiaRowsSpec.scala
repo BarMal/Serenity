@@ -26,13 +26,8 @@ class PerformanceBenchmarksSkiaRowsSpec extends AnyFlatSpec with Matchers:
     do names should contain(s"skia.compare.skia_raster.$font.$row")
   }
 
-  it should "time Java2D beside Skia on the same frames, so the pair can be compared" in {
-    val names = suiteNames
-    for
-      font <- fonts
-      row  <- frameRows
-    do names should contain(s"skia.compare.java2d.$font.$row")
-  }
-
-  it should "keep every Skia row under the skia. prefix" in
-    suiteNames.filter(_.toLowerCase.contains("skia")).foreach(_ should startWith("skia."))
+  it should "keep every Skia row under the skia. prefix, except the ported rows that end in .skia_raster" in
+    suiteNames
+      .filter(_.toLowerCase.contains("skia"))
+      .filterNot(_.endsWith(".skia_raster"))
+      .foreach(_ should startWith("skia."))

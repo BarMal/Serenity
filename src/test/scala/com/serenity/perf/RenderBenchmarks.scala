@@ -1,7 +1,6 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.client.DocumentUri
@@ -19,26 +18,18 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
-import com.serenity.ui.renderer.{
-  CharacterRenderer,
-  FontSpec,
-  Java2DRenderSurface,
-  RendererCursorOverlay,
-  RendererEntryPoints
-}
+import com.serenity.ui.renderer.{CharacterRenderer, FontSpec, RendererCursorOverlay, RendererEntryPoints}
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
+import com.serenity.{FramePixels, SkiaFrames}
 
-/** Layout, Java2D frame and markdown benchmarks: everything that needs the shared fonts, frame pools and render caches.
+/** Layout, Skia raster frame and markdown benchmarks: everything that needs the shared fonts, frame pools and render
+  * caches.
   */
 private[perf] object RenderBenchmarks:
 
   given Balance = Balance.default
-
-  private val reusableFramePools = Map(
-    1.0 -> new SwingWindow.ReusableImagePool,
-    2.0 -> new SwingWindow.ReusableImagePool
-  )
 
   private val monoFont         = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont         = Font(Font.SERIF, Font.PLAIN, 14)
@@ -94,14 +85,14 @@ private[perf] object RenderBenchmarks:
       List(
         layoutRow(plainScrollState, layoutSnapshot, unremembered),
         BenchmarkRunner.Benchmark(
-          "render.full_frame.java2d",
+          "render.full_frame.skia_raster",
           2,
           8,
           () => assert(renderedFrameHasPixels(fullFrame)),
           () => renderedFrame(richState, deviceScale = 1.0, renderCaches)
         ),
         BenchmarkRunner.Benchmark(
-          "render.long_measured_line.java2d",
+          "render.long_measured_line.skia_raster",
           2,
           8,
           () => assert(renderedFrameHasPixels(longMeasuredLineFrame)),
@@ -110,7 +101,7 @@ private[perf] object RenderBenchmarks:
             ()
         ),
         BenchmarkRunner.Benchmark(
-          "render.cursor_only.scene_reuse.java2d_overlay",
+          "render.cursor_only.scene_reuse.overlay",
           2,
           8,
           () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),
@@ -119,7 +110,7 @@ private[perf] object RenderBenchmarks:
             ()
         ),
         BenchmarkRunner.Benchmark(
-          "render.diagnostics_and_comments.java2d",
+          "render.diagnostics_and_comments.skia_raster",
           2,
           8,
           () => assert(renderedFrameHasPixels(diagnosticsAndComments)),
@@ -151,15 +142,15 @@ private[perf] object RenderBenchmarks:
         }
     )
 
-  private def hidpiRow(hidpiFrame: => BufferedImage, commentsState: => AppState): BenchmarkRunner.Benchmark =
+  private def hidpiRow(hidpiFrame: => FramePixels, commentsState: => AppState): BenchmarkRunner.Benchmark =
     BenchmarkRunner.Benchmark(
-      "render.hidpi_frame.java2d",
+      "render.hidpi_frame.skia_raster",
       2,
       8,
       () =>
         assert(
-          hidpiFrame.getWidth == frameWidthPx * 2 &&
-            hidpiFrame.getHeight == frameHeightPx * 2 &&
+          hidpiFrame.widthPx == frameWidthPx * 2 &&
+            hidpiFrame.heightPx == frameHeightPx * 2 &&
             renderedFrameHasPixels(hidpiFrame)
         ),
       () => renderedFrame(commentsState, deviceScale = 2.0, renderCaches)
@@ -228,7 +219,7 @@ private[perf] object RenderBenchmarks:
             MarkdownDocumentPreview.renderHtmlFragment(markdownSource.take(60_000), "benchmark", markdownPreviewCache)
         ),
         BenchmarkRunner.Benchmark(
-          "render.markdown.live_preview",
+          "render.markdown.live_preview.skia_raster",
           2,
           BenchmarkIterationCounts.RenderMarkdown,
           () => assert(renderedFrameHasPixels(markdownLiveFrame)),
@@ -252,22 +243,22 @@ private[perf] object RenderBenchmarks:
     }
     DiagnosticsState(diagnostics = Map(DocumentUri("file:///benchmark.scala") -> diagnostics))
 
-  private def renderedFrame(state: AppState, deviceScale: Double, caches: RenderCaches): BufferedImage =
-    val image = reusableFramePools(deviceScale).acquire(
-      math.ceil(frameWidthPx * deviceScale).toInt,
-      math.ceil(frameHeightPx * deviceScale).toInt,
-      BufferedImage.TYPE_INT_ARGB
-    )
-    val surface = new Java2DRenderSurface(
-      image,
+  private lazy val reusableFrames = Map(
+    1.0 -> SkiaFrames.newFrame(frameWidthPx, frameHeightPx),
+    2.0 -> SkiaFrames.newFrame(frameWidthPx * 2, frameHeightPx * 2)
+  )
+
+  private def renderedFrame(state: AppState, deviceScale: Double, caches: RenderCaches): FramePixels =
+    val frame = reusableFrames(deviceScale)
+    val surface = SkiaFrames.surfaceOver(
+      frame,
       cellMetrics,
       monoFont,
-      _ => (),
-      logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx,
-      deviceScaleX = deviceScale,
-      deviceScaleY = deviceScale,
-      textCaches = caches.surfaceText
+      frameWidthPx,
+      frameHeightPx,
+      deviceScale,
+      persists = false,
+      caches
     )
     RendererEntryPoints.render(
       state,
@@ -280,24 +271,24 @@ private[perf] object RenderBenchmarks:
       None,
       caches
     )
-    reusableFramePools(deviceScale).publish(image)
-    image
+    frame
 
-  private def renderedFrameHasPixels(image: BufferedImage): Boolean =
-    image.getWidth > 0 && image.getHeight > 0 && ((image.getRGB(0, 0) >>> 24) & 0xff) > 0
+  private def renderedFrameHasPixels(frame: FramePixels): Boolean =
+    frame.widthPx > 0 && frame.heightPx > 0 && ((frame.rgbAt(0, 0) >>> 24) & 0xff) > 0
 
-  private def renderedLongMeasuredLine(line: com.serenity.state.models.TextVisualLine): BufferedImage =
-    val image = new BufferedImage(frameWidthPx, frameHeightPx, BufferedImage.TYPE_INT_ARGB)
-    val surface = new Java2DRenderSurface(
-      image,
-      cellMetrics,
-      textFont,
-      _ => (),
-      logicalWidthPx = frameWidthPx,
-      logicalHeightPx = frameHeightPx,
-      textCaches = renderCaches.surfaceText
-    )
-    surface.setFont(FontSpec.fromAwt(textFont))
+  private def renderedLongMeasuredLine(line: com.serenity.state.models.TextVisualLine): FramePixels =
+    val frame = SkiaFrames.newFrame(frameWidthPx, frameHeightPx)
+    val surface =
+      SkiaFrames.surfaceOver(
+        frame,
+        cellMetrics,
+        textFont,
+        frameWidthPx,
+        frameHeightPx,
+        1.0,
+        persists = false,
+        renderCaches
+      )
     surface.clearViewport(Theme.light.background)
     CharacterRenderer.renderMeasuredLine(
       surface,
@@ -309,7 +300,7 @@ private[perf] object RenderBenchmarks:
       Theme.light,
       clipRightXPx = Some(frameWidthPx.toFloat)
     )
-    image
+    frame
 
   private def prepareCursorBaseFrame(state: AppState, window: SwingWindow, caches: RenderCaches): Unit =
     RendererEntryPoints.render(
@@ -322,7 +313,8 @@ private[perf] object RenderBenchmarks:
       uiMetrics,
       cursorColor = None,
       repaintOnFlush = false,
-      caches = caches
+      caches = caches,
+      surfaces = SkiaRasterSurfaceFactory
     )
 
   private def renderedCursorOverlay(state: AppState, window: SwingWindow, caches: RenderCaches): Boolean =

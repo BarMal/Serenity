@@ -9,6 +9,7 @@ import com.serenity.config.LayoutPin
 import com.serenity.diagnostics.{CrashRecord, CrashReport, PreviousRun, RuntimeIdentity}
 import com.serenity.state.manager.StartupRecoveryState
 import com.serenity.state.models.AppState
+import com.serenity.state.reducers.FallbackHeaderReducer
 import com.serenity.ui.presets.UiPresetStore
 
 /** What this launch does about recovery, decided once from the command line, the crash guard and the resets already
@@ -48,14 +49,15 @@ object StartupRecovery:
       crashLoopAfter: Option[Int] = None,
       unexpectedExit: Option[String] = None,
       crashRecorder: CrashRecorder = ignoreCrashes,
-      layoutPins: List[LayoutPin] = Nil
+      layoutPins: List[LayoutPin] = Nil,
+      fallbackHeader: Option[String] = None
   ):
 
     def windowTitle: String =
       if safeMode then SafeMode.windowTitle(AppName) else AppName
 
     def withSkiaFallback(render: RenderBackendSelection.Decision): Plan =
-      copy(notices = notices ++ SkiaFallback.notice(render))
+      SkiaFallback.header(render).fold(this)(header => copy(fallbackHeader = Some(header)))
 
     def noticeWith(configNotice: Option[String]): Option[String] =
       Option(notices ++ configNotice).filter(_.nonEmpty).map(_.mkString(" "))
@@ -72,7 +74,8 @@ object StartupRecovery:
         .fold(UiPresetStore.default)(root => UiPresetStore(root.resolve("ui-presets.json")))
 
     def appliedTo(state: AppState): AppState =
-      StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit, layoutPins)
+      val applied = StartupRecoveryState.applied(state, safeMode, crashLoopAfter, unexpectedExit, layoutPins)
+      fallbackHeader.fold(applied)(FallbackHeaderReducer.shown(applied, _))
 
   object Plan:
     val normal: Plan = Plan(safeMode = false, notices = Nil)

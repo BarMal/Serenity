@@ -5,7 +5,7 @@ import java.awt.{Color, Font}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -74,14 +74,6 @@ abstract class RoundedFillRepaintBehaviour extends AnyFlatSpec with Matchers:
     val y = 2 * metrics.lineHeight
     (image.rgbAt(x, y) & 0xffffff) shouldBe (margin.getRGB & 0xffffff)
   }
-
-class Java2DRoundedFillRepaintScale1Spec extends RoundedFillRepaintBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DRoundedFillRepaintScale2Spec extends RoundedFillRepaintBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaRoundedFillRepaintScale1Spec extends RoundedFillRepaintBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

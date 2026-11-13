@@ -5,7 +5,8 @@ import javax.swing.JPanel
 
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.ui.renderer.CaretRecordingSurface
+import com.serenity.ui.renderer.{CaretRecordingSurface, FontSpec}
+import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.terminal.SwingCanvasGeometry
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,9 +23,14 @@ class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
     panel
 
   "CaretRecordingSurface" should "record caret fills in paint order with their colours" in {
-    val surface = CaretRecordingSurface.forGeometry(metrics, font, SwingCanvasGeometry.of(canvas))
-    surface.fillPixelRect(10, 20, 2, 14, RenderColor.fromAwt(Color.WHITE))
-    surface.fillPixelRect(50, 60, 2, 14, RenderColor.fromAwt(new Color(255, 0, 0, 90)))
+    val surface = CaretRecordingSurface.forGeometry(
+      new SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
+    surface.pixels.fillPixelRect(10, 20, 2, 14, RenderColor.fromAwt(Color.WHITE))
+    surface.pixels.fillPixelRect(50, 60, 2, 14, RenderColor.fromAwt(new Color(255, 0, 0, 90)))
     surface.flush()
 
     surface.recordedFills shouldBe List(
@@ -34,14 +40,35 @@ class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "record a degenerate fill at the one-pixel minimum a Java2D surface paints" in {
-    val surface = CaretRecordingSurface.forGeometry(metrics, font, SwingCanvasGeometry.of(canvas))
-    surface.fillPixelRect(5, 5, 0, 0, RenderColor.fromAwt(Color.WHITE))
+    val surface = CaretRecordingSurface.forGeometry(
+      new SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
+    surface.pixels.fillPixelRect(5, 5, 0, 0, RenderColor.fromAwt(Color.WHITE))
 
     surface.recordedFills.map(_.rect) shouldBe List(PixelRect(5, 5, 1, 1))
   }
 
+  it should "offer no persistent content key, so the renderer keeps no scene for a surface that is new every frame" in {
+    val surface = CaretRecordingSurface.forGeometry(
+      new SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
+
+    surface.persistentContentKey shouldBe None
+  }
+
   it should "report the canvas's own logical viewport" in {
-    val surface = CaretRecordingSurface.forGeometry(metrics, font, SwingCanvasGeometry.of(canvas))
+    val surface = CaretRecordingSurface.forGeometry(
+      new SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
 
     surface.viewportWidth shouldBe 400 / metrics.charWidth
     surface.viewportHeight shouldBe 300 / metrics.lineHeight

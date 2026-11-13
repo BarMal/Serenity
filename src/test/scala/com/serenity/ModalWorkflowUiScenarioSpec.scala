@@ -8,7 +8,7 @@ import org.scalatest.matchers.should.Matchers
 
 /** End-to-end scenario coverage (#821) for the blocking modal layer (#814): a parent dialog with a nested child
   * confirmation on top, rendered through the full state-pipeline-plus-renderer pass rather than only at the reducer or
-  * layer-compositing unit level (see `ModalStateReducerSpec`, `ModalLayerCompositingSpec`).
+  * unit level (see `ModalStateReducerSpec`).
   */
 class ModalWorkflowUiScenarioSpec extends AnyFlatSpec with Matchers:
 

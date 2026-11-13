@@ -9,7 +9,7 @@ import org.jetbrains.skia.{Canvas, Rect}
 /** Keeps drawing off the pixels a frame holds correct, so a redrawn row's antialiased ink cannot land on a kept row's
   * (#2481). A clip on the canvas for the whole painting would send every antialiased edge it draws through Skia's
   * clip-mask path, which rounds its coverage differently from the unclipped one, so only the draws that can reach a
-  * kept rect are clipped, as [[com.serenity.ui.renderer.Java2DKeptOff]] does.
+  * kept rect are clipped.
   */
 private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
@@ -34,9 +34,9 @@ private[skia] trait SkiaExcludedPixels extends PanelOutlineDrawing:
 
   /** Runs `draw`, whose ink stays within a line's height of the box `left, top, right, bottom` (in the canvas's own
     * coordinates, as [[SkiaRenderSurface]] records a run's reach), off the kept rects that ink can reach: once for each
-    * rectangle of that reach the kept rects leave, as [[com.serenity.ui.renderer.Java2DKeptOff]] does. A rectangle clip
-    * leaves an antialiased edge's coverage as the unclipped draw has it, which a clip that cuts a rect out does not. A
-    * draw out of reach of all of them is not clipped at all.
+    * rectangle of that reach the kept rects leave. A rectangle clip leaves an antialiased edge's coverage as the
+    * unclipped draw has it, which a clip that cuts a rect out does not. A draw out of reach of all of them is not
+    * clipped at all.
     */
   private[skia] def awayFromKept(left: Float, top: Float, right: Float, bottom: Float)(draw: => Unit): Unit =
     val kept = keptReach.get

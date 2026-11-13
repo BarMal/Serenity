@@ -3,21 +3,19 @@ package com.serenity.perf
 import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.rope.Balance
-import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.{DiscardingImageLayer, SkiaRasterSurfaceFactory}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The `scroll_frame` row of [[PresentBenchmarks]] must scroll on every backend. The window's pool hands out two images
-  * in turn, and Java2D keeps what an image last showed, so a row that alternates between two states gives each image
-  * the same state every time and Java2D draws nothing: the row would time an empty frame against a real one.
+  * in turn and keeps what an image last showed, so a row that alternates between two states could give each image the
+  * same state every time and draw nothing: the row would time an empty frame.
   */
 class PresentScrollFrameSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
   private val backends = List(
-    "Java2D"                    -> FrameSurfaceFactory.Java2D,
     "Skia raster"               -> SkiaRasterSurfaceFactory,
     "Skia layer (image frames)" -> DiscardingImageLayer.factory
   )

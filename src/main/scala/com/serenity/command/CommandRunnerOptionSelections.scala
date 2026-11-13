@@ -137,14 +137,12 @@ object CommandRunnerOptionSelections:
     backend match
       case RenderBackendSetting.Auto       => 0
       case RenderBackendSetting.Skia       => 1
-      case RenderBackendSetting.Java2D     => 2
-      case RenderBackendSetting.SkiaRaster => 3
+      case RenderBackendSetting.SkiaRaster => 2
 
   private def renderWaylandIndex(mode: WaylandRender): Int =
     mode match
-      case WaylandRender.Java2D     => 0
-      case WaylandRender.SkiaRaster => 1
-      case WaylandRender.XWayland   => 2
+      case WaylandRender.SkiaRaster => 0
+      case WaylandRender.XWayland   => 1
 
   private def markdownViewModeIndex(mode: MarkdownViewMode): Int =
     mode match

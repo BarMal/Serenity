@@ -14,11 +14,11 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.typelevel.log4cats.noop.NoOpLogger
 
-/** A typing frame and a scroll frame, drawn by Java2D and by Skia's CPU rasteriser into the same 1500x1000 logical
-  * window at 2x, so the two renderers meet the same states, the same damage and the same renderer code.
+/** A typing frame and a scroll frame, drawn by Skia's CPU rasteriser, with a system monospace font and with the bundled
+  * ligature font, in the same 1500x1000 logical window at 2x, so both meet the same states and the same damage.
   *
   * Not part of the perf gate: run it with `Test / runMain com.serenity.perf.SkiaFrameBenchmarks` (optionally followed
   * by benchmark name prefixes) under `-Dsun.java2d.uiScale=2`. The Skia numbers are for the raster surface the specs
@@ -35,8 +35,8 @@ private[perf] object SkiaFrameBenchmarks:
   private val textFont        = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont          = Font(Font.SANS_SERIF, Font.PLAIN, 12)
 
-  /** A window's frame loop over one persisting image of `backend`, as `LaptopFrameBenchmarks.PersistingFrames` is for
-    * Java2D: every frame told what the transition into it damaged, so only damaged rows are redrawn.
+  /** A window's frame loop over one persisting image of `backend`, as `LaptopFrameBenchmarks.PersistingFrames` is:
+    * every frame told what the transition into it damaged, so only damaged rows are redrawn.
     */
   final private[perf] class Frames(backend: FrameBackend, codeFont: Font, metrics: CellMetrics, grid: ViewportSize):
     private val frame     = backend.newFrame(deviceSize(LogicalWidthPx), deviceSize(LogicalHeightPx))
@@ -169,9 +169,7 @@ private[perf] object SkiaFrameBenchmarks:
     val system = LaptopFrameBenchmarks.codeFont
 
     lazy val bundled = bundledFont
-    backendBenchmarks("java2d.system_monospace", Java2DFrames, system) ++
-      backendBenchmarks("skia_raster.system_monospace", SkiaFrames, system) ++
-      backendBenchmarks("java2d.bundled_ligature_font", Java2DFrames, bundled) ++
+    backendBenchmarks("skia_raster.system_monospace", SkiaFrames, system) ++
       backendBenchmarks("skia_raster.bundled_ligature_font", SkiaFrames, bundled)
 
   def main(args: Array[String]): Unit =

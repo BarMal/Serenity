@@ -123,19 +123,16 @@ class CommandRunnerOptionSelectionsSpec extends AnyFlatSpec with Matchers:
 
   it should "select the configured renderer" in {
     CommandRunnerOptionSelections.default(AppConfig.default)("render-backend") shouldBe 0
-    CommandRunnerOptionSelections.default(AppConfig.default.withRenderBackend(RenderBackendSetting.Java2D))(
+    CommandRunnerOptionSelections.default(AppConfig.default.withRenderBackend(RenderBackendSetting.Skia))(
       "render-backend"
-    ) shouldBe 2
+    ) shouldBe 1
     CommandRunnerOptionSelections.default(AppConfig.default.withRenderBackend(RenderBackendSetting.SkiaRaster))(
       "render-backend"
-    ) shouldBe 3
-    CommandRunnerOptionSelections.default(AppConfig.default)("render-wayland") shouldBe 1
-    CommandRunnerOptionSelections.default(AppConfig.default.withRenderWayland(WaylandRender.Java2D))(
-      "render-wayland"
-    ) shouldBe 0
+    ) shouldBe 2
+    CommandRunnerOptionSelections.default(AppConfig.default)("render-wayland") shouldBe 0
     CommandRunnerOptionSelections.default(AppConfig.default.withRenderWayland(WaylandRender.XWayland))(
       "render-wayland"
-    ) shouldBe 2
+    ) shouldBe 1
   }
 
   it should "reflect whether the word goal, line ending and indentation status segments are shown" in {

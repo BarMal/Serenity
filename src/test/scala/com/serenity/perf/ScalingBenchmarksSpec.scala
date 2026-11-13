@@ -13,11 +13,11 @@ class ScalingBenchmarksSpec extends AnyFlatSpec with Matchers:
     (for
       open <- List(1, 20)
       kind <- List("code", "prose")
-    yield s"buffers.switch_cold_frame.open_$open.$kind").toSet ++
+    yield s"buffers.switch_cold_frame.open_$open.$kind.skia_raster").toSet ++
       (for
         panes  <- List(1, 2, 4)
         action <- List("typing_frame", "scroll_line_frame", "page_down_frame")
-      yield s"panes.split$panes.$action").toSet +
+      yield s"panes.split$panes.$action.skia_raster").toSet +
       "scrollbar.four_panes.all_bars"
 
   "The scaling rows" should "be the four cold-frame rows, the nine split-frame rows and the late-bar row" in {

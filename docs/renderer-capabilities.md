@@ -30,7 +30,7 @@ This document describes what Serenity's renderer can do today, where the sharp e
 
 - `TextStyle` supports bold, italic, and underline.
 - Syntax and Markdown highlighting are represented as styled text segments.
-- Java2D rendering applies bold, italic, and underline through derived `Font` attributes.
+- Skia rendering applies bold, italic, and underline through the styled typefaces and decoration rules it draws.
 - Styling can vary within a line, but line height and ascent do not vary with that styling.
 
 ## Markdown

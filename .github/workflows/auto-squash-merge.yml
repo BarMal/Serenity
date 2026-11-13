@@ -74,7 +74,7 @@ jobs:
           # that has not been created yet is not a passing one, so these are waited for by name, for a few minutes, and
           # then fail the merge rather than letting a pull request through without Windows and macOS (#2016).
           # With the repository variable CROSS_OS_CI at "off" (Linux only, #2618) there are no Windows or macOS checks.
-          if [ "${CROSS_OS_CI:-}" = "off" ]; then
+          if [ "${CROSS_OS_CI,,}" = "off" ]; then
             required_checks=()
           else
             required_checks=("Cross-OS Tests: Test (windows)" "Cross-OS Tests: Test (macos)")

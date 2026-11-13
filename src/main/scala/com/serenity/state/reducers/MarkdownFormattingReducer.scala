@@ -20,7 +20,10 @@ private[reducers] object MarkdownFormattingReducer:
   def syntaxFor(intent: RichTextIntent): Either[String, MarkdownSyntax] =
     intent match
       case RichTextIntent.ToggleRichTextMark(mark) =>
-        Right(MarkdownSyntax.Emphasize(MarkdownSelection.emphasisOf(mark)))
+        MarkdownSelection
+          .emphasisOf(mark)
+          .map(MarkdownSyntax.Emphasize(_))
+          .toRight("Markdown has no syntax for a text shadow.")
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Body)           => Right(MarkdownSyntax.Heading(0))
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.Heading(level)) => Right(MarkdownSyntax.Heading(level))
       case RichTextIntent.SetRichTextParagraphRole(ParagraphRole.DropCap(_)) =>

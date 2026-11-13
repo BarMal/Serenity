@@ -15,8 +15,8 @@ class LaunchEnvironmentSpec extends AnyFlatSpec with Matchers with ScalaCheckPro
 
   it should "accept every valid value, in any case and with surrounding space" in {
     val valid = List(
-      "SERENITY_RENDER_BACKEND" -> List("auto", "skia", "java2d", " Skia ", "JAVA2D"),
-      "SERENITY_WAYLAND_RENDER" -> List("java2d", "skia-raster", "xwayland", " XWayland "),
+      "SERENITY_RENDER_BACKEND" -> List("auto", "skia", "skia-raster", " Skia ", "SKIA-RASTER"),
+      "SERENITY_WAYLAND_RENDER" -> List("skia-raster", "xwayland", " XWayland "),
       "SERENITY_TOOLKIT"        -> List("auto", "x11", "wayland", " X11 ", "Wayland")
     )
     for
@@ -34,15 +34,22 @@ class LaunchEnvironmentSpec extends AnyFlatSpec with Matchers with ScalaCheckPro
     val problems = LaunchEnvironment.problems(Map("SERENITY_RENDER_BACKEND" -> "vulkan"))
     problems should have size 1
     problems.head should (include("SERENITY_RENDER_BACKEND") and include("vulkan") and include(
-      "auto, skia, skia-raster or java2d"
+      "auto, skia or skia-raster"
     ))
+  }
+
+  it should "reject java2d for both render variables like any other unknown value" in {
+    LaunchEnvironment.problems(Map("SERENITY_RENDER_BACKEND" -> "java2d")) shouldBe
+      List("SERENITY_RENDER_BACKEND is 'java2d', which is not valid; expected auto, skia or skia-raster.")
+    LaunchEnvironment.problems(Map("SERENITY_WAYLAND_RENDER" -> "JAVA2D")) shouldBe
+      List("SERENITY_WAYLAND_RENDER is 'JAVA2D', which is not valid; expected skia-raster or xwayland.")
   }
 
   it should "name the variable, the value and the choices for an invalid SERENITY_WAYLAND_RENDER" in {
     val problems = LaunchEnvironment.problems(Map("SERENITY_WAYLAND_RENDER" -> "wl"))
     problems should have size 1
     problems.head should (include("SERENITY_WAYLAND_RENDER") and include("wl") and include(
-      "java2d, skia-raster or xwayland"
+      "skia-raster or xwayland"
     ))
   }
 

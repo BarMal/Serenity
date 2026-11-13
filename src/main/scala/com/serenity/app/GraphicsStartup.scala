@@ -10,31 +10,61 @@ import com.serenity.ui.skia.{LayerFrames, SkiaProbe}
   *
   * They are one decision because each depends on the other: Skia on a Wayland session needs the X11 toolkit, and the
   * X11 toolkit is only worth forcing if Skia then actually runs. A terminal launch never reads the config, probes the
-  * native library or builds a Skia factory, which keeps Skiko and Kotlin classes unloaded.
+  * native library or builds a Skia factory, which keeps Skiko and Kotlin classes unloaded. A window launch that cannot
+  * load Skia shows the terminal instead, unless it insisted on a window or there is no terminal.
   */
 object GraphicsStartup:
 
+  /** `forcedWindow` is a launch that asked for the window by name (`--gui`, `--smoke-test`, `--startup-probe`), so a
+    * Skia that cannot load is a failure rather than a reason to show the terminal; `terminalAvailable` is whether there
+    * is a terminal to show it on.
+    */
   final case class Launch(
       windowed: Boolean,
       safeMode: Boolean,
       renderer: Option[RenderBackendSetting] = None,
-      waylandRender: Option[WaylandRender] = None
+      waylandRender: Option[WaylandRender] = None,
+      forcedWindow: Boolean = false,
+      terminalAvailable: Boolean = true
   )
+
+  /** What [[resolve]] fails with for a window launch that Skia cannot serve and that has nowhere else to go; the
+    * message is what the person is told.
+    */
+  final class SkiaUnavailable(decision: Decision)
+      extends RuntimeException(
+        s"Serenity could not open its window because Skia could not load: ${decision.skiaFailure.getOrElse(decision.reason)}"
+      )
+
+  /** What the launch puts on screen. */
+  enum Display:
+    case Window(surfaces: FrameSurfaceFactory)
+    case Terminal
+
+    /** Every display is routed to one of the two, so a new one cannot be left out. */
+    def route[A](window: FrameSurfaceFactory => A, terminal: => A): A =
+      this match
+        case Window(surfaces) => window(surfaces)
+        case Terminal         => terminal
 
   final case class Resolved(
       toolkit: ToolkitSelection.Decision,
       backend: Decision,
-      surfaces: FrameSurfaceFactory,
+      display: Display,
       skiaVsync: Boolean = false,
       skiaFrames: SkiaFrames = SkiaFrames.Image
-  )
+  ):
 
-  def launchOf(options: LaunchOptions): Launch =
+    def windowed: Boolean = display.route(_ => true, false)
+
+  def launchOf(options: LaunchOptions, stdoutIsTty: Boolean = System.console() != null): Launch =
     Launch(
-      windowed = !LaunchOptions.resolveTuiMode(options),
+      windowed = !LaunchOptions.resolveTuiMode(options, stdoutIsTty = stdoutIsTty),
       safeMode = options.safeMode,
       renderer = options.renderer,
-      waylandRender = options.waylandRender
+      waylandRender = options.waylandRender,
+      forcedWindow = options.gui || options.smokeTest || options.startupProbe,
+      terminalAvailable = stdoutIsTty
     )
 
   /** The production wiring: the config file and the Skiko probe, both reached only when a windowed launch gets that
@@ -89,38 +119,48 @@ object GraphicsStartup:
   ): IO[Resolved] =
     val base = ToolkitSelection.choose(environment)
     val settled: IO[(ToolkitSelection.Decision, Decision, (Boolean, SkiaFrames))] =
-      if !launch.windowed then IO.pure((base, javaOnly("terminal or headless launch"), Unchosen))
-      else if launch.safeMode then IO.pure((base, javaOnly("safe mode"), Unchosen))
+      if !launch.windowed then IO.pure((base, terminal("terminal or headless launch"), Unchosen))
       else
-        configured.flatMap(settings =>
-          settleWindowed(launch, environment, catalogue, base, settings, probe)
-            .map((toolkit, decision) => (toolkit, decision, (settings.skiaVsync, settings.skiaFrames)))
+        // Safe mode never reads the user's config, so it paints with the defaults.
+        val settings = if launch.safeMode then IO.pure(RenderBackendPeek.Defaults) else configured
+        settings.flatMap(chosen =>
+          settleWindowed(launch, environment, base, chosen, probe)
+            .map((toolkit, decision) => (toolkit, decision, (chosen.skiaVsync, chosen.skiaFrames)))
         )
-    settled.map {
+    settled.flatMap {
       case (toolkit, decision, (vsync, frames)) =>
-        Resolved(toolkit, decision, catalogue.factoryFor(decision.backend), vsync, frames)
+        displayFor(launch, decision, catalogue)
+          .fold[IO[Resolved]](IO.raiseError(SkiaUnavailable(decision)))(display =>
+            IO.pure(Resolved(toolkit, decision, display, vsync, frames))
+          )
     }
+
+  /** `None` for a window launch that cannot have its window and has no terminal to fall back to, or insisted on a
+    * window.
+    */
+  private def displayFor(launch: Launch, decision: Decision, catalogue: SurfaceCatalogue): Option[Display] =
+    catalogue.factoryFor(decision.backend) match
+      case Some(surfaces) => Some(Display.Window(surfaces))
+      case None if !launch.windowed || (launch.terminalAvailable && !launch.forcedWindow) => Some(Display.Terminal)
+      case None                                                                           => None
 
   private def settleWindowed(
     launch: Launch,
     environment: ToolkitSelection.Environment,
-    catalogue: SurfaceCatalogue,
     base: ToolkitSelection.Decision,
     settings: RenderStartupSettings,
     probe: IO[Probe]
   ): IO[(ToolkitSelection.Decision, Decision)] =
     val wayland    = RenderBackendSelection.requestedWayland(settings.wayland, environment.env, launch.waylandRender)
     val x11Display = environment.env.get("DISPLAY").exists(_.trim.nonEmpty)
-    def inputsFor(toolkit: ToolkitSelection.Decision): Inputs =
+    def inputsFor(toolkit: ToolkitSelection.Decision, probed: Probe): Inputs =
       Inputs(
         osName = environment.osName,
         toolkit = effectiveToolkit(environment, toolkit),
         x11Display = x11Display,
-        probe = Probe.NotRun,
+        probe = probed,
         setting = RenderBackendSelection.requested(settings.backend, environment.env, launch.renderer),
-        skiaSurfaceAvailable = catalogue.skia.isDefined,
-        waylandRender = wayland,
-        rasterSurfaceAvailable = catalogue.skiaRaster.isDefined
+        waylandRender = wayland
       )
     // Forced only if it would really leave WLToolkit: an explicit SERENITY_TOOLKIT or -Dawt.toolkit.name wins.
     val forcedX11 = Option
@@ -130,12 +170,8 @@ object GraphicsStartup:
       )(ToolkitSelection.choose(environment.copy(xwaylandForSkia = true)))
       .filter(forced => effectiveToolkit(environment, forced) != ToolkitSelection.Choice.Wayland)
     val candidate = forcedX11.getOrElse(base)
-    val inputs    = inputsFor(candidate)
-    val probed =
-      if RenderBackendSelection.probeNeeded(inputs) then probe.map(result => inputs.copy(probe = result))
-      else IO.pure(inputs)
-    probed.map { ready =>
-      val decision = RenderBackendSelection.choose(ready)
+    probe.map { probed =>
+      val decision = RenderBackendSelection.choose(inputsFor(candidate, probed))
       // The X11 toolkit is only worth having if Skia runs on it.
       if decision.backend == RenderBackend.Skia then (candidate, decision) else (base, decision)
     }
@@ -150,4 +186,4 @@ object GraphicsStartup:
       case Some("XToolkit")  => ToolkitSelection.Choice.X11
       case _                 => toolkit.choice
 
-  private def javaOnly(reason: String): Decision = Decision(RenderBackend.Java2D, reason)
+  private def terminal(reason: String): Decision = Decision(RenderBackend.Terminal, reason)

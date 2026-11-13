@@ -46,7 +46,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     intrinsicWidth should be > editorWidth
     toolbar.width should be < (editorWidth * 3 / 4)
     rowGroups.map(_.map(_.id)) shouldBe List(
-      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
+      List("bold", "italic", "underline", "shadow", "font-family", "font-family-text", "font-size"),
       List("color", "color-hex", "paragraph-role", "align-left", "align-center", "align-right", "align-justify")
     )
   }
@@ -235,9 +235,9 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
       .map(_.map(_.id))
 
     rowGroups shouldBe List(
-      List("bold", "italic", "underline", "font-family", "font-family-text", "font-size"),
-      List("color", "color-hex", "paragraph-role"),
-      List("align-left", "align-center", "align-right", "align-justify")
+      List("bold", "italic", "underline", "shadow"),
+      List("font-family", "font-family-text", "font-size", "color", "color-hex"),
+      List("paragraph-role", "align-left", "align-center", "align-right", "align-justify")
     )
   }
 
@@ -251,7 +251,7 @@ class ContextualToolbarLayoutSpec extends AnyFlatSpec with Matchers with Context
     val toolbarState = ContextualToolbarState(displayMode = ToolbarDisplayMode.IconOnly)
     val width        = ContextualToolbarLayout.compactContentWidth(toolbarState, state, maxWidth = 120)
 
-    width shouldBe 55
+    width shouldBe 59
     ContextualToolbarLayout.rowCount(toolbarState, state, width) shouldBe 1
   }
 

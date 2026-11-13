@@ -92,34 +92,33 @@ object Main extends IOApp:
               )
             )
           )
-          .handleErrorWith(reportStartupFailure(options, console))
+          .handleErrorWith(reportStartupFailure(!LaunchOptions.resolveTuiMode(options), console))
       case Right(options) =>
         // Before anything else: the toolkit is fixed the moment the first java.awt class initialises, and the choice
         // depends on the renderer, so both are settled together here.
-        GraphicsStartup
-          .current(GraphicsStartup.launchOf(options))
-          .flatTap(graphics =>
+        GraphicsStartup.current(GraphicsStartup.launchOf(options)).attempt.flatMap {
+          case Left(error) => reportStartupFailure(!LaunchOptions.resolveTuiMode(options), console)(error)
+          case Right(graphics) =>
             IO(
               System.setProperty(
                 RuntimeIdentity.ToolkitProperty,
                 s"${graphics.toolkit.choice} (${graphics.toolkit.reason})"
               )
-            ).void
-          )
-          .flatMap(graphics =>
-            IO(new ShutdownWatchdog(ShutdownLedger.recording())).flatMap { watchdog =>
-              IO(watchdog.installSignalDump()) >>
-                launchUntilSettled(options, graphics, MacDesktopIntegration())(using watchdog)
-            }
-          )
-          .handleErrorWith(reportStartupFailure(options, console))
+            ) >>
+              IO(new ShutdownWatchdog(ShutdownLedger.recording()))
+                .flatMap { watchdog =>
+                  IO(watchdog.installSignalDump()) >>
+                    launchUntilSettled(options, graphics, MacDesktopIntegration())(using watchdog)
+                }
+                .handleErrorWith(reportStartupFailure(graphics.windowed, console))
+        }
 
   /** Anything that ends the launch before or outside the editor's own supervision: a crash file and, for a window
     * launch, a native dialog, since a packaged app has no terminal to print to.
     */
-  private def reportStartupFailure(options: LaunchOptions, console: PrintStream)(error: Throwable): IO[ExitCode] =
+  private def reportStartupFailure(windowed: Boolean, console: PrintStream)(error: Throwable): IO[ExitCode] =
     val display: StartupFailure.Notice => IO[Unit] =
-      if LaunchOptions.resolveTuiMode(options) then _ => IO.unit else SwingFailureDialog.show
+      if windowed then SwingFailureDialog.show else _ => IO.unit
     for
       at <- IO.realTimeInstant
       _  <- LoggerFactory[IO].getLogger(using LoggerName("Main")).error(error)("[STARTUP] Failed before the editor ran")
@@ -166,7 +165,7 @@ object Main extends IOApp:
     // means acquiring the Swing window or terminal resource, below) -- `Frontend.guiLogRouting`/`tuiLogRouting` are
     // exactly what those instances' own `logRouting` would answer, without needing one built.
     TuiConsoleLogFilter.installOnActiveLogback(
-      if LaunchOptions.resolveTuiMode(launchOptionsForLogging) then Frontend.tuiLogRouting else Frontend.guiLogRouting
+      if graphics.windowed then Frontend.guiLogRouting else Frontend.tuiLogRouting
     )
 
     given logger: org.typelevel.log4cats.Logger[IO] = LoggerFactory[IO].getLogger(using LoggerName("Main"))
@@ -179,14 +178,14 @@ object Main extends IOApp:
       _         <- logger.info(s"[RENDER] ${graphics.backend.logLine}")
       _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
       _         <- migrateEarlierLogs
-      _         <- Java2DPipeline.installSafeDefaults()
+      _         <- SwingPipelineDefaults.installSafeDefaults()
       _         <- IO(CrashReporter.install(CrashRecord(LogLocation.current), build))
       requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
       // #2023: settled before anything reads or writes the session, which only one process may own.
       instances = SingleInstance.forConfigDirectory(SessionManager.defaultSessionRoot(), logger)
       // macOS hands Finder opens and Cmd-Q to the desktop rather than argv, and the handlers must be in place before
       // the claim so an open that launched this process is not lost. A terminal launch never touches the desktop.
-      gui = !LaunchOptions.resolveTuiMode(launchOptionsForLogging)
+      gui = graphics.windowed
       _ <- (for
         hooks <- ShutdownTrace.traced("desktop hooks")(DesktopHooks.install(desktop, gui))
         role  <- ShutdownTrace.traced("instance claim")(SingleInstance.claim(instances, requested, logger))
@@ -199,7 +198,7 @@ object Main extends IOApp:
             launchOptionsForLogging,
             requestRestart,
             hooks,
-            graphics.surfaces,
+            graphics.display,
             graphics.backend
           )
       }
@@ -225,7 +224,7 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
-    surfaces: FrameSurfaceFactory,
+    display: GraphicsStartup.Display,
     render: RenderBackendSelection.Decision
   )(using
     logger: Logger[IO],
@@ -236,9 +235,9 @@ object Main extends IOApp:
       case LaunchRole.Primary(_) =>
         // Leaving by any route but a lost process clears the marker; a crash caught on the way leaves its own file.
         recordRun(store)
-          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, surfaces, render, store, _))
+          .flatMap(runPlanned(role, launchOptions, requestRestart, hooks, display, render, store, _))
           .guarantee(store.markCleanExit)
-      case _ => runPlanned(role, launchOptions, requestRestart, hooks, surfaces, render, store, PreviousRun.Clean)
+      case _ => runPlanned(role, launchOptions, requestRestart, hooks, display, render, store, PreviousRun.Clean)
 
   /** How the last run ended, read before this one marks itself as running. */
   private def recordRun(store: CrashRecord): IO[PreviousRun] =
@@ -253,7 +252,7 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     requestRestart: RestartMode => IO[Unit],
     hooks: DesktopHooks,
-    surfaces: FrameSurfaceFactory,
+    display: GraphicsStartup.Display,
     render: RenderBackendSelection.Decision,
     store: CrashRecord,
     previousRun: PreviousRun
@@ -307,7 +306,6 @@ object Main extends IOApp:
         askedPlan,
         requestRestart,
         StartupCrashGuard.markStarted(StartupCrashGuard.defaultMarker),
-        surfaces,
         render.backend.configKey
       )
       // The scratch session of safe mode replaces an isolated one, so only the notice that is still true is shown.
@@ -323,8 +321,10 @@ object Main extends IOApp:
           Stream.emit(opens.root.toList ++ startupOptions.extraOpenPaths).filter(_.nonEmpty) ++ hooks.opensFor(role),
           hooks.quitRequests
         )
-        if LaunchOptions.resolveTuiMode(launchOptions) then runTui(appConfig, startupOptions, notice, startup, session)
-        else runGui(appConfig, startupOptions, notice, startup, session)
+        display.route(
+          surfaces => runGui(appConfig, startupOptions, notice, startup, session, surfaces),
+          runTui(appConfig, startupOptions, notice, startup, session)
+        )
       }
       _ <- startup.markStarted
     yield ()
@@ -336,7 +336,6 @@ object Main extends IOApp:
       plan: StartupRecovery.Plan,
       requestRestart: RestartMode => IO[Unit],
       markStarted: IO[Unit],
-      surfaces: FrameSurfaceFactory,
       backend: String
   )
 
@@ -390,7 +389,8 @@ object Main extends IOApp:
     launchOptions: LaunchOptions,
     configNotice: Option[String],
     startup: Startup,
-    session: SessionChoice
+    session: SessionChoice,
+    surfaces: FrameSurfaceFactory
   )(using
     logger: Logger[IO],
     loggerFactory: LoggerFactory[IO],
@@ -493,7 +493,7 @@ object Main extends IOApp:
                       displayState.snapshot,
                       damage,
                       caches,
-                      startup.surfaces
+                      surfaces
                     )
                   )
                 ),
@@ -509,7 +509,7 @@ object Main extends IOApp:
                       displayState.snapshot,
                       damage,
                       caches,
-                      startup.surfaces
+                      surfaces
                     )
                   )
                 ),
@@ -563,6 +563,7 @@ object Main extends IOApp:
                 if launchOptions.smokeTest || launchOptions.startupProbe then
                   IO.race(host.control.awaitClose, smokeReady.get).void
                 else host.control.awaitClose,
+              hideWindow = IO(host.control.hide()),
               registerResizeCallback = cb => host.control.setOnResize(cb),
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),
               openPath = launchOptions.openPath,

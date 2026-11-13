@@ -128,8 +128,8 @@ object OverlaySegmentRowRenderer:
       ()
 
   /** The separator between two tabs. On a pixel surface it is a bar drawn as pixels, so it is the same on every
-    * renderer: the glyph `│` came out as a missing-glyph box on Java2D wherever the UI font has no U+2502, and as a
-    * thinner bar on Skia, which falls back to another font. A cell grid has only the glyph.
+    * renderer: the glyph `│` came out as a missing-glyph box on the former AWT renderer wherever the UI font has no
+    * U+2502, and as a thinner bar on Skia, which falls back to another font. A cell grid has only the glyph.
     */
   private def renderSeparator(
     surface: RenderSurface,

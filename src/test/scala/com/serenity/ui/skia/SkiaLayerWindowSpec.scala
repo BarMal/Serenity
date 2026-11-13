@@ -17,7 +17,7 @@ import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{FrameBackend, Java2DFrames, PersistedFrameFixture}
+import com.serenity.{FrameBackend, PersistedFrameFixture, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -27,7 +27,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
-  override protected def frames: FrameBackend = Java2DFrames
+  override protected def frames: FrameBackend = SkiaFrames
 
   private val evidence  = Path.of("target", "test-reports", "skia-layer-window")
   private val uiMetrics = CellMetrics.fromFont(uiFont)
@@ -116,28 +116,28 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   private def eventually(what: String)(condition: => Boolean): Unit =
     withClue(s"timed out waiting for $what: ")(awaited(condition, System.nanoTime() + 15_000_000_000L) shouldBe true)
 
-  "A window presenting through the Skia layer" should "show the same cells as Java2D for prose and for code" in
+  "A window presenting through the Skia layer" should "show the same cells as the Skia raster for prose and for code" in
     withWindow { window =>
       List("prose" -> proseLines, "code" -> codeLines).foreach {
         case (name, lines) =>
           val state = stateOf(lines.mkString("\n"), CursorPosition(2, 3))
-          render(window, state, RenderCaches.create(), FrameSurfaceFactory.Java2D)
-          val java2d = canvasImage(window)
-          // The layer is added over the canvas by the first layer frame, so the Java2D frame is taken first.
+          render(window, state, RenderCaches.create(), SkiaRasterSurfaceFactory)
+          val raster = canvasImage(window)
+          // The layer is added over the canvas by the first layer frame, so the raster frame is taken first.
           render(window, state, RenderCaches.create(), SkiaLayerSurfaceFactory)
           val layerHost = window.canvas.getComponents.length
           layerHost should be >= 1
-          val left = inkMap(java2d)
+          val left = inkMap(raster)
           def agreement(shown: BufferedImage): Double =
             val right = inkMap(shown)
             left.zip(right).count(_ == _).toDouble / left.length
           eventually("the layer's frame on screen")(inkMap(onScreen(window)).count(identity) > 20)
           eventually("the layer's whole frame on screen")(agreement(onScreen(window)) >= 0.95)
           val skia = onScreen(window)
-          keep(s"$name-java2d", java2d)
+          keep(s"$name-skia-raster", raster)
           keep(s"$name-skia-layer", skia)
           left.length shouldBe inkMap(skia).length
-          withClue(s"$name: share of cells where Java2D and the layer agree on ink: ")(
+          withClue(s"$name: share of cells where the Skia raster and the layer agree on ink: ")(
             agreement(skia) should be >= 0.95
           )
       }
@@ -147,7 +147,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   private val imageLayer =
     new LayerSurfaceFactory(
       canvas => SkiaLayerHost.create(canvas),
-      new RasterThenJava2D(SkiaRasterSurfaceFactory),
+      SkiaRasterSurfaceFactory,
       LayerFrames.Image
     )
 

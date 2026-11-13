@@ -13,9 +13,9 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
   private val environment = BenchmarkEnvironment("Linux", "Java 21", 1600, 1000, 2.0, Right("OPENGL"))
 
   private val results =
-    Scenario.values.toVector.map(scenario => ScenarioResult(scenario, stats(10, 20), Some(stats(5, 10))))
+    Scenario.values.toVector.map(scenario => ScenarioResult(scenario, Some(stats(5, 10))))
 
-  private val report = BenchmarkReport(environment, results, Verdict.SkiaWins)
+  private val report = BenchmarkReport(environment, results, Verdict.Measured)
 
   "BenchmarkReport.markdown" should "state the environment, one row per scenario and the verdict" in {
     val text = report.markdown
@@ -23,13 +23,12 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     text should include("OPENGL")
     text should include("scale 2.0")
     Scenario.values.foreach(scenario => text should include(scenario.label))
-    text should include("0.50x")
-    text should include("Skia wins")
+    text should include("**Measured:**")
   }
 
   it should "state the CPU, its governor and the power source, in the text and the JSON" in {
     val machine     = environment.copy(machine = MachineState("AMD Ryzen 7 7840U", "powersave", "battery"))
-    val withMachine = BenchmarkReport(machine, results, Verdict.SkiaWins)
+    val withMachine = BenchmarkReport(machine, results, Verdict.Measured)
 
     withMachine.markdown should include("AMD Ryzen 7 7840U")
     withMachine.markdown should include("governor powersave")
@@ -42,8 +41,8 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
 
   it should "say the window was drawn at the size asked for, when it was" in {
     val drawn =
-      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1600, 1000), "Skia layer" -> WindowPx(1600, 1000)))
-    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+      environment.copy(drawnWindows = List("Skia raster" -> WindowPx(1600, 1000), "Skia layer" -> WindowPx(1600, 1000)))
+    val text = BenchmarkReport(drawn, results, Verdict.Measured).markdown
 
     text should include("Window drawn at 1600x1000, as asked.")
     text should not include "Window asked for"
@@ -51,27 +50,27 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
 
   it should "name both sizes, per backend, when the window was drawn at another size" in {
     val drawn =
-      environment.copy(drawnWindows = List("Java2D" -> WindowPx(1920, 1060), "Skia layer" -> WindowPx(1920, 1028)))
-    val text = BenchmarkReport(drawn, results, Verdict.SkiaWins).markdown
+      environment.copy(drawnWindows = List("Skia raster" -> WindowPx(1920, 1060), "Skia layer" -> WindowPx(1920, 1028)))
+    val text = BenchmarkReport(drawn, results, Verdict.Measured).markdown
 
-    text should include("Window asked for 1600x1000 and drawn at 1920x1060 (Java2D), 1920x1028 (Skia layer).")
+    text should include("Window asked for 1600x1000 and drawn at 1920x1060 (Skia raster), 1920x1028 (Skia layer).")
     text should include("the window manager decided the size")
-    val json = parse(BenchmarkReport(drawn, results, Verdict.SkiaWins).json).toOption.get.hcursor
+    val json = parse(BenchmarkReport(drawn, results, Verdict.Measured).json).toOption.get.hcursor
       .downField("environment")
       .downField("drawn")
-    json.downField("Java2D").downField("width").as[Int] shouldBe Right(1920)
+    json.downField("Skia raster").downField("width").as[Int] shouldBe Right(1920)
     json.downField("Skia layer").downField("height").as[Int] shouldBe Right(1028)
   }
 
   it should "name the canvas size in device pixels the frames were drawn at, per backend" in {
     val drawn = environment.copy(
-      drawnWindows = List("Java2D" -> WindowPx(735, 458), "Skia layer" -> WindowPx(735, 458)),
-      drawnCanvases = List("Java2D" -> WindowPx(1470, 832), "Skia layer" -> WindowPx(1470, 832))
+      drawnWindows = List("Skia raster" -> WindowPx(735, 458), "Skia layer" -> WindowPx(735, 458)),
+      drawnCanvases = List("Skia raster" -> WindowPx(1470, 832), "Skia layer" -> WindowPx(1470, 832))
     )
-    val rendered = BenchmarkReport(drawn, results, Verdict.SkiaWins)
+    val rendered = BenchmarkReport(drawn, results, Verdict.Measured)
 
     rendered.markdown should include(
-      "Canvas drawn at 1470x832 device pixels (Java2D), 1470x832 device pixels (Skia layer)."
+      "Canvas drawn at 1470x832 device pixels (Skia raster), 1470x832 device pixels (Skia layer)."
     )
     val json = parse(rendered.json).toOption.get.hcursor.downField("environment").downField("drawnCanvas")
     json.downField("Skia layer").downField("width").as[Int] shouldBe Right(1470)
@@ -90,7 +89,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     val reason   = "the window manager kept the window at 1920x1060 when it was asked for 1200x750"
     val untimed  = environment.copy(notTimed = Map(Scenario.ResizeWindow -> reason))
     val timed    = results.filterNot(_.scenario == Scenario.ResizeWindow)
-    val rendered = BenchmarkReport(untimed, timed, Verdict.SkiaWins)
+    val rendered = BenchmarkReport(untimed, timed, Verdict.Measured)
 
     rendered.markdown should include(s"Not timed: ${Scenario.ResizeWindow.label} ($reason).")
     rendered.markdown should not include s"| ${Scenario.ResizeWindow.label} |"
@@ -102,7 +101,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "say whether the scenes were built as the app builds them, in the text and the JSON" in {
-    val like = BenchmarkReport(environment.copy(scenesLikeTheApp = true), results, Verdict.SkiaWins)
+    val like = BenchmarkReport(environment.copy(scenesLikeTheApp = true), results, Verdict.Measured)
 
     like.markdown should include("Scenes are built as the app builds them")
     like.markdown should include("measured after the frame")
@@ -124,15 +123,14 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       .as[Boolean] shouldBe Right(false)
   }
 
-  it should "print each scenario's shapings per frame on both backends, in the text and the JSON" in {
+  it should "print each scenario's shapings per frame on the Skia layer, in the text and the JSON" in {
     val withTraffic = environment.copy(
-      java2dShapeTraffic = Map(Scenario.PageDown -> ShapingTraffic(100, 20.0, 90L, 0.0, 0L)),
       skiaShapeTraffic = Map(Scenario.PageDown -> ShapingTraffic(100, 1.5, 12L, 0.5, 3L))
     )
-    val shaped = BenchmarkReport(withTraffic, results, Verdict.SkiaWins)
+    val shaped = BenchmarkReport(withTraffic, results, Verdict.Measured)
 
     shaped.markdown should include("Shaping per frame")
-    shaped.markdown should include("| page down | 20.00 | 90 | 1.50 | 12 | 0.50 | 3 |")
+    shaped.markdown should include("| page down | 1.50 | 12 | 0.50 | 3 |")
     val skia = parse(shaped.json).toOption.get.hcursor
       .downField("environment")
       .downField("shapeTraffic")
@@ -171,7 +169,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
         skiaDraws = Some(draws)
       ),
       results,
-      Verdict.SkiaWins
+      Verdict.Measured
     )
     val text = detailed.markdown
     List("sun.awt.X11.XToolkit", "SERENITY_TOOLKIT=x11", "1 layer", "330 draws for 300 published frames", "4.50")
@@ -180,20 +178,6 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("toolkit").as[String] shouldBe Right("sun.awt.X11.XToolkit")
     cursor.downField("skiaLayers").as[Int] shouldBe Right(1)
     cursor.downField("skiaDraws").downField("renders").as[Int] shouldBe Right(330)
-  }
-
-  it should "state the scale the Skia layer drew at beside Java2D's, in the text and the JSON" in {
-    val scaled = BenchmarkReport(environment.copy(skiaDeviceScale = Some(1.0)), results, Verdict.SkiaWins)
-    scaled.markdown should include("Skia layer scale 1.0")
-    val json = parse(scaled.json).getOrElse(fail("not JSON")).hcursor.downField("environment")
-    json.downField("deviceScale").as[Double] shouldBe Right(2.0)
-    json.downField("skiaDeviceScale").as[Double] shouldBe Right(1.0)
-  }
-
-  it should "leave the Skia layer's scale out when it was not measured" in {
-    report.markdown should not include "Skia layer scale"
-    val json = parse(report.json).getOrElse(fail("not JSON")).hcursor.downField("environment")
-    json.downField("skiaDeviceScale").succeeded shouldBe false
   }
 
   it should "say where a cold frame's time goes in the Skia caches" in {
@@ -206,7 +190,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       shapingsPerFrame = 165.0,
       shapingMsPerFrame = 22.8
     )
-    val detailed = BenchmarkReport(environment.copy(coldPhases = Some(phases)), results, Verdict.SkiaWins)
+    val detailed = BenchmarkReport(environment.copy(coldPhases = Some(phases)), results, Verdict.Measured)
     detailed.markdown should include(
       "Cold frame, Skia caches (mean of 20): 2.0 faces 19.90 ms, 1.0 shapers 2.50 ms, 165 shapings 22.80 ms."
     )
@@ -218,24 +202,19 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     json.downField("shapingMsPerFrame").as[Double] shouldBe Right(22.8)
   }
 
-  it should "split a cold frame into layout, drawing, the rest and the wait to be presented, for each backend" in {
-    val java2d = ColdFrameSplit(20, renderMs = 70.0, layoutMs = 15.5, drawMs = 45.25, otherMs = 9.25, presentMs = 5.0)
-    val skia   = ColdFrameSplit(20, renderMs = 80.0, layoutMs = 15.0, drawMs = 55.0, otherMs = 10.0, presentMs = 6.75)
+  it should "split the Skia layer's cold frame into layout, drawing, the rest and the wait to be presented" in {
+    val skia = ColdFrameSplit(20, renderMs = 80.0, layoutMs = 15.0, drawMs = 55.0, otherMs = 10.0, presentMs = 6.75)
     val detailed =
       BenchmarkReport(
-        environment.copy(java2dColdSplit = Some(java2d), skiaColdSplit = Some(skia)),
+        environment.copy(skiaColdSplit = Some(skia)),
         results,
-        Verdict.SkiaWins
+        Verdict.Measured
       )
-    detailed.markdown should include(
-      "Cold frame split, Java2D (mean of 20): render call 70.00 ms (layout 15.50, drawing 45.25, rest 9.25), then 5.00 ms until presented."
-    )
     detailed.markdown should include(
       "Cold frame split, Skia layer (mean of 20): render call 80.00 ms (layout 15.00, drawing 55.00, rest 10.00), then 6.75 ms until presented."
     )
     val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit")
-    json.downField("java2d").downField("frames").as[Int] shouldBe Right(20)
-    json.downField("java2d").downField("layoutMs").as[Double] shouldBe Right(15.5)
+    json.downField("java2d").succeeded shouldBe false
     json.downField("skia").downField("drawMs").as[Double] shouldBe Right(55.0)
     json.downField("skia").downField("presentMs").as[Double] shouldBe Right(6.75)
   }
@@ -246,7 +225,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       identical = 1006,
       differing = Vector("text (Inter) U+2502", "code (Mono) U+2192")
     )
-    val detailed = BenchmarkReport(environment.copy(fallbackAgreement = Some(agreement)), results, Verdict.SkiaWins)
+    val detailed = BenchmarkReport(environment.copy(fallbackAgreement = Some(agreement)), results, Verdict.Measured)
 
     detailed.markdown should include(
       "Fallback runs against TextLine on this machine: 1006 of 1008 strings identical. Differing: text (Inter) U+2502, code (Mono) U+2192."
@@ -262,22 +241,22 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     val clean = BenchmarkReport(
       environment.copy(fallbackAgreement = Some(FallbackAgreement(1008, 1008, Vector.empty))),
       results,
-      Verdict.SkiaWins
+      Verdict.Measured
     )
     clean.markdown should include("Fallback runs against TextLine on this machine: 1008 of 1008 strings identical.")
     clean.markdown should not include "Differing"
-    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Fallback runs against TextLine"
+    BenchmarkReport(environment, results, Verdict.Measured).markdown should not include "Fallback runs against TextLine"
   }
 
   it should "leave the cold-frame split out when no cold frame was measured" in {
-    val text = BenchmarkReport(environment, results, Verdict.SkiaWins)
+    val text = BenchmarkReport(environment, results, Verdict.Measured)
     text.markdown should not include "Cold frame split"
     parse(text.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("coldSplit").failed shouldBe
       true
   }
 
   it should "leave the cold-frame line out when no Skia cache was measured" in {
-    BenchmarkReport(environment, results, Verdict.SkiaWins).markdown should not include "Cold frame, Skia caches"
+    BenchmarkReport(environment, results, Verdict.Measured).markdown should not include "Cold frame, Skia caches"
   }
 
   it should "say how long a change of carets waited for its draw" in {
@@ -293,7 +272,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       caretToRenderMeanMs = 0.45,
       caretToRenderMaxMs = 3.2
     )
-    val detailed = BenchmarkReport(environment.copy(skiaDraws = Some(draws)), results, Verdict.SkiaWins)
+    val detailed = BenchmarkReport(environment.copy(skiaDraws = Some(draws)), results, Verdict.Measured)
     detailed.markdown should include("120 changes of carets; change to draw mean 0.45 ms (max 3.20)")
     val json = parse(detailed.json).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("skiaDraws")
     json.downField("caretWaits").as[Int] shouldBe Right(120)
@@ -304,13 +283,13 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
   it should "say whether the GPU was waited on after each draw, and why not when it could not be" in {
     val base = LayerDrawStats(1460, 1156, 9.0, 54.0, 3.4, 0.05, 0.0)
     def textFor(stats: LayerDrawStats): String =
-      BenchmarkReport(environment.copy(skiaDraws = Some(stats)), results, Verdict.SkiaWins).markdown
+      BenchmarkReport(environment.copy(skiaDraws = Some(stats)), results, Verdict.Measured).markdown
     textFor(base.copy(syncedDraws = 0, gpuContext = false)) should include(
       "GPU sync: not done (no GPU context on the canvas Skiko draws the layer with, which records into a picture)"
     )
     textFor(base.copy(syncedDraws = 1460, gpuContext = true)) should include("GPU sync: 1460 of 1460 draws")
     val json = parse(
-      BenchmarkReport(environment.copy(skiaDraws = Some(base.copy(syncedDraws = 7))), results, Verdict.SkiaWins).json
+      BenchmarkReport(environment.copy(skiaDraws = Some(base.copy(syncedDraws = 7))), results, Verdict.Measured).json
     ).getOrElse(fail("not JSON")).hcursor.downField("environment").downField("skiaDraws")
     json.downField("syncedDraws").as[Int] shouldBe Right(7)
     json.downField("gpuContext").as[Boolean] shouldBe Right(false)
@@ -323,12 +302,12 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       environment.copy(skiaDraws =
         Some(LayerDrawStats(1, 1, 1.0, 1.0, 1.0, 1.0, 1.0, pictureOpsMean = 812.0, pictureBytesMean = 65536.0))
       ),
-      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, tail, Some(tail))),
-      Verdict.SkiaWins
+      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, Some(tail))),
+      Verdict.Measured
     )
     val text = withTail.markdown
-    text should include("| Scenario | Java2D p75 |")
-    val tailTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Java2D p75 |")).takeWhile(_.nonEmpty).toList
+    text should include("| Scenario | Skia p75 |")
+    val tailTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Skia p75 |")).takeWhile(_.nonEmpty).toList
     val row       = tailTable.find(_.contains("caret blink")).getOrElse(fail("no tail row"))
     List("12.50", "17.50", "27.50", "| 4 |", "| 3 |").foreach(figure => row should include(figure))
     text should include("pictures: 812 ops, 64.0 KB on average")
@@ -366,24 +345,24 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     val fast = FrameStats(200, 5, 10, 15, 0, p50Frames = 1, p95Frames = 1, missedRefresh = 0)
     val withFrames = BenchmarkReport(
       environment,
-      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, slow, Some(fast))),
-      Verdict.SkiaWins
+      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, Some(slow), Some(fast))),
+      Verdict.Measured
     )
     val text = withFrames.markdown
     text should include("Frames to present")
-    text should include("| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed |")
-    val framesTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Java2D p50 | p95 | missed |")).toList
+    text should include("| Scenario | Skia p50 | p95 | missed | Raster p50 | p95 | missed |")
+    val framesTable = text.linesIterator.dropWhile(!_.contains("| Scenario | Skia p50 | p95 | missed |")).toList
     val row         = framesTable.find(_.contains("page down")).getOrElse(fail("no frames row"))
     List("| 2 |", "| 4 |", "50 (25%)", "0 (0%)").foreach(cell => row should include(cell))
     val json = parse(withFrames.json).getOrElse(fail("not JSON")).hcursor
     json.downField("environment").downField("refreshHz").as[Double] shouldBe Right(60.0)
     json.downField("environment").downField("refreshAssumed").as[Boolean] shouldBe Right(true)
-    val java2d = json.downField("scenarios").downArray.downField("java2d")
-    java2d.downField("p50Frames").as[Int] shouldBe Right(2)
-    java2d.downField("missedRefresh").as[Int] shouldBe Right(50)
+    val skia = json.downField("scenarios").downArray.downField("skia")
+    skia.downField("p50Frames").as[Int] shouldBe Right(2)
+    skia.downField("missedRefresh").as[Int] shouldBe Right(50)
   }
 
-  it should "show the raster arm beside the other two in every table, and give the reason when it is missing" in {
+  it should "show the raster arm beside the layer in every table, and give the reason when it is missing" in {
     val raster = FrameStats(
       200,
       8,
@@ -401,10 +380,8 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     )
     val withRaster = BenchmarkReport(
       environment,
-      Scenario.values.toVector.map(scenario =>
-        ScenarioResult(scenario, stats(10, 20), Some(stats(5, 10)), Some(raster))
-      ),
-      Verdict.SkiaWins
+      Scenario.values.toVector.map(scenario => ScenarioResult(scenario, Some(stats(5, 10)), Some(raster))),
+      Verdict.Measured
     )
     val text = withRaster.markdown
     text should include("Skia raster (CPU)")
@@ -412,12 +389,12 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
       .dropWhile(!_.contains("Skia raster (CPU)"))
       .find(_.contains("page down"))
       .getOrElse(fail("no raster row"))
-    List("8.00", "16.00", "24.00", "0.80x", "0.80x").foreach(figure => rasterRow should include(figure))
+    List("8.00", "16.00", "24.00", "1.60x", "1.60x").foreach(figure => rasterRow should include(figure))
     text should include(
-      "| Scenario | Java2D p75 | p90 | p99 | >33 ms | early | Skia p75 | p90 | p99 | >33 ms | early | Raster p75 | p90 | p99 | >33 ms | early |"
+      "| Scenario | Skia p75 | p90 | p99 | >33 ms | early | Raster p75 | p90 | p99 | >33 ms | early |"
     )
     text should include(
-      "| Scenario | Java2D p50 | p95 | missed | Skia p50 | p95 | missed | Raster p50 | p95 | missed |"
+      "| Scenario | Skia p50 | p95 | missed | Raster p50 | p95 | missed |"
     )
     parse(withRaster.json)
       .getOrElse(fail("not JSON"))
@@ -434,9 +411,9 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     without should not include "Raster p75"
   }
 
-  it should "show every figure of both backends in a scenario's row" in {
+  it should "show every figure of the Skia layer in a scenario's row" in {
     val row = report.markdown.linesIterator.find(_.contains("type one character")).getOrElse(fail("no row"))
-    List("10.00", "20.00", "25.00", "5.00", "10.00", "15.00").foreach(figure => row should include(figure))
+    List("5.00", "10.00", "15.00").foreach(figure => row should include(figure))
   }
 
   it should "say GPU NOT USED instead of a verdict when Skia ran in software" in {
@@ -447,20 +424,7 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
         Verdict.NotMeasured("GPU NOT USED (software fallback: SOFTWARE_FAST)")
       )
     software.markdown should include("GPU NOT USED (software fallback: SOFTWARE_FAST)")
-    software.markdown should not include "Skia wins"
-  }
-
-  it should "give a reason for each scenario that keeps Java2D" in {
-    val stays = BenchmarkReport(environment, results, Verdict.Java2DStays(List("scroll one line: p95 not better")))
-    stays.markdown should include("Skia does not win")
-    stays.markdown should include("scroll one line: p95 not better")
-  }
-
-  it should "say that auto no longer depends on the verdict, whichever it is" in {
-    val wins  = BenchmarkReport(environment, results, Verdict.SkiaWins).markdown
-    val stays = BenchmarkReport(environment, results, Verdict.Java2DStays(List("scroll one line"))).markdown
-    List(wins, stays).foreach(text => text should include("`auto` picks the Skia layer whatever this says"))
-    List(wins, stays).foreach(text => text should not include "auto stays on Java2D")
+    software.markdown should not include "**Measured:**"
   }
 
   "BenchmarkReport.json" should "carry the environment, every scenario's figures and the verdict" in {
@@ -469,9 +433,9 @@ class BenchmarkReportSpec extends AnyFlatSpec with Matchers:
     cursor.downField("environment").downField("skiaRenderApi").as[String] shouldBe Right("OPENGL")
     cursor.downField("environment").downField("width").as[Int] shouldBe Right(1600)
     cursor.downField("scenarios").as[Vector[io.circe.Json]].map(_.size) shouldBe Right(Scenario.values.length)
-    cursor.downField("scenarios").downArray.downField("java2d").downField("p50Ms").as[Double] shouldBe Right(10.0)
+    cursor.downField("scenarios").downArray.downField("java2d").succeeded shouldBe false
     cursor.downField("scenarios").downArray.downField("skia").downField("p95Ms").as[Double] shouldBe Right(10.0)
-    cursor.downField("verdict").downField("kind").as[String] shouldBe Right("skia-wins")
+    cursor.downField("verdict").downField("kind").as[String] shouldBe Right("measured")
   }
 
   it should "leave out the Skia figures when Skia was not measured" in {

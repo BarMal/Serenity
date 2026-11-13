@@ -43,7 +43,7 @@ final class SkiaGlFrames private (context: SkiaGlContext, targets: SkiaGlTargets
         settings.deviceScale,
         SkiaTextCaches.of(settings.backendCaches),
         settings.textCaches.styledFonts,
-        layerCacheOwner = Some(settings.screen)
+        screen = Some(settings.screen)
       )
       Try {
         render(surface)

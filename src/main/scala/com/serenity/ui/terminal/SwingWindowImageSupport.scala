@@ -9,7 +9,7 @@ import javax.swing.JComponent
 
 import com.serenity.state.models.CaretStyle
 import com.serenity.ui.layout.PixelRect
-import com.serenity.ui.renderer.{CaretGeometry, RenderTarget}
+import com.serenity.ui.renderer.{CaretGeometry, RenderTarget, TextShadow}
 
 /** Frame-buffer pooling and cursor-overlay repaint math for [[SwingWindow]]. Mixed into that class's companion object
   * so callers keep seeing `SwingWindow.ReusableImagePool` etc.; split into its own file to keep `SwingWindow.scala`
@@ -211,8 +211,8 @@ private[terminal] trait SwingWindowImageSupport:
   private[serenity] def needsBackgroundFill(base: Option[BufferedImage]): Boolean =
     !base.exists(image => image.getWidth > 0 && image.getHeight > 0 && image.getTransparency == Transparency.OPAQUE)
 
-  /** Present a frame into `g`, touching only its clip: Java2D bounds a software image upload by the destination
-    * rectangle, not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
+  /** Present a frame into `g`, touching only its clip: AWT bounds a software image upload by the destination rectangle,
+    * not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
     */
   private[serenity] def paintPresentedFrame(
     g: Graphics2D,
@@ -239,16 +239,21 @@ private[terminal] trait SwingWindowImageSupport:
     val smooth = g.create().asInstanceOf[Graphics2D]
     try
       smooth.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON)
-      CaretGeometry.polygons(body, style).foreach { polygon =>
-        val path = new Path2D.Double()
-        polygon.points.zipWithIndex.foreach {
-          case ((x, y), 0) => path.moveTo(x, y)
-          case ((x, y), _) => path.lineTo(x, y)
-        }
-        path.closePath()
-        smooth.fill(path)
-      }
+      val ink = smooth.getColor
+      smooth.setColor(TextShadow.colorOf(ink))
+      CaretGeometry.shadowPolygons(body, style).foreach(fillPolygon(smooth, _))
+      smooth.setColor(ink)
+      CaretGeometry.polygons(body, style).foreach(fillPolygon(smooth, _))
     finally smooth.dispose()
+
+  private def fillPolygon(g: Graphics2D, polygon: CaretGeometry.Polygon): Unit =
+    val path = new Path2D.Double()
+    polygon.points.zipWithIndex.foreach {
+      case ((x, y), 0) => path.moveTo(x, y)
+      case ((x, y), _) => path.lineTo(x, y)
+    }
+    path.closePath()
+    g.fill(path)
 
   /** Scaling `g` to image pixels keeps the image-to-panel mapping exact even when the scale is fractional. */
   private def drawImageRegion(

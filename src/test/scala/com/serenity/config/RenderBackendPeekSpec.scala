@@ -18,7 +18,12 @@ class RenderBackendPeekSpec extends AnyFlatSpec with Matchers:
 
   "RenderBackendPeek.read" should "read ui.render.backend from the config file" in {
     peek("ui.render.backend = skia\n") shouldBe RenderBackendSetting.Skia
-    peek("ui.render.backend = java2d\nui.render.fps = 60\n") shouldBe RenderBackendSetting.Java2D
+    peek("ui.render.backend = skia-raster\nui.render.fps = 60\n") shouldBe RenderBackendSetting.SkiaRaster
+  }
+
+  it should "take a file that still says java2d as the defaults, which is what its migration writes" in {
+    peekSettings("ui.render.backend = java2d\nui.render.wayland = java2d\n") shouldBe
+      RenderStartupSettings(RenderBackendSetting.Auto, WaylandRender.SkiaRaster)
   }
 
   it should "default to auto when the key is absent, invalid or the file is unreadable" in {

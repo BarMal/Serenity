@@ -20,7 +20,7 @@ import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySna
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
-import com.serenity.ui.renderer.{CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
+import com.serenity.ui.renderer.{CaretCanvases, CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
 import com.serenity.ui.theme.Theme
 import org.typelevel.log4cats.Logger
 
@@ -408,16 +408,16 @@ class SwingWindow(
       if usesNativeThemedChrome then updateNativeChromeTheme(chromePaletteRef.get())
       publishCanvasResize(canvas.getSize())
       val _ = canvas.requestFocusInWindow()
-    if SwingUtilities.isEventDispatchThread then showWindow.run()
-    else SwingUtilities.invokeAndWait(showWindow)
+    onEventDispatchThread(showWindow)
+
+  def hide(): Unit = SwingUtilities.invokeLater(() => frame.setVisible(false))
 
   def stop(): Unit =
     val dispose: Runnable = () =>
       layerPresenterRef.getAndSet(None).foreach(_.dispose())
       frame.setVisible(false)
       frame.dispose()
-    if SwingUtilities.isEventDispatchThread then dispose.run()
-    else SwingUtilities.invokeAndWait(dispose)
+    onEventDispatchThread(dispose)
 
   def viewportSize: ViewportSize =
     val d = pixelSize.get()
@@ -506,9 +506,9 @@ class SwingWindow(
   def detectedDeviceTextScale: Double =
     DisplayScale.forComponent(canvas).textScale
 
-  def geometry: SurfaceGeometry = SwingCanvasGeometry.of(canvas)
-
+  def geometry: SurfaceGeometry                   = SwingCanvasGeometry.of(canvas)
   override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
+  override lazy val caretCanvases: CaretCanvases  = new com.serenity.ui.skia.SkiaCaretCanvases
 
   override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 

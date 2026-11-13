@@ -6,7 +6,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -137,9 +137,6 @@ abstract class SurfaceTextContractBehaviour extends AnyFlatSpec with Matchers:
     lone.exists(_ != Color.BLACK.getRGB) shouldBe true
     wide shouldBe lone
   }
-
-class Java2DSurfaceTextContractSpec extends SurfaceTextContractBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
 
 class SkiaSurfaceTextContractSpec extends SurfaceTextContractBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

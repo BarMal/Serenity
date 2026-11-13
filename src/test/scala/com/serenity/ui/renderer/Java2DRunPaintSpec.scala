@@ -6,7 +6,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -217,6 +217,96 @@ abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
     hasFullInkRow(image, 52) shouldBe false
   }
 
+  private val shadowBlack  = Color.BLACK.getRGB & 0xffffff
+  private val shadowInk    = new Color(200, 100, 50)
+  private val shadowedBold = TextStyle(isBold = true, isShadowed = true)
+  private val plainBold    = TextStyle(isBold = true)
+
+  private def shadowSurface(image: FramePixels): RenderSurface =
+    val surface = surfaceOver(image)
+    surface.clearViewport(RenderColor.fromAwt(Color.BLACK))
+    surface.setForegroundColor(RenderColor.fromAwt(shadowInk))
+    surface.setBackgroundColor(RenderColor.fromAwt(Color.BLACK))
+    surface
+
+  private def shadowRendered(
+    style: TextStyle,
+    text: String = "MMMM",
+    runWidthPx: Float = 56f,
+    topPx: Int = 26
+  ): FramePixels =
+    val image   = freshImage()
+    val surface = shadowSurface(image)
+    surface.enableStyle(style)
+    surface.text.drawRunPx(14f, topPx, runWidthPx, metrics.lineHeight, metrics.ascent, text)
+    surface.disableStyle(style)
+    image
+
+  private def rgbBits(image: FramePixels, x: Int, y: Int): Int = image.rgbAt(x, y) & 0xffffff
+
+  private def inkedAt(image: FramePixels): List[(Int, Int)] =
+    (for y <- 0 until height; x <- 0 until width if rgbBits(image, x, y) != shadowBlack yield (x, y)).toList
+
+  private def redOf(pixel: Int): Int = (pixel >> 16) & 0xff
+
+  "A shadowed run" should "extend its ink one pixel down and to the right and not up or to the left" in {
+    val plain    = inkedAt(shadowRendered(plainBold))
+    val shadowed = inkedAt(shadowRendered(shadowedBold))
+
+    shadowed.map(_._1).min shouldBe plain.map(_._1).min
+    shadowed.map(_._2).min shouldBe plain.map(_._2).min
+    shadowed.map(_._1).max shouldBe (plain.map(_._1).max + 1)
+    shadowed.map(_._2).max shouldBe (plain.map(_._2).max + 1)
+  }
+
+  it should "only ever add light where the plain run left the background" in {
+    val plain    = shadowRendered(plainBold)
+    val shadowed = shadowRendered(shadowedBold)
+    val changed =
+      for y <- 0 until height; x <- 0 until width if rgbBits(plain, x, y) != rgbBits(shadowed, x, y) yield (x, y)
+
+    changed should not be empty
+    all(changed.map((x, y) => redOf(rgbBits(shadowed, x, y)) - redOf(rgbBits(plain, x, y)))) should be >= 0
+  }
+
+  it should "paint the shadow at 40% of the foreground" in {
+    val plain    = shadowRendered(plainBold)
+    val shadowed = shadowRendered(shadowedBold)
+    val shadowOnly =
+      for
+        y <- 0 until height
+        x <- 0 until width
+        if rgbBits(plain, x, y) == shadowBlack && rgbBits(shadowed, x, y) != shadowBlack
+      yield redOf(rgbBits(shadowed, x, y))
+    val full = (shadowInk.getRed * 0.4).round.toInt
+
+    shadowOnly should not be empty
+    shadowOnly.max should (be >= full - 12 and be <= full + 2)
+  }
+
+  it should "add nothing outside the run's own box, which is all a repaint of the run clears" in {
+    val plain    = shadowRendered(plainBold, text = "MMMMMMMM")
+    val shadowed = shadowRendered(shadowedBold, text = "MMMMMMMM")
+    val outside =
+      for y <- 0 until height; x <- 0 until width if !(x >= 14 && x < 70 && y >= 26 && y < 39) yield (x, y)
+
+    all(outside.map((x, y) => rgbBits(shadowed, x, y) - rgbBits(plain, x, y))) shouldBe 0
+  }
+
+  it should "leave the runs after it unshadowed once the style is switched off" in {
+    val image   = freshImage()
+    val surface = shadowSurface(image)
+    surface.enableStyle(shadowedBold)
+    surface.text.drawRunPx(14f, 26, 56f, metrics.lineHeight, metrics.ascent, "MMMM")
+    surface.disableStyle(shadowedBold)
+    surface.enableStyle(plainBold)
+    surface.text.drawRunPx(14f, 52, 56f, metrics.lineHeight, metrics.ascent, "MMMM")
+    surface.disableStyle(plainBold)
+    val alone = shadowRendered(plainBold, topPx = 52)
+
+    for y <- 52 until 65; x <- 0 until width do rgbBits(image, x, y) shouldBe rgbBits(alone, x, y)
+  }
+
   private def inkIn(image: FramePixels, left: Int, right: Int, top: Int, bottom: Int): Int =
     (for
       y <- top until bottom
@@ -228,9 +318,6 @@ abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
     ((top + metrics.ascent) until (top + metrics.lineHeight + 2)).exists { y =>
       (runLeftPx + 2 until runLeftPx + runWidthPx - 2).forall(x => image.rgbAt(x, y) != Color.BLACK.getRGB)
     }
-
-class Java2DRunPaintSpec extends RunPaintBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
 
 class SkiaRunPaintSpec extends RunPaintBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

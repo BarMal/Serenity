@@ -42,6 +42,7 @@ object PanelId:
       case SurfaceContent.FilePreview(_, _)         => None
       case SurfaceContent.SymbolDefinition(_, _)    => None
       case SurfaceContent.StatusLine(_)             => None
+      case SurfaceContent.FallbackHeader(_)         => None
       case SurfaceContent.DirectoryListing(_, _, _) => None
       case SurfaceContent.CommandPalette(_)         => None
       case SurfaceContent.CommandRunnerPeek(_)      => None

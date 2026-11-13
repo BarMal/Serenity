@@ -11,3 +11,6 @@ enum SurfacePlacement:
     * than one surface shares the same corner.
     */
   case Corner(position: CornerPosition)
+
+  /** The whole top row of the screen, over whatever is there: the fallback header. */
+  case TopEdge

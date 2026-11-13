@@ -42,6 +42,7 @@ enum HotkeyAction:
   case GoToLine
   case SaveAs
   case ToggleShortcutsHelp
+  case OpenLogsFolder
   case FocusLeft
   case FocusRight
   case FocusUp
@@ -81,6 +82,7 @@ enum HotkeyAction:
       case GoToLine                 => "go_to_line"
       case SaveAs                   => "save_as"
       case ToggleShortcutsHelp      => "toggle_shortcuts_help"
+      case OpenLogsFolder           => "open_logs_folder"
       case FocusLeft                => "focus_left"
       case FocusRight               => "focus_right"
       case FocusUp                  => "focus_up"
@@ -97,8 +99,8 @@ enum HotkeyAction:
       case ToggleCommandRunner | FileSearch | GoToFile | NextTab | PreviousTab | MoveTabLeft | MoveTabRight |
           SplitPaneHorizontal | SplitPaneVertical | ClosePane | FocusLeft | FocusRight | FocusUp | FocusDown =>
         HotkeyPurpose.Navigation
-      case ToggleShortcutsHelp | ToggleContextualToolbar | ToggleSyntaxHighlighting | ToggleChapterGhosts |
-          OpenChapterNote | OpenKeywordNote | ToggleNotesPin =>
+      case ToggleShortcutsHelp | OpenLogsFolder | ToggleContextualToolbar | ToggleSyntaxHighlighting |
+          ToggleChapterGhosts | OpenChapterNote | OpenKeywordNote | ToggleNotesPin =>
         HotkeyPurpose.View
 
 final case class HotkeyTrigger(
@@ -464,7 +466,7 @@ object HotkeyConfig:
       // (issue #1213) and no per-OS branching here.
       HotkeyAction.ToggleShortcutsHelp -> List(HotkeyTrigger(InputKey.F1, None, Set.empty))
     ) ++ GlobalDefaultBindings.directionalFocus ++ GlobalDefaultBindings.goToFile(primaryModifier) ++
-      GlobalDefaultBindings.chapterNotes(primaryModifier)
+      GlobalDefaultBindings.chapterNotes(primaryModifier) ++ GlobalDefaultBindings.openLogsFolder
 
   def validate(bindings: Map[HotkeyAction, List[HotkeyTrigger]]): Either[String, Unit] =
     conflictIn(actionTargets(bindings))

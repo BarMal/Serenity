@@ -5,7 +5,7 @@ import java.awt.{Color, Font}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -200,14 +200,6 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
 
     at(image, left, top) shouldBe rgb(panel)
   }
-
-class Java2DRoundedPanelScale1Spec extends RoundedPanelDrawingBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DRoundedPanelScale2Spec extends RoundedPanelDrawingBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaRoundedPanelScale1Spec extends RoundedPanelDrawingBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

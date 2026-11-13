@@ -28,10 +28,10 @@ trait RenderSurface:
     */
   def persistentContentKey: Option[SurfaceContentIdentity] = None
 
-  /** Whose cached modal/panel layers this surface may reuse. Successive frames of one window must agree on it even
-    * though each frame is a fresh surface, or every frame starts a new cache entry (#1798).
+  /** The screen this surface paints. Successive frames of one window must agree on it even though each frame is a fresh
+    * surface, or every frame starts a new entry in the per-screen records (#1798).
     */
-  def layerCacheOwner: ScreenIdentity = ScreenIdentity(this)
+  def screenIdentity: ScreenIdentity = ScreenIdentity(this)
 
   /** Whether this surface's pixel coordinates are real device pixels, finer than a cell. The renderer keeps and
     * repaints sub-cell bands of chrome and rows only on a surface that does; on one whose "pixel" is a cell it repaints
@@ -92,13 +92,6 @@ trait RenderSurface:
     * draws is app-painted content -- the default, and what every GUI canvas keeps doing.
     */
   def hardwareCursor: Option[HardwareCursor] = None
-
-  /** Creating a fresh, independently-paintable buffer shaped like this surface, for a compositing layer to own instead
-    * of painting into this surface directly. `None` -- the default -- means callers must paint the layer straight into
-    * this surface, same as before this capability existed; only a raster surface with a real sub-buffer concept
-    * (`Java2DRenderSurface`) advertises it. See [[LayerBufferSupport]].
-    */
-  def layerBuffers: Option[LayerBufferSupport] = None
 
   /** What drawing into this surface has cost so far, for the frame counters. A surface that counts nothing reports a
     * fresh, empty one.

@@ -16,7 +16,7 @@ import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import org.typelevel.log4cats.noop.NoOpLogger
 
-/** `laptop.render.typing_frame_2x` with a ligature font, and with a letter the frame has never seen on every call.
+/** `skia.laptop.render.typing_frame_2x` with a ligature font, and with a letter the frame has never seen on every call.
   *
   * Its alternating twin undoes each keystroke, so after the first pair the edited row's layout and shaping come from
   * cache; here every keystroke is new text, which a ligature font must lay out and shape afresh. One call is the
@@ -50,7 +50,7 @@ private[perf] object LigatureTypingBenchmarks:
     BenchmarkRunner.Benchmark.sharing((font, metrics, grid, stateManager, frames, shown, firstFrame))(
       List(
         BenchmarkRunner.Benchmark(
-          "laptop.render.typing_frame_2x.ligature_font",
+          "laptop.render.typing_frame_2x.ligature_font.skia_raster",
           3,
           BenchmarkIterationCounts.RandomTyping,
           () =>

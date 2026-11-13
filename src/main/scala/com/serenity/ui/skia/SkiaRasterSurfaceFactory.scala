@@ -2,6 +2,8 @@ package com.serenity.ui.skia
 
 import java.awt.image.BufferedImage
 
+import scala.util.{Failure, Success, Try}
+
 import com.serenity.ui.renderer.{
   BackendCacheKey,
   BackendCaches,
@@ -14,7 +16,7 @@ import com.serenity.ui.renderer.{
 import org.jetbrains.skia.Surface
 
 /** Paints a window's frames with Skia's CPU rasteriser and hands the Swing canvas an ordinary image to present, so the
-  * window keeps its Java2D canvas for input, input methods and accessibility.
+  * window keeps its Swing canvas for input, input methods and accessibility.
   *
   * The owner's [[BackendCaches]] hold the raster surface, which is how a frame starts from the pixels the last one
   * left.
@@ -23,7 +25,21 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
 
   private val FramesKey = BackendCacheKey(classOf[RasterFrames])
 
+  /** A raster of the window's device size that holds nothing yet, in the order the window's own frames use. */
+  def newSurface(widthPx: Int, heightPx: Int): Surface =
+    Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
+
+  /** `FrameSurfaceFactory.create` has no failure channel, and a window with no raster has nothing else to paint with,
+    * so the failure is thrown for the render loop's crash path to report.
+    */
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def create(request: FrameSurfaceRequest): RenderSurface =
+    Try(build(request)) match
+      case Success(surface) => surface
+      case Failure(error) =>
+        throw SkiaRasterUnavailable(request.geometry.deviceWidthPx, request.geometry.deviceHeightPx, error)
+
+  private def build(request: FrameSurfaceRequest): RenderSurface =
     val geometry      = request.geometry
     val logicalWidth  = geometry.logicalWidthPx
     val logicalHeight = geometry.logicalHeightPx
@@ -57,7 +73,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
           surface.close()
         request.onFlush(image)
       ,
-      layerCacheOwner = Some(geometry.identity),
+      screen = Some(geometry.identity),
       changes = changes
     )
 

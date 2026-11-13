@@ -31,16 +31,15 @@ import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, 
 
 /** A [[RenderSurface]] that draws with Skia onto a `Canvas`.
   *
-  * Coordinates, geometry and capabilities follow [[Java2DRenderSurface]]: cell units through [[CellMetrics]], logical
-  * pixels for runs and fills, and a device scale applied once to the canvas. Text is positioned by the caller run by
-  * run, from the advances layout measured with AWT, so Skia only has to draw the glyphs of the same font at the x it is
-  * handed; [[SkiaFontCache]] makes the Skia font match the AWT one.
+  * Coordinates and geometry: cell units through [[CellMetrics]], logical pixels for runs and fills, and a device scale
+  * applied once to the canvas. Text is positioned by the caller run by run, from the advances layout measured with AWT,
+  * so Skia only has to draw the glyphs of the same font at the x it is handed; [[SkiaFontCache]] makes the Skia font
+  * match the AWT one.
   *
-  * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers (a layer is
-  * a `BufferedImage`, and routing every modal and panel through a CPU image would cost the GPU path its point), so
-  * those are painted straight into the canvas. Content persistence and [[PixelCopying]] need pixels that outlive a
-  * frame, which a window's GPU canvas lacks, so they exist only over a retained raster [[Surface]]
-  * ([[SkiaRenderSurface.retaining]]).
+  * What Skia does not offer here is declared rather than faked. Modals and panels have no layer image of their own
+  * (routing each through a `BufferedImage` would cost the GPU path its point), so they are painted straight into the
+  * canvas. Content persistence and [[PixelCopying]] need pixels that outlive a frame, which a window's GPU canvas
+  * lacks, so they exist only over a retained raster [[Surface]] ([[SkiaRenderSurface.retaining]]).
   *
   * Threading is that of the render pool: one thread draws a frame, and `onFlush` is called once when it ends.
   */
@@ -55,7 +54,7 @@ final class SkiaRenderSurface(
     deviceScaleY: Double = 1.0,
     retainedSurface: Option[Surface] = None,
     opaque: Boolean = true,
-    layerCacheOwnerOverride: Option[ScreenIdentity] = None,
+    screenIdentityOverride: Option[ScreenIdentity] = None,
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     override val activity: SurfaceActivity = SurfaceActivity(),
@@ -95,7 +94,7 @@ final class SkiaRenderSurface(
 
   private val phases = changes.fold(new PresentPhases)(_.phases)
 
-  override def layerCacheOwner: ScreenIdentity = layerCacheOwnerOverride.getOrElse(super.layerCacheOwner)
+  override def screenIdentity: ScreenIdentity = screenIdentityOverride.getOrElse(super.screenIdentity)
 
   override def persistentContentKey: Option[SurfaceContentIdentity] =
     retainedSurface.map(SurfaceContentIdentity(_))
@@ -132,6 +131,7 @@ final class SkiaRenderSurface(
   private val translation   = AtomicReference((0.0, 0.0))
   private val painted       = PaintedPixels()
   private val underlineRef  = AtomicBoolean(false)
+  private val shadowRef     = AtomicBoolean(false)
   private val userClipDepth = AtomicInteger(0)
   private val pixelMover =
     SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
@@ -303,10 +303,17 @@ final class SkiaRenderSurface(
         try
           if clipGlyphToRun then clipTo(boundedLeft, boundedTop, boundedWidth, boundedHeight)
           else clipTo(0, 0, cellGridWidthPx, cellGridHeightPx)
-          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(drawGlyphs)
+          awayFromKept(boundedLeft.toFloat, boundedTop.toFloat, boundedRight.toFloat, boundedBottom.toFloat)(
+            drawShadowed(boundedLeft, boundedTop, boundedWidth, boundedHeight)(drawGlyphs)
+          )
         finally restoreTo(saved)
         drawRules(boundedLeft, boundedWidth, yPx + ascentPx)
         painted.ranOver(boundedLeft, boundedTop, boundedRight, boundedBottom)
+
+  /** A shadowed run's glyphs are drawn once more first, as [[SkiaTextShadow]] has them. */
+  private def drawShadowed(left: Int, top: Int, width: Int, height: Int)(drawGlyphs: => Unit): Unit =
+    if shadowRef.get() then SkiaTextShadow.pass(canvas, fgRef, deviceScaleX)(left, top, width, height)(drawGlyphs)
+    drawGlyphs
 
   private def clipTo(x: Int, y: Int, width: Int, height: Int): Unit =
     val _ = canvas.clipRect(rect(x.toFloat, y.toFloat, width.toFloat, height.toFloat), false)
@@ -402,10 +409,12 @@ final class SkiaRenderSurface(
 
   def enableStyle(style: TextStyle): Unit =
     underlineRef.set(style.isUnderlined)
+    shadowRef.set(style.isShadowed)
     currentFontRef.set(styledFonts.fontFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     underlineRef.set(false)
+    shadowRef.set(false)
     currentFontRef.set(baseFontRef.get())
 
   override def setAlpha(alpha: Float): Unit =
@@ -529,7 +538,7 @@ object SkiaRenderSurface:
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
-    layerCacheOwner: Option[ScreenIdentity] = None
+    screen: Option[ScreenIdentity] = None
   ): SkiaRenderSurface =
     new SkiaRenderSurface(
       canvas,
@@ -540,7 +549,7 @@ object SkiaRenderSurface:
       logicalHeightPx,
       deviceScale,
       deviceScale,
-      layerCacheOwnerOverride = layerCacheOwner,
+      screenIdentityOverride = screen,
       caches = caches,
       styledFonts = styledFonts
     )
@@ -559,7 +568,7 @@ object SkiaRenderSurface:
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
     onFlush: () => Unit = () => (),
-    layerCacheOwner: Option[ScreenIdentity] = None,
+    screen: Option[ScreenIdentity] = None,
     changes: Option[ChangeRecorder] = None
   ): SkiaRenderSurface =
     new SkiaRenderSurface(
@@ -572,12 +581,12 @@ object SkiaRenderSurface:
       deviceScale,
       deviceScale,
       retainedSurface = Some(surface),
-      layerCacheOwnerOverride = layerCacheOwner,
+      screenIdentityOverride = screen,
       caches = caches,
       styledFonts = styledFonts,
       changes = changes
     )
 
-  /** The device size of a surface holding `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image. */
+  /** The device size of a surface holding `logicalPx` at `deviceScale`, as the frame image is sized. */
   def deviceDimension(logicalPx: Int, deviceScale: Double): Int =
     SurfaceSizing.deviceImageDimension(logicalPx, deviceScale)

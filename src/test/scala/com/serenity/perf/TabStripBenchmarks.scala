@@ -1,21 +1,14 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Buffer, BufferId, TabListEntry, UiSurface}
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, TabBarLayoutSettings, TabBarSurfaceComposition}
-import com.serenity.ui.renderer.{
-  Java2DRenderSurface,
-  MeasuredTextAdvances,
-  ShapedTextCache,
-  TextOverlayRenderer,
-  TextOverlayView
-}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache, TextOverlayRenderer, TextOverlayView}
 import com.serenity.ui.theme.Theme
+import com.serenity.{FramePixels, ReferenceFrames}
 
 /** The tab strip as a GUI draws it with rounded corners, which every change to the strip repaints, and as it is laid
   * out, which every pointer move over the strip does again. Ten tabs fit the strip as it is; twenty-four overflow it.
@@ -42,11 +35,10 @@ private[perf] object TabStripBenchmarks:
   private def entriesOf(count: Int): List[TabListEntry] =
     (1 to count).toList.map(id => TabListEntry(BufferId(id), s"Quarterly notes $id", isDirty = id % 3 == 0))
 
-  private def repaint(count: Int): () => BufferedImage =
+  private def repaint(count: Int): () => FramePixels =
     val state   = stateWith(count)
-    val image   = new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB)
-    val caches  = RenderCaches.create()
-    val surface = new Java2DRenderSurface(image, cells, font, _ => (), textCaches = caches.surfaceText)
+    val painted = ReferenceFrames.over(widthPx, heightPx, cells, font, widthPx, heightPx)
+    val surface = painted.surface
     val active  = Some(BufferId(count))
     val overlay = TextOverlayView(
       rect = rect,
@@ -56,7 +48,7 @@ private[perf] object TabStripBenchmarks:
     )
     () =>
       TextOverlayRenderer.render(surface, overlay, Theme.light, config, false, font, cells, advances)
-      image
+      painted.frame
 
   private def layout(count: Int): () => Int =
     val state   = stateWith(count)
@@ -67,8 +59,10 @@ private[perf] object TabStripBenchmarks:
       TabBarSurfaceComposition.forTabBar(entries, active, rect, settings).hitRegions.size +
         TabBarSurfaceComposition.closeAffordances(entries, active, rect, settings).size
 
-  private def hasPixels(image: BufferedImage): Boolean =
-    (0 until image.getWidth).exists(x => image.getRGB(x, 6) != image.getRGB(0, 6))
+  private def hasPixels(frame: FramePixels): Boolean =
+    val pixels = frame.rgbPixels
+    val row    = 6 * frame.widthPx
+    (0 until frame.widthPx).exists(x => pixels(row + x) != pixels(row))
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
     List(10, 24).flatMap { count =>
@@ -76,7 +70,7 @@ private[perf] object TabStripBenchmarks:
       val laidOut = layout(count)
       List(
         BenchmarkRunner.Benchmark(
-          s"render.tab_strip.repaint.${count}_tabs",
+          s"render.tab_strip.repaint.${count}_tabs.skia_raster",
           3,
           12,
           () => assert(hasPixels(painted()), s"the $count-tab strip drew nothing"),

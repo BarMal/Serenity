@@ -14,7 +14,8 @@ final case class TextStyle(
     isUnderlined: Boolean = false,
     fontFamily: Option[String] = None,
     fontSize: Option[Float] = None,
-    isStrikethrough: Boolean = false
+    isStrikethrough: Boolean = false,
+    isShadowed: Boolean = false
 ):
 
   def combine(other: TextStyle): TextStyle =
@@ -24,7 +25,8 @@ final case class TextStyle(
       isUnderlined = other.isUnderlined || this.isUnderlined,
       fontFamily = other.fontFamily.orElse(this.fontFamily),
       fontSize = other.fontSize.orElse(this.fontSize),
-      isStrikethrough = other.isStrikethrough || this.isStrikethrough
+      isStrikethrough = other.isStrikethrough || this.isStrikethrough,
+      isShadowed = other.isShadowed || this.isShadowed
     )
 
   def fontMode: Int =
@@ -39,8 +41,8 @@ object TextStyle:
   def boldItalic: TextStyle = TextStyle(isBold = true, isItalic = true)
 
   /** Derive the concrete AWT font a style paints (and is measured) with, over a base font. This is the single source
-    * both `Java2DRenderSurface.enableStyle` (drawing) and the measured-layout caret measurement use, so a run's glyph
-    * advances always match the glyphs actually drawn.
+    * both a surface's `enableStyle` (drawing) and the measured-layout caret measurement use, so a run's glyph advances
+    * always match the glyphs actually drawn.
     *
     * An underline is not part of the font: the surface draws it as a rule under the run, so an underlined run shares
     * the font of its plain counterpart. Strikethrough is still a font attribute.

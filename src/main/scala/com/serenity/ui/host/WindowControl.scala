@@ -27,6 +27,9 @@ trait WindowControl:
   /** The size the window was last resized to, once, until it changes again. */
   def doResizeIfNecessary(): Option[ViewportSize]
 
+  /** Takes the window off the screen without waiting for it to be released; calling it again does nothing. */
+  def hide(): Unit
+
   /** Raises the window for a later launch that handed its files over to this one. */
   def bringToFront(): Unit
 

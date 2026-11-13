@@ -66,11 +66,14 @@ private[perf] object EreaderTypingBenchmarks:
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     typingBenchmark(
-      "laptop.render.typing_frame_2x.ereader_railed",
+      "laptop.render.typing_frame_2x.ereader_railed.skia_raster",
       LaptopFrameBenchmarks.proseStateManager(config = config)._1
     ) ::
-      typingBenchmark("laptop.render.typing_frame_2x.ereader_railed_ghosts", ghostedStateManager(config)) ::
-      typingBenchmark("laptop.render.typing_frame_2x.chapter_ghosts", ghostedStateManager(singleColumnConfig)) :: Nil
+      typingBenchmark("laptop.render.typing_frame_2x.ereader_railed_ghosts.skia_raster", ghostedStateManager(config)) ::
+      typingBenchmark(
+        "laptop.render.typing_frame_2x.chapter_ghosts.skia_raster",
+        ghostedStateManager(singleColumnConfig)
+      ) :: Nil
 
   private[perf] def typingBenchmark(name: String, stateManager: => StateManager)(using
     IORuntime

@@ -7,8 +7,8 @@ import com.serenity.ui.openings.OpeningInvalidation
 /** Diffs two consecutive frames of one editor pane's text layout and reports which visible rows can no longer reuse the
   * pixels an earlier frame left on the surface.
   *
-  * The function is deliberately pure data in, plain row indices out: it has no knowledge of Java2D, surfaces or the
-  * renderer, so the rule that governs screen correctness can be tested with fixtures alone.
+  * The function is deliberately pure data in, plain row indices out: it has no knowledge of any graphics API, surfaces
+  * or the renderer, so the rule that governs screen correctness can be tested with fixtures alone.
   *
   * The bias is always towards reporting too much. Redrawing a row that did not change is invisible; skipping a row that
   * did change leaves stale pixels on screen. Every whole-snapshot property that shifts row geometry (panel width, row

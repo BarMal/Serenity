@@ -51,12 +51,30 @@ class CaretGeometrySpec extends AnyFlatSpec with Matchers:
     CaretGeometry.bounds(body, CaretStyle(strikethrough = true)) shouldBe new Rectangle(96, 50, 10, 20)
   }
 
+  it should "have no shadow shapes unless the caret is shadowed" in {
+    CaretGeometry.shadowPolygons(body, CaretStyle.Plain) shouldBe Nil
+    CaretGeometry.shadowPolygons(body, CaretStyle(italic = true, underline = true)) shouldBe Nil
+  }
+
+  it should "shadow the caret body one pixel down and to the right" in {
+    CaretGeometry.shadowPolygons(body, CaretStyle(shadow = true)).map(_.points) shouldBe
+      List(Vector((101.0, 71.0), (103.0, 71.0), (103.0, 51.0), (101.0, 51.0)))
+    CaretGeometry.bounds(body, CaretStyle(shadow = true)) shouldBe new Rectangle(100, 50, 3, 21)
+  }
+
+  it should "shadow the slanted and widened body, and not its rules" in {
+    val style = CaretStyle(bold = true, italic = true, underline = true, strikethrough = true, shadow = true)
+
+    CaretGeometry.shadowPolygons(body, style).map(_.points) shouldBe
+      List(Vector((101.0, 71.0), (105.0, 71.0), (109.0, 51.0), (105.0, 51.0)))
+  }
+
   it should "cover every shape of a caret with all four styles in its bounds" in {
-    val style  = CaretStyle(italic = true, bold = true, underline = true, strikethrough = true)
+    val style  = CaretStyle(italic = true, bold = true, underline = true, strikethrough = true, shadow = true)
     val bounds = CaretGeometry.bounds(body, style)
 
     for
-      polygon <- CaretGeometry.polygons(body, style)
+      polygon <- CaretGeometry.polygons(body, style) ++ CaretGeometry.shadowPolygons(body, style)
       (x, y)  <- polygon.points
     do
       x should (be >= bounds.getMinX and be <= bounds.getMaxX)

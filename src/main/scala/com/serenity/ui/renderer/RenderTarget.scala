@@ -50,6 +50,9 @@ trait RenderTarget:
   /** Hands the target the layer a backend made, so it can give the layer the carets and the pointer cursor. */
   def attachLayerPresenter(presenter: LayerPresenter): Unit = ()
 
+  /** The surfaces the cursor path records carets against, made by the backend that paints this target's frames. */
+  def caretCanvases: CaretCanvases
+
   def acquireBaseImage(width: Int, height: Int, imageType: Int): BufferedImage
 
   /** Publish a finished base frame, repainting only `dirtyRects` when the rest is known to match what is shown. */

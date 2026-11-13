@@ -1,5 +1,4 @@
 # Suite, shard, seconds: regenerate with `sbt generateTestShards` after a full `sbt test` (#2484).
-com.serenity.perf.PageDownRichDocumentFramesSpec	1	984.322
 com.serenity.perf.HeadingSpacingFramesSpec	1	243.766
 com.serenity.ui.benchmark.RenderBenchmarkRunnerSpec	1	166.412
 com.serenity.perf.ColumnPagingFramesSpec	1	104.426
@@ -23,7 +22,6 @@ com.serenity.config.ConfigToleranceSpec	1	11.074
 com.serenity.lsp.LspConnectionStderrSpec	1	10.036
 com.serenity.state.manager.ColumnPixelPagingSpec	1	9.972
 com.serenity.perf.TypingPaintProfileSpec	1	9.524
-com.serenity.perf.FontFallbackColdFrameSpec	1	8.543
 com.serenity.lsp.LspManagerReleaseAllSpec	1	7.83
 com.serenity.EditIdleSessionSaveSpec	1	7.693
 com.serenity.lsp.LspConnectionHungServerSpec	1	7.484
@@ -90,7 +88,6 @@ com.serenity.ui.openings.OpeningDetectionCostSpec	1	1.489
 com.serenity.state.manager.HotExitRecoveryStartupSpec	1	1.483
 com.serenity.TabStripGeometryPixelsSpec	1	1.431
 com.serenity.spellcheck.BundledEnglishStandInSpec	1	1.42
-com.serenity.perf.GuiCellGridClusterSelectionSpec	1	1.409
 com.serenity.state.manager.TypedKeyPathParitySpec	1	1.328
 com.serenity.RendererBoundarySpec	1	1.299
 com.serenity.state.manager.BufferCountScalingSpec	1	1.288
@@ -155,10 +152,8 @@ com.serenity.SessionCommandUsageSpec	1	0.506
 com.serenity.ui.renderer.ImePreEditScreenshotSpec	1	0.492
 com.serenity.LineNumberSettingsSpec	1	0.49
 com.serenity.StartupOpenFileOrFolderSpec	1	0.477
-com.serenity.ui.renderer.ShapedTextPaintSpec	1	0.468
 com.serenity.text.TextEditingWordSpec	1	0.461
 com.serenity.MarkdownViewModeSpec	1	0.458
-com.serenity.perf.FontFallbackSelectionSpec	1	0.455
 com.serenity.StateMutationValidationSpec	1	0.439
 com.serenity.app.DesktopHooksSpec	1	0.432
 com.serenity.SessionManagerSpec	1	0.42
@@ -246,7 +241,6 @@ com.serenity.MarkdownBlockRenderingSpec	1	0.138
 com.serenity.ui.renderer.RendererFloatingPanelsSpec	1	0.138
 com.serenity.ui.tui.TerminalEditorChromeBackdropSpec	1	0.137
 com.serenity.SwingWindowPresentSpec	1	0.135
-com.serenity.ui.renderer.LabelSpritesSpec	1	0.135
 com.serenity.app.instance.InstanceMessengerSpec	1	0.134
 com.serenity.ui.benchmark.RenderBenchmarkOptionsSpec	1	0.132
 com.serenity.ui.skia.MeasuredEqualsDrawnSpec	1	0.131
@@ -263,7 +257,7 @@ com.serenity.ui.tui.TerminalGridCostSpec	1	0.117
 com.serenity.SessionManagerFileStampOrderingSpec	1	0.116
 com.serenity.PaneCloseUndoSpec	1	0.115
 com.serenity.PointerShapeMouseSpec	1	0.114
-com.serenity.Java2DPipelineSpec	1	0.112
+com.serenity.SwingPipelineDefaultsSpec	1	0.112
 com.serenity.io.DocumentRevisionStampSpec	1	0.11
 com.serenity.FontSizesSettingsGroupSpec	1	0.107
 com.serenity.MouseGestureOriginSpec	1	0.107
@@ -324,9 +318,8 @@ com.serenity.ui.theme.TextStyleBoldFaceSpec	1	0.059
 com.serenity.ui.layout.HeadingSpacingLayoutSpec	1	0.058
 com.serenity.ui.tui.TerminalAnsiDiffPropertySpec	1	0.058
 com.serenity.SwingInputHandlerImeDiagnosticsSpec	1	0.057
-com.serenity.ui.renderer.StyledFontCacheSpec	1	0.057
 com.serenity.FindSearchSpec	1	0.056
-com.serenity.PanelLayerCompositingSpec	1	0.056
+com.serenity.PanelAndModalDirectPaintSpec	1	0.03
 com.serenity.ui.renderer.BoldTextCellGridPaintSpec	1	0.056
 com.serenity.CommandRunnerUiPresetThemeSettingsSpec	1	0.054
 com.serenity.StateManagerQuitSpec	1	0.054
@@ -415,7 +408,6 @@ com.serenity.EndToEndConfigThemingSpec	1	0.029
 com.serenity.SwingInputHandlerCommentKeysSpec	1	0.029
 com.serenity.release.ChangelogSectionsSpec	1	0.029
 com.serenity.AnnotationIndexCachePerformanceSpec	1	0.028
-com.serenity.Java2DFrameImageTypeSpec	1	0.028
 com.serenity.command.CommandAvailabilitySpec	1	0.028
 com.serenity.state.manager.OpeningsLayoutInvalidationSpec	1	0.028
 com.serenity.RendererFontIsolationSpec	1	0.027
@@ -442,9 +434,6 @@ com.serenity.config.CommentAuthorConfigSpec	1	0.024
 com.serenity.richtext.RichTextDocumentSharingSpec	1	0.024
 com.serenity.state.manager.StateManagerComponentPortsSpec	1	0.024
 com.serenity.state.reducers.EditorViewportNavigationSpec	1	0.024
-com.serenity.ui.renderer.Java2DPixelLiftingSpec	1	0.024
-com.serenity.CursorPixelAlignmentSpec	1	0.023
-com.serenity.ModalLayerCompositingSpec	1	0.023
 com.serenity.app.ForwardedOpenSpec	1	0.023
 com.serenity.perf.SettledAllocationSpec	1	0.023
 com.serenity.state.reducers.EditorMultiCursorNavigationSpec	1	0.023
@@ -464,7 +453,6 @@ com.serenity.ui.theme.MarkdownHeadingStylingSpec	1	0.021
 com.serenity.DirtyLineDiffSpec	1	0.02
 com.serenity.SwingWindowAccessibilitySpec	1	0.02
 com.serenity.io.AboutDocumentSpec	1	0.02
-com.serenity.perf.PresentedFramesSpec	1	0.02
 com.serenity.state.core.NotesPaneKeywordFollowSpec	1	0.02
 com.serenity.state.manager.PointerShapeTabModalSpec	1	0.02
 com.serenity.state.reducers.NoticePromptReducerSpec	1	0.02
@@ -495,7 +483,6 @@ com.serenity.state.core.EditorStateSpec	1	0.017
 com.serenity.state.reducers.SurfaceOperationReducersSpec	1	0.017
 com.serenity.ui.layout.ContextualToolbarContentResolverSpec	1	0.017
 com.serenity.ui.layout.VisualRowCountsKnownSpec	1	0.017
-com.serenity.ui.renderer.GuiCellGridFallbackPaintSpec	1	0.017
 com.serenity.FocusedInputTranslatorSpec	1	0.016
 com.serenity.PeekOverlayRenderingSpec	1	0.016
 com.serenity.SpellingActionsSpec	1	0.016
@@ -606,7 +593,7 @@ com.serenity.state.models.CursorPositionOrderingPropertySpec	1	0.008
 com.serenity.state.models.PanelArrangementSpec	1	0.008
 com.serenity.state.reducers.DocumentIndentationEditingSpec	1	0.008
 com.serenity.ui.benchmark.FrameStatsSpec	1	0.008
-com.serenity.ui.fonts.Java2DGlyphCoverageSpec	1	0.008
+com.serenity.ui.fonts.AwtGlyphCoverageSpec	1	0.008
 com.serenity.ui.layout.CommentsSurfaceCompositionSpec	1	0.008
 com.serenity.ui.renderer.DropCapRendererSpec	1	0.008
 com.serenity.ui.renderer.OverlayColumnRowRendererSpec	1	0.008
@@ -704,7 +691,6 @@ com.serenity.state.reducers.EditorIndentationSettingsSpec	1	0.003
 com.serenity.state.reducers.WorkspaceEditReducerSpec	1	0.003
 com.serenity.text.LineEndingCountsSpec	1	0.003
 com.serenity.ui.layout.TerminalScrollbarSpec	1	0.003
-com.serenity.ui.renderer.SurfaceActivitySpec	1	0.003
 com.serenity.ui.skia.SkiaProbeSpec	1	0.003
 com.serenity.ui.theme.RichTextStylingSpec	1	0.003
 com.serenity.CaretRecordingSurfaceSpec	1	0.002
@@ -791,7 +777,6 @@ com.serenity.manuscript.epub.ManuscriptEpubCheckSpec	2	9.981
 com.serenity.state.manager.ColumnPagingNavigationSpec	2	9.778
 com.serenity.state.manager.KeepWithNextColumnPagingSpec	2	9.265
 com.serenity.perf.TypingBurstLatencySpec	2	8.213
-com.serenity.perf.PanelLayerGeometrySpec	2	7.728
 com.serenity.state.manager.FileIoLanesSpec	2	7.621
 com.serenity.perf.ColumnPaneRowReuseSpec	2	7.375
 com.serenity.state.manager.VisualRowIndexEquivalenceSpec	2	6.747
@@ -829,9 +814,7 @@ com.serenity.ui.layout.WrapTextLayoutCountSpec	2	2.417
 com.serenity.spellcheck.SpellCheckerIncrementalAllocationSpec	2	2.396
 com.serenity.StateManagerUiPresetWorkbenchSpec	2	2.335
 com.serenity.lsp.LspManagerSemanticTokensCrashSpec	2	2.326
-com.serenity.perf.GuiCellGridColdFrameSpec	2	2.302
 com.serenity.config.ConfigCodecPropertySpec	2	2.234
-com.serenity.ui.layout.Java2DTextMeasurerSpec	2	2.179
 com.serenity.lsp.LspFramerPropertySpec	2	2.142
 com.serenity.UndoRedoPropertySpec	2	2.084
 com.serenity.lsp.LspQueueSpec	2	2.041
@@ -876,7 +859,6 @@ com.serenity.OpenFolderStateManagerSpec	2	0.995
 com.serenity.perf.TypingFramePresentSpec	2	0.994
 com.serenity.perf.CombiningMarkEditingSpec	2	0.99
 com.serenity.ui.tui.TuiCursorModeSpec	2	0.971
-com.serenity.ui.renderer.Java2DClearViewportExceptSpec	2	0.961
 com.serenity.InputCharacterTestSpec	2	0.959
 com.serenity.state.manager.TypedRunsJoinSpec	2	0.946
 com.serenity.KeymapEditorStateManagerSpec	2	0.921
@@ -916,7 +898,6 @@ com.serenity.input.MenuActivationGuardSpec	2	0.55
 com.serenity.StartupCommandsSpec	2	0.544
 com.serenity.state.manager.StateManagerUiPresetEffectsSpec	2	0.54
 com.serenity.testkit.RuntimeShutdownWatchSpec	2	0.539
-com.serenity.CaretFollowsCursorAcrossFramesSpec	2	0.515
 com.serenity.state.effects.EffectLanesSpec	2	0.515
 com.serenity.lsp.LspCommandRoutingSpec	2	0.491
 com.serenity.perf.BoundaryCacheBenchmarksSpec	2	0.484
@@ -927,7 +908,6 @@ com.serenity.ui.renderer.GuiCellGridEmojiLigatureSpec	2	0.458
 com.serenity.io.ChunkedTextCodecSpec	2	0.452
 com.serenity.StateManagerAppModeSpec	2	0.441
 com.serenity.ui.renderer.MeasuredLineRunsEquivalenceSpec	2	0.439
-com.serenity.perf.GuiCellGridSelectionSpec	2	0.418
 com.serenity.ui.layout.RunLookupAndCaretRepairSpec	2	0.414
 com.serenity.spellcheck.SpellCheckerIncrementalSpec	2	0.402
 com.serenity.ScrollingNavigationSpec	2	0.393
@@ -999,7 +979,6 @@ com.serenity.ui.benchmark.BenchmarkReportSpec	2	0.158
 com.serenity.richtext.FidelityReportSpec	2	0.155
 com.serenity.ui.layout.VisualLineIndexFollowChangeSpec	2	0.152
 com.serenity.lsp.LspManagerNoticeSpec	2	0.15
-com.serenity.CommandRunnerEditorPaneAccumulationSpec	2	0.148
 com.serenity.SessionRestoreNoticeSpec	2	0.148
 com.serenity.richtext.DocxPassthroughSpec	2	0.144
 com.serenity.ui.layout.RowDescentSpec	2	0.144
@@ -1128,14 +1107,12 @@ com.serenity.SwingInputHandlerWheelSpec	2	0.041
 com.serenity.lsp.SemanticTokensEditReducerSpec	2	0.041
 com.serenity.state.undo.UndoThenSaveDocxSpec	2	0.041
 com.serenity.ClipboardEventSyncSpec	2	0.04
-com.serenity.Java2DRenderSurfaceSpec	2	0.04
 com.serenity.diagnostics.CrashRecordSpec	2	0.04
 com.serenity.state.core.NotesPaneSyncSpec	2	0.04
 com.serenity.RopeIntegrationSpec	2	0.039
 com.serenity.io.AppKitOpenPanelSpec	2	0.039
 com.serenity.state.manager.MouseTargetCacheSpec	2	0.039
 com.serenity.ui.layout.VisualRowTotalIncrementalSpec	2	0.039
-com.serenity.ui.renderer.Java2DRunPaintSpec	2	0.039
 com.serenity.CommandRunnerSettingsFrontendSpec	2	0.038
 com.serenity.RuntimeDisplayStateSpec	2	0.038
 com.serenity.config.AutoSaveConfigSpec	2	0.038
@@ -1250,7 +1227,6 @@ com.serenity.state.manager.WorkflowTransitionsSpec	2	0.018
 com.serenity.state.reducers.EditorEventReducerOffsetSpec	2	0.018
 com.serenity.ui.layout.ScrollbarGeometrySpec	2	0.018
 com.serenity.CommandPaletteStateSpec	2	0.017
-com.serenity.Java2DLayerSurfaceSpec	2	0.017
 com.serenity.PinnedMarkdownPreviewTextSpec	2	0.017
 com.serenity.StatusLineSpec	2	0.017
 com.serenity.diagnostics.FrameCountersSpec	2	0.017
@@ -1258,7 +1234,6 @@ com.serenity.project.ProjectTaskRunnerSpec	2	0.017
 com.serenity.state.reducers.EditorBookmarkTrackingSpec	2	0.017
 com.serenity.testkit.StallSamplerSpec	2	0.017
 com.serenity.ui.layout.VisualLineIndexStoreRecentContentSpec	2	0.017
-com.serenity.ui.renderer.FontFallbackPaintSpec	2	0.017
 com.serenity.CommandRunnerProjectPresenceSpec	2	0.016
 com.serenity.KeywordHighlightToggleSpec	2	0.016
 com.serenity.SimpleCommandRunnerSpec	2	0.016
@@ -1331,7 +1306,6 @@ com.serenity.spellcheck.SpellCheckerPublicationSpec	2	0.01
 com.serenity.state.models.BufferWithEditedContentSpec	2	0.01
 com.serenity.ui.layout.BoundaryScratchSpec	2	0.01
 com.serenity.ui.layout.LayoutMemosOwnershipSpec	2	0.01
-com.serenity.ui.renderer.RenderImageSpec	2	0.01
 com.serenity.DocumentationStandardsSpec	2	0.009
 com.serenity.EditorEventSnapshotSpec	2	0.009
 com.serenity.HiddenBufferSpec	2	0.009
@@ -1351,7 +1325,6 @@ com.serenity.state.reducers.EditorTextEditReducerSpec	2	0.009
 com.serenity.state.undo.BufferSnapshotRichTextSpec	2	0.009
 com.serenity.ui.layout.CombiningMarkWidthSpec	2	0.009
 com.serenity.ui.openings.VirtualDropCapRoleSpec	2	0.009
-com.serenity.ui.renderer.LigatureFontShapingSpec	2	0.009
 com.serenity.ui.skia.SkiaBundledFontsSpec	2	0.009
 com.serenity.ui.terminal.SwingWindowMenuBarPlacementSpec	2	0.009
 com.serenity.CellMetricsSpec	2	0.008
@@ -1364,7 +1337,6 @@ com.serenity.config.ConfigFieldDecodeSpec	2	0.008
 com.serenity.lsp.model.SemanticTokenDataSpec	2	0.008
 com.serenity.richtext.RichTextInlineContentSpec	2	0.008
 com.serenity.state.manager.FileFinderTransitionsSpec	2	0.008
-com.serenity.state.manager.RenderCachesRendererOwnershipSpec	2	0.008
 com.serenity.state.models.CursorListSpec	2	0.008
 com.serenity.state.models.CursorPositionPrimaryCursorSpec	2	0.008
 com.serenity.state.reducers.ChromeSummonEventSpec	2	0.008
@@ -1372,7 +1344,6 @@ com.serenity.state.reducers.EditorClipboardEventReducerSpec	2	0.008
 com.serenity.ui.display.DisplayScaleSpec	2	0.008
 com.serenity.ui.layout.ChromeSummonLayoutSpec	2	0.008
 com.serenity.ui.layout.HeadingCacheKeySpec	2	0.008
-com.serenity.ui.renderer.Java2DSurfaceTextContractSpec	2	0.008
 com.serenity.ui.renderer.OverlaySegmentRowRendererSpec	2	0.008
 com.serenity.ui.theme.HeadingColourStylingSpec	2	0.008
 com.serenity.BuildInfoSpec	2	0.007
@@ -1428,7 +1399,6 @@ com.serenity.state.manager.PanelHighlightRefreshSpec	2	0.005
 com.serenity.state.models.CursorPositionConversionsSpec	2	0.005
 com.serenity.state.reducers.CommandRunnerReducerToggleSpec	2	0.005
 com.serenity.ui.layout.CaretStopsTuiSpec	2	0.005
-com.serenity.ui.renderer.RenderSurfaceCapabilitiesSpec	2	0.005
 com.serenity.AppRuntimeCursorCadenceSpec	2	0.004
 com.serenity.EmptyBufferDisplaySpec	2	0.004
 com.serenity.MarkdownBlockSpansSpec	2	0.004
@@ -1467,7 +1437,6 @@ com.serenity.state.reducers.EditorFindEventReducerSpec	2	0.003
 com.serenity.state.reducers.FocusedSpec	2	0.003
 com.serenity.testkit.FocusedLensSpec	2	0.003
 com.serenity.ui.layout.ScrollbarLayoutSpec	2	0.003
-com.serenity.ui.renderer.FontSpecSpec	2	0.003
 com.serenity.ui.skia.SkiaPixelOrderSpec	2	0.003
 com.serenity.ui.theme.DropCapColourSpec	2	0.003
 com.serenity.ui.theme.appearance.OsAppearanceParsersSpec	2	0.003
@@ -1476,7 +1445,6 @@ com.serenity.EditorNavigationInputTranslatorSpec	2	0.002
 com.serenity.LanguageAwareHighlightingSpec	2	0.002
 com.serenity.ModalGotoLineReducerSpec	2	0.002
 com.serenity.ModalStateReducerSpec	2	0.002
-com.serenity.RenderSurfaceDrawRunPxSpec	2	0.002
 com.serenity.TextLayoutSnapshotProportionalSpec	2	0.002
 com.serenity.ThemeContrastSpec	2	0.002
 com.serenity.TypographyRoleSpec	2	0.002
@@ -1502,7 +1470,6 @@ com.serenity.ui.theme.StyledTextSpellSpec	2	0.002
 com.serenity.AlphaModeSpec	2	0.001
 com.serenity.AssemblyManifestSpec	2	0.001
 com.serenity.FocusedKeymapCodecSpec	2	0.001
-com.serenity.Java2DReferenceConfinementSpec	2	0.001
 com.serenity.OpaqueBlockPaintSpec	2	0.001
 com.serenity.PeekOverlayTranslatorSpec	2	0.001
 com.serenity.ReverseTabHandlingSpec	2	0.001

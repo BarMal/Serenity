@@ -25,7 +25,7 @@ object PaintLog:
     scale: Double,
     caches: SkiaTextCaches,
     styledFonts: StyledFontCache,
-    layerCacheOwner: ScreenIdentity
+    screen: ScreenIdentity
   ): (SkiaRenderSurface, PaintLog) =
     val recorder = ChangeRecorder(scale, scale, surface.getWidth, surface.getHeight, new PresentPhases)
     val painted = SkiaRenderSurface.retaining(
@@ -37,7 +37,7 @@ object PaintLog:
       scale,
       caches,
       styledFonts,
-      layerCacheOwner = Some(layerCacheOwner),
+      screen = Some(screen),
       changes = Some(recorder)
     )
     (painted, new PaintLog(recorder))

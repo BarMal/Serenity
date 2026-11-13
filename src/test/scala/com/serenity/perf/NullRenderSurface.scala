@@ -37,7 +37,7 @@ final class NullRenderSurface(
     with PanelOutlineDrawing:
 
   private val contentIdentity = SurfaceContentIdentity(new Object)
-  private val screenIdentity  = ScreenIdentity(new Object)
+  private val screen          = ScreenIdentity(new Object)
   private val renderContext   = Some(TextLayoutSnapshot.defaultFontRenderContext())
   private val foreground      = new AtomicReference(RenderColor.White)
   private val background      = new AtomicReference(RenderColor.Black)
@@ -48,7 +48,7 @@ final class NullRenderSurface(
   override def panelOutlines: Option[PanelOutlineDrawing] = Some(this)
 
   override def persistentContentKey: Option[SurfaceContentIdentity] = Some(contentIdentity)
-  override def layerCacheOwner: ScreenIdentity                      = screenIdentity
+  override def screenIdentity: ScreenIdentity                       = screen
   override def addressesPixels: Boolean                             = true
   override def devicePixelScaleX: Double                            = deviceScale
   override def devicePixelScaleY: Double                            = deviceScale
@@ -100,8 +100,6 @@ final class NullRenderSurface(
 
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit             = ()
-  override def compositeFullSurfaceLayer(image: RenderImage): Unit                             = ()
-  override def compositeLayer(image: RenderImage, bounds: PixelRect): Unit                     = ()
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit                    = render
 
   def setAlpha(alpha: Float): Unit = ()

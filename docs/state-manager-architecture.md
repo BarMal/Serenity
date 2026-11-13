@@ -53,7 +53,7 @@ raised by new damage. Only input batches and focus gain move the schedule's anch
 resumes the blink where it was.
 The caret itself shows the formatting at the insertion point: `CaretStyle` reads it (the pending toggle, else the text
 before the caret; Markdown emphasis and strikethrough on a Markdown buffer), `CaretGeometry` turns it into shapes (a
-slant when italic, a wider caret when bold, an underline or strikethrough rule), and Java2D and Skia draw those same
+slant when italic, a wider caret when bold, an underline or strikethrough rule), and Skia draws those same
 shapes over the presented frame. A plain caret is the rect the layout placed, drawn as before. Every app-state commit, whichever fiber makes it, goes
 through `ModelCommit` and is validated by the same `AppStateValidation`, so a surface dropped once its exit animation
 finishes can never commit a dangling reference unnoticed. File reads and writes

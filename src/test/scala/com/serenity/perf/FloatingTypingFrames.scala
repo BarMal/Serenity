@@ -18,7 +18,7 @@ private[perf] object FloatingTypingFrames:
       LaptopFrameBenchmarks.AlternatingTransition(backend, before, after)
     BenchmarkRunner.Benchmark.building(typing)(
       BenchmarkRunner.Benchmark(
-        "laptop.render.typing_frame_floating_2x",
+        "laptop.render.typing_frame_floating_2x.skia_raster",
         2,
         12,
         () => typing.verify("floating typing", LaptopFrameBenchmarks.MaxTypingRowsDrawn),

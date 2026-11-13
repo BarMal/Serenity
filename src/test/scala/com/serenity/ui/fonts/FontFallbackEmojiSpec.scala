@@ -24,7 +24,7 @@ class FontFallbackEmojiSpec extends AnyFlatSpec with Matchers:
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
       .deriveFont(Font.PLAIN, 14.0f)
 
-  private def coverage(chain: FontFallback) = Java2DGlyphCoverage.of(codeFont, chain)
+  private def coverage(chain: FontFallback) = AwtGlyphCoverage.of(codeFont, chain)
 
   "A chain with an emoji family" should "order its slots as configured families, the emoji face, then Dialog" in {
     val chain = FontFallback(Vector("Configured"), Some(emoji))

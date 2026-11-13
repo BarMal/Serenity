@@ -40,17 +40,15 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   private def withDisplay(): Unit =
     assume(!GraphicsEnvironment.isHeadless, "The benchmark opens real windows, which needs a display")
 
-  "RenderBenchmarkRunner.run" should "time every scenario on both backends, with exactly the frames asked for" in {
+  "RenderBenchmarkRunner.run" should "time every scenario on the Skia layer, with exactly the frames asked for" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
     report.results.map(_.scenario) shouldBe Scenario.values.toVector
     report.results.foreach { result =>
       withClue(result.scenario.label) {
-        result.java2d.count shouldBe 3
-        result.java2d.dropped shouldBe 0
         result.skia.map(_.count) shouldBe Some(3)
         result.skia.map(_.dropped) shouldBe Some(0)
-        result.java2d.p50Ms should be > 0.0
+        result.skia.map(_.p50Ms).getOrElse(0.0) should be > 0.0
       }
     }
     (report.environment.widthPx, report.environment.heightPx) shouldBe (640, 400)
@@ -59,7 +57,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   it should "record the size each window was drawn at, and time the resize when the window can be resized" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
-    report.environment.drawnWindows.map(_._1) shouldBe List("Java2D", "Skia layer")
+    report.environment.drawnWindows.map(_._1) shouldBe List("Skia layer")
     report.environment.drawnWindows.foreach { (arm, size) =>
       withClue(arm)((size.width, size.height) should not be (0, 0))
     }
@@ -70,15 +68,14 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
   it should "record the scale the Skia layer drew at" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
-    report.environment.skiaDeviceScale.getOrElse(fail("no Skia layer scale")) should be > 0.0
+    report.environment.deviceScale should be > 0.0
   }
 
-  it should "count the shapings of every scenario's frames on both backends, and the cold frame's on Skia" in {
+  it should "count the shapings of every scenario's frames on the Skia layer, and the cold frame's" in {
     withDisplay()
     val environment = runExclusively(small, SynchronousSkiaLayerSurfaceFactory).environment
     Scenario.values.foreach { scenario =>
       withClue(scenario.label) {
-        environment.java2dShapeTraffic.get(scenario).map(_.frames) shouldBe Some(3)
         environment.skiaShapeTraffic.get(scenario).map(_.frames) shouldBe Some(3)
       }
     }
@@ -104,13 +101,10 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     phases.shapingsPerFrame should be > 0.0
   }
 
-  it should "split each backend's cold frame into layout and drawing, whose sum is within the render call" in {
+  it should "split the Skia layer's cold frame into layout and drawing, whose sum is within the render call" in {
     withDisplay()
     val report = runExclusively(small, SynchronousSkiaLayerSurfaceFactory)
-    val splits = List(
-      "Java2D"     -> report.environment.java2dColdSplit,
-      "Skia layer" -> report.environment.skiaColdSplit
-    )
+    val splits = List("Skia layer" -> report.environment.skiaColdSplit)
     splits.foreach { (arm, split) =>
       withClue(arm) {
         val measured = split.getOrElse(fail("no cold-frame split"))
@@ -138,8 +132,8 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     report.environment.refresh.hz should be > 0.0
     report.results.foreach { result =>
       withClue(result.scenario.label) {
-        result.java2d.p50Frames should be >= 1
-        result.java2d.missedRefresh should be <= result.java2d.count
+        result.skia.map(_.p50Frames).getOrElse(0) should be >= 1
+        result.skia.map(_.missedRefresh).getOrElse(0) should be <= result.skia.map(_.count).getOrElse(0)
       }
     }
   }
@@ -166,14 +160,14 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
         case other                       => fail(s"a software run got a verdict: $other")
   }
 
-  it should "report the layer as unavailable, and still time Java2D, when the window fell back to Java2D" in {
+  it should "report the layer as unavailable, with no figures, when the window fell back to its raster" in {
     withDisplay()
-    val failing = new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"))
-    val report  = runExclusively(small, failing)
+    val failing =
+      new LayerSurfaceFactory(_ => throw new IllegalStateException("no GL context"), SkiaRasterSurfaceFactory)
+    val report = runExclusively(small, failing)
     report.environment.skiaRenderApi.isLeft shouldBe true
     report.results.foreach(result => result.skia shouldBe None)
     report.environment.skiaLayers shouldBe None
-    report.results.foreach(result => result.java2d.count shouldBe 3)
     report.verdict match
       case Verdict.NotMeasured(reason) => reason should include("Skia layer unavailable")
       case other                       => fail(s"expected no verdict, got $other")
@@ -186,7 +180,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     report.results.foreach(result => result.skia shouldBe None)
   }
 
-  it should "time the Skia raster arm with exactly the frames asked for, beside the other two" in {
+  it should "time the Skia raster arm with exactly the frames asked for, beside the layer" in {
     withDisplay()
     val report =
       runExclusively(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(SkiaRasterSurfaceFactory))
@@ -195,7 +189,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
         result.raster.map(_.count) shouldBe Some(3)
         result.raster.map(_.dropped) shouldBe Some(0)
         result.raster.map(_.p50Ms).getOrElse(0.0) should be > 0.0
-        result.java2d.count shouldBe 3
+        result.skia.map(_.count) shouldBe Some(3)
       }
     }
     report.environment.rasterNote shouldBe None
@@ -208,14 +202,13 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     report.environment.rasterNote shouldBe Some("no raster arm was asked for")
   }
 
-  it should "report a raster arm that fails, and still report the other two" in {
+  it should "report a raster arm that fails, and still report the layer" in {
     withDisplay()
     val failing: FrameSurfaceFactory = _ => throw new IllegalStateException("no raster surface")
     val (report, open) =
       runExclusivelyListingOpenWindows(small, SynchronousSkiaLayerSurfaceFactory, rasterFactory = Some(failing))
     report.results.foreach { result =>
       result.raster shouldBe None
-      result.java2d.count shouldBe 3
       result.skia.map(_.count) shouldBe Some(3)
     }
     report.environment.rasterNote.getOrElse("") should include("no raster surface")

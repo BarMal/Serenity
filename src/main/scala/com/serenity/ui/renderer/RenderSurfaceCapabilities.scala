@@ -105,31 +105,6 @@ trait PixelDrawing:
 
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit
 
-  /** Composite a whole-surface layer image (a modal/panel layer buffer, produced by
-    * [[LayerBufferSupport.newLayerSurface]]) back onto this surface, covering it exactly.
-    *
-    * Distinct from [[drawImage]] because a layer buffer is already at this surface's own backing resolution: it must be
-    * blitted one-for-one, not scaled through the cell grid and device transform that [[drawImage]]'s cell-addressed
-    * geometry applies. Routing it through `drawImage(image, 0, 0, viewportWidth, viewportHeight)` snaps the destination
-    * to `floor(logicalSize / cellSize) * cellSize` and then re-scales by the device factor, so a layer comes back very
-    * slightly smaller than it left -- imperceptible in one frame, but the command runner re-composites on every
-    * navigation keystroke, so the shrink compounds into a visible "zoom out" of the editor pane behind it until a full
-    * clean repaint resets it.
-    *
-    * The only real surface with a layer-buffer capability is [[Java2DRenderSurface]], which overrides this to blit 1:1
-    * in device pixels; every other surface either advertises no layer buffers at all (a terminal) or is a headless test
-    * double. The default records the composite as an ordinary full-surface `drawImage` so those doubles keep observing
-    * one blit per layer paint, without needing this surface's backing resolution.
-    */
-  def compositeFullSurfaceLayer(image: RenderImage): Unit =
-    drawImage(image, 0, 0, image.widthPx, image.heightPx)
-
-  /** Composite a layer buffer made by [[LayerBufferSupport.newBoundedLayerSurface]] for `bounds` back where it was
-    * painted. A surface whose bounded layers are whole-surface ones (the default) composites them as such.
-    */
-  def compositeLayer(image: RenderImage, @unused bounds: PixelRect): Unit =
-    compositeFullSurfaceLayer(image)
-
   /** Translate drawing in device-independent logical pixels for fractional-cell floating geometry. */
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit
 
@@ -168,42 +143,6 @@ trait PixelLifting:
   */
 trait Effects:
   def setAlpha(alpha: Float): Unit
-
-/** A fresh, independently-paintable surface shaped exactly like the surface this capability came from -- same cell
-  * metrics, font, logical size and device scale -- for a layer (a pinned panel, a modal, a floating overlay) to own its
-  * own persisted buffer instead of painting straight into the shared frame surface (#1100 stage 2). Genuinely optional:
-  * a surface with no natural notion of an offscreen sub-buffer (a cell-addressed terminal, which has no sub-cell pixel
-  * buffering the same way a raster surface does) simply has no capability to expose, so [[RenderSurface.layerBuffers]]
-  * exposes this as an `Option` and callers fall back to painting the layer directly into the shared surface, same as
-  * before this capability existed.
-  */
-trait LayerBufferSupport:
-
-  /** A new surface painting into a blank, fully transparent buffer the same shape as the surface this capability came
-    * from. `onFlush` receives the finished image once the caller's `flush()` completes -- compositing it onto the frame
-    * surface (e.g. via `RenderSurface.pixels.compositeFullSurfaceLayer`) is the caller's job, not this surface's; a
-    * layer surface never publishes itself anywhere on its own.
-    *
-    * Everything the layer's owner didn't paint stays transparent. That is what makes compositing the whole layer back
-    * over a frame whose content has since changed correct (#1798) -- a layer seeded with a full copy of the frame would
-    * paste that stale copy back over everything.
-    *
-    * `recycled` is a previous layer image the caller is done with; it is cleared and painted into instead of
-    * allocating, when its size still matches.
-    */
-  def newLayerSurface(onFlush: RenderImage => Unit, recycled: Option[RenderImage] = None): RenderSurface
-
-  /** As [[newLayerSurface]], for a layer that paints only inside `bounds` (logical pixels): the surface still addresses
-    * the whole window, so a renderer paints at its usual coordinates, but the image it hands back covers `bounds` alone
-    * and goes back through [[PixelDrawing.compositeLayer]]. A capability with no smaller buffer to offer returns the
-    * whole-surface layer, which that composite handles too.
-    */
-  def newBoundedLayerSurface(
-    @unused bounds: PixelRect,
-    onFlush: RenderImage => Unit,
-    recycled: Option[RenderImage] = None
-  ): RenderSurface =
-    newLayerSurface(onFlush, recycled)
 
 /** A caret shape a real terminal's own cursor can be styled as via DECSCUSR (`CSI Ps SP q`). */
 enum HardwareCursorShape:

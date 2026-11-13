@@ -184,7 +184,7 @@ object RendererCursorOverlay:
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val viewportSize = target.viewportSize
-    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
@@ -193,7 +193,7 @@ object RendererCursorOverlay:
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
       target.onCursorOverlayReady(Some(Nil)) {
-        val surface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+        val surface = CaretRecordingSurface.forGeometry(target.caretCanvases, target.metrics, codeFont, target.geometry)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state,
           authoritativeScene,
@@ -341,7 +341,7 @@ object RendererCursorOverlay:
     cursorColor: Option[RenderColor],
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create(),
-    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    surfaces: FrameSurfaceFactory
   ): Boolean =
     val viewportSize = target.viewportSize
     // The window fills the carets over the presented frame, so this base frame is repainted whole every time; the
@@ -364,7 +364,7 @@ object RendererCursorOverlay:
         attachLayer = target.attachLayerPresenter
       )
     )
-    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
@@ -412,7 +412,8 @@ object RendererCursorOverlay:
         .fold(target.onCursorOverlayReady(None)(Nil)) { renderPlan =>
           val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
           target.onCursorOverlayReady(baseDirtyRects) {
-            val cursorSurface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+            val cursorSurface =
+              CaretRecordingSurface.forGeometry(target.caretCanvases, target.metrics, codeFont, target.geometry)
             val _ = paintCursorsOnly(
               state,
               cursorSurface,

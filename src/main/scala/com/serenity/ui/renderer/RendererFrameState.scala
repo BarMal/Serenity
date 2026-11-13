@@ -42,51 +42,6 @@ final case class RenderInputs(
   */
 final case class DrawState(paneIds: Set[PaneId], inputs: RenderInputs)
 
-/** What [[RendererFramePlanner.paintModalLayer]] cached the last time it painted the modal layer into its own buffer
-  * (#1100 stage 2): the flushed image, and the frame shape/cursor-blink state it was painted for. Reused only when a
-  * later frame's modal layer is clean (see [[DamageProducer]]'s `modalOnlyContentChange`) *and* still matches both
-  * fields -- a viewport resize or a blink toggle invalidates the cache even though neither is `AppState`, so a stale
-  * buffer is never composited over a frame it no longer matches. One slot per surface, not keyed by frame-buffer
-  * identity, because exactly one modal is ever open at a time on a given surface and the cached image is just a source
-  * for `drawImage`, independent of which of the (possibly pooled) frame buffers it gets composited onto.
-  */
-final case class CachedModalLayer(
-    image: RenderImage,
-    viewportWidth: Int,
-    viewportHeight: Int,
-    cursorVisible: Boolean
-)
-
-/** What [[RendererFramePlanner.paintPanelLayer]] cached the last time it painted a given pinned/expanded/floating panel
-  * into its own buffer (#1100 stage 3): the [[CachedModalLayer]] pattern generalised to every panel kind, keyed by
-  * [[SurfaceId]] rather than held as a single slot, since -- unlike the modal -- more than one of these panels can be
-  * on screen at once. `frameRect` is remembered alongside viewport shape and cursor-blink state because a panel's own
-  * rect can shift (another panel appearing/disappearing reflows pinned layout) without the panel's own `UiSurface`
-  * fields changing, which [[Damage.Surface]] narrowing alone would not catch.
-  */
-final case class CachedPanelLayer(
-    image: RenderImage,
-    viewportWidth: Int,
-    viewportHeight: Int,
-    cursorVisible: Boolean,
-    frameRect: LayoutRect,
-    bounds: Option[PixelRect] = None,
-    compositedOnto: Set[SurfaceContentIdentity] = Set.empty
-):
-
-  /** Whether this layer still describes a panel at `frameRect`, painted within `layerBounds`, on a window of this
-    * shape.
-    */
-  def matches(
-    viewportWidth: Int,
-    viewportHeight: Int,
-    cursorVisible: Boolean,
-    frameRect: LayoutRect,
-    layerBounds: PixelRect
-  ): Boolean =
-    this.viewportWidth == viewportWidth && this.viewportHeight == viewportHeight &&
-      this.cursorVisible == cursorVisible && this.frameRect == frameRect && bounds.forall(_ == layerBounds)
-
 /** What a frame's annotations are worked out from, compared by object identity: each part is an immutable value the
   * state replaces rather than edits, so the same object is the same answer and nothing needs deep comparison.
   */
@@ -294,7 +249,6 @@ final class RendererFrameState(initialCapacity: Int):
     previousRowGhosts.remove(key)
     previousFloatingSurfaceRects.remove(key)
     bufferBars.remove(key)
-    forgetPanelCompositions(key)
 
   private val bufferDamage    = new BoundedRefCache[SurfaceContentIdentity, Damage](cacheCapacity)
   private val bufferDrawState = new BoundedRefCache[SurfaceContentIdentity, DrawState](cacheCapacity)
@@ -324,76 +278,7 @@ final class RendererFrameState(initialCapacity: Int):
   private val screenDamage  = new BoundedRefCache[ScreenIdentity, Damage](cacheCapacity)
   private val screenPaneIds = new BoundedRefCache[ScreenIdentity, Set[PaneId]](cacheCapacity)
 
-  /** Keyed by [[RenderSurface.layerCacheOwner]] rather than the surface itself: a GUI frame is a fresh surface every
-    * time, so a surface key never hit and each frame pinned another full-window image until eviction (#1798). Still per
-    * owner, never one JVM-wide slot, so one window's cached modal image can't leak into another's frame.
-    */
-  private val modalLayerBuffers = new BoundedRefCache[ScreenIdentity, CachedModalLayer](cacheCapacity)
-
-  def cachedModalLayerFor(surface: RenderSurface): Option[CachedModalLayer] =
-    modalLayerBuffers.get(surface.layerCacheOwner)
-
-  def rememberModalLayerBuffer(surface: RenderSurface, layer: CachedModalLayer): Unit =
-    modalLayerBuffers.put(surface.layerCacheOwner, layer)
-
-  def forgetModalLayerBuffer(surface: RenderSurface): Unit = modalLayerBuffers.remove(surface.layerCacheOwner)
-
-  /** Keyed by owner first and [[SurfaceId]] second, for the same reason as [[modalLayerBuffers]] -- a bare
-    * `Map[SurfaceId, CachedPanelLayer]` shared process-wide let any two independently rendered surfaces that happen to
-    * reuse the same `SurfaceId` (unremarkable: tests across many specs all use `SurfaceId("outline")`) stomp on each
-    * other's cached panel image.
-    */
-  private val panelLayerBuffers =
-    new BoundedRefCache[ScreenIdentity, Map[SurfaceId, CachedPanelLayer]](cacheCapacity)
   val paintedPanels = new PaintedPanelRecords(cacheCapacity)
-
-  def cachedPanelLayersFor(surface: RenderSurface): Map[SurfaceId, CachedPanelLayer] =
-    panelLayerBuffers.get(surface.layerCacheOwner).getOrElse(Map.empty)
-
-  def rememberPanelLayer(surface: RenderSurface, surfaceId: SurfaceId, layer: CachedPanelLayer): Unit =
-    val owner = surface.layerCacheOwner
-    panelLayerBuffers.replaceAll { tracked =>
-      val current = tracked.getOrElse(owner, Map.empty[SurfaceId, CachedPanelLayer])
-      tracked.updated(owner, current.updated(surfaceId, layer))
-    }
-
-  /** Records that `surfaceId`'s cached layer now sits in the pixels `key` holds, so a later frame that keeps those
-    * pixels need not composite it again.
-    */
-  def panelCompositedOnto(surface: RenderSurface, surfaceId: SurfaceId, key: SurfaceContentIdentity): Unit =
-    val owner = surface.layerCacheOwner
-    panelLayerBuffers.replaceAll { tracked =>
-      tracked.get(owner).fold(tracked) { layers =>
-        layers.get(surfaceId).fold(tracked) { layer =>
-          tracked.updated(owner, layers.updated(surfaceId, layer.copy(compositedOnto = layer.compositedOnto + key)))
-        }
-      }
-    }
-
-  /** `key`'s pixels no longer hold any cached panel, because they were cleared or are about to be repainted whole. */
-  private def forgetPanelCompositions(key: SurfaceContentIdentity): Unit =
-    panelLayerBuffers.replaceAll { tracked =>
-      tracked.map((owner, layers) =>
-        owner -> layers.map((id, layer) => id -> layer.copy(compositedOnto = layer.compositedOnto - key))
-      )
-    }
-
-  /** Drop cached panel buffers for surfaces no longer on screen this frame, scoped to `surface`'s own entry -- a
-    * dismissed panel's cache would otherwise sit in that inner `Map[SurfaceId, _]` forever ([[SurfaceId]] is a plain
-    * value, not an object this module can bound the lifetime of any other way).
-    */
-  def pruneStalePanelLayers(surface: RenderSurface, activeIds: Set[SurfaceId]): Unit =
-    val owner = surface.layerCacheOwner
-    panelLayerBuffers.replaceAll { tracked =>
-      tracked.get(owner).fold(tracked) { current =>
-        tracked.updated(owner, current.filter { case (id, _) => activeIds.contains(id) })
-      }
-    }
-
-  /** Releases every cached layer image `surface`'s owner holds, for when layer caching is switched off. */
-  def forgetLayerBuffers(surface: RenderSurface): Unit =
-    forgetModalLayerBuffer(surface)
-    panelLayerBuffers.remove(surface.layerCacheOwner)
 
   /** Drops every buffer-scoped cache entry for `key` -- used by [[RendererFramePlanner.forgetPreservedContent]]
     * alongside [[forgetPreviousFrameState]] when a surface's preserved pixels are no longer valid.

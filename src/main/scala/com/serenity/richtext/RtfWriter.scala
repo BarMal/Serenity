@@ -97,7 +97,8 @@ private[richtext] object RtfWriter:
       style.color.flatMap(parseColor).map(hex => s"\\cf${tables.colors.indexOf(hex) + 1}"),
       Option.when(style.marks.contains(InlineMark.Bold))("\\b"),
       Option.when(style.marks.contains(InlineMark.Italic))("\\i"),
-      Option.when(style.marks.contains(InlineMark.Underline))("\\ul")
+      Option.when(style.marks.contains(InlineMark.Underline))("\\ul"),
+      Option.when(style.marks.contains(InlineMark.Shadow))("\\shad")
     ).flatten.mkString
 
   private def sanitizedFontName(name: String): String =

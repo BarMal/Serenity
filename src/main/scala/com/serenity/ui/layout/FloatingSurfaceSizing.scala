@@ -65,6 +65,7 @@ private[layout] object FloatingSurfaceSizing:
       case SurfaceContent.FilePreview(_, content) => math.max(4, math.min(6, content.linesIterator.take(4).size + 2))
       case SurfaceContent.SymbolDefinition(_, _)  => 4
       case SurfaceContent.StatusLine(_)           => 1
+      case SurfaceContent.FallbackHeader(_)       => 1
       case SurfaceContent.DirectoryListing(_, entries, _) => math.max(4, math.min(6, entries.take(4).size + 2))
       case SurfaceContent.DirectoryTree(tree, _, _) =>
         math.max(4, math.min(8, DirectoryTreeData.visibleRows(tree).size + 2))
@@ -124,6 +125,6 @@ private[layout] object FloatingSurfaceSizing:
         1
 
     val floor = content match
-      case SurfaceContent.StatusLine(_) | SurfaceContent.TabBar(_, _) => 1
-      case _                                                          => 3
+      case SurfaceContent.StatusLine(_) | SurfaceContent.TabBar(_, _) | SurfaceContent.FallbackHeader(_) => 1
+      case _                                                                                             => 3
     math.max(floor, math.min(maxHeight, preferredHeight))

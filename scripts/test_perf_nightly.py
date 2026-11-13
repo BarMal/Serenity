@@ -25,8 +25,33 @@ sys.path.insert(0, str(_SCRIPTS))
 import perf_nightly  # noqa: E402
 
 
-def _run(sha: str, created: str, conclusion: str | None = "success", status: str = "completed") -> dict:
-    return {"head_sha": sha, "created_at": created, "conclusion": conclusion, "status": status}
+def _run(
+    sha: str,
+    created: str,
+    conclusion: str | None = "success",
+    status: str = "completed",
+    branch: str = "master",
+    event: str = "schedule",
+) -> dict:
+    return {
+        "head_sha": sha,
+        "created_at": created,
+        "conclusion": conclusion,
+        "status": status,
+        "head_branch": branch,
+        "event": event,
+    }
+
+
+def _git(repo: str, *args: str) -> str:
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@example.com",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@example.com",
+    }
+    return subprocess.run(["git", "-C", repo, *args], env=env, capture_output=True, text=True, check=True).stdout.strip()
 
 
 class PreviousNightlyTests(unittest.TestCase):
@@ -45,6 +70,89 @@ class PreviousNightlyTests(unittest.TestCase):
     def test_no_runs_gives_an_empty_answer(self) -> None:
         self.assertEqual("", perf_nightly.previous_nightly_sha({"workflow_runs": []}))
         self.assertEqual("", perf_nightly.previous_nightly_sha({}))
+
+    def test_a_manual_run_on_another_branch_is_not_a_baseline(self) -> None:
+        # The shape of nights 17-21 (2026-11-09 to 2026-11-13): the newest success was a dispatch on a topic branch whose
+        # commit the nightly's clone never had, so every night failed building it.
+        runs = {
+            "workflow_runs": [
+                _run("master-night", "2026-11-08T12:02:17Z"),
+                _run("topic", "2026-11-08T21:23:16Z", branch="claude/kept-clip-allocation", event="workflow_dispatch"),
+                _run("failed-night", "2026-11-09T14:07:19Z", "failure"),
+            ]
+        }
+        self.assertEqual("master-night", perf_nightly.previous_nightly_sha(runs))
+
+    def test_only_topic_branch_successes_give_an_empty_answer(self) -> None:
+        runs = {"workflow_runs": [_run("topic", "2026-11-08T21:23:16Z", branch="claude/x", event="workflow_dispatch")]}
+        self.assertEqual("", perf_nightly.previous_nightly_sha(runs))
+
+    def test_a_manual_run_on_master_is_a_baseline(self) -> None:
+        runs = {"workflow_runs": [_run("by-hand", "2026-11-07T11:23:38Z", event="workflow_dispatch")]}
+        self.assertEqual("by-hand", perf_nightly.previous_nightly_sha(runs))
+
+    def test_the_newest_run_that_the_check_accepts_is_the_baseline(self) -> None:
+        runs = {"workflow_runs": [_run("a", "2026-11-01T03:00:00Z"), _run("b", "2026-11-02T03:00:00Z"), _run("c", "2026-11-03T03:00:00Z")]}
+        self.assertEqual("b", perf_nightly.previous_nightly_sha(runs, is_ancestor=lambda sha: sha != "c"))
+
+    def test_when_the_check_accepts_nothing_the_answer_is_empty(self) -> None:
+        runs = {"workflow_runs": [_run("a", "2026-11-01T03:00:00Z")]}
+        self.assertEqual("", perf_nightly.previous_nightly_sha(runs, is_ancestor=lambda sha: False))
+
+
+class AncestryTests(unittest.TestCase):
+    """The commit to compare against has to be one the nightly can check out: part of the history it stands on."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = self._tmp.name
+        _git(self.repo, "init", "-q", "-b", "master")
+        for name in ("first", "second"):
+            Path(self.repo, f"{name}.txt").write_text(name)
+            _git(self.repo, "add", ".")
+            _git(self.repo, "commit", "-q", "-m", name)
+        self.first = _git(self.repo, "rev-parse", "HEAD~1")
+        self.second = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "-q", "-b", "side", self.first)
+        Path(self.repo, "side.txt").write_text("side")
+        _git(self.repo, "add", ".")
+        _git(self.repo, "commit", "-q", "-m", "side")
+        self.side = _git(self.repo, "rev-parse", "HEAD")
+        _git(self.repo, "checkout", "-q", "master")
+
+    def test_a_commit_in_the_history_is_accepted(self) -> None:
+        check = perf_nightly.git_ancestor_of("HEAD", self.repo)
+        self.assertTrue(check(self.first))
+        self.assertTrue(check(self.second))
+
+    def test_a_commit_on_a_branch_that_is_not_in_the_history_is_refused(self) -> None:
+        self.assertFalse(perf_nightly.git_ancestor_of("HEAD", self.repo)(self.side))
+
+    def test_a_commit_the_clone_does_not_have_is_refused(self) -> None:
+        self.assertFalse(perf_nightly.git_ancestor_of("HEAD", self.repo)("d7706865893bedf7d6e83e145af733dd59798ddc"))
+
+    def test_the_command_skips_a_baseline_it_cannot_check_out_for_an_older_one_it_can(self) -> None:
+        runs = {
+            "workflow_runs": [
+                _run(self.first, "2026-11-08T12:02:17Z"),
+                _run(self.side, "2026-11-09T12:00:00Z"),
+                _run("d7706865893bedf7d6e83e145af733dd59798ddc", "2026-11-10T12:00:00Z"),
+            ]
+        }
+        path = os.path.join(self._tmp.name, "..", f"runs-{os.getpid()}.json")
+        with open(path, "w") as handle:
+            json.dump(runs, handle)
+        self.addCleanup(os.remove, path)
+        out = io.StringIO()
+        before = os.getcwd()
+        os.chdir(self.repo)
+        try:
+            with contextlib.redirect_stdout(out):
+                code = perf_nightly.main_with_args(["previous-sha", path, "--within", "HEAD"])
+        finally:
+            os.chdir(before)
+        self.assertEqual((0, f"{self.first}\n"), (code, out.getvalue()))
 
 
 class VerdictTests(unittest.TestCase):
@@ -94,6 +202,10 @@ class CommandTests(unittest.TestCase):
         path = self._file("runs.json", json.dumps({"workflow_runs": [_run("abc123", "2026-11-01T03:00:00Z")]}))
         self.assertEqual((0, "abc123\n"), self._main("previous-sha", path))
 
+    def test_previous_sha_without_a_check_does_not_need_a_repository(self) -> None:
+        runs = {"workflow_runs": [_run("not-a-commit", "2026-11-01T03:00:00Z")]}
+        self.assertEqual((0, "not-a-commit\n"), self._main("previous-sha", self._file("runs.json", json.dumps(runs))))
+
     def test_verdict_exits_with_the_decision(self) -> None:
         ex = self._file("ex.txt", "row.one\n")
         self.assertEqual(0, self._main("verdict", "0", "--exclude-file", ex)[0])
@@ -120,6 +232,9 @@ class WorkflowShapeTests(unittest.TestCase):
 
     def test_the_excluded_rows_come_from_the_checked_in_list(self) -> None:
         self.assertIn("perf_nightly.py prefixes scripts/perf-gate-excluded-rows.txt", self.text)
+
+    def test_the_baseline_has_to_be_part_of_the_history_the_job_checked_out(self) -> None:
+        self.assertRegex(self.text, r'perf_nightly\.py previous-sha "\$RUNNER_TEMP/runs\.json" --within HEAD')
 
     def test_the_decision_is_made_by_the_script_and_the_csvs_are_uploaded_even_on_failure(self) -> None:
         self.assertIn("perf_nightly.py verdict", self.text)

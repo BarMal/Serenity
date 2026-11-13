@@ -114,6 +114,11 @@ object SurfaceContentResolver:
         )
       case SurfaceContent.StatusLine(text) =>
         ResolvedSurfaceContent(rows = List(OverlayRow(text)))
+      case SurfaceContent.FallbackHeader(message) =>
+        val text = FallbackHeaderText.fit(message, FallbackHeaderText.Hint, rect.width)
+        ResolvedSurfaceContent(rows =
+          List(OverlayRow(text, segments = List(OverlaySegment(text, tone = OverlayTone.Accent))))
+        )
       case SurfaceContent.DirectoryListing(path, entries, selectedPath) =>
         PanelContentResolver.resolveDirectoryListing(
           rect,

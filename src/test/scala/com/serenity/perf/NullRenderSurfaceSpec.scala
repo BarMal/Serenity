@@ -72,7 +72,7 @@ class NullRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surfaces.size should be >= 2
     surfaces.flatMap(_.persistentContentKey).distinct should have size 1
     surfaces.map(_.persistentContentKey).forall(_.isDefined) shouldBe true
-    surfaces.map(_.layerCacheOwner).distinct should have size 1
+    surfaces.map(_.screenIdentity).distinct should have size 1
   }
 
   "The null surface" should "round-trip its background colour" in {

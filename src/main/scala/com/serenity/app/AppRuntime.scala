@@ -180,6 +180,7 @@ object AppRuntime:
     quitRequests: Stream[IO, QuitResponse] = Stream.empty,
     fileOrFolderOpen: Boolean = false,
     afterEditorShutdown: IO[Unit] = IO.unit,
+    hideWindow: IO[Unit] = IO.unit,
     scrollCountExecutor: Executor = ScrollCountExecutor.shared
   )(using
     logger: Logger[IO],
@@ -362,6 +363,7 @@ object AppRuntime:
                         renderLoop,
                         watcher,
                         awaitExternalQuit,
+                        hideWindow,
                         appConfig,
                         runtime.frameTimings,
                         frameTimingEnabled,
@@ -388,6 +390,7 @@ object AppRuntime:
     renderLoop: Stream[IO, Unit],
     fileChangeWatcher: com.serenity.io.FileChangeWatcher,
     awaitExternalQuit: IO[Unit],
+    hideWindow: IO[Unit],
     appConfig: AppConfig,
     frameTimings: FrameTimings,
     frameTimingEnabled: SignallingRef[IO, Boolean],
@@ -412,8 +415,8 @@ object AppRuntime:
       AppRuntimeRenderLoops.superviseLoop("external quit coordinator", lifecycle.forceQuit, recordCrash)(
         coordinateExternalQuit(awaitExternalQuit, lifecycle.forceQuit, lifecycle.awaitQuit)
       ),
-      AppRuntimeRenderLoops.superviseLoop("input shutdown", lifecycle.forceQuit, recordCrash)(
-        shutdownInputAfterQuit(lifecycle.awaitQuit, inputHandler.shutdown)
+      AppRuntimeRenderLoops.superviseLoop("quit shutdown", lifecycle.forceQuit, recordCrash)(
+        afterQuitConfirmed(lifecycle.awaitQuit, hideWindow >> inputHandler.shutdown)
       ),
       AppRuntimeRenderLoops.superviseLoop("LSP loop", lifecycle.forceQuit, recordCrash)(
         ProjectTrustService.load(ProjectTrustStore.defaultPath).flatMap { loaded =>
@@ -549,8 +552,8 @@ object AppRuntime:
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
 
-  private[serenity] def shutdownInputAfterQuit(awaitQuit: IO[Unit], shutdownInput: IO[Unit]): IO[Unit] =
-    awaitQuit >> shutdownInput
+  private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
+    awaitQuit >> whenQuit
 
   /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
     *

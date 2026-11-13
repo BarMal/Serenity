@@ -44,14 +44,16 @@ jobs:
       - name: Set up sbt launcher
         uses: sbt/setup-sbt@v1
 
-      - name: Apply scalafmt and scalafix
-        run: sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
-
+      # This compiles main and test with -Werror, and scalafix then reuses that build. Scalafix drops -Werror while it
+      # runs, so compiling after it rebuilds every source in a fresh JVM, which is what ran this job out of heap (#2618).
       # Every test suite must run in exactly one Windows/macOS shard, and the shard table must not list a suite that no
       # longer exists (#2484).
       - name: Check the test shard table
-        if: ${{ !cancelled() }}
         run: sbt -v checkTestShards
+
+      - name: Apply scalafmt and scalafix
+        if: ${{ !cancelled() }}
+        run: sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 
       - name: Check style tasks did not change files
         if: ${{ !cancelled() }}
@@ -155,6 +157,7 @@ jobs:
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
             scripts.test_build_outputs \
+            scripts.test_carry_checksums \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_apt_workflow \

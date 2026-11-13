@@ -2,7 +2,7 @@ package com.serenity.perf
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.LayoutEngine
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +20,7 @@ class GutterContinuationMarkSpec extends AnyFlatSpec with Matchers:
   private val cells    = LaptopFrameBenchmarks.cellMetrics
   private val scale    = LaptopFrameBenchmarks.DeviceScale
   private val rowPx    = math.round(cells.lineHeight * scale).toInt
-  private val backends = List[(String, FrameBackend)]("Java2D" -> Java2DFrames, "Skia" -> SkiaFrames)
+  private val backends = List[(String, FrameBackend)]("Skia" -> SkiaFrames)
 
   /** The tallest unbroken run of ink in any pixel column of the counter, leaving out its divider cell. */
   private def tallestInkRun(frame: FramePixels): Int =

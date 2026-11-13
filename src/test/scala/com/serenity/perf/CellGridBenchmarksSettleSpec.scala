@@ -10,11 +10,11 @@ import org.scalatest.matchers.should.Matchers
 class CellGridBenchmarksSettleSpec extends AnyFlatSpec with Matchers:
 
   private val frameRows = Set(
-    "render.cell_grid.frame_ascii",
-    "render.cell_grid.frame_mixed",
-    "render.cell_grid.frame_emoji",
-    "render.cell_grid.frame_emoji_clusters",
-    "render.cell_grid.frame_ascii.floating_chrome"
+    "render.cell_grid.frame_ascii.skia_raster",
+    "render.cell_grid.frame_mixed.skia_raster",
+    "render.cell_grid.frame_emoji.skia_raster",
+    "render.cell_grid.frame_emoji_clusters.skia_raster",
+    "render.cell_grid.frame_ascii.floating_chrome.skia_raster"
   )
 
   private def rows = CellGridBenchmarks.benchmarks() ++ CellGridBenchmarks.floatingChromeBenchmarks()

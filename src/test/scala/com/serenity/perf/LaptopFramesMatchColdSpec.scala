@@ -16,10 +16,10 @@ import com.serenity.{ChromeOn, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The frames `laptop.render.typing_frame_2x` and `scroll_frame_2x` time, checked here as the benchmarks check them: a
-  * damaged frame over one persisting image, driven by the damage a live `StateManager` reports for the step, must equal
-  * a frame drawn from scratch to the last device pixel. Before #1839 the first column of a kept row lost the one
-  * antialiased pixel its first glyph spilled outside the row's band, six pixels in all.
+/** The frames `skia.laptop.render.typing_frame_2x` and `scroll_frame_2x` time, checked here as the benchmarks check
+  * them: a damaged frame over one persisting image, driven by the damage a live `StateManager` reports for the step,
+  * must equal a frame drawn from scratch to the last device pixel. Before #1839 the first column of a kept row lost the
+  * one antialiased pixel its first glyph spilled outside the row's band, six pixels in all.
   */
 class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
 

@@ -11,8 +11,8 @@ class PresentBenchmarksBackendSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  "PresentBenchmarks.factoryFor" should "know java2d, skia and layer-image, and refuse anything else" in {
-    PresentBenchmarks.factoryFor("java2d") shouldBe Right(FrameSurfaceFactory.Java2D)
+  "PresentBenchmarks.factoryFor" should "know skia and layer-image, and refuse anything else" in {
+    PresentBenchmarks.factoryFor("java2d").isLeft shouldBe true
     PresentBenchmarks.factoryFor("skia") shouldBe Right(SkiaRasterSurfaceFactory)
     PresentBenchmarks.factoryFor("layer-image") shouldBe Right(DiscardingImageLayer.factory)
     PresentBenchmarks.factoryFor("skia-image").isLeft shouldBe true
@@ -20,7 +20,7 @@ class PresentBenchmarksBackendSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "say which backends it knows when it refuses one" in {
-    PresentBenchmarks.factoryFor("bogus").left.getOrElse("") should (include("java2d") and include("layer-image"))
+    PresentBenchmarks.factoryFor("bogus").left.getOrElse("") should (include("skia") and include("layer-image"))
   }
 
   "A benchmark window on the layer's image frames" should "have no image to read back, and still say whether the frame drew" in {

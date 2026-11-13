@@ -49,8 +49,10 @@ jobs:
           if [ -n "$PREVIOUS_REF" ]; then
             previous="$(git rev-parse "$PREVIOUS_REF^{commit}")"
           else
+            # Only a master run whose commit is in this checkout's history counts (a topic-branch dispatch that
+            # succeeded, or a branch deleted since, once made every night fail: "invalid reference").
             gh api "repos/$GITHUB_REPOSITORY/actions/workflows/perf-nightly-abba.yml/runs?status=success&per_page=30" > "$RUNNER_TEMP/runs.json"
-            previous="$(python3 scripts/perf_nightly.py previous-sha "$RUNNER_TEMP/runs.json")"
+            previous="$(python3 scripts/perf_nightly.py previous-sha "$RUNNER_TEMP/runs.json" --within HEAD)"
             if [ -z "$previous" ]; then
               previous="$(git rev-list -1 --before='24 hours ago' HEAD)"
               echo "::notice::No earlier successful nightly; comparing against the last commit older than 24 hours ($previous)."

@@ -169,7 +169,7 @@ abstract class ScrollReusePixelsBehaviour extends AnyFlatSpec with Matchers with
   }
 
   private def strip(values: Int*): FramePixels =
-    val frame = Java2DFrames.newFrame(values.size, 1)
+    val frame = SkiaFrames.newFrame(values.size, 1)
     values.zipWithIndex.foreach((value, x) => frame.stamp(x, 0, value * 0x010101))
     frame
 

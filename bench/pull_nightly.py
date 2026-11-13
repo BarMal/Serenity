@@ -314,7 +314,7 @@ def parse_perf_csv(text: str) -> dict[str, float]:
 
 
 def parse_render_json(text: str) -> dict[str, float]:
-    """`--render-benchmark`'s JSON: scenarios[].{scenario, java2d|skia|raster: {p50Ms}} as `render.<scenario>.<backend>`."""
+    """`--render-benchmark`'s JSON: scenarios[].{scenario, skia|raster: {p50Ms}} as `render.<scenario>.<backend>`."""
     try:
         scenarios = json.loads(text)["scenarios"]
     except (ValueError, KeyError, TypeError) as error:
@@ -322,7 +322,7 @@ def parse_render_json(text: str) -> dict[str, float]:
     metrics: dict[str, float] = {}
     for scenario in scenarios:
         label = re.sub(r"[^A-Za-z0-9]+", "_", str(scenario.get("scenario", "?"))).strip("_").lower()
-        for backend in ("java2d", "skia", "raster"):
+        for backend in ("skia", "raster"):
             stats = scenario.get(backend)
             if isinstance(stats, dict) and isinstance(stats.get("p50Ms"), (int, float)):
                 metrics[f"render.{label}.{backend}"] = float(stats["p50Ms"])

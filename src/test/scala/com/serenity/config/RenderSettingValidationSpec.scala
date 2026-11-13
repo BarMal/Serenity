@@ -20,7 +20,7 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
     val result = loaded("ui.render.backend = vulkan\n")
     val entry  = result.report.invalidEntries.find(_.key == "ui.render.backend")
     entry.map(_.value) shouldBe Some("vulkan")
-    entry.map(_.reason).getOrElse("") should include("auto, skia, skia-raster or java2d")
+    entry.map(_.reason).getOrElse("") should include("auto, skia or skia-raster")
     result.config.surfaceConfig.renderBackend shouldBe RenderBackendSetting.Auto
   }
 
@@ -35,7 +35,7 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
     val result = loaded("ui.render.wayland = sideways\n")
     val entry  = result.report.invalidEntries.find(_.key == "ui.render.wayland")
     entry.map(_.value) shouldBe Some("sideways")
-    entry.map(_.reason).getOrElse("") should include("java2d, skia-raster or xwayland")
+    entry.map(_.reason).getOrElse("") should include("skia-raster or xwayland")
     result.config.surfaceConfig.renderWayland shouldBe WaylandRender.SkiaRaster
   }
 
@@ -43,8 +43,23 @@ class RenderSettingValidationSpec extends AnyFlatSpec with Matchers:
     val result  = loaded("ui.render.backend = vulkan\n")
     val message = ConfigMigrationWarning.message(TestTemp.file("serenity-render-warning", ".conf"), result.report)
     message.getOrElse("") should (include("ui.render.backend = vulkan") and include(
-      "auto, skia, skia-raster or java2d"
+      "auto, skia or skia-raster"
     ))
+  }
+
+  "java2d" should "be neither a renderer nor a Wayland render at the current config version" in {
+    val result = loaded("config.version = 3\nui.render.backend = java2d\nui.render.wayland = java\n")
+    result.report.invalidEntries.map(entry => entry.key -> entry.value).sorted shouldBe
+      List("ui.render.backend" -> "java2d", "ui.render.wayland" -> "java")
+    result.config.surfaceConfig.renderBackend shouldBe RenderBackendSetting.Auto
+    result.config.surfaceConfig.renderWayland shouldBe WaylandRender.SkiaRaster
+  }
+
+  "The render setting values" should "be the renderers Skia has" in {
+    RenderBackendSetting.values.toList.map(_.configKey) shouldBe List("auto", "skia", "skia-raster")
+    WaylandRender.values.toList.map(_.configKey) shouldBe List("skia-raster", "xwayland")
+    RenderBackendSetting.fromConfigKey("java2d") shouldBe None
+    WaylandRender.fromConfigKey("java") shouldBe None
   }
 
   "A valid render setting" should "be reported as nothing" in {

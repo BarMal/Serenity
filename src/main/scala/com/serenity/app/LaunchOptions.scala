@@ -27,12 +27,12 @@ import com.serenity.ui.benchmark.RenderBenchmarkOptions
   * @param resetSession
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param renderer
-  *   `--renderer=auto|skia|skia-raster|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
+  *   `--renderer=auto|skia|skia-raster`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
   * @param waylandRender
-  *   `--wayland-render=java2d|skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
+  *   `--wayland-render=skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
   * @param renderBenchmark
-  *   `--render-benchmark`: time Java2D and the Skia layer side by side on one scripted document, print and write the
-  *   report, and quit without starting the editor. `None` unless the flag is given.
+  *   `--render-benchmark`: time the Skia layer on one scripted document, print and write the report, and quit without
+  *   starting the editor. `None` unless the flag is given.
   */
 final case class LaunchOptions(
     openPaths: List[Path] = Nil,
@@ -124,14 +124,14 @@ object LaunchOptions:
     Opts
       .option[String](
         "renderer",
-        "Which renderer paints the window: auto, skia, skia-raster or java2d. Beats SERENITY_RENDER_BACKEND and " +
+        "Which renderer paints the window: auto, skia or skia-raster. Beats SERENITY_RENDER_BACKEND and " +
           "ui.render.backend.",
-        metavar = "auto|skia|skia-raster|java2d"
+        metavar = "auto|skia|skia-raster"
       )
       .mapValidated(value =>
         RenderBackendSetting
           .fromConfigKey(value)
-          .toValidNel(s"Unknown renderer '$value'; expected auto, skia, skia-raster or java2d.")
+          .toValidNel(s"Unknown renderer '$value'; expected auto, skia or skia-raster.")
       )
       .orNone
 
@@ -139,15 +139,15 @@ object LaunchOptions:
     Opts
       .option[String](
         "wayland-render",
-        "What a Wayland session does when Skia would paint the window: java2d (keep native Wayland and Java2D), " +
-          "skia-raster (Skia on the CPU under native Wayland) or xwayland (X11 toolkit, so Skia can use the GPU). " +
+        "What a Wayland session does when Skia would paint the window: skia-raster (Skia on the CPU under native " +
+          "Wayland) or xwayland (X11 toolkit, so Skia can use the GPU). " +
           "Beats SERENITY_WAYLAND_RENDER and ui.render.wayland.",
-        metavar = "java2d|skia-raster|xwayland"
+        metavar = "skia-raster|xwayland"
       )
       .mapValidated(value =>
         WaylandRender
           .fromConfigKey(value)
-          .toValidNel(s"Unknown Wayland render '$value'; expected java2d, skia-raster or xwayland.")
+          .toValidNel(s"Unknown Wayland render '$value'; expected skia-raster or xwayland.")
       )
       .orNone
 
@@ -157,7 +157,7 @@ object LaunchOptions:
       Opts
         .flag(
           "render-benchmark",
-          "Time Java2D and the Skia layer side by side on one scripted document, print and save the report, then quit."
+          "Time the Skia layer on one scripted document, print and save the report, then quit."
         )
         .orFalse,
       Opts

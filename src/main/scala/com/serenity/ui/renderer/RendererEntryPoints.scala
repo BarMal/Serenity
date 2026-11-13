@@ -68,7 +68,7 @@ object RendererEntryPoints:
     repaintOnFlush: Boolean,
     damage: Damage = Damage.Everything,
     caches: RenderCaches = RenderCaches.create(),
-    surfaces: FrameSurfaceFactory = FrameSurfaceFactory.Java2D
+    surfaces: FrameSurfaceFactory
   ): Unit =
     // Set while the frame is drawn, read when it is flushed: None asks for a whole-canvas repaint, Some(rects) for a
     // repaint bounded to the rects this frame actually changed.
@@ -93,7 +93,7 @@ object RendererEntryPoints:
       )
     )
     val viewportSize = target.viewportSize
-    // A Swing/Java2D surface always has a real FontRenderContext to measure against, so this scene keeps its
+    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext to measure against, so this scene keeps its
     // long-standing behaviour of deriving cell metrics from `codeFont` and letting `TextLayoutSnapshot` auto-detect
     // measured vs. cell layout per buffer font -- no override needed (#1215's cellMetrics override is for a surface
     // with no real font rendering at all, i.e. TUI's `TerminalRenderSurface`, reached only through the
