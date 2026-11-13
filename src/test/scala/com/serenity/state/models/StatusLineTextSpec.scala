@@ -1,5 +1,6 @@
 package com.serenity.state.models
 
+import cats.data.NonEmptyList
 import com.serenity.config.StatusSegment
 import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.LspProgressTask
@@ -57,4 +58,42 @@ class StatusLineTextSpec extends AnyFlatSpec with Matchers:
 
     StatusLineText.render(base, List(StatusSegment.Language)) shouldBe Some("Scala")
     StatusLineText.render(state, List(StatusSegment.Language)) shouldBe Some("Scala (Indexing 40%)")
+  }
+
+  /** `Col` is the visual column: tab-expanded, with a wide character or an emoji cluster counted at its cells (#1967).
+    */
+  private def positionAt(text: String, line: Int, column: Int): Option[String] =
+    val buffer = Buffer.fromString(bufferId, text)
+    val placed = buffer.withCursorList(NonEmptyList.one(Cursor(CursorPosition(line, column))))
+    val state  = AppState.initial.copy(persisted = AppState.initial.persisted.copy(buffers = Map(bufferId -> placed)))
+    StatusLineText.render(state, List(StatusSegment.Position))
+
+  "Position" should "count a plain line's columns as before" in {
+    positionAt("hello", 0, 5) shouldBe Some("Line 1, Col 6")
+  }
+
+  it should "count a flag, four UTF-16 units, as the two cells it takes" in {
+    positionAt("\ud83c\uddfa\ud83c\uddf8", 0, 4) shouldBe Some("Line 1, Col 3")
+  }
+
+  it should "count a base and its combining mark as the one cell they take" in {
+    positionAt("e\u0301x", 0, 3) shouldBe Some("Line 1, Col 3")
+  }
+
+  it should "count a joined family as the two cells it takes" in {
+    positionAt("\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67x", 0, 9) shouldBe Some("Line 1, Col 4")
+  }
+
+  it should "count a wide CJK character as two cells" in {
+    positionAt("\u4f60\u597d", 0, 2) shouldBe Some("Line 1, Col 5")
+  }
+
+  it should "expand a tab to the next tab stop" in {
+    val tab = IndentationSettings.DefaultTabSize
+    positionAt("\tx", 0, 2) shouldBe Some(s"Line 1, Col ${tab + 2}")
+    positionAt("ab\tc", 0, 4) shouldBe Some(s"Line 1, Col ${tab + 2}")
+  }
+
+  it should "read the line the cursor is on" in {
+    positionAt("one\n\u4f60\u597d", 1, 1) shouldBe Some("Line 2, Col 3")
   }

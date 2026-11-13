@@ -27,10 +27,10 @@ class TuiUnicodeWidthSpec extends TuiSpec:
       _ <- typeText("漢")
       _ <- verify("after one wide glyph") { screen =>
         // Past the glyph's continuation cell, not on it: the caret's column is a display column, so it agrees with
-        // both the painted cells and the status bar's own count.
+        // both the painted cells and the status bar's own count (the glyph's two cells, #1967).
         screen.caret shouldBe (ContentColumn + 2, FirstLineRow)
         screen.cellAt(ContentColumn + 1, FirstLineRow).span shouldBe CellSpan.Continuation
-        screen.statusBar should include("Col 2")
+        screen.statusBar should include("Col 3")
       }
       _ <- typeText("字")
       _ <- verify("after two")(screen => screen.caret shouldBe (ContentColumn + 4, FirstLineRow))

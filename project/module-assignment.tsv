@@ -184,6 +184,7 @@ ui/layout/BoundaryScratch.scala	base
 ui/layout/CellMetrics.scala	base
 ui/layout/CellWrapping.scala	base
 ui/layout/CharWidth.scala	base
+ui/layout/DisplayColumn.scala	base
 ui/layout/DropCapWidths.scala	base
 ui/layout/FontLineExtents.scala	base
 ui/layout/KeyHintVocabulary.scala	base
