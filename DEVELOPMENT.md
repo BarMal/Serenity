@@ -68,7 +68,7 @@ sbt -v scalafmtAll "Compile / scalafix" "Test / scalafix"
 ### Turning Windows and macOS CI off (Linux only)
 
 The repository variable `CROSS_OS_CI` is the one switch (Settings, Secrets and variables, Actions, Variables). Unset, or any
-value but `off`, every job runs as usual. At `off` (#2618) the Windows and macOS jobs are skipped:
+value but `off` (in any letter case: `OFF` works too), every job runs as usual. At `off` (#2618) the Windows and macOS jobs are skipped:
 
 - Cross-OS Tests: its four jobs are skipped, so the required checks `Test (windows)` and `Test (macos)` report skipped,
   which branch protection counts as passing.
