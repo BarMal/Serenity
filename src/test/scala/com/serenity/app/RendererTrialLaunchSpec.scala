@@ -5,13 +5,18 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 
 import scala.concurrent.duration.*
 
-import cats.effect.{Deferred, IO}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Deferred, IO}
 import com.serenity.app.RendererChoice.{Candidate, Outcome}
 import com.serenity.app.RendererWorkload.Plan
 import com.serenity.config.WindowChromeMode
 import com.serenity.diagnostics.FrameTimings
+import com.serenity.input.InputRouter
+import com.serenity.keystroke.events.Event
+import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.testkit.DisplayExclusive
+import com.serenity.ui.host.InputSettings
+import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.terminal.{SwingWindow, SwingWindowHost}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -43,7 +48,13 @@ class RendererTrialLaunchSpec extends AnyFlatSpec with Matchers:
     val quit = withHost { host =>
       for
         quit <- Deferred[IO, Unit]
-        _    <- RendererTrialLaunch.firstFrame(options("notes.md"), host, "skia", quit, new PrintStream(new ByteArrayOutputStream()))
+        _ <- RendererTrialLaunch.firstFrame(
+          options("notes.md"),
+          host,
+          "skia",
+          quit,
+          new PrintStream(new ByteArrayOutputStream())
+        )
         _    <- IO.sleep(300.millis)
         done <- quit.tryGet
       yield done
@@ -56,6 +67,9 @@ class RendererTrialLaunchSpec extends AnyFlatSpec with Matchers:
       val bytes = new ByteArrayOutputStream()
       val out   = new PrintStream(bytes, true, "UTF-8")
       for
+        router <- InputRouter.create[IO, Event](new TextEntryTranslator)
+        metrics = () => CellMetrics(8, 16, 13)
+        _    <- host.inputHandler(router, InputSettings(metrics, metrics, 3, FrameTimings(), None))
         quit <- Deferred[IO, Unit]
         _ <- RendererTrialLaunch.firstFrame(
           options("--renderer-trial=skia-raster", "--safe-mode"),
