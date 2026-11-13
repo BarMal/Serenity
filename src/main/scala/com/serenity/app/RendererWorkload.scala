@@ -83,7 +83,7 @@ object RendererWorkload:
     case _: Step.Type => plan.typingPace
     case _            => plan.settle
 
-  def outcome(result: Result, scale: Double): Outcome =
+  def outcome(result: Result, scale: Double, clockResolutionMs: Double): Outcome =
     val unanswered = List("typing" -> result.typing, "page-down" -> result.pageDown, "full-redraw" -> result.fullRedraw)
       .filter((_, samples) => samples.latenciesMs.isEmpty)
     if unanswered.nonEmpty then
@@ -98,6 +98,7 @@ object RendererWorkload:
           typingP50Ms = RendererChoice.median(result.typing.latenciesMs.toList),
           typingP95Ms = RendererChoice.percentile(result.typing.latenciesMs.toList, 95),
           scale = scale,
+          clockResolutionMs = clockResolutionMs,
           fullWindowMs = Map(
             "page-down"   -> RendererChoice.median(result.pageDown.latenciesMs.toList),
             "full-redraw" -> RendererChoice.median(result.fullRedraw.latenciesMs.toList)

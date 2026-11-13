@@ -46,8 +46,10 @@ object RendererBenchmarkResult:
     case Applies(stored: Stored)
     case Stale(stored: Stored, changed: List[String])
 
-  /** 2 added the typing p95 and the scale; a file of any other version is read as absent and measured again. */
-  val SchemaVersion: Int = 2
+  /** 2 added the typing p95 and the scale, 3 the clock's resolution; a file of any other version is read as absent and
+    * measured again.
+    */
+  val SchemaVersion: Int = 3
 
   val fileName: String = "render-benchmark.json"
 
@@ -73,10 +75,11 @@ object RendererBenchmarkResult:
   private[app] def outcomeJson(outcome: Outcome): Json = outcome match
     case Outcome.Measured(workload) =>
       Json.obj(
-        "typingP50Ms"  -> workload.typingP50Ms.asJson,
-        "typingP95Ms"  -> workload.typingP95Ms.asJson,
-        "scale"        -> workload.scale.asJson,
-        "fullWindowMs" -> workload.fullWindowMs.asJson
+        "typingP50Ms"       -> workload.typingP50Ms.asJson,
+        "typingP95Ms"       -> workload.typingP95Ms.asJson,
+        "scale"             -> workload.scale.asJson,
+        "clockResolutionMs" -> workload.clockResolutionMs.asJson,
+        "fullWindowMs"      -> workload.fullWindowMs.asJson
       )
     case Outcome.Failed(reason) =>
       Json.obj("failed" -> reason.asJson)
@@ -119,11 +122,12 @@ object RendererBenchmarkResult:
       case Some(reason) => Right(Outcome.Failed(reason))
       case None =>
         for
-          typing    <- cursor.get[Double]("typingP50Ms")
-          typingP95 <- cursor.get[Double]("typingP95Ms")
-          scale     <- cursor.get[Double]("scale")
-          rows      <- cursor.get[Map[String, Double]]("fullWindowMs")
-        yield Outcome.Measured(Workload(typing, typingP95, scale, rows))
+          typing     <- cursor.get[Double]("typingP50Ms")
+          typingP95  <- cursor.get[Double]("typingP95Ms")
+          scale      <- cursor.get[Double]("scale")
+          resolution <- cursor.get[Double]("clockResolutionMs")
+          rows       <- cursor.get[Map[String, Double]]("fullWindowMs")
+        yield Outcome.Measured(Workload(typing, typingP95, scale, resolution, rows))
     }
 
   private given Decoder[Outcome] = outcomeDecoder

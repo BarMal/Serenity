@@ -17,25 +17,27 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
 
   /** A screen that takes `cost` to grab and shows what `ref` holds when the grab finishes. */
   private def fakeScreen(
-      cost: FiniteDuration,
-      ref: Ref[IO, Vector[Int]],
-      grabs: Ref[IO, List[Region]],
-      events: Option[Ref[IO, List[String]]] = None
+    cost: FiniteDuration,
+    ref: Ref[IO, Vector[Int]],
+    grabs: Ref[IO, List[Region]],
+    events: Option[Ref[IO, List[String]]] = None
   ): Screen =
     grabbed => grabs.update(grabbed :: _) *> events.traverse_(_.update("grab" :: _)) *> IO.sleep(cost) *> ref.get
 
   private def measure(
-      cost: FiniteDuration,
-      changeAfter: Option[FiniteDuration],
-      timeout: FiniteDuration = 200.millis
+    cost: FiniteDuration,
+    changeAfter: Option[FiniteDuration],
+    timeout: FiniteDuration = 200.millis
   ): (Option[Double], List[String], Int) =
     runVirtual {
       for
         ref    <- Ref.of[IO, Vector[Int]](blank)
         grabs  <- Ref.of[IO, List[Region]](Nil)
         events <- Ref.of[IO, List[String]](Nil)
-        screen  = fakeScreen(cost, ref, grabs, Some(events))
-        trigger = events.update("trigger" :: _) *> changeAfter.traverse_(delay => (IO.sleep(delay) *> ref.set(inked)).start)
+        screen = fakeScreen(cost, ref, grabs, Some(events))
+        trigger = events.update("trigger" :: _) *> changeAfter.traverse_(delay =>
+          (IO.sleep(delay) *> ref.set(inked)).start
+        )
         result <- PixelClock.timeChange(screen, region, trigger, timeout)
         log    <- events.get
         count  <- grabs.get.map(_.size)
@@ -69,8 +71,8 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
         ref   <- Ref.of[IO, Vector[Int]](blank)
         grabs <- Ref.of[IO, List[Region]](Nil)
         screen = fakeScreen(1.milli, ref, grabs)
-        _     <- PixelClock.timeChange(screen, region, ref.set(inked), 50.millis)
-        all   <- grabs.get
+        _   <- PixelClock.timeChange(screen, region, ref.set(inked), 50.millis)
+        all <- grabs.get
       yield all.distinct
     }
     seen shouldBe List(region)
@@ -83,7 +85,7 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
   }
 
   "PixelClock.resolution" should "be the quickest grab, which is the least the clock can be late by" in {
-    val costs = List(8.millis, 5.millis, 9.millis).iterator
+    val costs           = List(8.millis, 5.millis, 9.millis).iterator
     val varying: Screen = _ => IO.sleep(costs.next()).as(blank)
     runVirtual(PixelClock.resolution(varying, region, samples = 3)) shouldBe 5.0
   }
@@ -93,8 +95,8 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
       for
         grabs <- Ref.of[IO, Int](0)
         screen: Screen = _ => grabs.update(_ + 1) *> IO.sleep(2.millis).as(blank)
-        _     <- PixelClock.resolution(screen, region, samples = 50)
-        n     <- grabs.get
+        _ <- PixelClock.resolution(screen, region, samples = 50)
+        n <- grabs.get
       yield n
     }
     count shouldBe 50
