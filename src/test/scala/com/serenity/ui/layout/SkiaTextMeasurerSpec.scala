@@ -19,3 +19,17 @@ class SkiaTextMeasurerSpec extends TextMeasurerContract:
   protected def fonts: Vector[FontSpec] =
     TextMeasureCorpus.fonts.map(pinned => FontSpec.fromAwt(pinned.font)) :+
       FontSpec.fromAwt(Font(Font.SANS_SERIF, Font.PLAIN, 13))
+
+  property(
+    "Skiko's font metrics are still answered, and a 14 pt font's cell has an ascent inside a plausible line height"
+  ) {
+    SkiaTextMeasurer.hasVerticalMetrics shouldBe true
+    TextMeasureCorpus.fonts.foreach { pinned =>
+      val cell = first.cellMetrics(FontSpec.fromAwt(pinned.font))
+      withClue(pinned.label) {
+        cell.lineHeight should (be > 8 and be < 40)
+        cell.ascent should (be >= 1 and be < cell.lineHeight)
+        cell.charWidth should (be >= 5 and be < 25)
+      }
+    }
+  }

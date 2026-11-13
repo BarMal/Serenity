@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
 import com.serenity.ui.layout.TextMeasureBaseline.Entry
-import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
+import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextMeasurer

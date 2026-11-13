@@ -20,7 +20,7 @@ import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedTextCache}
   * whose only context is a kerning pair with its successor is not context-free but is measurable: the pair's kerning is
   * kept beside its advance, which is all a row cut out of the paragraph needs to find its carets.
   */
-final private[layout] class GlyphAdvances private (
+final private[ui] class GlyphAdvances private (
     private val advances: Array[Float],
     private val contextFreeBefore: Array[Int],
     private val kernAfter: Array[Float],
@@ -95,13 +95,13 @@ final private[layout] class GlyphAdvances private (
       if index > 0 && index < count then carets(index) - kernAfter(from + index - 1) else carets(index)
     )
 
-private[layout] object GlyphAdvances:
+private[ui] object GlyphAdvances:
 
   /** Shaped and nominal advances closer than this are the same advance read through different arithmetic. */
-  private val ShapingTolerancePx = 0.01f
+  private[ui] val ShapingTolerancePx = 0.01f
 
   /** Below this a non-zero advance could be mistaken for a collapsed caret by `normalizeCollapsedCarets`. */
-  private val SmallestDistinctAdvancePx = 0.05f
+  private[ui] val SmallestDistinctAdvancePx = 0.05f
 
   private val AgreementProbeText = "Hoxi "
 
@@ -170,11 +170,24 @@ private[layout] object GlyphAdvances:
       shaped.getGlyphPosition(1).getX.toFloat - nominal.getGlyphMetrics(0).getAdvance
     else 0.0f
 
+  /** Advances a backend other than AWT measured: `advances` and `kernAfter` per character, and per character whether it
+    * is context-free and whether it is measurable (see [[measure]]).
+    */
+  def of(
+    advances: Array[Float],
+    contextFree: Array[Boolean],
+    kernAfter: Array[Float],
+    measurable: Array[Boolean]
+  ): GlyphAdvances =
+    def countBefore(flags: Array[Boolean]): Array[Int] =
+      flags.scanLeft(0)((count, flag) => if flag then count + 1 else count)
+    new GlyphAdvances(advances, countBefore(contextFree), kernAfter, countBefore(measurable))
+
   def hasContextFreeCharacters(text: String): Boolean =
     !Font.textRequiresLayout(text.toCharArray, 0, text.length) && text.forall(isContextFreeCharacter)
 
   /** AWT measures a format character (zero-width space, joiner) differently at the end of a run than inside it. */
-  private def isContextFreeCharacter(char: Char): Boolean =
+  private[ui] def isContextFreeCharacter(char: Char): Boolean =
     Character.getType(char) != Character.FORMAT && !Character.isSurrogate(char) &&
       (char == '\t' || !Character.isISOControl(char))
 
@@ -220,9 +233,7 @@ private[layout] object GlyphAdvances:
       case (column, extraPx) =>
         if column >= origin && column < origin + chars.length then advances(column - origin) += extraPx
     }
-    def countBefore(flags: Array[Boolean]): Array[Int] =
-      flags.scanLeft(0)((count, flag) => if flag then count + 1 else count)
-    new GlyphAdvances(advances, countBefore(contextFree), kernAfter, countBefore(measurable))
+    of(advances, contextFree, kernAfter, measurable)
 
   private def measureRun(
     chars: Array[Char],
