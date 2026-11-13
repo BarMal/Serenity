@@ -56,7 +56,7 @@ final class RenderCaches private (
     val scrollRows: ScrollRowsReporter
 ):
 
-  /** What a Java2D surface drawing for this owner paints text through. */
+  /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
 
 object RenderCaches:

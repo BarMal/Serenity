@@ -4,7 +4,7 @@ import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches}
 import org.jetbrains.skia.Typeface
 
 /** What a Skia surface paints text and images through. Their owner shares one set across every frame and layer it
-  * draws, as it does for a Java2D surface ([[com.serenity.ui.renderer.SurfaceTextCaches]]).
+  * draws. [[com.serenity.ui.renderer.SurfaceTextCaches]] is the seam type that carries the same owner's caches in.
   */
 final case class SkiaTextCaches(
     fonts: SkiaFontCache,

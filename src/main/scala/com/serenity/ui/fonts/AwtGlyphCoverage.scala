@@ -4,9 +4,9 @@ import java.awt.Font
 
 import com.serenity.text.fallback.{FontSlot, GlyphCoverage}
 
-/** Font coverage for the Java2D backend, read with `Font.canDisplay`. The chain is the primary font, the configured
-  * fallbacks, an optional emoji face, and last the logical `Dialog` composite: its fontconfig-driven component fonts
-  * reach whatever the system has installed, so a codepoint no explicit fallback covers still has a font to go to.
+/** Font coverage over AWT fonts, read with `Font.canDisplay`. The chain is the primary font, the configured fallbacks,
+  * an optional emoji face, and last the logical `Dialog` composite: its fontconfig-driven component fonts reach
+  * whatever the system has installed, so a codepoint no explicit fallback covers still has a font to go to.
   */
 final class AwtGlyphCoverage private (fonts: Vector[Font], override val emojiSlot: Option[FontSlot])
     extends GlyphCoverage:

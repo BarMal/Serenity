@@ -184,7 +184,7 @@ object RendererCursorOverlay:
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val viewportSize = target.viewportSize
-    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
@@ -364,7 +364,7 @@ object RendererCursorOverlay:
         attachLayer = target.attachLayerPresenter
       )
     )
-    // Swing/Java2D always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,

@@ -215,12 +215,12 @@ object RendererFramePlanner:
       .getOrElse(Damage.Nothing)
 
   /** Paint the modal layer, reusing its last-painted buffer instead of repainting when it's safe to: the surface
-    * supports [[LayerBufferSupport]] (GUI/Java2D only -- a `TerminalRenderSurface` reports `layerBuffers = None` and
-    * this falls straight through to `renderModalLayer`, painting directly into the shared surface every frame exactly
-    * as before this stage, since a terminal has no sub-cell buffering concept to give the modal its own buffer with),
-    * the modal is actually present this frame (`scene.modalBackdrop` is defined), the layer is clean (`isDirty` is
-    * false, i.e. `DamageProducer`'s `modalOnlyContentChange` carve-out held for this transition), and the cached image
-    * still matches this frame's viewport size and cursor-blink state.
+    * supports [[LayerBufferSupport]] (a pixel surface may offer it, none does at present; a `TerminalRenderSurface`
+    * reports `layerBuffers = None` and this falls straight through to `renderModalLayer`, painting directly into the
+    * shared surface every frame exactly as before this stage, since a terminal has no sub-cell buffering concept to
+    * give the modal its own buffer with), the modal is actually present this frame (`scene.modalBackdrop` is defined),
+    * the layer is clean (`isDirty` is false, i.e. `DamageProducer`'s `modalOnlyContentChange` carve-out held for this
+    * transition), and the cached image still matches this frame's viewport size and cursor-blink state.
     *
     * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
     * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting

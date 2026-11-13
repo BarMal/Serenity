@@ -3,7 +3,8 @@ package com.serenity.diagnostics
 import java.util.concurrent.atomic.AtomicLong
 
 /** The time one owner's frames have spent building their scene (layout) and drawing it, which the render benchmark
-  * reads to split a cold frame. The two phases are timed on whatever backend draws, so Java2D and Skia can be compared.
+  * reads to split a cold frame. The two phases are timed on whatever backend draws, so the Skia layer and the raster
+  * can be compared.
   */
 final class FramePhaseClock(nanoTime: () => Long = () => System.nanoTime()):
 

@@ -17,10 +17,10 @@ import com.serenity.ui.layout.{
 }
 import com.serenity.ui.theme.RichTextStyling
 
-/** Java2D/font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a
-  * reducer runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared
-  * measurement (also used directly by mouse-click and vertical-navigation effect handlers); `ensureVisibleCursors` is
-  * the boundary pass that re-applies it after a pure reduce, for every buffer whose primary cursor moved.
+/** AWT font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a reducer
+  * runs mid-edit against content the effect boundary has not seen yet. `adjustForCursor` is the shared measurement
+  * (also used directly by mouse-click and vertical-navigation effect handlers); `ensureVisibleCursors` is the boundary
+  * pass that re-applies it after a pure reduce, for every buffer whose primary cursor moved.
   */
 object CursorViewport:
 

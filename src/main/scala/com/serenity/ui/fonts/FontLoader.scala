@@ -233,8 +233,8 @@ object FontLoader:
     loadBundledFontBase("/fonts/MaterialIconsRound-Regular.otf").filter(registerBundled)
 
   /** The family of the bundled monochrome emoji face, registered with a Regular and a Bold file so that a bold request
-    * finds a face of its own: Java2D cannot select a variable font's weight axis, and its synthetic bold would widen
-    * the advance.
+    * finds a face of its own: AWT cannot select a variable font's weight axis, and its synthetic bold would widen the
+    * advance.
     */
   lazy val emojiFontFamily: Option[String] =
     val faces = List("/fonts/NotoEmoji-Regular.ttf", "/fonts/NotoEmoji-Bold.ttf").flatMap(loadBundledFontBase)

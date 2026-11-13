@@ -16,7 +16,7 @@ import com.serenity.ui.renderer.{
 import org.jetbrains.skia.Surface
 
 /** Paints a window's frames with Skia's CPU rasteriser and hands the Swing canvas an ordinary image to present, so the
-  * window keeps its Java2D canvas for input, input methods and accessibility.
+  * window keeps its Swing canvas for input, input methods and accessibility.
   *
   * The owner's [[BackendCaches]] hold the raster surface, which is how a frame starts from the pixels the last one
   * left.

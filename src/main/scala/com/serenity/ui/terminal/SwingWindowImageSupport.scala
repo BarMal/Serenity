@@ -211,8 +211,8 @@ private[terminal] trait SwingWindowImageSupport:
   private[serenity] def needsBackgroundFill(base: Option[BufferedImage]): Boolean =
     !base.exists(image => image.getWidth > 0 && image.getHeight > 0 && image.getTransparency == Transparency.OPAQUE)
 
-  /** Present a frame into `g`, touching only its clip: Java2D bounds a software image upload by the destination
-    * rectangle, not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
+  /** Present a frame into `g`, touching only its clip: AWT bounds a software image upload by the destination rectangle,
+    * not the clip, so drawing the whole image for a caret-sized repaint copies the whole window.
     */
   private[serenity] def paintPresentedFrame(
     g: Graphics2D,
