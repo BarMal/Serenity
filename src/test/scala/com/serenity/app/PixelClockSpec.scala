@@ -15,11 +15,14 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
   private val blank  = Vector.fill(8)(0xff000000)
   private val inked  = Vector.fill(8)(0xffffffff)
 
-  /** A screen that takes `cost` to grab and shows `pixels`, which a test changes with `set`. */
-  final private class FakeScreen(cost: FiniteDuration, initial: Vector[Int]):
-    val shown: IO[Ref[IO, Vector[Int]]] = Ref.of[IO, Vector[Int]](initial)
-    def screen(ref: Ref[IO, Vector[Int]], grabs: Ref[IO, List[Region]]): Screen =
-      grabbed => grabs.update(grabbed :: _) *> IO.sleep(cost) *> ref.get
+  /** A screen that takes `cost` to grab and shows what `ref` holds when the grab finishes. */
+  private def fakeScreen(
+      cost: FiniteDuration,
+      ref: Ref[IO, Vector[Int]],
+      grabs: Ref[IO, List[Region]],
+      events: Option[Ref[IO, List[String]]] = None
+  ): Screen =
+    grabbed => grabs.update(grabbed :: _) *> events.traverse_(_.update("grab" :: _)) *> IO.sleep(cost) *> ref.get
 
   private def measure(
       cost: FiniteDuration,
@@ -31,7 +34,7 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
         ref    <- Ref.of[IO, Vector[Int]](blank)
         grabs  <- Ref.of[IO, List[Region]](Nil)
         events <- Ref.of[IO, List[String]](Nil)
-        screen  = new FakeScreen(cost, blank).screen(ref, grabs)
+        screen  = fakeScreen(cost, ref, grabs, Some(events))
         trigger = events.update("trigger" :: _) *> changeAfter.traverse_(delay => (IO.sleep(delay) *> ref.set(inked)).start)
         result <- PixelClock.timeChange(screen, region, trigger, timeout)
         log    <- events.get
@@ -57,7 +60,7 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
 
   it should "take its baseline before it runs the trigger, so the trigger's own effect is what it sees" in {
     val (_, log, _) = measure(cost = 5.millis, changeAfter = Some(1.millis))
-    log shouldBe List("trigger")
+    log.reverse.take(2) shouldBe List("grab", "trigger")
   }
 
   it should "grab only the region it was asked about" in {
@@ -65,7 +68,7 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
       for
         ref   <- Ref.of[IO, Vector[Int]](blank)
         grabs <- Ref.of[IO, List[Region]](Nil)
-        screen = new FakeScreen(1.milli, blank).screen(ref, grabs)
+        screen = fakeScreen(1.milli, ref, grabs)
         _     <- PixelClock.timeChange(screen, region, ref.set(inked), 50.millis)
         all   <- grabs.get
       yield all.distinct
