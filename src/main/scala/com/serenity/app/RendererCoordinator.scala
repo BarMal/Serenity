@@ -12,7 +12,8 @@ import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Recom
   * what each child printed, recommend, keep the result, and say what it found.
   *
   * Starting a child is behind [[Spawner]], so everything here is exercised without a window. A trial that could not
-  * start, or whose child printed nothing usable, is a failed run for that mode; the rest still run.
+  * start, or whose child printed nothing usable, is run once more; if that fails too it is a failed run for that mode,
+  * and the rest still run.
   */
 object RendererCoordinator:
 
@@ -26,11 +27,17 @@ object RendererCoordinator:
   /** The trial number (from 1), the number of trials, and the mode about to run. */
   type Progress = (Int, Int, Candidate) => IO[Unit]
 
+  /** A trial that failed and was run again: its number, its mode, and why the first attempt failed. */
+  final case class Retry(trial: Int, candidate: Candidate, firstFailure: String)
+
+  type Retrying = (Int, Candidate, String) => IO[Unit]
+
   final case class Finished(
       runs: List[CandidateRuns],
       recommendation: Recommendation,
       current: Candidate,
-      saveError: Option[String]
+      saveError: Option[String],
+      retries: List[Retry] = Nil
   )
 
   def optimize(
@@ -38,19 +45,35 @@ object RendererCoordinator:
     thorough: Boolean,
     spawner: Spawner,
     environment: Environment,
-    progress: Progress
+    progress: Progress,
+    retrying: Retrying = (_, _, _) => IO.unit
   ): IO[Finished] =
     val order = RendererRunOrder.order(thorough)
     for
       outcomes <- order.zipWithIndex.traverse { (candidate, index) =>
-        progress(index + 1, order.size, candidate) *> trial(spawner, candidate).map(candidate -> _)
+        progress(index + 1, order.size, candidate) *> trialWithRetry(spawner, candidate, index + 1, retrying)
       }
+      retries = outcomes.flatMap(_._3)
       runs = RendererRunOrder.candidates(thorough).map { candidate =>
-        CandidateRuns(candidate, outcomes.collect { case (`candidate`, outcome) => outcome })
+        CandidateRuns(candidate, outcomes.collect { case (`candidate`, outcome, _) => outcome })
       }
       recommendation = RendererTarget.annotate(RendererChoice.recommend(current, runs), runs)
       saveError <- save(environment, runs)
-    yield Finished(runs, recommendation, current, saveError)
+    yield Finished(runs, recommendation, current, saveError, retries)
+
+  private def trialWithRetry(
+    spawner: Spawner,
+    candidate: Candidate,
+    number: Int,
+    retrying: Retrying
+  ): IO[(Candidate, Outcome, Option[Retry])] =
+    trial(spawner, candidate).flatMap {
+      case Outcome.Failed(reason) =>
+        retrying(number, candidate, reason) *> trial(spawner, candidate).map(
+          (candidate, _, Some(Retry(number, candidate, reason)))
+        )
+      case measured => IO.pure((candidate, measured, None))
+    }
 
   private def trial(spawner: Spawner, candidate: Candidate): IO[Outcome] =
     spawner
@@ -80,4 +103,7 @@ object RendererCoordinator:
     val kept = finished.saveError.fold(
       List(s"The measurements are kept in ${RendererBenchmarkResult.fileName}, beside config.conf.")
     )(error => List(s"The measurements could not be saved: $error"))
-    headline :: finished.recommendation.evidence ::: advice ::: kept
+    val retried = finished.retries.map(retry =>
+      s"Trial ${retry.trial} (${retry.candidate.label}) failed: ${retry.firstFailure}; it was run again."
+    )
+    retried ::: headline :: finished.recommendation.evidence ::: advice ::: kept

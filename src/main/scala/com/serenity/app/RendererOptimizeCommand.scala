@@ -56,7 +56,9 @@ object RendererOptimizeCommand:
           options.thorough,
           deps.spawner,
           deps.environment,
-          (number, of, candidate) => say(List(s"Trial $number of $of: ${candidate.label}"))
+          (number, of, candidate) => say(List(s"Trial $number of $of: ${candidate.label}")),
+          (number, candidate, reason) =>
+            say(List(s"Trial $number (${candidate.label}) failed: $reason; running it once more."))
         )
         _       <- say(RendererCoordinator.report(finished))
         applied <- if options.apply then apply(finished, deps) else IO.pure(None)
