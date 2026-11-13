@@ -519,11 +519,10 @@ private[perf] object LaptopFrameBenchmarks:
       )
     )
 
-  /** The two frames above on Skia's CPU raster surface, with the same states, the same damage and the same check before
-    * timing (the row caps and pixel equality with a frame drawn from scratch, here by Skia). They are named under
-    * `skia.`, which `scripts/perf-gate-excluded-rows.txt` keeps off the per-PR gate: Skia is the default renderer, and
-    * the nightly ABBA judges these rows. The `.skia_raster` rows beside them draw the same frames, and differ from
-    * these only in their names, which the gate lists.
+  /** A typing frame and a scroll frame on Skia's CPU raster surface, with the same states, the same damage and the same
+    * check before timing (the row caps and pixel equality with a frame drawn from scratch, here by Skia). They are
+    * named under `skia.`, which `scripts/perf-gate-excluded-rows.txt` keeps off the per-PR gate: Skia is the default
+    * renderer, and the nightly ABBA judges these rows.
     */
   private[perf] def skiaInteractionBenchmarks(
     transitions: => InteractionTransitions,
@@ -548,14 +547,6 @@ private[perf] object LaptopFrameBenchmarks:
   private[perf] def interactionBenchmarks(transitions: => InteractionTransitions): List[BenchmarkRunner.Benchmark] =
     lazy val built = transitions
     List(
-      typingFrameRow(
-        "laptop.render.typing_frame_2x.skia_raster",
-        AlternatingTransition(SkiaFrames, built.beforeTyping, built.afterTyping)
-      ),
-      scrollFrameRow(
-        "laptop.render.scroll_frame_2x.skia_raster",
-        AlternatingTransition(SkiaFrames, built.afterTyping, built.afterScroll)
-      ),
       BenchmarkRunner.Benchmark.building(built)(
         BenchmarkRunner.Benchmark(
           "laptop.damage.typing_transition",

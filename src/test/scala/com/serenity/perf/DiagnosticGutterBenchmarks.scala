@@ -10,9 +10,9 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.{BufferId, DiagnosticsState, LanguageServiceState}
 
-/** `laptop.render.typing_frame_2x` over a buffer with an error on every line, so the gutter holds a `!` marker beside
-  * every visible row. The keystroke edits one row; the markers of the rest are kept, so a frame that redraws them all
-  * pays for rows it did not touch. Once with a cell-grid counter (code) and once with a measured one (prose).
+/** `skia.laptop.render.typing_frame_2x` over a buffer with an error on every line, so the gutter holds a `!` marker
+  * beside every visible row. The keystroke edits one row; the markers of the rest are kept, so a frame that redraws
+  * them all pays for rows it did not touch. Once with a cell-grid counter (code) and once with a measured one (prose).
   */
 private[perf] object DiagnosticGutterBenchmarks:
 

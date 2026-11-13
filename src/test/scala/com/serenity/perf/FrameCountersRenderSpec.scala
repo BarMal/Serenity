@@ -14,8 +14,9 @@ import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdenti
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** What the frames `laptop.render.typing_frame_2x` and `scroll_frame_2x` time actually draw, counted: a damaged frame
-  * over a persisting image redraws the rows its damage names and keeps the rest, and says so in its frame counters.
+/** What the frames `skia.laptop.render.typing_frame_2x` and `scroll_frame_2x` time actually draw, counted: a damaged
+  * frame over a persisting image redraws the rows its damage names and keeps the rest, and says so in its frame
+  * counters.
   */
 class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
 

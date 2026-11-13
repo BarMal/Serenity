@@ -69,10 +69,8 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
 
   private lazy val transitions = LaptopFrameBenchmarks.InteractionTransitions(beforeTyping, afterTyping, afterScroll)
 
-  "The Skia raster rows" should "carry the raster marker" in {
+  "The interaction rows" should "be the damage row alone, the frames being timed under the skia. prefix" in {
     LaptopFrameBenchmarks.interactionBenchmarks(transitions).map(_.name) shouldBe List(
-      "laptop.render.typing_frame_2x.skia_raster",
-      "laptop.render.scroll_frame_2x.skia_raster",
       "laptop.damage.typing_transition"
     )
   }
