@@ -5,7 +5,6 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO}
-import cats.effect.unsafe.implicits.global
 import com.serenity.app.RendererChoice.{Candidate, Outcome, Workload}
 import com.serenity.app.RendererTrialChild.Setup
 import com.serenity.app.RendererWorkload.{Plan, Step, Window}
@@ -62,7 +61,7 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
           val bytes = new ByteArrayOutputStream()
           bytes -> new PrintStream(bytes, true, "UTF-8")
         }
-        _ <- RendererTrialChild.run(setup(_ => IO.pure(Some(12.0))), quit, text._2)
+        _    <- RendererTrialChild.run(setup(_ => IO.pure(Some(12.0))), quit, text._2)
         done <- quit.tryGet
       yield (text._1.toString("UTF-8"), done)
     }
@@ -71,15 +70,20 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     report.backend shouldBe RenderBackend.Skia
     report.renderApi shouldBe Some("OPENGL")
     report.outcome shouldBe Outcome.Measured(
-      Workload(typingP50Ms = 12.0, typingP95Ms = 12.0, scale = 2.0, clockResolutionMs = 1.5, fullWindowMs = Map("page-down" -> 12.0, "full-redraw" -> 12.0))
+      Workload(
+        typingP50Ms = 12.0,
+        typingP95Ms = 12.0,
+        scale = 2.0,
+        clockResolutionMs = 1.5,
+        fullWindowMs = Map("page-down" -> 12.0, "full-redraw" -> 12.0)
+      )
     )
     printed._2 shouldBe Some(())
   }
 
   it should "print a failed trial with its reason when every sample of a kind timed out" in {
-    val text = output { out =>
-      Deferred[IO, Unit].flatMap(quit => RendererTrialChild.run(setup(_ => IO.pure(None)), quit, out))
-    }
+    val text =
+      output(out => Deferred[IO, Unit].flatMap(quit => RendererTrialChild.run(setup(_ => IO.pure(None)), quit, out)))
     lineOf(text).outcome should matchPattern { case Outcome.Failed(reason) if reason.contains("typing") => }
   }
 
@@ -115,7 +119,9 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
 
   it should "report a backend it does not know as a failed trial rather than guess" in {
     val text = output { out =>
-      Deferred[IO, Unit].flatMap(quit => RendererTrialChild.run(setup(_ => IO.pure(Some(1.0)), backend = "java2d"), quit, out))
+      Deferred[IO, Unit].flatMap(quit =>
+        RendererTrialChild.run(setup(_ => IO.pure(Some(1.0)), backend = "java2d"), quit, out)
+      )
     }
     lineOf(text).outcome should matchPattern { case Outcome.Failed(reason) if reason.contains("java2d") => }
   }
