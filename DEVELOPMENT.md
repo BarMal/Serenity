@@ -552,6 +552,32 @@ The header also records the CPU model, the CPU frequency governor and whether th
 where the platform does not say: Linux reads `/proc/cpuinfo`, cpufreq and `/sys/class/power_supply`; Windows gives only the CPU
 model, macOS the CPU model), so a shift between days can be told from a code change.
 
+#### The renderer optimizer (`--optimize-renderer`, #2618)
+
+`serenity --optimize-renderer [--thorough] [--apply]` is the user-facing command (docs/user/choosing-a-renderer.md). Its
+parts, each a file under `com.serenity.app` with a spec beside it:
+
+- `RendererCoordinator` runs the trials in the A B B A order of `RendererRunOrder` through a `Spawner`, reads what each
+  child printed (`RendererTrial`), recommends (`RendererChoice`) and keeps the result (`RendererBenchmarkResult`, in
+  `~/.serenity/render-benchmark.json`, schema 3: a file of any other version is read as absent). `RendererTarget`
+  reports each mode against the 16.7 ms typing p95 target at 2x and says "not judged" when the clock resolves more
+  coarsely than a quarter of it.
+- `ProcessSpawner` runs one child per trial through `ProcessService`: the same java, JVM flags and class path, `--safe-mode`,
+  the mode's `--renderer` and `-Dserenity.skia.layerFrames`, and a generated document (`TrialDocument`) to scroll.
+- The child is the hidden `--renderer-trial=<layer+image|layer+picture|skia-raster>` flag (not in `--help`, refused outside
+  safe mode like `--startup-probe`). At the first painted frame `RendererTrialLaunch` dismisses the safe-mode notice
+  (which would take the page-down keys), then `RendererTrialChild` runs `RendererWorkload` (150 typed letters, 20
+  page-downs, 10 full redraws) against `RendererTrialWindow`, prints one `RENDERER_TRIAL {json}` line and quits. A step
+  is a trigger in the window (`SwingTrialDriver`, over `WindowHost.typeCharacter`, `pressPageDown`, `toggleTheme`,
+  `pressEscape` and `resizeToPreferred`) and a screen region the clock watches.
+- The clock is `PixelClock` over `RobotScreen` (`java.awt.Robot`): it grabs a baseline, triggers, and grabs until the
+  region differs. `clockResolutionMs` is the quickest of 50 grabs of that region, so a verdict is never finer than the
+  clock. Needs a display (X11 or XWayland); Linux only for now.
+
+To run one trial by hand: `serenity --safe-mode --renderer=skia-raster --renderer-trial=skia-raster --open <long file>`
+prints its `RENDERER_TRIAL` line.
+
+
 ## Codex CLI
 
 Codex CLI is installed in the Codespace image. Start it from the repository root:
