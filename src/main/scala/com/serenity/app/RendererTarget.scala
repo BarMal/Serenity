@@ -17,6 +17,9 @@ object RendererTarget:
 
   private val ScaleTolerance = 0.05
 
+  /** A clock that resolves more coarsely than a quarter of the target cannot support a verdict on it. */
+  val MaxResolutionMs: Double = TargetMs / 4.0
+
   enum Verdict:
     case Meets(p95Ms: Double)
     case Misses(p95Ms: Double, overByMs: Double)
@@ -30,8 +33,14 @@ object RendererTarget:
     measured.map(_.scale).distinct match
       case Nil => Verdict.NotJudged("no completed run")
       case scale :: Nil if math.abs(scale - TargetScale) <= ScaleTolerance =>
-        val p95 = RendererChoice.median(measured.map(_.typingP95Ms))
-        if p95 <= TargetMs then Verdict.Meets(p95) else Verdict.Misses(p95, p95 - TargetMs)
+        val resolution = RendererChoice.median(measured.map(_.clockResolutionMs))
+        val p95        = RendererChoice.median(measured.map(_.typingP95Ms))
+        if resolution > MaxResolutionMs then
+          Verdict.NotJudged(
+            s"the clock resolves only to ${ms(resolution)} ms; a verdict on ${ms(TargetMs)} ms needs at most ${ms(MaxResolutionMs)} ms"
+          )
+        else if p95 <= TargetMs then Verdict.Meets(p95)
+        else Verdict.Misses(p95, p95 - TargetMs)
       case scale :: Nil => Verdict.NotJudged(s"measured at ${times(scale)}; the target is defined at 2x")
       case scales =>
         Verdict.NotJudged(s"the runs were measured at different scales (${scales.map(times).mkString(", ")})")

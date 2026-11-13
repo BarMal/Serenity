@@ -16,13 +16,14 @@ object RendererChoice:
     case LayerPicture extends Candidate("layer+picture")
     case SkiaRaster   extends Candidate("skia-raster")
 
-  /** One run of the workload: the typing median and 95th percentile, the display scale it ran at, and the median of
-    * each full-window row it measured.
+  /** One run of the workload: the typing median and 95th percentile, the display scale it ran at, the clock's
+    * resolution, and the median of each full-window row it measured.
     */
   final case class Workload(
       typingP50Ms: Double,
       typingP95Ms: Double,
       scale: Double,
+      clockResolutionMs: Double,
       fullWindowMs: Map[String, Double]
   )
 

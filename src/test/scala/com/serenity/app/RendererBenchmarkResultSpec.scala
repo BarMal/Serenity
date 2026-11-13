@@ -33,7 +33,10 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
         Outcome.Measured(Workload(33.0, 52.5, 2.0, 1.4, Map("page-down" -> 12.5, "full-redraw" -> 41.0)))
       )
     ),
-    CandidateRuns(Candidate.SkiaRaster, List(Outcome.Measured(Workload(44.0, 90.0, 2.0, 1.1, Map("page-down" -> 20.0))))),
+    CandidateRuns(
+      Candidate.SkiaRaster,
+      List(Outcome.Measured(Workload(44.0, 90.0, 2.0, 1.1, Map("page-down" -> 20.0))))
+    ),
     CandidateRuns(Candidate.LayerPicture, List(Outcome.Failed("every typing sample timed out (150)")))
   )
 
