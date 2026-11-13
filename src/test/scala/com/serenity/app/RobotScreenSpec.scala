@@ -41,17 +41,15 @@ class RobotScreenSpec extends AnyFlatSpec with Matchers:
         body(panel, Region(origin.x + 10, origin.y + 10, 16, 8))
       finally onEdt(frame.dispose())
 
-  "RobotScreen" should "read the pixels of a region of the screen" in {
+  "RobotScreen" should "read the pixels of a region of the screen" in
     withPanel { (_, region) =>
       val pixels = RobotScreen().flatMap(_.grab(region)).unsafeRunSync()
       pixels should have size (16 * 8)
       pixels.distinct shouldBe Vector(Color.BLACK.getRGB)
     }
-  }
 
-  "PixelClock on a real screen" should "see a repaint and answer how long it took" in {
+  "PixelClock on a real screen" should "see a repaint and answer how long it took" in
     withPanel { (panel, region) =>
-      val change = onEdt(()) // the panel is up before the clock looks
       val elapsed = RobotScreen()
         .flatMap { screen =>
           PixelClock.timeChange(
@@ -65,20 +63,19 @@ class RobotScreenSpec extends AnyFlatSpec with Matchers:
           )
         }
         .unsafeRunSync()
-      change shouldBe (())
       elapsed.exists(ms => ms > 0.0 && ms < 5000.0) shouldBe true
     }
-  }
 
-  it should "answer none when nothing on the screen changes" in {
+  it should "answer none when nothing on the screen changes" in
     withPanel { (_, region) =>
-      RobotScreen().flatMap(screen => PixelClock.timeChange(screen, region, IO.unit, 300.millis)).unsafeRunSync() shouldBe None
+      RobotScreen()
+        .flatMap(screen => PixelClock.timeChange(screen, region, IO.unit, 300.millis))
+        .unsafeRunSync() shouldBe None
     }
-  }
 
-  it should "measure a resolution that is a real, finite grab time" in {
+  it should "measure a resolution that is a real, finite grab time" in
     withPanel { (_, region) =>
-      val resolution = RobotScreen().flatMap(screen => PixelClock.resolution(screen, region, samples = 20)).unsafeRunSync()
+      val resolution =
+        RobotScreen().flatMap(screen => PixelClock.resolution(screen, region, samples = 20)).unsafeRunSync()
       resolution should (be > 0.0 and be < 1000.0)
     }
-  }
