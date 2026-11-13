@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 2026-11-13
+
+- Added `serenity --optimize-renderer` (with `--thorough` and `--apply`): it measures the GPU layer's image frames, the Skia raster surface and, with `--thorough`, the layer's picture frames on your machine, each twice in a window of its own, and recommends a mode only when it is clearly better, printing the settings to use or, with `--apply`, writing `ui.render.backend` and `ui.render.skia_frames`. It reports where each mode stands against the 16.7 ms typing target (#2489) and says when none reaches it, which is the case on the reference laptop today. Linux only for now; see docs/user/choosing-a-renderer.md (#2618).
+
 ### 2026-11-11
 
 - Added `ui.render.skia_frames` (`image` or `picture`, default `image`): what Skia's GPU window layer is handed for each frame. `image` is the default since 2026-11-08; `picture` brings back the recorded-picture replay. It is read at startup, so a change needs a restart, and `-Dserenity.skia.layerFrames` beats it (#2618).
