@@ -6,8 +6,8 @@ import java.time.Instant
 
 import scala.concurrent.duration.*
 
-import cats.effect.{ExitCode, IO}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{ExitCode, IO}
 import com.serenity.TestTemp
 import com.serenity.app.RendererBenchmarkResult.Key
 import com.serenity.app.RendererChoice.{Candidate, Outcome, Workload}
@@ -37,18 +37,19 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
     )
 
   /** Layer+image at 30 ms and the raster surface at 50: the layer wins clearly. */
-  private val layerWins: Spawner = candidate => IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 50.0 else 30.0))
+  private val layerWins: Spawner = candidate =>
+    IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 50.0 else 30.0))
 
   private val nothingWorks: Spawner = _ => IO.pure("")
 
   private def run(
-      opts: LaunchOptions,
-      spawner: Spawner,
-      config: Path = TestTemp.directory("optimize-command").resolve("config.conf"),
-      display: Boolean = true
+    opts: LaunchOptions,
+    spawner: Spawner,
+    config: Path = TestTemp.directory("optimize-command").resolve("config.conf"),
+    display: Boolean = true
   ): (ExitCode, String, Path) =
-    val bytes = new ByteArrayOutputStream()
-    val out   = new PrintStream(bytes, true, "UTF-8")
+    val bytes      = new ByteArrayOutputStream()
+    val out        = new PrintStream(bytes, true, "UTF-8")
     val resultPath = config.resolveSibling("render-benchmark.json")
     val deps = RendererOptimizeCommand.Deps(
       spawner = spawner,
@@ -61,6 +62,18 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
     val code = RendererOptimizeCommand.run(opts, deps).unsafeRunSync()
     (code, bytes.toString("UTF-8"), config)
 
+  /** A config that has the raster surface on: the layer winning is then a switch, not a mode already in use. */
+  private def rasterConfig(): Path =
+    val config = TestTemp.directory("optimize-command-raster").resolve("config.conf")
+    val base   = AppConfig.default
+    ConfigManager
+      .saveConfigIO(
+        base.withSurfaceConfig(base.surfaceConfig.copy(renderBackend = RenderBackendSetting.SkiaRaster)),
+        config
+      )
+      .unsafeRunSync() shouldBe Right(())
+    config
+
   "RendererOptimizeCommand.run" should "say how long it takes and that it types into windows, before it starts" in {
     val (_, text, _) = run(options(), layerWins)
     text should (include("8 minutes") and include("keyboard and mouse") and include("Ctrl+C"))
@@ -68,23 +81,25 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "refuse, and start no trial, when there is no display to open windows on" in {
-    var started = 0
-    val counting: Spawner = candidate => IO { started += 1 } *> layerWins.run(candidate)
-    val (code, text, _) = run(options(), counting, display = false)
+    var started           = 0
+    val counting: Spawner = candidate => IO(started += 1) *> layerWins.run(candidate)
+    val (code, text, _)   = run(options(), counting, display = false)
     code shouldBe ExitCode.Error
     started shouldBe 0
     text should include("display")
   }
 
   it should "recommend a clearly faster mode and say what to set, without touching the config" in {
-    val (code, text, config) = run(options(), layerWins)
+    val config          = rasterConfig()
+    val before          = java.nio.file.Files.readString(config)
+    val (code, text, _) = run(options(), layerWins, config = config)
     code shouldBe ExitCode.Success
     text should (include("ui.render.backend = skia, ui.render.skia_frames = image") and include("--apply"))
-    java.nio.file.Files.exists(config) shouldBe false
+    java.nio.file.Files.readString(config) shouldBe before
   }
 
   it should "write the recommended mode to the config when asked to apply it" in {
-    val (code, text, config) = run(options("--apply"), layerWins)
+    val (code, text, config) = run(options("--apply"), layerWins, config = rasterConfig())
     code shouldBe ExitCode.Success
     text should include("written")
     val surface = ConfigManager.loadConfigIO(Some(config.toString)).unsafeRunSync().surfaceConfig
@@ -92,7 +107,8 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "change nothing when there is no clear winner, even when asked to apply" in {
-    val close: Spawner = candidate => IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 50.0 else 48.0))
+    val close: Spawner =
+      candidate => IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 50.0 else 48.0))
     val (code, text, config) = run(options("--apply"), close)
     code shouldBe ExitCode.Success
     text should include("Nothing to change")
@@ -103,9 +119,13 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
     val config = TestTemp.directory("optimize-command-current").resolve("config.conf")
     val base   = AppConfig.default
     ConfigManager
-      .saveConfigIO(base.withSurfaceConfig(base.surfaceConfig.copy(renderBackend = RenderBackendSetting.SkiaRaster)), config)
+      .saveConfigIO(
+        base.withSurfaceConfig(base.surfaceConfig.copy(renderBackend = RenderBackendSetting.SkiaRaster)),
+        config
+      )
       .unsafeRunSync() shouldBe Right(())
-    val rasterWins: Spawner = candidate => IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 20.0 else 50.0))
+    val rasterWins: Spawner =
+      candidate => IO.pure(printed(candidate, if candidate == Candidate.SkiaRaster then 20.0 else 50.0))
     val (_, text, _) = run(options(), rasterWins, config = config)
     text should (include("Nothing to change") and include("skia-raster"))
   }
