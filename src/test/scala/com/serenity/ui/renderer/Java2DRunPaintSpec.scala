@@ -6,7 +6,7 @@ import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.theme.TextStyle
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -318,9 +318,6 @@ abstract class RunPaintBehaviour extends AnyFlatSpec with Matchers:
     ((top + metrics.ascent) until (top + metrics.lineHeight + 2)).exists { y =>
       (runLeftPx + 2 until runLeftPx + runWidthPx - 2).forall(x => image.rgbAt(x, y) != Color.BLACK.getRGB)
     }
-
-class Java2DRunPaintSpec extends RunPaintBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
 
 class SkiaRunPaintSpec extends RunPaintBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

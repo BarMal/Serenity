@@ -65,7 +65,7 @@ class TypingPaintProfileSpec extends AnyFlatSpec with Matchers:
     draws("english") - draws("english_no_spellcheck") should be < (draws("full") - draws("no_spellcheck")) / 4
   }
 
-  for (name, factory) <- List("Java2D" -> FrameSurfaceFactory.Java2D, "Skia raster" -> SkiaRasterSurfaceFactory) do
+  for (name, factory) <- List("Skia raster" -> SkiaRasterSurfaceFactory) do
     it should s"draw rows in every typing frame it measures on $name" in {
       val cycle = TypingPaintProfile.typingCycle(factory, 900, 600, 1.0, TypingPaintProfile.variants.head.config)
       val drawn = (0 until 12).map { _ =>

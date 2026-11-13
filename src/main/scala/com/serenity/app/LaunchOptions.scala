@@ -27,11 +27,11 @@ import com.serenity.ui.benchmark.RenderBenchmarkOptions
   * @param resetSession
   *   `--reset-session`: move the saved session aside to a timestamped backup before starting. See [[LaunchReset]].
   * @param renderer
-  *   `--renderer=auto|skia|skia-raster|java2d`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
+  *   `--renderer=auto|skia|skia-raster`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
   * @param waylandRender
-  *   `--wayland-render=java2d|skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
+  *   `--wayland-render=skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
   * @param renderBenchmark
-  *   `--render-benchmark`: time Java2D and the Skia layer side by side on one scripted document, print and write the
+  *   `--render-benchmark`: time the Skia layer on one scripted document, print and write the
   *   report, and quit without starting the editor. `None` unless the flag is given.
   */
 final case class LaunchOptions(
@@ -157,7 +157,7 @@ object LaunchOptions:
       Opts
         .flag(
           "render-benchmark",
-          "Time Java2D and the Skia layer side by side on one scripted document, print and save the report, then quit."
+          "Time the Skia layer on one scripted document, print and save the report, then quit."
         )
         .orFalse,
       Opts

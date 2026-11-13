@@ -1,6 +1,6 @@
 # Accessibility checks
 
-Serenity paints its editor and surfaces with Java2D. The Swing accessibility bridge publishes the same stable pane,
+Serenity paints its editor and surfaces with Skia. The Swing accessibility bridge publishes the same stable pane,
 surface, and control identities used by layout and hit testing, including focused document/surface state, selected
 startup and command-runner controls, control values, and status text.
 

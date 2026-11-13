@@ -411,7 +411,7 @@ render), with a migration note, and anywhere else it is an unrecognised value.
 Hyprland the owner saw no tearing with it off and a frame is 4-8 ms quicker, and compositors on Windows, macOS and most
 Linux desktops do not tear either. Turn it on if you see tearing, for example on X11 without a compositor. Serenity sets
 Skiko's `skiko.vsync.enabled` property from the key at startup, so it needs a restart, and `SKIKO_VSYNC_ENABLED` or
-`-Dskiko.vsync.enabled`, when given, win. The Skia CPU raster and Java2D ignore it.
+`-Dskiko.vsync.enabled`, when given, win. The Skia CPU raster ignores it.
 
 `auto` uses Skia's GPU layer wherever the native library loads: Direct3D on Windows, Metal on macOS, OpenGL on Linux with
 an X11 or XWayland display (Skiko falls back to its own software redrawer where the GPU API cannot start). If the layer
@@ -422,7 +422,7 @@ launch with no terminal (from a desktop launcher), or one that asked for the win
 `--startup-probe`), stops with an error dialog and a non-zero exit instead. `skia` and `auto` differ only in the reason
 logged; `skia-raster` forces the Skia CPU raster on any display and toolkit (it still needs the native library, and
 takes the same fallback, saying why, if the library does not load). The raster rasterises off the event thread and the event thread only copies the image to
-the window, as Java2D does, so it is the way to compare against the GPU layer when that one keeps the event thread busy
+the window, so it is the way to compare against the GPU layer when that one keeps the event thread busy
 (#2489); `ui.render.wayland` is then ignored. Terminal launches never load Skia; safe mode loads it like any
 window launch, with the default render settings. The startup log records the outcome as
 `[RENDER] backend=<skia|skia-raster|terminal> reason=...`. A
@@ -515,20 +515,20 @@ Wayland, the JetBrains Runtime's native toolkit needs its own libraries on the s
 
 #### Comparing the renderers
 
-`serenity --render-benchmark` opens a window of its own for each renderer (Java2D, the Skia layer, then Skia's CPU
-raster, which paints with Skia and presents through Java2D), draws the same built-in document through the same scripted
+`serenity --render-benchmark` opens a window of its own for each renderer (the Skia layer, then Skia's CPU
+raster, which paints with Skia and presents through Swing), draws the same built-in document through the same scripted
 actions on each, prints the tables and saves them as
 `render-benchmark-<timestamp>.md` and `.json` in the working directory, then quits without starting the editor. The
 scenarios are a cold full frame, a warm full frame (the same state redrawn whole with warm caches), typing one
 character, scrolling one line, scrolling five lines, a page down, a caret blink and the first frame after a window resize
 (the window alternates between its size and three quarters of it; the toolkit's own resize is outside the timing). The
 warm frame and the resize are reported but take no part in the verdict. The report also gives the scale the Skia layer
-drew at beside Java2D's. A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D, raster)
+drew at. A frame is timed from the moment the renderer is called to the last time the canvas painted (raster)
 or the layer drew the frame's published picture (Skia layer). Skiko draws the layer's picture on the GPU afterwards, on
 its own thread, and gives the layer no GPU context to wait on, so the layer's figures cover recording the frame and
 Skiko's frame pacing (with vsync on, which is now opt-in, a draw can wait up to a refresh), not the GPU finishing. Options: `--render-benchmark-size WIDTHxHEIGHT` (default
 `1600x1000`), `--render-benchmark-frames` (timed frames per scenario, default 200) and `--render-benchmark-warmup`
-(untimed frames first, default 30). It needs a display and always runs both renderers whatever `ui.render.backend` says.
+(untimed frames first, default 30). It needs a display and always runs the Skia layer, and the raster beside it, whatever `ui.render.backend` says.
 
 The benchmark settles the toolkit and renderer like an editor launch does, so `SERENITY_TOOLKIT` and `-Dawt.toolkit.name`
 apply to it too (on a runtime without `WLToolkit`, `SERENITY_TOOLKIT=wayland` falls back to the default toolkit). The report
@@ -543,8 +543,7 @@ frame would have waited behind the others' draws. The raster arm does not take p
 
 The report names the render API Skia actually used. If Skiko had to fall back to a software redrawer, or the layer could
 not be made, it prints `GPU NOT USED` or `Skia layer unavailable` instead of a verdict, so a software run is never read as a
-GPU result. On a GPU the verdict is that Skia wins only if its p50 and p95 are no worse than Java2D's in every scenario
-except the cold full frame and its p95 is better when scrolling and on a page down. The verdict is information about this machine: `auto` no longer depends on it.
+GPU result. On a GPU the verdict says the figures were measured; it carries no comparison, and `auto` does not depend on it.
 
 The header also records the CPU model, the CPU frequency governor and whether the machine was on AC or battery (`unknown`
 where the platform does not say: Linux reads `/proc/cpuinfo`, cpufreq and `/sys/class/power_supply`; Windows gives only the CPU

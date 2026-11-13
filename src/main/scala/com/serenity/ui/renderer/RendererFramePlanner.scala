@@ -224,8 +224,7 @@ object RendererFramePlanner:
     *
     * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
     * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting
-    * directly -- see [[Java2DRenderSurface.newLayerSurface]]'s doc comment for why, and for the one correctness
-    * precondition (`renderModalLayer` never reads pixels back off the surface it paints onto) that keeps this safe.
+    * directly, so long as `renderModalLayer` never reads pixels back off the surface it paints onto.
     */
   private def paintModalLayer(
     state: AppState,

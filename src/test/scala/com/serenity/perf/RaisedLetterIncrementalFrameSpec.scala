@@ -23,7 +23,7 @@ import com.serenity.ui.openings.{
   RaisedRowRule
 }
 import com.serenity.ui.theme.DropCapColour
-import com.serenity.{FrameBackend, Java2DFrames, SkiaFrames}
+
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -32,12 +32,6 @@ import org.scalatest.matchers.should.Matchers
   * draw what a cold frame draws.
   */
 class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
-
-  // macOS only: on Skia the focus-move and typing steps differ from the cold frame by 8 to 15 pixels of one row inside
-  // the repaint rect, the row at its top edge (cross-OS run 42362353367 on #2667); Linux and Windows pass. It stays on
-  // Java2D there until that is fixed (#2380).
-  override protected def referenceFrames: FrameBackend =
-    if System.getProperty("os.name", "").toLowerCase.contains("mac") then Java2DFrames else SkiaFrames
 
   private val scales = List(1.0, 2.0)
 

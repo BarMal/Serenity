@@ -31,10 +31,10 @@ import org.jetbrains.skia.{BlendMode, Canvas, Paint, PaintMode, PaintStrokeCap, 
 
 /** A [[RenderSurface]] that draws with Skia onto a `Canvas`.
   *
-  * Coordinates, geometry and capabilities follow [[Java2DRenderSurface]]: cell units through [[CellMetrics]], logical
-  * pixels for runs and fills, and a device scale applied once to the canvas. Text is positioned by the caller run by
-  * run, from the advances layout measured with AWT, so Skia only has to draw the glyphs of the same font at the x it is
-  * handed; [[SkiaFontCache]] makes the Skia font match the AWT one.
+  * Coordinates and geometry: cell units through [[CellMetrics]], logical pixels for runs and fills, and a device scale
+  * applied once to the canvas. Text is positioned by the caller run by run, from the advances layout measured with AWT,
+  * so Skia only has to draw the glyphs of the same font at the x it is handed; [[SkiaFontCache]] makes the Skia font
+  * match the AWT one.
   *
   * What Skia does not offer here is declared rather than faked. There are no [[LayerBufferSupport]] layers (a layer is
   * a `BufferedImage`, and routing every modal and panel through a CPU image would cost the GPU path its point), so
@@ -588,6 +588,6 @@ object SkiaRenderSurface:
       changes = changes
     )
 
-  /** The device size of a surface holding `logicalPx` at `deviceScale`, as [[Java2DRenderSurface]] sizes its image. */
+  /** The device size of a surface holding `logicalPx` at `deviceScale`, as the frame image is sized. */
   def deviceDimension(logicalPx: Int, deviceScale: Double): Int =
     SurfaceSizing.deviceImageDimension(logicalPx, deviceScale)

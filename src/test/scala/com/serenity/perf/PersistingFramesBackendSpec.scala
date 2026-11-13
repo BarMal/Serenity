@@ -1,7 +1,6 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicInteger
 
 import cats.effect.unsafe.implicits.global
@@ -12,7 +11,7 @@ import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, BufferId, Damage}
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{RenderSurface, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -25,7 +24,7 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val backends: List[(String, FrameBackend)] = List("Java2D" -> Java2DFrames, "Skia raster" -> SkiaFrames)
+  private val backends: List[(String, FrameBackend)] = List("Skia raster" -> SkiaFrames)
 
   private lazy val (beforeTyping, afterTyping, afterScroll) =
     val (stateManager, _)           = LaptopFrameBenchmarks.proseStateManager()
@@ -125,20 +124,4 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
   they should "pass their own check before they are timed" in
     LaptopFrameBenchmarks.skiaInteractionBenchmarks(transitions).foreach(_.verify())
 
-  "The scratch frame of the Java2D rows" should "be the one the rows drew before they took a backend" in {
-    val rendered = (state: AppState) =>
-      LaptopFrameBenchmarks.renderedFrame(
-        state,
-        RenderCaches.create(),
-        LaptopFrameBenchmarks.frameImage(),
-        cursorVisible = false
-      )
-    List(afterTyping, afterScroll).foreach { state =>
-      val viaBackend = LaptopColdFrames.of(Java2DFrames, state, RenderCaches.create(), cursorVisible = false)
-      pixelsOf(rendered(state)) shouldBe viaBackend.rgbPixels
-    }
-  }
-
-  private def pixelsOf(image: BufferedImage): Array[Int] =
-    image.getRGB(0, 0, image.getWidth, image.getHeight, null, 0, image.getWidth)
 end PersistingFramesBackendSpec

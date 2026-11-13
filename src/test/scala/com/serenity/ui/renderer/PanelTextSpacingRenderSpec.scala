@@ -13,7 +13,7 @@ import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, TestWorkspaceTrees}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -141,14 +141,6 @@ abstract class PanelTextSpacingBehaviour extends AnyFlatSpec with Matchers:
       inkWidth.toDouble should (be >= 0.7 * natural and be < (natural + gridWidth) / 2)
     }
   }
-
-class Java2DPanelTextSpacingScale1Spec extends PanelTextSpacingBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DPanelTextSpacingScale2Spec extends PanelTextSpacingBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaPanelTextSpacingScale1Spec extends PanelTextSpacingBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

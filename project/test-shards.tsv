@@ -831,7 +831,6 @@ com.serenity.StateManagerUiPresetWorkbenchSpec	2	2.335
 com.serenity.lsp.LspManagerSemanticTokensCrashSpec	2	2.326
 com.serenity.perf.GuiCellGridColdFrameSpec	2	2.302
 com.serenity.config.ConfigCodecPropertySpec	2	2.234
-com.serenity.ui.layout.Java2DTextMeasurerSpec	2	2.179
 com.serenity.lsp.LspFramerPropertySpec	2	2.142
 com.serenity.UndoRedoPropertySpec	2	2.084
 com.serenity.lsp.LspQueueSpec	2	2.041

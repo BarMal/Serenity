@@ -30,16 +30,3 @@ final case class FrameSurfaceRequest(
 /** The seam the frontend draws a frame through. The backend chosen at startup supplies the implementation. */
 trait FrameSurfaceFactory:
   def create(request: FrameSurfaceRequest): RenderSurface
-
-object FrameSurfaceFactory:
-
-  val Java2D: FrameSurfaceFactory = request =>
-    Java2DRenderSurface.forFrame(
-      request.metrics,
-      request.font,
-      request.geometry,
-      request.onFlush,
-      request.acquireImage,
-      request.textCaches,
-      request.contentPersists
-    )

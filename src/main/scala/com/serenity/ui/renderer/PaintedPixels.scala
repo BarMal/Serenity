@@ -5,8 +5,8 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 
 import com.serenity.ui.layout.PixelRect
 
-/** What a [[Java2DRenderSurface]] knows about the pixels it has painted since it last cleared the viewport, so a run
-  * can leave out a background fill that would repeat the clear.
+/** What a [[com.serenity.ui.skia.SkiaRenderSurface]] knows about the pixels it has painted since it last cleared the
+  * viewport, so a run can leave out a background fill that would repeat the clear.
   *
   * Everything is in the logical pixels the clears and runs are expressed in. Anything painted under a translation is
   * moved back to those before it is compared, and anything the tracking cannot place -- a pixel copy, a layer composite

@@ -17,7 +17,6 @@ class PresentScrollFrameSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val backends = List(
-    "Java2D"                    -> FrameSurfaceFactory.Java2D,
     "Skia raster"               -> SkiaRasterSurfaceFactory,
     "Skia layer (image frames)" -> DiscardingImageLayer.factory
   )

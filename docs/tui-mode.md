@@ -24,7 +24,7 @@ Serenity runs as either a Swing GUI application or a real terminal application, 
 |---|---|---|
 | `makeInputHandler` | `SwingInputHandler` over the AWT canvas | `TerminalInputHandler` over the JLine terminal |
 | `checkResize` / `registerResizeCallback` | `SwingWindow` resize hooks | `TerminalShell`'s `SIGWINCH` handling |
-| `renderFull` / `renderCursorOnly` | Swing-specific `Renderer` entry points over `Java2DRenderSurface` | Surface-generic `Renderer` entry points (#1104) over `TerminalRenderSurface` (#1106/#1107) |
+| `renderFull` / `renderCursorOnly` | Swing-specific `Renderer` entry points over `SkiaRenderSurface` | Surface-generic `Renderer` entry points (#1104) over `TerminalRenderSurface` (#1106/#1107) |
 | `fileDialog` | `SwingFileDialog` (native chooser) | `None` -- falls back to the in-app save-as/open form (#1110) |
 | clipboard | `SystemClipboard.awt` | `ClipboardStrategy.select` (#1111): AWT reuse when a display is reachable, OSC 52 through the terminal writer otherwise, an external CLI tool (`wl-copy`/`xclip`/`xsel`) next, an in-process clipboard as the last resort |
 | `awaitExternalQuit` | `swingWin.awaitClose` (window close) | `TerminalShell.awaitExternalQuit` (`SIGINT`, i.e. Ctrl+C at the raw terminal) |

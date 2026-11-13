@@ -181,7 +181,7 @@ final class TerminalRenderSurface(
   // -- PixelDrawing ---------------------------------------------------------------------------------------------------
   // `cellMetrics` here is always `CellMetrics.cellUnit` (charWidth = lineHeight = 1, see `TuiRuntime`), so every
   // "pixel" coordinate `RenderSurface` callers pass is already a cell coordinate -- no metrics conversion needed, in
-  // contrast to `Java2DRenderSurface`'s real pixel scaling.
+  // contrast to a pixel surface's real pixel scaling.
   //
   // `drawImage` renders through `HalfBlockImageRenderer` (notcurses/ratatui-image/Jexer's technique): the source image
   // is downsampled to twice the target cell grid's vertical resolution, and each cell becomes an upper-half-block
@@ -191,7 +191,7 @@ final class TerminalRenderSurface(
 
   // fillPixelRect stays a no-op deliberately, unlike drawImage: Renderer's full-frame caret paint
   // (paintCursorOverlay/similar call sites) calls `pixels.fillPixelRect` with coordinates computed from real font
-  // pixel geometry regardless of surface -- correct on `Java2DRenderSurface`, but on this cell surface (`cellMetrics`
+  // pixel geometry regardless of surface -- correct on a pixel surface, but on this cell surface (`cellMetrics`
   // is always `CellMetrics.cellUnit`) that same call lands on real character cells and, if it painted for real, would
   // silently overwrite live buffer text with a solid caret-colored block every full render (confirmed empirically: it
   // reliably blanked two characters of "alpha" immediately after the gutter on every frame). TUI's real caret is

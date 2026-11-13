@@ -34,7 +34,7 @@ import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
   *
   * One JVM runs one backend at one window size and scale, so `bench/abba.sh`-style A B B A runs can alternate JVMs. Row
   * names do not mention the backend, so the two sides' CSVs compare. Settings are system properties:
-  * `present.backend=java2d|skia`, `present.width`, `present.height` (logical), `present.scale`.
+  * `present.backend=skia|layer-image`, `present.width`, `present.height` (logical), `present.scale`.
   */
 private[perf] object PresentBenchmarks:
 
@@ -312,16 +312,15 @@ private[perf] object PresentBenchmarks:
 
     def trafficOf(name: String): Option[PresentReport.ShapeTrafficStats] = logs.get(name).map(_.traffic)
 
-  /** The frame surfaces a `present.backend` names: Java2D, the Skia raster surface, or the GPU layer's image frames. */
+  /** The frame surfaces a `present.backend` names: the Skia raster surface, or the GPU layer's image frames. */
   private[perf] def factoryFor(backend: String): Either[String, FrameSurfaceFactory] =
     backend match
-      case "java2d"      => Right(FrameSurfaceFactory.Java2D)
       case "skia"        => Right(SkiaRasterSurfaceFactory)
       case "layer-image" => Right(DiscardingImageLayer.factory)
-      case other         => Left(s"present.backend must be java2d, skia or layer-image, not '$other'")
+      case other         => Left(s"present.backend must be skia or layer-image, not '$other'")
 
   def benchmarks(using IORuntime): Rows =
-    val backend   = sys.props.getOrElse("present.backend", "java2d")
+    val backend   = sys.props.getOrElse("present.backend", "skia")
     val widthPx   = sys.props.getOrElse("present.width", "1920").toInt
     val heightPx  = sys.props.getOrElse("present.height", "1080").toInt
     val scale     = sys.props.getOrElse("present.scale", "1").toDouble

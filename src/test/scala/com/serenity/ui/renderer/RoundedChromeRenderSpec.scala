@@ -11,7 +11,7 @@ import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, TestWorkspaceTrees}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -171,14 +171,6 @@ abstract class RoundedChromeRenderBehaviour extends AnyFlatSpec with Matchers:
     List(c(0), c(1), c(3)).foreach(p => withClue(s"panel corner $p: ")(isRounded(r, q, p) shouldBe false))
     corners(r.status).foreach(p => withClue(s"status corner $p: ")(isRounded(r, q, p) shouldBe false))
   }
-
-class Java2DRoundedChromeScale1Spec extends RoundedChromeRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DRoundedChromeScale2Spec extends RoundedChromeRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaRoundedChromeScale1Spec extends RoundedChromeRenderBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

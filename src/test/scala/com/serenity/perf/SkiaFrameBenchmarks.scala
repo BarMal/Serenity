@@ -14,7 +14,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** A typing frame and a scroll frame, drawn by Java2D and by Skia's CPU rasteriser into the same 1500x1000 logical
@@ -169,9 +169,7 @@ private[perf] object SkiaFrameBenchmarks:
     val system = LaptopFrameBenchmarks.codeFont
 
     lazy val bundled = bundledFont
-    backendBenchmarks("java2d.system_monospace", Java2DFrames, system) ++
-      backendBenchmarks("skia_raster.system_monospace", SkiaFrames, system) ++
-      backendBenchmarks("java2d.bundled_ligature_font", Java2DFrames, bundled) ++
+    backendBenchmarks("skia_raster.system_monospace", SkiaFrames, system) ++
       backendBenchmarks("skia_raster.bundled_ligature_font", SkiaFrames, bundled)
 
   def main(args: Array[String]): Unit =
