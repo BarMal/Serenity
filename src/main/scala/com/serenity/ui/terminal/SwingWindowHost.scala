@@ -45,6 +45,9 @@ final class SwingWindowHost private (val window: SwingWindow, menuInput: Deferre
   override def pressPageDown: IO[Unit] =
     menuInput.get.flatMap(handler => IO(handler.submitKey(KeyStrokeInfo(InputKey.PageDown, None, Set.empty))))
 
+  override def pressEscape: IO[Unit] =
+    menuInput.get.flatMap(handler => IO(handler.submitKey(KeyStrokeInfo(InputKey.Escape, None, Set.empty))))
+
   override def toggleTheme: IO[Unit] =
     menuInput.get.flatMap(handler => IO(handler.submit(MenuDispatch.eventFor(CommandId("toggle-theme")))))
 
