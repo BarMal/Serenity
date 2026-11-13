@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.{Color, Font}
-import com.serenity.testkit.ActivePane
 import java.nio.file.Paths
 
 import cats.effect.IO
@@ -10,6 +9,7 @@ import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacem
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*

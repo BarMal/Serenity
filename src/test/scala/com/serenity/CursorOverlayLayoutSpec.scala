@@ -1,11 +1,11 @@
 package com.serenity
 
-import com.serenity.testkit.ActivePane
 import com.serenity.command.*
 import com.serenity.config.AppConfigOps.*
 import com.serenity.config.InterfaceDensity
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec

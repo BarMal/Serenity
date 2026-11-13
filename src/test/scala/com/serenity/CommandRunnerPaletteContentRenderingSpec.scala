@@ -1,6 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.ActivePane
 import java.awt.Font
 
 import cats.effect.IO
@@ -8,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset

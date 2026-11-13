@@ -1,9 +1,9 @@
 package com.serenity
 
 import com.serenity.config.{StatusLinePlacement, TextAreaInsets}
-import com.serenity.testkit.ActivePane
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -52,9 +52,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     ActivePane.of(state, calculatedLayout).rightSpacerRect.width shouldBe 0
     ActivePane.of(state, calculatedLayout).lineNumberRect.map(_.width) shouldBe Some(3)
     // x/width shift by 2: unset line-number margin/padding now default to a GUI cell each, not zero.
-    val text = ActivePane.of(state, calculatedLayout).contentRect
-    LayoutRect(text.x, calculatedLayout.editorPanelRect.y, text.width, calculatedLayout.editorPanelRect.height) shouldBe
-      LayoutRect(5, 0, 95, 29)
+    ActivePane.textRect(state, calculatedLayout) shouldBe LayoutRect(5, 0, 95, 29)
   }
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
@@ -202,12 +200,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     ActivePane.of(state, calculatedLayout).topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
     ActivePane.of(state, calculatedLayout).bottomSpacerRect shouldBe LayoutRect(9, 25, 57, 4)
     ActivePane.of(state, calculatedLayout).lineNumberRect shouldBe Some(LayoutRect(10, 3, 3, 22))
-    LayoutRect(
-      insetPaneLayout.contentRect.x,
-      calculatedLayout.editorPanelRect.y,
-      insetPaneLayout.contentRect.width,
-      calculatedLayout.editorPanelRect.height
-    ) shouldBe LayoutRect(14, 0, 52, 29)
+    ActivePane.textRect(state, calculatedLayout) shouldBe LayoutRect(14, 0, 52, 29)
     insetPaneLayout.contentRect.width should be >= state.persisted.config.editorConfig.minimumPaneWidth
     insetPaneLayout.headerRect shouldBe LayoutRect(2, 0, 79, 1)
     insetPaneLayout.topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
@@ -583,8 +576,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
     val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the command palette to render"))
-    val text        = ActivePane.of(state, layout).contentRect
-    val contentRect = LayoutRect(text.x, layout.editorPanelRect.y, text.width, layout.editorPanelRect.height)
+    val contentRect = ActivePane.textRect(state, layout)
 
     overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))
     // Confirm this genuinely differs from the old cursor-anchored position -- otherwise the assertion above would
@@ -618,8 +610,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
     val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the file workflow dialog to render"))
-    val text        = ActivePane.of(state, layout).contentRect
-    val contentRect = LayoutRect(text.x, layout.editorPanelRect.y, text.width, layout.editorPanelRect.height)
+    val contentRect = ActivePane.textRect(state, layout)
 
     overlayRect.width shouldBe math.min(contentRect.width, 72)
     overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))

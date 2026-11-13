@@ -1,13 +1,12 @@
 package com.serenity
 
-import com.serenity.testkit.ActivePane
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Leaf, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, VerticalCursorState}
+import com.serenity.testkit.{ActivePane, EditingStateFixtures, VerticalCursorState}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

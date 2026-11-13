@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.{Color, Font}
-import com.serenity.testkit.ActivePane
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -9,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, CursorColorConfig}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{ActivePane, EditingStateFixtures}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*

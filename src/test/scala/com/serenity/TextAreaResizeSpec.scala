@@ -1,10 +1,10 @@
 package com.serenity
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.testkit.ActivePane
 import com.serenity.config.{Gutter, TextAreaInsets}
 import com.serenity.keystroke.events.{MouseDrag, ResizeEvent}
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -1,6 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.ActivePane
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.TextAreaInsets
@@ -11,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{ActivePane, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec

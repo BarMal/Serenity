@@ -1,10 +1,10 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.{AppConfig, AppMode, ConfigRegistry}
-import com.serenity.testkit.ActivePane
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
+import com.serenity.testkit.ActivePane
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

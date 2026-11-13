@@ -1,12 +1,12 @@
 package com.serenity
 
 import java.awt.Font
-import com.serenity.testkit.ActivePane
 
 import com.serenity.config.{AppConfig, ChromeElement}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,

@@ -1,6 +1,5 @@
 package com.serenity
 
-import com.serenity.testkit.ActivePane
 import java.awt.Color
 
 import _root_.io.circe.syntax.*
@@ -12,6 +11,7 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints

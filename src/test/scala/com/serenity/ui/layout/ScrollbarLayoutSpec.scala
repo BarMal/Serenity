@@ -1,9 +1,9 @@
 package com.serenity.ui.layout
 
-import com.serenity.testkit.ActivePane
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
