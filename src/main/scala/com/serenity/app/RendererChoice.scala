@@ -16,8 +16,15 @@ object RendererChoice:
     case LayerPicture extends Candidate("layer+picture")
     case SkiaRaster   extends Candidate("skia-raster")
 
-  /** One run of the workload: the typing median, and the median of each full-window row it measured. */
-  final case class Workload(typingP50Ms: Double, fullWindowMs: Map[String, Double])
+  /** One run of the workload: the typing median and 95th percentile, the display scale it ran at, and the median of
+    * each full-window row it measured.
+    */
+  final case class Workload(
+      typingP50Ms: Double,
+      typingP95Ms: Double,
+      scale: Double,
+      fullWindowMs: Map[String, Double]
+  )
 
   enum Outcome:
     case Measured(workload: Workload)
@@ -47,6 +54,11 @@ object RendererChoice:
       spreadMs: Double,
       rowsMs: Map[String, Double]
   )
+
+  /** The nearest-rank percentile: the smallest sample with at least `percent` of the samples at or below it. */
+  private[app] def percentile(values: List[Double], percent: Int): Double =
+    val sorted = values.sorted
+    sorted(math.max(0, math.ceil(sorted.size * percent / 100.0).toInt - 1))
 
   private[app] def median(values: List[Double]): Double =
     val sorted = values.sorted
