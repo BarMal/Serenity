@@ -37,6 +37,7 @@ class RendererTrialWindowSpec extends AnyFlatSpec with Matchers:
         def typeCharacter(char: Char): IO[Unit] = act(s"type $char")
         def pressPageDown: IO[Unit]             = act("page-down")
         def toggleTheme: IO[Unit]               = act("toggle-theme")
+        def dismissNotices: IO[Unit]            = act("dismiss")
         def resize: IO[Unit]                    = act("resize")
         def watchedFor(step: Step): IO[Region] = IO.pure(step match
           case _: Step.Type                        => typing

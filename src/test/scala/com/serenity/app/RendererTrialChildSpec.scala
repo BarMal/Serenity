@@ -81,6 +81,30 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     printed._2 shouldBe Some(())
   }
 
+  it should "prepare the window before it runs the workload" in {
+    val order = runVirtual {
+      for
+        seen <- cats.effect.Ref.of[IO, List[String]](Nil)
+        quit <- Deferred[IO, Unit]
+        ready = setup(_ => seen.update("step" :: _) *> IO.pure(Some(1.0))).copy(prepare = seen.update("prepare" :: _))
+        _    <- RendererTrialChild.run(ready, quit, new PrintStream(new ByteArrayOutputStream()))
+        log  <- seen.get
+      yield log.reverse
+    }
+    order.head shouldBe "prepare"
+    order.count(_ == "prepare") shouldBe 1
+  }
+
+  it should "print a failed trial when the preparation fails, without running the workload" in {
+    val text = output { out =>
+      Deferred[IO, Unit].flatMap { quit =>
+        val failing = setup(_ => IO.pure(Some(1.0))).copy(prepare = IO.raiseError(new IllegalStateException("no notice to dismiss")))
+        RendererTrialChild.run(failing, quit, out)
+      }
+    }
+    lineOf(text).outcome should matchPattern { case Outcome.Failed(reason) if reason.contains("no notice to dismiss") => }
+  }
+
   it should "print a failed trial with its reason when every sample of a kind timed out" in {
     val text =
       output(out => Deferred[IO, Unit].flatMap(quit => RendererTrialChild.run(setup(_ => IO.pure(None)), quit, out)))
