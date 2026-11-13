@@ -62,7 +62,7 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   override def pixelLifting: Option[PixelLifting] = inner.pixelLifting.map(CountingLifting(_, counts))
 
   override def persistentContentKey: Option[SurfaceContentIdentity] = inner.persistentContentKey
-  override def layerCacheOwner: ScreenIdentity                      = inner.layerCacheOwner
+  override def screenIdentity: ScreenIdentity                       = inner.screenIdentity
   override def addressesPixels: Boolean                             = inner.addressesPixels
   override def devicePixelScaleX: Double                            = inner.devicePixelScaleX
   override def devicePixelScaleY: Double                            = inner.devicePixelScaleY

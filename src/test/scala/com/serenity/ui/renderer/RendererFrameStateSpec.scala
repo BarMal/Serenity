@@ -258,4 +258,4 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
   }
 
   private class OwnedMockSurface(window: AnyRef) extends MockRenderSurface(10, 5, true):
-    override def layerCacheOwner: ScreenIdentity = ScreenIdentity(window)
+    override def screenIdentity: ScreenIdentity = ScreenIdentity(window)

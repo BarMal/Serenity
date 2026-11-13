@@ -73,7 +73,7 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
           surface.close()
         request.onFlush(image)
       ,
-      layerCacheOwner = Some(geometry.identity),
+      screen = Some(geometry.identity),
       changes = changes
     )
 

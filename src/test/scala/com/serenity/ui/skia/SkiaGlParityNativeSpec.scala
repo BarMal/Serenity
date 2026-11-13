@@ -47,7 +47,7 @@ class SkiaGlParityNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWindow
       1.0,
       SkiaTextCaches.of(frame.backendCaches),
       frame.textCaches.styledFonts,
-      layerCacheOwner = Some(frame.screen)
+      screen = Some(frame.screen)
     )
     try
       render(surface)
