@@ -56,7 +56,7 @@ object RendererWorkload:
 
   final case class Result(typing: Samples, pageDown: Samples, fullRedraw: Samples)
 
-  private val prose = "the quick brown fox jumps over the lazy dog "
+  private val prose = "thequickbrownfoxjumpsoverthelazydog"
 
   def script(plan: Plan): Vector[Step] =
     Vector.tabulate(plan.typedChars)(index => Step.Type(prose(index % prose.length))) ++
