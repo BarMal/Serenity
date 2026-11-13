@@ -72,6 +72,16 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
     java.nio.file.Files.exists(directory.resolve("diffs.tsv")) shouldBe true
   }
 
+  "Monaspace carets" should "match the baseline, a caret inside a ligature spread across it as AWT does" in {
+    val monaspace =
+      sections.flatMap(_.compared).filter(c => c.key.startsWith("monaspace_neon") && c.key.endsWith(".carets"))
+    monaspace should not be empty
+    val off = monaspace.filter(_.size > TextMeasureBaseline.FloatTolerance)
+    withClue(off.map(c => f"${c.key}[${c.index}] AWT ${c.awt}%.4f Skia ${c.skia}%.4f").mkString("; ")) {
+      off shouldBe empty
+    }
+  }
+
   "Skia carets" should "start at zero, never go back and hold a stop per character, wherever they differ from AWT" in {
     for
       pinned <- TextMeasureCorpus.fonts ++ systemFonts

@@ -185,8 +185,9 @@ final class SkiaTextMeasurer(faces: SkiaFontCache = new SkiaFontCache()) extends
       }
     }
 
-  /** The x of each character of `text` shaped alone, then the trailing edge: a character inside a cluster takes the
-    * cluster's x, as a ligature's characters do.
+  /** The x of each character of `text` shaped alone, then the trailing edge. The characters of one cluster, a
+    * ligature's say, share its glyphs: they are spread evenly from the cluster's x to the next one's, so each takes a
+    * stop of its own and a part of the glyph can be selected, as AWT places them.
     */
   private def shapedCarets(text: String, font: Font): Array[Float] =
     if text.isEmpty then Array(0.0f)
@@ -197,8 +198,14 @@ final class SkiaTextMeasurer(faces: SkiaFontCache = new SkiaFontCache()) extends
         if cluster >= 0 && cluster < text.length && (starts(cluster).isNaN || x < starts(cluster)) then
           starts(cluster) = x
       }
-      val filled = starts.scanLeft(0.0f)((previous, x) => if x.isNaN then previous else x).drop(1)
-      filled :+ collector.width
+      val clusterStarts = starts.indices.filter(index => !starts(index).isNaN)
+      val spread = clusterStarts.zip(clusterStarts.drop(1) :+ text.length).flatMap { (from, until) =>
+        val startX = starts(from)
+        val endX   = if until >= text.length then collector.width else starts(until)
+        (from until until).map(index => startX + (endX - startX) * (index - from) / (until - from))
+      }
+      val leading = Array.fill(clusterStarts.headOption.getOrElse(text.length))(0.0f)
+      (leading ++ spread) :+ collector.width
 
   private def shaped(text: String, font: Font, level: Byte): GlyphCollector =
     val collector = new GlyphCollector()
