@@ -36,10 +36,9 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
           "driver spec"
         )
         .use { host =>
-          IO {
-            val window = host.window
-            use(window, SwingTrialDriver(host))
-          }
+          host match
+            case swing: SwingWindowHost => IO(use(swing.window, SwingTrialDriver(swing)))
+            case other => IO.raiseError(new IllegalStateException(s"expected a Swing host, got $other"))
         }
         .unsafeRunSync()
 
@@ -53,7 +52,7 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
     inner.x >= outer.x && inner.y >= outer.y &&
       inner.x + inner.width <= outer.x + outer.width && inner.y + inner.height <= outer.y + outer.height
 
-  "SwingTrialDriver" should "watch the first rows for typing and a band in the middle for scrolling, both on the canvas" in {
+  "SwingTrialDriver" should "watch the first rows for typing and a band in the middle for scrolling, both on the canvas" in
     withDriver { (window, driver) =>
       val canvas = canvasBounds(window)
       val typing = driver.watchedFor(Step.Type('a')).unsafeRunSync()
@@ -63,26 +62,29 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
       typing.y shouldBe canvas.y
       scroll.y should be > typing.y
     }
-  }
 
-  it should "watch a spot that the new colours reach for a theme toggle, on the canvas" in {
+  it should "watch a spot that the new colours reach for a theme toggle, on the canvas" in
     withDriver { (window, driver) =>
       val canvas = canvasBounds(window)
       inside(driver.watchedFor(Step.FullRedraw(Redraw.ThemeToggle)).unsafeRunSync(), canvas) shouldBe true
     }
-  }
 
-  it should "watch across the edge the next resize moves, and move the window's edge each time it resizes" in {
+  it should "watch across the edge the next resize moves, and move the window's edge each time it resizes" in
     withDriver { (window, driver) =>
       val before = window.currentPreferredWindowSize.width
       val canvas = canvasBounds(window)
       val across = driver.watchedFor(Step.FullRedraw(Redraw.Resize)).unsafeRunSync()
       (across.x < canvas.x + canvas.width && across.x + across.width > canvas.x + canvas.width) shouldBe true
       driver.resize.unsafeRunSync()
-      Iterator.continually { Thread.sleep(50); window.currentPreferredWindowSize.width }.take(60).find(_ != before) should not be empty
+      Iterator
+        .continually { Thread.sleep(50); window.currentPreferredWindowSize.width }
+        .take(60)
+        .find(_ != before) should not be empty
       val grown = window.currentPreferredWindowSize.width
       driver.resize.unsafeRunSync()
-      Iterator.continually { Thread.sleep(50); window.currentPreferredWindowSize.width }.take(60).find(_ != grown) should not be empty
+      Iterator
+        .continually { Thread.sleep(50); window.currentPreferredWindowSize.width }
+        .take(60)
+        .find(_ != grown) should not be empty
       window.currentPreferredWindowSize.width shouldBe before
     }
-  }
