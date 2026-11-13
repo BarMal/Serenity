@@ -4,7 +4,6 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{ColumnLeft, ColumnRight, DeleteBackward, Enter, InsertChar}
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.ColumnPagingFixture
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

@@ -17,7 +17,6 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.models.AppState
 import com.serenity.testkit.FrameDiff
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningOverride, OpeningRules, OpeningSettings}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

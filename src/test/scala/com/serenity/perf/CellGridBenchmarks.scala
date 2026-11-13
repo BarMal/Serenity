@@ -1,12 +1,12 @@
 package com.serenity.perf
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.{ChromeOn, FramePixels, SkiaFrames}
 import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
+import com.serenity.{ChromeOn, FramePixels, SkiaFrames}
 
 /** The GUI cell grid -- the layout a monospaced font with ligatures off and an exact integer advance gets -- on plain
   * ASCII code, which must cost what it did, and on code with CJK, Hangul and symbols, which it now places on two cells

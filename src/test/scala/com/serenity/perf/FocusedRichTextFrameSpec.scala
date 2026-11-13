@@ -6,7 +6,6 @@ import javax.imageio.ImageIO
 
 import com.serenity.keystroke.events.{MoveDown, MoveUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

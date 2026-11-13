@@ -13,7 +13,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
-import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback, AwtGlyphCoverage}
+import com.serenity.ui.fonts.{AwtGlyphCoverage, FallbackCoverages, FallbackItemisations, FontFallback}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 import com.serenity.ui.renderer.ShapedTextCache

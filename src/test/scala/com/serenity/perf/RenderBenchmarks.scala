@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import java.awt.Font
 
-import com.serenity.{FramePixels, SkiaFrames}
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.client.DocumentUri
 import com.serenity.lsp.config.LanguageId
@@ -23,6 +22,7 @@ import com.serenity.ui.renderer.{CharacterRenderer, FontSpec, RendererCursorOver
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.ui.theme.Theme
+import com.serenity.{FramePixels, SkiaFrames}
 
 /** Layout, Skia raster frame and markdown benchmarks: everything that needs the shared fonts, frame pools and render
   * caches.

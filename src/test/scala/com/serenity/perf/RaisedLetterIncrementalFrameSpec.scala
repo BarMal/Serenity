@@ -23,7 +23,6 @@ import com.serenity.ui.openings.{
   RaisedRowRule
 }
 import com.serenity.ui.theme.DropCapColour
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

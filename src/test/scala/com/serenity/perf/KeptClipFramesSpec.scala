@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.ColumnPagingFixture
-
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

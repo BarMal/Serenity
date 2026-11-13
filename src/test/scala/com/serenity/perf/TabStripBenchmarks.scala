@@ -2,13 +2,13 @@ package com.serenity.perf
 
 import java.awt.Font
 
-import com.serenity.{FramePixels, ReferenceFrames}
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, TabListEntry, UiSurface}
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, TabBarLayoutSettings, TabBarSurfaceComposition}
 import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache, TextOverlayRenderer, TextOverlayView}
 import com.serenity.ui.theme.Theme
+import com.serenity.{FramePixels, ReferenceFrames}
 
 /** The tab strip as a GUI draws it with rounded corners, which every change to the strip repaints, and as it is laid
   * out, which every pointer move over the strip does again. Ten tabs fit the strip as it is; twenty-four overflow it.
