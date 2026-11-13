@@ -1,9 +1,10 @@
 package com.serenity.ui.layout
 
+import com.serenity.TestWorkspaceTrees
 import com.serenity.config.{AppConfig, AppMode, TextAreaInsets}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, EditorPane, Focus, PaneId}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -148,4 +149,46 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
 
     TextArea.spacerHeights(content, config.surfaceConfig.textAreaInsets.normalized) shouldBe
       (pane.topSpacerRect.height, pane.bottomSpacerRect.height)
+  }
+
+  it should "share one set of horizontal gutters between split panes, and give each its own vertical ones" in {
+    val config =
+      AppConfig.default
+        .withLineNumbers(true)
+        .withTextAreaInsets(TextAreaInsets(left = 0.1, right = 0.15, top = 0.05, bottom = 0.1))
+    val paneIds = List(PaneId(0), PaneId(1), PaneId(2))
+    val base    = terminalState(config)
+    val state = base.copy(persisted =
+      base.persisted.copy(
+        layout = Layout(
+          editorPanes = paneIds.map(id => id -> EditorPane.empty(id)).toMap,
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(paneIds*))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
+      )
+    )
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(160, 41))
+    val panes  = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)
+    val insets = config.surfaceConfig.textAreaInsets.normalized
+    val blocks =
+      (layout.editorPanelRect.x - layout.leftSpacerRect.right, layout.rightSpacerRect.x - layout.editorPanelRect.right)
+    val area =
+      TextArea.horizontal(
+        layout.leftSpacerRect.width + blocks._1 + layout.editorPanelRect.width + blocks._2 +
+          layout.rightSpacerRect.width,
+        insets,
+        blocks._1,
+        blocks._2,
+        None
+      )
+
+    layout.leftSpacerRect.width shouldBe area.leftSpacer
+    layout.rightSpacerRect.width shouldBe area.rightSpacer
+    layout.editorPanelRect.width shouldBe area.width
+    panes should have size 3
+    panes.values.foreach { pane =>
+      TextArea.spacerHeights(pane.paneRect.height - pane.headerRect.height, insets) shouldBe
+        (pane.topSpacerRect.height, pane.bottomSpacerRect.height)
+    }
   }
