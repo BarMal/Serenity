@@ -220,7 +220,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
       state.copy(persisted =
-        state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets(0.15, 0.15)))
+        state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets.percent(0.15, 0.15)))
       )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()

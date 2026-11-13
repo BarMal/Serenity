@@ -85,7 +85,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
         config = ChromeOn.config
           .withLineNumbers(true)
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
-          .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.10, right = 0.20))
       )
     )
     val viewportSize     = ViewportSize(100, 30)
@@ -173,7 +173,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       persisted = ChromeOn.initial.persisted.copy(
         buffers = Map(buffer.id -> buffer),
         config = ChromeOn.config.withTextAreaInsets(
-          TextAreaInsets(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
+          TextAreaInsets.percent(left = 0.10, right = 0.20, top = 0.10, bottom = 0.15)
         )
       ),
       runtime = ChromeOn.initial.runtime.copy(viewportSize = Some(renderViewport))
@@ -213,7 +213,7 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
       persisted = ChromeOn.initial.persisted.copy(
         config = ChromeOn.config
           .withLineNumbers(false)
-          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.0, right = 0.0))
           .withUiElementGap(Some(2))
       ),
       runtime = ChromeOn.initial.runtime.copy(viewportSize = Some(renderViewport))

@@ -139,7 +139,7 @@ object LayoutEngine:
     val uiElementGap  = math.ceil(math.max(0.0, state.effectiveUiElementGap)).toInt
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
-      else TextAreaInsets(spacerPercentage, spacerPercentage).normalized
+      else TextAreaInsets.percent(left = spacerPercentage, right = spacerPercentage).normalized
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 2): a column-mode page carries its line numbers as a
     // per-column rail on each column's own left edge (`RendererGutter`/`perColumnGutterWidth`), so the single
     // pane-level rail slice 1 still reserved here is dropped -- reserving it as well would take the gutter's width out
@@ -163,12 +163,13 @@ object LayoutEngine:
       if lineNumbersOn then
         lineNumberLayout.marginRight + (if hasRightCounter then counterWidth + lineNumberPadding else 0)
       else 0
-    val horizontalTextFraction = (1.0 - textAreaInsets.left - textAreaInsets.right).max(0.01)
+    val (gutterShare, gutterCells) = TextArea.reservation(textAreaInsets, ProseColumn.chInCells(state))
+    val horizontalTextFraction     = (1.0 - gutterShare).max(0.01)
     val minimumEditorWorkspaceWidth =
       math
         .ceil(
           (state.persisted.config.editorConfig.minimumPaneWidth
-            .max(1) + leftBlock + rightBlock) / horizontalTextFraction
+            .max(1) + leftBlock + rightBlock + gutterCells) / horizontalTextFraction
         )
         .toInt
     // An expanded/maximized panel (issue #817: `Layout.maximizedWorkspaceNodeId`, not a separate presentation) takes
@@ -219,7 +220,14 @@ object LayoutEngine:
 
     val editorPaneHeaderHeight = paneHeaderHeight(state)
     val textArea =
-      TextArea.horizontal(workspaceWidth, textAreaInsets, leftBlock, rightBlock, ProseColumn.widthCells(state))
+      TextArea.horizontal(
+        workspaceWidth,
+        textAreaInsets,
+        leftBlock,
+        rightBlock,
+        ProseColumn.widthCells(state),
+        ProseColumn.chInCells(state)
+      )
     val (leftSpacerWidth, rightSpacerWidth)   = (textArea.leftSpacer, textArea.rightSpacer)
     val contentAreaHeight                     = math.max(1, workspaceHeight - editorPaneHeaderHeight)
     val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(contentAreaHeight, textAreaInsets)

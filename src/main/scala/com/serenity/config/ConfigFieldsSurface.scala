@@ -28,10 +28,10 @@ private[config] object ConfigFieldsSurface:
       "text.area.left.percent",
       "text_area_left_percent"
     )(
-      insetPercent
+      gutter(allowAuto = true, allowCh = true)
     )(
-      _.surfaceConfig.textAreaInsets.leftPercent,
-      (config, value) => config.withTextAreaLeftInset(fractionOfPercent(value))
+      _.surfaceConfig.textAreaInsets.left,
+      (config, value) => config.withTextAreaLeft(value)
     ),
     named(
       "editor.text_area.right",
@@ -40,10 +40,10 @@ private[config] object ConfigFieldsSurface:
       "text.area.right.percent",
       "text_area_right_percent"
     )(
-      insetPercent
+      gutter(allowAuto = true, allowCh = true)
     )(
-      _.surfaceConfig.textAreaInsets.rightPercent,
-      (config, value) => config.withTextAreaRightInset(fractionOfPercent(value))
+      _.surfaceConfig.textAreaInsets.right,
+      (config, value) => config.withTextAreaRight(value)
     ),
     named(
       "editor.text_area.top",
@@ -52,10 +52,10 @@ private[config] object ConfigFieldsSurface:
       "text.area.top.percent",
       "text_area_top_percent"
     )(
-      insetPercent
+      gutter(allowAuto = false, allowCh = false)
     )(
-      _.surfaceConfig.textAreaInsets.topPercent,
-      (config, value) => config.withTextAreaTopInset(fractionOfPercent(value))
+      _.surfaceConfig.textAreaInsets.top,
+      (config, value) => config.withTextAreaTop(value)
     ),
     named(
       "editor.text_area.bottom",
@@ -64,9 +64,9 @@ private[config] object ConfigFieldsSurface:
       "text.area.bottom.percent",
       "text_area_bottom_percent"
     )(
-      insetPercent
+      gutter(allowAuto = false, allowCh = false)
     )(
-      _.surfaceConfig.textAreaInsets.bottomPercent,
-      (config, value) => config.withTextAreaBottomInset(fractionOfPercent(value))
+      _.surfaceConfig.textAreaInsets.bottom,
+      (config, value) => config.withTextAreaBottom(value)
     )
   )

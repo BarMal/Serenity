@@ -57,10 +57,10 @@ object CommandRunnerSettingsInputItems:
       textFontSizeValue = editorConfig.fontConfig.textFontSize.toString,
       uiFontSizeValue = editorConfig.fontConfig.uiFontSize.toString,
       textScaleValue = f"${editorConfig.fontConfig.textScaleMultiplier}%.2f",
-      textAreaLeftValue = f"${surfaceConfig.textAreaInsets.leftPercent}%.1f",
-      textAreaRightValue = f"${surfaceConfig.textAreaInsets.rightPercent}%.1f",
-      textAreaTopValue = f"${surfaceConfig.textAreaInsets.topPercent}%.1f",
-      textAreaBottomValue = f"${surfaceConfig.textAreaInsets.bottomPercent}%.1f",
+      textAreaLeftValue = Gutter.display(surfaceConfig.textAreaInsets.left),
+      textAreaRightValue = Gutter.display(surfaceConfig.textAreaInsets.right),
+      textAreaTopValue = Gutter.display(surfaceConfig.textAreaInsets.top),
+      textAreaBottomValue = Gutter.display(surfaceConfig.textAreaInsets.bottom),
       // Unset resolves to the same surface-specific number `AppState.effectiveUiElementGap` and its
       // `effectiveLineNumberMarginLeft`/`effectiveLineNumberPadding` siblings would show -- a GUI cell of breathing
       // room, or the TUI's existing zero -- rather than the literal string "auto" (issue #1621 carve-out).
