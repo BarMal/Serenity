@@ -75,8 +75,11 @@ value but `off` (in any letter case: `OFF` works too), every job runs as usual. 
 - The merge train gates on `ci.yml` alone (`scripts/merge_train.py`, `required_workflows`) and no longer dispatches or
   waits for Cross-OS Tests; Auto Squash Merge stops requiring the two Cross-OS checks.
 - Desktop Package Check, Ligature Oracle, Skia Natives Probe and the macOS and Windows Skiko builds run Linux only.
-- Desktop Publish skips the Cross-OS nightly gate, builds the Linux jar and zip, and publishes only those (the checksum
-  file and the release notes name them); Windows and macOS assets already on a release are left as they are.
+- Desktop Publish skips the Cross-OS nightly gate, builds the Linux jar and zip, and publishes only those (the release
+  notes name them); Windows and macOS assets already on the nightly release are left as they are, and their lines in
+  `SHA256SUMS` are carried over from the previous nightly file (`scripts/carry_checksums.py`), checked against the
+  digest GitHub recorded for each attached asset, so every attached file stays verifiable. A line that is missing or
+  disagrees is replaced by the recorded digest and the run says so in a warning.
 
 Delete the variable to turn everything back on; no job was removed. A change to a workflow file is merged by hand.
 

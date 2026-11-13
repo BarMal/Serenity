@@ -618,6 +618,7 @@ jobs:
         shell: bash
         env:
           CROSS_OS_CI: ${{ vars.CROSS_OS_CI }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           cd dist
@@ -640,6 +641,18 @@ jobs:
             echo "::warning::No SBOM for this nightly build; publishing without Serenity.cdx.json."
           fi
           sha256sum "${ASSETS[@]}" > SHA256SUMS
+          # The Windows and macOS assets of an earlier build stay attached to the nightly release while they are off, so
+          # their checksums are carried over and every attached file stays verifiable (#2618). A tag build attaches
+          # only Linux files to a new release, so it has nothing to carry.
+          if [ "${CROSS_OS_CI,,}" = "off" ] && [ "$GITHUB_REF_TYPE" != "tag" ]; then
+            mkdir -p ../carry
+            gh release download desktop-latest --pattern SHA256SUMS --dir ../carry \
+              || echo "::notice::No previous nightly SHA256SUMS to carry from."
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/desktop-latest" > ../carry/release.json \
+              || echo "::notice::No nightly release to read the attached checksums from."
+            python3 "$GITHUB_WORKSPACE/scripts/carry_checksums.py" \
+              --fresh SHA256SUMS --previous ../carry/SHA256SUMS --release-json ../carry/release.json
+          fi
           cat SHA256SUMS
 
       - name: Publish versioned release

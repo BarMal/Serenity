@@ -157,6 +157,7 @@ jobs:
             scripts.test_bench_laptop \
             scripts.test_bench_scaling \
             scripts.test_build_outputs \
+            scripts.test_carry_checksums \
             scripts.test_check_no_dng \
             scripts.test_check_perf_regression \
             scripts.test_ci_apt_workflow \

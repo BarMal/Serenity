@@ -54,11 +54,44 @@ def _run_block(step: str) -> str:
     return textwrap.dedent("\n".join(body))
 
 
+_FAKE_GH = """#!/usr/bin/env bash
+echo "$@" >> "$FAKE_GH_LOG"
+case "$1" in
+  release)
+    while [ "$#" -gt 0 ]; do [ "$1" = "--dir" ] && DIR="$2"; shift; done
+    [ -f "$FAKE_GH_PREVIOUS" ] || exit 1
+    mkdir -p "$DIR" && cp "$FAKE_GH_PREVIOUS" "$DIR/SHA256SUMS" ;;
+  api)
+    [ -f "$FAKE_GH_RELEASE" ] || exit 1
+    cat "$FAKE_GH_RELEASE" ;;
+  *) exit 1 ;;
+esac
+"""
+
+
+def _fake_gh(directory: Path) -> Path:
+    """A stand-in `gh` that serves the previous release's SHA256SUMS and release JSON from files, and logs its calls."""
+    directory.mkdir(parents=True, exist_ok=True)
+    gh = directory / "gh"
+    gh.write_text(_FAKE_GH)
+    gh.chmod(0o755)
+    return directory
+
+
 def _bash(script: str, cwd: Path, **env: str) -> subprocess.CompletedProcess[str]:
+    tools = _fake_gh(cwd / "fake-bin")
     return subprocess.run(
         ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", script],
         cwd=cwd,
-        env={"PATH": "/usr/bin:/bin", **env},
+        env={
+            "PATH": f"{tools}:/usr/local/bin:/usr/bin:/bin",
+            "GITHUB_WORKSPACE": str(_ROOT),
+            "GITHUB_REPOSITORY": "owner/repo",
+            "FAKE_GH_LOG": str(cwd / "gh.log"),
+            "FAKE_GH_PREVIOUS": str(cwd / "previous-sums"),
+            "FAKE_GH_RELEASE": str(cwd / "release.json"),
+            **env,
+        },
         capture_output=True,
         text=True,
         check=False,
@@ -183,6 +216,66 @@ class DesktopPublishTests(unittest.TestCase):
                 self.assertEqual(0, result.returncode, result.stderr)
                 listed = [line.split()[-1] for line in (dist / "SHA256SUMS").read_text().splitlines()]
                 self.assertEqual(["Serenity-linux-x64.jar", "Serenity-linux-x64.zip", "Serenity.cdx.json"], listed)
+
+    def _write_sums_off(self, tmp: str, **env: str) -> subprocess.CompletedProcess[str]:
+        script = _run_block(_step(_job(self._text, "publish"), "Write SHA256SUMS"))
+        dist = Path(tmp) / "dist"
+        dist.mkdir(exist_ok=True)
+        for name in ("Serenity-linux-x64.jar", "Serenity-linux-x64.zip", "Serenity.cdx.json"):
+            (dist / name).write_bytes(b"x")
+        return _bash(script, Path(tmp), CROSS_OS_CI="off", GH_TOKEN="t", **{"GITHUB_REF_TYPE": "branch", **env})
+
+    def test_the_old_windows_and_macos_checksums_are_carried_into_the_nightly_when_off(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            old = {"Serenity-windows-x64.jar": "1" * 64, "Serenity-macos-arm64.zip": "4" * 64}
+            (Path(tmp) / "previous-sums").write_text("".join(f"{h}  {n}\n" for n, h in old.items()))
+            (Path(tmp) / "release.json").write_text(
+                json.dumps({"assets": [{"name": n, "digest": f"sha256:{h}"} for n, h in old.items()]})
+            )
+            result = self._write_sums_off(tmp)
+            self.assertEqual(0, result.returncode, result.stderr)
+            listed = (Path(tmp) / "dist" / "SHA256SUMS").read_text().splitlines()
+            self.assertEqual(
+                [
+                    "Serenity-linux-x64.jar",
+                    "Serenity-linux-x64.zip",
+                    "Serenity.cdx.json",
+                    "Serenity-windows-x64.jar",
+                    "Serenity-macos-arm64.zip",
+                ],
+                [line.split()[-1] for line in listed],
+            )
+            self.assertIn(f"{'1' * 64}  Serenity-windows-x64.jar", listed)
+
+    def test_a_nightly_with_no_previous_release_still_publishes_the_linux_checksums_when_off(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._write_sums_off(tmp)
+            self.assertEqual(0, result.returncode, result.stderr)
+            listed = (Path(tmp) / "dist" / "SHA256SUMS").read_text().splitlines()
+            self.assertEqual(3, len(listed))
+
+    def test_a_versioned_release_carries_nothing_because_it_attaches_only_linux_assets(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "previous-sums").write_text(f"{'1' * 64}  Serenity-windows-x64.jar\n")
+            result = self._write_sums_off(tmp, GITHUB_REF_TYPE="tag")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(3, len((Path(tmp) / "dist" / "SHA256SUMS").read_text().splitlines()))
+            self.assertFalse((Path(tmp) / "gh.log").exists(), "a tag build must not ask the nightly release for anything")
+
+    def test_nothing_is_fetched_when_the_switch_is_not_off(self) -> None:
+        script = _run_block(_step(_job(self._text, "publish"), "Write SHA256SUMS"))
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = Path(tmp) / "dist"
+            dist.mkdir()
+            for name in (
+                "Serenity-linux-x64.jar", "Serenity-windows-x64.jar", "Serenity-macos-arm64.jar",
+                "Serenity-linux-x64.zip", "Serenity-windows-x64.zip", "Serenity-macos-arm64.zip",
+            ):
+                (dist / name).write_bytes(b"x")
+            result = _bash(script, Path(tmp), CROSS_OS_CI="", GITHUB_REF_TYPE="branch")
+            self.assertEqual(0, result.returncode, result.stderr)
+            self.assertEqual(6, len((dist / "SHA256SUMS").read_text().splitlines()))
+            self.assertFalse((Path(tmp) / "gh.log").exists())
 
     def test_the_checksums_still_need_every_platform_when_the_switch_is_not_off(self) -> None:
         script = _run_block(_step(_job(self._text, "publish"), "Write SHA256SUMS"))
