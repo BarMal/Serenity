@@ -32,6 +32,16 @@ class TextMeasureCorpusSpec extends AnyFlatSpec with Matchers:
       List("rows", "ends", "widths", "heights").foreach(kind => keys should contain(s"$prefix.$kind@600"))
   }
 
+  "Every corpus line, structural only or not," should "have the glyph count and the cluster map AWT shapes it to" in {
+    val keys = entries.map(_.key).toSet
+    for
+      font <- TextMeasureCorpus.fonts
+      line <- TextMeasureCorpus.lines
+    do
+      keys should contain(s"${font.label}.${line.id}.glyphs")
+      keys should contain(s"${font.label}.${line.id}.clusters")
+  }
+
   "The structural-only lines" should "have their caret stops counted and nothing else pinned" in {
     val keys = entries.map(_.key).toSet
     for
