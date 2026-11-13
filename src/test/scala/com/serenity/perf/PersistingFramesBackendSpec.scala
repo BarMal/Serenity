@@ -17,8 +17,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** `laptop.render.*` draws a damaged frame over one persisting image and checks it before timing it: no more rows
   * redrawn than the step allows, and pixel for pixel the frame drawn from scratch. That check is the point of the rows,
-  * and it has to hold on whichever renderer draws the frame, so it is run here on Java2D and on Skia's raster surface,
-  * and shown to fail when a damaged row is skipped or the damage widens.
+  * and it has to hold on whichever surface draws the frame, so it is run here on Skia's raster surface, and shown to
+  * fail when a damaged row is skipped or the damage widens.
   */
 class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
 
@@ -69,10 +69,10 @@ class PersistingFramesBackendSpec extends AnyFlatSpec with Matchers:
 
   private lazy val transitions = LaptopFrameBenchmarks.InteractionTransitions(beforeTyping, afterTyping, afterScroll)
 
-  "The Java2D rows" should "keep their names" in {
+  "The Skia raster rows" should "carry the raster marker" in {
     LaptopFrameBenchmarks.interactionBenchmarks(transitions).map(_.name) shouldBe List(
-      "laptop.render.typing_frame_2x",
-      "laptop.render.scroll_frame_2x",
+      "laptop.render.typing_frame_2x.skia_raster",
+      "laptop.render.scroll_frame_2x.skia_raster",
       "laptop.damage.typing_transition"
     )
   }

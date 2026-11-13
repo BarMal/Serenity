@@ -19,7 +19,7 @@ private[perf] object AllThreadsRows:
       "laptop.input.state_manager.two_runtimes",
       "laptop.present.swing_fresh_frame_synced_1500x1000",
       "laptop.present.swing_paint_caret_1500x1000",
-      "laptop.render.typing_frame_2x.ligature_font",
+      "laptop.render.typing_frame_2x.ligature_font.skia_raster",
       "index.walk"
     )
 

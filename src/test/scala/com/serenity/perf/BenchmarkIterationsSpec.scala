@@ -64,7 +64,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
       "reducer.multi_cursor_move_down",
       "damage.caret_move.repaint_region.pinned_status",
       "render.cursor_only.scene_reuse.java2d_overlay",
-      "render.diagnostics_and_comments.java2d",
+      "render.diagnostics_and_comments.skia_raster",
       "layout.large_multiline.visible_viewport"
     )
   }
@@ -75,7 +75,7 @@ class BenchmarkIterationsSpec extends AnyFlatSpec with Matchers:
     val needsDisplay = Set(
       "lsp.framer.large_batch",
       "render.cursor_only.scene_reuse.java2d_overlay",
-      "render.diagnostics_and_comments.java2d",
+      "render.diagnostics_and_comments.skia_raster",
       "layout.large_multiline.visible_viewport"
     )
     (BenchmarkIterationCounts.JitSettled -- needsDisplay -- constructible.map(_.name)) shouldBe empty

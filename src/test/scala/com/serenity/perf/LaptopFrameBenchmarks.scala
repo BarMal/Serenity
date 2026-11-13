@@ -1,7 +1,6 @@
 package com.serenity.perf
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.IO
@@ -24,22 +23,14 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PanelPosition, PixelRect, ViewportSize}
-import com.serenity.ui.renderer.{
-  FontSpec,
-  FrameOutput,
-  Java2DRenderSurface,
-  RendererEntryPoints,
-  RendererFramePlanner,
-  ScreenIdentity
-}
+import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
+import com.serenity.ui.renderer.{FontSpec, FrameOutput, RendererEntryPoints, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{
   ChromeOn,
   DockedPanelFixtures,
   FrameBackend,
   FramePixels,
-  Java2DFrames,
   SkiaFrames,
   TestTemp,
   setBufferForPane,
@@ -90,32 +81,25 @@ private[perf] object LaptopFrameBenchmarks:
       40
     )
 
-  /** A frame buffer at the window's device size; reused across iterations, as the app's own image pool does. Opaque,
-    * like every frame `Java2DRenderSurface.forFrame` draws.
-    */
-  def frameImage(): BufferedImage =
-    new BufferedImage(
-      math.ceil(LogicalWidthPx * DeviceScale).toInt,
-      math.ceil(LogicalHeightPx * DeviceScale).toInt,
-      BufferedImage.TYPE_INT_RGB
-    )
+  /** A frame buffer at the window's device size; reused across iterations, as the app's own image pool does. */
+  def frameImage(): FramePixels =
+    SkiaFrames.newFrame(math.ceil(LogicalWidthPx * DeviceScale).toInt, math.ceil(LogicalHeightPx * DeviceScale).toInt)
 
   def renderedFrame(
     state: AppState,
     caches: RenderCaches,
-    image: BufferedImage,
+    image: FramePixels,
     cursorVisible: Boolean = true
-  ): BufferedImage =
-    val surface = new Java2DRenderSurface(
+  ): FramePixels =
+    val surface = SkiaFrames.surfaceOver(
       image,
       cellMetrics,
       codeFont,
-      _ => (),
-      logicalWidthPx = LogicalWidthPx,
-      logicalHeightPx = LogicalHeightPx,
-      deviceScaleX = DeviceScale,
-      deviceScaleY = DeviceScale,
-      textCaches = caches.surfaceText
+      LogicalWidthPx,
+      LogicalHeightPx,
+      DeviceScale,
+      persists = false,
+      caches
     )
     RendererEntryPoints.render(
       state,
@@ -129,10 +113,6 @@ private[perf] object LaptopFrameBenchmarks:
       caches
     )
     image
-
-  private[perf] def hasPixels(image: BufferedImage): Boolean =
-    val row = image.getHeight / 2
-    (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
 
   private[perf] def hasPixels(frame: FramePixels): Boolean =
     val row = frame.heightPx / 2
@@ -154,14 +134,14 @@ private[perf] object LaptopFrameBenchmarks:
     BenchmarkRunner.Benchmark.sharing((caches, prose, withPanel, proseImage, panelImage))(
       List(
         BenchmarkRunner.Benchmark(
-          "laptop.render.prose_frame_2x",
+          "laptop.render.prose_frame_2x.skia_raster",
           2,
           8,
           () => assert(hasPixels(renderedFrame(prose, caches, proseImage)), "prose frame drew nothing"),
           () => renderedFrame(prose, caches, proseImage)
         ),
         BenchmarkRunner.Benchmark(
-          "laptop.render.prose_frame_2x.pinned_panel_frosted",
+          "laptop.render.prose_frame_2x.pinned_panel_frosted.skia_raster",
           2,
           8,
           () => assert(hasPixels(renderedFrame(withPanel, caches, panelImage)), "panel frame drew nothing"),
@@ -389,8 +369,7 @@ private[perf] object LaptopFrameBenchmarks:
       textFont: Font = LaptopFrameBenchmarks.textFont,
       cellMetrics: CellMetrics = LaptopFrameBenchmarks.cellMetrics,
       viewport: ViewportSize = LaptopFrameBenchmarks.viewport,
-      backend: FrameBackend = Java2DFrames,
-      onKeptOff: List[PixelRect] => Unit = _ => ()
+      backend: FrameBackend = SkiaFrames
   ):
     private val frame =
       backend.newFrame(math.ceil(LogicalWidthPx * DeviceScale).toInt, math.ceil(LogicalHeightPx * DeviceScale).toInt)
@@ -416,8 +395,7 @@ private[perf] object LaptopFrameBenchmarks:
         DeviceScale,
         persists = true,
         caches,
-        Some(screen),
-        onKeptOff
+        Some(screen)
       )
       val _ = RendererFramePlanner.renderFrame(
         state,
@@ -480,13 +458,13 @@ private[perf] object LaptopFrameBenchmarks:
         )
       }
 
-  /** An [[AlternatingTransition]] on the Java2D renderer, which the scaling rows draw their frames with. */
-  private[perf] def java2dTransition(before: AppState, after: AppState): AlternatingTransition =
-    AlternatingTransition(Java2DFrames, before, after)
+  /** An [[AlternatingTransition]] on Skia's CPU raster, which the scaling rows draw their frames with. */
+  private[perf] def rasterTransition(before: AppState, after: AppState): AlternatingTransition =
+    AlternatingTransition(SkiaFrames, before, after)
 
-  /** A frame of `state` drawn from scratch on the Java2D renderer, without the caret. */
-  private[perf] def java2dColdFrame(state: AppState): FramePixels =
-    LaptopColdFrames.of(Java2DFrames, state, RenderCaches.create(), cursorVisible = false)
+  /** A frame of `state` drawn from scratch on Skia's CPU raster, without the caret. */
+  private[perf] def rasterColdFrame(state: AppState): FramePixels =
+    LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false)
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
   private[perf] def differingPixels(a: FramePixels, b: FramePixels): IndexedSeq[(Int, Int)] =
@@ -544,11 +522,8 @@ private[perf] object LaptopFrameBenchmarks:
   /** The two frames above on Skia's CPU raster surface, with the same states, the same damage and the same check before
     * timing (the row caps and pixel equality with a frame drawn from scratch, here by Skia). They are named under
     * `skia.`, which `scripts/perf-gate-excluded-rows.txt` keeps off the per-PR gate: Skia is the default renderer, and
-    * the nightly ABBA judges these rows. The other `laptop.render.*` rows differ from these only in their fixtures (a
-    * panel, columns, a gutter, a ligature font), so they have no Skia twin here.
-    *
-    * Each draws its first frame, and so first uses Skia, when its check runs rather than when the suite is built, so
-    * the Java2D rows are timed in a JVM that has not drawn with Skia.
+    * the nightly ABBA judges these rows. The `.skia_raster` rows beside them draw the same frames, and differ from
+    * these only in their names, which the gate lists.
     */
   private[perf] def skiaInteractionBenchmarks(
     transitions: => InteractionTransitions,
@@ -568,18 +543,18 @@ private[perf] object LaptopFrameBenchmarks:
 
   /** The typing frame in floating chrome, kept out of [[interactionBenchmarks]], whose rows are pinned. */
   private[perf] def floatingTypingBenchmarks(): List[BenchmarkRunner.Benchmark] =
-    List(FloatingTypingFrames.benchmark(Java2DFrames))
+    List(FloatingTypingFrames.benchmark(SkiaFrames))
 
   private[perf] def interactionBenchmarks(transitions: => InteractionTransitions): List[BenchmarkRunner.Benchmark] =
     lazy val built = transitions
     List(
       typingFrameRow(
-        "laptop.render.typing_frame_2x",
-        AlternatingTransition(Java2DFrames, built.beforeTyping, built.afterTyping)
+        "laptop.render.typing_frame_2x.skia_raster",
+        AlternatingTransition(SkiaFrames, built.beforeTyping, built.afterTyping)
       ),
       scrollFrameRow(
-        "laptop.render.scroll_frame_2x",
-        AlternatingTransition(Java2DFrames, built.afterTyping, built.afterScroll)
+        "laptop.render.scroll_frame_2x.skia_raster",
+        AlternatingTransition(SkiaFrames, built.afterTyping, built.afterScroll)
       ),
       BenchmarkRunner.Benchmark.building(built)(
         BenchmarkRunner.Benchmark(

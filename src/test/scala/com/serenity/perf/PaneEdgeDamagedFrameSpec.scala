@@ -120,9 +120,10 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
       )
 
       val drawnImage = drawn.toImage
-      val differing  = differingPixels(drawnImage, cold)
-      val clue       = if differing.isEmpty then "" else diagnosis(drawnImage, cold, differing, damage)
-      if differing.nonEmpty then println(FrameDifferencePicture.of(scenario.name, drawnImage, cold, differing))
+      val coldImage  = cold.toImage
+      val differing  = differingPixels(drawnImage, coldImage)
+      val clue       = if differing.isEmpty then "" else diagnosis(drawnImage, coldImage, differing, damage)
+      if differing.nonEmpty then println(FrameDifferencePicture.of(scenario.name, drawnImage, coldImage, differing))
       withClue(clue)(differing shouldBe empty)
     }
   }

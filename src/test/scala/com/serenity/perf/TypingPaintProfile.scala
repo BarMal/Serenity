@@ -127,30 +127,16 @@ private[perf] object TypingPaintProfile:
       heightPx,
       scale
     )
-    val java2d = variants.take(2).map { variant =>
-      timedRow(
-        s"render.profile.$label.typing_java2d.${variant.label}",
-        FrameSurfaceFactory.Java2D,
-        variant,
-        widthPx,
-        heightPx,
-        scale
-      )
-    }
-    val rows    = skia ++ java2d :+ floor
+    val rows    = skia :+ floor
     val results = BenchmarkRunner.runMatching(Nil, rows.map(_._1))
     val phases  = rows.map((benchmark, log) => benchmark.name -> log).toMap
     PresentReport.print(results, name => phases.get(name).map(_.breakdown), name => phases.get(name).map(_.traffic))
     def timingOf(result: BenchmarkRunner.BenchmarkResult) =
       TypingPaintReport.VariantTiming(result.name.split('.').last, result.p50Ms, result.p95Ms)
-    val (skiaResults, rest)           = results.splitAt(skia.length)
-    val (java2dResults, floorResults) = rest.splitAt(java2d.length)
-    val timings                       = skiaResults.map(timingOf)
+    val (skiaResults, floorResults) = results.splitAt(skia.length)
+    val timings                     = skiaResults.map(timingOf)
     println()
     println(TypingPaintReport.timingTable(timings))
-    println()
-    println("Java2D, same frames:")
-    println(TypingPaintReport.timingTable(java2dResults.map(timingOf)))
     floorResults.headOption.foreach(floorResult =>
       println(TypingPaintReport.floorLine(skiaP50Ms = timings.head.p50Ms, floorP50Ms = floorResult.p50Ms))
     )

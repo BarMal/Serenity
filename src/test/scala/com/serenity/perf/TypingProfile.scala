@@ -35,7 +35,7 @@ import org.typelevel.log4cats.noop.NoOpLogger
   * the given seconds. `cold_typing` types the given number of random letters in a fresh JVM with no warm-up, pausing
   * `--pace-ms` between keys outside the timed region; `--warm-ms` first replays the startup warm-up on a separate
   * `StateManager` for that long. `--real-warm-ms` instead runs the app's own `StartupWarmUp.run`, drawing into an
-  * offscreen Java2D image (so it needs a display), and stops it after that long as the user's first input would.
+  * offscreen image (so it needs a display), and stops it after that long as the user's first input would.
   */
 object TypingProfile:
   given Balance = Balance.default

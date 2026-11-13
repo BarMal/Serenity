@@ -8,7 +8,7 @@ import scala.annotation.unused
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RenderSurface, ScreenIdentity}
+import com.serenity.ui.renderer.{FontSpec, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{PaintLog, SkiaRenderSurface, SkiaTextCaches}
 import org.jetbrains.skia.{
   Bitmap,
@@ -59,8 +59,8 @@ object FramePixels:
     image.setRGB(0, 0, widthPx, heightPx, pixels, 0, widthPx)
     image
 
-/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. A Java2D
-  * surface reports to `onKeptOff` each set of rects it keeps pixels off; a Skia surface does not report them.
+/** A renderer the persisted-frame specs can run against: a pooled pixel store and a surface painting into it. A Skia
+  * surface does not report the rects it keeps pixels off, so `onKeptOff` is never called.
   */
 trait FrameBackend:
   def newFrame(widthPx: Int, heightPx: Int): FramePixels
@@ -77,67 +77,6 @@ trait FrameBackend:
     screen: Option[ScreenIdentity] = None,
     onKeptOff: List[PixelRect] => Unit = _ => ()
   ): RenderSurface
-
-object Java2DFrames extends FrameBackend:
-
-  final private class Java2DFrame(val image: BufferedImage) extends FramePixels:
-    def widthPx: Int                          = image.getWidth
-    def heightPx: Int                         = image.getHeight
-    def rgbAt(x: Int, y: Int): Int            = image.getRGB(x, y)
-    def stamp(x: Int, y: Int, rgb: Int): Unit = image.setRGB(x, y, rgb)
-
-    def rgbPixels: Array[Int] =
-      image.getRGB(0, 0, widthPx, heightPx, new Array[Int](widthPx * heightPx), 0, widthPx)
-
-    def fill(rgb: Int): Unit =
-      val graphics = image.createGraphics()
-      try
-        graphics.setComposite(java.awt.AlphaComposite.Src)
-        graphics.setColor(new java.awt.Color(rgb))
-        graphics.fillRect(0, 0, widthPx, heightPx)
-      finally graphics.dispose()
-
-    def blit(source: FramePixels, x: Int, y: Int, width: Int, height: Int): Unit = source match
-      case from: Java2DFrame =>
-        val graphics = image.createGraphics()
-        try graphics.drawImage(from.image.getSubimage(x, y, width, height), x, y, null)
-        finally graphics.dispose()
-      case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
-
-  def newFrame(widthPx: Int, heightPx: Int): FramePixels =
-    new Java2DFrame(new BufferedImage(widthPx, heightPx, BufferedImage.TYPE_INT_RGB))
-
-  def surfaceOver(
-    frame: FramePixels,
-    metrics: CellMetrics,
-    font: Font,
-    logicalWidthPx: Int,
-    logicalHeightPx: Int,
-    scale: Double,
-    persists: Boolean,
-    caches: RenderCaches,
-    screen: Option[ScreenIdentity],
-    onKeptOff: List[PixelRect] => Unit
-  ): RenderSurface =
-    frame match
-      case java2d: Java2DFrame =>
-        new Java2DRenderSurface(
-          java2d.image,
-          metrics,
-          font,
-          _ => (),
-          logicalWidthPx = logicalWidthPx,
-          logicalHeightPx = logicalHeightPx,
-          deviceScaleX = scale,
-          deviceScaleY = scale,
-          contentPersists = persists,
-          layerCacheOwnerOverride = screen.orElse(Some(ScreenIdentity(java2d.image))),
-          textCaches = caches.surfaceText
-        ):
-          override def withoutPixels(kept: List[PixelRect])(render: => Unit): Unit =
-            onKeptOff(kept)
-            super.withoutPixels(kept)(render)
-      case other => throw new IllegalArgumentException(s"not a Java2D frame: $other")
 
 /** The renderer the pixel specs paint with: a frame and a surface painting into it, read back as an image. */
 object ReferenceFrames:

@@ -3,7 +3,6 @@ package com.serenity.perf
 import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.rope.Balance
-import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

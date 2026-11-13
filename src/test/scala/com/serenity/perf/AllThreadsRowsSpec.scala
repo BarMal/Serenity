@@ -43,7 +43,7 @@ class AllThreadsRowsSpec extends AnyFlatSpec with Matchers:
       "laptop.input.state_manager.two_runtimes.different_text",
       "laptop.present.swing_fresh_frame_synced_1500x1000",
       "laptop.present.swing_paint_caret_1500x1000",
-      "laptop.render.typing_frame_2x.ligature_font",
+      "laptop.render.typing_frame_2x.ligature_font.skia_raster",
       "index.walk.cold.100k",
       "index.walk.warm.100k"
     )

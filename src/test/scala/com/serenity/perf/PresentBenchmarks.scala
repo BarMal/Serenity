@@ -28,8 +28,8 @@ import com.serenity.ui.skia.{DiscardingImageLayer, PresentPhase, SkiaRasterSurfa
 import com.serenity.ui.terminal.SwingWindow.ReusableImagePool
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingPresentationSite}
 
-/** Scratch benchmark for #2380: a window's frame through `FrameSurfaceFactory.Java2D` or `SkiaRasterSurfaceFactory`,
-  * end to end from the surface request to the published image (so including the raster copy-out), with the
+/** Scratch benchmark for #2380: a window's frame through `SkiaRasterSurfaceFactory` or the layer's image frames, end to
+  * end from the surface request to the published image (so including the raster copy-out), with the
   * `RendererFramePlanner` and every state, damage and cache identical on both sides.
   *
   * One JVM runs one backend at one window size and scale, so `bench/abba.sh`-style A B B A runs can alternate JVMs. Row
@@ -88,7 +88,7 @@ private[perf] object PresentBenchmarks:
 
     def lastFrame: FrameCounts = caches.frameCounters.lastFrame
 
-    /** What the Skia raster path spent in each present phase since this was last asked; nothing on Java2D. */
+    /** What the Skia raster path spent in each present phase since this was last asked. */
     def drainPhases(): Map[PresentPhase, Long] =
       SkiaRasterSurfaceFactory.drainPhases(caches.backendCaches).getOrElse(Map.empty)
 
@@ -171,7 +171,7 @@ private[perf] object PresentBenchmarks:
 
   /** The prose window's states a benchmark shows: the typing pair, and the same document scrolled three lines at a
     * time. The scroll states are three, not two, because the window's pool hands out two images in turn: two states
-    * would give each image the same state every time, and Java2D, which keeps what an image shows, would draw nothing.
+    * would give each image the same state every time, and a surface that keeps what an image shows would draw nothing.
     */
   final private[perf] class ProseStates(prose: StateManager)(using IORuntime):
     val (beforeTyping, afterTyping) = TypingTransition.of(prose)

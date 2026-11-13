@@ -31,8 +31,8 @@ import com.serenity.ui.benchmark.RenderBenchmarkOptions
   * @param waylandRender
   *   `--wayland-render=skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
   * @param renderBenchmark
-  *   `--render-benchmark`: time the Skia layer on one scripted document, print and write the
-  *   report, and quit without starting the editor. `None` unless the flag is given.
+  *   `--render-benchmark`: time the Skia layer on one scripted document, print and write the report, and quit without
+  *   starting the editor. `None` unless the flag is given.
   */
 final case class LaunchOptions(
     openPaths: List[Path] = Nil,

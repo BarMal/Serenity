@@ -1,14 +1,12 @@
 package com.serenity.perf
 
-import java.awt.image.BufferedImage
-
 import cats.effect.unsafe.implicits.global
-import com.serenity.ChromeOn
+import com.serenity.{ChromeOn, FramePixels, SkiaFrames}
 import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
-import com.serenity.ui.renderer.{FontSpec, Java2DRenderSurface, RendererEntryPoints}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 
 /** The GUI cell grid -- the layout a monospaced font with ligatures off and an exact integer advance gets -- on plain
   * ASCII code, which must cost what it did, and on code with CJK, Hangul and symbols, which it now places on two cells
@@ -55,20 +53,10 @@ private[perf] object CellGridBenchmarks:
     manager.getCurrentState.unsafeRunSync()
 
   /** A full frame of `state` at 1x, in the cell layout, drawn the way the laptop frame benchmarks draw one. */
-  private def frameOf(state: AppState): () => BufferedImage =
-    val image  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
-    val caches = RenderCaches.create()
-    val surface = new Java2DRenderSurface(
-      image,
-      cells,
-      codeFont,
-      _ => (),
-      logicalWidthPx = width,
-      logicalHeightPx = height,
-      deviceScaleX = 1.0,
-      deviceScaleY = 1.0,
-      textCaches = caches.surfaceText
-    )
+  private def frameOf(state: AppState): () => FramePixels =
+    val frame   = SkiaFrames.newFrame(width, height)
+    val caches  = RenderCaches.create()
+    val surface = SkiaFrames.surfaceOver(frame, cells, codeFont, width, height, 1.0, persists = false, caches)
     () =>
       RendererEntryPoints.render(
         state,
@@ -81,11 +69,12 @@ private[perf] object CellGridBenchmarks:
         None,
         caches
       )
-      image
+      frame
 
-  private def hasPixels(image: BufferedImage): Boolean =
-    val row = image.getHeight / 4
-    (0 until image.getWidth).exists(x => image.getRGB(x, row) != image.getRGB(0, row))
+  private def hasPixels(frame: FramePixels): Boolean =
+    val pixels = frame.rgbPixels
+    val row    = frame.heightPx / 4 * frame.widthPx
+    (0 until frame.widthPx).exists(x => pixels(row + x) != pixels(row))
 
   private def layoutOf(line: Int => String): () => Int =
     val lines = Vector.tabulate(Lines)(line)
@@ -122,7 +111,7 @@ private[perf] object CellGridBenchmarks:
     )(
       List(
         BenchmarkRunner.Benchmark(
-          "render.cell_grid.frame_ascii",
+          "render.cell_grid.frame_ascii.skia_raster",
           3,
           12,
           () => assert(hasPixels(asciiFrame()), "cell-grid ASCII frame drew nothing"),
@@ -130,7 +119,7 @@ private[perf] object CellGridBenchmarks:
           settleJit = true
         ),
         BenchmarkRunner.Benchmark(
-          "render.cell_grid.frame_mixed",
+          "render.cell_grid.frame_mixed.skia_raster",
           3,
           12,
           () => assert(hasPixels(mixedFrame()), "cell-grid mixed frame drew nothing"),
@@ -138,7 +127,7 @@ private[perf] object CellGridBenchmarks:
           settleJit = true
         ),
         BenchmarkRunner.Benchmark(
-          "render.cell_grid.frame_emoji",
+          "render.cell_grid.frame_emoji.skia_raster",
           3,
           12,
           () => assert(hasPixels(emojiFrame()), "cell-grid emoji frame drew nothing"),
@@ -146,7 +135,7 @@ private[perf] object CellGridBenchmarks:
           settleJit = true
         ),
         BenchmarkRunner.Benchmark(
-          "render.cell_grid.frame_emoji_clusters",
+          "render.cell_grid.frame_emoji_clusters.skia_raster",
           3,
           12,
           () => assert(hasPixels(clusterFrame()), "cell-grid emoji cluster frame drew nothing"),
@@ -190,7 +179,7 @@ private[perf] object CellGridBenchmarks:
     List(
       BenchmarkRunner.Benchmark.building(frame)(
         BenchmarkRunner.Benchmark(
-          "render.cell_grid.frame_ascii.floating_chrome",
+          "render.cell_grid.frame_ascii.floating_chrome.skia_raster",
           3,
           12,
           () => assert(hasPixels(frame()), "cell-grid ASCII frame in floating chrome drew nothing"),

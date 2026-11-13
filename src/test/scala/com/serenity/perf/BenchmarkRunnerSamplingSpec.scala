@@ -69,7 +69,7 @@ class BenchmarkRunnerSamplingSpec extends AnyFlatSpec with Matchers:
     List(
       "skia.laptop.render.typing_frame_2x",
       "skia.compare.skia_raster.system_monospace.typing_frame_2x",
-      "skia.compare.java2d.system_monospace.typing_new_letter_2x"
+      "skia.compare.skia_raster.system_monospace.typing_new_letter_2x"
     ).foreach(name => withClue(name)(BenchmarkRunner.tracksAllocation(name) shouldBe true))
 
   it should "track every skia row the suite declares" in {

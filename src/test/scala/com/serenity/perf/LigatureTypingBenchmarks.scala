@@ -50,7 +50,7 @@ private[perf] object LigatureTypingBenchmarks:
     BenchmarkRunner.Benchmark.sharing((font, metrics, grid, stateManager, frames, shown, firstFrame))(
       List(
         BenchmarkRunner.Benchmark(
-          "laptop.render.typing_frame_2x.ligature_font",
+          "laptop.render.typing_frame_2x.ligature_font.skia_raster",
           3,
           BenchmarkIterationCounts.RandomTyping,
           () =>
