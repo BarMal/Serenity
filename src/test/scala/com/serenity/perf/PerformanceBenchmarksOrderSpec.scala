@@ -19,7 +19,7 @@ class PerformanceBenchmarksOrderSpec extends AnyFlatSpec with Matchers:
     "layout.large_multiline.visible_viewport",
     "render.full_frame.skia_raster",
     "render.long_measured_line.skia_raster",
-    "render.cursor_only.scene_reuse.java2d_overlay",
+    "render.cursor_only.scene_reuse.overlay",
     "render.diagnostics_and_comments.skia_raster",
     "render.hidpi_frame.skia_raster",
     "layout.aligned_prose.cached_snapshot",
