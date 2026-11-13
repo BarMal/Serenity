@@ -39,10 +39,10 @@ class RendererTrialWindowSpec extends AnyFlatSpec with Matchers:
         def toggleTheme: IO[Unit]               = act("toggle-theme")
         def resize: IO[Unit]                    = act("resize")
         def watchedFor(step: Step): IO[Region] = IO.pure(step match
-          case _: Step.Type                          => typing
-          case Step.PageDown                         => scroll
-          case Step.FullRedraw(Redraw.Resize)        => resized
-          case Step.FullRedraw(Redraw.ThemeToggle)   => themed)
+          case _: Step.Type                        => typing
+          case Step.PageDown                       => scroll
+          case Step.FullRedraw(Redraw.Resize)      => resized
+          case Step.FullRedraw(Redraw.ThemeToggle) => themed)
 
   private def perform(step: Step, latency: Option[FiniteDuration]): (Option[Double], Vector[String]) =
     runVirtual {
@@ -88,7 +88,7 @@ class RendererTrialWindowSpec extends AnyFlatSpec with Matchers:
 
   it should "fail when the screen cannot be read, rather than count it as a slow step" in {
     val outcome = runVirtual {
-      val recorder = Recorder()
+      val recorder       = Recorder()
       val broken: Screen = _ => IO.raiseError(new IllegalStateException("no display"))
       RendererTrialWindow(recorder.driver(Some(1.milli)), broken, timeout).perform(Step.PageDown).attempt
     }
