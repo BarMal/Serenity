@@ -138,7 +138,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
     val canvas = JPanel()
     canvas.setSize(Dimension(400, 300))
     val surface = CaretRecordingSurface.forGeometry(
-      SkiaCaretCanvases,
+      new SkiaCaretCanvases,
       metrics,
       FontSpec.fromAwt(font),
       SwingCanvasGeometry.of(canvas)

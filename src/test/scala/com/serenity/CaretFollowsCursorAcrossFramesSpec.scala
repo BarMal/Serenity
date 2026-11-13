@@ -98,7 +98,7 @@ class CaretFollowsCursorAcrossFramesSpec extends AnyFlatSpec with Matchers:
     def cursorOnlyFrame(state: AppState): List[PixelRect] =
       val surface =
         CaretRecordingSurface.forGeometry(
-          SkiaCaretCanvases,
+          new SkiaCaretCanvases,
           metrics,
           FontSpec.fromAwt(codeFont),
           SwingCanvasGeometry.of(canvas)

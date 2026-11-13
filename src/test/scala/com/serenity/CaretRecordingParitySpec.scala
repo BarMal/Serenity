@@ -58,7 +58,7 @@ class CaretRecordingParitySpec extends AnyFlatSpec with Matchers:
     canvas.setSize(Dimension(widthPx, heightPx))
     val surface =
       CaretRecordingSurface.forGeometry(
-        SkiaCaretCanvases,
+        new SkiaCaretCanvases,
         metrics,
         FontSpec.fromAwt(codeFont),
         SwingCanvasGeometry.of(canvas)

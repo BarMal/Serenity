@@ -12,7 +12,7 @@ import com.serenity.ui.layout.{CellMetrics, PixelRect}
   * wraps, drawn on a canvas of one pixel that nothing reads: carets are only ever drawn with `fillPixelRect` and
   * `fillCaret`, and the geometry the cursor path measures against is the canvas's own.
   */
-final class CaretRecordingSurface private (inner: RenderSurface, release: () => Unit) extends RenderSurface:
+final class CaretRecordingSurface private (inner: RenderSurface) extends RenderSurface:
   private val fills = new AtomicReference(Vector.empty[CaretRecordingSurface.CaretFill])
 
   private object Recording extends PixelDrawing:
@@ -47,7 +47,9 @@ final class CaretRecordingSurface private (inner: RenderSurface, release: () => 
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
       inner.pixels.withPixelTranslation(xPx, yPx)(render)
 
-  override def persistentContentKey: Option[SurfaceContentIdentity] = inner.persistentContentKey
+  // A recorder keeps no pixels, so it offers no key: the renderer would store a whole prepared scene under the identity of
+  // a surface that is new for every cursor frame, and never find it again.
+  override def persistentContentKey: Option[SurfaceContentIdentity] = None
   override def layerCacheOwner: ScreenIdentity                      = inner.layerCacheOwner
   override def addressesPixels: Boolean                             = inner.addressesPixels
   override def devicePixelScaleX: Double                            = inner.devicePixelScaleX
@@ -81,10 +83,7 @@ final class CaretRecordingSurface private (inner: RenderSurface, release: () => 
   def viewportWidth: Int  = inner.viewportWidth
   def viewportHeight: Int = inner.viewportHeight
 
-  /** Releases the one-pixel raster the frame was never going to read; the fills stay. */
-  def flush(): Unit =
-    inner.flush()
-    release()
+  def flush(): Unit = inner.flush()
 
   def recordedFills: List[CaretRecordingSurface.CaretFill] = fills.get().toList
 
@@ -98,5 +97,4 @@ object CaretRecordingSurface:
     font: FontSpec,
     geometry: SurfaceGeometry
   ): CaretRecordingSurface =
-    val canvas = canvases.forGeometry(metrics, font, geometry)
-    new CaretRecordingSurface(canvas.surface, canvas.release)
+    new CaretRecordingSurface(canvases.forGeometry(metrics, font, geometry))

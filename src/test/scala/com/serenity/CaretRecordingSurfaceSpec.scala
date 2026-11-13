@@ -24,7 +24,7 @@ class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
 
   "CaretRecordingSurface" should "record caret fills in paint order with their colours" in {
     val surface = CaretRecordingSurface.forGeometry(
-      SkiaCaretCanvases,
+      new SkiaCaretCanvases,
       metrics,
       FontSpec.fromAwt(font),
       SwingCanvasGeometry.of(canvas)
@@ -41,7 +41,7 @@ class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
 
   it should "record a degenerate fill at the one-pixel minimum a Java2D surface paints" in {
     val surface = CaretRecordingSurface.forGeometry(
-      SkiaCaretCanvases,
+      new SkiaCaretCanvases,
       metrics,
       FontSpec.fromAwt(font),
       SwingCanvasGeometry.of(canvas)
@@ -51,9 +51,20 @@ class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.recordedFills.map(_.rect) shouldBe List(PixelRect(5, 5, 1, 1))
   }
 
+  it should "offer no persistent content key, so the renderer keeps no scene for a surface that is new every frame" in {
+    val surface = CaretRecordingSurface.forGeometry(
+      new SkiaCaretCanvases,
+      metrics,
+      FontSpec.fromAwt(font),
+      SwingCanvasGeometry.of(canvas)
+    )
+
+    surface.persistentContentKey shouldBe None
+  }
+
   it should "report the canvas's own logical viewport" in {
     val surface = CaretRecordingSurface.forGeometry(
-      SkiaCaretCanvases,
+      new SkiaCaretCanvases,
       metrics,
       FontSpec.fromAwt(font),
       SwingCanvasGeometry.of(canvas)

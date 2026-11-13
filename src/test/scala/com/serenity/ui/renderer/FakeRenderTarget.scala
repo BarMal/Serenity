@@ -34,7 +34,7 @@ final class FakeRenderTarget(
   def acquisitions: Vector[Acquired]          = acquired.get()
   def overlayCarets: Vector[List[CaretPaint]] = overlays.get()
 
-  def caretCanvases: CaretCanvases = SkiaCaretCanvases
+  val caretCanvases: CaretCanvases = new SkiaCaretCanvases
 
   def geometry: SurfaceGeometry =
     SurfaceGeometry(logicalWidthPx, logicalHeightPx, scale, ScreenIdentity(identityToken))

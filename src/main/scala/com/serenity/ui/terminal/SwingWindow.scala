@@ -508,7 +508,7 @@ class SwingWindow(
 
   def geometry: SurfaceGeometry                   = SwingCanvasGeometry.of(canvas)
   override def presentationSite: PresentationSite = SwingPresentationSite(canvas)
-  override def caretCanvases: CaretCanvases       = com.serenity.ui.skia.SkiaCaretCanvases
+  override lazy val caretCanvases: CaretCanvases  = new com.serenity.ui.skia.SkiaCaretCanvases
 
   override def reportFirstPaints(logger: Logger[IO]): IO[Unit] = SwingPaintProbe.report(this, logger)
 
