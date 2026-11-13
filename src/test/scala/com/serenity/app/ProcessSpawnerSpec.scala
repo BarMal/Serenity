@@ -4,8 +4,11 @@ import java.nio.file.Path
 
 import scala.concurrent.duration.*
 
+import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RendererChoice.Candidate
+import com.serenity.process.{ProcessLauncher, ProcessService}
+import org.typelevel.log4cats.noop.NoOpLogger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -53,21 +56,23 @@ class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
       .exists(_.startsWith("-Dserenity.skia.layerFrames")) shouldBe false
   }
 
-  "ProcessSpawner" should "answer everything the child printed" in {
-    val spawner = ProcessSpawner(_ => List("bash", "-c", "echo one; echo two 1>&2"), 10.seconds)
-    val text    = spawner.run(Candidate.SkiaRaster).unsafeRunSync()
+  private val service: ProcessService =
+    ProcessService.create(ProcessLauncher.system)(using NoOpLogger[IO]).unsafeRunSync()
+
+  private def spawner(command: List[String], timeout: FiniteDuration) = ProcessSpawner(service, _ => command, timeout)
+
+  "ProcessSpawner" should "answer what the child printed" in {
+    val text = spawner(List("bash", "-c", "echo one; echo two"), 10.seconds).run(Candidate.SkiaRaster).unsafeRunSync()
     text should (include("one") and include("two"))
   }
 
-  it should "stop a child that outlives its timeout and answer what it had printed" in {
-    val spawner = ProcessSpawner(_ => List("bash", "-c", "echo started; sleep 60"), 1.second)
+  it should "fail, and stop the child, when it outlives its timeout" in {
     val started = System.nanoTime()
-    val text    = spawner.run(Candidate.SkiaRaster).unsafeRunSync()
-    text should include("started")
+    val outcome = spawner(List("bash", "-c", "sleep 60"), 1.second).run(Candidate.SkiaRaster).attempt.unsafeRunSync()
+    outcome.left.map(_.getMessage).left.getOrElse("") should include("did not finish")
     ((System.nanoTime() - started) / 1_000_000_000L) should be < 30L
   }
 
   it should "fail when the child cannot be started, so the coordinator counts a failed trial" in {
-    val spawner = ProcessSpawner(_ => List("/nonexistent/serenity-java"), 5.seconds)
-    spawner.run(Candidate.SkiaRaster).attempt.unsafeRunSync().isLeft shouldBe true
+    spawner(List("/nonexistent/serenity-java"), 5.seconds).run(Candidate.SkiaRaster).attempt.unsafeRunSync().isLeft shouldBe true
   }

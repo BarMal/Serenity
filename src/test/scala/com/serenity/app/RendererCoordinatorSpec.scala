@@ -120,7 +120,7 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val (finished, _) = optimize(script)
     script.started.size shouldBe 4
     finished.runs.head.runs.head should matchPattern {
-      case Outcome.Failed(reason) if reason.contains("could not be started") && reason.contains("no java") =>
+      case Outcome.Failed(reason) if reason.contains("could not be run") && reason.contains("no java") =>
     }
   }
 

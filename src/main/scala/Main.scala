@@ -71,8 +71,7 @@ object Main extends IOApp:
     LaunchOptions.parse(args) match
       case Left(help) =>
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
-      case Right(options) if options.showVersion =>
-        IO(println(VersionBanner.current)).as(ExitCode.Success)
+      case Right(OneShot(command)) => command
       case Right(options) if LaunchRefusal(options).nonEmpty =>
         IO(LaunchRefusal(options).foreach(System.err.println)).as(ExitCode.Error)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
