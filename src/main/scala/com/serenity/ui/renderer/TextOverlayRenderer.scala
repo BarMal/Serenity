@@ -70,7 +70,7 @@ object TextOverlayRenderer:
 
     surface.effects.foreach(_.setAlpha(overlay.alphaMultiplier))
 
-    // A shape clip sends every cell painted through it down Java2D's slow path, which the status line and the tab strip
+    // A shape clip sends every cell painted through it down a slow path (measured on the former AWT renderer), which the status line and the tab strip
     // cannot afford: they are painted in every frame that changes them. They take their rounded corners from one hard
     // edged fill and are clipped to a rectangle; the tab strip's layout keeps everything it paints clear of the arcs.
     // A floating panel is painted rarely, and keeps the exact shape clip.

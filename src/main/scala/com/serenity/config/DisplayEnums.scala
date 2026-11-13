@@ -35,7 +35,7 @@ object RenderDamageGranularity:
       case _                => None
 
 /** Which renderer paints the window. `Auto` lets startup pick Skia's GPU layer where the native library loads;
-  * `SkiaRaster` paints Skia on the CPU into an image that Java2D presents, on any display and toolkit.
+  * `SkiaRaster` paints Skia on the CPU into an image the Swing canvas presents, on any display and toolkit.
   */
 enum RenderBackendSetting(val configKey: String):
   case Auto       extends RenderBackendSetting("auto")
@@ -52,8 +52,8 @@ object RenderBackendSetting:
       case _                                        => None
 
 /** What a Wayland session does when the window would otherwise be painted by Skia. `SkiaRaster` keeps the native
-  * Wayland toolkit and paints Skia on the CPU into an image Java2D presents; `XWayland` swaps to the X11 toolkit so
-  * that Skia's GLX layer can run.
+  * Wayland toolkit and paints Skia on the CPU into an image the Swing canvas presents; `XWayland` swaps to the X11
+  * toolkit so that Skia's GLX layer can run.
   */
 enum WaylandRender(val configKey: String):
   case SkiaRaster extends WaylandRender("skia-raster")

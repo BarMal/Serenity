@@ -9,11 +9,11 @@ import org.jetbrains.skia.{BlendMode, Canvas, IRect, Paint, Surface}
 /** Moves a retained surface's own pixels for [[SkiaRenderSurface.copyPixels]].
   *
   * In device pixels on an untransformed canvas, since the copy is of whole device pixels. Every source pixel is read as
-  * it was before the copy. A clip in force (inside `withRectClip`) still bounds the copy, which Java2D's raw graphics
-  * would ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows of one. A
-  * source that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs) copies only
-  * the part inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the rect's own
-  * corner would move it sideways.
+  * it was before the copy. A clip in force (inside `withRectClip`) still bounds the copy, which a raw pixel copy would
+  * ignore; the surface's pixels are moved in place only when no clip is, since only the canvas knows of one. A source
+  * that reaches past the surface (a row's rect starts a pixel left of it where a glyph overhangs) copies only the part
+  * inside, to where that part belongs: a snapshot is cut to the surface, so drawing it at the rect's own corner would
+  * move it sideways.
   */
 final private[skia] class SkiaPixelMover(
     canvas: Canvas,
