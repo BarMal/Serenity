@@ -1,12 +1,13 @@
 package com.serenity.ui.layout
 
+import java.awt.Font
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
-import com.serenity.ui.renderer.FontProbes
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
 
 /** What AWT measures for the bundled fonts and the corpus lines, as data: cell metrics, whether a font takes the
   * measured layout, whether a ligature font's certificate holds, and for each line its caret x positions on one row and
@@ -71,8 +72,25 @@ object TextMeasureBaseline:
       fallback = pinned.fallback
     )
 
+  /** How many glyphs AWT shapes the line to in the font alone, and the character each starts at: what shaping did,
+    * before layout snaps cells or draws a fallback font. Read straight from `layoutGlyphVector`, left to right.
+    */
+  private def glyphEntries(pinned: PinnedFont, line: Line, prefix: String): Vector[Entry] =
+    val frc = TextLayoutSnapshot.defaultFontRenderContext()
+    FontFirstUse.settle(pinned.font, frc)
+    val chars  = line.text.toCharArray
+    val shaped = pinned.font.layoutGlyphVector(frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
+    val count  = shaped.getNumGlyphs
+    Vector(
+      ints(s"$prefix.glyphs", Seq(count)),
+      ints(s"$prefix.clusters", shaped.getGlyphCharIndices(0, count, new Array[Int](count)).toSeq)
+    )
+
   private def measureLine(pinned: PinnedFont, line: Line): Vector[Entry] =
     val prefix = s"${pinned.label}.${line.id}"
+    glyphEntries(pinned, line, prefix) ++ measureLayout(pinned, line, prefix)
+
+  private def measureLayout(pinned: PinnedFont, line: Line, prefix: String): Vector[Entry] =
     val onOne =
       snapshot(pinned, line, Unwrapped).visualLines.headOption.map(_.row.caretXs.toVector).getOrElse(Vector.empty)
     if TextMeasureCorpus.structuralOnly(pinned, line) then Vector(ints(s"$prefix.stops", Seq(onOne.length)))

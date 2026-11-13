@@ -150,9 +150,8 @@ object EditorPaneLayoutEngine:
     contentRectForPane(paneRect, TextAreaInsets(), LayoutEngine.EditorPaneHeaderHeight)
 
   private def contentRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
-    val baseContent        = baseContentRectForPane(paneRect, headerHeight)
-    val topSpacerHeight    = (baseContent.height * insets.top).toInt
-    val bottomSpacerHeight = (baseContent.height * insets.bottom).toInt
+    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
+    val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
     LayoutRect(
       baseContent.x,
       baseContent.y + topSpacerHeight,
@@ -162,12 +161,11 @@ object EditorPaneLayoutEngine:
 
   private def topSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
     val baseContent = baseContentRectForPane(paneRect, headerHeight)
-    baseContent.copy(height = (baseContent.height * insets.top).toInt)
+    baseContent.copy(height = TextArea.spacerHeights(baseContent.height, insets)._1)
 
   private def bottomSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
-    val baseContent        = baseContentRectForPane(paneRect, headerHeight)
-    val topSpacerHeight    = (baseContent.height * insets.top).toInt
-    val bottomSpacerHeight = (baseContent.height * insets.bottom).toInt
+    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
+    val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
     LayoutRect(
       baseContent.x,
       baseContent.y + topSpacerHeight + math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight),
