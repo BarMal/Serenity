@@ -7,7 +7,13 @@ import org.scalatest.matchers.should.Matchers
 class RendererChoiceSpec extends AnyFlatSpec with Matchers:
 
   private def workload(typing: Double, rows: (String, Double)*): Workload =
-    Workload(typingP50Ms = typing, typingP95Ms = typing, scale = 2.0, fullWindowMs = rows.toMap)
+    Workload(
+      typingP50Ms = typing,
+      typingP95Ms = typing,
+      scale = 2.0,
+      clockResolutionMs = 1.0,
+      fullWindowMs = rows.toMap
+    )
 
   private def measured(candidate: Candidate, runs: Workload*): CandidateRuns =
     CandidateRuns(candidate, runs.toList.map(Outcome.Measured(_)))

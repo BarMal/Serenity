@@ -7,8 +7,16 @@ import org.scalatest.matchers.should.Matchers
 
 class RendererTargetSpec extends AnyFlatSpec with Matchers:
 
-  private def run(p95: Double, scale: Double = 2.0): Outcome =
-    Outcome.Measured(Workload(typingP50Ms = p95 / 2, typingP95Ms = p95, scale = scale, fullWindowMs = Map.empty))
+  private def run(p95: Double, scale: Double = 2.0, resolution: Double = 1.0): Outcome =
+    Outcome.Measured(
+      Workload(
+        typingP50Ms = p95 / 2,
+        typingP95Ms = p95,
+        scale = scale,
+        clockResolutionMs = resolution,
+        fullWindowMs = Map.empty
+      )
+    )
 
   private def runs(candidate: Candidate, outcomes: Outcome*): CandidateRuns = CandidateRuns(candidate, outcomes.toList)
 
@@ -28,6 +36,16 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
     RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, scale = 1.0))) match
       case Verdict.NotJudged(reason) => reason should (include("1.0x") and include("2x"))
       case other                     => fail(s"expected no verdict, got $other")
+  }
+
+  it should "not judge a mode whose clock resolves only coarsely, and say how coarsely" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, resolution = 5.0), run(10.0, resolution = 6.0))) match
+      case Verdict.NotJudged(reason) => reason should (include("resolves only to 5.5 ms") and include("4.2 ms"))
+      case other                     => fail(s"expected no verdict, got $other")
+  }
+
+  it should "judge a clock that resolves to exactly a quarter of the target" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, resolution = 16.7 / 4.0))) shouldBe a[Verdict.Meets]
   }
 
   it should "not judge runs that were measured at different scales" in {
