@@ -3,8 +3,8 @@ package com.serenity.ui.layout
 import com.serenity.config.TextAreaInsets
 import com.serenity.state.models.*
 
-/** Where one pane's `[left spacer][left rail][text][right rail][right spacer]` fall inside its pane rect. Spacers, rails
-  * and text are sized from that pane's own width and buffer (#2570), so panes of different widths or documents of
+/** Where one pane's `[left spacer][left rail][text][right rail][right spacer]` fall inside its pane rect. Spacers,
+  * rails and text are sized from that pane's own width and buffer (#2570), so panes of different widths or documents of
   * different lengths each get their own.
   */
 object PaneTextArea:
@@ -78,12 +78,13 @@ object PaneTextArea:
       )
     Bands(leftSpacer, leftRail, text, rightRail, Span(text.right + rightBlock, textArea.rightSpacer))
 
-  /** The narrowest a pane can be and still give its text `minimumTextWidth` cells: the text plus the cells its rails and
-    * fixed-count gutters take, divided by the share the percent gutters leave.
+  /** The narrowest a pane can be and still give its text `minimumTextWidth` cells: the text plus the cells its rails
+    * and fixed-count gutters take, divided by the share the percent gutters leave.
     */
   def minimumWidth(state: AppState, paneId: PaneId, insets: TextAreaInsets, minimumTextWidth: Int): Int =
     val (_, leftBlock, rightBlock) = blocks(state, paneId)
     val (share, cells)             = TextArea.reservation(insets, ProseColumn.chInCells(state))
     val textFraction               = (1.0 - share).max(0.01)
     math.ceil((minimumTextWidth.max(1) + leftBlock + rightBlock + cells) / textFraction).toInt
+
 end PaneTextArea

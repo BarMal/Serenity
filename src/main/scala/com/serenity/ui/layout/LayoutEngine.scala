@@ -196,7 +196,7 @@ object LayoutEngine:
       tabBarRect = tabBarRect
     )
 
-    val panes = laidOutPanes(state, baseLayout)
+    val panes    = laidOutPanes(state, baseLayout)
     val textRect = primaryTextRect(state, panes, editorPanelRect)
 
     val aboveSurfaces = OverlayStackLayout.orderedAboveCursorSurfaces(state)

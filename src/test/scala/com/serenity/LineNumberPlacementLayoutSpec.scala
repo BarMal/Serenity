@@ -61,7 +61,7 @@ class LineNumberPlacementLayoutSpec extends AnyFlatSpec with Matchers:
   "Left placement with margin and padding" should "offset the counter and the content by those cells" in {
     val state  = stateWith(LineNumberLayout(side = LineNumberSide.Left, marginLeft = Some(2), padding = Some(3)))
     val layout = layoutFor(state)
-    val left = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("expected a left counter"))
+    val left   = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("expected a left counter"))
     left.x shouldBe 2
     left.width shouldBe counterWidth
     ActivePane.of(state, layout).contentRect.x shouldBe (2 + counterWidth + 3)

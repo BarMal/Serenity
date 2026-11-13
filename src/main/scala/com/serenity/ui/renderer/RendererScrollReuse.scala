@@ -76,7 +76,9 @@ private[renderer] object RendererScrollReuse:
   /** Everything a copied row can touch: the pane's rows, and the line numbers that sit beside them. */
   private def contentArea(context: RenderContext, pane: EditorPaneLayout): Option[PixelRect] =
     val toPixels = RendererChromePlan.pixelRectOf(context.cellMetrics)
-    PixelRect.unionOf((pane.contentRect :: (pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)).map(toPixels))
+    PixelRect.unionOf(
+      (pane.contentRect :: (pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)).map(toPixels)
+    )
 
   /** The rows `record` draws itself, given the rows `damageDirty` already names, and the copies that supply the rest.
     * Without `movable` a row that changed place is simply a row that changed, as [[DirtyLineDiff.dirtyRows]] reports.
@@ -115,7 +117,10 @@ private[renderer] object RendererScrollReuse:
   ): List[RowBands] =
     val numbers =
       if state.chrome.lineNumbers then
-        renderPlan.paneLayouts.get(paneId).toList.flatMap(pane => pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)
+        renderPlan.paneLayouts
+          .get(paneId)
+          .toList
+          .flatMap(pane => pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)
       else Nil
     val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
     def widened(bands: Vector[PixelRect]): Vector[PixelRect] =

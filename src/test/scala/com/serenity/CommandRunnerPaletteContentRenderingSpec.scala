@@ -80,11 +80,11 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       Command.typed("open", "Open file", CommandIntent.File(FileIntent.OpenFile)),
       Command.typed("close", "Close current file", CommandIntent.File(FileIntent.CloseCurrentFile))
     )
-    val state   = stateWithRunner(Theme.light, "op", commands)
-    val surface = new MockRenderSurface(100, 30)
-    val layout  = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
-    val overlay = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
-    val paneRect = ActivePane.textColumn(state, layout, paneId)
+    val state           = stateWithRunner(Theme.light, "op", commands)
+    val surface         = new MockRenderSurface(100, 30)
+    val layout          = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
+    val overlay         = layout.belowCursorOverlayRect.getOrElse(fail("Expected below-cursor overlay rect"))
+    val paneRect        = ActivePane.textColumn(state, layout, paneId)
     val paneContentRect = CursorLayout.contentRectForPane(paneRect)
     val commandContentRect = SurfaceFrameLayout
       .forContent(overlay, state.runtime.uiSurfaces.head.content)
@@ -196,7 +196,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
           )
         )
       )
-      val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
+      val layout   = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
       val paneRect = ActivePane.textColumn(state, layout, paneId)
       val caretRow =
         MeasuredRows.caretRow(state, layout, paneId, cursor).getOrElse(fail("Expected the cursor to be painted"))

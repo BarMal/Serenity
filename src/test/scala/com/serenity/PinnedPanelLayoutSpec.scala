@@ -91,7 +91,10 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, expandViewport)
 
     layout.expandedPanelRect shouldBe Some(ActivePane.textRect(state, layout))
-    ActivePane.textRect(state, layout) shouldBe ActivePane.textRect(baseState, LayoutEngine.calculateLayout(baseState, expandViewport))
+    ActivePane.textRect(state, layout) shouldBe ActivePane.textRect(
+      baseState,
+      LayoutEngine.calculateLayout(baseState, expandViewport)
+    )
   }
 
   it should "split same-side left and right panels into per-surface rects" in {

@@ -29,8 +29,11 @@ final case class ChromeRepaint(
     columnRails: Map[PaneId, Repaint[Int]] = Map.empty,
     slack: Repaint[PaneId] = Repaint.all
 ):
+
   def paintsAny: Boolean =
-    spacers || statusRow || headers.nonEmpty || lineNumberRows.values.exists(_.nonEmpty) || columnRails.values.exists(_.nonEmpty)
+    spacers || statusRow || headers.nonEmpty || lineNumberRows.values.exists(_.nonEmpty) || columnRails.values.exists(
+      _.nonEmpty
+    )
 
   def railRows(paneId: PaneId): Repaint[Int] = columnRails.getOrElse(paneId, Repaint.all[Int])
 

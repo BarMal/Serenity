@@ -16,7 +16,12 @@ object ActivePane:
   /** The active pane's text across the workspace's height: what the editor panel was while one pane filled it. */
   def textRect(state: AppState, layout: CalculatedLayout): LayoutRect =
     val pane = of(state, layout)
-    LayoutRect(pane.contentRect.x, layout.editorPanelRect.y, pane.contentRect.width + pane.scrollbarRect.width, layout.editorPanelRect.height)
+    LayoutRect(
+      pane.contentRect.x,
+      layout.editorPanelRect.y,
+      pane.contentRect.width + pane.scrollbarRect.width,
+      layout.editorPanelRect.height
+    )
 
   /** `paneId`'s pane rect narrowed to its text column, for specs that click or place things by cell. */
   def textColumn(state: AppState, layout: CalculatedLayout, paneId: PaneId): LayoutRect =

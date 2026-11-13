@@ -221,7 +221,7 @@ trait ColdFrameHarness:
     def split(text: String, stacked: Boolean, label: String): Unit =
       step(label) {
         given com.serenity.rope.Balance = com.serenity.rope.Balance.default
-        val buffer = stateManager.createBuffer(text, None).unsafeRunSync()
+        val buffer                      = stateManager.createBuffer(text, None).unsafeRunSync()
         val opened =
           if stacked then stateManager.splitPaneVertical(paneId, Some(buffer))
           else stateManager.splitPaneHorizontal(paneId, Some(buffer))

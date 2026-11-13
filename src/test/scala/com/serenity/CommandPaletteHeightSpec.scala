@@ -47,12 +47,14 @@ class CommandPaletteHeightSpec extends AnyFlatSpec with Matchers:
         runtime = AppState.initial(com.serenity.ChromeOn.config).runtime.copy(uiSurfaces = List(commandSurface))
       )
     def withDensity(density: InterfaceDensity): AppState =
-      baseState.copy(persisted = baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(density)))
+      baseState.copy(persisted =
+        baseState.persisted.copy(config = baseState.persisted.config.withInterfaceDensity(density))
+      )
     val compactState  = withDensity(InterfaceDensity.Compact)
     val spaciousState = withDensity(InterfaceDensity.Spacious)
     val compact       = LayoutEngine.calculateLayout(compactState, ViewportSize(120, 30))
-    val comfortable = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
-    val spacious = LayoutEngine.calculateLayout(spaciousState, ViewportSize(120, 30))
+    val comfortable   = LayoutEngine.calculateLayout(baseState, ViewportSize(120, 30))
+    val spacious      = LayoutEngine.calculateLayout(spaciousState, ViewportSize(120, 30))
 
     ActivePane.textRect(compactState, compact) shouldBe ActivePane.textRect(baseState, comfortable)
     // Spacious widens the line-number gutter's left margin and padding by one cell each (issue #1542 re-scope:

@@ -108,7 +108,12 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "repaint the last row's counter too when the pane's row count changed" in {
-    val plan = RendererChromePlan.repaintFor(contract, Damage.Nothing, dirtyRows, signals(lastRowMoved = Map(activePane -> Set(30))))
+    val plan = RendererChromePlan.repaintFor(
+      contract,
+      Damage.Nothing,
+      dirtyRows,
+      signals(lastRowMoved = Map(activePane -> Set(30)))
+    )
 
     plan.numberRows(activePane).includes(30) shouldBe true
     plan.numberRows(activePane).includes(29) shouldBe false
@@ -135,7 +140,9 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
           )
         )
       )
-    repaint(Damage.Nothing, rowsOverflow = true, contract = withRightCounter).numberRows(activePane).everything shouldBe true
+    repaint(Damage.Nothing, rowsOverflow = true, contract = withRightCounter)
+      .numberRows(activePane)
+      .everything shouldBe true
   }
 
   "RendererFrameState.chromeGeometryChanged" should "report a change only when the chrome's rects differ from the last frame's" in {

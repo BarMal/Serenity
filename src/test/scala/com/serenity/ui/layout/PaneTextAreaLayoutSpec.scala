@@ -68,9 +68,9 @@ class PaneTextAreaLayoutSpec extends AnyFlatSpec with Matchers:
     LayoutEngine.calculateEditorWorkspaceLayout(state, calculated).paneLayouts
 
   private val insetCases = List(
-    "no insets"                -> TextAreaInsets.percent(0.0, 0.0),
-    "10% each side"            -> TextAreaInsets.percent(0.10, 0.10),
-    "an auto left, 6 cells"    -> TextAreaInsets(Gutter.Auto, Gutter.Cells(6), Gutter.Percent(0.0), Gutter.Percent(0.0))
+    "no insets"             -> TextAreaInsets.percent(0.0, 0.0),
+    "10% each side"         -> TextAreaInsets.percent(0.10, 0.10),
+    "an auto left, 6 cells" -> TextAreaInsets(Gutter.Auto, Gutter.Cells(6), Gutter.Percent(0.0), Gutter.Percent(0.0))
   )
 
   private val axes = List(SplitAxis.Horizontal, SplitAxis.Vertical)
@@ -121,7 +121,7 @@ class PaneTextAreaLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   "The editor panel" should "be the union of the pane rects" in {
-    val state      = stateWith(SplitAxis.Horizontal, List(30, 30, 30), lineNumbers = true, TextAreaInsets.percent(0.1, 0.1))
+    val state = stateWith(SplitAxis.Horizontal, List(30, 30, 30), lineNumbers = true, TextAreaInsets.percent(0.1, 0.1))
     val calculated = LayoutEngine.calculateLayout(state, viewport)
     val layouts    = LayoutEngine.calculateEditorWorkspaceLayout(state, calculated).paneLayouts.values.map(_.paneRect)
     calculated.editorPanelRect.x shouldBe layouts.map(_.x).min

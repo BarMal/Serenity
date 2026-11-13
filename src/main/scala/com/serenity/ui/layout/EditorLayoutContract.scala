@@ -126,11 +126,11 @@ final case class EditorLayoutContract(
           if activePaneId.contains(paneId) then "active top spacer" else s"pane ${paneId.value} top spacer"
         val bottomSpacerName =
           if activePaneId.contains(paneId) then "active bottom spacer" else s"pane ${paneId.value} bottom spacer"
-        val leftSpacerName = s"$paneName left spacer"
+        val leftSpacerName  = s"$paneName left spacer"
         val rightSpacerName = s"$paneName right spacer"
-        val leftRailName = s"$paneName line numbers"
-        val rightRailName = s"$paneName right line numbers"
-        val headerName = if activePaneId.contains(paneId) then "active header" else s"pane ${paneId.value} header"
+        val leftRailName    = s"$paneName line numbers"
+        val rightRailName   = s"$paneName right line numbers"
+        val headerName      = if activePaneId.contains(paneId) then "active header" else s"pane ${paneId.value} header"
         containedBy(
           "editor panel",
           workspace.editorPanelRect,

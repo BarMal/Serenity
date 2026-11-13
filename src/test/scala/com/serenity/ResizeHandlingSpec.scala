@@ -333,7 +333,10 @@ class ResizeHandlingSpec extends AnyFlatSpec with Matchers:
     val layoutAfterWide = LayoutEngine.calculateLayout(stateAfterWide, wideSize)
 
     // Verify that layout calculations reflect the size change
-    ActivePane.textRect(stateAfterNarrow, layoutAfterNarrow).width.should(be < ActivePane.textRect(stateAfterWide, layoutAfterWide).width)
+    ActivePane
+      .textRect(stateAfterNarrow, layoutAfterNarrow)
+      .width
+      .should(be < ActivePane.textRect(stateAfterWide, layoutAfterWide).width)
 
     stateAfterWide.persisted.buffers.get(bufferId) match
       case Some(buffer) =>

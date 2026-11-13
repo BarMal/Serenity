@@ -16,8 +16,9 @@ class GutterContinuationMarkSpec extends AnyFlatSpec with Matchers:
 
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
-  private val state    = LaptopFrameBenchmarks.proseState
-  private val gutter   = ActivePane.of(state, LayoutEngine.calculateLayout(state, LaptopFrameBenchmarks.viewport)).lineNumberRect
+  private val state = LaptopFrameBenchmarks.proseState
+  private val gutter =
+    ActivePane.of(state, LayoutEngine.calculateLayout(state, LaptopFrameBenchmarks.viewport)).lineNumberRect
   private val cells    = LaptopFrameBenchmarks.cellMetrics
   private val scale    = LaptopFrameBenchmarks.DeviceScale
   private val rowPx    = math.round(cells.lineHeight * scale).toInt

@@ -128,19 +128,19 @@ object EditorPaneLayoutEngine:
     state: AppState,
     calculatedLayout: CalculatedLayout
   ): EditorPaneLayout =
-    val headerHeight   = LayoutEngine.paneHeaderHeight(state)
-    val insets         = calculatedLayout.textAreaInsets
-    val bands          = PaneTextArea.bands(state, paneId, paneRect.x, paneRect.width, insets)
-    val paneHeaderRect = paneRect.copy(height = headerHeight)
-    val baseContent    = baseContentRectForPane(paneRect, headerHeight)
+    val headerHeight                          = LayoutEngine.paneHeaderHeight(state)
+    val insets                                = calculatedLayout.textAreaInsets
+    val bands                                 = PaneTextArea.bands(state, paneId, paneRect.x, paneRect.width, insets)
+    val paneHeaderRect                        = paneRect.copy(height = headerHeight)
+    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
     val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
-    val textHeight   = math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight)
-    val textY        = baseContent.y + topSpacerHeight
-    val bandRect     = LayoutRect(bands.text.x, textY, bands.text.width, textHeight)
-    val scrollbarColumns = ScrollbarLayout.terminalColumns(state, bandRect.width)
-    val bandX            = bands.leftSpacer.right
-    val bandWidth        = bands.rightSpacer.x - bandX
-    def rail(span: PaneTextArea.Span) = LayoutRect(span.x, textY, span.width, textHeight)
+    val textHeight                            = math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight)
+    val textY                                 = baseContent.y + topSpacerHeight
+    val bandRect                              = LayoutRect(bands.text.x, textY, bands.text.width, textHeight)
+    val scrollbarColumns                      = ScrollbarLayout.terminalColumns(state, bandRect.width)
+    val bandX                                 = bands.leftSpacer.right
+    val bandWidth                             = bands.rightSpacer.x - bandX
+    def rail(span: PaneTextArea.Span)         = LayoutRect(span.x, textY, span.width, textHeight)
     EditorPaneLayout(
       paneRect = paneRect,
       headerRect = paneHeaderRect,

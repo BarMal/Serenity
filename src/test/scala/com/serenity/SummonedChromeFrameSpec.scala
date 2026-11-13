@@ -71,7 +71,10 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
 
     paint(hidden, caches)
     val gutter =
-      ActivePane.of(held, LayoutEngine.calculateLayoutWithUI(held, viewport)).lineNumberRect.getOrElse(fail("no gutter reserved"))
+      ActivePane
+        .of(held, LayoutEngine.calculateLayoutWithUI(held, viewport))
+        .lineNumberRect
+        .getOrElse(fail("no gutter reserved"))
     val before = paint(hidden, caches)
     val after  = paint(held, caches)
 

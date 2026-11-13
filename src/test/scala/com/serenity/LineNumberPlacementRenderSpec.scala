@@ -146,8 +146,11 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     (startPx, startPx + TextAlignment.measureTextWidth(call.s.trim, font))
 
   "A left counter on a buffer of 100+ lines" should "draw every three-digit number whole, clear of its divider" in {
-    val state   = proseStateWith(LineNumberSide.Left, lineCount = 150, topLine = 99)
-    val rect    = ActivePane.of(state, LayoutEngine.calculateLayout(state, viewport)).lineNumberRect.getOrElse(fail("expected a counter"))
+    val state = proseStateWith(LineNumberSide.Left, lineCount = 150, topLine = 99)
+    val rect = ActivePane
+      .of(state, LayoutEngine.calculateLayout(state, viewport))
+      .lineNumberRect
+      .getOrElse(fail("expected a counter"))
     val surface = renderProse(state)
     val runs    = lineNumberRuns(surface, rect)
 
@@ -163,8 +166,11 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
   }
 
   "A right counter on a buffer of 100+ lines" should "draw every three-digit number whole, clear of its divider" in {
-    val state   = proseStateWith(LineNumberSide.Right, lineCount = 150, topLine = 99)
-    val rect    = ActivePane.of(state, LayoutEngine.calculateLayout(state, viewport)).rightLineNumberRect.getOrElse(fail("no counter"))
+    val state = proseStateWith(LineNumberSide.Right, lineCount = 150, topLine = 99)
+    val rect = ActivePane
+      .of(state, LayoutEngine.calculateLayout(state, viewport))
+      .rightLineNumberRect
+      .getOrElse(fail("no counter"))
     val surface = renderProse(state)
     val runs    = lineNumberRuns(surface, rect)
 
@@ -183,11 +189,16 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
     List(99 -> 3, 100 -> 4, 999 -> 4, 1000 -> 5).foreach {
       case (lineCount, expectedWidth) =>
         val state = proseStateWith(LineNumberSide.Left, lineCount, topLine = 0)
-        ActivePane.of(state, LayoutEngine.calculateLayout(state, viewport)).lineNumberRect.map(_.width) shouldBe Some(expectedWidth)
+        ActivePane.of(state, LayoutEngine.calculateLayout(state, viewport)).lineNumberRect.map(_.width) shouldBe Some(
+          expectedWidth
+        )
     }
 
-    val state   = proseStateWith(LineNumberSide.Left, lineCount = 1050, topLine = 999)
-    val rect    = ActivePane.of(state, LayoutEngine.calculateLayout(state, viewport)).lineNumberRect.getOrElse(fail("expected a counter"))
+    val state = proseStateWith(LineNumberSide.Left, lineCount = 1050, topLine = 999)
+    val rect = ActivePane
+      .of(state, LayoutEngine.calculateLayout(state, viewport))
+      .lineNumberRect
+      .getOrElse(fail("expected a counter"))
     val surface = renderProse(state)
     val runs    = lineNumberRuns(surface, rect)
 

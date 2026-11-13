@@ -149,7 +149,8 @@ object RendererGutter:
     // Diagnostic markers share the divider's own column, so they are collected here and repainted afterwards -- once
     // the divider itself has been painted as one continuous stroke -- rather than drawn inline per row, which would
     // have the divider immediately paint back over them.
-    val diagnosticRows = renderLineNumberRows(state, context, renderPlan, paneId, lineRect, surface, dividerOnLeft, rows)
+    val diagnosticRows =
+      renderLineNumberRows(state, context, renderPlan, paneId, lineRect, surface, dividerOnLeft, rows)
 
     // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than implicitly by
     // each row's own background fill: a divider assembled that way is only as continuous as every row's fill agrees
