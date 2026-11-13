@@ -36,8 +36,8 @@ RENDER_JSON = json.dumps(
     {
         "environment": {},
         "scenarios": [
-            {"scenario": "Typing at end", "java2d": {"p50Ms": 3.0}, "skia": {"p50Ms": 9.5}, "raster": {"p50Ms": 4.5}},
-            {"scenario": "Scroll", "java2d": {"p50Ms": 5.0}},
+            {"scenario": "Typing at end", "skia": {"p50Ms": 9.5}, "raster": {"p50Ms": 4.5}},
+            {"scenario": "Scroll", "skia": {"p50Ms": 5.0}},
         ],
     }
 )
@@ -195,10 +195,9 @@ class ParserTests(unittest.TestCase):
     def test_render_json_names_each_backend_of_each_scenario(self):
         self.assertEqual(
             {
-                "render.typing_at_end.java2d": 3.0,
                 "render.typing_at_end.skia": 9.5,
                 "render.typing_at_end.raster": 4.5,
-                "render.scroll.java2d": 5.0,
+                "render.scroll.skia": 5.0,
             },
             pn.parse_render_json(RENDER_JSON),
         )
