@@ -8,7 +8,7 @@ import org.scalatest.matchers.should.Matchers
 
 class TrialDocumentSpec extends AnyFlatSpec with Matchers:
 
-  "TrialDocument" should "give a long document of lines that all differ, so every page looks different once scrolled" in {
+  "TrialDocument" should "give a long document of lines that all differ, so every page looks different once scrolled" in
     TrialDocument.resource
       .use { path =>
         cats.effect.IO {
@@ -19,7 +19,6 @@ class TrialDocumentSpec extends AnyFlatSpec with Matchers:
         }
       }
       .unsafeRunSync()
-  }
 
   it should "remove the file when the trial is over" in {
     val path = TrialDocument.resource.use(path => cats.effect.IO.pure(path)).unsafeRunSync()
