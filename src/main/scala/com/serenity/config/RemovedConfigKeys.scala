@@ -35,7 +35,7 @@ object RemovedConfigKeys:
     "viewport_height_max",
     "window.translucent",
     "window_translucent",
-    // The modal/panel layer cache went with Java2D, the only renderer that could hold layer images.
+    // The modal/panel layer cache: no renderer holds layer images any more, so the setting does nothing.
     "ui.render.layer_cache",
     "render.layer_cache",
     "render_layer_cache",
