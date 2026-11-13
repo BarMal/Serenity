@@ -13,7 +13,7 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
   private def runs(candidate: Candidate, outcomes: Outcome*): CandidateRuns = CandidateRuns(candidate, outcomes.toList)
 
   "RendererTarget.judge" should "say a mode meets the target when its typing p95 at 2x is at or below 16.7 ms" in {
-    RendererTarget.judge(runs(Candidate.LayerImage, run(16.7), run(12.0))) shouldBe Verdict.Meets(14.35)
+    RendererTarget.judge(runs(Candidate.LayerImage, run(16.7), run(12.0))) shouldBe Verdict.Meets((12.0 + 16.7) / 2.0)
   }
 
   it should "say by how much a mode misses it, from the median of its runs' p95" in {
