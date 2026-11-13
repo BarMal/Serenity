@@ -43,7 +43,7 @@ private[perf] object PanelLayerCachingBenchmarks:
       lazy val frames = Alternating(steps)
       BenchmarkRunner.Benchmark.building(frames)(
         BenchmarkRunner.Benchmark(
-          s"$prefix.$name",
+          s"$prefix.$name.skia_raster",
           2,
           12,
           () => assert(LaptopFrameBenchmarks.hasPixels(frames.next()), s"$name drew nothing"),

@@ -34,7 +34,7 @@ object RenderDamageGranularity:
       case "cells" | "cell" => Some(Cells)
       case _                => None
 
-/** Which renderer paints the window. `Auto` lets startup pick Skia where it can load and Java2D everywhere else;
+/** Which renderer paints the window. `Auto` lets startup pick Skia's GPU layer where the native library loads;
   * `SkiaRaster` paints Skia on the CPU into an image that Java2D presents, on any display and toolkit.
   */
 enum RenderBackendSetting(val configKey: String):

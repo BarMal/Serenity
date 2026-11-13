@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -98,9 +98,6 @@ abstract class PixelLiftingBehaviour extends AnyFlatSpec with Matchers:
 
       withClue(s"at scale $scale: ")(image.rgbPixels shouldBe before)
     }
-
-class Java2DPixelLiftingSpec extends PixelLiftingBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
 
 class SkiaPixelLiftingSpec extends PixelLiftingBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.RenderBackendSelection.Probe
 import com.serenity.config.{RenderBackendSetting, RenderStartupSettings, SkiaFrames, WaylandRender}
 import com.serenity.ui.renderer.FrameSurfaceFactory
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -38,7 +39,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
   ): GraphicsStartup.Resolved =
     def factory(): FrameSurfaceFactory =
       counters.built.incrementAndGet()
-      FrameSurfaceFactory.Java2D
+      SkiaRasterSurfaceFactory
     GraphicsStartup
       .resolve(
         launch,
@@ -308,7 +309,7 @@ class GraphicsStartupSpec extends AnyFlatSpec with Matchers:
   }
 
   "GraphicsStartup.Display.route" should "run only the window branch for a window, handing it the surfaces" in {
-    val surfaces = FrameSurfaceFactory.Java2D
+    val surfaces = SkiaRasterSurfaceFactory
     GraphicsStartup.Display
       .Window(surfaces)
       .route(handed => handed eq surfaces, fail("the terminal branch ran")) shouldBe

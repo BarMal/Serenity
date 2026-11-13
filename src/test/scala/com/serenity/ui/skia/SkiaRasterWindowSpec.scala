@@ -13,7 +13,7 @@ import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
-import com.serenity.{FrameBackend, Java2DFrames, PersistedFrameFixture}
+import com.serenity.{FrameBackend, PersistedFrameFixture, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,7 +22,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class SkiaRasterWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameFixture:
 
-  override protected def frames: FrameBackend = Java2DFrames
+  override protected def frames: FrameBackend = SkiaFrames
 
   private val evidence  = Path.of("target", "test-reports", "skia-raster-window")
   private val uiMetrics = CellMetrics.fromFont(uiFont)
@@ -136,27 +136,7 @@ class SkiaRasterWindowSpec extends AnyFlatSpec with Matchers with PersistedFrame
       yield all(y * image.getWidth + x)).exists(_ != background)
     }
 
-  "A window presenting through the raster factory" should "show the same cells as Java2D for prose and for code" in
-    withWindow { window =>
-      List("prose" -> proseLines, "code" -> codeLines).foreach {
-        case (name, lines) =>
-          val state  = stateOf(lines.mkString("\n"), CursorPosition(2, 3))
-          val java2d = present(window, state, Damage.Everything, RenderCaches.create(), FrameSurfaceFactory.Java2D)
-          val skia   = present(window, state, Damage.Everything, RenderCaches.create(), SkiaRasterSurfaceFactory)
-          keep(s"$name-java2d", java2d)
-          keep(s"$name-skia-raster", skia)
-
-          val (left, right) = (inkMap(java2d), inkMap(skia))
-          left.length shouldBe right.length
-          withClue(s"$name: share of cells where Java2D and Skia agree on ink: ") {
-            left.zip(right).count(_ == _).toDouble / left.length should be >= 0.95
-          }
-          left.count(identity) should be > 20
-          right.count(identity) should be > 20
-      }
-    }
-
-  it should "present a typing and undo sequence exactly as a window drawing each frame from scratch does" in
+  "A window presenting through the raster factory" should "present a typing and undo sequence exactly as a window drawing each frame from scratch does" in
     withWindow { incremental =>
       withWindow { scratch =>
         val first   = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))

@@ -10,7 +10,7 @@ import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, TestWorkspaceTrees}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -137,14 +137,6 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
     )
     withClue(s"$ink: centred: ")((ink.above - ink.below).abs should be <= 1)
   }
-
-class Java2DTabSeparatorScale1Spec extends TabSeparatorRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DTabSeparatorScale2Spec extends TabSeparatorRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaTabSeparatorScale1Spec extends TabSeparatorRenderBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

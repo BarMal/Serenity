@@ -21,7 +21,7 @@ The current `sbt` build is a single Scala 3 JVM project and declares no Android,
 iOS, Kotlin/Native, or Scala Native target.[2] Startup creates a `SwingWindow`,
 uses `SwingInputHandler`, AWT clipboard access, and `SwingFileDialog`, then wires
 those implementations into the runtime.[3] The desktop renderer constructs a
-`Java2DRenderSurface` from that Swing window and its `JPanel` canvas.[4]
+`SkiaRenderSurface` from that Swing window and its `JPanel` canvas.[4]
 
 The runtime itself accepts input, resize, rendering, and shutdown capabilities as
 parameters, which is a useful seam for a future shell.[5] `InputHandler` and
@@ -112,7 +112,7 @@ refactoring during mobile UI work.
 
 [8] [`src/main/scala/com/serenity/ui/terminal/SwingWindow.scala`](../src/main/scala/com/serenity/ui/terminal/SwingWindow.scala)
 
-[9] [`src/main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala`](../src/main/scala/com/serenity/ui/renderer/Java2DRenderSurface.scala)
+[9] [`src/main/scala/com/serenity/ui/skia/SkiaRenderSurface.scala`](../src/main/scala/com/serenity/ui/skia/SkiaRenderSurface.scala)
 
 [10] [`src/main/scala/com/serenity/input/SwingInputHandler.scala`](../src/main/scala/com/serenity/input/SwingInputHandler.scala)
 

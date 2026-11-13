@@ -51,7 +51,7 @@ private[perf] object ScalingBenchmarks:
     def coldFrame(state: AppState) = LaptopFrameBenchmarks.renderedFrame(state, RenderCaches.create(), image)
     BenchmarkRunner.Benchmark.building(shown)(
       BenchmarkRunner.Benchmark(
-        s"buffers.switch_cold_frame.open_$open.${kind.label}",
+        s"buffers.switch_cold_frame.open_$open.${kind.label}.skia_raster",
         Warmups,
         Iterations,
         () =>
@@ -84,11 +84,11 @@ private[perf] object ScalingBenchmarks:
     action: String,
     change: MultiPaneSession => (AppState, AppState)
   )(using IORuntime): BenchmarkRunner.Benchmark =
-    val name = s"panes.split$panes.$action"
+    val name = s"panes.split$panes.$action.skia_raster"
 
     lazy val session    = MultiPaneSession.open(panes, MultiBufferFixture.LaptopSize)
     lazy val changed    = change(session)
-    lazy val transition = LaptopFrameBenchmarks.java2dTransition(changed._1, changed._2)
+    lazy val transition = LaptopFrameBenchmarks.rasterTransition(changed._1, changed._2)
     BenchmarkRunner.Benchmark.building(transition)(
       BenchmarkRunner.Benchmark(
         name,
@@ -112,7 +112,7 @@ private[perf] object ScalingBenchmarks:
   ): Unit =
     List(after, before).foreach { expected =>
       val drawn   = transition.nextFrame()
-      val cold    = LaptopFrameBenchmarks.java2dColdFrame(expected)
+      val cold    = LaptopFrameBenchmarks.rasterColdFrame(expected)
       val outside = outsideEdgeColumns(LaptopFrameBenchmarks.differingPixels(drawn, cold), sharedEdges(expected))
       assert(
         outside.isEmpty,

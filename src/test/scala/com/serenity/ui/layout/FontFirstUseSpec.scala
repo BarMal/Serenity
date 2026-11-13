@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes, FontSpec, ShapedStretch, ShapedTextCache, StyledFontCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -120,13 +120,4 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     val caret = unsettledFont()
     TextCaretMeasurement.rawMeasuredCaretXs("To fi", 0, LineFontResolver(caret, Vector.empty), frc, ShapedTextCache())
     FontFirstUse.isSettled(caret, frc) shouldBe true
-
-    val glyphs = unsettledFont()
-    Java2DTextMeasurer(frc).shape(
-      "To",
-      0,
-      TextMeasurer.FontRun(0, 2, FontSpec.fromAwt(glyphs)),
-      0.toByte
-    )
-    FontFirstUse.isSettled(glyphs, frc) shouldBe true
   }

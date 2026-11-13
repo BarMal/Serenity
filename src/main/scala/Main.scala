@@ -178,7 +178,7 @@ object Main extends IOApp:
       _         <- logger.info(s"[RENDER] ${graphics.backend.logLine}")
       _         <- logger.info(s"[LOGS] Writing to ${LogLocation.current}")
       _         <- migrateEarlierLogs
-      _         <- Java2DPipeline.installSafeDefaults()
+      _         <- SwingPipelineDefaults.installSafeDefaults()
       _         <- IO(CrashReporter.install(CrashRecord(LogLocation.current), build))
       requested <- IO(launchOptionsForLogging.openPaths.map(_.toAbsolutePath.normalize))
       // #2023: settled before anything reads or writes the session, which only one process may own.

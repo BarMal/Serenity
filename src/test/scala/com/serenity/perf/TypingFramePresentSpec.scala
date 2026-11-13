@@ -13,7 +13,7 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** What a typing frame presents to the window, through the planner's own repaint region -- the rects `SwingWindow`
-  * publishes -- for the keystroke `laptop.render.typing_frame_2x` times (#1839).
+  * publishes -- for the keystroke `skia.laptop.render.typing_frame_2x` times (#1839).
   */
 class TypingFramePresentSpec extends AnyFlatSpec with Matchers:
 

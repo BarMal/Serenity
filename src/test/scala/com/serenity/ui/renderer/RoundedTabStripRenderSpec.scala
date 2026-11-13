@@ -12,7 +12,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
-import com.serenity.{FrameBackend, FramePixels, Java2DFrames, SkiaFrames, TestWorkspaceTrees}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -247,14 +247,6 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       }
     }
   }
-
-class Java2DRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 1
-
-class Java2DRoundedTabStripScale2Spec extends RoundedTabStripRenderBehaviour:
-  override protected def frames: FrameBackend = Java2DFrames
-  override protected def scale: Int           = 2
 
 class SkiaRoundedTabStripScale1Spec extends RoundedTabStripRenderBehaviour:
   override protected def frames: FrameBackend = SkiaFrames

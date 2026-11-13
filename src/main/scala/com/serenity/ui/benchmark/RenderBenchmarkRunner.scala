@@ -24,10 +24,11 @@ import com.serenity.ui.skia.{
 }
 import com.serenity.ui.terminal.{LayerDrawStats, SwingCanvasGeometry, SwingWindow}
 
-/** Times the same scripted document on Java2D and on the Skia layer, each in a real window of its own.
+/** Times the same scripted document on the Skia layer, and optionally on the Skia CPU raster, each in a real window of
+  * its own.
   *
-  * A frame is timed from the moment the renderer is called to the last time the canvas painted (Java2D) or the layer
-  * drew (Skia) for it, and the next frame starts only once nothing has been presented for a moment, so what a frame
+  * A frame is timed from the moment the renderer is called to the last time the canvas painted (raster) or the layer
+  * drew (layer) for it, and the next frame starts only once nothing has been presented for a moment, so what a frame
   * spread over several paints or draws costs is all counted, and in the same way on both. A frame nothing ever
   * presented is counted as dropped.
   */
@@ -84,7 +85,6 @@ object RenderBenchmarkRunner:
     given Balance = Balance.default
     val fonts     = loadFonts()
     val refresh   = RefreshRate.current
-    val java2d    = measure(options, "Java2D", FrameSurfaceFactory.Java2D, fonts, refresh)
     val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts, refresh))
     val raster = rasterFactory.fold("no raster arm was asked for".asLeft[Measured]) { factory =>
       skiaProbe.left
@@ -98,14 +98,13 @@ object RenderBenchmarkRunner:
       _.renderApi.toRight("the layer could not be made, so the window painted with its fallback surface")
     )
     val measuredSkia = skia.toOption.filter(_ => api.isRight)
-    val arms         = List(Some(java2d), measuredSkia, raster.toOption).flatten
+    val arms         = List(measuredSkia, raster.toOption).flatten
     val notTimed = arms.flatMap(_.notTimed.toList).groupMap(_._1)(_._2).view.mapValues(_.distinct.mkString("; ")).toMap
     val results = Scenario.values.toVector
       .filterNot(notTimed.contains)
       .map(scenario =>
         ScenarioResult(
           scenario,
-          java2d.stats.getOrElse(scenario, FrameStats.of(Vector.empty, dropped = 0, refreshNanos = refresh.nanos)),
           measuredSkia.flatMap(_.stats.get(scenario)),
           raster.toOption.flatMap(_.stats.get(scenario))
         )
@@ -115,7 +114,7 @@ object RenderBenchmarkRunner:
       s"Java ${System.getProperty("java.version", "?")}",
       options.widthPx,
       options.heightPx,
-      java2d.deviceScale,
+      arms.headOption.fold(1.0)(_.deviceScale),
       api,
       toolkit = java.awt.Toolkit.getDefaultToolkit.getClass.getName,
       startup = startup,
@@ -125,15 +124,12 @@ object RenderBenchmarkRunner:
       rasterNote = raster.left.toOption,
       machine = MachineState.current,
       coldPhases = measuredSkia.flatMap(_.coldPhases),
-      java2dColdSplit = java2d.coldSplit,
       skiaColdSplit = measuredSkia.flatMap(_.coldSplit),
       fallbackAgreement = measuredSkia.map(_ => FallbackAgreement.checkAwt(drawnFonts(fonts))),
-      skiaDeviceScale = measuredSkia.map(_.deviceScale),
       drawnWindows = arms.map(arm => arm.name -> arm.drawn),
       drawnCanvases = arms.map(arm => arm.name -> arm.drawnCanvas),
       notTimed = notTimed,
       scenesLikeTheApp = true,
-      java2dShapeTraffic = java2d.shapeTraffic,
       skiaShapeTraffic = measuredSkia.fold(Map.empty[Scenario, ShapingTraffic])(_.shapeTraffic)
     )
     BenchmarkReport(environment, results, BenchmarkVerdict.of(results, environment))

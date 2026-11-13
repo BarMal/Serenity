@@ -1,7 +1,7 @@
 #!/usr/bin/env nix-shell
 #!nix-shell -i bash -p xdotool wmctrl python3 xorg.xwininfo coreutils procps jdk
 
-# bench-scaling.sh [--dry-run] <jar> <label> <a|b|c|d> [java2d|skia]
+# bench-scaling.sh [--dry-run] <jar> <label> <a|b|c|d> [skia|skia-raster]
 #
 # How the running app scales with many open files and split panes (issue #2478), one mode a row of the harness's
 # scaling rows; the harness gives the numbers CI records, this gives the laptop's, from the app's own [FRAME] and
@@ -30,7 +30,7 @@ source "$BENCH_DIR/bench-lib.sh"
 # shellcheck source=bench-scaling-lib.sh
 source "$BENCH_DIR/bench-scaling-lib.sh"
 
-usage() { echo "Usage: bench-scaling.sh [--dry-run] <jar> <label> <a|b|c|d> [java2d|skia]" >&2; }
+usage() { echo "Usage: bench-scaling.sh [--dry-run] <jar> <label> <a|b|c|d> [skia|skia-raster]" >&2; }
 
 DRY_RUN=false
 if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=true; shift; fi
@@ -43,8 +43,8 @@ case "$MODE" in
   *) usage; exit 2 ;;
 esac
 case "$BACKEND" in
-  "" | java2d | skia) ;;
-  *) echo "ERROR: backend must be java2d or skia, not: $BACKEND" >&2; exit 2 ;;
+  "" | skia | skia-raster) ;;
+  *) echo "ERROR: backend must be skia or skia-raster, not: $BACKEND" >&2; exit 2 ;;
 esac
 RENDERER_FLAG=()
 if [[ -n "$BACKEND" ]]; then RENDERER_FLAG=("--renderer=$BACKEND"); fi

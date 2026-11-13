@@ -116,10 +116,9 @@ trait PixelDrawing:
     * navigation keystroke, so the shrink compounds into a visible "zoom out" of the editor pane behind it until a full
     * clean repaint resets it.
     *
-    * The only real surface with a layer-buffer capability is [[Java2DRenderSurface]], which overrides this to blit 1:1
-    * in device pixels; every other surface either advertises no layer buffers at all (a terminal) or is a headless test
-    * double. The default records the composite as an ordinary full-surface `drawImage` so those doubles keep observing
-    * one blit per layer paint, without needing this surface's backing resolution.
+    * No real surface advertises a layer-buffer capability now (a terminal has none, nor does Skia), so this is the
+    * default for all of them. It records the composite as an ordinary full-surface `drawImage` so those doubles keep
+    * observing one blit per layer paint, without needing this surface's backing resolution.
     */
   def compositeFullSurfaceLayer(image: RenderImage): Unit =
     drawImage(image, 0, 0, image.widthPx, image.heightPx)

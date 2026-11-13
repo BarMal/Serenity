@@ -29,7 +29,7 @@ private[serenity] object DiscardingImageLayer:
     def renderApi: String                                      = "DISCARDING"
 
   val factory: FrameSurfaceFactory =
-    new LayerSurfaceFactory(_ => new Host, FrameSurfaceFactory.Java2D, LayerFrames.Image)
+    new LayerSurfaceFactory(_ => new Host, SkiaRasterSurfaceFactory, LayerFrames.Image)
 
   /** Whether the latest frame holds anything but its first pixel's colour along its middle row. */
   def latestHasInk: Boolean =

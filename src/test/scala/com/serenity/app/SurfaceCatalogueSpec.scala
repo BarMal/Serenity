@@ -3,16 +3,17 @@ package com.serenity.app
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.renderer.{FrameSurfaceFactory, FrameSurfaceRequest, RenderSurface}
+import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class SurfaceCatalogueSpec extends AnyFlatSpec with Matchers:
 
   private val skiaFactory: FrameSurfaceFactory = new FrameSurfaceFactory:
-    def create(request: FrameSurfaceRequest): RenderSurface = FrameSurfaceFactory.Java2D.create(request)
+    def create(request: FrameSurfaceRequest): RenderSurface = SkiaRasterSurfaceFactory.create(request)
 
   private val rasterFactory: FrameSurfaceFactory = new FrameSurfaceFactory:
-    def create(request: FrameSurfaceRequest): RenderSurface = FrameSurfaceFactory.Java2D.create(request)
+    def create(request: FrameSurfaceRequest): RenderSurface = SkiaRasterSurfaceFactory.create(request)
 
   final private class Built:
     val skia: AtomicInteger   = new AtomicInteger(0)

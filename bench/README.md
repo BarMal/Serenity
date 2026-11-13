@@ -127,17 +127,17 @@ The numbers are only comparable like-for-like: on the same machine, with the sam
 
 ## Key to screen, per backend
 
-`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as java2d, skia, skia, java2d (`bench-laptop.sh <jar> <label> skia-raster` runs the Skia CPU raster the same way) (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
+`bench/key-to-screen-abba.sh <jar> <label>` runs `bench-laptop.sh` as skia-raster, skia, skia, skia-raster (each its usual 3 runs, with `--renderer=<backend>` and `ui.render.latency_trace = true`) and reduces the tagged `[LATENCY] summary` and `[FRAME]` lines with `bench/key_to_screen_summary.py`: p50 and p95 of each keystroke's `total`, and of `input-to-paint`, per backend.
 
 ```bash
 nix-shell -p xdotool wmctrl python3 xorg.xwininfo --run "bash bench/key-to-screen-abba.sh $PWD/Serenity.jar <label>"
 ```
 
-The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For Java2D and the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's draw cycle on the event thread (our callback, the replay on the GPU canvas, the flush and the swap), **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
+The clock is `System.nanoTime`, from the key's arrival at the AWT listener on the event thread to the end of the frame's presentation. For the Skia raster that is the end of the canvas paint; for the Skia layer it is the end of Skiko's draw cycle on the event thread (our callback, the replay on the GPU canvas, the flush and the swap), **not GPU completion and not display scan-out** (the lines say so with `presented=`). `when_to_edt` is the gap from `KeyEvent.getWhen` to the event thread, in wall-clock milliseconds on a time base the platform decides; it is shown on its own and is not part of `total`, but it is part of `key_to_screen` (and so of the `key-to-screen` columns of `key_to_screen_summary.py`). The OS input path and the display's scan-out are outside these figures.
 
 ## Scaling with many open files and split panes (#2478)
 
-`bench/bench-scaling.sh <jar> <label> <a|b|c|d> [java2d|skia]` is the laptop side of the harness rows that ask how
+`bench/bench-scaling.sh <jar> <label> <a|b|c|d> [skia|skia-raster]` is the laptop side of the harness rows that ask how
 performance scales: `a` ctrl+Tab through 1 and through 20 open files, `b` typing, PageDown and the wheel with 1, 2 and 4
 panes (a different file in each), `c` the heap in use after a GC with 1 file and with 20, `d` the time to the last of four
 scrollbars, which the app's logs cannot show (the harness row `scrollbar.four_panes.all_bars` measures it). The documents

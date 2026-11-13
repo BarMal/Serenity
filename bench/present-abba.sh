@@ -2,9 +2,8 @@
 # present-abba.sh <out-dir> <config...>
 #
 # Two backends against each other, end to end through the real surface factories (see PresentBenchmarks.scala): by
-# default Java2D (A) against the Skia raster path (B). $PRESENT_BACKENDS names another pair, "<A> <B>", from java2d,
-# skia and layer-image (the GPU layer's image frames, painted and snapshotted with no GL layer and no readback), e.g.
-# "skia layer-image" to put the layer's frame cost beside the raster path's.
+# default the Skia raster path "skia" (A) against "layer-image" (B), the GPU layer's image frames painted and
+# snapshotted with no GL layer and no readback. $PRESENT_BACKENDS names another pair, "<A> <B>", from those two.
 # A config is <logical height>_<scale>, e.g. 1080_2 for a 1920x1080 window at 2x; 1440 means 2560x1440. For each config
 # the runs go A B B A A B B A, one JVM each, so drift falls on both alike. The JVM flags are the
 # packaged app's. Needs the Test classpath in $PRESENT_CP (e.g. from `sbt "export app/Test/fullClasspath"`); without
@@ -19,8 +18,8 @@ OUT="${1:?Usage: present-abba.sh <out-dir> <config...>}"
 shift
 CP="${PRESENT_CP:?set PRESENT_CP to the Test classpath}"
 ROWS="${PRESENT_ROWS:-}"
-read -r BACKEND_A BACKEND_B <<< "${PRESENT_BACKENDS:-java2d skia}"
-: "${BACKEND_B:?PRESENT_BACKENDS must name two backends, for example \"java2d skia\"}"
+read -r BACKEND_A BACKEND_B <<< "${PRESENT_BACKENDS:-skia layer-image}"
+: "${BACKEND_B:?PRESENT_BACKENDS must name two backends, for example \"skia layer-image\"}"
 mkdir -p "$OUT"
 
 for config in "$@"; do
