@@ -13,7 +13,7 @@ import com.serenity.command.menu.MenuDispatch
 import com.serenity.config.{MenuBarMode, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{FileDropHandler, InputHandler, InputRouter}
-import com.serenity.keystroke.events.{Event, InsertChar, PageDown}
+import com.serenity.keystroke.events.{Escape, Event, InsertChar, PageDown}
 import com.serenity.keystroke.translators.TextEntryTranslator
 import com.serenity.ui.host.{InputSettings, WindowHost}
 import com.serenity.ui.layout.CellMetrics
@@ -112,4 +112,11 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
       val toggle  = MenuDispatch.eventFor(CommandId("toggle-theme"))
       host.toggleTheme.unsafeRunSync()
       firstEvent(handler, toggle) shouldBe Some(List(toggle))
+    }
+
+  it should "queue an escape key into the input handler it built, to dismiss the notice a safe-mode start shows" in
+    withHost { host =>
+      val handler = handlerOf(host)
+      host.pressEscape.unsafeRunSync()
+      firstEvent(handler, Escape) shouldBe Some(List(Escape))
     }
