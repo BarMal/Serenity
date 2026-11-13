@@ -44,6 +44,12 @@ trait WindowHost:
   def pressPageDown: IO[Unit] =
     IO.raiseError(new UnsupportedOperationException("This window host cannot inject a page-down key."))
 
+  /** Queues an escape key as if it had been pressed in the window, for the renderer trial (#2618), to dismiss the
+    * notice a safe-mode start shows, which would otherwise take the trial's keys.
+    */
+  def pressEscape: IO[Unit] =
+    IO.raiseError(new UnsupportedOperationException("This window host cannot inject an escape key."))
+
   /** Queues the toggle-theme command as if it had been run in the window, for the renderer trial (#2618). */
   def toggleTheme: IO[Unit] =
     IO.raiseError(new UnsupportedOperationException("This window host cannot inject the toggle-theme command."))
