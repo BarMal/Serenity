@@ -63,7 +63,7 @@ object GraphicsStartup:
       safeMode = options.safeMode,
       renderer = options.renderer,
       waylandRender = options.waylandRender,
-      forcedWindow = options.gui || options.smokeTest || options.startupProbe,
+      forcedWindow = options.gui || options.smokeTest || options.startupProbe || options.rendererTrial.isDefined,
       terminalAvailable = stdoutIsTty
     )
 
