@@ -109,7 +109,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
     .withRenderSkiaVsync(true)
     .withRenderSkiaFrames(SkiaFrames.Picture)
     .withRendererFrameStateCacheCapacity(96)
-    .withLayerCaching(true)
     .withFrameTiming(true)
     .withLatencyTrace(true)
     .withMemoryCompaction(false)

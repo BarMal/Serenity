@@ -88,7 +88,6 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
 
     onCanvas.persistentContentKey shouldBe None
     onCanvas.pixelCopying shouldBe None
-    onCanvas.layerBuffers shouldBe None
     onCanvas.addressesPixels shouldBe true
     onCanvas.effects should not be empty
     onCanvas.panelOutlines should not be empty
@@ -105,7 +104,6 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     retaining(first, 1.0).persistentContentKey should not be retaining(second, 1.0).persistentContentKey
     retaining(first, 2.0).pixelCopying should not be empty
     retaining(first, 1.5).pixelCopying shouldBe None
-    retaining(first, 1.0).layerBuffers shouldBe None
   }
 
   it should "report the viewport in cells and the device scale it was built with" in {

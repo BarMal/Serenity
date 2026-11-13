@@ -384,8 +384,8 @@ object DamageProducer:
     * some `SurfaceId`, whose presentation is the same kind (`Modal`/`Docked`/`Floating`) on both sides, and nothing
     * else about `uiSurfaces`, reports `Damage.Surface` scoped to that surface instead of `Everything` (#1100 stage 2
     * for the modal only; stage 3 extends it to docked/floating panels). This is safe for every presentation kind
-    * because `Renderer`'s per-surface layer buffer (`LayerBufferSupport.newLayerSurface`) always paints into an
-    * isolated buffer, never the live frame surface directly, and no layer reads back the pixels behind it.
+    * because no panel reads back the pixels behind it: a panel is painted whole from its own state, and a frame leaves
+    * one alone only when the pixels it paints onto are recorded as holding that same content (`PanelReuse.kept`).
     */
   private def fullRenderDamage(before: AppState, after: AppState): Damage =
     if before.runtime.chapterGhostsVisible != after.runtime.chapterGhostsVisible ||

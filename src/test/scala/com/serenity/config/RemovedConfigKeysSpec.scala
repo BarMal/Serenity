@@ -173,6 +173,15 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "viewport_height_percent" -> "90"
     )
 
+  "A config file naming the removed layer cache setting" should "load and report it once" in
+    assertRemovedAndIgnored("ui.render.layer_cache" -> "true")
+
+  it should "treat its older spellings as removed too" in
+    assertRemovedAndIgnored(
+      "render.layer_cache" -> "true",
+      "render_layer_cache" -> "false"
+    )
+
   // ---- the motion and animation settings -------------------------------------------------------------------------
 
   private val motionFamilies = List(
@@ -298,7 +307,8 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
         "window.viewport.width_percent",
         "window.viewport.width_max",
         "window.viewport.height_percent",
-        "window.viewport.height_max"
+        "window.viewport.height_max",
+        "ui.render.layer_cache"
       )
 
     val messageLines =

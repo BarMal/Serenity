@@ -16,14 +16,13 @@ final case class FramePlan(
 )
 
 /** Decides what a frame actually has to (re)draw and paints the resulting layer stack: the row-level reuse plan
-  * ([[planFrame]]/[[dirtyRowsFor]]), the modal/panel layer caching ([[paintModalLayer]]/[[PanelLayers.paint]]), and the
-  * top-level per-frame orchestration ([[renderFrame]]/[[paintFrameLayers]]) that ties them together. The seam between
-  * "what changed" (fed by [[RendererFrameState]]) and "what to paint" (the feature-specific renderers in the rest of
-  * this package).
+  * ([[planFrame]]/[[dirtyRowsFor]]), which panels the frame keeps ([[panelDirtyCheck]]), and the top-level per-frame
+  * orchestration ([[renderFrame]]/[[paintFrameLayers]]) that ties them together. The seam between "what changed" (fed
+  * by [[RendererFrameState]]) and "what to paint" (the feature-specific renderers in the rest of this package).
   *
-  * It owns the layer-buffer reuse policy for the whole package, which is why [[PanelLayers.paint]]/[[panelDirtyCheck]]
-  * are public: [[RendererFloatingPanels]] paints each panel *through* them rather than deciding for itself when a
-  * cached panel image is still valid, since that decision depends on frame-wide damage the panel renderer never sees.
+  * It owns the policy for whether a panel is repainted or left as the frame's pixels hold it, since that decision
+  * depends on frame-wide damage the panel renderer never sees; [[RendererFloatingPanels]] paints each panel through
+  * [[PanelPainting.paint]] with the outcome.
   */
 object RendererFramePlanner:
 
@@ -83,10 +82,10 @@ object RendererFramePlanner:
             caches = caches
           )
         val panels = FramePanels.of(state, floatContext, scene)
-        RendererFloatingPanels.renderFloatingPanels(state, floatContext, Damage.Everything, panels)
+        RendererFloatingPanels.renderFloatingPanels(state, floatContext, panels)
         // This branch never reaches `paintFrameLayers`, so paint the modal layer here or a blocking modal opened from
         // the startup page (the open-file dialog) would be invisible (#1289).
-        paintModalLayer(state, floatContext, scene, isDirty = true, panels)
+        RendererFloatingPanels.renderModalLayer(state, floatContext, scene, panels)
         None
       case None =>
         val prepared = caches.frameState
@@ -160,11 +159,9 @@ object RendererFramePlanner:
     editorRenderPlan
 
   /** Paint one frame's editor content as an explicit, z-ordered stack of layers rather than a hard-coded sequence of
-    * calls -- the compositing seam #1100 introduces. Every layer except the modal still paints directly into the shared
-    * `context.surface` (no buffer of its own), so for those, [[LayerCompositor.orderedForComposite]] resolving to
-    * today's existing paint order is the whole of what changes visually: nothing. The modal layer is the first to own a
-    * real per-surface buffer and consume [[LayerCompositor.dirtyLayers]] (#1100 stage 2) -- see [[paintModalLayer]] for
-    * why it, specifically, is safe to cache and skip while the others aren't yet.
+    * calls -- the compositing seam #1100 introduces. Every layer paints directly into the shared `context.surface`
+    * (none has a buffer of its own), so [[LayerCompositor.orderedForComposite]] resolving to the paint order is all
+    * there is to it.
     */
   private def paintFrameLayers(
     state: AppState,
@@ -183,8 +180,7 @@ object RendererFramePlanner:
       Layer(FloatingPanelsLayerId, zOrder = 3, LayerEffect.identity, damage),
       Layer(ModalLayerId, zOrder = 4, LayerEffect.identity, modalDamage)
     )
-    val dirtyLayerIds = LayerCompositor.dirtyLayers(layers).map(_.id).toSet
-    PanelLayers.forgetStale(state, panels, context.surface, context.caches)
+    PanelPainting.forgetStale(state, panels, context.surface, context.caches)
     val chrome     = framePlan.map(_.chrome).getOrElse(ChromeRepaint.Whole)
     val keptOff    = PreservedPixels.of(context, framePlan)
     val dirtyByRow = keptOff.rowsToPaint(framePlan.map(_.dirtyRowsByPane).getOrElse(Map.empty))
@@ -196,9 +192,9 @@ object RendererFramePlanner:
           RendererChapterGhosts.render(state, context, editorRenderPlan, dirtyByRow)
         }
       },
-      PinnedPanelsLayerId -> { () => RendererFloatingPanels.renderPinnedPanels(state, context, scene, damage, panels) },
-      FloatingPanelsLayerId -> { () => RendererFloatingPanels.renderFloatingPanels(state, context, damage, panels) },
-      ModalLayerId -> { () => paintModalLayer(state, context, scene, dirtyLayerIds.contains(ModalLayerId), panels) }
+      PinnedPanelsLayerId   -> { () => RendererFloatingPanels.renderPinnedPanels(state, context, scene, panels) },
+      FloatingPanelsLayerId -> { () => RendererFloatingPanels.renderFloatingPanels(state, context, panels) },
+      ModalLayerId          -> { () => RendererFloatingPanels.renderModalLayer(state, context, scene, panels) }
     )
     LayerCompositor.orderedForComposite(layers).foreach(layer => paintByLayer(layer.id)())
 
@@ -214,57 +210,8 @@ object RendererFramePlanner:
       .find(_ != Damage.Nothing)
       .getOrElse(Damage.Nothing)
 
-  /** Paint the modal layer, reusing its last-painted buffer instead of repainting when it's safe to: the surface
-    * supports [[LayerBufferSupport]] (a pixel surface may offer it, none does at present; a `TerminalRenderSurface`
-    * reports `layerBuffers = None` and this falls straight through to `renderModalLayer`, painting directly into the
-    * shared surface every frame exactly as before this stage, since a terminal has no sub-cell buffering concept to
-    * give the modal its own buffer with), the modal is actually present this frame (`scene.modalBackdrop` is defined),
-    * the layer is clean (`isDirty` is false, i.e. `DamageProducer`'s `modalOnlyContentChange` carve-out held for this
-    * transition), and the cached image still matches this frame's viewport size and cursor-blink state.
-    *
-    * Painting `renderModalLayer` into a fresh, fully-transparent [[LayerBufferSupport.newLayerSurface]] instead of
-    * `context.surface` directly, then compositing the result back at full opacity, is pixel-identical to painting
-    * directly, so long as `renderModalLayer` never reads pixels back off the surface it paints onto.
-    */
-  private def paintModalLayer(
-    state: AppState,
-    context: RenderContext,
-    scene: UiSceneSnapshot,
-    isDirty: Boolean,
-    panels: FramePanels
-  ): Unit =
-    PanelLayers.supportFor(state, context) match
-      case None => RendererFloatingPanels.renderModalLayer(state, context, scene, panels)
-      case Some(support) =>
-        scene.modalBackdrop match
-          case None =>
-            context.caches.frameState.forgetModalLayerBuffer(context.surface)
-          case Some(_) =>
-            val cached = context.caches.frameState.cachedModalLayerFor(context.surface)
-            val reusable = !isDirty && cached.exists { c =>
-              c.viewportWidth == context.surface.viewportWidth &&
-              c.viewportHeight == context.surface.viewportHeight &&
-              c.cursorVisible == context.cursorVisible
-            }
-            if reusable then cached.foreach(c => context.surface.pixels.compositeFullSurfaceLayer(c.image))
-            else
-              val capture      = LayerCapture()
-              val layerSurface = support.newLayerSurface(capture.onFlush, cached.map(_.image))
-              RendererFloatingPanels.renderModalLayer(state, context.copy(surface = layerSurface), scene, panels)
-              layerSurface.flush()
-              capture.image.foreach { image =>
-                val newlyCached = CachedModalLayer(
-                  image,
-                  context.surface.viewportWidth,
-                  context.surface.viewportHeight,
-                  context.cursorVisible
-                )
-                context.caches.frameState.rememberModalLayerBuffer(context.surface, newlyCached)
-                context.surface.pixels.compositeFullSurfaceLayer(image)
-              }
-
-  /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than reuse its
-    * cached buffer -- the panel generalisation of [[paintModalLayer]]'s `isDirty` flag (#1100 stage 3).
+  /** Whether a pinned/expanded/floating panel identified by `surfaceId` must repaint this frame rather than be left as
+    * the frame's pixels hold it.
     *
     * `Damage.narrowToSurface(damage, surfaceId)` is `Damage.Nothing` whenever this frame's damage doesn't name this
     * surface, even if it names something else entirely (editor content elsewhere, chrome, another surface). That is
@@ -401,7 +348,7 @@ object RendererFramePlanner:
 
         val blits = redraws.values.flatMap(_.blits).toList
         val keptPanels =
-          if Damage.isEverything(effectiveDamage) || blits.nonEmpty || !PanelLayers.canKeep(state, context) ||
+          if Damage.isEverything(effectiveDamage) || blits.nonEmpty || !PanelPainting.canKeep(context) ||
               state.runtime.modalStack.nonEmpty
           then Set.empty[SurfaceId]
           else
@@ -416,7 +363,7 @@ object RendererFramePlanner:
               PanelReuse.Frame(context.surface.viewportWidth, context.surface.viewportHeight, context.cursorVisible)
             PanelReuse.kept(
               panels,
-              PanelLayers.holds(state, context, persistenceKey, frame),
+              PanelPainting.holds(context, persistenceKey, frame),
               panelDirtyCheck(damage),
               repainted,
               context.caches.frameState.previousFloatingSurfaceRectsFor(persistenceKey)

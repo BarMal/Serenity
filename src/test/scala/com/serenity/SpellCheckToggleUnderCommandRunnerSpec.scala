@@ -60,9 +60,8 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
     code = Some("unknown-word")
   )
 
-  private def editorState(spellCheckEnabled: Boolean, layerCaching: Boolean, runnerShown: Boolean): AppState =
+  private def editorState(spellCheckEnabled: Boolean, runnerShown: Boolean): AppState =
     val config = AppConfig.default
-      .withLayerCaching(layerCaching)
       .withSpellCheck(SpellCheckConfig(enabled = spellCheckEnabled, languages = List("en")))
     val runner = FixedFontCatalog.emptyRunner
       .activate(CommandRegistry.default, config)
@@ -149,17 +148,15 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
     val error = Theme.light.error.foreground.argb
     image.rgbPixels.count(_ == error)
 
-  for
-    runnerShown  <- List(true, false)
-    layerCaching <- List(false, true)
+  for runnerShown <- List(true, false)
   do
     val setting = if runnerShown then "with the command runner open" else "with nothing over the editor"
 
-    s"Enabling spell check $setting (layer caching $layerCaching)" should
+    s"Enabling spell check $setting" should
       "mark the misspelling in the editor before the runner closes" in {
         val frames  = new Frames
-        val off     = editorState(spellCheckEnabled = false, layerCaching, runnerShown)
-        val toggled = editorState(spellCheckEnabled = true, layerCaching, runnerShown)
+        val off     = editorState(spellCheckEnabled = false, runnerShown)
+        val toggled = editorState(spellCheckEnabled = true, runnerShown)
         val checked = withMisspelling(toggled)
 
         frames.paint(off, Damage.Everything)
@@ -172,9 +169,9 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
 
     it should "clear the marks again when switched off before the runner closes" in {
       val frames  = new Frames
-      val checked = withMisspelling(editorState(spellCheckEnabled = true, layerCaching, runnerShown))
-      val toggled = editorState(spellCheckEnabled = false, layerCaching, runnerShown).copy(runtime = checked.runtime)
-      val cleared = editorState(spellCheckEnabled = false, layerCaching, runnerShown)
+      val checked = withMisspelling(editorState(spellCheckEnabled = true, runnerShown))
+      val toggled = editorState(spellCheckEnabled = false, runnerShown).copy(runtime = checked.runtime)
+      val cleared = editorState(spellCheckEnabled = false, runnerShown)
 
       frames.paint(checked, Damage.Everything)
       frames.paint(checked, Damage.Nothing)

@@ -8,24 +8,20 @@ import com.serenity.state.models.{AppState, Damage, SurfaceContent, SurfaceId}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.{DockedPanelFixtures, FramePixels}
 
-/** Frames with a docked outline over the laptop prose, drawn with panel layer caching off and on (#1869). The two
-  * variants are named apart so a run can take either by prefix (`laptop.render.pinned_panel.layer_cache_off`) and the
-  * runs be interleaved A/B/A/B across processes under identical display and JVM settings.
+/** Frames with a docked outline over the laptop prose (#1869), as the panel is painted straight onto a persisting
+  * frame.
   *
-  * Three frames cover what caching changes: a typing frame, where the panel's pixels are kept; an idle frame, where
-  * nothing repainted; and a frame whose damage is the panel itself.
+  * Three frames cover what keeping a panel's pixels changes: a typing frame, where the panel's pixels are kept; an idle
+  * frame, where nothing repainted; and a frame whose damage is the panel itself.
   */
-private[perf] object PanelLayerCachingBenchmarks:
+private[perf] object PinnedPanelBenchmarks:
 
   given Balance = Balance.default
 
   private val outlineId = SurfaceId("outline")
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    List(false, true).flatMap(variant)
-
-  private def variant(layerCaching: Boolean)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val prefix                 = s"laptop.render.pinned_panel.layer_cache_${if layerCaching then "on" else "off"}"
+    val prefix                 = "laptop.render.pinned_panel"
     lazy val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
     lazy val docked =
       stateManager
@@ -34,10 +30,8 @@ private[perf] object PanelLayerCachingBenchmarks:
     lazy val (before, after) =
       val _ = docked
       TypingTransition.of(stateManager)
-    lazy val typingBefore = withCaching(before, layerCaching)
-    lazy val typingAfter  = withCaching(after, layerCaching)
-    lazy val forward      = DamageProducer.forTransition(typingBefore, typingAfter)
-    lazy val backward     = DamageProducer.forTransition(typingAfter, typingBefore)
+    lazy val forward  = DamageProducer.forTransition(before, after)
+    lazy val backward = DamageProducer.forTransition(after, before)
 
     def benchmark(name: String, steps: => List[(AppState, Damage)]): BenchmarkRunner.Benchmark =
       lazy val frames = Alternating(steps)
@@ -52,13 +46,10 @@ private[perf] object PanelLayerCachingBenchmarks:
       )
 
     List(
-      benchmark("typing_frame_2x", List(typingAfter -> forward, typingBefore -> backward)),
-      benchmark("idle_frame_2x", List(typingAfter -> Damage.Nothing)),
-      benchmark("panel_damaged_frame_2x", List(typingAfter -> Damage.Surface(outlineId)))
+      benchmark("typing_frame_2x", List(after -> forward, before -> backward)),
+      benchmark("idle_frame_2x", List(after -> Damage.Nothing)),
+      benchmark("panel_damaged_frame_2x", List(after -> Damage.Surface(outlineId)))
     )
-
-  private def withCaching(state: AppState, enabled: Boolean): AppState =
-    state.copy(persisted = state.persisted.copy(config = state.persisted.config.withLayerCaching(enabled)))
 
   /** The first frame is drawn in full; after that each call draws the next step over the same persisting image. */
   final private class Alternating(steps: List[(AppState, Damage)]):

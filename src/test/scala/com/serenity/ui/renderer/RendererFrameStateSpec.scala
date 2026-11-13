@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
@@ -27,8 +26,6 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
 
   private def frameOutput(screen: AnyRef): FrameOutput =
     FrameOutput(ScreenIdentity(screen), new AtomicReference[Option[List[com.serenity.ui.layout.PixelRect]]](None))
-
-  private def image(): RenderImage = RenderImage.fromAwt(new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB))
 
   private val someInputs = RenderInputs(
     ViewportSize(80, 24),
@@ -117,59 +114,43 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     frameState.screenPaneIdsChanged(Some(output), Set(PaneId(2))) shouldBe true
   }
 
-  "modal layer buffer caching" should "round-trip and forget" in {
+  private def painted(content: String): PaintedPanel =
+    PaintedPanel(
+      80,
+      24,
+      cursorVisible = true,
+      com.serenity.ui.layout.LayoutRect(0, 0, 1, 1),
+      com.serenity.ui.layout.PixelRect(0, 0, 1, 1),
+      content
+    )
+
+  "painted panel records" should "round-trip per surfaceId and prune inactive ones" in {
     val s     = surface()
-    val layer = CachedModalLayer(image(), 80, 24, cursorVisible = true)
-    frameState.cachedModalLayerFor(s) shouldBe None
-    frameState.rememberModalLayerBuffer(s, layer)
-    frameState.cachedModalLayerFor(s) shouldBe Some(layer)
-    frameState.forgetModalLayerBuffer(s)
-    frameState.cachedModalLayerFor(s) shouldBe None
+    val key   = s.persistentContentKey.get
+    val outer = SurfaceId("outline")
+    val inner = SurfaceId("preview")
+
+    frameState.paintedPanels.of(s) shouldBe Map.empty
+    frameState.paintedPanels.remember(s, outer, key, painted("a"))
+    frameState.paintedPanels.remember(s, inner, key, painted("b"))
+    frameState.paintedPanels.of(s).keySet shouldBe Set(outer -> key, inner -> key)
+
+    frameState.paintedPanels.prune(s, Set(inner))
+    frameState.paintedPanels.of(s).keySet shouldBe Set(inner -> key)
   }
 
-  "panel layer buffer caching" should "round-trip per surfaceId and prune inactive ones" in {
-    val s      = surface()
-    val outer  = SurfaceId("outline")
-    val inner  = SurfaceId("preview")
-    val layer1 = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(0, 0, 1, 1))
-    val layer2 = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(1, 1, 1, 1))
-
-    frameState.cachedPanelLayersFor(s) shouldBe Map.empty
-    frameState.rememberPanelLayer(s, outer, layer1)
-    frameState.rememberPanelLayer(s, inner, layer2)
-    frameState.cachedPanelLayersFor(s) shouldBe Map(outer -> layer1, inner -> layer2)
-
-    frameState.pruneStalePanelLayers(s, Set(inner))
-    frameState.cachedPanelLayersFor(s) shouldBe Map(inner -> layer2)
-  }
-
-  "layer buffer caching" should "share one entry between successive surfaces painting the same window" in {
+  it should "share one entry between successive surfaces painting the same window" in {
     // A GUI frame is a fresh surface every time (#1798); keying by the surface itself made every frame a new entry.
     val window      = new Object
     val firstFrame  = new OwnedMockSurface(window)
     val secondFrame = new OwnedMockSurface(window)
-    val modal       = CachedModalLayer(image(), 80, 24, cursorVisible = true)
-    val panel = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(0, 0, 1, 1))
-    val state = RendererFrameState(64)
+    val record      = painted("a")
+    val state       = RendererFrameState(64)
 
-    state.rememberModalLayerBuffer(firstFrame, modal)
-    state.rememberPanelLayer(firstFrame, SurfaceId("outline"), panel)
+    state.paintedPanels.remember(firstFrame, SurfaceId("outline"), firstFrame.persistentContentKey.get, record)
 
-    state.cachedModalLayerFor(secondFrame) shouldBe Some(modal)
-    state.cachedPanelLayersFor(secondFrame) shouldBe Map(SurfaceId("outline") -> panel)
-    state.cachedModalLayerFor(new OwnedMockSurface(new Object)) shouldBe None
-  }
-
-  it should "forget both modal and panel layers for a window at once" in {
-    val s     = surface()
-    val panel = CachedPanelLayer(image(), 80, 24, cursorVisible = true, com.serenity.ui.layout.LayoutRect(0, 0, 1, 1))
-    frameState.rememberModalLayerBuffer(s, CachedModalLayer(image(), 80, 24, cursorVisible = true))
-    frameState.rememberPanelLayer(s, SurfaceId("outline"), panel)
-
-    frameState.forgetLayerBuffers(s)
-
-    frameState.cachedModalLayerFor(s) shouldBe None
-    frameState.cachedPanelLayersFor(s) shouldBe Map.empty
+    state.paintedPanels.of(secondFrame).values.toList shouldBe List(record)
+    state.paintedPanels.of(new OwnedMockSurface(new Object)) shouldBe Map.empty
   }
 
   "forgetPreviousFrameState" should "drop remembered floating rects for the key" in {

@@ -377,7 +377,6 @@ object ConfigGenerators:
         AppConfig.MinRendererFrameStateCacheCapacity,
         AppConfig.MaxRendererFrameStateCacheCapacity
       )
-      layerCaching <- Gen.oneOf(true, false)
       frameTiming  <- Gen.oneOf(true, false)
       latencyTrace <- Gen.oneOf(true, false)
       warmUp       <- Gen.oneOf(true, false)
@@ -422,7 +421,6 @@ object ConfigGenerators:
       textAreaInsets = insets,
       lineNumberLayout = lineNumberLayout,
       rendererFrameStateCacheCapacity = frameStateCacheCapacity,
-      layerCachingEnabled = layerCaching,
       frameTimingEnabled = frameTiming,
       latencyTraceEnabled = latencyTrace,
       startupWarmUpEnabled = warmUp,

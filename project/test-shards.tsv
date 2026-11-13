@@ -319,7 +319,7 @@ com.serenity.ui.layout.HeadingSpacingLayoutSpec	1	0.058
 com.serenity.ui.tui.TerminalAnsiDiffPropertySpec	1	0.058
 com.serenity.SwingInputHandlerImeDiagnosticsSpec	1	0.057
 com.serenity.FindSearchSpec	1	0.056
-com.serenity.PanelLayerCompositingSpec	1	0.056
+com.serenity.PanelAndModalDirectPaintSpec	1	0.03
 com.serenity.ui.renderer.BoldTextCellGridPaintSpec	1	0.056
 com.serenity.CommandRunnerUiPresetThemeSettingsSpec	1	0.054
 com.serenity.StateManagerQuitSpec	1	0.054
@@ -434,7 +434,6 @@ com.serenity.config.CommentAuthorConfigSpec	1	0.024
 com.serenity.richtext.RichTextDocumentSharingSpec	1	0.024
 com.serenity.state.manager.StateManagerComponentPortsSpec	1	0.024
 com.serenity.state.reducers.EditorViewportNavigationSpec	1	0.024
-com.serenity.ModalLayerCompositingSpec	1	0.023
 com.serenity.app.ForwardedOpenSpec	1	0.023
 com.serenity.perf.SettledAllocationSpec	1	0.023
 com.serenity.state.reducers.EditorMultiCursorNavigationSpec	1	0.023
@@ -1400,7 +1399,6 @@ com.serenity.state.manager.PanelHighlightRefreshSpec	2	0.005
 com.serenity.state.models.CursorPositionConversionsSpec	2	0.005
 com.serenity.state.reducers.CommandRunnerReducerToggleSpec	2	0.005
 com.serenity.ui.layout.CaretStopsTuiSpec	2	0.005
-com.serenity.ui.renderer.RenderSurfaceCapabilitiesSpec	2	0.005
 com.serenity.AppRuntimeCursorCadenceSpec	2	0.004
 com.serenity.EmptyBufferDisplaySpec	2	0.004
 com.serenity.MarkdownBlockSpansSpec	2	0.004

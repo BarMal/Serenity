@@ -52,10 +52,6 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.rendererFrameStateCacheCapacity,
       (config, value) => config.withRendererFrameStateCacheCapacity(value)
     ),
-    field("ui.render.layer_cache", "render.layer_cache", "render_layer_cache")(boolean)(
-      _.surfaceConfig.layerCachingEnabled,
-      (config, value) => config.withLayerCaching(value)
-    ),
     field("ui.render.skia_vsync", "render.skia_vsync", "render_skia_vsync")(boolean)(
       _.surfaceConfig.renderSkiaVsync,
       (config, value) => config.withRenderSkiaVsync(value)
