@@ -130,12 +130,12 @@ class RendererChoiceSpec extends AnyFlatSpec with Matchers:
     val result = recommend(
       current = Candidate.SkiaRaster,
       List(
-        failed(Candidate.LayerImage, "fell back to Java2D"),
+        failed(Candidate.LayerImage, "fell back to the terminal"),
         measured(Candidate.SkiaRaster, workload(50.0, "page_down" -> 40.0))
       )
     )
     result should matchPattern { case Recommendation.Keep(_, _) => }
-    result.reason should include("fell back to Java2D")
+    result.reason should include("fell back to the terminal")
   }
 
   it should "report when every candidate failed" in {

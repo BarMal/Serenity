@@ -78,12 +78,12 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
       case other                  => fail(s"expected a failure, got $other")
   }
 
-  it should "report a mode that fell back to Java2D as failed, not as a measurement of that mode" in
+  it should "report a mode that fell back to the terminal as failed, not as a measurement of that mode" in
     List(Candidate.LayerImage, Candidate.LayerPicture, Candidate.SkiaRaster).foreach { candidate =>
       withClue(candidate.label) {
-        val fellBack = report(candidate, RenderBackend.Java2D, None)
+        val fellBack = report(candidate, RenderBackend.Terminal, None)
         RendererTrial.outcomeOf(RendererTrial.line(fellBack), candidate) match
-          case Outcome.Failed(reason) => reason should (include("java2d") and include(candidate.label))
+          case Outcome.Failed(reason) => reason should (include("terminal") and include(candidate.label))
           case other                  => fail(s"expected a failure, got $other")
       }
     }

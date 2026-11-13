@@ -9,7 +9,7 @@ import io.circe.{Decoder, HCursor, Json}
   * A child prints one `RENDERER_TRIAL {json}` line: the mode it was asked for, the backend the window really ran on,
   * the render API the layer ended with, and the outcome of the workload. The coordinator trusts nothing else in the
   * child's output. A child that printed no line, an unreadable one or several, or whose window ran on another backend
-  * than the mode needs (a layer that fell back to Java2D, say), is a failed trial, never a measurement of that mode.
+  * than the mode needs (a layer that fell back to the terminal, say), is a failed trial, never a measurement of that mode.
   */
 object RendererTrial:
 
