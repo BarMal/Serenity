@@ -8,7 +8,7 @@ import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
 import com.serenity.ui.layout.TextMeasureParity.Section
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.{SkiaFontCache, SkiaTextMeasurer}
+import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
 
-  private val faces    = new SkiaFontCache()
+  private val faces    = TestBundledTypefaces.cacheWithInter()
   private val measurer = new SkiaTextMeasurer(faces)
 
   private val systemFonts = Vector(
@@ -56,6 +56,7 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
     val header = List(
       s"JDK ${System.getProperty("java.version")}, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}",
       "Typeface selection is still reconciled to AWT (`SkiaTypefaces.keyOf`), so a Skia number here is Skia shaping on the typeface AWT's advance picks",
+      "The Inter subset is resolved to its own bytes (`TestBundledTypefaces`): it is an AWT-only test font that Skia would not find on a host without Inter installed",
       "Compared: cell metrics, the measured-layout decision, carets of one unwrapped row and one-row line heights",
       "Not compared before layout runs through the measurer (step D): wrap points, row counts, tabs, wide and emoji clusters, right-to-left carets"
     )
