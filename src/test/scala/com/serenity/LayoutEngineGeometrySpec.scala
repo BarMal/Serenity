@@ -46,7 +46,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
             .withInterfaceDensity(density)
             .withLineNumbers(true)
             .withStatusLinePlacement(StatusLinePlacement.Pinned)
-            .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.10))
+            .withTextAreaInsets(TextAreaInsets.percent(left = 0.05, right = 0.10))
             .withUiElementGap(Some(2))
         )
       )
@@ -217,7 +217,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(false)
           .withoutStatusLine
-          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.0, right = 0.0))
           .withUiElementGap(Some(gap.toDouble))
       )
     )
@@ -249,7 +249,7 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(false)
           .withoutStatusLine
-          .withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.0, right = 0.0, top = 0.0, bottom = 0.0))
           .withUiElementGap(Some(gap.toDouble))
       )
     )

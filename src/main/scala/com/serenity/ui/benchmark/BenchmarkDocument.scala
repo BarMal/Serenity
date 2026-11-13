@@ -55,7 +55,7 @@ object BenchmarkDocument:
         focus = Focus.EditorPane(paneId),
         theme = Theme.light,
         config = AppConfig.conventional.withoutStatusLine.copy(surfaceConfig =
-          AppConfig.conventional.surfaceConfig.copy(textAreaInsets = TextAreaInsets(0.04, 0.04, 0.04, 0.04))
+          AppConfig.conventional.surfaceConfig.copy(textAreaInsets = TextAreaInsets.percent(0.04, 0.04, 0.04, 0.04))
         )
       )
     )

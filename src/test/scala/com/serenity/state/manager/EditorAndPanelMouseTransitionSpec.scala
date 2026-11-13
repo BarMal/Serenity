@@ -222,7 +222,7 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val base = editorState("text")
     val state = base.copy(persisted =
       base.persisted.copy(config =
-        base.persisted.config.withTextAreaInsets(TextAreaInsets(left = 0.0, right = 0.0, top = 0.20))
+        base.persisted.config.withTextAreaInsets(TextAreaInsets.percent(left = 0.0, right = 0.0, top = 0.20))
       )
     )
     val layout        = LayoutEngine.calculateLayout(state, viewport)
