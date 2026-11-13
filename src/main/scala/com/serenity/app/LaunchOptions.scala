@@ -5,6 +5,7 @@ import java.nio.file.Path
 import cats.data.Validated
 import cats.syntax.all.*
 import com.monovore.decline.{Command, Help, Opts}
+import com.serenity.app.RendererChoice.Candidate
 import com.serenity.config.{RenderBackendSetting, WaylandRender}
 import com.serenity.ui.benchmark.RenderBenchmarkOptions
 
@@ -30,6 +31,14 @@ import com.serenity.ui.benchmark.RenderBenchmarkOptions
   *   `--renderer=auto|skia|skia-raster`: beats `SERENITY_RENDER_BACKEND` and `ui.render.backend`.
   * @param waylandRender
   *   `--wayland-render=skia-raster|xwayland`: beats `SERENITY_WAYLAND_RENDER` and `ui.render.wayland`.
+  * @param optimizeRenderer
+  *   `--optimize-renderer`: measure the renderer modes on this machine, say which is clearly fastest and quit. See
+  *   [[RendererCoordinator]]. `thorough` adds layer+picture to the modes; `apply` writes the recommended mode to
+  *   `config.conf`.
+  * @param rendererTrial
+  *   `--renderer-trial=<mode>`: one trial of `--optimize-renderer`, run by the coordinator in a child process and left
+  *   out of `--help` like `--startup-probe`. It types into the window, so [[RendererTrialChild.refusal]] stops it
+  *   unless safe mode is on.
   * @param renderBenchmark
   *   `--render-benchmark`: time the Skia layer on one scripted document, print and write the report, and quit without
   *   starting the editor. `None` unless the flag is given.
@@ -48,7 +57,11 @@ final case class LaunchOptions(
     renderer: Option[RenderBackendSetting] = None,
     waylandRender: Option[WaylandRender] = None,
     renderBenchmark: Option[RenderBenchmarkOptions] = None,
-    startupProbe: Boolean = false
+    startupProbe: Boolean = false,
+    optimizeRenderer: Boolean = false,
+    thorough: Boolean = false,
+    apply: Boolean = false,
+    rendererTrial: Option[Candidate] = None
 ):
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
@@ -57,6 +70,8 @@ object LaunchOptions:
 
   /** Taken out of the arguments before decline sees them, so it is in no help or usage text. */
   private val StartupProbeFlag = "--startup-probe"
+
+  private val RendererTrialPrefix = "--renderer-trial="
 
   /** `--open`/`--file` first, then any bare paths, which a file manager passes several of for a multi-file selection.
     */
@@ -183,6 +198,26 @@ object LaunchOptions:
       )
     }
 
+  private val optimizeRenderer: Opts[Boolean] =
+    Opts
+      .flag(
+        "optimize-renderer",
+        "Measure the renderers on this machine, recommend the clearly fastest and quit. It takes about 8 minutes " +
+          "(12 with --thorough), opens windows and types into them: leave the keyboard and mouse alone."
+      )
+      .orFalse
+
+  private val thorough: Opts[Boolean] =
+    Opts.flag("thorough", "With --optimize-renderer, also measure the Skia layer with picture frames.").orFalse
+
+  private val apply: Opts[Boolean] =
+    Opts
+      .flag(
+        "apply",
+        "With --optimize-renderer, write a recommended renderer to config.conf instead of only printing it."
+      )
+      .orFalse
+
   val command: Command[LaunchOptions] =
     Command("serenity", "A calm text editor.")(
       (
@@ -198,8 +233,54 @@ object LaunchOptions:
         resetSession,
         renderer,
         waylandRender,
-        renderBenchmark
-      ).mapN(LaunchOptions(_, _, _, _, _, _, _, _, _, _, _, _, _))
+        renderBenchmark,
+        optimizeRenderer,
+        thorough,
+        apply
+      ).mapN {
+        (
+          open,
+          eco,
+          tui,
+          gui,
+          alpha,
+          version,
+          safeMode,
+          smokeTest,
+          resetConfig,
+          resetSession,
+          renderer,
+          wayland,
+          benchmark,
+          optimize,
+          thorough,
+          apply
+        ) =>
+          LaunchOptions(
+            open,
+            eco,
+            tui,
+            gui,
+            alpha,
+            version,
+            safeMode,
+            smokeTest,
+            resetConfig,
+            resetSession,
+            renderer,
+            wayland,
+            benchmark,
+            optimizeRenderer = optimize,
+            thorough = thorough,
+            apply = apply
+          )
+      }.mapValidated(options =>
+        Validated.condNel(
+          (!options.thorough && !options.apply) || options.optimizeRenderer,
+          options,
+          "--thorough and --apply need --optimize-renderer."
+        )
+      )
     )
 
   /** `Left` carries the text to print. `Help.errors` distinguishes the two reasons: empty for a `--help` request,
@@ -211,8 +292,23 @@ object LaunchOptions:
     * from a correct one. Issue #1280.
     */
   def parse(args: List[String]): Either[Help, LaunchOptions] =
-    val (probe, rest) = args.partition(_ == StartupProbeFlag)
-    command.parse(rest, sys.env).map(_.copy(startupProbe = probe.nonEmpty))
+    val (probe, afterProbe) = args.partition(_ == StartupProbeFlag)
+    val (trial, rest)       = afterProbe.partition(_.startsWith(RendererTrialPrefix))
+    val mode: Either[Help, Option[Candidate]] = trial.lastOption.traverse { flag =>
+      val label = flag.drop(RendererTrialPrefix.length)
+      Candidate.values
+        .find(_.label == label)
+        .toRight(
+          Help
+            .fromCommand(command)
+            .withErrors(
+              List(s"Unknown renderer trial mode '$label'; expected ${Candidate.values.map(_.label).mkString(", ")}.")
+            )
+        )
+    }
+    mode.flatMap(candidate =>
+      command.parse(rest, sys.env).map(_.copy(startupProbe = probe.nonEmpty, rendererTrial = candidate))
+    )
 
   /** Whether this launch should use the terminal shell rather than Swing.
     *
@@ -230,7 +326,7 @@ object LaunchOptions:
     stdoutIsTty: Boolean = System.console() != null,
     osName: String = osNameProperty
   ): Boolean =
-    if options.gui || options.smokeTest || options.startupProbe then false
+    if options.gui || options.smokeTest || options.startupProbe || options.rendererTrial.isDefined then false
     else if options.tui then true
     else detectTuiByDefault(env, stdoutIsTty, osName)
 

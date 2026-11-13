@@ -114,13 +114,12 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
     (none.optimizeRenderer, none.thorough, none.apply) shouldBe (false, false, false)
   }
 
-  it should "refuse --thorough and --apply without --optimize-renderer, naming the flag they need" in {
+  it should "refuse --thorough and --apply without --optimize-renderer, naming the flag they need" in
     List("--thorough", "--apply").foreach { flag =>
       LaunchOptions.parse(List(flag)).left.map(_.toString) match
         case Left(text) => text should (include(flag) and include("--optimize-renderer"))
         case Right(_)   => fail(s"$flag alone should be refused")
     }
-  }
 
   it should "describe --optimize-renderer in --help, with how long it takes and that it types into a window" in {
     val help = LaunchOptions.command.showHelp.toString
