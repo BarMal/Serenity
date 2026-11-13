@@ -690,6 +690,13 @@ addCommandAlias(
   "app/Test/runMain com.serenity.perf.FrameCountBaseline ../../src/test/resources/perf/frame-counts.tsv"
 )
 
+// Rewrites src/test/resources/text-measure/baseline.tsv, the AWT text measurements TextMeasureBaselineSpec compares
+// every run with. The spec never writes the file; changing a number is this explicit command (#2660 item 2).
+addCommandAlias(
+  "writeTextMeasureBaseline",
+  "app/Test/runMain com.serenity.ui.layout.TextMeasureBaseline ../../src/test/resources/text-measure/baseline.tsv"
+)
+
 // Runs the tests that are only true on a headless JVM (see HeadlessAwtTest), which `sbt test` excludes because every leg
 // of it has a display. Start sbt with -Djava.awt.headless=true; the tests fail, not cancel, on a JVM that is not.
 lazy val headlessAwtTest = taskKey[Unit]("Run the headless-AWT specs excluded from `sbt test`")
