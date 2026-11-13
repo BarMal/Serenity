@@ -5,8 +5,8 @@ import java.nio.file.Paths
 
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
-import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.layout.TextMeasureParity.Section
+import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextMeasurer
 import org.scalatest.flatspec.AnyFlatSpec
