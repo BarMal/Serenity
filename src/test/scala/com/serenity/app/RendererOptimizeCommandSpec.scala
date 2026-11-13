@@ -81,11 +81,11 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "refuse, and start no trial, when there is no display to open windows on" in {
-    var started           = 0
-    val counting: Spawner = candidate => IO(started += 1) *> layerWins.run(candidate)
+    val started           = new java.util.concurrent.atomic.AtomicInteger(0)
+    val counting: Spawner = candidate => IO(started.incrementAndGet()) *> layerWins.run(candidate)
     val (code, text, _)   = run(options(), counting, display = false)
     code shouldBe ExitCode.Error
-    started shouldBe 0
+    started.get() shouldBe 0
     text should include("display")
   }
 
