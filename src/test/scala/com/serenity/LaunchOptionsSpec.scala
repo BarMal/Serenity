@@ -3,6 +3,7 @@ package com.serenity
 import java.nio.file.Path
 
 import com.serenity.app.LaunchOptions
+import com.serenity.app.RendererChoice.Candidate
 import com.serenity.config.{RenderBackendSetting, WaylandRender}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -102,6 +103,47 @@ class LaunchOptionsSpec extends AnyFlatSpec with Matchers:
 
   it should "keep --startup-probe out of --help, as it is a benchmark hook and not a feature" in {
     LaunchOptions.command.showHelp.toString should not include "startup-probe"
+  }
+
+  it should "recognise --optimize-renderer, with --thorough and --apply, and leave them off by default" in {
+    val all = parsed(List("--optimize-renderer", "--thorough", "--apply"))
+    (all.optimizeRenderer, all.thorough, all.apply) shouldBe (true, true, true)
+    val plain = parsed(List("--optimize-renderer"))
+    (plain.optimizeRenderer, plain.thorough, plain.apply) shouldBe (true, false, false)
+    val none = parsed(List("notes.md"))
+    (none.optimizeRenderer, none.thorough, none.apply) shouldBe (false, false, false)
+  }
+
+  it should "refuse --thorough and --apply without --optimize-renderer, naming the flag they need" in {
+    List("--thorough", "--apply").foreach { flag =>
+      LaunchOptions.parse(List(flag)).left.map(_.toString) match
+        case Left(text) => text should (include(flag) and include("--optimize-renderer"))
+        case Right(_)   => fail(s"$flag alone should be refused")
+    }
+  }
+
+  it should "describe --optimize-renderer in --help, with how long it takes and that it types into a window" in {
+    val help = LaunchOptions.command.showHelp.toString
+    help should (include("--optimize-renderer") and include("--thorough") and include("--apply"))
+  }
+
+  it should "recognise the hidden --renderer-trial=<mode> and leave it off by default" in {
+    parsed(List("--renderer-trial=layer+image")).rendererTrial shouldBe Some(Candidate.LayerImage)
+    parsed(List("--renderer-trial=skia-raster", "--safe-mode")).rendererTrial shouldBe Some(Candidate.SkiaRaster)
+    parsed(List("--renderer-trial=layer+picture")).rendererTrial shouldBe Some(Candidate.LayerPicture)
+    parsed(List("notes.md")).rendererTrial shouldBe None
+  }
+
+  it should "refuse --renderer-trial with a mode it does not know, and list the modes" in {
+    LaunchOptions.parse(List("--renderer-trial=java2d")).left.map(_.toString) match
+      case Left(text) => text should (include("java2d") and include("layer+image") and include("skia-raster"))
+      case Right(_)   => fail("an unknown mode should be refused")
+  }
+
+  it should "use the window for --renderer-trial, and keep it out of --help as a hook and not a feature" in {
+    val options = parsed(List("--renderer-trial=layer+image"))
+    LaunchOptions.resolveTuiMode(options, env = Map.empty, stdoutIsTty = true, osName = "Linux") shouldBe false
+    LaunchOptions.command.showHelp.toString should not include "renderer-trial"
   }
 
   it should "start normally, without safe mode or any reset, when none is asked for" in {
