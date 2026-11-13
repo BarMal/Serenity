@@ -26,6 +26,7 @@ class Java2DReferenceConfinementSpec extends AnyFlatSpec with Matchers:
     */
   private val java2dOnly: Set[String] = Set(
     "CaretFollowsCursorAcrossFramesSpec.scala",
+    "CaretRecordingParitySpec.scala",
     "CommandRunnerEditorPaneAccumulationSpec.scala",
     "CursorPixelAlignmentSpec.scala",
     "FrameBackend.scala",

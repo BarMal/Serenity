@@ -21,6 +21,7 @@ import com.serenity.ui.renderer.{
   RendererEntryPoints,
   ScreenIdentity
 }
+import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.terminal.SwingCanvasGeometry
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -95,7 +96,13 @@ class CaretFollowsCursorAcrossFramesSpec extends AnyFlatSpec with Matchers:
       surface.carets
 
     def cursorOnlyFrame(state: AppState): List[PixelRect] =
-      val surface = CaretRecordingSurface.forGeometry(metrics, codeFont, SwingCanvasGeometry.of(canvas))
+      val surface =
+        CaretRecordingSurface.forGeometry(
+          new SkiaCaretCanvases,
+          metrics,
+          FontSpec.fromAwt(codeFont),
+          SwingCanvasGeometry.of(canvas)
+        )
       RendererCursorOverlay.renderCursorOnly(
         state,
         cursorVisible = true,

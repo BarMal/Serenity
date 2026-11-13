@@ -25,6 +25,10 @@ object SkiaRasterSurfaceFactory extends FrameSurfaceFactory:
 
   private val FramesKey = BackendCacheKey(classOf[RasterFrames])
 
+  /** A raster of the window's device size that holds nothing yet, in the order the window's own frames use. */
+  def newSurface(widthPx: Int, heightPx: Int): Surface =
+    Surface.Companion.makeRaster(RasterFrames.frameInfo(widthPx, heightPx))
+
   /** `FrameSurfaceFactory.create` has no failure channel, and a window with no raster has nothing else to paint with,
     * so the failure is thrown for the render loop's crash path to report.
     */

@@ -193,7 +193,7 @@ object RendererCursorOverlay:
       // No base content is redrawn by this call, so the base frame contributes nothing to the repaint bound --
       // only the cursor's own old and new pixel rects can have changed on screen.
       target.onCursorOverlayReady(Some(Nil)) {
-        val surface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+        val surface = CaretRecordingSurface.forGeometry(target.caretCanvases, target.metrics, codeFont, target.geometry)
         val (layout, renderPlan) = resolveCursorRenderPlan(
           state,
           authoritativeScene,
@@ -412,7 +412,8 @@ object RendererCursorOverlay:
         .fold(target.onCursorOverlayReady(None)(Nil)) { renderPlan =>
           val baseDirtyRects = repaintRegion.get().map(_.map(RendererFrameState.toAwtRectangle))
           target.onCursorOverlayReady(baseDirtyRects) {
-            val cursorSurface = CaretRecordingSurface.forGeometry(target.metrics, codeFont.toAwt, target.geometry)
+            val cursorSurface =
+              CaretRecordingSurface.forGeometry(target.caretCanvases, target.metrics, codeFont, target.geometry)
             val _ = paintCursorsOnly(
               state,
               cursorSurface,
