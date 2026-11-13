@@ -3,8 +3,8 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.{GlyphVector, TextAttribute}
 
-import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
+import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.{SkiaFontCache, SkiaTextMeasurer}
 
