@@ -307,7 +307,8 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
         "window.viewport.width_percent",
         "window.viewport.width_max",
         "window.viewport.height_percent",
-        "window.viewport.height_max"
+        "window.viewport.height_max",
+        "ui.render.layer_cache"
       )
 
     val messageLines =

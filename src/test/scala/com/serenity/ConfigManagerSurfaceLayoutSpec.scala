@@ -173,22 +173,6 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
     ConfigManager.configToString(config) should include("ui.render.cache_capacity = 128")
   }
 
-  it should "default layer caching to off, then load and write it" in {
-    AppConfig.conventional.surfaceConfig.layerCachingEnabled shouldBe false
-
-    val configFile = TestTemp.file("serenity-render-layer-cache-config", ".conf")
-    Files.writeString(
-      configFile,
-      """ui.render.layer_cache = true
-        |""".stripMargin
-    )
-
-    val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
-
-    config.surfaceConfig.layerCachingEnabled shouldBe true
-    ConfigManager.configToString(config) should include("ui.render.layer_cache = true")
-  }
-
   it should "default frame timing to off, then load and write it" in {
     AppConfig.conventional.surfaceConfig.frameTimingEnabled shouldBe false
 

@@ -6,13 +6,12 @@ import com.serenity.ui.layout.*
 
 /** Paints every surface that floats above or is pinned within the editor workspace: cursor-anchored overlays
   * (completion popups, hovers, ...), the modal backdrop + modal surface, and pinned/expanded panels (outline, markdown
-  * split-preview). Panel-level layer caching is delegated to
-  * [[RendererFramePlanner.paintPanelLayer]]/[[RendererFramePlanner.panelDirtyCheck]], which decide reuse from
-  * frame-wide damage this object never sees.
+  * split-preview). Whether a panel is repainted or left as the frame's pixels hold it is decided by
+  * [[RendererFramePlanner]] from frame-wide damage this object never sees, and passed in as [[FramePanels.kept]].
   *
   * [[renderModalLayer]] and [[pinnedAndExpandedSurfaces]] are public for the reverse direction: the frame planner
-  * schedules the modal layer in its own z-ordered layer stack, and reconciles cached panel buffers against the set of
-  * panels actually on screen, both of which are facts only this object can state.
+  * schedules the modal layer in its own z-ordered layer stack, and drops the records of panels no longer on screen
+  * against the set of panels actually on screen, both of which are facts only this object can state.
   */
 object RendererFloatingPanels:
 
@@ -22,20 +21,17 @@ object RendererFloatingPanels:
   def renderFloatingPanels(
     state: AppState,
     context: RenderContext,
-    scene: UiSceneSnapshot,
-    damage: Damage
+    scene: UiSceneSnapshot
   ): Unit =
-    renderFloatingPanels(state, context, damage, FramePanels.of(state, context, scene))
+    renderFloatingPanels(state, context, FramePanels.of(state, context, scene))
 
   private[renderer] def renderFloatingPanels(
     state: AppState,
     context: RenderContext,
-    damage: Damage,
     panels: FramePanels
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-    val overlays     = panels.overlays
-    val panelIsDirty = RendererFramePlanner.panelDirtyCheck(damage)
+    val overlays = panels.overlays
 
     def paintOverlay(overlay: TextOverlayView): Unit =
       def paint(layerContext: RenderContext): Unit =
@@ -52,13 +48,7 @@ object RendererFloatingPanels:
         )
       overlay.surfaceId.flatMap(panels.sites.get) match
         case Some(site) =>
-          PanelLayers.paint(
-            state,
-            context,
-            site,
-            panelIsDirty(site.id),
-            panels.kept.contains(site.id)
-          )(paint)
+          PanelPainting.paint(context, site, panels.kept.contains(site.id))(paint)
         case None => paint(context)
 
     panels.floating.foreach(paintOverlay)
@@ -121,16 +111,14 @@ object RendererFloatingPanels:
   def renderPinnedPanels(
     state: AppState,
     context: RenderContext,
-    scene: UiSceneSnapshot,
-    damage: Damage
+    scene: UiSceneSnapshot
   ): Unit =
-    renderPinnedPanels(state, context, scene, damage, FramePanels.of(state, context, scene))
+    renderPinnedPanels(state, context, scene, FramePanels.of(state, context, scene))
 
   private[renderer] def renderPinnedPanels(
     state: AppState,
     context: RenderContext,
     scene: UiSceneSnapshot,
-    damage: Damage,
     panels: FramePanels
   ): Unit =
     context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
@@ -157,12 +145,9 @@ object RendererFloatingPanels:
                 Some(PinnedPanelRenderer.PanelTextMeasure(layerContext.uiFont, layerContext.caches.measuredAdvances))
               )
 
-        val isDirty = RendererFramePlanner.panelDirtyCheck(damage)(surface.id)
         panels.sites.get(surface.id) match
           case Some(site) =>
-            PanelLayers.paint(state, context, site, isDirty, panels.kept.contains(site.id))(
-              paintContent
-            )
+            PanelPainting.paint(context, site, panels.kept.contains(site.id))(paintContent)
           case None => paintContent(context)
       }
     }

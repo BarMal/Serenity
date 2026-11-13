@@ -93,12 +93,6 @@ trait RenderSurface:
     */
   def hardwareCursor: Option[HardwareCursor] = None
 
-  /** Creating a fresh, independently-paintable buffer shaped like this surface, for a compositing layer to own instead
-    * of painting into this surface directly. `None` -- the default -- means callers must paint the layer straight into
-    * this surface, same as before this capability existed; no surface advertises it now. See [[LayerBufferSupport]].
-    */
-  def layerBuffers: Option[LayerBufferSupport] = None
-
   /** What drawing into this surface has cost so far, for the frame counters. A surface that counts nothing reports a
     * fresh, empty one.
     */

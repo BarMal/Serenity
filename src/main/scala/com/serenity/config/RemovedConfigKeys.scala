@@ -35,6 +35,10 @@ object RemovedConfigKeys:
     "viewport_height_max",
     "window.translucent",
     "window_translucent",
+    // The modal/panel layer cache went with Java2D, the only renderer that could hold layer images.
+    "ui.render.layer_cache",
+    "render.layer_cache",
+    "render_layer_cache",
     // `ui.motion` once was a leaf beside `ui.motion.*`; `character.animation` and `character_animation` the same.
     "ui.motion",
     "ui_motion",

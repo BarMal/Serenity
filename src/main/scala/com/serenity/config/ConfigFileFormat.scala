@@ -429,8 +429,6 @@ object ConfigFileFormat:
     comment("Per-cache capacity for the renderer's bounded frame-state caches (issue #1433). Default 64 suits a"),
     comment("single window; raise it for a session with many concurrently open surfaces."),
     field("ui.render.cache_capacity"),
-    comment("Cache modal/panel layers between frames instead of repainting them (each holds a full-window image)"),
-    field("ui.render.layer_cache"),
     comment("Log a [FRAME] timing summary (input, render and paint latency) to the app log every 5 seconds"),
     field("ui.render.frame_timing"),
     comment("Log a [LATENCY] line per keystroke (each stage from key event to paint) and a summary every 5 seconds"),

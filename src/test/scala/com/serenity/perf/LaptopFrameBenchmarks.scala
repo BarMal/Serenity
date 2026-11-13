@@ -122,7 +122,7 @@ private[perf] object LaptopFrameBenchmarks:
     lazy val transitions = interactionTransitions
     renderBenchmarks ++ interactionBenchmarks(
       transitions
-    ) ++ LigatureTypingBenchmarks.benchmarks ++ PanelLayerCachingBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
+    ) ++ LigatureTypingBenchmarks.benchmarks ++ PinnedPanelBenchmarks.benchmarks ++ EreaderTypingBenchmarks.benchmarks ++ DiagnosticGutterBenchmarks.benchmarks ++ inputBenchmarks ++ typingBenchmarks ++
       LaptopPresentBenchmarks.benchmarks(presentWindow) ++ skiaInteractionBenchmarks(transitions)
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =

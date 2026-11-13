@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** A panel painted straight into a persisting surface, with no layer buffer to repaint it from: where it sat and what
-  * it showed. One is kept for each of a surface's contents, since a surface alternating between two images holds the
-  * panel as it was on each image's last frame.
+/** A panel painted straight into a persisting surface: where it sat and what it showed. One is kept for each of a
+  * surface's contents, since a surface alternating between two images holds the panel as it was on each image's last
+  * frame.
   */
 final case class PaintedPanel(
     viewportWidth: Int,
@@ -28,8 +28,11 @@ final case class PaintedPanel(
     this.viewportWidth == viewportWidth && this.viewportHeight == viewportHeight &&
       this.cursorVisible == cursorVisible && this.frameRect == frameRect && bounds == layerBounds
 
-/** The panels a frame painted without a layer buffer, per surface owner (as [[RendererFrameState]] keys its cached
-  * layers, for the same reason) and per the surface contents each was painted into.
+/** The panels a frame painted, per surface owner and per the surface contents each was painted into.
+  *
+  * Keyed by [[RenderSurface.layerCacheOwner]] rather than the surface itself: a GUI frame is a fresh surface every
+  * time, so a surface key never hit. Still per owner, never one JVM-wide slot, so one window's records can't leak into
+  * another's frame, and two surfaces that reuse a [[SurfaceId]] (unremarkable in tests) can't stomp on each other's.
   */
 final private[renderer] class PaintedPanelRecords(cacheCapacity: AtomicInteger):
 

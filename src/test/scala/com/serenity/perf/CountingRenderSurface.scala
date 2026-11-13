@@ -11,7 +11,6 @@ import com.serenity.ui.renderer.{
   FrameSurfaceFactory,
   FrameSurfaceRequest,
   HardwareCursor,
-  LayerBufferSupport,
   LiftedPixels,
   PanelOutlineDrawing,
   PixelCopying,
@@ -29,8 +28,7 @@ import com.serenity.ui.theme.TextStyle
 enum DrawKind:
 
   case PutString, FillRect, DrawRunPx, DrawShapedRunPx, DrawLabelPx, FillPixelRect, FillPixelRects, DrawImage,
-    CompositeLayer,
-    CompositeFullSurfaceLayer, ClipPush, ClipPop, StrokeRect, SetAlpha, CopyPixels, Lift, PutBack, SetFont,
+    ClipPush, ClipPop, StrokeRect, SetAlpha, CopyPixels, Lift, PutBack, SetFont,
     PixelTranslation, FallbackFamily, LogicalPixelRow, ClearViewport, ClearViewportExcept, Flush
 
 /** Single-threaded tallies, one slot per [[DrawKind]], because a frame is drawn on one thread. */
@@ -69,7 +67,6 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   override def devicePixelScaleX: Double                            = inner.devicePixelScaleX
   override def devicePixelScaleY: Double                            = inner.devicePixelScaleY
   override def activity: SurfaceActivity                            = inner.activity
-  override def layerBuffers: Option[LayerBufferSupport]             = inner.layerBuffers
   override def hardwareCursor: Option[HardwareCursor]               = inner.hardwareCursor
   override def fontRenderContext: Option[FontRenderContext]         = inner.text.fontRenderContext
   def viewportWidth: Int                                            = inner.viewportWidth
@@ -157,14 +154,6 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
     counts.increment(DrawKind.DrawImage)
     inner.pixels.drawImage(image, x, y, width, height)
-
-  override def compositeFullSurfaceLayer(image: RenderImage): Unit =
-    counts.increment(DrawKind.CompositeFullSurfaceLayer)
-    inner.pixels.compositeFullSurfaceLayer(image)
-
-  override def compositeLayer(image: RenderImage, bounds: PixelRect): Unit =
-    counts.increment(DrawKind.CompositeLayer)
-    inner.pixels.compositeLayer(image, bounds)
 
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
     counts.increment(DrawKind.PixelTranslation)

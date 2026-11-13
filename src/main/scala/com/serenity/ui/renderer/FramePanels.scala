@@ -3,11 +3,10 @@ package com.serenity.ui.renderer
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
 
-/** A panel painted through a layer buffer: the cells it is placed in, the pixels it paints, and the pixels its buffer
-  * covers.
+/** A panel as the frame places it: the cells it is placed in, the pixels it paints, and those pixels with a margin.
   *
-  * `painted` is what the panel can change on the frame; `bounds` is that with a margin, so a buffer cut to it still
-  * holds everything the panel draws.
+  * `painted` is what the panel can change on the frame; `bounds` is that with a margin, so a record of what the panel
+  * painted still covers everything it draws.
   */
 final private[renderer] case class PanelSite(
     id: SurfaceId,
@@ -63,7 +62,7 @@ final private[renderer] case class FramePanels(
 
   def keeping(panelIds: Set[SurfaceId]): FramePanels = copy(kept = panelIds)
 
-  /** Every panel that has a layer this frame, for dropping the buffers of those that have gone. */
+  /** Every panel on screen this frame, for dropping the records of those that have gone. */
   def activeIds(state: AppState): Set[SurfaceId] =
     RendererFloatingPanels.pinnedAndExpandedSurfaces(state).map(_.id).toSet ++
       (overlays.aboveCursorStack ++ overlays.belowCursorStack ++ overlays.cornerStack ++ overlays.tabBar.toList)

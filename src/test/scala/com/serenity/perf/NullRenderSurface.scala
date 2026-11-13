@@ -100,8 +100,6 @@ final class NullRenderSurface(
 
   def fillPixelRect(xPx: Int, yPx: Int, widthPx: Int, heightPx: Int, color: RenderColor): Unit = ()
   def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit             = ()
-  override def compositeFullSurfaceLayer(image: RenderImage): Unit                             = ()
-  override def compositeLayer(image: RenderImage, bounds: PixelRect): Unit                     = ()
   def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit                    = render
 
   def setAlpha(alpha: Float): Unit = ()

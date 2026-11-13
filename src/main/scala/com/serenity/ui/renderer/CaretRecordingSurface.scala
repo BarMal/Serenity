@@ -38,12 +38,6 @@ final class CaretRecordingSurface private (inner: RenderSurface) extends RenderS
     def drawImage(image: RenderImage, x: Int, y: Int, width: Int, height: Int): Unit =
       inner.pixels.drawImage(image, x, y, width, height)
 
-    override def compositeFullSurfaceLayer(image: RenderImage): Unit =
-      inner.pixels.compositeFullSurfaceLayer(image)
-
-    override def compositeLayer(image: RenderImage, bounds: PixelRect): Unit =
-      inner.pixels.compositeLayer(image, bounds)
-
     def withPixelTranslation(xPx: Double, yPx: Double)(render: => Unit): Unit =
       inner.pixels.withPixelTranslation(xPx, yPx)(render)
 
@@ -76,7 +70,6 @@ final class CaretRecordingSurface private (inner: RenderSurface) extends RenderS
   override def pixelLifting: Option[PixelLifting]         = inner.pixelLifting
   override def panelOutlines: Option[PanelOutlineDrawing] = inner.panelOutlines
   override def hardwareCursor: Option[HardwareCursor]     = inner.hardwareCursor
-  override def layerBuffers: Option[LayerBufferSupport]   = inner.layerBuffers
   override def activity: SurfaceActivity                  = inner.activity
 
   def hideCursor(): Unit  = inner.hideCursor()
