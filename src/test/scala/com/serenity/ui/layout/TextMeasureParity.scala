@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path}
 
 import com.serenity.ui.layout.TextMeasureBaseline.Entry
-import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
-import com.serenity.ui.layout.TextMeasurer.LineFonts
+import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
+import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts}
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextMeasurer
 
@@ -42,15 +42,26 @@ object TextMeasureParity:
       Entry(s"${pinned.label}.cell", Vector(cell.charWidth, cell.lineHeight, cell.ascent).map(_.toString)),
       Entry(s"${pinned.label}.measured", Vector(if measurer.measuresProportionally(spec) then "1" else "0"))
     )
-    perFont ++ TextMeasureCorpus.lines.filterNot(line => notComparable.contains(line.id)).flatMap { line =>
-      val fonts  = LineFonts(spec, Vector.empty)
-      val carets = measurer.caretXs(line.text, 0, fonts, measuredLayout = true, cell)
-      val height = measurer.lineMetrics(fonts, 0, line.text.length).heightPx
-      Vector(
-        Entry(s"${pinned.label}.${line.id}.carets", carets.toVector.map(value => f"$value%.4f")),
-        Entry(s"${pinned.label}.${line.id}.heights@$OneRowWidthPx", Vector(height.toString))
-      )
-    }
+    perFont ++ TextMeasureCorpus.lines.flatMap(shapeEntries(spec, _, pinned.label, measurer)) ++
+      TextMeasureCorpus.lines.filterNot(line => notComparable.contains(line.id)).flatMap { line =>
+        val fonts  = LineFonts(spec, Vector.empty)
+        val carets = measurer.caretXs(line.text, 0, fonts, measuredLayout = true, cell)
+        val height = measurer.lineMetrics(fonts, 0, line.text.length).heightPx
+        Vector(
+          Entry(s"${pinned.label}.${line.id}.carets", carets.toVector.map(value => f"$value%.4f")),
+          Entry(s"${pinned.label}.${line.id}.heights@$OneRowWidthPx", Vector(height.toString))
+        )
+      }
+
+  /** The glyph count and the character each glyph starts at when the line is shaped in the font alone, left to right,
+    * which is what the baseline's `glyphs` and `clusters` hold from AWT (step A2).
+    */
+  private def shapeEntries(spec: FontSpec, line: Line, label: String, measurer: SkiaTextMeasurer): Vector[Entry] =
+    val shaped = measurer.shape(line.text, 0, FontRun(0, line.text.length, spec), 0.toByte)
+    Vector(
+      Entry(s"$label.${line.id}.glyphs", Vector(shaped.glyphs.length.toString)),
+      Entry(s"$label.${line.id}.clusters", shaped.clusters.toVector.map(_.toString))
+    )
 
   /** Every number both sides hold under a key, and why the others were not compared. */
   def compare(reference: Seq[Entry], skia: Seq[Entry]): (Vector[Compared], Vector[Skipped]) =
@@ -58,6 +69,8 @@ object TextMeasureParity:
     val results = skia.toVector.map { entry =>
       referenceByKey.get(entry.key) match
         case None => Right(Skipped(entry.key, "no reference value"))
+        case Some(awt) if awt.values.length != entry.values.length && awt.kind == "clusters" =>
+          Right(Skipped(entry.key, "the glyph counts differ, so the cluster maps cannot be compared glyph by glyph"))
         case Some(awt) if awt.values.length != entry.values.length =>
           Right(Skipped(entry.key, "wrapped to several rows in layout; wrap points are not comparable before step D"))
         case Some(awt) =>
@@ -92,7 +105,8 @@ object TextMeasureParity:
   private def absoluteTable(absolute: Absolute): String =
     val rows = absolute.entries.map { entry =>
       val shown =
-        if entry.kind == "carets" then
+        if entry.kind == "clusters" then s"${entry.values.length} glyphs"
+        else if entry.kind == "carets" then
           s"${entry.values.length} stops, ends at ${entry.values.lastOption.getOrElse("-")}"
         else entry.values.mkString(", ")
       s"| ${entry.key} | $shown |"
