@@ -3,6 +3,7 @@ package com.serenity.state.models
 import com.serenity.config.{AppMode, StatusSegment}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.text.TextStatistics
+import com.serenity.ui.layout.DisplayColumn
 
 /** Renders the configured status segments for the active buffer into the one line both placements show. */
 object StatusLineText:
@@ -20,8 +21,10 @@ object StatusLineText:
   private def segment(state: AppState, buffer: Buffer, segment: StatusSegment): String =
     segment match
       case StatusSegment.Position =>
-        val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
-        s"Line ${cursor.line + 1}, Col ${cursor.column + 1}"
+        val cursor  = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
+        val tabSize = buffer.effectiveIndentation(state.persisted.config.indentation).tabSize
+        val line    = buffer.document.content.getLine(cursor.line).getOrElse("")
+        s"Line ${cursor.line + 1}, Col ${DisplayColumn.of(line, cursor.column, tabSize) + 1}"
       case StatusSegment.Title =>
         buffer.document.filePath.flatMap(path => Option(path.getFileName).map(_.toString)).getOrElse("Unsaved")
       case StatusSegment.Language =>
