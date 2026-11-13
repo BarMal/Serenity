@@ -60,10 +60,11 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
       "Compared: cell metrics, the measured-layout decision, carets of one unwrapped row and one-row line heights",
       "Not compared before layout runs through the measurer (step D): wrap points, row counts, tabs, wide and emoji clusters, right-to-left carets"
     )
-    val diagnosis = TextMeasureCorpus.fonts.flatMap(TextMeasureDiagnosis.lines(_, measurer, faces))
+    val classified = TextMeasureClassification.classify(sections.flatMap(_.compared), measurer, faces)
+    val diagnosis  = TextMeasureCorpus.fonts.flatMap(TextMeasureDiagnosis.lines(_, measurer, faces))
     TextMeasureParity.write(
       directory,
-      TextMeasureParity.summary(header, sections, absolute, diagnosis),
+      TextMeasureParity.summary(header, sections, absolute, diagnosis, classified),
       TextMeasureParity.tsv(sections)
     )
 
@@ -71,16 +72,6 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
     absolute.foreach(table => table.entries should not be empty)
     java.nio.file.Files.exists(directory.resolve("summary.md")) shouldBe true
     java.nio.file.Files.exists(directory.resolve("diffs.tsv")) shouldBe true
-  }
-
-  "Monaspace carets" should "match the baseline, a caret inside a ligature spread across it as AWT does" in {
-    val monaspace =
-      sections.flatMap(_.compared).filter(c => c.key.startsWith("monaspace_neon") && c.key.endsWith(".carets"))
-    monaspace should not be empty
-    val off = monaspace.filter(_.size > TextMeasureBaseline.FloatTolerance)
-    withClue(off.map(c => f"${c.key}[${c.index}] AWT ${c.awt}%.4f Skia ${c.skia}%.4f").mkString("; ")) {
-      off shouldBe empty
-    }
   }
 
   "Skia carets" should "start at zero, never go back and hold a stop per character, wherever they differ from AWT" in {

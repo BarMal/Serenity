@@ -117,7 +117,8 @@ object TextMeasureParity:
     header: Seq[String],
     sections: Seq[Section],
     absolute: Seq[Absolute] = Nil,
-    appendix: Seq[String] = Nil
+    appendix: Seq[String] = Nil,
+    classified: Seq[TextMeasureClassification.Classified] = Nil
   ): String =
     val out = new StringBuilder
     out.append("# Skia text measurer against AWT (step B, #2660 item 2)\n\n")
@@ -140,6 +141,7 @@ object TextMeasureParity:
         out.append("\nNot compared:\n\n")
         reasons.foreach((reason, items) => out.append(s"- ${items.size} keys: $reason\n"))
     }
+    if classified.nonEmpty then out.append(classesTable(classified))
     absolute.foreach(table => out.append(absoluteTable(table)))
     if appendix.nonEmpty then
       out
@@ -147,6 +149,30 @@ object TextMeasureParity:
         .append(appendix.mkString("\n"))
         .append("\n")
     out.toString
+
+  private def classesTable(classified: Seq[TextMeasureClassification.Classified]): String =
+    val fontOf    = (item: TextMeasureClassification.Classified) => item.compared.key.takeWhile(_ != '.')
+    val differing = classified.filter(_.compared.size > 0.0)
+    val byClass = differing
+      .groupBy(_.reason)
+      .toVector
+      .sortBy(_._1.ordinal)
+      .map((reason, items) =>
+        s"| ${reason.label} | ${items.size} | ${items.map(fontOf).distinct.sorted.mkString(", ")} |"
+      )
+    val flagged = differing
+      .filter(!_.reason.accepted)
+      .sortBy(item => -item.compared.size)
+      .take(40)
+      .map(item =>
+        f"- ${item.compared.key} [${item.compared.index}]: AWT ${item.compared.awt}%.4f, Skia ${item.compared.skia}%.4f"
+      )
+    val table =
+      if byClass.isEmpty then "No differences.\n"
+      else "| class | numbers | fonts |\n|---|---|---|\n" + byClass.mkString("\n") + "\n"
+    s"\n## Classes of difference (information, nothing fails on them)\n\n$table" +
+      (if flagged.isEmpty then "\nNo flagged difference.\n"
+       else s"\nFlagged, largest first:\n\n${flagged.mkString("\n")}\n")
 
   def tsv(sections: Seq[Section]): String =
     "section\tkey\tindex\tawt\tskia\tdelta\n" +
