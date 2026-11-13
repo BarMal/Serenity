@@ -8,7 +8,7 @@ import com.serenity.ui.layout.TextMeasureCorpus.PinnedFont
 import com.serenity.ui.layout.TextMeasureParity.Section
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.SkiaTextMeasurer
+import com.serenity.ui.skia.{SkiaFontCache, SkiaTextMeasurer}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,7 +19,8 @@ import org.scalatest.matchers.should.Matchers
   */
 class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
 
-  private val measurer = new SkiaTextMeasurer()
+  private val faces    = new SkiaFontCache()
+  private val measurer = new SkiaTextMeasurer(faces)
 
   private val systemFonts = Vector(
     PinnedFont("system_monospaced", Font(Font.MONOSPACED, Font.PLAIN, 14), FontFallback.Default),
@@ -58,9 +59,10 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
       "Compared: cell metrics, the measured-layout decision, carets of one unwrapped row and one-row line heights",
       "Not compared before layout runs through the measurer (step D): wrap points, row counts, tabs, wide and emoji clusters, right-to-left carets"
     )
+    val diagnosis = TextMeasureCorpus.fonts.flatMap(TextMeasureDiagnosis.lines(_, measurer, faces))
     TextMeasureParity.write(
       directory,
-      TextMeasureParity.summary(header, sections, absolute),
+      TextMeasureParity.summary(header, sections, absolute, diagnosis),
       TextMeasureParity.tsv(sections)
     )
 

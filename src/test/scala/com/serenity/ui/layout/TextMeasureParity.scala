@@ -113,7 +113,12 @@ object TextMeasureParity:
     }
     s"\n## ${absolute.title}\n\n${absolute.note}\n\n| key | Skia value |\n|---|---|\n${rows.mkString("\n")}\n"
 
-  def summary(header: Seq[String], sections: Seq[Section], absolute: Seq[Absolute] = Nil): String =
+  def summary(
+    header: Seq[String],
+    sections: Seq[Section],
+    absolute: Seq[Absolute] = Nil,
+    appendix: Seq[String] = Nil
+  ): String =
     val out = new StringBuilder
     out.append("# Skia text measurer against AWT (step B, #2660 item 2)\n\n")
     header.foreach(line => out.append(s"- $line\n"))
@@ -136,6 +141,11 @@ object TextMeasureParity:
         reasons.foreach((reason, items) => out.append(s"- ${items.size} keys: $reason\n"))
     }
     absolute.foreach(table => out.append(absoluteTable(table)))
+    if appendix.nonEmpty then
+      out
+        .append("\n## Diagnosis: the face and size each side measures with\n\n")
+        .append(appendix.mkString("\n"))
+        .append("\n")
     out.toString
 
   def tsv(sections: Seq[Section]): String =
