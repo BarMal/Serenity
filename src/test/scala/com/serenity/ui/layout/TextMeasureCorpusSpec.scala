@@ -53,6 +53,7 @@ class TextMeasureCorpusSpec extends AnyFlatSpec with Matchers:
       "cjk",
       "emoji_clusters",
       "paragraph",
+      "zero_advance",
       "ltr_rtl"
     )
   }

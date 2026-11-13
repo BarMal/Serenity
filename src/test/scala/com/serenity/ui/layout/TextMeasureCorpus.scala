@@ -58,6 +58,7 @@ private[layout] object TextMeasureCorpus:
       "a❤️b 👍🏽 c 👨‍👩‍👧 d 🇺🇸 e 1️⃣"
     ),
     Line("paragraph", Paragraph),
+    Line("zero_advance", "0000000000"),
     Line("ltr_rtl", "abc שלום def مرحبا ghi")
   )
 
