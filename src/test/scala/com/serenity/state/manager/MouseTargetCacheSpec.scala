@@ -93,7 +93,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "cache full editor pane layouts for mouse hit testing" in {
-    val config = AppConfig.default.withTextAreaInsets(TextAreaInsets(0.15, 0.10))
+    val config = AppConfig.default.withTextAreaInsets(TextAreaInsets.percent(0.15, 0.10))
     val state  = stateWith(Buffer.fromString(bufferId, "alpha\nbeta"), config)
     val size   = ViewportSize(80, 24)
     val cache  = MouseTargetCache.fromState(state, size, authoritativeScene)
@@ -307,7 +307,9 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val size  = ViewportSize(80, 24)
 
     val insetState = state.copy(persisted =
-      state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets(0.2, 0.1, 0.1, 0.1)))
+      state.persisted.copy(config =
+        state.persisted.config.withTextAreaInsets(TextAreaInsets.percent(0.2, 0.1, 0.1, 0.1))
+      )
     )
 
     authoritativeScene.layoutKeyFor(insetState, size) should not be authoritativeScene.layoutKeyFor(state, size)

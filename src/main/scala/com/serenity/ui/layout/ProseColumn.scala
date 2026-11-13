@@ -29,6 +29,14 @@ object ProseColumn:
         cells(measure, widths.chPx, widths.gridCellPx)
     }
 
+  /** How many grid cells one `ch` is: the prose font's `0` advance over the grid cell, and exactly one in a terminal.
+    */
+  def chInCells(state: AppState): Double =
+    if state.runtime.capabilities.isCellGrid then 1.0
+    else
+      val widths = glyphWidths(state.persisted.config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
+      widths.chPx / widths.gridCellPx.max(1)
+
   /** Left and right spacer widths that leave at most `columnCells` of `availableWidth` for text, centred, never
     * narrower than the inset spacers already asked for.
     */

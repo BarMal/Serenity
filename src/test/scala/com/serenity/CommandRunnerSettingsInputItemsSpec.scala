@@ -26,7 +26,7 @@ class CommandRunnerSettingsInputItemsSpec extends AnyFlatSpec with Matchers:
     val config = AppConfig.default
       .withInterfaceConfig(InterfaceConfig(elementGap = Some(3), outlineThicknessPx = 4))
       .withCommandRunnerVisibleRows(Some(9))
-      .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
+      .withTextAreaInsets(TextAreaInsets.percent(left = 0.10, right = 0.20, top = 0.15, bottom = 0.25))
       .withSpellCheck(
         SpellCheckConfig(
           enabled = true,

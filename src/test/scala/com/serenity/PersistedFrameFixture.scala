@@ -46,7 +46,9 @@ trait PersistedFrameFixture:
   protected def deviceSize(logicalPx: Int, scale: Double): Int = math.ceil(logicalPx * scale).toInt
 
   protected def withMargins(config: AppConfig): AppConfig =
-    config.copy(surfaceConfig = config.surfaceConfig.copy(textAreaInsets = TextAreaInsets(0.04, 0.04, 0.04, 0.04)))
+    config.copy(surfaceConfig =
+      config.surfaceConfig.copy(textAreaInsets = TextAreaInsets.percent(0.04, 0.04, 0.04, 0.04))
+    )
 
   protected def stateOf(
     text: String,

@@ -83,14 +83,17 @@ private[config] object ConfigFieldSyntax:
       _.configKey
     )
 
-  /** A percentage in the file, a fraction in the config. The rounding matters: reading `17.3` back as a raw division
-    * gives 0.17299999999999996, which then writes out as a different number than the one that was saved.
-    */
-  private[config] def fractionOfPercent(value: Double): Double =
-    BigDecimal(value / 100.0).setScale(9, BigDecimal.RoundingMode.HALF_UP).toDouble
-
-  private[config] val insetPercent: FieldCodec[Double] =
-    double.filtered(percent => percent >= 0.0 && percent <= TextAreaInsets.MaxInset * 100.0)
+  /** A gutter: a percentage (a bare number as ever, or `N%`), `Ncells`, `Nch` and, where allowed, `auto`. */
+  private[config] def gutter(allowAuto: Boolean, allowCh: Boolean): FieldCodec[Gutter] =
+    given io.circe.Encoder[Gutter] = Gutter.fieldEncoder
+    given io.circe.Decoder[Gutter] = Gutter.fieldDecoder(allowAuto, allowCh)
+    FieldCodec.of(
+      text => Gutter.parse(text, allowAuto, allowCh),
+      {
+        case Gutter.Percent(share) => HoconValue.number(Gutter.percentOf(share))
+        case other                 => HoconValue.string(Gutter.render(other))
+      }
+    )
 
   /** Characters per line, `off` or `unlimited` for none. */
   private[config] val proseMeasure: FieldCodec[Option[Int]] =

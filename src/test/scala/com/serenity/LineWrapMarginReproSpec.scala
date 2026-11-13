@@ -94,7 +94,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render with a large horizontal margin (text font)" should
     "keep every wrapped row within the margin-adjusted content width" in {
       val viewportSize                             = ViewportSize(80, 24)
-      val largeMargin                              = TextAreaInsets(left = 0.35, right = 0.35)
+      val largeMargin                              = TextAreaInsets.percent(left = 0.35, right = 0.35)
       val (rows, panelWidthPx, cursorRects, drawn) = renderAndInspect(largeMargin, usesTextFont = true, viewportSize)
 
       info(s"panelWidthPx=$panelWidthPx rows=${rows.length}")
@@ -126,7 +126,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render with a large horizontal margin (code font)" should
     "keep every wrapped row within the content width" in {
       val viewportSize                             = ViewportSize(80, 24)
-      val largeMargin                              = TextAreaInsets(left = 0.35, right = 0.35)
+      val largeMargin                              = TextAreaInsets.percent(left = 0.35, right = 0.35)
       val (rows, panelWidthPx, cursorRects, drawn) = renderAndInspect(largeMargin, usesTextFont = false, viewportSize)
 
       info(s"panelWidthPx=$panelWidthPx rows=${rows.length}")
@@ -152,7 +152,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
   "CursorViewport.adjustForCursor" should
     "scroll to the caret's wrapped row measured at the grid wrap width (text font)" in {
       val viewportSize = ViewportSize(80, 24)
-      val largeMargin  = TextAreaInsets(left = 0.35, right = 0.35)
+      val largeMargin  = TextAreaInsets.percent(left = 0.35, right = 0.35)
       val paneId       = PaneId(0)
       val bufferId     = BufferId(1)
       val content      = "abcdefghij" * 60

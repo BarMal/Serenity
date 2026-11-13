@@ -317,12 +317,21 @@ object ConfigGenerators:
       explorerOpenMode = explorer
     )
 
+  private val genShare: Gen[Gutter] = double(0.0, 0.4).map(Gutter.Percent(_))
+
+  private val genCells: Gen[Gutter] = Gen.choose(0, 30).map(Gutter.Cells(_))
+
+  private val genAlongTheLine: Gen[Gutter] =
+    Gen.frequency(4 -> genShare, 2 -> genCells, 2 -> Gen.choose(0, 20).map(Gutter.Ch(_)), 1 -> Gen.const(Gutter.Auto))
+
+  private val genAcross: Gen[Gutter] = Gen.frequency(4 -> genShare, 2 -> genCells)
+
   val genTextAreaInsets: Gen[TextAreaInsets] =
     for
-      left   <- double(0.0, 0.4)
-      right  <- double(0.0, 0.4)
-      top    <- double(0.0, 0.4)
-      bottom <- double(0.0, 0.4)
+      left   <- genAlongTheLine
+      right  <- genAlongTheLine
+      top    <- genAcross
+      bottom <- genAcross
     yield TextAreaInsets(left, right, top, bottom).normalized
 
   val genLineNumberLayout: Gen[LineNumberLayout] =

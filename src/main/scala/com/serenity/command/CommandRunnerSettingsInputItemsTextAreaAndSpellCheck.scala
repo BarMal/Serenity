@@ -26,7 +26,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaLeftInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.leftPercent}%.1f")
+      defaultValue = Some(Gutter.display(AppConfig.default.surfaceConfig.textAreaInsets.left))
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-right",
@@ -41,7 +41,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaRightInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.rightPercent}%.1f")
+      defaultValue = Some(Gutter.display(AppConfig.default.surfaceConfig.textAreaInsets.right))
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-top",
@@ -56,7 +56,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             CommandIntent.Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaTopInset(value / 100.0)))
           ),
       category = CommandCategory.Settings,
-      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.topPercent}%.1f")
+      defaultValue = Some(Gutter.display(AppConfig.default.surfaceConfig.textAreaInsets.top))
     ),
     CommandSurfaceItem.InputItem(
       id = "text-area-bottom",
@@ -71,7 +71,7 @@ private[command] object CommandRunnerSettingsInputItemsTextAreaAndSpellCheck:
             CommandIntent
               .Settings(SettingsIntent.TextDisplay(TextDisplayIntent.SetTextAreaBottomInset(value / 100.0)))
           ),
-      defaultValue = Some(f"${AppConfig.default.surfaceConfig.textAreaInsets.bottomPercent}%.1f"),
+      defaultValue = Some(Gutter.display(AppConfig.default.surfaceConfig.textAreaInsets.bottom)),
       category = CommandCategory.Settings
     )
   )

@@ -149,10 +149,14 @@ class ConfigManagerSurfaceLayoutSpec extends AnyFlatSpec with Matchers with Opti
 
     val config = ConfigManagerTestSupport.loadConfig(Some(configFile.toString))
 
-    config.surfaceConfig.textAreaInsets.left shouldBe 0.125 +- 0.0001
-    config.surfaceConfig.textAreaInsets.right shouldBe 0.20 +- 0.0001
-    config.surfaceConfig.textAreaInsets.top shouldBe 0.075 +- 0.0001
-    config.surfaceConfig.textAreaInsets.bottom shouldBe 0.10 +- 0.0001
+    def share(gutter: Gutter): Double =
+      gutter match
+        case Gutter.Percent(share) => share
+        case other                 => fail(s"expected a percentage, got $other")
+    share(config.surfaceConfig.textAreaInsets.left) shouldBe 0.125 +- 0.0001
+    share(config.surfaceConfig.textAreaInsets.right) shouldBe 0.20 +- 0.0001
+    share(config.surfaceConfig.textAreaInsets.top) shouldBe 0.075 +- 0.0001
+    share(config.surfaceConfig.textAreaInsets.bottom) shouldBe 0.10 +- 0.0001
     ConfigManager.configToString(config) should include("editor.text_area.left = 12.5")
     ConfigManager.configToString(config) should include("editor.text_area.right = 20.0")
     ConfigManager.configToString(config) should include("editor.text_area.top = 7.5")
