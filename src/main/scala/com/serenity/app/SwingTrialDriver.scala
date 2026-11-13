@@ -26,6 +26,7 @@ final class SwingTrialDriver(host: SwingWindowHost) extends RendererTrialWindow.
   def typeCharacter(char: Char): IO[Unit] = host.typeCharacter(char)
   def pressPageDown: IO[Unit]             = host.pressPageDown
   def toggleTheme: IO[Unit]               = host.toggleTheme
+  def dismissNotices: IO[Unit]            = host.pressEscape
 
   def resize: IO[Unit] =
     IO.blocking {

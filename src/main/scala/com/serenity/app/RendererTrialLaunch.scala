@@ -24,6 +24,9 @@ object RendererTrialLaunch:
 
   private val ResolutionSamples = 50
 
+  /** The start-up's safe-mode notice closes with a short animation; the trial waits for it. */
+  private val NoticeSettle = 500.millis
+
   def firstFrame(
     options: LaunchOptions,
     host: WindowHost,
@@ -65,7 +68,8 @@ object RendererTrialLaunch:
             scale = DisplayScale.forComponent(swing.window.canvas).x,
             backendKey = backendKey,
             renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
-            timeout = RendererTrialChild.Timeout
+            timeout = RendererTrialChild.Timeout,
+            prepare = driver.dismissNotices *> IO.sleep(NoticeSettle)
           )
         }
       case _ =>
