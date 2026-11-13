@@ -61,7 +61,9 @@ private[layout] object TextMeasureCorpus:
     Line("ltr_rtl", "abc שלום def مرحبا ghi")
   )
 
-  /** The line whose characters no bundled font holds, so the system's fallback measures them: only how many caret stops
-    * it has is pinned, not where they are.
+  /** The lines whose characters the font has no glyph for, so the system's fallback measures them: only how many caret
+    * stops they have is pinned, not where they are. No bundled font holds Hebrew or Arabic; the Inter subset holds
+    * neither the combining marks nor CJK.
     */
-  val structuralOnly: Set[String] = Set("ltr_rtl")
+  def structuralOnly(font: PinnedFont, line: Line): Boolean =
+    line.id == "ltr_rtl" || (font.label.startsWith("inter_subset") && Set("latin_marks", "cjk").contains(line.id))

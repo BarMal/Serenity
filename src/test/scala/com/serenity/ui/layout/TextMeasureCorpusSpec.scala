@@ -24,12 +24,22 @@ class TextMeasureCorpusSpec extends AnyFlatSpec with Matchers:
     val keys = entries.map(_.key).toSet
     for
       font <- TextMeasureCorpus.fonts
-      line <- TextMeasureCorpus.lines.filterNot(line => TextMeasureCorpus.structuralOnly.contains(line.id))
+      line <- TextMeasureCorpus.lines.filterNot(TextMeasureCorpus.structuralOnly(font, _))
     do
       val prefix = s"${font.label}.${line.id}"
       keys should contain(s"$prefix.carets")
       List("rows", "ends", "widths", "heights").foreach(kind => keys should contain(s"$prefix.$kind@240"))
       List("rows", "ends", "widths", "heights").foreach(kind => keys should contain(s"$prefix.$kind@600"))
+  }
+
+  "The structural-only lines" should "have their caret stops counted and nothing else pinned" in {
+    val keys = entries.map(_.key).toSet
+    for
+      font <- TextMeasureCorpus.fonts
+      line <- TextMeasureCorpus.lines.filter(TextMeasureCorpus.structuralOnly(font, _))
+    do
+      keys should contain(s"${font.label}.${line.id}.stops")
+      keys should not contain s"${font.label}.${line.id}.carets"
   }
 
   "The corpus" should "name each kind of text the replacement measurer has to handle" in {

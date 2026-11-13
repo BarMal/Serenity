@@ -75,7 +75,7 @@ object TextMeasureBaseline:
     val prefix = s"${pinned.label}.${line.id}"
     val onOne =
       snapshot(pinned, line, Unwrapped).visualLines.headOption.map(_.row.caretXs.toVector).getOrElse(Vector.empty)
-    if TextMeasureCorpus.structuralOnly.contains(line.id) then Vector(ints(s"$prefix.stops", Seq(onOne.length)))
+    if TextMeasureCorpus.structuralOnly(pinned, line) then Vector(ints(s"$prefix.stops", Seq(onOne.length)))
     else
       Vector(floats(s"$prefix.carets", onOne)) ++ WrapWidthsPx.flatMap { widthPx =>
         val rows = snapshot(pinned, line, widthPx).visualLines.map(_.row)
@@ -135,4 +135,3 @@ object TextMeasureBaseline:
   def main(args: Array[String]): Unit =
     val target = Paths.get(args.headOption.getOrElse(sys.error("usage: TextMeasureBaseline <baseline.tsv>")))
     val _      = Files.write(target, render(entries()).getBytes(StandardCharsets.UTF_8))
-    println(s"wrote $target")
