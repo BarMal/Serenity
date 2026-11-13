@@ -17,6 +17,7 @@ class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
     classPath = "/opt/serenity/Serenity.jar",
     mainClass = "Main"
   )
+
   private val document = Path.of("/tmp/serenity-trial-doc.txt")
 
   "ProcessSpawner.command" should "start the same java with the same JVM flags and class path, in safe mode, on the trial document" in {
@@ -24,7 +25,13 @@ class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
     command.take(3) shouldBe List("/opt/jdk/bin/java", "-Xmx6g", "--enable-native-access=ALL-UNNAMED")
     command should contain inOrder ("-cp", "/opt/serenity/Serenity.jar", "Main")
     command.dropWhile(_ != "Main").drop(1) shouldBe
-      List("--safe-mode", "--renderer=skia-raster", "--renderer-trial=skia-raster", "--open", "/tmp/serenity-trial-doc.txt")
+      List(
+        "--safe-mode",
+        "--renderer=skia-raster",
+        "--renderer-trial=skia-raster",
+        "--open",
+        "/tmp/serenity-trial-doc.txt"
+      )
   }
 
   it should "choose the layer's image frames explicitly for layer+image, so a changed default cannot change what is measured" in {
@@ -41,7 +48,9 @@ class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "put no frame property on the raster surface, which has no frame form to choose" in {
-    ProcessSpawner.command(runtime, Candidate.SkiaRaster, document).exists(_.startsWith("-Dserenity.skia.layerFrames")) shouldBe false
+    ProcessSpawner
+      .command(runtime, Candidate.SkiaRaster, document)
+      .exists(_.startsWith("-Dserenity.skia.layerFrames")) shouldBe false
   }
 
   "ProcessSpawner" should "answer everything the child printed" in {
