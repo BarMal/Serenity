@@ -55,8 +55,6 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
   "OverlayViewModel" should "adapt directory listings for horizontal surfaces" in {
     val layout = com.serenity.ui.layout.CalculatedLayout(
       editorPanelRect = LayoutRect(0, 0, 80, 20),
-      leftSpacerRect = LayoutRect(0, 0, 0, 20),
-      rightSpacerRect = LayoutRect(80, 0, 0, 20),
       aboveCursorOverlayRect = Some(LayoutRect(10, 2, 48, 6))
     )
 
@@ -68,8 +66,6 @@ class OverlayLayoutKindSpec extends AnyFlatSpec with Matchers:
   it should "adapt directory listings for vertical surfaces" in {
     val layout = com.serenity.ui.layout.CalculatedLayout(
       editorPanelRect = LayoutRect(0, 0, 80, 20),
-      leftSpacerRect = LayoutRect(0, 0, 0, 20),
-      rightSpacerRect = LayoutRect(80, 0, 0, 20),
       aboveCursorOverlayRect = Some(LayoutRect(10, 2, 18, 40))
     )
 

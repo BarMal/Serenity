@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.TestWorkspaceTrees
+import com.serenity.testkit.ActivePane
 import com.serenity.config.{AppConfig, AppMode, Gutter, TextAreaInsets}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
@@ -211,12 +212,12 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
         val viewport   = ViewportSize(width, 40)
         val layout     = LayoutEngine.calculateLayout(state, viewport)
         val insets     = config.surfaceConfig.textAreaInsets.normalized
-        val leftBlock  = layout.editorPanelRect.x - layout.leftSpacerRect.right
-        val rightBlock = layout.rightSpacerRect.x - layout.editorPanelRect.right
+        val pane       = ActivePane.of(state, layout)
+        val leftBlock  = pane.contentRect.x - pane.leftSpacerRect.right
+        val rightBlock = pane.rightSpacerRect.x - pane.contentRect.right
         val area =
           TextArea.horizontal(
-            layout.leftSpacerRect.width + leftBlock + layout.editorPanelRect.width + rightBlock +
-              layout.rightSpacerRect.width,
+            pane.paneRect.width,
             insets,
             leftBlock,
             rightBlock,
@@ -224,9 +225,9 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
           )
 
         area shouldBe TextArea(
-          leftSpacer = layout.leftSpacerRect.width,
-          rightSpacer = layout.rightSpacerRect.width,
-          width = layout.editorPanelRect.width
+          leftSpacer = pane.leftSpacerRect.width,
+          rightSpacer = pane.rightSpacerRect.width,
+          width = pane.contentRect.width
         )
       }
     }
@@ -239,10 +240,11 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
         .withTextAreaInsets(TextAreaInsets(Gutter.Cells(8), Gutter.Cells(6), Gutter.Percent(0.0), Gutter.Percent(0.0)))
 
     List(60, 101, 240).foreach { width =>
-      val layout = LayoutEngine.calculateLayout(terminalState(config), ViewportSize(width, 40))
+      val state  = terminalState(config)
+      val layout = LayoutEngine.calculateLayout(state, ViewportSize(width, 40))
+      val pane   = ActivePane.of(state, layout)
 
-      (layout.leftSpacerRect.width, layout.rightSpacerRect.width, layout.editorPanelRect.width) shouldBe
-        (8, 6, width - 14)
+      (pane.leftSpacerRect.width, pane.rightSpacerRect.width, pane.contentRect.width) shouldBe (8, 6, width - 14)
     }
   }
 
@@ -252,7 +254,8 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
         .withLineNumbers(false)
         .withTextAreaInsets(TextAreaInsets(Gutter.Ch(8), Gutter.Percent(0.0), Gutter.Percent(0.0), Gutter.Percent(0.0)))
 
-    LayoutEngine.calculateLayout(terminalState(config), ViewportSize(100, 40)).leftSpacerRect.width shouldBe 8
+    val state = terminalState(config)
+    ActivePane.of(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 40))).leftSpacerRect.width shouldBe 8
   }
 
   it should "give a pane's top and bottom spacers the heights the engine gives them" in {
@@ -268,7 +271,7 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
       (pane.topSpacerRect.height, pane.bottomSpacerRect.height)
   }
 
-  it should "share one set of horizontal gutters between split panes, and give each its own vertical ones" in {
+  it should "give each split pane its own horizontal gutters from its own width, and its own vertical ones" in {
     val config =
       AppConfig.default
         .withLineNumbers(true)
@@ -288,23 +291,13 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(160, 41))
     val panes  = EditorPaneLayoutEngine.calculateEditorPaneLayouts(state, layout)
     val insets = config.surfaceConfig.textAreaInsets.normalized
-    val blocks =
-      (layout.editorPanelRect.x - layout.leftSpacerRect.right, layout.rightSpacerRect.x - layout.editorPanelRect.right)
-    val area =
-      TextArea.horizontal(
-        layout.leftSpacerRect.width + blocks._1 + layout.editorPanelRect.width + blocks._2 +
-          layout.rightSpacerRect.width,
-        insets,
-        blocks._1,
-        blocks._2,
-        None
-      )
 
-    layout.leftSpacerRect.width shouldBe area.leftSpacer
-    layout.rightSpacerRect.width shouldBe area.rightSpacer
-    layout.editorPanelRect.width shouldBe area.width
     panes should have size 3
     panes.values.foreach { pane =>
+      val leftBlock  = pane.contentRect.x - pane.leftSpacerRect.right
+      val rightBlock = pane.rightSpacerRect.x - pane.contentRect.right
+      TextArea.horizontal(pane.paneRect.width, insets, leftBlock, rightBlock, None) shouldBe
+        TextArea(pane.leftSpacerRect.width, pane.rightSpacerRect.width, pane.contentRect.width)
       TextArea.spacerHeights(pane.paneRect.height - pane.headerRect.height, insets) shouldBe
         (pane.topSpacerRect.height, pane.bottomSpacerRect.height)
     }

@@ -1,6 +1,7 @@
 package com.serenity.perf
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.LayoutEngine
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,7 +17,7 @@ class GutterContinuationMarkSpec extends AnyFlatSpec with Matchers:
   given com.serenity.rope.Balance = com.serenity.rope.Balance.default
 
   private val state    = LaptopFrameBenchmarks.proseState
-  private val gutter   = LayoutEngine.calculateLayout(state, LaptopFrameBenchmarks.viewport).lineNumberRect
+  private val gutter   = ActivePane.of(state, LayoutEngine.calculateLayout(state, LaptopFrameBenchmarks.viewport)).lineNumberRect
   private val cells    = LaptopFrameBenchmarks.cellMetrics
   private val scale    = LaptopFrameBenchmarks.DeviceScale
   private val rowPx    = math.round(cells.lineHeight * scale).toInt

@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Font
+import com.serenity.testkit.ActivePane
 
 import com.serenity.config.{AppConfig, ChromeElement}
 import com.serenity.rope.Balance
@@ -69,7 +70,8 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
     val caches = RenderCaches.create()
 
     paint(hidden, caches)
-    val gutter = LayoutEngine.calculateLayoutWithUI(held, viewport).lineNumberRect.getOrElse(fail("no gutter reserved"))
+    val gutter =
+      ActivePane.of(held, LayoutEngine.calculateLayoutWithUI(held, viewport)).lineNumberRect.getOrElse(fail("no gutter reserved"))
     val before = paint(hidden, caches)
     val after  = paint(held, caches)
 

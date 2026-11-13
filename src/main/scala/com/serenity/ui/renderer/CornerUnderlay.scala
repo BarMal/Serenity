@@ -25,7 +25,7 @@ object CornerUnderlay:
     * (the spacers are painted before the panes), the window's background everywhere else.
     */
   def over(rect: LayoutRect, corners: RoundedCorners, contract: EditorLayoutContract, theme: Theme): CornerUnderlay =
-    val spacers = List(contract.leftSpacerRect, contract.rightSpacerRect)
+    val spacers = contract.sideSpacerRects
     def under(rounded: Boolean, cellX: Int, cellY: Int): Option[RenderColor] =
       Option.when(rounded):
         if spacers.exists(spacer => lies(spacer, cellX, cellY)) then theme.margin else theme.background

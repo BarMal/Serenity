@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.{AppConfig, AppMode, ConfigRegistry}
+import com.serenity.testkit.ActivePane
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
@@ -28,7 +29,7 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     val state  = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(60)))
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
-    layout.leftSpacerRect.width shouldBe 20
+    ActivePane.of(state, layout).leftSpacerRect.width shouldBe 20
     layout.editorPanelRect.x shouldBe 20
   }
 

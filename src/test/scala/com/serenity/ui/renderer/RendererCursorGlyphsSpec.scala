@@ -157,9 +157,7 @@ class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
     RenderContext(
       surface = new NoopSurface,
       layout = com.serenity.ui.layout.CalculatedLayout(
-        editorPanelRect = LayoutRect(0, 0, 80, 24),
-        leftSpacerRect = LayoutRect(0, 0, 0, 0),
-        rightSpacerRect = LayoutRect(0, 0, 0, 0)
+        editorPanelRect = LayoutRect(0, 0, 80, 24)
       ),
       cursorColorOverride = cursorColorOverride,
       codeFont = font,

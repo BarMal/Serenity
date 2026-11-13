@@ -51,7 +51,7 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
     val plan    = session.settle(before)
 
     val layout = plan.paneLayouts.getOrElse(paneId, fail("expected the pane's layout"))
-    plan.layoutContract.leftSpacerRect.width should be > 0
+    plan.layoutContract.activePaneLayout.getOrElse(fail("expected an active pane")).leftSpacerRect.width should be > 0
 
     val columnLeftPx = math.round(cellMetrics.toPixelX(layout.contentRect.x) * scale).toInt
     val topPx        = math.round(cellMetrics.toPixelY(layout.contentRect.y) * scale).toInt

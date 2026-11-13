@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.Font
+import com.serenity.testkit.ActivePane
 import java.nio.file.Path
 
 import com.serenity.rope.Balance
@@ -163,10 +164,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val title = "notes.md"
     val headerRects = List(
-      Some(layout.leftSpacerRect),
-      layout.lineNumberRect,
+      Some(ActivePane.of(state, layout).leftSpacerRect),
+      ActivePane.of(state, layout).lineNumberRect,
       Some(layout.editorPanelRect),
-      Some(layout.rightSpacerRect)
+      Some(ActivePane.of(state, layout).rightSpacerRect)
     ).flatten
     val headerLeft  = headerRects.map(_.x).min
     val headerRight = headerRects.map(_.right).max

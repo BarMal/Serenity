@@ -48,14 +48,14 @@ object ChromeLayoutMemo:
   final private case class Key(
       viewportSize: ViewportSize,
       spacerPercentage: Double,
-      gutterCounterWidth: Int,
+      gutterCounterWidths: List[Int],
       values: List[Any],
       references: List[AnyRef]
   ):
 
     def matches(other: Key): Boolean =
       viewportSize == other.viewportSize && spacerPercentage == other.spacerPercentage &&
-        gutterCounterWidth == other.gutterCounterWidth && values == other.values &&
+        gutterCounterWidths == other.gutterCounterWidths && values == other.values &&
         references.corresponds(other.references)(_ eq _)
 
   private object Key:
@@ -68,7 +68,7 @@ object ChromeLayoutMemo:
       Key(
         viewportSize = viewportSize,
         spacerPercentage = spacerPercentage,
-        gutterCounterWidth = LayoutEngine.lineNumberCounterWidth(state),
+        gutterCounterWidths = PaneTextArea.counterWidths(state),
         values = List(
           statusLineSurface,
           state.chrome,

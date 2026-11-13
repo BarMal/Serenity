@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.testkit.ActivePane
 import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
@@ -71,16 +72,17 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
         }
       }
 
+      val activeLayout = ActivePane.of(state, layout)
       List(
         "editor panel" -> layout.editorPanelRect,
-        "left spacer"  -> layout.leftSpacerRect,
-        "right spacer" -> layout.rightSpacerRect
+        "left spacer"  -> activeLayout.leftSpacerRect,
+        "right spacer" -> activeLayout.rightSpacerRect
       ).foreach {
         case (name, rect) =>
           assertInside(contentArea, rect, s"density=$density $name")
       }
 
-      layout.lineNumberRect.foreach(rect => assertInside(contentArea, rect, s"density=$density line numbers"))
+      activeLayout.lineNumberRect.foreach(rect => assertInside(contentArea, rect, s"density=$density line numbers"))
       layout.pinnedPanelRects.foreach {
         case (position, rect) =>
           assertInside(contentArea, rect, s"density=$density pinned panel $position")
@@ -290,12 +292,12 @@ class LayoutEngineGeometrySpec extends AnyFlatSpec with Matchers:
       .activePaneLayout(state)
       .getOrElse(fail("expected active pane layout"))
 
-    layout.leftSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
-    layout.rightSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
+    paneLayout.leftSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
+    paneLayout.rightSpacerRect.width shouldBe (viewport.width * spacerPercentage).toInt
     paneLayout.paneRect shouldBe layout.editorPanelRect
-    paneLayout.headerRect.x shouldBe layout.leftSpacerRect.x
-    paneLayout.headerRect.right shouldBe layout.rightSpacerRect.right
-    paneLayout.contentRect.x shouldBe layout.editorPanelRect.x
-    paneLayout.contentRect.width shouldBe layout.editorPanelRect.width
+    paneLayout.headerRect.x shouldBe paneLayout.leftSpacerRect.x
+    paneLayout.headerRect.right shouldBe paneLayout.rightSpacerRect.right
+    paneLayout.contentRect.x shouldBe paneLayout.leftSpacerRect.right
+    paneLayout.contentRect.width shouldBe paneLayout.rightSpacerRect.x - paneLayout.leftSpacerRect.right
   }
 end LayoutEngineGeometrySpec

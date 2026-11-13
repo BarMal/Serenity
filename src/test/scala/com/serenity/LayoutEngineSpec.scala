@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.config.{StatusLinePlacement, TextAreaInsets}
+import com.serenity.testkit.ActivePane
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -47,11 +48,13 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewportSize)
 
-    calculatedLayout.leftSpacerRect.width shouldBe 0
-    calculatedLayout.rightSpacerRect.width shouldBe 0
-    calculatedLayout.lineNumberRect.map(_.width) shouldBe Some(3)
+    ActivePane.of(state, calculatedLayout).leftSpacerRect.width shouldBe 0
+    ActivePane.of(state, calculatedLayout).rightSpacerRect.width shouldBe 0
+    ActivePane.of(state, calculatedLayout).lineNumberRect.map(_.width) shouldBe Some(3)
     // x/width shift by 2: unset line-number margin/padding now default to a GUI cell each, not zero.
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(5, 0, 95, 29)
+    val text = ActivePane.of(state, calculatedLayout).contentRect
+    LayoutRect(text.x, calculatedLayout.editorPanelRect.y, text.width, calculatedLayout.editorPanelRect.height) shouldBe
+      LayoutRect(5, 0, 95, 29)
   }
 
   it should "remove single-pane chrome when the selected configuration disables pane headers" in {
@@ -93,13 +96,12 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
 
     workspaceLayout.editorPanelRect shouldBe calculatedLayout.editorPanelRect
-    workspaceLayout.lineNumberRect shouldBe calculatedLayout.lineNumberRect
     workspaceLayout.gutterRect shouldBe calculatedLayout.gutterRect
     workspaceLayout.paneLayouts shouldBe LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)
 
     val activeHeader  = workspaceLayout.activeHeaderRect(state).getOrElse(fail("expected active header"))
     val activeContent = workspaceLayout.activeContentRect(state).getOrElse(fail("expected active content"))
-    val lineNumbers   = workspaceLayout.lineNumberRect.getOrElse(fail("expected line numbers"))
+    val lineNumbers   = ActivePane.of(state, calculatedLayout).lineNumberRect.getOrElse(fail("expected line numbers"))
     val gutter        = workspaceLayout.gutterRect.getOrElse(fail("expected gutter"))
 
     activeHeader.y shouldBe calculatedLayout.editorPanelRect.y
@@ -130,7 +132,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
 
-    workspaceLayout
+    ActivePane
+      .of(state, calculatedLayout)
       .lineNumberRowSlots(itemCount = 4)
       .map(slot => slot.kind -> slot.y)
       .shouldBe(
@@ -194,15 +197,20 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val insetPaneLayout = LayoutEngine.calculateEditorPaneLayouts(state, calculatedLayout)(PaneId(0))
     calculatedLayout.pinnedPanelRects(PanelPosition.Left).width shouldBe 1
     calculatedLayout.pinnedPanelRects(PanelPosition.Right).width shouldBe 18
-    calculatedLayout.leftSpacerRect shouldBe LayoutRect(2, 0, 7, 29)
-    calculatedLayout.rightSpacerRect shouldBe LayoutRect(66, 0, 15, 29)
-    calculatedLayout.topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
-    calculatedLayout.bottomSpacerRect shouldBe LayoutRect(9, 25, 57, 4)
-    calculatedLayout.lineNumberRect shouldBe Some(LayoutRect(10, 3, 3, 22))
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(14, 0, 52, 29)
-    calculatedLayout.editorPanelRect.width should be >= state.persisted.config.editorConfig.minimumPaneWidth
+    ActivePane.of(state, calculatedLayout).leftSpacerRect shouldBe LayoutRect(2, 0, 7, 29)
+    ActivePane.of(state, calculatedLayout).rightSpacerRect shouldBe LayoutRect(66, 0, 15, 29)
+    ActivePane.of(state, calculatedLayout).topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
+    ActivePane.of(state, calculatedLayout).bottomSpacerRect shouldBe LayoutRect(9, 25, 57, 4)
+    ActivePane.of(state, calculatedLayout).lineNumberRect shouldBe Some(LayoutRect(10, 3, 3, 22))
+    LayoutRect(
+      insetPaneLayout.contentRect.x,
+      calculatedLayout.editorPanelRect.y,
+      insetPaneLayout.contentRect.width,
+      calculatedLayout.editorPanelRect.height
+    ) shouldBe LayoutRect(14, 0, 52, 29)
+    insetPaneLayout.contentRect.width should be >= state.persisted.config.editorConfig.minimumPaneWidth
     insetPaneLayout.headerRect shouldBe LayoutRect(2, 0, 79, 1)
-    insetPaneLayout.topSpacerRect shouldBe LayoutRect(14, 1, 52, 2)
+    insetPaneLayout.topSpacerRect shouldBe LayoutRect(9, 1, 57, 2)
     insetPaneLayout.contentRect shouldBe LayoutRect(14, 3, 52, 22)
     paneLayouts(PaneId(0)) shouldBe calculatedLayout.editorPanelRect
   }
@@ -368,9 +376,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
 
-    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 38, 29)
-    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y, 57, 14)
-    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 38, layout.editorPanelRect.y + 14, 57, 15)
+    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 40, 29)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x + 40, layout.editorPanelRect.y, 60, 14)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 40, layout.editorPanelRect.y + 14, 60, 15)
     panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
     panes(first).right shouldBe panes(second).x
     panes(second).bottom shouldBe panes(third).y
@@ -412,9 +420,9 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))
     val panes  = LayoutEngine.calculatePaneLayouts(state, layout)
 
-    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 95, 11)
-    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y + 11, 47, 18)
-    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 47, layout.editorPanelRect.y + 11, 48, 18)
+    panes(first) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y, 100, 11)
+    panes(second) shouldBe LayoutRect(layout.editorPanelRect.x, layout.editorPanelRect.y + 11, 50, 18)
+    panes(third) shouldBe LayoutRect(layout.editorPanelRect.x + 50, layout.editorPanelRect.y + 11, 50, 18)
     panes.values.foreach(layout.editorPanelRect.containsRect(_) shouldBe true)
     panes(first).bottom shouldBe panes(second).y
     panes(second).right shouldBe panes(third).x
@@ -575,7 +583,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
     val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the command palette to render"))
-    val contentRect = layout.editorPanelRect
+    val text        = ActivePane.of(state, layout).contentRect
+    val contentRect = LayoutRect(text.x, layout.editorPanelRect.y, text.width, layout.editorPanelRect.height)
 
     overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))
     // Confirm this genuinely differs from the old cursor-anchored position -- otherwise the assertion above would
@@ -609,7 +618,8 @@ class LayoutEngineSpec extends AnyFlatSpec with Matchers:
 
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(160, 30))
     val overlayRect = layout.belowCursorOverlayRect.getOrElse(fail("Expected the file workflow dialog to render"))
-    val contentRect = layout.editorPanelRect
+    val text        = ActivePane.of(state, layout).contentRect
+    val contentRect = LayoutRect(text.x, layout.editorPanelRect.y, text.width, layout.editorPanelRect.height)
 
     overlayRect.width shouldBe math.min(contentRect.width, 72)
     overlayRect.x shouldBe (contentRect.x + math.max(0, (contentRect.width - overlayRect.width) / 2))

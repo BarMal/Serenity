@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.AppConfig
+import com.serenity.testkit.ActivePane
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -67,5 +68,6 @@ class ChromeLayoutMemoSpec extends AnyFlatSpec with Matchers:
     val shortLayout = layoutOf(short, viewport)
     val longLayout  = layoutOf(long, viewport)
 
-    longLayout.lineNumberRect.map(_.width) should not be shortLayout.lineNumberRect.map(_.width)
+    ActivePane.of(long, longLayout).lineNumberRect.map(_.width) should not be
+      ActivePane.of(short, shortLayout).lineNumberRect.map(_.width)
   }

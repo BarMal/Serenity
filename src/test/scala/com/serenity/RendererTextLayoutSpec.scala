@@ -1,6 +1,7 @@
 package com.serenity
 
 import java.awt.{Color, Font}
+import com.serenity.testkit.ActivePane
 import java.nio.file.Path
 
 import cats.effect.IO
@@ -159,10 +160,10 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val uiMetrics   = CellMetrics.fromFont(uiFont)
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val headerRect = List(
-      Some(layout.leftSpacerRect),
-      layout.lineNumberRect,
+      Some(ActivePane.of(state, layout).leftSpacerRect),
+      ActivePane.of(state, layout).lineNumberRect,
       Some(layout.editorPanelRect),
-      Some(layout.rightSpacerRect)
+      Some(ActivePane.of(state, layout).rightSpacerRect)
     ).flatten
     val headerLeft  = headerRect.map(_.x).min
     val headerRight = headerRect.map(_.right).max

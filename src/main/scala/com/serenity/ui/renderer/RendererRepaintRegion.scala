@@ -18,7 +18,6 @@ private[renderer] object RendererRepaintRegion:
     * spanning every row between them.
     */
   def rects(
-    state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
     panes: Map[PaneId, PaneFrameRecord],
@@ -30,10 +29,11 @@ private[renderer] object RendererRepaintRegion:
     val rowRects = panes.toList.flatMap {
       case (paneId, record) =>
         val lineNumberRows =
-          if state.persisted.layout.activeEditorPaneId.contains(paneId) then
-            (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)
-              .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
-          else Nil
+          renderPlan.paneLayouts
+            .get(paneId)
+            .toList
+            .flatMap(pane => pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)
+            .map(RendererPaneSetup.paneRowRects(_, context, record.snapshot))
         val dirty = dirtyRows(paneId, record)
         dirty.toList.flatMap { row =>
           record.rowRects.lift(row).map(RendererChromePlan.withBleed(context)).toList ++

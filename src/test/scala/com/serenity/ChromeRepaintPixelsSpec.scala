@@ -66,9 +66,9 @@ abstract class ChromeRepaintPixelsBehaviour extends AnyFlatSpec with Matchers wi
     val session = Session()
     val plan    = session.settle(before)
 
-    val gutter = plan.layoutContract.lineNumberRect.getOrElse(fail("expected a line-number rect"))
+    val gutter = plan.layoutContract.activePaneLayout.getOrElse(fail("expected an active pane")).lineNumberRect.getOrElse(fail("expected a line-number rect"))
     val header = plan.layoutContract.paneHeaderRect(paneId).getOrElse(fail("expected a pane header"))
-    val spacer = List(plan.layoutContract.leftSpacerRect, plan.layoutContract.rightSpacerRect)
+    val spacer = List(plan.layoutContract.activePaneLayout.getOrElse(fail("expected an active pane")).leftSpacerRect, plan.layoutContract.activePaneLayout.getOrElse(fail("expected an active pane")).rightSpacerRect)
       .find(nonEmpty)
       .getOrElse(fail("expected a left or right spacer"))
     header.height should be > 0

@@ -1,6 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.config.{AppConfig, ChromeElement}
+import com.serenity.testkit.ActivePane
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,7 +38,7 @@ class ChromeSummonLayoutSpec extends AnyFlatSpec with Matchers:
   "A minimal layout" should "reserve no chrome until some is summoned" in {
     val layout = layoutOf(minimal)
 
-    layout.lineNumberRect shouldBe None
+    ActivePane.of(minimal, layout).lineNumberRect shouldBe None
     layout.gutterRect shouldBe None
     layout.tabBarRect shouldBe None
     LayoutEngine.paneHeaderHeight(minimal) shouldBe 0
@@ -48,11 +49,11 @@ class ChromeSummonLayoutSpec extends AnyFlatSpec with Matchers:
     val state  = summoned(minimal, ChromeSummons.empty.pressed(ChromeElement.LineNumbers))
     val layout = layoutOf(state)
 
-    layout.lineNumberRect should not be None
+    ActivePane.of(state, layout).lineNumberRect should not be None
     layout.gutterRect shouldBe None
     layout.tabBarRect shouldBe None
     LayoutEngine.paneHeaderHeight(state) shouldBe 0
-    layout.editorPanelRect.x should be > layoutOf(minimal).editorPanelRect.x
+    ActivePane.of(state, layout).contentRect.x should be > ActivePane.of(minimal, layoutOf(minimal)).contentRect.x
   }
 
   "Summoning the status bar" should "reserve the pinned gutter row at the bottom" in {
@@ -61,7 +62,7 @@ class ChromeSummonLayoutSpec extends AnyFlatSpec with Matchers:
 
     layout.gutterRect should not be None
     layout.editorPanelRect.height should be < layoutOf(minimal).editorPanelRect.height
-    layout.lineNumberRect shouldBe None
+    ActivePane.of(state, layout).lineNumberRect shouldBe None
   }
 
   "Summoning the tab strip" should "reserve its row at the top once two files are open" in {
@@ -82,7 +83,7 @@ class ChromeSummonLayoutSpec extends AnyFlatSpec with Matchers:
     val state = summoned(minimal, ChromeSummons.empty.pressed(ChromeElement.PaneHeaders))
 
     LayoutEngine.paneHeaderHeight(state) shouldBe LayoutEngine.EditorPaneHeaderHeight
-    layoutOf(state).lineNumberRect shouldBe None
+    ActivePane.of(state, layoutOf(state)).lineNumberRect shouldBe None
   }
 
   "Summoning the scrollbar" should "show it on a pane wide enough to carry one" in {
@@ -108,7 +109,7 @@ class ChromeSummonLayoutSpec extends AnyFlatSpec with Matchers:
     val locked = ChromeSummons.empty.pressed(ChromeElement.LineNumbers).lockHeld.released(ChromeElement.LineNumbers)
     val state  = summoned(minimal, locked)
 
-    layoutOf(state).lineNumberRect should not be None
+    ActivePane.of(state, layoutOf(state)).lineNumberRect should not be None
   }
 
   "Summoning what the config already shows" should "change nothing" in {

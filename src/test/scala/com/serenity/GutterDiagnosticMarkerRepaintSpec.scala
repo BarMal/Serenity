@@ -46,7 +46,7 @@ class GutterDiagnosticMarkerRepaintSpec extends AnyFlatSpec with Matchers with P
     )
 
   private def markerCell(plan: com.serenity.ui.renderer.EditorPaneRenderPlan, row: Int): (Int, Int) =
-    val gutter = plan.layoutContract.lineNumberRect.getOrElse(fail("expected a line-number rect"))
+    val gutter = plan.layoutContract.activePaneLayout.getOrElse(fail("expected an active pane")).lineNumberRect.getOrElse(fail("expected a line-number rect"))
     val x      = math.round(cellMetrics.toPixelX(gutter.x + gutter.width - 1) * scale).toInt + 1
     val y      = math.round(cellMetrics.toPixelY(gutter.y + row) * scale).toInt + 1
     (x, y)
