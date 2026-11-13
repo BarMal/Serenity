@@ -101,7 +101,7 @@ private[perf] object RenderBenchmarks:
             ()
         ),
         BenchmarkRunner.Benchmark(
-          "render.cursor_only.scene_reuse.java2d_overlay",
+          "render.cursor_only.scene_reuse.overlay",
           2,
           8,
           () => assert(renderedCursorOverlay(plainScrollState, cursorWindow, renderCaches)),

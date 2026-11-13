@@ -108,7 +108,7 @@ private[perf] object BenchmarkIterationCounts:
     "command_runner.palette.keystroke",
     "reducer.multi_cursor_move_down",
     "damage.caret_move.repaint_region.pinned_status",
-    "render.cursor_only.scene_reuse.java2d_overlay",
+    "render.cursor_only.scene_reuse.overlay",
     "render.diagnostics_and_comments.skia_raster",
     "layout.large_multiline.visible_viewport"
   )
