@@ -8,9 +8,9 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RendererChoice.Candidate
 import com.serenity.process.{ProcessLauncher, ProcessService}
-import org.typelevel.log4cats.noop.NoOpLogger
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import org.typelevel.log4cats.noop.NoOpLogger
 
 class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
 
@@ -74,5 +74,9 @@ class ProcessSpawnerSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fail when the child cannot be started, so the coordinator counts a failed trial" in {
-    spawner(List("/nonexistent/serenity-java"), 5.seconds).run(Candidate.SkiaRaster).attempt.unsafeRunSync().isLeft shouldBe true
+    spawner(List("/nonexistent/serenity-java"), 5.seconds)
+      .run(Candidate.SkiaRaster)
+      .attempt
+      .unsafeRunSync()
+      .isLeft shouldBe true
   }

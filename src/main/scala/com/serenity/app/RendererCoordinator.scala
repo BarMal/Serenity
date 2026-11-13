@@ -56,7 +56,7 @@ object RendererCoordinator:
     spawner
       .run(candidate)
       .map(RendererTrial.outcomeOf(_, candidate))
-      .handleError(error => Outcome.Failed(s"the trial could not be started: ${error.getMessage}"))
+      .handleError(error => Outcome.Failed(s"the trial could not be run: ${error.getMessage}"))
 
   private def save(environment: Environment, runs: List[CandidateRuns]): IO[Option[String]] =
     (for

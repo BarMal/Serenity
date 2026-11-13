@@ -1,16 +1,15 @@
 package com.serenity.app
 
-import java.io.{BufferedReader, InputStreamReader}
 import java.lang.management.ManagementFactory
-import java.nio.charset.StandardCharsets
 import java.nio.file.Path
 
 import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters.*
 
-import cats.effect.{IO, Ref, Resource}
+import cats.effect.IO
 import com.serenity.app.RendererChoice.Candidate
 import com.serenity.app.RendererCoordinator.Spawner
+import com.serenity.process.{ProcessOwner, ProcessService, ProcessSpec}
 
 /** Starts one `--renderer-trial=<mode>` child as a process of its own (#2618), so each trial gets a fresh JVM and a
   * window of its own, and a native failure in one cannot take the coordinator with it.
@@ -45,33 +44,20 @@ object ProcessSpawner:
       List("-cp", runtime.classPath, runtime.mainClass, "--safe-mode", s"--renderer=$renderer") ++
       List(s"--renderer-trial=${candidate.label}", "--open", document.toString)
 
-  /** A spawner over `commandFor`: whatever the child prints on either stream, once it exits or `timeout` passes, when
-    * it is stopped. A child that cannot be started fails the call.
+  /** A spawner over the process service that owns every process the editor starts: whatever the child printed on its
+    * standard output once it exited. A child that could not be started, or is still running at `timeout` (and so is
+    * stopped), fails the call.
     */
-  def apply(commandFor: Candidate => List[String], timeout: FiniteDuration): Spawner =
+  def apply(service: ProcessService, commandFor: Candidate => List[String], timeout: FiniteDuration): Spawner =
     candidate =>
-      Resource
-        .make(IO.blocking(new ProcessBuilder(commandFor(candidate).asJava).redirectErrorStream(true).start()))(
-          process =>
-            IO.blocking(if process.isAlive then
-              process.destroyForcibly(); ())
-        )
-        .use { process =>
-          for
-            printed <- Ref.of[IO, Vector[String]](Vector.empty)
-            reader = new BufferedReader(new InputStreamReader(process.getInputStream, StandardCharsets.UTF_8))
-            pumping <- pump(reader, printed).start
-            _ <- IO
-              .fromCompletableFuture(IO(process.onExit()))
-              .void
-              .timeoutTo(timeout, IO.blocking { process.destroyForcibly(); () })
-            _    <- pumping.join
-            text <- printed.get
-          yield text.mkString("\n")
+      service
+        .run(ProcessSpec(commandFor(candidate), ProcessOwner("renderer-trial")), timeout)
+        .flatMap {
+          case Some(result) => IO.pure(result.output)
+          case None =>
+            IO.raiseError(
+              new IllegalStateException(
+                s"the child did not finish within ${timeout.toSeconds} s, or could not be started"
+              )
+            )
         }
-
-  private def pump(reader: BufferedReader, printed: Ref[IO, Vector[String]]): IO[Unit] =
-    IO.blocking(Option(reader.readLine())).flatMap {
-      case Some(line) => printed.update(_ :+ line) >> pump(reader, printed)
-      case None       => IO.unit
-    }
