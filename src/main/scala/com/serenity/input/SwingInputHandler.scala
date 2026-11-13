@@ -100,7 +100,11 @@ class SwingInputHandler[F[_] : Sync, E <: Event](
     * to type into. It runs on the caller's thread, so the trace sees no event-thread hop.
     */
   def submitTypedChar(char: Char): Unit =
-    enqueueKey(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty), System.currentTimeMillis())
+    submitKey(KeyStrokeInfo(InputKey.Character, Some(char), Set.empty))
+
+  /** Queues one key press the same way, for the renderer trial (#2618). */
+  def submitKey(info: KeyStrokeInfo): Unit =
+    enqueueKey(info, System.currentTimeMillis())
 
   private def enqueueKey(info: KeyStrokeInfo, whenMillis: Long): Unit =
     frameTimings.keyLatency.keyReceived(whenMillis)
