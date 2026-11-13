@@ -2,7 +2,7 @@ package com.serenity.app
 
 import cats.effect.IO
 
-object Java2DPipeline:
+object SwingPipelineDefaults:
 
   private val WindowsSafeDefaults: Map[String, String] =
     Map(

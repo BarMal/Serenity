@@ -263,7 +263,7 @@ com.serenity.ui.tui.TerminalGridCostSpec	1	0.117
 com.serenity.SessionManagerFileStampOrderingSpec	1	0.116
 com.serenity.PaneCloseUndoSpec	1	0.115
 com.serenity.PointerShapeMouseSpec	1	0.114
-com.serenity.Java2DPipelineSpec	1	0.112
+com.serenity.SwingPipelineDefaultsSpec	1	0.112
 com.serenity.io.DocumentRevisionStampSpec	1	0.11
 com.serenity.FontSizesSettingsGroupSpec	1	0.107
 com.serenity.MouseGestureOriginSpec	1	0.107
@@ -606,7 +606,7 @@ com.serenity.state.models.CursorPositionOrderingPropertySpec	1	0.008
 com.serenity.state.models.PanelArrangementSpec	1	0.008
 com.serenity.state.reducers.DocumentIndentationEditingSpec	1	0.008
 com.serenity.ui.benchmark.FrameStatsSpec	1	0.008
-com.serenity.ui.fonts.Java2DGlyphCoverageSpec	1	0.008
+com.serenity.ui.fonts.AwtGlyphCoverageSpec	1	0.008
 com.serenity.ui.layout.CommentsSurfaceCompositionSpec	1	0.008
 com.serenity.ui.renderer.DropCapRendererSpec	1	0.008
 com.serenity.ui.renderer.OverlayColumnRowRendererSpec	1	0.008

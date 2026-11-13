@@ -21,7 +21,7 @@ class RoleFontCoverageSpec extends AnyFlatSpec with Matchers:
   private def codePoints(text: String): Vector[Int] = text.codePoints().toArray.toVector.filterNot(_ == ' '.toInt)
 
   private def chainCovers(font: Font, codePoint: Int): Boolean =
-    val chain = Java2DGlyphCoverage.of(font, FontConfigFallback)
+    val chain = AwtGlyphCoverage.of(font, FontConfigFallback)
     (0 until chain.slotCount).exists(slot => chain.covers(FontSlot(slot), codePoint))
 
   private val FontConfigFallback = FontLoader.FontConfig().fallback

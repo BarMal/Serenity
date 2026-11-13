@@ -13,7 +13,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
 import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
-import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback, Java2DGlyphCoverage}
+import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback, AwtGlyphCoverage}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 import com.serenity.ui.renderer.ShapedTextCache
@@ -97,7 +97,7 @@ sealed abstract class WrappedLineCache:
     * behind it, for the next layout of the same line; without one every call itemises afresh.
     */
   def fallbackRuns(primary: Font, fallback: FontFallback, text: String, stickyNeutrals: Boolean): Vector[FallbackRun] =
-    FallbackItemiser.itemise(text, 0, text.length, Java2DGlyphCoverage.of(primary, fallback), stickyNeutrals)
+    FallbackItemiser.itemise(text, 0, text.length, AwtGlyphCoverage.of(primary, fallback), stickyNeutrals)
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
