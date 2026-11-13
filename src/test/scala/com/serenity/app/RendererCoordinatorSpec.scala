@@ -32,7 +32,7 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val started: ListBuffer[Candidate] = ListBuffer.empty
     private val remaining              = answers.view.mapValues(_.iterator).toMap
     val spawner: Spawner = candidate =>
-      IO(started += candidate) *> remaining(candidate).nextOption().getOrElse(IO.pure(""))
+      IO(started += candidate) *> IO.defer(remaining(candidate).nextOption().getOrElse(IO.pure("")))
 
   private def environment(path: Path): Environment =
     Environment(key = IO.pure(machine), now = IO.pure(instant), resultPath = path)
@@ -96,7 +96,11 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
   it should "count a child that printed nothing as a failed run, and never recommend that mode" in {
     val script = Script(
       Map(
-        Candidate.LayerImage -> List(IO.pure(""), IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))),
+        Candidate.LayerImage -> List(
+          IO.pure(""),
+          IO.pure(""),
+          IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))
+        ),
         Candidate.SkiaRaster -> List.fill(2)(IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))))
       )
     )
@@ -112,13 +116,14 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
       Map(
         Candidate.LayerImage -> List(
           IO.raiseError(new RuntimeException("no java")),
+          IO.raiseError(new RuntimeException("no java")),
           IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))
         ),
         Candidate.SkiaRaster -> List.fill(2)(IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))))
       )
     )
     val (finished, _) = optimize(script)
-    script.started.size shouldBe 4
+    script.started.size shouldBe 5
     finished.runs.head.runs.head should matchPattern {
       case Outcome.Failed(reason) if reason.contains("could not be run") && reason.contains("no java") =>
     }
@@ -147,6 +152,69 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     finished.saveError.exists(_.nonEmpty) shouldBe true
   }
 
+  private val hung = "every page-down sample timed out (20)"
+
+  private def failedLine(candidate: Candidate): String =
+    printed(candidate, Outcome.Failed(hung))
+
+  it should "run a failed trial once more, and use that second try as the run" in {
+    val script = Script(
+      Map(
+        Candidate.LayerImage -> List(
+          IO.pure(failedLine(Candidate.LayerImage)),
+          IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0))),
+          IO.pure(printed(Candidate.LayerImage, measured(32.0, 50.0)))
+        ),
+        Candidate.SkiaRaster -> List.fill(2)(IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))))
+      )
+    )
+    val retrying = ListBuffer.empty[(Int, Candidate, String)]
+    val path     = TestTemp.directory("renderer-coordinator-retry").resolve("render-benchmark.json")
+    val finished = RendererCoordinator
+      .optimize(
+        Candidate.SkiaRaster,
+        false,
+        script.spawner,
+        environment(path),
+        (_, _, _) => IO.unit,
+        (n, c, why) => IO(retrying += ((n, c, why))).void
+      )
+      .unsafeRunSync()
+    script.started.toList shouldBe List(
+      Candidate.LayerImage,
+      Candidate.LayerImage,
+      Candidate.SkiaRaster,
+      Candidate.SkiaRaster,
+      Candidate.LayerImage
+    )
+    finished.runs.head.runs.map(_.getClass) shouldBe List.fill(2)(classOf[Outcome.Measured])
+    finished.retries shouldBe List(RendererCoordinator.Retry(1, Candidate.LayerImage, hung))
+    retrying.toList.map(r => (r._1, r._2)) shouldBe List((1, Candidate.LayerImage))
+    retrying.toList.head._3 should include(hung)
+  }
+
+  it should "keep the second failure's reason when the retry fails as well, and not retry a third time" in {
+    val script = Script(
+      Map(
+        Candidate.LayerImage -> List(
+          IO.pure(failedLine(Candidate.LayerImage)),
+          IO.pure(failedLine(Candidate.LayerImage)),
+          IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))
+        ),
+        Candidate.SkiaRaster -> List.fill(2)(IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))))
+      )
+    )
+    val (finished, _) = optimize(script)
+    script.started.count(_ == Candidate.LayerImage) shouldBe 3
+    finished.runs.head.runs.head shouldBe Outcome.Failed(hung)
+    finished.retries.map(_.trial) shouldBe List(1)
+  }
+
+  it should "not retry a trial that measured" in {
+    val (finished, _) = optimize(Script(twoModesAnswers))
+    finished.retries shouldBe Nil
+  }
+
   "RendererCoordinator.report" should "say what to set for a recommended switch, and how to have it applied" in {
     val (finished, _) = optimize(Script(twoModesAnswers))
     val lines         = RendererCoordinator.report(finished)
@@ -173,4 +241,12 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val (finished, _) = optimize(Script(twoModesAnswers))
     RendererCoordinator.report(finished).mkString("\n") should include("16.7 ms")
     RendererCoordinator.report(finished.copy(saveError = Some("disk full"))).mkString("\n") should include("disk full")
+  }
+
+  it should "say which trials were run again and why, so a retry is never silent" in {
+    val (finished, _) = optimize(Script(twoModesAnswers))
+    val retried       = finished.copy(retries = List(RendererCoordinator.Retry(1, Candidate.LayerImage, hung)))
+    val text          = RendererCoordinator.report(retried).mkString("\n")
+    text should (include("Trial 1") and include("layer+image") and include(hung) and include("it was run again"))
+    RendererCoordinator.report(finished).mkString("\n") should not include "it was run again"
   }
