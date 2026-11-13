@@ -9,7 +9,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.app.RendererBenchmarkResult.{Key, Stored}
-import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Recommendation, Workload}
+import com.serenity.app.RendererChoice.{Candidate, Outcome, Recommendation, Workload}
 import com.serenity.app.RendererCoordinator.{Environment, Spawner}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,10 +38,10 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     Environment(key = IO.pure(machine), now = IO.pure(instant), resultPath = path)
 
   private def optimize(
-      script: Script,
-      thorough: Boolean = false,
-      current: Candidate = Candidate.SkiaRaster,
-      progress: ListBuffer[(Int, Int, Candidate)] = ListBuffer.empty
+    script: Script,
+    thorough: Boolean = false,
+    current: Candidate = Candidate.SkiaRaster,
+    progress: ListBuffer[(Int, Int, Candidate)] = ListBuffer.empty
   ): (RendererCoordinator.Finished, Path) =
     val path = TestTemp.directory("renderer-coordinator").resolve("render-benchmark.json")
     val finished = RendererCoordinator
@@ -101,14 +101,19 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
       )
     )
     val (finished, _) = optimize(script)
-    finished.runs.head.runs.head should matchPattern { case Outcome.Failed(reason) if reason.contains("no RENDERER_TRIAL") => }
+    finished.runs.head.runs.head should matchPattern {
+      case Outcome.Failed(reason) if reason.contains("no RENDERER_TRIAL") =>
+    }
     finished.recommendation should not matchPattern { case Recommendation.Switch(Candidate.LayerImage, _) => }
   }
 
   it should "count a trial that could not be started as failed and carry on with the rest" in {
     val script = Script(
       Map(
-        Candidate.LayerImage -> List(IO.raiseError(new RuntimeException("no java")), IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))),
+        Candidate.LayerImage -> List(
+          IO.raiseError(new RuntimeException("no java")),
+          IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0)))
+        ),
         Candidate.SkiaRaster -> List.fill(2)(IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))))
       )
     )
@@ -130,7 +135,13 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val blocker   = directory.resolve("blocker")
     java.nio.file.Files.writeString(blocker, "a file, not a directory")
     val finished = RendererCoordinator
-      .optimize(Candidate.SkiaRaster, false, Script(twoModesAnswers).spawner, environment(blocker.resolve("render-benchmark.json")), (_, _, _) => IO.unit)
+      .optimize(
+        Candidate.SkiaRaster,
+        false,
+        Script(twoModesAnswers).spawner,
+        environment(blocker.resolve("render-benchmark.json")),
+        (_, _, _) => IO.unit
+      )
       .unsafeRunSync()
     finished.recommendation should matchPattern { case Recommendation.Switch(Candidate.LayerImage, _) => }
     finished.saveError.exists(_.nonEmpty) shouldBe true
@@ -140,7 +151,9 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val (finished, _) = optimize(Script(twoModesAnswers))
     val lines         = RendererCoordinator.report(finished)
     lines.head should include("layer+image")
-    lines.mkString("\n") should (include("ui.render.backend = skia, ui.render.skia_frames = image") and include("--apply"))
+    lines.mkString("\n") should (include("ui.render.backend = skia, ui.render.skia_frames = image") and include(
+      "--apply"
+    ))
   }
 
   it should "say it is keeping the current mode, and offer nothing to apply, when there is no clear winner" in {
