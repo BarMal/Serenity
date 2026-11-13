@@ -18,7 +18,10 @@ class RendererApplySpec extends AnyFlatSpec with Matchers:
   private def withSurface(file: Path, backend: RenderBackendSetting, frames: SkiaFrames): Unit =
     val config = AppConfig.default
     val saved = ConfigManager
-      .saveConfigIO(config.withSurfaceConfig(config.surfaceConfig.copy(renderBackend = backend, renderSkiaFrames = frames)), file)
+      .saveConfigIO(
+        config.withSurfaceConfig(config.surfaceConfig.copy(renderBackend = backend, renderSkiaFrames = frames)),
+        file
+      )
       .unsafeRunSync()
     saved shouldBe Right(())
 
