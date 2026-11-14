@@ -73,8 +73,8 @@ object Main extends IOApp:
         IO(System.err.println(help)).as(if help.errors.isEmpty then ExitCode.Success else ExitCode.Error)
       case Right(options) if options.showVersion =>
         IO(println(VersionBanner.current)).as(ExitCode.Success)
-      case Right(options) if StartupProbe.refusal(options, StartupProbe.userHome).nonEmpty =>
-        IO(StartupProbe.refusal(options, StartupProbe.userHome).foreach(System.err.println)).as(ExitCode.Error)
+      case Right(options) if LaunchRefusal(options).nonEmpty =>
+        IO(LaunchRefusal(options).foreach(System.err.println)).as(ExitCode.Error)
       case Right(_) if LaunchEnvironment.problems(sys.env).nonEmpty =>
         IO(LaunchEnvironment.problems(sys.env).foreach(System.err.println)).as(ExitCode.Error)
       case Right(options) if options.renderBenchmark.isDefined =>
@@ -467,7 +467,7 @@ object Main extends IOApp:
                   quit = smokeReady,
                   timeout = StartupProbe.Timeout
                 )
-              )
+              ) >> RendererTrialLaunch.firstFrame(launchOptions, host, startup.backend, smokeReady)
 
             val frontendRuntime = FrontendRuntime(
               inputHandler = router =>
@@ -560,7 +560,7 @@ object Main extends IOApp:
                 )
               ),
               awaitExternalQuit =
-                if launchOptions.smokeTest || launchOptions.startupProbe then
+                if launchOptions.smokeTest || launchOptions.startupProbe || launchOptions.rendererTrial.isDefined then
                   IO.race(host.control.awaitClose, smokeReady.get).void
                 else host.control.awaitClose,
               hideWindow = IO(host.control.hide()),
