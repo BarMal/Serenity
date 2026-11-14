@@ -6,13 +6,26 @@ import org.scalatest.matchers.should.Matchers
 
 class RendererChoiceSpec extends AnyFlatSpec with Matchers:
 
-  private def workload(typing: Double, rows: (String, Double)*): Workload = Workload(typing, rows.toMap)
+  private def workload(typing: Double, rows: (String, Double)*): Workload =
+    Workload(typingP50Ms = typing, typingP95Ms = typing, scale = 2.0, fullWindowMs = rows.toMap)
 
   private def measured(candidate: Candidate, runs: Workload*): CandidateRuns =
     CandidateRuns(candidate, runs.toList.map(Outcome.Measured(_)))
 
   private def failed(candidate: Candidate, reason: String): CandidateRuns =
     CandidateRuns(candidate, List(Outcome.Failed(reason)))
+
+  "RendererChoice.percentile" should "take the nearest rank: the smallest value with at least that share of the samples at or below it" in {
+    percentile((1 to 150).map(_.toDouble).toList, 95) shouldBe 143.0
+    percentile((1 to 100).map(_.toDouble).toList, 95) shouldBe 95.0
+    percentile(List(10.0, 20.0), 95) shouldBe 20.0
+    percentile(List(7.0), 95) shouldBe 7.0
+  }
+
+  it should "not depend on the order the samples came in" in {
+    percentile(List(30.0, 10.0, 20.0, 40.0), 50) shouldBe 20.0
+    percentile(List(40.0, 20.0, 10.0, 30.0), 50) shouldBe 20.0
+  }
 
   "RendererChoice.recommend" should "switch to a candidate that is clearly better at typing and no worse on full-window rows" in {
     val result = recommend(
