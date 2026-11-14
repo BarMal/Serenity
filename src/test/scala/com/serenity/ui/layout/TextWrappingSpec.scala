@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -98,7 +99,7 @@ class TextWrappingSpec extends AnyFlatSpec with Matchers:
     TextMeasure.Pixels(
       font,
       TextLayoutSnapshot.defaultFontRenderContext(),
-      CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
+      TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
       insetPx,
       advances
     )

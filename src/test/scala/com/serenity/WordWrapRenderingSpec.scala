@@ -6,6 +6,7 @@ import cats.effect.IO
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
 import com.serenity.ui.theme.Theme
@@ -25,7 +26,7 @@ class WordWrapRenderingSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(50, 14)
     val codeFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont     = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val cellMetrics  = CellMetrics.fromFont(codeFont)
+    val cellMetrics  = TestMeasure.cellMetrics(codeFont)
     val content      = "abcdefghij" * 9
     val buffer = Buffer
       .fromString(bufferId, content)

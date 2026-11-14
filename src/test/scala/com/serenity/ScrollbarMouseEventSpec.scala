@@ -5,6 +5,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{AuthoritativeUiScene, StateManager}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,7 +25,7 @@ class ScrollbarMouseEventSpec extends AnyFlatSpec with Matchers with StateManage
     def send(event: Event): Unit = stateManager.applyEvent(event).unsafeRunSync()
 
     private def metrics: CellMetrics =
-      CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
+      TestMeasure.cellMetrics(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
     private def pane: EditorPaneLayout = scene.paneLayouts.getOrElse(PaneId(0), fail("expected the pane"))
     def extent: ScrollExtent           = scene.paneScrolls.getOrElse(PaneId(0), fail("expected a scroll")).extent
     private def strip: PixelRect       = ScrollbarLayout.strip(pane.contentRect, metrics)

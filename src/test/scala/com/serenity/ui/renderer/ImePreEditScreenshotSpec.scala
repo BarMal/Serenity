@@ -10,7 +10,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 import com.serenity.{ChromeOn, ReferenceFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -34,7 +35,7 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
       .deriveFont(Font.PLAIN, 18.0f)
 
-  private val metrics  = CellMetrics.fromFont(codeFont)
+  private val metrics  = TestMeasure.cellMetrics(codeFont)
   private val viewport = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
 
   private def stateWith(composition: Option[Composition]): AppState =

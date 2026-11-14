@@ -7,6 +7,8 @@ import java.text.Bidi
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicLong, AtomicReference, LongAdder}
 
+import com.serenity.ui.layout.TextMeasurer
+
 /** Text shaped once and kept: the glyphs a stretch of text paints with, found by text, font and render context.
   *
   * `Graphics2D.drawString` shapes its string afresh on every call, and a line painted as several colour runs shapes
@@ -15,13 +17,21 @@ import java.util.concurrent.atomic.{AtomicLong, AtomicReference, LongAdder}
   * newer, and when the newer fills, the older is dropped, so what the last frames painted survives and the cache holds
   * at most twice `capacityPerGeneration` stretches.
   */
-final class ShapedTextCache(capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity) extends ShapeTraffic:
+final class ShapedTextCache(
+    capacityPerGeneration: Int = ShapedTextCache.DefaultCapacity,
+    measurerSource: () => Option[TextMeasurer] = () => None
+) extends ShapeTraffic:
   import ShapedTextCache.*
 
   private val generations = AtomicReference(Generations(newMap(), newMap()))
   private val shapedN     = AtomicLong(0)
   private val exactN      = AtomicLong(0)
   private val promotedN   = LongAdder()
+
+  /** What layout measures with for the owner of this cache, asked for only when something measures: the same measurer
+    * whichever of the owner's caches it is reached through. None is the cell grid.
+    */
+  def measurer: Option[TextMeasurer] = measurerSource()
 
   /** What the owner of this cache has read off the fonts it shapes: probed once per font, by whatever shapes for it. */
   val probes: FontProbes = FontProbes()

@@ -4,7 +4,8 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
-import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{RichTextContext, TextLayoutSnapshot, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.{ChromeOn, FramePixels, SkiaFrames}
 
@@ -21,7 +22,7 @@ private[perf] object CellGridBenchmarks:
   private val width         = 1200
   private val height        = 800
   private lazy val codeFont = BenchmarkFonts.courierPrimeRegular().deriveFont(10.0f)
-  private lazy val cells    = CellMetrics.fromFont(codeFont)
+  private lazy val cells    = TestMeasure.cellMetrics(codeFont)
   private lazy val viewport = ViewportSize(width / cells.charWidth, height / cells.lineHeight)
   private lazy val frc      = TextLayoutSnapshot.defaultFontRenderContext()
 

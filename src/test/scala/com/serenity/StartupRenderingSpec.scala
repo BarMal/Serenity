@@ -11,6 +11,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererStartPage}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -114,8 +115,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val expectedLines     = fullExpectedLines.filter(_.nonEmpty)
       val codeFont          = Font(Font.MONOSPACED, Font.PLAIN, 12)
       val uiFont            = Font(Font.SANS_SERIF, Font.PLAIN, 12).deriveFont(codeFont.getSize2D)
-      val codeMetrics       = CellMetrics.fromFont(codeFont)
-      val uiMetrics         = CellMetrics.fromFont(uiFont)
+      val codeMetrics       = TestMeasure.cellMetrics(codeFont)
+      val uiMetrics         = TestMeasure.cellMetrics(uiFont)
       val lineHeightPx      = math.max(codeMetrics.lineHeight, uiMetrics.lineHeight)
       val expectedStartYPx  = math.max(0, ((30 * codeMetrics.lineHeight) - (fullExpectedLines.size * lineHeightPx)) / 2)
       val titleRun =
@@ -148,8 +149,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
       val uiFont      = Font(Font.SERIF, Font.PLAIN, 12)
-      val codeMetrics = CellMetrics.fromFont(codeFont)
-      val uiMetrics   = CellMetrics.fromFont(uiFont)
+      val codeMetrics = TestMeasure.cellMetrics(codeFont)
+      val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
       RendererEntryPoints.render(
         state,
@@ -192,8 +193,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
       val uiFont      = Font(Font.SANS_SERIF, Font.BOLD, 20)
-      val codeMetrics = CellMetrics.fromFont(codeFont)
-      val uiMetrics   = CellMetrics.fromFont(uiFont)
+      val codeMetrics = TestMeasure.cellMetrics(codeFont)
+      val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
       RendererEntryPoints.render(
         state,
@@ -234,8 +235,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val surface     = new MockRenderSurface(100, 30)
       val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
       val uiFont      = Font(Font.SANS_SERIF, Font.BOLD, 20)
-      val codeMetrics = CellMetrics.fromFont(codeFont)
-      val uiMetrics   = CellMetrics.fromFont(uiFont)
+      val codeMetrics = TestMeasure.cellMetrics(codeFont)
+      val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
       RendererEntryPoints.render(
         state,
@@ -291,8 +292,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont    = Font(Font.SERIF, Font.PLAIN, 12)
-    val codeMetrics = CellMetrics.fromFont(codeFont)
-    val textMetrics = CellMetrics.fromFont(textFont)
+    val codeMetrics = TestMeasure.cellMetrics(codeFont)
+    val textMetrics = TestMeasure.cellMetrics(textFont)
 
     RendererEntryPoints.render(
       state,
@@ -358,8 +359,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont    = Font(Font.SANS_SERIF, Font.PLAIN, 20)
-    val codeMetrics = CellMetrics.fromFont(codeFont)
-    val textMetrics = CellMetrics.fromFont(textFont)
+    val codeMetrics = TestMeasure.cellMetrics(codeFont)
+    val textMetrics = TestMeasure.cellMetrics(textFont)
 
     RendererEntryPoints.render(
       state,
@@ -404,8 +405,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont    = Font(Font.SANS_SERIF, Font.PLAIN, 20)
-    val codeMetrics = CellMetrics.fromFont(codeFont)
-    val textMetrics = CellMetrics.fromFont(textFont)
+    val codeMetrics = TestMeasure.cellMetrics(codeFont)
+    val textMetrics = TestMeasure.cellMetrics(textFont)
 
     RendererEntryPoints.render(
       state,
@@ -439,8 +440,8 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
     val surface     = new MockRenderSurface(80, 24)
     val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont    = Font(Font.SANS_SERIF, Font.PLAIN, 20)
-    val codeMetrics = CellMetrics.fromFont(codeFont)
-    val textMetrics = CellMetrics.fromFont(textFont)
+    val codeMetrics = TestMeasure.cellMetrics(codeFont)
+    val textMetrics = TestMeasure.cellMetrics(textFont)
 
     RendererEntryPoints.render(
       state,

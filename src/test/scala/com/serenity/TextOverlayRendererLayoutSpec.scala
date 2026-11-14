@@ -4,6 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.config.{AppConfig, StatusLineColors}
 import com.serenity.rope.Balance
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
@@ -44,7 +45,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   "TextOverlayRenderer" should "highlight selected segments in plain breadcrumb rows" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 50, 5),
       header = Some(
@@ -70,7 +71,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render command runner settings rows with stable label, hint, and value columns" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 70, 6),
       rows = List(
@@ -108,7 +109,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render content from an explicit overlay content rect when one is provided" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 10, 6),
       contentRect = Some(LayoutRect(3, 2, 4, 2)),
@@ -148,7 +149,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "keep narrow column rows inside their assigned content rect" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 12, 5),
       contentRect = Some(LayoutRect(3, 2, 4, 1)),
@@ -170,7 +171,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "keep narrow two-column rows inside their assigned content rect" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 12, 5),
       contentRect = Some(LayoutRect(3, 2, 3, 1)),
@@ -192,7 +193,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "right-align selected command option values in the value column" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 70, 6),
       rows = List(
@@ -223,7 +224,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render overlay footers in the footer slot from the shared frame contract" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 30, 7),
       header = Some(OverlayRow("header")),
@@ -242,7 +243,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render a persistent key-hint row above the footer, distinct from both it and the item rows (issue #931, Stage 3)" in {
     val surface = new MockRenderSurface(80, 9)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 30, 8),
       header = Some(OverlayRow("header")),
@@ -264,7 +265,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "truncate long selected column text from the end instead of dropping the leading characters" in {
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 24, 5),
       rows = List(
@@ -291,7 +292,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render font preview segments with the segment font family" in {
     val surface = new MockRenderSurface(60, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 50, 5),
       rows = List(
@@ -315,7 +316,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "render an inline icon run with its icon font before the label" in {
     val surface        = new MockRenderSurface(40, 6)
     val font           = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics        = CellMetrics.fromFont(font)
+    val metrics        = TestMeasure.cellMetrics(font)
     val iconFontFamily = FontLoader.toolbarIconFontFamily.getOrElse(fail("Expected bundled toolbar icon font"))
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 30, 5),
@@ -345,7 +346,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "paint a SurfacePaintLayout.Distributed composition box the same way OverlaySegmentRowRenderer.renderCompactDistributedRow paints an equivalent OverlayRowLayout.Distributed row: per-segment allocated width plus an inter-segment separator glyph owned by neither segment" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val segments = List(
       OverlaySegment("Ax", allocatedWidth = Some(3), trailingSeparator = true),
       OverlaySegment("By", allocatedWidth = Some(3))
@@ -377,7 +378,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "use theme panel colours for rows without animation overrides" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val theme = Theme.light.copy(
       panel = Theme.light.panel.copy(
         foreground = RenderColor.fromRgba(0x12, 0x34, 0x56),
@@ -398,7 +399,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "override the cursor info bar's background alpha when configured" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val config  = AppConfig.default.withStatusLineColors(StatusLineColors(backgroundAlpha = Some(0.5)))
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
@@ -418,7 +419,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "keep the theme's own panel background alpha for the cursor info bar when no override is configured" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
@@ -433,7 +434,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "leave every other panel's background alpha unaffected by a cursor-info-bar alpha override" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val config  = AppConfig.default.withStatusLineColors(StatusLineColors(backgroundAlpha = Some(0.5)))
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
@@ -450,7 +451,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "override the cursor info bar's foreground and background colours when configured" in {
     val surface    = new MockRenderSurface(24, 6)
     val font       = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics    = CellMetrics.fromFont(font)
+    val metrics    = TestMeasure.cellMetrics(font)
     val foreground = new Color(0x11, 0x22, 0x33)
     val background = new Color(0x44, 0x55, 0x66)
     val config = AppConfig.default.withStatusLineColors(
@@ -471,7 +472,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "keep the theme's own panel colours for the cursor info bar when no colour override is configured" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 18, 4),
       rows = List(OverlayRow(plainText = "12:1")),
@@ -487,7 +488,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "leave every other panel's colours unaffected by a cursor-info-bar colour override" in {
     val surface = new MockRenderSurface(24, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val config = AppConfig.default.withStatusLineColors(
       com.serenity.config.StatusLineColors(Some(new Color(0x11, 0x22, 0x33)), Some(new Color(0x44, 0x55, 0x66)))
     )
@@ -506,7 +507,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
   it should "paint a TabBarSurfaceComposition's tabs at their allocated columns, with the dirty glyph in an unsaved tab's label and the active tab highlighted (issues #1075/#1076)" in {
     val surface = new MockRenderSurface(24, 4)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val entries = List(
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(0), "one", isDirty = false),
       com.serenity.state.models.TabListEntry(com.serenity.state.models.BufferId(1), "two", isDirty = true)

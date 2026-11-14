@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -381,7 +381,7 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
       .unsafeRunSync()
     val currentState = stateManager.getCurrentState.unsafeRunSync()
     val layout       = LayoutEngine.calculateLayout(currentState, ViewportSize(80, 24))
-    val panelWidthPx = layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth
+    val panelWidthPx = layout.editorPanelRect.width * TestMeasure.cellMetrics(font).charWidth
     val snapshot = TextLayoutSnapshot.fromBuffer(
       currentState.persisted.buffers(bufferId),
       panelWidthPx,

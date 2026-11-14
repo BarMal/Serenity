@@ -5,9 +5,10 @@ import java.awt.image.BufferedImage
 import java.nio.file.Paths
 
 import com.serenity.ReferenceFrames
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.{CellMetrics, CharWidth, WrappedLineCache}
+import com.serenity.ui.layout.{CharWidth, WrappedLineCache}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,7 +28,7 @@ class GuiCellGridEmojiSpec extends AnyFlatSpec with Matchers:
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
       .deriveFont(sizePx)
 
-  private val metrics  = CellMetrics.fromFont(primary)
+  private val metrics  = TestMeasure.cellMetrics(primary)
   private val cell     = metrics.charWidth
   private val fallback = FontFallback(Vector.empty, FontLoader.emojiFontFamily)
 

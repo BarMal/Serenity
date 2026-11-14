@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import scala.util.Random
 
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.renderer.FontProbes
 import org.scalatest.Assertions
@@ -24,7 +25,7 @@ object WrapFixtures extends Assertions:
       forceCellLayout: Boolean = false,
       cellMetrics: Option[CellMetrics] = None
   ):
-    def charWidthPx: Int = cellMetrics.getOrElse(CellMetrics.fromFont(font)).charWidth.max(1)
+    def charWidthPx: Int = cellMetrics.getOrElse(TestMeasure.cellMetrics(font)).charWidth.max(1)
 
   private def derived(font: Font, attributes: (TextAttribute, AnyRef)*): Font =
     font.deriveFont(java.util.Map.copyOf(java.util.Map.ofEntries(attributes.map((k, v) => java.util.Map.entry(k, v))*)))
@@ -59,7 +60,7 @@ object WrapFixtures extends Assertions:
 
   /** The key the cache wraps `text` under in `layout` at `widthPx`. */
   def keyFor(text: String, layout: Layout, widthPx: Int, baseColumn: Int = 0): WrappedLineKey =
-    val cellMetrics = layout.cellMetrics.getOrElse(CellMetrics.fromFont(layout.font))
+    val cellMetrics = layout.cellMetrics.getOrElse(TestMeasure.cellMetrics(layout.font))
     val measured = !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc, FontProbes())
     WrappedLineKey(
       text,

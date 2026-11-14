@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
@@ -26,7 +27,7 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
 
   // The logical monospaced font differs by OS (15 px rows on Linux, 17 px on Windows), so a whole-canvas height
   // measured in a fixed 16 px per row would pass or fail depending only on where the spec runs.
-  private val canvasHeightPx = viewport.height * com.serenity.ui.layout.CellMetrics.fromFont(font).lineHeight
+  private val canvasHeightPx = viewport.height * TestMeasure.cellMetrics(font).lineHeight
 
   private def stateWith(content: Vector[String], cursor: CursorPosition = CursorPosition(0, 0)): AppState =
     val buffer0 = Buffer.fromString(bufferId, content.mkString("\n"))
@@ -59,8 +60,8 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       FontSpec.fromAwt(font),
       FontSpec.fromAwt(font),
-      com.serenity.ui.layout.CellMetrics.fromFont(font),
-      com.serenity.ui.layout.CellMetrics.fromFont(font),
+      TestMeasure.cellMetrics(font),
+      TestMeasure.cellMetrics(font),
       None,
       damage,
       caches

@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings, RaisedRowRule}
 import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.TextStyle
@@ -145,7 +146,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     * `untouched`; and whether the rows from there down were painted on at all.
     */
   private def paintedAbove(laid: Laid): (Int, Int) =
-    val reference = ReferenceFrames.over(1600, 900, CellMetrics.fromFont(laid.font), laid.font, 1600, 900)
+    val reference = ReferenceFrames.over(1600, 900, TestMeasure.cellMetrics(laid.font), laid.font, 1600, 900)
     reference.frame.fill(untouched)
     val surface = reference.surface
     val theme   = AppState.empty.persisted.theme

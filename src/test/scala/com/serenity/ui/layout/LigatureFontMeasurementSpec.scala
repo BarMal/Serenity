@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
@@ -50,7 +51,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
       resolver,
       frc,
       measuredLayout = true,
-      CellMetrics.fromFont(codeFont),
+      TestMeasure.cellMetrics(codeFont),
       0,
       com.serenity.richtext.ParagraphRole.Body,
       0.0f
@@ -89,7 +90,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
               resolver,
               frc,
               measuredLayout = true,
-              CellMetrics.fromFont(codeFont)
+              TestMeasure.cellMetrics(codeFont)
             )
           )
         }
@@ -100,7 +101,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
     codeLines.foreach { line =>
       val xs = TextLayoutSnapshot.caretXsForText(line, codeFont, ShapedTextCache(), frc)
       val reference =
-        LegacyLineMeasurement.caretXs(line, 0, resolver, frc, true, CellMetrics.fromFont(codeFont))
+        LegacyLineMeasurement.caretXs(line, 0, resolver, frc, true, TestMeasure.cellMetrics(codeFont))
       xs.length shouldBe reference.length
       xs.zip(reference).foreach((x, expected) => x shouldBe expected +- tolerance)
     }

@@ -6,6 +6,7 @@ import java.nio.file.{Files, Paths}
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
 import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
 
@@ -53,7 +54,7 @@ object TextMeasureBaseline:
 
   private def measureFont(pinned: PinnedFont): Vector[Entry] =
     val frc         = TextLayoutSnapshot.defaultFontRenderContext()
-    val metrics     = CellMetrics.fromFont(pinned.font)
+    val metrics     = TestMeasure.cellMetrics(pinned.font)
     val measured    = TextLayoutSnapshot.shouldUseMeasuredLayout(pinned.font, frc, FontProbes())
     val certificate = LigatureCertificate.of(pinned.font, frc).isDefined
     val perFont = Vector(

@@ -13,8 +13,8 @@ import com.serenity.input.ImeRequestsHost
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{FrameBackend, PersistedFrameFixture, SkiaFrames}
@@ -30,7 +30,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   override protected def frames: FrameBackend = SkiaFrames
 
   private val evidence  = Path.of("target", "test-reports", "skia-layer-window")
-  private val uiMetrics = CellMetrics.fromFont(uiFont)
+  private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
   private def settle(): Unit =
     SwingUtilities.invokeAndWait(() => ())

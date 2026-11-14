@@ -2,7 +2,7 @@ package com.serenity.ui.skia
 
 import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaTextCachesOwnershipSpec extends AnyFlatSpec with Matchers:
 
   private val font     = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val metrics  = CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
   private val widthPx  = 900
   private val heightPx = 40
   // A character from U+0300 up is what sends text through the shaper; plain ASCII is drawn without shaping.

@@ -7,8 +7,9 @@ import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
 import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.{RichTextStyling, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -20,7 +21,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont     = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val monoMetrics  = CellMetrics.fromFont(monoFont)
+  private val monoMetrics  = TestMeasure.cellMetrics(monoFont)
   private val viewportSize = ViewportSize(80, 24)
 
   private def richDocument: RichTextDocument =

@@ -4,8 +4,9 @@ import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,8 +55,8 @@ class CursorViewportColumnPagingSpec extends AnyFlatSpec with Matchers:
 
   /** The rows one column draws, computed the way the renderer sizes the pane it paints. */
   private val drawnRows =
-    val codeHeight = CellMetrics.fromFont(FontLoader.previewCodeFont(fontConfig)).lineHeight
-    val textHeight = CellMetrics.fromFont(FontLoader.previewTextFont(fontConfig)).lineHeight
+    val codeHeight = TestMeasure.cellMetrics(FontLoader.previewCodeFont(fontConfig)).lineHeight
+    val textHeight = TestMeasure.cellMetrics(FontLoader.previewTextFont(fontConfig)).lineHeight
     math.max(1, gridRows * codeHeight / textHeight)
 
   private def placed(state: AppState, from: Buffer, line: Int): Buffer =

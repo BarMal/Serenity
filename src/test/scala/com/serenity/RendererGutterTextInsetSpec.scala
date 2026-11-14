@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.{LineNumberLayout, LineNumberSide}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, SurfaceTextInset}
 import com.serenity.ui.theme.Theme
@@ -64,7 +65,7 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
 
   private def render(state: AppState, surface: MockRenderSurface): Unit =
     val viewport    = ViewportSize(80, 24)
-    val cellMetrics = CellMetrics.fromFont(codeFont)
+    val cellMetrics = TestMeasure.cellMetrics(codeFont)
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
@@ -92,7 +93,7 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
   it should "inset by less than one cell, so the digits stay inside the cell LayoutEngine already reserved" in {
     val state       = stateWithBuffer()
     val surface     = new MockRenderSurface(80, 24)
-    val cellMetrics = CellMetrics.fromFont(codeFont)
+    val cellMetrics = TestMeasure.cellMetrics(codeFont)
     render(state, surface)
 
     SurfaceTextInset.px(state.persisted.config) should be < cellMetrics.charWidth.toDouble

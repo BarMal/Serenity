@@ -5,8 +5,9 @@ import java.awt.{Color, Dimension, Font, Rectangle}
 import javax.swing.JPanel
 
 import com.serenity.state.models.CaretStyle
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.renderer.{CaretGeometry, CaretPaint, CaretRecordingSurface, FontSpec}
 import com.serenity.ui.skia.{SkiaCaretCanvases, SkiaCaretInk}
 import com.serenity.ui.terminal.{SwingCanvasGeometry, SwingWindow}
@@ -36,7 +37,7 @@ class CaretStylePaintSpec extends AnyFlatSpec with Matchers:
     )
 
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
-  private val metrics = CellMetrics.fromFont(font)
+  private val metrics = TestMeasure.cellMetrics(font)
 
   private def java2d(carets: List[CaretPaint]): Int => Int => Int =
     val base   = new BufferedImage(edgePx, edgePx, BufferedImage.TYPE_INT_RGB)

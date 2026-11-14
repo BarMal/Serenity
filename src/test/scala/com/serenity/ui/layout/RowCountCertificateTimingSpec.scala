@@ -8,6 +8,7 @@ import scala.util.Random
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, TypographyRole}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -64,7 +65,7 @@ class RowCountCertificateTimingSpec extends AnyFlatSpec with Matchers:
       Buffer.fromString(bufferId, lines.mkString("\n")),
       widthPx,
       font,
-      Some(CellMetrics.fromFont(font)),
+      Some(TestMeasure.cellMetrics(font)),
       false,
       cache
     )

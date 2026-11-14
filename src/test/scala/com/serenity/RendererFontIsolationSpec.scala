@@ -7,6 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
@@ -20,7 +21,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 14)
   private val textFont    = Font(Font.SANS_SERIF, Font.PLAIN, 14)
   private val uiFont      = Font(Font.SANS_SERIF, Font.BOLD, 16)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
 
   private val paneId    = PaneId(0)
   private val bufferId  = BufferId(1)
@@ -144,7 +145,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       FontSpec.fromAwt(uiFont),
       cellMetrics,
-      CellMetrics.fromFont(uiFont),
+      TestMeasure.cellMetrics(uiFont),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )

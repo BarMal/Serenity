@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{
   BundledInterFont,
   CellMetrics,
@@ -36,7 +37,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
           viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 6)
         )
       val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-      val metrics = CellMetrics.fromFont(font)
+      val metrics = TestMeasure.cellMetrics(font)
       val frc     = TextLayoutSnapshot.defaultFontRenderContext()
 
       val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 14, font)
@@ -80,7 +81,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 6)
       )
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 14, font)
 
@@ -94,7 +95,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
     val bodyDocument = RichTextDocument(List(RichTextParagraph.plain(text)))
     val viewport     = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 6)
     val font         = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics      = CellMetrics.fromFont(font)
+    val metrics      = TestMeasure.cellMetrics(font)
     val panelWidthPx = metrics.charWidth * 14
 
     val dropCapBuffer = Buffer

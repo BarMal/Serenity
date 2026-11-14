@@ -8,6 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererPaneSetup}
 import com.serenity.ui.theme.Theme
@@ -117,7 +118,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
     ): CountingAccessRope = new CountingAccessRope(delegate, lineReads, collects)
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val cellMetrics  = CellMetrics.fromFont(monoFont)
+  private val cellMetrics  = TestMeasure.cellMetrics(monoFont)
   private val viewportSize = ViewportSize(80, 24)
 
   private def singlePaneLayout(paneId: PaneId, bufferId: BufferId): Layout =

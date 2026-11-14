@@ -10,9 +10,10 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{Focus, SurfaceContent}
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
@@ -209,7 +210,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
 
       val surface     = new MockRenderSurface(initialViewportSize.width, initialViewportSize.height)
       val font        = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
-      val cellMetrics = CellMetrics.fromFont(font)
+      val cellMetrics = TestMeasure.cellMetrics(font)
 
       RendererEntryPoints.render(
         finalState,

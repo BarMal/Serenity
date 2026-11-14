@@ -3,8 +3,8 @@ package com.serenity
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{
-  CellMetrics,
   LayoutEngine,
   TextLayoutSnapshot,
   ViewportSize,
@@ -437,7 +437,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         val workspaceLayout  = LayoutEngine.calculateEditorWorkspaceLayout(state, calculatedLayout)
         val contentRect  = workspaceLayout.activeContentRect(state).getOrElse(fail("expected an active content rect"))
         val font         = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-        val cellMetrics  = CellMetrics.fromFont(font)
+        val cellMetrics  = TestMeasure.cellMetrics(font)
         val panelWidthPx = contentRect.width * cellMetrics.charWidth
         val rawBuffer    = state.persisted.buffers(bufferId)
         val buffer =

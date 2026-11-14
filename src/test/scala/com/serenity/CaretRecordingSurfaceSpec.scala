@@ -3,8 +3,9 @@ package com.serenity
 import java.awt.{Color, Dimension, Font}
 import javax.swing.JPanel
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.renderer.{CaretRecordingSurface, FontSpec}
 import com.serenity.ui.skia.SkiaCaretCanvases
 import com.serenity.ui.terminal.SwingCanvasGeometry
@@ -14,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class CaretRecordingSurfaceSpec extends AnyFlatSpec with Matchers:
 
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 10)
-  private val metrics = CellMetrics.fromFont(font)
+  private val metrics = TestMeasure.cellMetrics(font)
 
   private def canvas: JPanel =
     val panel = JPanel()

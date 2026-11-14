@@ -5,7 +5,8 @@ import java.awt.Font
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,7 +33,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
     // test environment, where font-rendering quirks can otherwise tip an ordinary monospace font onto the measured
     // path via `shouldUseMeasuredLayout`'s fractional-advance-drift probe.
     val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = TestMeasure.cellMetrics(font)
 
     val paneId      = PaneId(0)
     val bufferId    = BufferId(1)

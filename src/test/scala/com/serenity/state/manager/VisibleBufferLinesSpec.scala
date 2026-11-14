@@ -7,9 +7,10 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.model.LineRange
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.TextLayoutSnapshot
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -24,7 +25,7 @@ class VisibleBufferLinesSpec extends AnyFlatSpec with Matchers:
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
   private val font        = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-  private val charWidthPx = CellMetrics.fromFont(font).charWidth
+  private val charWidthPx = TestMeasure.cellMetrics(font).charWidth
 
   private def bufferOf(text: String, viewport: Viewport): Buffer =
     Buffer.fromString(BufferId(1), text).copy(viewport = viewport)

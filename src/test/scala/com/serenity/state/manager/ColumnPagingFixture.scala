@@ -5,9 +5,9 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
-  CellMetrics,
   LayoutEngine,
   TextLayoutSnapshot,
   ViewportSize,
@@ -78,12 +78,12 @@ final class ColumnPagingFixture(
 
   /** The rows one column draws, sized the way the renderer sizes the pane it paints. */
   val rowsPerColumn: Int =
-    val codeHeight = CellMetrics.fromFont(FontLoader.previewCodeFont(fontConfig)).lineHeight
-    val textHeight = CellMetrics.fromFont(FontLoader.previewTextFont(fontConfig)).lineHeight
+    val codeHeight = TestMeasure.cellMetrics(FontLoader.previewCodeFont(fontConfig)).lineHeight
+    val textHeight = TestMeasure.cellMetrics(FontLoader.previewTextFont(fontConfig)).lineHeight
     math.max(1, gridRows * codeHeight / textHeight)
 
   /** The pixels the pane gives one column: its rows of the cell grid the pane is divided into. */
-  val columnHeightPx: Int = rowsPerColumn * CellMetrics.fromFont(FontLoader.previewTextFont(fontConfig)).lineHeight
+  val columnHeightPx: Int = rowsPerColumn * TestMeasure.cellMetrics(FontLoader.previewTextFont(fontConfig)).lineHeight
 
   /** Kept across layouts as the running editor keeps its own, so a walk over a document measures each line once. */
   val wrapCache: WrappedLineCache = WrappedLineCache.bounded()

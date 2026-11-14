@@ -3,7 +3,7 @@ package com.serenity.ui.skia
 import java.awt.{Dimension, Font}
 import javax.swing.JPanel
 
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.{FontSpec, SurfaceGeometry}
 import com.serenity.ui.terminal.SwingCanvasGeometry
 import org.scalatest.flatspec.AnyFlatSpec
@@ -16,7 +16,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaCaretCanvasesSpec extends AnyFlatSpec with Matchers:
 
   private val font    = FontSpec.fromAwt(Font(Font.MONOSPACED, Font.PLAIN, 12))
-  private val metrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+  private val metrics = TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   private def geometry(width: Int, height: Int): SurfaceGeometry =
     val canvas = JPanel()

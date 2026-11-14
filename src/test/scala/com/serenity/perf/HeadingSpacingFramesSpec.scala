@@ -11,8 +11,8 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas}
-import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas, TestMeasure}
+import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -29,8 +29,8 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
   final private case class Window(width: Int, height: Int):
     def viewport: ViewportSize = ViewportSize(width / cellMetrics.charWidth, height / cellMetrics.lineHeight)

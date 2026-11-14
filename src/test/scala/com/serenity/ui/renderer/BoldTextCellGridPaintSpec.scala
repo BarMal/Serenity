@@ -4,10 +4,11 @@ import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 
 import com.serenity.ReferenceFrames
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.{CellMetrics, WrappedLineCache}
+import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +23,7 @@ class BoldTextCellGridPaintSpec extends AnyFlatSpec with Matchers:
   private val white   = RenderColor.fromRgba(255, 255, 255)
   private val black   = RenderColor.fromRgba(0, 0, 0)
   private val primary = FontLoader.previewCodeFont(FontConfig(fontSize = 14.5f, enableLigatures = false))
-  private val metrics = CellMetrics.fromFont(primary)
+  private val metrics = TestMeasure.cellMetrics(primary)
   private val cell    = metrics.charWidth
   private val label   = "bold run "
   private val heart   = String(Array(0x2764, 0xfe0f), 0, 2)

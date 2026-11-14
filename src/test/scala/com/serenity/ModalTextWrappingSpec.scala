@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.config.{AppConfig, LayoutPin, UiLayout}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{MeasuredTextAdvances, RendererEntryPoints, ShapedTextCache}
@@ -235,7 +236,7 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
     val measure: TextMeasure.Pixels = TextMeasure.Pixels(
       font,
       TextLayoutSnapshot.defaultFontRenderContext(),
-      CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
+      TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
       0.0,
       advances
     )

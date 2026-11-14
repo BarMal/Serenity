@@ -9,6 +9,7 @@ import com.serenity.rope.Rope
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, PinnedPanelViewModel, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -221,7 +222,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
     renderPanel(state, surface)
 
     val contentRect = previewContentRect(state)
-    val charWidth   = CellMetrics.fromFont(previewFont).charWidth
+    val charWidth   = TestMeasure.cellMetrics(previewFont).charWidth
     val firstRun    = panelRunsOf(state, surface).minBy(_.xPx)
     firstRun.xPx should be >= (contentRect.x * charWidth).toFloat
     firstRun.xPx should be < ((contentRect.x + contentRect.width) * charWidth).toFloat
@@ -278,7 +279,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
       ViewportSize(100, 20),
       codeFont = FontSpec.fromAwt(font),
       textFont = FontSpec.fromAwt(font),
-      cellMetrics = CellMetrics.fromFont(font),
+      cellMetrics = TestMeasure.cellMetrics(font),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
     )
@@ -344,7 +345,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
       previewViewport,
       codeFont = FontSpec.fromAwt(previewFont),
       textFont = FontSpec.fromAwt(previewFont),
-      cellMetrics = CellMetrics.fromFont(previewFont),
+      cellMetrics = TestMeasure.cellMetrics(previewFont),
       cursorColor = None,
       com.serenity.state.manager.RenderCaches.create()
     )
@@ -356,7 +357,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
 
   /** The glyph runs drawn inside the docked preview panel, not the editor pane beside it. */
   private def panelRunsOf(state: AppState, surface: MockRenderSurface): List[surface.DrawRunPxCall] =
-    val panelLeftPx = (previewContentRect(state).x * CellMetrics.fromFont(previewFont).charWidth).toFloat
+    val panelLeftPx = (previewContentRect(state).x * TestMeasure.cellMetrics(previewFont).charWidth).toFloat
     surface.drawRunPxCalls.filter(_.xPx >= panelLeftPx)
 
   private def shownInPanel(state: AppState): List[String] =

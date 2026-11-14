@@ -5,6 +5,7 @@ import java.util.concurrent.Executor
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +46,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
         0,
         widthPx,
         font,
-        cellMetricsOverride = Some(CellMetrics.fromFont(font)),
+        cellMetricsOverride = Some(TestMeasure.cellMetrics(font)),
         wrapCache = WrappedLineCache.bounded()
       )
       .length
@@ -62,7 +63,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
       buffer,
       widthPx,
       font,
-      Some(CellMetrics.fromFont(font)),
+      Some(TestMeasure.cellMetrics(font)),
       false,
       cache,
       known = painted.get,

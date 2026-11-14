@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
@@ -19,7 +20,7 @@ class RendererMultiColumnRenderSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val cellMetrics  = CellMetrics.fromFont(monoFont)
+  private val cellMetrics  = TestMeasure.cellMetrics(monoFont)
   private val viewportSize = ViewportSize(160, 20)
 
   private val paneId   = PaneId(0)

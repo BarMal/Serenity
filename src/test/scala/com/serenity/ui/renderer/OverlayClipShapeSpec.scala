@@ -6,8 +6,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.serenity.MockRenderSurface
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.state.models.UiSurface
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow, RoundedCorners}
+import com.serenity.ui.layout.{LayoutRect, OverlayRow, RoundedCorners}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -42,7 +43,7 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
       true
 
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val metrics = CellMetrics.fromFont(font)
+  private val metrics = TestMeasure.cellMetrics(font)
   private val config = AppConfig.conventional.withUiCornerRadiusPx(12).withDockedCornerStyle(DockedCornerStyle.Floating)
   private val shaped = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
 

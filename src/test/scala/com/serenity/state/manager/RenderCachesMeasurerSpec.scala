@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.ui.layout.TextMeasurer
-import com.serenity.ui.renderer.BackendCaches
+import com.serenity.ui.renderer.{BackendCaches, ShapedTextCache}
 import com.serenity.ui.skia.SkiaTextMeasurer
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,4 +27,23 @@ final class RenderCachesMeasurerSpec extends AnyFlatSpec with Matchers:
     caches.measurer should be theSameInstanceAs first
     made.get shouldBe 1
     seen.get().exists(_ eq caches.backendCaches) shouldBe true
+  }
+
+  it should "carry the measurer on the caches layout measures through, made only when one of them is asked" in {
+    val made = new AtomicInteger(0)
+    val caches = RenderCaches.create(measurerFor = owner =>
+      made.incrementAndGet()
+      Some(SkiaTextMeasurer.of(owner)))
+    made.get shouldBe 0
+    val fromShaped = caches.shapedText.measurer
+    made.get shouldBe 1
+    fromShaped should not be empty
+    caches.measurer shouldBe fromShaped
+    caches.wrappedLines.shapedText.measurer shouldBe fromShaped
+    caches.surfaceText.shapedText.measurer shouldBe fromShaped
+    made.get shouldBe 1
+  }
+
+  "A ShapedTextCache made on its own" should "have no measurer" in {
+    ShapedTextCache().measurer shouldBe None
   }

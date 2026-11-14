@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import scala.util.Random
 
 import com.serenity.state.models.TextVisualLine
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -99,7 +100,7 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
       TextCaretMeasurement.singleFontResolver(font),
       frc,
       measuredLayout = true,
-      CellMetrics.fromFont(font)
+      TestMeasure.cellMetrics(font)
     )
     withClue(s"$font at $widthPx px, '$text': ") {
       rows.map(row => (row.startColumn, row.endColumn)) shouldBe legacy.map(row => (row.startColumn, row.endColumn))

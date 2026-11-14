@@ -7,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -54,7 +55,7 @@ class MarkdownInlineRenderingSpec extends AnyFlatSpec with Matchers:
       ViewportSize(100, 20),
       codeFont = FontSpec.fromAwt(codeFont),
       textFont = FontSpec.fromAwt(textFont),
-      cellMetrics = CellMetrics.fromFont(codeFont),
+      cellMetrics = TestMeasure.cellMetrics(codeFont),
       cursorColor = None,
       RenderCaches.create()
     )

@@ -7,7 +7,8 @@ import com.serenity.config.AppConfig
 import com.serenity.rope.{Balance, Leaf}
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -35,7 +36,7 @@ class ScrollReadBoundSpec extends AnyFlatSpec with Matchers:
       }
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val cellMetrics  = CellMetrics.fromFont(monoFont)
+  private val cellMetrics  = TestMeasure.cellMetrics(monoFont)
   private val viewportSize = ViewportSize(80, visibleLines + 2)
   private val document     = (1 to lineTotal).map(line => s"line number $line of the long document").mkString("\n")
 

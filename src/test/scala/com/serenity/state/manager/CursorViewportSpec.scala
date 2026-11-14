@@ -4,9 +4,9 @@ import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
-  CellMetrics,
   LayoutEngine,
   TextLayoutSnapshot,
   ViewportSize,
@@ -172,8 +172,8 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       // Mirrors RendererPaneSetup.snapshotForBuffer's own row-fit calculation for the pane actually painted.
       val codeFont            = FontLoader.previewCodeFont(fontConfig)
       val textFont            = FontLoader.previewTextFont(fontConfig)
-      val panelHeightPx       = buffer.viewport.visibleLines * CellMetrics.fromFont(codeFont).lineHeight
-      val actuallyVisibleRows = math.max(1, panelHeightPx / CellMetrics.fromFont(textFont).lineHeight)
+      val panelHeightPx       = buffer.viewport.visibleLines * TestMeasure.cellMetrics(codeFont).lineHeight
+      val actuallyVisibleRows = math.max(1, panelHeightPx / TestMeasure.cellMetrics(textFont).lineHeight)
 
       val gridWidthPx = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
       def visualRowsFor(lineIndex: Int): Int =

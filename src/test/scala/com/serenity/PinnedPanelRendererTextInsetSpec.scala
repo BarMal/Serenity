@@ -4,6 +4,7 @@ import java.awt.Font
 import java.io.StringWriter
 
 import com.serenity.config.{AppConfig, InterfaceDensity}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -18,7 +19,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class PinnedPanelRendererTextInsetSpec extends AnyFlatSpec with Matchers:
 
-  private val cellMetrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+  private val cellMetrics = TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   private def expectedInsetPx(config: AppConfig): Double =
     SurfaceTextInset.px(config)

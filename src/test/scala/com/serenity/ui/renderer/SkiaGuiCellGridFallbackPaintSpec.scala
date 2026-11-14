@@ -6,9 +6,10 @@ import java.nio.file.Paths
 
 import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontFallback
-import com.serenity.ui.layout.{CellMetrics, WrappedLineCache}
+import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.skia.SkiaTestFonts
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,7 +32,7 @@ class SkiaGuiCellGridFallbackPaintSpec extends AnyFlatSpec with Matchers:
   private val _      = GraphicsEnvironment.getLocalGraphicsEnvironment.registerFont(subset)
 
   private val primary  = resource("/fonts/MonaspaceNeon-Regular.otf").deriveFont(sizePx)
-  private val metrics  = CellMetrics.fromFont(primary)
+  private val metrics  = TestMeasure.cellMetrics(primary)
   private val cell     = metrics.charWidth
   private val fallback = FontFallback(Vector(subset.getFamily))
 

@@ -4,9 +4,9 @@ import java.awt.Font
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.fonts.{FontLoader, LogicalFontFamilies}
-import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -130,7 +130,7 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
     FontLoader.availableMonospaceFamilies.foreach { family =>
       if family != FontLoader.BundledCodeFontFamily then
         val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
-        val metrics = CellMetrics.fromFont(font)
+        val metrics = TestMeasure.cellMetrics(font)
         withClue(s"Font family '$family' produces invalid metrics: ") {
           metrics.isValid shouldBe true
         }
@@ -149,7 +149,7 @@ class FontLoadingSpec extends AnyFlatSpec with Matchers:
   it should "only include text families that produce valid CellMetrics" in
     FontLoader.availableTextFamilies.foreach { family =>
       val font    = Font(family, Font.PLAIN, 12).deriveFont(12.0f)
-      val metrics = CellMetrics.fromFont(font)
+      val metrics = TestMeasure.cellMetrics(font)
       withClue(s"Font family '$family' produces invalid metrics: ") {
         metrics.isValid shouldBe true
       }

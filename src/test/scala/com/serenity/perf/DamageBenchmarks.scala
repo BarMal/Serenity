@@ -15,7 +15,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
-import com.serenity.ui.layout.{CellMetrics, PixelRect}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.{MockRenderSurface, VerticalNavSupport}
 
@@ -141,7 +142,7 @@ private[perf] object DamageBenchmarks:
     */
   private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
     val font         = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics      = CellMetrics.fromFont(font)
+    val metrics      = TestMeasure.cellMetrics(font)
     val viewport     = BenchmarkFixtures.viewportSize
     lazy val fixture = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
     lazy val before =

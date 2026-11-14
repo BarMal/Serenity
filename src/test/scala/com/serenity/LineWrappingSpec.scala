@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.ActivePane
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -479,7 +480,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
     )
     val snapshot = TextLayoutSnapshot.fromBuffer(
       beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
-      panelWidth * CellMetrics.fromFont(font).charWidth,
+      panelWidth * TestMeasure.cellMetrics(font).charWidth,
       font,
       wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled
     )

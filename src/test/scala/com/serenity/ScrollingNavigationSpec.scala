@@ -10,10 +10,10 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{StateManager, ViewportStateReducer}
 import com.serenity.state.models.*
-import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
+import com.serenity.testkit.{EditingStateFixtures, SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
+import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -192,7 +192,7 @@ class ScrollingNavigationSpec extends AnyFlatSpec with Matchers:
       val expectedLeftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
         lineText = buffer.document.content.getLine(0).getOrElse(""),
         cursorColumn = 8,
-        visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
+        visibleWidthPx = TestMeasure.cellMetrics(font).charWidth * 4,
         font = font,
         shapedText = ShapedTextCache()
       )

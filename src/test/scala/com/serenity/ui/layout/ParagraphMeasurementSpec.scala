@@ -14,6 +14,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
 import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
@@ -124,7 +125,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
           withClue(s"$font at $widthPx px: ") {
             assertSameRows(
               TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
-              legacyLine(line, widthPx, font, CellMetrics.fromFont(font), measured = true)
+              legacyLine(line, widthPx, font, TestMeasure.cellMetrics(font), measured = true)
             )
           }
         }
@@ -136,7 +137,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       forAll(corpus) { line =>
         val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
         val legacy =
-          LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
+          LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, TestMeasure.cellMetrics(font))
         xs.length shouldBe legacy.length
         xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
         assertSameRows(
@@ -152,7 +153,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
               LineLayout.plainResolver(line, 5, font, frc, measuredLayout = true),
               frc,
               true,
-              CellMetrics.fromFont(font)
+              TestMeasure.cellMetrics(font)
             )
           )
         )
@@ -174,13 +175,13 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         withClue(s"$font at $widthPx px: ") {
           assertSameRows(
             TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
-            legacyLine(line, widthPx, font, CellMetrics.fromFont(font), measured = true)
+            legacyLine(line, widthPx, font, TestMeasure.cellMetrics(font), measured = true)
           )
         }
       }
       val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
       val legacy =
-        LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, CellMetrics.fromFont(font))
+        LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, TestMeasure.cellMetrics(font))
       xs.length shouldBe legacy.length
       xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
     }
@@ -194,7 +195,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   it should "wrap cell layouts, uniform and display-width aware, exactly as before" in {
     val cellLayouts =
-      Seq(CellMetrics.fromFont(mono), CellMetrics(1, 1, 0), CellMetrics(1, 1, 0, displayWidthAware = true))
+      Seq(TestMeasure.cellMetrics(mono), CellMetrics(1, 1, 0), CellMetrics(1, 1, 0, displayWidthAware = true))
     cellLayouts.foreach { cellMetrics =>
       forAll(corpus) { line =>
         Seq(1, 7, 40, 97, 480).foreach { widthPx =>
@@ -223,13 +224,13 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         Seq(1, 3, 40).foreach { limit =>
           assertSameRows(
             TextLayoutSnapshot.boundedVisualLinesForText(long, 3, widthPx, font, frc, maxVisualLines = limit),
-            legacyLine(long, widthPx, font, CellMetrics.fromFont(font), measured = true, maxVisualLines = limit)
+            legacyLine(long, widthPx, font, TestMeasure.cellMetrics(font), measured = true, maxVisualLines = limit)
           )
         }
       }
       assertSameRows(
         TextLayoutSnapshot.boundedVisualLinesForText(long, 3, 1200, font, frc),
-        legacyLine(long, 1200, font, CellMetrics.fromFont(font), measured = true)
+        legacyLine(long, 1200, font, TestMeasure.cellMetrics(font), measured = true)
       )
     }
   }
@@ -291,7 +292,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         resolverForLine(font, document, lineIndex, line.length, proseScale),
         frc,
         measuredLayout = true,
-        CellMetrics.fromFont(font),
+        TestMeasure.cellMetrics(font),
         paragraphRole = role,
         dropCapIndentPx = glyphPx
       )

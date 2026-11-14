@@ -7,6 +7,7 @@ import com.serenity.richtext.*
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.matchers.should.Matchers
@@ -128,7 +129,7 @@ trait ContextualToolbarTestSupport extends Matchers with StateManagerTestSupport
     val viewport = state.runtime.viewportSize.getOrElse(fail("Expected viewport size"))
     val surface  = state.contextualToolbarSurface.getOrElse(fail("Expected contextual toolbar surface"))
     val layout   = LayoutEngine.calculateLayoutWithUI(state, viewport)
-    val metrics  = CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
+    val metrics  = TestMeasure.cellMetrics(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
     val offsetPx = FloatingSurfaceGeometry.signedRowOffsetPixels(
       layout.floatingOverlayOffsetRows.getOrElse(surface.id, 0.0),
       metrics

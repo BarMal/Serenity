@@ -10,6 +10,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.ActivePane
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -417,7 +418,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val font     = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
     val snapshot = TextLayoutSnapshot.fromBuffer(
       buffer,
-      ActivePane.textRect(state, layout).width * CellMetrics.fromFont(font).charWidth,
+      ActivePane.textRect(state, layout).width * TestMeasure.cellMetrics(font).charWidth,
       font
     )
     val secondLineVisualRow =
@@ -620,7 +621,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val textFont    = codeFont
     val uiFont      = new Font(Font.SANS_SERIF, Font.PLAIN, 18)
     val cellMetrics = CellMetrics(charWidth = 8, lineHeight = 16, ascent = 11)
-    val uiMetrics   = CellMetrics.fromFont(uiFont)
+    val uiMetrics   = TestMeasure.cellMetrics(uiFont)
     val gutter      = LayoutEngine.calculateLayout(state, viewport).gutterRect.getOrElse(fail("Expected gutter rect"))
 
     RendererEntryPoints.render(

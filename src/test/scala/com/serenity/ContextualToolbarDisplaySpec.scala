@@ -9,6 +9,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
@@ -202,7 +203,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       viewport,
       FontSpec.fromAwt(font),
       FontSpec.fromAwt(font),
-      CellMetrics.fromFont(font),
+      TestMeasure.cellMetrics(font),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
@@ -268,7 +269,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       viewport,
       FontSpec.fromAwt(font),
       FontSpec.fromAwt(font),
-      CellMetrics.fromFont(font),
+      TestMeasure.cellMetrics(font),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
@@ -330,7 +331,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       viewport,
       FontSpec.fromAwt(font),
       FontSpec.fromAwt(font),
-      CellMetrics.fromFont(font),
+      TestMeasure.cellMetrics(font),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
