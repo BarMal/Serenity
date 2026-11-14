@@ -24,3 +24,11 @@ class TrialDocumentSpec extends AnyFlatSpec with Matchers:
     val path = TrialDocument.resource.use(path => cats.effect.IO.pure(path)).unsafeRunSync()
     Files.exists(path) shouldBe false
   }
+
+  it should "keep the document in a folder of its own, and remove that folder with it" in {
+    val (path, folderDuring) =
+      TrialDocument.resource.use(path => cats.effect.IO.pure((path, Files.isDirectory(path.getParent)))).unsafeRunSync()
+    folderDuring shouldBe true
+    path.getParent should not be java.nio.file.Path.of(System.getProperty("java.io.tmpdir"))
+    Files.exists(path.getParent) shouldBe false
+  }

@@ -87,7 +87,8 @@ class TempFilesLeakGuardSpec extends AnyFlatSpec with Matchers:
       "StateManager.scala",
       "SafeMode.scala",
       "StartupWarmUp.scala",
-      "SingleInstance.scala"
+      "SingleInstance.scala",
+      "TrialDocument.scala"
     )
     val offenders = sourcesUnder("src/main/scala")
       .filterNot(path => removesItself(path.getFileName.toString))

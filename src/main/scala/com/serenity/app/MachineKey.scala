@@ -7,6 +7,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
 import com.serenity.app.RendererBenchmarkResult.Key
+import com.serenity.ui.skia.SkikoVersion
 
 /** The key a measurement is kept under (#2618), from what the coordinator can read about the machine. What only a
   * window can report, the GL renderer, is `unknown`: a driver change alone does not mark a result stale.
@@ -43,8 +44,7 @@ object MachineKey:
       System.getProperties.asScala.toMap,
       sys.env,
       display = screen,
-      skiko =
-        Option(classOf[org.jetbrains.skiko.SkiaLayer].getPackage).flatMap(p => Option(p.getImplementationVersion)),
+      skiko = SkikoVersion.current,
       onMains = onMains
     )
 
