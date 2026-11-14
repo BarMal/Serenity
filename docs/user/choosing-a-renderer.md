@@ -14,10 +14,13 @@ leaves your settings alone unless you ask it to write the answer (#2618).
 ## Running it
 
 ```
-serenity --optimize-renderer              # about 8 minutes, 4 trials
-serenity --optimize-renderer --thorough   # about 12 minutes, 6 trials: layer+picture too
+serenity --optimize-renderer              # announces about 8 minutes, 4 trials
+serenity --optimize-renderer --thorough   # announces about 12 minutes, 6 trials: layer+picture too
 serenity --optimize-renderer --apply      # also write a recommended mode to config.conf
 ```
+
+The announced time counts two minutes a trial. Starting and stopping each window takes longer than that: a run of the
+four trials measured 12 minutes 43 seconds on a virtual display, so allow about three minutes a trial.
 
 It opens a window for each trial and types into it, scrolls it, resizes it and changes its theme. **Leave the keyboard
 and mouse alone while it runs**; it says so, and waits five seconds before it starts (Ctrl+C cancels). Every mode runs
