@@ -8,8 +8,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec

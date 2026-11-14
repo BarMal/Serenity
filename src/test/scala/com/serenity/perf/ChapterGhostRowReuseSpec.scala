@@ -13,8 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
-import com.serenity.testkit.FrameDiff
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec

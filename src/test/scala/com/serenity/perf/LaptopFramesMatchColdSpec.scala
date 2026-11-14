@@ -9,8 +9,7 @@ import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameDiff
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, SkiaFrames}

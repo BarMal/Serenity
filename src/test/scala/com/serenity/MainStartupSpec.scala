@@ -9,8 +9,7 @@ import com.serenity.config.AppConfig
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{Focus, SurfaceContent}
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.ViewportSize

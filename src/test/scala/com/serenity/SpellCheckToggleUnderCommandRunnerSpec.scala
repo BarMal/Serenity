@@ -12,8 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.FixedFontCatalog
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{FixedFontCatalog, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}

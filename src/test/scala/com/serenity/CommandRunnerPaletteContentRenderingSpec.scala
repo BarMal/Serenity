@@ -7,8 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset

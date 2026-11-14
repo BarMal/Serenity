@@ -9,8 +9,7 @@ import javax.swing.SwingUtilities
 import com.serenity.config.WindowChromeMode
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.DisplayExclusive
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{FrameBackend, PersistedFrameFixture, SkiaFrames}

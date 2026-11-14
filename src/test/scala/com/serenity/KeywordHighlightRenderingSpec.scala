@@ -6,8 +6,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme

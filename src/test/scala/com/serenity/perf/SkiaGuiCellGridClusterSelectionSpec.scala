@@ -9,8 +9,7 @@ import cats.data.NonEmptyList
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameDiff
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme

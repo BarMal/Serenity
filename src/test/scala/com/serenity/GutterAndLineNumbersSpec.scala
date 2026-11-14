@@ -9,8 +9,7 @@ import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacem
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*

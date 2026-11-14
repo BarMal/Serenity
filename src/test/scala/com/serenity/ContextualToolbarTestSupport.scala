@@ -6,8 +6,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.richtext.*
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.matchers.should.Matchers

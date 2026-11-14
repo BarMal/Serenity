@@ -2,8 +2,7 @@ package com.serenity
 
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.layout.{
   LayoutEngine,
   TextLayoutSnapshot,

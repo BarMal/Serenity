@@ -6,8 +6,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition}
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}

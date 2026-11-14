@@ -4,8 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.{LineNumberLayout, LineNumberSide}
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme

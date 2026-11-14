@@ -10,8 +10,7 @@ import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameDiff
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}

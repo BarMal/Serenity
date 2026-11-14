@@ -7,8 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
