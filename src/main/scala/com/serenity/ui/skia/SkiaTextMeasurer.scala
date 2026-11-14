@@ -8,8 +8,8 @@ import scala.util.Try
 import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches, FontSpec}
-import org.jetbrains.skia.{Font, Paint}
 import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, ShapingOptions}
+import org.jetbrains.skia.{Font, Paint}
 
 /** [[TextMeasurer]] over Skia: HarfBuzz shaping and Skia font metrics, for the day layout measures with what draws
   * (#2660 item 2). Nothing measures with it yet; `TextMeasurerParitySpec` reports how it differs from AWT.
