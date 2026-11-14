@@ -176,6 +176,35 @@ private[renderer] object RendererChromePlan:
     if context.surface.addressesPixels then band.copy(xPx = band.xPx - BleedPx, widthPx = band.widthPx + 2 * BleedPx)
     else band
 
+  /** The band of each of `record`'s rows that is kept, with the margin a frame keeps with its row, bar the line that
+    * faces a row drawn again ([[withoutLineFacing]]).
+    */
+  def keptRowBands(context: RenderContext, record: PaneFrameRecord, dirty: Set[Int]): List[PixelRect] =
+    val redrawn = dirty.toList.flatMap(record.rowRects.lift)
+    record.rowRects.indices
+      .filterNot(dirty.contains)
+      .map(record.rowRects)
+      .map(withBleed(context))
+      .map(withoutLineFacing(context, redrawn))
+      .toList
+
+  /** A kept row's `band` without the line that faces a row drawn again, on the side where such a row abuts it. A glyph
+    * can put ink on the line just past its row, and that line is the kept row's first or last: kept, the frame would
+    * neither clear it nor paint the redrawn row's ink on it, and it would still hold the last frame's. Given up, the
+    * frame clears the line, the redrawn row paints its ink on it, and the kept row, painted again beside it, paints its
+    * own. Only a surface that clips ([[PreservedPixels.clipsKeptPixels]]) paints the kept row again, so only it gives
+    * the line up.
+    */
+  def withoutLineFacing(context: RenderContext, redrawn: List[PixelRect])(band: PixelRect): PixelRect =
+    if !PreservedPixels.clipsKeptPixels(context.surface) || band.heightPx <= 2 then band
+    else
+      def touchesInX(other: PixelRect): Boolean = other.xPx < band.rightPx && band.xPx < other.rightPx
+      val below = redrawn.exists(other => touchesInX(other) && other.yPx == band.bottomPx)
+      val above = redrawn.exists(other => touchesInX(other) && other.bottomPx == band.yPx)
+      val top   = if above then 1 else 0
+      val rest  = band.heightPx - top - (if below then 1 else 0)
+      band.copy(yPx = band.yPx + top, heightPx = rest)
+
   /** A status row with the room under it that a glyph's descender can reach. With floating chrome the gap below the row
     * holds those pixels, so a row that is kept keeps them and a row that is cleared clears them; against the window's
     * bottom edge there is nothing below to take. The window's rows are the layout's own, which a surface cut larger
