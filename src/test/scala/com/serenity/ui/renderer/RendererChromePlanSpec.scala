@@ -39,7 +39,7 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
     geometryChanged: Boolean = false,
     rowsOverflow: Boolean = false,
     surfaceOverChrome: Boolean = false,
-    lastRowMoved: Set[Int] = Set.empty,
+    lastRowMoved: Map[PaneId, Set[Int]] = Map.empty,
     staleSlack: Set[PaneId] = Set.empty
   ): RendererChromePlan.Signals =
     RendererChromePlan.Signals(geometryChanged, rowsOverflow, surfaceOverChrome, lastRowMoved, staleSlack)
@@ -58,8 +58,8 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
     plan.spacers shouldBe false
     plan.statusRow shouldBe false
     plan.headers.includes(activePane) shouldBe false
-    plan.lineNumberRows.includes(5) shouldBe true
-    plan.lineNumberRows.includes(20) shouldBe false
+    plan.numberRows(activePane).includes(5) shouldBe true
+    plan.numberRows(activePane).includes(20) shouldBe false
   }
 
   it should "repaint the status row only for Chrome damage" in {
@@ -108,26 +108,41 @@ class RendererChromePlanSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "repaint the last row's counter too when the pane's row count changed" in {
-    val plan = RendererChromePlan.repaintFor(contract, Damage.Nothing, dirtyRows, signals(lastRowMoved = Set(30)))
+    val plan = RendererChromePlan.repaintFor(
+      contract,
+      Damage.Nothing,
+      dirtyRows,
+      signals(lastRowMoved = Map(activePane -> Set(30)))
+    )
 
-    plan.lineNumberRows.includes(30) shouldBe true
-    plan.lineNumberRows.includes(29) shouldBe false
+    plan.numberRows(activePane).includes(30) shouldBe true
+    plan.numberRows(activePane).includes(29) shouldBe false
   }
 
   it should "repaint every line number when the active pane has no row records to pair them with" in {
     val plan = RendererChromePlan.repaintFor(contract, Damage.Nothing, Map.empty, signals())
 
-    plan.lineNumberRows.everything shouldBe true
-    plan.lineNumberRows.includes(99) shouldBe true
+    plan.numberRows(activePane).everything shouldBe true
+    plan.numberRows(activePane).includes(99) shouldBe true
   }
 
   it should "repaint the spacers when row ink may have reached them, and every line number beside a right counter" in {
     repaint(Damage.Nothing, rowsOverflow = true).spacers shouldBe true
-    repaint(Damage.Nothing, rowsOverflow = true).lineNumberRows.includes(99) shouldBe false
+    repaint(Damage.Nothing, rowsOverflow = true).numberRows(activePane).includes(99) shouldBe false
 
+    val pane = contract.paneLayout(activePane).getOrElse(fail("expected the active pane"))
     val withRightCounter =
-      contract.copy(workspace = contract.workspace.copy(rightLineNumberRect = Some(LayoutRect(100, 2, 5, 30))))
-    repaint(Damage.Nothing, rowsOverflow = true, contract = withRightCounter).lineNumberRows.everything shouldBe true
+      contract.copy(workspace =
+        contract.workspace.copy(paneLayouts =
+          contract.workspace.paneLayouts.updated(
+            activePane,
+            pane.copy(rightLineNumberRect = Some(LayoutRect(100, 2, 5, 30)))
+          )
+        )
+      )
+    repaint(Damage.Nothing, rowsOverflow = true, contract = withRightCounter)
+      .numberRows(activePane)
+      .everything shouldBe true
   }
 
   "RendererFrameState.chromeGeometryChanged" should "report a change only when the chrome's rects differ from the last frame's" in {

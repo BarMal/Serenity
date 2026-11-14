@@ -4,6 +4,7 @@ import java.nio.file.Paths
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -74,10 +75,10 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedPanelRects(PanelPosition.Bottom) shouldBe LayoutRect(0, 33, 120, 6)
     layout.gutterRect shouldBe Some(LayoutRect(0, 39, 120, 1))
 
-    layout.editorPanelRect.x should be > noPanels.editorPanelRect.x
-    layout.editorPanelRect.width should be < noPanels.editorPanelRect.width
+    ActivePane.textRect(state, layout).x should be > ActivePane.textRect(baseState, noPanels).x
+    ActivePane.textRect(state, layout).width should be < ActivePane.textRect(baseState, noPanels).width
     // 39 (content height) - 6 (bottom panel) - 1 (bottom gap, the GUI's unset-`ui.element_gap` default) = 32.
-    layout.editorPanelRect.bottom shouldBe 32
+    ActivePane.textRect(state, layout).bottom shouldBe 32
   }
 
   it should "place an expanded panel in the central editor workspace and keep side panels out of the layout" in {
@@ -89,8 +90,11 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, expandViewport)
 
-    layout.expandedPanelRect shouldBe Some(layout.editorPanelRect)
-    layout.editorPanelRect shouldBe LayoutEngine.calculateLayout(baseState, expandViewport).editorPanelRect
+    layout.expandedPanelRect shouldBe Some(ActivePane.textRect(state, layout))
+    ActivePane.textRect(state, layout) shouldBe ActivePane.textRect(
+      baseState,
+      LayoutEngine.calculateLayout(baseState, expandViewport)
+    )
   }
 
   it should "split same-side left and right panels into per-surface rects" in {
@@ -110,7 +114,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(SurfaceId("left-two")) shouldBe LayoutRect(0, 15, 24, 15)
     // 24 (panel) + 1 (left gap, unset `ui.element_gap`'s GUI default) + 1 (unset left margin's GUI default) +
     // 3 (counter) + 1 (unset padding's GUI default) = 30.
-    layout.editorPanelRect.x shouldBe 30
+    ActivePane.textRect(state, layout).x shouldBe 30
   }
 
   it should "split same-side top and bottom panels into per-surface rects" in {
@@ -129,7 +133,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(SurfaceId("bottom-one")) shouldBe LayoutRect(0, 16, 40, 8)
     layout.pinnedSurfaceRects(SurfaceId("bottom-two")) shouldBe LayoutRect(40, 16, 40, 8)
     // 24 (content height) - 8 (bottom panel) - 1 (bottom gap, unset `ui.element_gap`'s GUI default) = 15.
-    layout.editorPanelRect.bottom shouldBe 15
+    ActivePane.textRect(state, layout).bottom shouldBe 15
   }
 
   it should "derive ordered same-edge panel rectangles from docked workspace leaves" in {
@@ -150,7 +154,7 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
     layout.pinnedSurfaceRects(secondId) shouldBe LayoutRect(75, 15, 25, 15)
     layout.pinnedPanelRects(PanelPosition.Right) shouldBe LayoutRect(75, 0, 25, 30)
     // 100 (viewport) - 25 (panel) - 1 (right gap, unset `ui.element_gap`'s GUI default) = 74.
-    layout.editorPanelRect.right shouldBe 74
+    ActivePane.textRect(state, layout).right shouldBe 74
   }
 
   it should "retain the configured editor minimum beside oversized panels on every edge" in {
@@ -170,9 +174,9 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
       position match
         case PanelPosition.Left | PanelPosition.Right =>
-          layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
+          ActivePane.textRect(state, layout).width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
         case PanelPosition.Top | PanelPosition.Bottom =>
-          layout.editorPanelRect.height should be >= 5
+          ActivePane.textRect(state, layout).height should be >= 5
     }
   }
 
@@ -190,8 +194,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
 
     val layout = LayoutEngine.calculateLayout(state, viewport)
 
-    layout.editorPanelRect.width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
-    layout.editorPanelRect.height should be >= 5
+    ActivePane.textRect(state, layout).width should be >= baseState.persisted.config.editorConfig.minimumPaneWidth
+    ActivePane.textRect(state, layout).height should be >= 5
   }
 
   /** Each dock-vs-editor boundary costs a gap, and `LayoutEngine` charges every one of them to the editor workspace.
@@ -216,8 +220,8 @@ class PinnedPanelLayoutSpec extends AnyFlatSpec with Matchers:
       val layout = LayoutEngine.calculateLayout(withGap, viewport)
 
       withClue(s"gap $gap: ") {
-        layout.editorPanelRect.width should be >= withGap.persisted.config.editorConfig.minimumPaneWidth
-        layout.editorPanelRect.height should be >= 5
+        ActivePane.textRect(withGap, layout).width should be >= withGap.persisted.config.editorConfig.minimumPaneWidth
+        ActivePane.textRect(withGap, layout).height should be >= 5
       }
     }
   }

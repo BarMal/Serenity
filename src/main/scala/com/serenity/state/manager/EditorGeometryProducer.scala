@@ -9,7 +9,6 @@ import com.serenity.ui.layout.{
   ColumnPaging,
   LayoutEngine,
   RichTextContext,
-  ScrollbarLayout,
   TextLayoutSnapshot,
   ViewportSize,
   VisualRowCounts,
@@ -256,12 +255,22 @@ object EditorGeometryProducer:
   private def effectivePanelWidth(state: AppState, buffer: Buffer): Int =
     val surfaceConfig    = state.persisted.config.surfaceConfig
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-    columnWidthForBuffer(state, buffer).filter(_ => columnModeActive).getOrElse(fullPanelWidth(state))
+    columnWidthForBuffer(state, buffer).filter(_ => columnModeActive).getOrElse(fullPanelWidth(state, buffer))
 
-  private def fullPanelWidth(state: AppState): Int =
+  /** The text width of the pane showing `buffer` -- the active pane when none does -- which is the whole text area
+    * while one pane fills the workspace.
+    */
+  private def fullPanelWidth(state: AppState, buffer: Buffer): Int =
     val viewportSize = state.runtime.viewportSize.getOrElse(ViewportSize(80, 24))
-    val panelWidth   = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect.width
-    panelWidth - ScrollbarLayout.terminalColumns(state, panelWidth)
+    val layout       = LayoutEngine.calculateLayout(state, viewportSize)
+    val panes        = LayoutEngine.calculateEditorPaneLayouts(state, layout)
+    val own = state.persisted.layout.orderedPaneIds.find(id =>
+      state.persisted.layout.editorPanes.get(id).exists(_.bufferId.contains(buffer.id))
+    )
+    own
+      .orElse(state.persisted.layout.activeEditorPaneId)
+      .flatMap(panes.get)
+      .fold(layout.editorPanelRect.width)(_.contentRect.width)
 
   /** One column's TEXT width in cells for `buffer`'s own pane, derived the same way
     * `CursorViewport.adjustForCursorColumnMode` (via `columnCountForBuffer`) and `RendererPaneSetup` do -- the count

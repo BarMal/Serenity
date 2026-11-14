@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.config.TabStripMode
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,7 +28,9 @@ class LayoutEngineTabBarSpec extends AnyFlatSpec with Matchers:
     calculatedLayout.tabBarRect shouldBe None
     // x/width shift by 2 cells from the unset line-number margin/padding's GUI default (one cell each side of the
     // counter, where both used to be zero) -- see the matching update in LayoutEngineSpec.
-    calculatedLayout.editorPanelRect shouldBe LayoutRect(5, 0, 95, 29)
+    val text = ActivePane.of(state, calculatedLayout).contentRect
+    LayoutRect(text.x, calculatedLayout.editorPanelRect.y, text.width, calculatedLayout.editorPanelRect.height) shouldBe
+      LayoutRect(5, 0, 95, 29)
   }
 
   it should "reserve a one-row strip at the top of the frame once 2+ buffers are open, shrinking the workspace beneath it by exactly that row" in {

@@ -27,9 +27,7 @@ class RendererPaneSetupColumnModeSpec extends AnyFlatSpec with Matchers:
     RenderContext(
       surface = surface,
       layout = CalculatedLayout(
-        editorPanelRect = LayoutRect(0, 0, 100, 10),
-        leftSpacerRect = LayoutRect(0, 0, 0, 0),
-        rightSpacerRect = LayoutRect(0, 0, 0, 0)
+        editorPanelRect = LayoutRect(0, 0, 100, 10)
       ),
       codeFont = monoFont,
       textFont = monoFont,

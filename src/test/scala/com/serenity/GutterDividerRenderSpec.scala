@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
 import com.serenity.ui.theme.Theme
@@ -41,7 +42,7 @@ class GutterDividerRenderSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val gutter   = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+    val gutter   = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("Expected line number rect"))
 
     RendererEntryPoints.render(
       state,

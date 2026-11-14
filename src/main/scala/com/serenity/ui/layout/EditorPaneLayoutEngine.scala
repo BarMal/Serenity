@@ -1,6 +1,5 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.TextAreaInsets
 import com.serenity.keystroke.events.Direction
 import com.serenity.state.models.*
 
@@ -47,10 +46,8 @@ object EditorPaneLayoutEngine:
   def calculateEditorWorkspaceLayout(state: AppState, calculatedLayout: CalculatedLayout): EditorWorkspaceLayout =
     EditorWorkspaceLayout(
       editorPanelRect = calculatedLayout.editorPanelRect,
-      lineNumberRect = calculatedLayout.lineNumberRect,
       gutterRect = calculatedLayout.gutterRect,
-      paneLayouts = calculateEditorPaneLayouts(state, calculatedLayout),
-      rightLineNumberRect = calculatedLayout.rightLineNumberRect
+      paneLayouts = calculateEditorPaneLayouts(state, calculatedLayout)
     )
 
   def calculateEditorPaneLayoutsWithMinWidth(
@@ -70,7 +67,11 @@ object EditorPaneLayoutEngine:
     val editorPaneIds = state.persisted.layout.editorPanes.keySet
     state.persisted.layout.workspaceTree match
       case Some(tree) =>
-        calculateWorkspaceTreePaneRects(tree, calculatedLayout.editorPanelRect, minWidth)
+        calculateWorkspaceTreePaneRects(
+          tree,
+          calculatedLayout.editorPanelRect,
+          paneId => PaneTextArea.minimumWidth(state, paneId, calculatedLayout.textAreaInsets, minWidth)
+        )
           .filter { case (paneId, _) => editorPaneIds.contains(paneId) }
       case None =>
         Map.empty
@@ -78,11 +79,11 @@ object EditorPaneLayoutEngine:
   private def calculateWorkspaceTreePaneRects(
     tree: WorkspaceTree,
     editorRect: LayoutRect,
-    minWidth: Int
+    minimumPaneWidth: PaneId => Int
   ): Map[PaneId, LayoutRect] =
     def minimumWidth(node: WorkspaceNode): Int =
       node match
-        case WorkspaceNode.Leaf(_, _)             => minWidth.max(1)
+        case WorkspaceNode.Leaf(_, paneId)        => minimumPaneWidth(paneId).max(1)
         case WorkspaceNode.DockedSurface(_, _, _) => 1
         case WorkspaceNode.Split(_, SplitAxis.Horizontal, _, first, second) =>
           minimumWidth(first) + minimumWidth(second)
@@ -127,51 +128,35 @@ object EditorPaneLayoutEngine:
     state: AppState,
     calculatedLayout: CalculatedLayout
   ): EditorPaneLayout =
-    val headerHeight   = LayoutEngine.paneHeaderHeight(state)
-    val insets         = state.persisted.config.surfaceConfig.textAreaInsets.normalized
-    val paneHeaderRect = paneRect.copy(height = headerHeight)
-    val headerRect =
-      if state.persisted.layout.activeEditorPaneId.contains(paneId) then
-        activeWorkspaceHeaderRect(paneRect.y, calculatedLayout, headerHeight)
-      else paneHeaderRect
-    val bandRect         = contentRectForPane(paneRect, insets, headerHeight)
-    val scrollbarColumns = ScrollbarLayout.terminalColumns(state, bandRect.width)
+    val headerHeight                          = LayoutEngine.paneHeaderHeight(state)
+    val insets                                = calculatedLayout.textAreaInsets
+    val bands                                 = PaneTextArea.bands(state, paneId, paneRect.x, paneRect.width, insets)
+    val paneHeaderRect                        = paneRect.copy(height = headerHeight)
+    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
+    val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
+    val textHeight                            = math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight)
+    val textY                                 = baseContent.y + topSpacerHeight
+    val bandRect                              = LayoutRect(bands.text.x, textY, bands.text.width, textHeight)
+    val scrollbarColumns                      = ScrollbarLayout.terminalColumns(state, bandRect.width)
+    val bandX                                 = bands.leftSpacer.right
+    val bandWidth                             = bands.rightSpacer.x - bandX
+    def rail(span: PaneTextArea.Span)         = LayoutRect(span.x, textY, span.width, textHeight)
     EditorPaneLayout(
       paneRect = paneRect,
-      headerRect = headerRect,
-      titleRect = headerRect,
+      headerRect = paneHeaderRect,
+      titleRect = paneHeaderRect,
       contentRect = bandRect.copy(width = bandRect.width - scrollbarColumns),
-      topSpacerRect = topSpacerRectForPane(paneRect, insets, headerHeight),
-      bottomSpacerRect = bottomSpacerRectForPane(paneRect, insets, headerHeight),
+      topSpacerRect = LayoutRect(bandX, baseContent.y, bandWidth, topSpacerHeight),
+      bottomSpacerRect = LayoutRect(bandX, textY + textHeight, bandWidth, bottomSpacerHeight),
+      leftSpacerRect = LayoutRect(bands.leftSpacer.x, paneRect.y, bands.leftSpacer.width, paneRect.height),
+      rightSpacerRect = LayoutRect(bands.rightSpacer.x, paneRect.y, bands.rightSpacer.width, paneRect.height),
+      lineNumberRect = bands.leftRail.map(rail),
+      rightLineNumberRect = bands.rightRail.map(rail),
       scrollbarRect = LayoutRect(bandRect.right - scrollbarColumns, bandRect.y, scrollbarColumns, bandRect.height)
     )
 
   private[layout] def contentRectForPane(paneRect: LayoutRect): LayoutRect =
-    contentRectForPane(paneRect, TextAreaInsets(), LayoutEngine.EditorPaneHeaderHeight)
-
-  private def contentRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
-    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
-    val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
-    LayoutRect(
-      baseContent.x,
-      baseContent.y + topSpacerHeight,
-      baseContent.width,
-      math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight)
-    )
-
-  private def topSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
-    val baseContent = baseContentRectForPane(paneRect, headerHeight)
-    baseContent.copy(height = TextArea.spacerHeights(baseContent.height, insets)._1)
-
-  private def bottomSpacerRectForPane(paneRect: LayoutRect, insets: TextAreaInsets, headerHeight: Int): LayoutRect =
-    val baseContent                           = baseContentRectForPane(paneRect, headerHeight)
-    val (topSpacerHeight, bottomSpacerHeight) = TextArea.spacerHeights(baseContent.height, insets)
-    LayoutRect(
-      baseContent.x,
-      baseContent.y + topSpacerHeight + math.max(1, baseContent.height - topSpacerHeight - bottomSpacerHeight),
-      baseContent.width,
-      bottomSpacerHeight
-    )
+    baseContentRectForPane(paneRect, LayoutEngine.EditorPaneHeaderHeight)
 
   private def baseContentRectForPane(paneRect: LayoutRect, headerHeight: Int): LayoutRect =
     LayoutRect(
@@ -180,17 +165,3 @@ object EditorPaneLayoutEngine:
       paneRect.width,
       math.max(1, paneRect.height - headerHeight)
     )
-
-  private def activeWorkspaceHeaderRect(y: Int, layout: CalculatedLayout, headerHeight: Int): LayoutRect =
-    val workspaceRects =
-      List(
-        Some(layout.leftSpacerRect),
-        layout.lineNumberRect,
-        Some(layout.editorPanelRect),
-        layout.rightLineNumberRect,
-        Some(layout.rightSpacerRect)
-      ).flatten
-    val left  = workspaceRects.map(_.x).minOption.getOrElse(layout.editorPanelRect.x)
-    val right = workspaceRects.map(_.right).maxOption.getOrElse(layout.editorPanelRect.right)
-
-    LayoutRect(left, y, math.max(1, right - left), headerHeight)

@@ -11,6 +11,7 @@ import com.serenity.session.SessionState
 import com.serenity.session.given
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -238,7 +239,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupp
 
   private def cursorScreenPos(state: AppState): (Int, Int) =
     val layout   = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect = LayoutEngine.calculatePaneLayouts(state, layout).get(PaneId(0)).get
+    val paneRect = ActivePane.textColumn(state, layout, PaneId(0))
     (paneRect.x, paneRect.y + 1) // header row at paneRect.y, content starts at +1
 
   private def openSettingsGroup(sm: StateManager, search: String): Unit =

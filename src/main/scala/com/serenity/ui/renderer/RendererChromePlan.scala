@@ -25,17 +25,22 @@ final case class ChromeRepaint(
     spacers: Boolean,
     statusRow: Boolean,
     headers: Repaint[PaneId],
-    lineNumberRows: Repaint[Int],
+    lineNumberRows: Map[PaneId, Repaint[Int]],
     columnRails: Map[PaneId, Repaint[Int]] = Map.empty,
     slack: Repaint[PaneId] = Repaint.all
 ):
+
   def paintsAny: Boolean =
-    spacers || statusRow || headers.nonEmpty || lineNumberRows.nonEmpty || columnRails.values.exists(_.nonEmpty)
+    spacers || statusRow || headers.nonEmpty || lineNumberRows.values.exists(_.nonEmpty) || columnRails.values.exists(
+      _.nonEmpty
+    )
 
   def railRows(paneId: PaneId): Repaint[Int] = columnRails.getOrElse(paneId, Repaint.all[Int])
 
+  def numberRows(paneId: PaneId): Repaint[Int] = lineNumberRows.getOrElse(paneId, Repaint.all[Int])
+
 object ChromeRepaint:
-  val Whole: ChromeRepaint = ChromeRepaint(spacers = true, statusRow = true, Repaint.all, Repaint.all)
+  val Whole: ChromeRepaint = ChromeRepaint(spacers = true, statusRow = true, Repaint.all, Map.empty)
 
 /** The rects chrome is painted into. Chrome kept from an earlier frame is only valid while they hold still.
   *
@@ -54,9 +59,9 @@ object ChromeGeometry:
   def of(renderPlan: EditorPaneRenderPlan): ChromeGeometry =
     val contract = renderPlan.layoutContract
     ChromeGeometry(
-      spacers = List(contract.leftSpacerRect, contract.rightSpacerRect),
+      spacers = contract.sideSpacerRects,
       statusRow = contract.gutterRect,
-      lineNumbers = contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList,
+      lineNumbers = contract.lineNumberRects,
       panes = renderPlan.paneLayouts
     )
 
@@ -74,7 +79,7 @@ private[renderer] object RendererChromePlan:
       geometryChanged: Boolean,
       rowsOverflow: Boolean,
       surfaceOverChrome: Boolean,
-      lastRowMoved: Set[Int],
+      lastRowMoved: Map[PaneId, Set[Int]],
       staleSlack: Set[PaneId] = Set.empty
   )
 
@@ -96,7 +101,7 @@ private[renderer] object RendererChromePlan:
         geometryChanged || !context.surface.addressesPixels,
         rowsOverflow(context, renderPlan, panes, persistenceKey),
         surfacesMayTouch(context, renderPlan, persistenceKey, damage, chromeRegions(context, renderPlan, panes)),
-        lastRowIfRowCountChanged(context, renderPlan.layoutContract.activePaneId, panes, persistenceKey),
+        lastRowsIfRowCountChanged(context, panes, persistenceKey),
         staleRoomBelowRows(context, renderPlan, panes, persistenceKey)
       )
     )
@@ -122,9 +127,15 @@ private[renderer] object RendererChromePlan:
         headers = Repaint.only(Damage.paneChromeIds(damage) ++ dirtyRowsByPane.collect {
           case (id, rows) if rows.contains(0) => id
         }),
-        lineNumberRows =
-          if signals.rowsOverflow && contract.rightLineNumberRect.isDefined then Repaint.all[Int]
-          else lineNumberRowsToRepaint(contract.activePaneId, dirtyRowsByPane, signals.lastRowMoved),
+        lineNumberRows = contract.panesInOrder.map { (paneId, pane) =>
+          paneId ->
+            (if signals.rowsOverflow && pane.rightLineNumberRect.isDefined then Repaint.all[Int]
+             else
+               lineNumberRowsToRepaint(
+                 dirtyRowsByPane.get(paneId),
+                 signals.lastRowMoved.getOrElse(paneId, Set.empty)
+               ))
+        }.toMap,
         columnRails = dirtyRowsByPane.map((paneId, rows) => paneId -> Repaint.only(rows)),
         slack = Repaint.only(signals.staleSlack)
       )
@@ -210,8 +221,7 @@ private[renderer] object RendererChromePlan:
         .map(ColumnRails.railRect(layout.contentRect, _))
     }
     val toPixels = pixelRectOf(context.cellMetrics)
-    (List(contract.leftSpacerRect, contract.rightSpacerRect) ++
-      contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList ++ columnRails ++ panes)
+    (contract.sideSpacerRects ++ contract.lineNumberRects ++ columnRails ++ panes)
       .map(toPixels) ++ contract.gutterRect.map(toPixels).map(withDescenderBleed(context)) ++
       roomsBelowRows(context, renderPlan, records, renderPlan.paneLayouts.keySet)
 
@@ -281,22 +291,21 @@ private[renderer] object RendererChromePlan:
       now.exists(room => !previous.get(paneId).flatMap(roomBelowRows(context, renderPlan, paneId, _)).contains(room))
     }
 
-  /** The active pane's last row when the pane showed another number of rows in the frame this surface last drew: the
-    * counter below the last row belongs to it, and what lay there then is no longer what lies there now.
+  /** Each pane's last row when it showed another number of rows in the frame this surface last drew: the counter below
+    * the last row belongs to it, and what lay there then is no longer what lies there now.
     */
-  def lastRowIfRowCountChanged(
+  def lastRowsIfRowCountChanged(
     context: RenderContext,
-    activePaneId: Option[PaneId],
     panes: Map[PaneId, PaneFrameRecord],
     persistenceKey: SurfaceContentIdentity
-  ): Set[Int] =
-    for
-      paneId   <- activePaneId.toSet
-      record   <- panes.get(paneId).toSet
-      previous <- context.caches.frameState.previousSnapshotsFor(persistenceKey).get(paneId).toSet
-      if previous.visualLines.length != record.rowRects.length
-      lastRow <- record.rowRects.indices.lastOption.toSet
-    yield lastRow
+  ): Map[PaneId, Set[Int]] =
+    val previous = context.caches.frameState.previousSnapshotsFor(persistenceKey)
+    (for
+      (paneId, record) <- panes.toList
+      before           <- previous.get(paneId).toList
+      if before.visualLines.length != record.rowRects.length
+      lastRow <- record.rowRects.indices.lastOption.toList
+    yield paneId -> Set(lastRow)).toMap
 
   /** Whether any pane has a row whose glyphs reach past its content rect, now or in the frame this surface last drew.
     */
@@ -313,22 +322,18 @@ private[renderer] object RendererChromePlan:
           .exists(layout => RendererPaneSetup.overflowingRows(layout.contentRect, context, snapshot).nonEmpty)
       }
 
-  /** A line number sits beside its row and repaints with it. An active pane the frame redraws without row records (a
-    * markdown lens, an empty buffer) has no rows to pair them with, so its numbers repaint whole.
+  /** A line number sits beside its row and repaints with it. A pane the frame redraws without row records (a markdown
+    * lens, an empty buffer) has no rows to pair them with, so its numbers repaint whole.
     */
-  private def lineNumberRowsToRepaint(
-    activePaneId: Option[PaneId],
-    dirtyRowsByPane: Map[PaneId, Set[Int]],
-    lastRowMoved: Set[Int]
-  ): Repaint[Int] =
-    activePaneId.flatMap(dirtyRowsByPane.get) match
-      case Some(dirtyRows) => Repaint.only(dirtyRows ++ lastRowMoved)
-      case None            => Repaint.all[Int]
+  private def lineNumberRowsToRepaint(dirtyRows: Option[Set[Int]], lastRowMoved: Set[Int]): Repaint[Int] =
+    dirtyRows match
+      case Some(rows) => Repaint.only(rows ++ lastRowMoved)
+      case None       => Repaint.all[Int]
 
   /** Paints the chrome `repaint` names, in the order a whole frame paints it. */
   def paint(state: AppState, context: RenderContext, renderPlan: EditorPaneRenderPlan, repaint: ChromeRepaint): Unit =
     if repaint.spacers then RendererPaneSetup.renderSpacerColumns(state, context, renderPlan.layoutContract)
-    RendererGutter.renderLineNumbers(state, context, renderPlan, repaint.lineNumberRows, repaint.railRows)
+    RendererGutter.renderLineNumbers(state, context, renderPlan, repaint.numberRows, repaint.railRows)
     if repaint.statusRow then RendererGutter.renderGutter(state, context, renderPlan.layoutContract)
 
   /** The pixel bands `repaint` leaves alone, to be handed to `clearViewportExcept` so they survive the clear. */
@@ -348,9 +353,11 @@ private[renderer] object RendererChromePlan:
     val spacers =
       if repaint.spacers then Nil
       else
-        List(
-          trimmedTowardsContent(context, toPixels(contract.leftSpacerRect), contentOnRight = true),
-          trimmedTowardsContent(context, toPixels(contract.rightSpacerRect), contentOnRight = false)
+        editorPaneLayouts.flatMap((_, layout) =>
+          List(
+            trimmedTowardsContent(context, toPixels(layout.leftSpacerRect), contentOnRight = true),
+            trimmedTowardsContent(context, toPixels(layout.rightSpacerRect), contentOnRight = false)
+          )
         ) ++ editorPaneLayouts.flatMap((_, layout) => List(layout.topSpacerRect, layout.bottomSpacerRect)).map(toPixels)
     val statusRow = contract.gutterRect.filter(_ => !repaint.statusRow).toList
     val headers = editorPaneLayouts.collect {
@@ -360,7 +367,7 @@ private[renderer] object RendererChromePlan:
     val rooms = panes.keys.filterNot(repaint.slack.includes).toSet
     spacers ++ headers.map(toPixels) ++ statusRow.map(toPixels).map(withDescenderBleed(context)) ++
       roomsBelowRows(context, renderPlan, panes, rooms) ++
-      keptLineNumberBands(state, context, renderPlan, panes, repaint.lineNumberRows) ++
+      keptLineNumberBands(state, context, renderPlan, panes, repaint) ++
       keptColumnRailBands(state, context, renderPlan, repaint)
 
   /** A side spacer without the margin ([[BleedPx]]) beside the text: a glyph's antialiasing can land a pixel there, and
@@ -395,21 +402,20 @@ private[renderer] object RendererChromePlan:
         )
       yield band
 
-  /** The line-number bands of the active pane's rows that `rows` leaves alone, in both counters. */
+  /** The line-number bands of each pane's rows that `repaint` leaves alone, in both counters. */
   private def keptLineNumberBands(
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
     panes: Map[PaneId, PaneFrameRecord],
-    rows: Repaint[Int]
+    repaint: ChromeRepaint
   ): List[PixelRect] =
-    val contract = renderPlan.layoutContract
     for
-      paneId <- state.persisted.layout.activeEditorPaneId.toList
-      record <- panes.get(paneId).toList
+      (paneId, layout) <- renderPlan.layoutContract.panesInOrder
+      record           <- panes.get(paneId).toList
       if state.chrome.lineNumbers
-      rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
-      band <- RendererGutter.keptRowBands(state, context, record.snapshot, rect, rows)
+      rect <- layout.lineNumberRect.toList ++ layout.rightLineNumberRect.toList
+      band <- RendererGutter.keptRowBands(state, context, paneId, record.snapshot, rect, repaint.numberRows(paneId))
     yield band
 
   /** The counter pixels a repainted line number must not paint on: the top of each kept row below a repainted one. */
@@ -420,13 +426,12 @@ private[renderer] object RendererChromePlan:
     panes: Map[PaneId, PaneFrameRecord],
     repaint: ChromeRepaint
   ): List[PixelRect] =
-    val contract = renderPlan.layoutContract
     for
-      paneId <- state.persisted.layout.activeEditorPaneId.toList
-      record <- panes.get(paneId).toList
+      (paneId, layout) <- renderPlan.layoutContract.panesInOrder
+      record           <- panes.get(paneId).toList
       if state.chrome.lineNumbers
-      rect <- contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
-      band <- RendererGutter.spillGuardBands(state, context, record.snapshot, rect, repaint.lineNumberRows)
+      rect <- layout.lineNumberRect.toList ++ layout.rightLineNumberRect.toList
+      band <- RendererGutter.spillGuardBands(state, context, paneId, record.snapshot, rect, repaint.numberRows(paneId))
     yield band
 
   def pixelRectOf(cellMetrics: CellMetrics)(rect: LayoutRect): PixelRect =

@@ -226,8 +226,9 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
       )
     )
     val layout        = LayoutEngine.calculateLayout(state, viewport)
-    val contentHeight = layout.editorPanelRect.bottom - layout.topSpacerRect.y
-    val drag          = MouseDrag(layout.topSpacerRect.x + 2, layout.topSpacerRect.y + 3)
+    val pane          = com.serenity.testkit.ActivePane.of(state, layout)
+    val contentHeight = pane.paneRect.bottom - pane.topSpacerRect.y
+    val drag          = MouseDrag(pane.topSpacerRect.x + 2, pane.topSpacerRect.y + 3)
 
     PinnedPanelMouseHitTesting.textAreaInsetFromDrag(drag, state) shouldBe
       Some(PinnedPanelMouseHitTesting.TextAreaInsetDrag.Top(3.0 / contentHeight.toDouble))

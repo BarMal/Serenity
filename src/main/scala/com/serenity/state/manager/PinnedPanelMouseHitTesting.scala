@@ -450,27 +450,28 @@ private[manager] object PinnedPanelMouseHitTesting:
     * the hover pointer shape share.
     */
   def textAreaInsetAt(event: MouseInputEvent, contract: EditorLayoutContract): Option[TextAreaInsetDrag] =
-    contract.activePaneLayout.flatMap { _ =>
-      val col            = event.col
-      val row            = event.row
-      val workspaceX     = contract.leftSpacerRect.x
-      val workspaceRight = contract.rightSpacerRect.right
-      val workspaceWidth = (workspaceRight - workspaceX).max(1)
-      val contentTop     = contract.topSpacerRect.y
-      val contentBottom  = contract.workspace.editorPanelRect.bottom
-      val contentHeight  = (contentBottom - contentTop).max(1)
-      val withinWorkspaceY =
-        row >= contract.leftSpacerRect.y && row < contract.leftSpacerRect.bottom
-      val withinWorkspaceX =
-        col >= contract.topSpacerRect.x && col < contract.topSpacerRect.right
+    contract.panesInOrder.view.flatMap((_, pane) => textAreaInsetIn(event, pane)).headOption
 
-      if withinWorkspaceY && col >= contract.leftSpacerRect.x && col < contract.leftSpacerRect.right then
-        Some(TextAreaInsetDrag.Left((col - workspaceX).toDouble / workspaceWidth.toDouble))
-      else if withinWorkspaceY && col >= contract.rightSpacerRect.x && col < contract.rightSpacerRect.right
-      then Some(TextAreaInsetDrag.Right((workspaceRight - col).toDouble / workspaceWidth.toDouble))
-      else if withinWorkspaceX && row >= contract.topSpacerRect.y && row < contract.topSpacerRect.bottom
-      then Some(TextAreaInsetDrag.Top((row - contentTop).toDouble / contentHeight.toDouble))
-      else if withinWorkspaceX && row >= contract.bottomSpacerRect.y && row < contract.bottomSpacerRect.bottom
-      then Some(TextAreaInsetDrag.Bottom((contentBottom - row).toDouble / contentHeight.toDouble))
-      else None
-    }
+  /** The margin of one pane `event` lands in. The setting is shared by every pane, so what a drag sets is the share of
+    * the pane it started in.
+    */
+  private def textAreaInsetIn(event: MouseInputEvent, pane: EditorPaneLayout): Option[TextAreaInsetDrag] =
+    val col           = event.col
+    val row           = event.row
+    val paneRect      = pane.paneRect
+    val paneWidth     = paneRect.width.max(1).toDouble
+    val contentTop    = pane.topSpacerRect.y
+    val contentBottom = paneRect.bottom
+    val contentHeight = (contentBottom - contentTop).max(1).toDouble
+    val withinPaneY   = row >= paneRect.y && row < paneRect.bottom
+    val withinBandX   = col >= pane.topSpacerRect.x && col < pane.topSpacerRect.right
+
+    if withinPaneY && col >= pane.leftSpacerRect.x && col < pane.leftSpacerRect.right then
+      Some(TextAreaInsetDrag.Left((col - paneRect.x) / paneWidth))
+    else if withinPaneY && col >= pane.rightSpacerRect.x && col < pane.rightSpacerRect.right then
+      Some(TextAreaInsetDrag.Right((paneRect.right - col) / paneWidth))
+    else if withinBandX && row >= pane.topSpacerRect.y && row < pane.topSpacerRect.bottom then
+      Some(TextAreaInsetDrag.Top((row - contentTop) / contentHeight))
+    else if withinBandX && row >= pane.bottomSpacerRect.y && row < pane.bottomSpacerRect.bottom then
+      Some(TextAreaInsetDrag.Bottom((contentBottom - row) / contentHeight))
+    else None

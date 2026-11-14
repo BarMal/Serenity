@@ -71,7 +71,7 @@ object RendererPaneSetup:
   def renderSpacerColumns(state: AppState, context: RenderContext, contract: EditorLayoutContract): Unit =
     val surface = context.surface
     surface.setBackgroundColor(state.persisted.theme.margin)
-    List(contract.leftSpacerRect, contract.rightSpacerRect)
+    contract.sideSpacerRects
       .filter(rect => rect.width > 0 && rect.height > 0)
       .foreach(rect => surface.fillRect(rect.x, rect.y, rect.width, rect.height, ' '))
 

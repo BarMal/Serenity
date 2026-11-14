@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{ActivePane, EditingStateFixtures}
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
@@ -163,10 +163,10 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
 
     val title = "notes.md"
     val headerRects = List(
-      Some(layout.leftSpacerRect),
-      layout.lineNumberRect,
+      Some(ActivePane.of(state, layout).leftSpacerRect),
+      ActivePane.of(state, layout).lineNumberRect,
       Some(layout.editorPanelRect),
-      Some(layout.rightSpacerRect)
+      Some(ActivePane.of(state, layout).rightSpacerRect)
     ).flatten
     val headerLeft  = headerRects.map(_.x).min
     val headerRight = headerRects.map(_.right).max
