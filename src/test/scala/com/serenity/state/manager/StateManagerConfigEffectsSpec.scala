@@ -13,7 +13,8 @@ import com.serenity.config.{
   HeadingsConfig,
   PanelEscapeTarget,
   PerMode,
-  WindowChromeMode
+  WindowChromeMode,
+  WrapColumn
 }
 import com.serenity.richtext.ParagraphAlignment
 import com.serenity.state.models.*
@@ -242,9 +243,9 @@ class StateManagerConfigEffectsSpec extends AnyFlatSpec with Matchers with Confi
     fixture.currentConfig.surfaceConfig.columnModeEnabled shouldBe true
 
     fixture.config
-      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnTargetWidth(60)), AppState.initial)
+      .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetWrapColumn(WrapColumn.Cells(60))), AppState.initial)
       .unsafeRunSync()
-    fixture.currentConfig.surfaceConfig.columnTargetWidthCells shouldBe Some(60)
+    fixture.currentConfig.surfaceConfig.wrapColumn shouldBe WrapColumn.Cells(60)
 
     fixture.config
       .interpret(SettingsIntent.TextDisplay(TextDisplayIntent.SetColumnGap(4)), AppState.initial)

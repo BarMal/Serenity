@@ -5,7 +5,7 @@ import java.awt.font.FontRenderContext
 import java.util.concurrent.atomic.AtomicInteger
 
 import cats.effect.unsafe.IORuntime
-import com.serenity.config.AppMode
+import com.serenity.config.{AppMode, WrapColumn}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
@@ -140,7 +140,7 @@ private[perf] object CacheOwnershipBenchmarks:
     val config = LaptopFrameBenchmarks.proseState.persisted.config
       .withFontConfig(FontConfig(textFontSize = textFontSize))
       .withAppMode(AppMode.Prose)
-      .withProseMeasure(Some(66))
+      .withWrapColumn(WrapColumn.Ch(66))
     val state = LaptopFrameBenchmarks.proseState
     state.copy(persisted = state.persisted.copy(config = config))
 

@@ -4,16 +4,7 @@ import com.serenity.keystroke.events.TextEntryEvent
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{
-  CellMetrics,
-  ColumnPaging,
-  LayoutEngine,
-  RichTextContext,
-  TextLayoutSnapshot,
-  ViewportSize,
-  VisualRowCounts,
-  WrappedLineCache
-}
+import com.serenity.ui.layout.{CellMetrics, ColumnPaging, LayoutEngine, ProseColumn, RichTextContext, TextLayoutSnapshot, ViewportSize, VisualRowCounts, WrappedLineCache}
 
 /** Builds, at the effect boundary, the immutable navigation geometry a vertical cursor move needs. This is the font
   * lookup, cell-metric and text-layout-snapshot work the reducer used to do inline; keeping it here leaves the reducer
@@ -294,7 +285,7 @@ object EditorGeometryProducer:
         .flatten
         .filter(_ > 0)
         .map { contentWidth =>
-          val count     = LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
+          val count     = LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig, ProseColumn.wrapCells(state))
           val bandWidth = LayoutEngine.columnWidthCellsForCount(contentWidth, count, surfaceConfig.columnGap)
           (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
         }

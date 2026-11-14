@@ -294,7 +294,7 @@ enum TextDisplayIntent:
   case SetVisualLineCursorNavigation(enabled: Boolean)
   case SetTypewriterScrolling(enabled: Boolean)
   case SetColumnMode(enabled: Boolean)
-  case SetColumnTargetWidth(cells: Int)
+  case SetWrapColumn(wrapColumn: com.serenity.config.WrapColumn)
   case SetColumnGap(cells: Int)
   case SetColumnCount(count: Option[Int])
   case SetFocusedTextBody(enabled: Boolean)

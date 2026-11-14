@@ -1,11 +1,11 @@
 package com.serenity.state.manager
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{LayoutEngine, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.ui.layout.{LayoutEngine, ProseColumn, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -250,7 +250,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
   // cursor jumped to the wrong buffer line. See CursorViewport.adjustForCursorColumnMode / RendererPaneSetup, both of
   // which already wrap at the column width.
   private val columnConfig: AppConfig =
-    AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20).withColumnGap(2)
+    AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(20)).withColumnGap(2)
 
   private def columnStateWith(buffer: Buffer, config: AppConfig, viewportSize: ViewportSize): AppState =
     // `stateWith(isTuiMode = true)` already sets `capabilities = FrontendCapabilities.tui()`; only the viewport size
@@ -271,7 +271,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
       .getOrElse(fail("expected a pane for the buffer"))
     val surfaceConfig = state.persisted.config.surfaceConfig
     val bandWidth =
-      LayoutEngine.columnWidthCells(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+      LayoutEngine.columnWidthCells(contentWidth, ProseColumn.wrapCells(state), surfaceConfig.columnGap)
     (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
 
   private def columnCountFor(state: AppState, viewportSize: ViewportSize): Int =
@@ -281,7 +281,7 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
       .map(_._2.contentRect.width)
       .getOrElse(fail("expected a pane for the buffer"))
     val surfaceConfig = state.persisted.config.surfaceConfig
-    LayoutEngine.columnCount(contentWidth, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
+    LayoutEngine.columnCount(contentWidth, ProseColumn.wrapCells(state), surfaceConfig.columnGap)
 
   "EditorGeometryProducer.forPane, in column mode" should
     "wrap the navigation geometry at the narrow column width, not the full pane width" in {

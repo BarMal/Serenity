@@ -1,9 +1,8 @@
 package com.serenity.config
 
-import java.nio.file.{Files, Paths}
+import java.nio.file.Files
 
 import com.serenity.TestTemp
-import com.serenity.session.given
 import com.serenity.session.SessionConfigCodec
 import io.circe.Json
 import org.scalatest.OptionValues
@@ -30,16 +29,18 @@ class LegacyWrapColumnKeysSpec extends AnyFlatSpec with Matchers with OptionValu
     wrapColumnOf("prose.measure = 72ch") shouldBe WrapColumn.Ch(72)
   }
 
-  it should "read a bare number as ch, as it always did, and write it back as ch" in
+  it should "read a bare number as ch, as it always did, and write it back as ch" in {
     wrapColumnOf("typography.prose.measure = 66") shouldBe WrapColumn.Ch(66)
+  }
 
   it should "turn off and unlimited into the edge" in {
     wrapColumnOf("typography.prose.measure = off") shouldBe WrapColumn.Edge
     wrapColumnOf("typography.prose.measure = unlimited") shouldBe WrapColumn.Edge
   }
 
-  it should "apply in a code workspace too, which is the point of the one setting" in
+  it should "apply in a code workspace too, which is the point of the one setting" in {
     wrapColumnOf("workspace.mode = code", "typography.prose.measure = 66ch") shouldBe WrapColumn.Ch(66)
+  }
 
   "editor.column_target_width" should "become the wrap column in cells while column mode is on" in {
     wrapColumnOf(columns, "editor.column_target_width = 80") shouldBe WrapColumn.Cells(80)
@@ -51,8 +52,9 @@ class LegacyWrapColumnKeysSpec extends AnyFlatSpec with Matchers with OptionValu
     wrapColumnOf("editor.column_mode = false", "editor.column_target_width = 80") shouldBe WrapColumn.Edge
   }
 
-  it should "still be read from its older spellings" in
+  it should "still be read from its older spellings" in {
     wrapColumnOf(columns, "display.column_target_width = 60") shouldBe WrapColumn.Cells(60)
+  }
 
   "A file naming both old keys" should "take the measure in a prose workspace and the target in column mode" in {
     wrapColumnOf(prose, "typography.prose.measure = 66ch", "editor.column_target_width = 80") shouldBe
@@ -107,17 +109,31 @@ class LegacyWrapColumnKeysSpec extends AnyFlatSpec with Matchers with OptionValu
 
   "A session written before the wrap column" should "decode the old keys as it would a file, by mode" in {
     def sessionWith(mode: AppMode, columnMode: Boolean, fields: (String, Json)*): AppConfig =
-      val encoded = SessionConfigCodec.encode(AppConfig.default.withAppMode(mode).withColumnMode(columnMode)).asObject.value
-      val withOld = fields.foldLeft(encoded.remove("editor.wrap_column")) { case (json, (key, value)) =>
-        json.add(key, value)
+      val encoded =
+        SessionConfigCodec.encode(AppConfig.default.withAppMode(mode).withColumnMode(columnMode)).asObject.value
+      val withOld = fields.foldLeft(encoded.remove("editor.wrap_column")) {
+        case (json, (key, value)) =>
+          json.add(key, value)
       }
       SessionConfigCodec.decode(Json.fromJsonObject(withOld).hcursor)
 
-    sessionWith(AppMode.Prose, columnMode = false, "typography.prose.measure" -> Json.fromInt(66)).surfaceConfig.wrapColumn shouldBe
+    sessionWith(
+      AppMode.Prose,
+      columnMode = false,
+      "typography.prose.measure" -> Json.fromInt(66)
+    ).surfaceConfig.wrapColumn shouldBe
       WrapColumn.Ch(66)
-    sessionWith(AppMode.Code, columnMode = true, "columnTargetWidthCells" -> Json.fromInt(80)).surfaceConfig.wrapColumn shouldBe
+    sessionWith(
+      AppMode.Code,
+      columnMode = true,
+      "columnTargetWidthCells" -> Json.fromInt(80)
+    ).surfaceConfig.wrapColumn shouldBe
       WrapColumn.Cells(80)
-    sessionWith(AppMode.Code, columnMode = false, "columnTargetWidthCells" -> Json.fromInt(80)).surfaceConfig.wrapColumn shouldBe
+    sessionWith(
+      AppMode.Code,
+      columnMode = false,
+      "columnTargetWidthCells" -> Json.fromInt(80)
+    ).surfaceConfig.wrapColumn shouldBe
       WrapColumn.Edge
   }
 

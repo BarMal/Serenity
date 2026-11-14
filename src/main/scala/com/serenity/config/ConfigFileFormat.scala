@@ -129,11 +129,15 @@ object ConfigFileFormat:
     ),
     field("editor.cursor.offscreen_surfaces"),
     comment(
-      "E-reader-style column layout: as many columns as fit the target width (in cells, or unlimited for one " +
-        "column that fills the pane) plus the gap between them. Only takes effect while word wrap is also on"
+      "Where a line wraps inside the text area, in every mode: edge, a count of cells (80) or of the prose font's " +
+        "ch (66ch). With auto gutters a set column is centred. In column mode it is one column's width"
+    ),
+    field("editor.wrap_column"),
+    comment(
+      "E-reader-style column layout: as many columns as fit the wrap column plus the gap between them. Only takes " +
+        "effect while word wrap is also on"
     ),
     field("editor.column_mode"),
-    field("editor.column_target_width"),
     field("editor.column_gap"),
     field("editor.column_count"),
     field("editor.line_numbers"),
@@ -216,10 +220,6 @@ object ConfigFileFormat:
         "the system's own fonts follow. Family names, e.g. [\"Noto Sans CJK JP\"]"
     ),
     field("typography.fallback.families"),
-    comment(
-      "Prose line length in characters (e.g. 66ch) while the workspace is in prose mode, or unlimited (off means the same)"
-    ),
-    field("typography.prose.measure"),
     comment("How all text adapts to the display: auto, manual (uses the factor below), off"),
     field("typography.scale.mode"),
     field("typography.scale.factor"),

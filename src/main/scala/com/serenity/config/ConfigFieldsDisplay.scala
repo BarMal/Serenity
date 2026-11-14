@@ -124,7 +124,7 @@ private[config] object ConfigFieldsDisplay:
       )
     )(_.surfaceConfig.offscreenCursorSurfaces, (config, value) => config.withOffscreenCursorSurfaces(value)),
     // Column-based document layout (issue #1338, Phase 1): global toggle, only takes effect while word wrap is also
-    // on. `columnTargetWidthCells`/`columnGap` are clamped by `SurfaceConfig.normalized`, not filtered here.
+    // on. `columnGap` is clamped by `SurfaceConfig.normalized`, not filtered here.
     named(
       "editor.column_mode",
       "columnModeEnabled",
@@ -135,17 +135,9 @@ private[config] object ConfigFieldsDisplay:
       _.surfaceConfig.columnModeEnabled,
       (config, value) => config.withColumnMode(value)
     ),
-    named(
-      "editor.column_target_width",
-      "columnTargetWidthCells",
-      "display.column_target_width",
-      "display.column.target.width",
-      "display_column_target_width"
-    )(
-      int.filtered(_ >= 1).orUnlimited
-    )(
-      _.surfaceConfig.columnTargetWidthCells,
-      (config, value) => config.withColumnTargetWidthSetting(value)
+    field("editor.wrap_column")(wrapColumn)(
+      _.surfaceConfig.wrapColumn,
+      (config, value) => config.withWrapColumn(value)
     ),
     named(
       "editor.column_gap",

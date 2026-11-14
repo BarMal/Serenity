@@ -1,9 +1,10 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{AppConfig, AppMode, ConfigRegistry, WrapColumn}
+import com.serenity.TestWorkspaceTrees
+import com.serenity.config.{AppConfig, AppMode, Gutter, TextAreaInsets, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
-import com.serenity.state.models.AppState
+import com.serenity.state.models.{AppState, EditorPane, Focus, PaneId}
 import com.serenity.testkit.ActivePane
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -62,6 +63,32 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     textColumnWidth(terminalState(AppConfig.default.withWrapColumn(WrapColumn.Edge)), 100) shouldBe 100
   }
 
+  it should "centre in each split pane, from that pane's own width, with auto gutters" in {
+    val base = terminalState(
+      AppConfig.default
+        .withWrapColumn(WrapColumn.Cells(30))
+        .withTextAreaInsets(TextAreaInsets(Gutter.Auto, Gutter.Auto, Gutter.Zero, Gutter.Zero))
+    )
+    val panes = List(PaneId(0), PaneId(1))
+    val state = base.copy(persisted =
+      base.persisted.copy(
+        layout = Layout(
+          editorPanes = panes.map(id => id -> EditorPane.empty(id)).toMap,
+          activeEditorPaneId = Some(PaneId(0)),
+          workspaceTree = Some(TestWorkspaceTrees.linear(panes*))
+        ),
+        focus = Focus.EditorPane(PaneId(0))
+      )
+    )
+    val layouts =
+      LayoutEngine.calculateEditorPaneLayouts(state, LayoutEngine.calculateLayout(state, ViewportSize(100, 40)))
+
+    layouts.values.foreach { pane =>
+      pane.contentRect.width shouldBe 30
+      math.abs(pane.leftSpacerRect.width - pane.rightSpacerRect.width) should be <= 1
+    }
+  }
+
   it should "be one column's width in column mode, not a cap on the text area" in {
     val state = terminalState(
       AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(40))
@@ -75,20 +102,4 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     ProseColumn.cells(66, chWidthPx = 9.0, gridCellWidthPx = 10) shouldBe 60
     ProseColumn.cells(66, chWidthPx = 10.0, gridCellWidthPx = 10) shouldBe 66
     ProseColumn.cells(66, chWidthPx = 12.5, gridCellWidthPx = 10) shouldBe 83
-  }
-
-  "The prose measure setting" should "read a CSS-style character count, or off" in {
-    val field = ConfigRegistry.find("typography.prose.measure").getOrElse(fail("missing typography.prose.measure"))
-
-    field.read(AppConfig.default, "66ch").map(_.surfaceConfig.proseMeasure) shouldBe Some(Some(66))
-    field.read(AppConfig.default, "72").map(_.surfaceConfig.proseMeasure) shouldBe Some(Some(72))
-    field.read(AppConfig.default.withProseMeasure(Some(66)), "off").map(_.surfaceConfig.proseMeasure) shouldBe
-      Some(None)
-    field.read(AppConfig.default.withProseMeasure(Some(66)), "unlimited").map(_.surfaceConfig.proseMeasure) shouldBe
-      Some(None)
-    field.read(AppConfig.default.withProseMeasure(Some(66)), " Unlimited ").map(_.surfaceConfig.proseMeasure) shouldBe
-      Some(None)
-    field.read(AppConfig.default, "wide") shouldBe None
-    field.setting(AppConfig.default.withProseMeasure(Some(66)))._2.config.unwrapped shouldBe "66ch"
-    field.setting(AppConfig.default)._2.config.unwrapped shouldBe "off"
   }

@@ -2,7 +2,7 @@ package com.serenity.perf
 
 import cats.effect.unsafe.IORuntime
 import com.serenity.FramePixels
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.diagnostics.FrameCounter
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -26,7 +26,8 @@ private[perf] object EreaderTypingBenchmarks:
     */
   private val ProseTypingLine = 150
 
-  private val config = AppConfig.conventional.withColumnMode(true).withColumnTargetWidth(40).withLineNumbers(true)
+  private val config =
+    AppConfig.conventional.withColumnMode(true).withWrapColumn(WrapColumn.Cells(40)).withLineNumbers(true)
 
   private val singleColumnConfig = AppConfig.conventional
 

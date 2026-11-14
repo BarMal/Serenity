@@ -108,12 +108,13 @@ object ConfigManager:
             config)
     }
 
-    val scaled             = inferTextScaleMode(parsed, entries)
-    val withStatus         = LegacyStatusLineKeys.applied(scaled, entries.map(entry => entry.key -> entry.value))
-    val withLists          = applyHoconLists(withStatus, source)
-    val withLspLists       = PreferredWindowSizeParsing.applied(LspConfigEntries.applyLists(withLists, source), source)
-    val explicitCommandIds = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
-    val hotkeys            = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
+    val scaled       = inferTextScaleMode(parsed, entries)
+    val keyedEntries = entries.map(entry => entry.key -> entry.value)
+    val withStatus   = LegacyStatusLineKeys.applied(LegacyWrapColumnKeys.applied(scaled, keyedEntries), keyedEntries)
+    val withLists    = applyHoconLists(withStatus, source)
+    val withLspLists = PreferredWindowSizeParsing.applied(LspConfigEntries.applyLists(withLists, source), source)
+    val explicitCommandIds   = entries.flatMap(entry => ConfigGroups.commandIdOf(entry.key)).toSet
+    val hotkeys              = withLspLists.inputConfig.hotkeyConfig.yieldingDefaultCommandBindings(explicitCommandIds)
     val (settled, conflicts) = HotkeyConflict.settle(hotkeys)
     val (summon, summonConflicts) =
       withLspLists.summon.settled(settled, withLspLists.inputConfig.focusedKeymapConfig)
@@ -335,10 +336,14 @@ object ConfigManager:
     status: ConfigVersionStatus,
     supported: ConfigVersion
   ): ConfigMigrationReport =
-    val entries = hoconEntries(source)
+    val entries      = hoconEntries(source)
+    val keyedEntries = entries.map(entry => entry.key -> entry.value)
     val deprecatedEntries = entries
       .flatMap(entry =>
-        deprecatedReplacement(entry.key).map(replacement => DeprecatedConfigEntry(entry.key, replacement))
+        LegacyWrapColumnKeys
+          .replacementFor(entry.key, keyedEntries)
+          .orElse(deprecatedReplacement(entry.key))
+          .map(replacement => DeprecatedConfigEntry(entry.key, replacement))
       )
       .distinctBy(_.key)
     val removedKeys = entries
@@ -517,6 +522,8 @@ object ConfigManager:
               Option.when(value.trim.toIntOption.forall(_ <= 0))(
                 "not a whole number above zero, read as an unversioned file"
               )
+            case key if LegacyWrapColumnKeys.handles(key) =>
+              Option.when(LegacyWrapColumnKeys.rejects(key, value))(s"not ${WrapColumn.Accepted}, using the edge")
             case key if LegacyStatusLineKeys.handles(key) =>
               Option.when(LegacyStatusLineKeys.rejects(key, value))("not a recognised value, using the default")
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>

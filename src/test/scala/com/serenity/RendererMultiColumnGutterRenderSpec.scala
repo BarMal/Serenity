@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -51,7 +51,7 @@ class RendererMultiColumnGutterRenderSpec extends AnyFlatSpec with Matchers:
       .withLineNumbers(lineNumbers)
       .withWordWrap(true)
       .withColumnMode(true)
-      .withColumnTargetWidth(20)
+      .withWrapColumn(WrapColumn.Cells(20))
       .withColumnGap(2)
 
   private def scene(state: AppState): UiSceneSnapshot =

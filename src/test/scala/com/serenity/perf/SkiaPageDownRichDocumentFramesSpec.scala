@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, ProseMeasure, StatusLinePlacement, TabStripMode}
+import com.serenity.config.{AppConfig, AppMode, InterfaceDensity, StatusLinePlacement, TabStripMode, WrapColumn}
 import com.serenity.keystroke.events.PageDown
 import com.serenity.richtext.{
   InlineMark,
@@ -338,7 +338,7 @@ abstract class SkiaPageDownRichDocumentFramesSplit(part: Int, parts: Int) extend
       .withAppMode(AppMode.Prose)
       .withTypewriterScrolling(true)
       .withFocusedTextBody(true)
-      .withProseMeasure(Some(ProseMeasure.Default))
+      .withWrapColumn(WrapColumn.Ch(66))
       .withInterfaceDensity(InterfaceDensity.Spacious)
 
   for

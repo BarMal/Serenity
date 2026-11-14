@@ -29,11 +29,11 @@ object CommandToggleState:
           TextDisplayIntent.SetLineNumberMarginLeft(_) | TextDisplayIntent.SetLineNumberMarginRight(_) |
           TextDisplayIntent.SetLineNumberPadding(_) | TextDisplayIntent.SetWordWrap(_) |
           TextDisplayIntent.SetVisualLineCursorNavigation(_) | TextDisplayIntent.SetTypewriterScrolling(_) |
-          TextDisplayIntent.SetColumnMode(_) | TextDisplayIntent.SetColumnTargetWidth(_) |
-          TextDisplayIntent.SetColumnGap(_) | TextDisplayIntent.SetColumnCount(_) |
-          TextDisplayIntent.SetFocusedTextBody(_) | TextDisplayIntent.SetContextualToolbarEnabled(_) |
-          TextDisplayIntent.SetContextualToolbarDisplayMode(_) | TextDisplayIntent.SetTextAreaLeftInset(_) |
-          TextDisplayIntent.SetTextAreaRightInset(_) | TextDisplayIntent.SetTextAreaTopInset(_) |
-          TextDisplayIntent.SetTextAreaBottomInset(_) | TextDisplayIntent.SetDropCapsEnabled(_) |
-          TextDisplayIntent.SetTabSize(_) | TextDisplayIntent.SetInsertSpaces(_) =>
+          TextDisplayIntent.SetColumnMode(_) | TextDisplayIntent.SetWrapColumn(_) | TextDisplayIntent.SetColumnGap(_) |
+          TextDisplayIntent.SetColumnCount(_) | TextDisplayIntent.SetFocusedTextBody(_) |
+          TextDisplayIntent.SetContextualToolbarEnabled(_) | TextDisplayIntent.SetContextualToolbarDisplayMode(_) |
+          TextDisplayIntent.SetTextAreaLeftInset(_) | TextDisplayIntent.SetTextAreaRightInset(_) |
+          TextDisplayIntent.SetTextAreaTopInset(_) | TextDisplayIntent.SetTextAreaBottomInset(_) |
+          TextDisplayIntent.SetDropCapsEnabled(_) | TextDisplayIntent.SetTabSize(_) |
+          TextDisplayIntent.SetInsertSpaces(_) =>
         None

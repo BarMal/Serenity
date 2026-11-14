@@ -3,13 +3,13 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.image.BufferedImage
 
-import com.serenity.config.AppMode
+import com.serenity.config.WrapColumn
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.renderer.FontFirstUse
 
-/** The prose measure as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
+/** The wrap column as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
 object ProseColumn:
 
   final private[layout] case class GlyphWidths(chPx: Double, gridCellPx: Int)
@@ -19,15 +19,22 @@ object ProseColumn:
   def cells(measure: Int, chWidthPx: Double, gridCellWidthPx: Int): Int =
     math.ceil(measure * chWidthPx / gridCellWidthPx.max(1)).toInt.max(1)
 
-  /** The text column's width in grid cells while a prose workspace has a measure set. */
+  /** The wrap column in grid cells, whatever the mode; `None` at the edge. */
+  def wrapCells(state: AppState): Option[Int] =
+    state.persisted.config.surfaceConfig.wrapColumn match
+      case WrapColumn.Edge                                               => None
+      case WrapColumn.Cells(count)                                       => Some(count)
+      case WrapColumn.Ch(count) if state.runtime.capabilities.isCellGrid => Some(count)
+      case WrapColumn.Ch(count) =>
+        val widths = glyphWidths(state.persisted.config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
+        Some(cells(count, widths.chPx, widths.gridCellPx))
+
+  /** The most the text area is capped to, in grid cells: the wrap column, except in column mode, where it is the width
+    * of one column and the area holds however many fit.
+    */
   def widthCells(state: AppState): Option[Int] =
-    val config = state.persisted.config
-    config.surfaceConfig.proseMeasure.filter(_ => config.appMode == AppMode.Prose).map { measure =>
-      if state.runtime.capabilities.isCellGrid then measure
-      else
-        val widths = glyphWidths(config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
-        cells(measure, widths.chPx, widths.gridCellPx)
-    }
+    val surfaceConfig = state.persisted.config.surfaceConfig
+    if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then None else wrapCells(state)
 
   /** How many grid cells one `ch` is: the prose font's `0` advance over the grid cell, and exactly one in a terminal.
     */

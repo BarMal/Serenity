@@ -2,19 +2,7 @@ package com.serenity.state.manager
 
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{
-  CellMetrics,
-  ColumnPager,
-  ColumnPaging,
-  LayoutEngine,
-  PaneRowBands,
-  RichTextContext,
-  ScrollLimits,
-  TextLayoutSnapshot,
-  TextLayoutSnapshotColumnMode,
-  VisualRowCounts,
-  WrappedLineCache
-}
+import com.serenity.ui.layout.{CellMetrics, ColumnPager, ColumnPaging, LayoutEngine, PaneRowBands, ProseColumn, RichTextContext, ScrollLimits, TextLayoutSnapshot, TextLayoutSnapshotColumnMode, VisualRowCounts, WrappedLineCache}
 import com.serenity.ui.theme.RichTextStyling
 
 /** AWT font measurement for cursor-visibility scrolling belongs at the effect boundary, not in a reducer -- a reducer
@@ -447,8 +435,9 @@ object CursorViewport:
             paneLayouts.get(paneId).map(_.contentRect.width)
         }.flatten
         paneContentWidth match
-          case None               => 1
-          case Some(contentWidth) => LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
+          case None => 1
+          case Some(contentWidth) =>
+            LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig, ProseColumn.wrapCells(state))
 
   private def previewFontForBuffer(
     buffer: Buffer,

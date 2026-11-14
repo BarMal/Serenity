@@ -397,11 +397,14 @@ object ConfigGenerators:
         AppConfig.MinDiagnosticHighlightBlendWeight,
         AppConfig.MaxDiagnosticHighlightBlendWeight
       )
-      columnMode        <- Gen.oneOf(true, false)
-      columnTargetWidth <- Gen.option(Gen.choose(1, 400))
-      columnGap         <- Gen.choose(0, 40)
-      columnCount       <- Gen.option(Gen.choose(1, 20))
-      proseMeasure      <- Gen.option(Gen.choose(ProseMeasure.Min, ProseMeasure.Max))
+      columnMode  <- Gen.oneOf(true, false)
+      columnGap   <- Gen.choose(0, 40)
+      columnCount <- Gen.option(Gen.choose(1, 20))
+      wrapColumn <- Gen.oneOf(
+        Gen.const(WrapColumn.Edge),
+        Gen.choose(WrapColumn.MinCells, WrapColumn.MaxCells).map(WrapColumn.Cells(_)),
+        Gen.choose(WrapColumn.MinCh, WrapColumn.MaxCh).map(WrapColumn.Ch(_))
+      )
     yield SurfaceConfig(
       showLineNumbers = lineNumbers,
       showPaneHeaders = paneHeaders,
@@ -439,10 +442,9 @@ object ConfigGenerators:
       memoryCompactionEnabled = compaction,
       diagnosticHighlightBlendWeight = diagnosticBlendWeight,
       columnModeEnabled = columnMode,
-      columnTargetWidthCells = columnTargetWidth,
       columnGap = columnGap,
       columnCount = columnCount,
-      proseMeasure = proseMeasure
+      wrapColumn = wrapColumn
     )
 
   val genAppConfig: Gen[AppConfig] =

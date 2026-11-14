@@ -30,7 +30,7 @@ class ConfigToleranceSpec extends AnyFlatSpec with Matchers with OptionValues wi
     .withWordWrap(false)
     .withTypewriterScrolling(true)
     .withColumnMode(true)
-    .withColumnTargetWidth(60)
+    .withWrapColumn(WrapColumn.Cells(60))
     .withCursorBlinkTimeoutMillis(4000L)
     .withWordGoal(Some(50000))
     .withAutoSaveMode(AutoSaveMode.AfterDelay)
