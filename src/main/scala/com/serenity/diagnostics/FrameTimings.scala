@@ -237,6 +237,14 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
       else work
     }
 
+  /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
+  def timedFrame(kind: FrameKind, paintEc: scala.concurrent.ExecutionContext)(
+    sync: IO[Unit],
+    draw: IO[Unit]
+  ): IO[Unit] =
+    IO(renderStarted()) >>
+      (timedIO(FramePhase.Sync)(sync) >> draw).evalOn(paintEc).guarantee(IO(renderFinished(kind)))
+
   /** The summary of everything since the previous drain, starting a new window. */
   def drain(): FrameTimingSummary =
     val now      = clock()

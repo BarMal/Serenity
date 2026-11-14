@@ -39,6 +39,12 @@ trait TextMeasurer:
 
   def glyphWidthPx(font: FontSpec, text: String): Float
 
+  /** The box the ink of `text` covers, from the baseline origin: `top` is negative above the baseline and `bottom`
+    * positive below it. The glyphs the characters map to, not shaped, which is all a single letter needs. Empty text
+    * has no ink.
+    */
+  def inkBounds(font: FontSpec, text: String): TextMeasurer.InkBounds
+
   /** The glyphs, positions and cluster map of `run`'s characters shaped alone at bidi `level` (odd is right to left).
     * `run` is in the columns of `text`, whose first character is at `startColumn`; each [[TextMeasurer.FontRun]] from
     * [[itemise]] is shaped by one call.
@@ -128,6 +134,11 @@ object TextMeasurer:
       fallbackChain: Vector[String] = Vector.empty,
       direction: ParagraphDirection = ParagraphDirection.LeftToRight
   )
+
+  final case class InkBounds(left: Float, top: Float, right: Float, bottom: Float)
+
+  object InkBounds:
+    val Empty: InkBounds = InkBounds(0.0f, 0.0f, 0.0f, 0.0f)
 
   enum ParagraphDirection:
     case LeftToRight, RightToLeft

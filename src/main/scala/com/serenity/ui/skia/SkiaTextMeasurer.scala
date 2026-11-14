@@ -5,10 +5,10 @@ import java.lang.invoke.{MethodHandle, MethodHandles, MethodType}
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
-import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
+import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
-import com.serenity.ui.renderer.FontSpec
-import org.jetbrains.skia.Font
+import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches, FontSpec}
+import org.jetbrains.skia.{Font, Paint}
 import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, ShapingOptions}
 
 /** [[TextMeasurer]] over Skia: HarfBuzz shaping and Skia font metrics, for the day layout measures with what draws
@@ -29,6 +29,7 @@ final class SkiaTextMeasurer(
   import SkiaTextMeasurer.*
 
   private val shaperLock = new Object
+  private val inkPaint   = new Paint()
   private val shaper     = Shaper.Companion.make()
   private val options    = ShapingOptions.Companion.getDEFAULT()
 
@@ -70,6 +71,12 @@ final class SkiaTextMeasurer(
 
   def glyphWidthPx(font: FontSpec, text: String): Float =
     if text.isEmpty then 0.0f else skia(font).measureTextWidth(text)
+
+  def inkBounds(font: FontSpec, text: String): InkBounds =
+    if text.isEmpty then InkBounds.Empty
+    else
+      val box = skia(font).measureText(text, inkPaint)
+      InkBounds(box.getLeft, box.getTop, box.getRight, box.getBottom)
 
   def shape(text: String, startColumn: Int, run: FontRun, level: Byte): ShapedRun =
     val slice = text.substring(run.startColumn - startColumn, run.endColumn - startColumn)
@@ -257,6 +264,17 @@ final class SkiaTextMeasurer(
     collector
 
 object SkiaTextMeasurer:
+
+  private val Key = BackendCacheKey(classOf[SkiaTextMeasurer])
+
+  /** The measurer for the faces and stretches `owner`'s surfaces draw with, so a line is measured where it is drawn. An
+    * owner has one, made the first time it is asked for.
+    */
+  def of(owner: BackendCaches): SkiaTextMeasurer =
+    owner.getOrCreate(Key) {
+      val caches = SkiaTextCaches.of(owner)
+      new SkiaTextMeasurer(caches.fonts, caches.shapedText)
+    }
 
   private val DriftSample = "iiiiiiiiiiii"
 

@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{ScrollRowsReporter, TabBarMeasures, WrappedLineCache}
+import com.serenity.ui.layout.{ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
   GraphemeSegmentationCache,
@@ -53,8 +53,15 @@ final class RenderCaches private (
     val compositionRevisions: CompositionRevisions,
     val backendCaches: BackendCaches,
     val framePhases: FramePhaseClock,
-    val scrollRows: ScrollRowsReporter
+    val scrollRows: ScrollRowsReporter,
+    measurerFor: BackendCaches => Option[TextMeasurer]
 ):
+
+  /** What layout measures with, made from this owner's backend caches the first time it is asked for: the backend that
+    * draws for this owner supplies it, so layout and painting share faces and shaped stretches. None measures nothing:
+    * layout is the cell grid.
+    */
+  lazy val measurer: Option[TextMeasurer] = measurerFor(backendCaches)
 
   /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
@@ -68,7 +75,8 @@ object RenderCaches:
   def create(
     rendererFrameStateCacheCapacity: Int = 64,
     scrollCounting: ScrollCounting = ScrollCounting.Inline,
-    styledFonts: StyledFontCache = StyledFontCache()
+    styledFonts: StyledFontCache = StyledFontCache(),
+    measurerFor: BackendCaches => Option[TextMeasurer] = _ => None
   ): RenderCaches =
     val shapedText   = ShapedTextCache()
     val wrappedLines = WrappedLineCache.sharing(shapedText)
@@ -89,5 +97,6 @@ object RenderCaches:
       new CompositionRevisions,
       new BackendCaches,
       new FramePhaseClock(),
-      ScrollRowsReporter.fromSystemProperty()
+      ScrollRowsReporter.fromSystemProperty(),
+      measurerFor
     )

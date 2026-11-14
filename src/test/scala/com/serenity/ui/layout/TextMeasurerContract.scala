@@ -221,6 +221,40 @@ trait TextMeasurerContract extends AnyPropSpec with ScalaCheckPropertyChecks wit
     }
   }
 
+  property("contract: an empty text has no ink") {
+    forAll(genFont, genMeasurer)((font, measurer) => measurer.inkBounds(font, "") shouldBe TextMeasurer.InkBounds.Empty)
+  }
+
+  property("contract: ink is a box with its left before its right and its top above its bottom") {
+    forAll(genFont, genText, genMeasurer) { (font, text, measurer) =>
+      val ink = measurer.inkBounds(font, text)
+      ink.left should be <= ink.right
+      ink.top should be <= ink.bottom
+    }
+  }
+
+  property("contract: a capital H stands on the baseline and reaches above it") {
+    forAll(genFont, genMeasurer) { (font, measurer) =>
+      val ink = measurer.inkBounds(font, "H")
+      ink.top should be < 0.0f
+      ink.bottom should be <= 1.0f
+      ink.right should be > ink.left
+    }
+  }
+
+  property("contract: a g hangs below the baseline") {
+    forAll(genFont, genMeasurer)((font, measurer) => measurer.inkBounds(font, "g").bottom should be > 0.0f)
+  }
+
+  property("contract: measurers with equal metrics keys find the same ink") {
+    forAll(genFont, genText, genMeasurer) { (font, text, other) =>
+      whenever(measurers.forall(_.metricsKey == other.metricsKey)) {
+        val inks = measurers.map(_.inkBounds(font, text))
+        inks.distinct.size shouldBe 1
+      }
+    }
+  }
+
   property("contract: an empty glyph has no width") {
     forAll(genFont, genMeasurer)((font, measurer) => measurer.glyphWidthPx(font, "") shouldBe 0.0f)
   }

@@ -1,7 +1,6 @@
 import java.io.PrintStream
 import java.nio.file.Path
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
 import cats.effect.*
@@ -21,7 +20,6 @@ import com.serenity.config.{
 import com.serenity.diagnostics.{
   CrashRecord,
   FrameKind,
-  FramePhase,
   FrameTimings,
   LogLocation,
   LogMigration,
@@ -45,6 +43,7 @@ import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.InputSettings
 import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
+import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
@@ -482,7 +481,7 @@ object Main extends IOApp:
                   )
                 ),
               renderFull = (state, vis, cc, damage, caches) =>
-                timedFrame(frameTimings, FrameKind.Full, paintEc)(
+                frameTimings.timedFrame(FrameKind.Full, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     GuiFramePainting.paintFullFrame(
@@ -498,7 +497,7 @@ object Main extends IOApp:
                   )
                 ),
               renderCursorOnly = (state, vis, cc, damage, caches) =>
-                timedFrame(frameTimings, FrameKind.CursorOnly, paintEc)(
+                frameTimings.timedFrame(FrameKind.CursorOnly, paintEc)(
                   syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     GuiFramePainting.paintCursorFrame(
@@ -556,7 +555,8 @@ object Main extends IOApp:
                   windowSizeProvider = IO.blocking(Some(host.control.currentPreferredWindowSize)),
                   onPreferredWindowSizeChanged = size => IO.blocking(host.control.resizeToPreferred(size)),
                   fileDialog = Some(fileDialog),
-                  scrollCounting = scrollCounting
+                  scrollCounting = scrollCounting,
+                  layoutMeasurerFor = owner => Some(SkiaTextMeasurer.of(owner))
                 )
               ),
               awaitExternalQuit =
@@ -575,14 +575,6 @@ object Main extends IOApp:
           }
         }
     yield ()
-
-  /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
-  private def timedFrame(timings: FrameTimings, kind: FrameKind, paintEc: ExecutionContext)(
-    sync: IO[Unit],
-    draw: IO[Unit]
-  ): IO[Unit] =
-    IO(timings.renderStarted()) >>
-      (timings.timedIO(FramePhase.Sync)(sync) >> draw).evalOn(paintEc).guarantee(IO(timings.renderFinished(kind)))
 
   private def resolveAutoTextScale(config: AppConfig, detectedTextScale: Double): AppConfig =
     config.withFontConfig(config.editorConfig.fontConfig.resolveAutoTextScale(detectedTextScale))
