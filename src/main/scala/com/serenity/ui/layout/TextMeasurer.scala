@@ -106,10 +106,10 @@ trait TextMeasurer:
   /** False when some character of `text` is shaped from its neighbours whatever the font, so [[advances]] cannot stand
     * in for laying the text out.
     */
-  private[layout] def mayMeasureByAdvances(text: String): Boolean
+  private[ui] def mayMeasureByAdvances(text: String): Boolean
 
   /** Advances of `text[from, until)`, indexed from `from`. */
-  private[layout] def advances(
+  private[ui] def advances(
     text: String,
     from: Int,
     until: Int,
