@@ -130,12 +130,7 @@ object LayoutEngine:
     val textAreaInsets =
       if spacerPercentage == DefaultSpacerPercentage then state.persisted.config.surfaceConfig.textAreaInsets.normalized
       else TextAreaInsets.percent(left = spacerPercentage, right = spacerPercentage).normalized
-    val minimumEditorWorkspaceWidth =
-      val minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth
-      state.persisted.layout.editorPanes.keys
-        .map(PaneTextArea.minimumWidth(state, _, textAreaInsets, minimumPaneWidth))
-        .maxOption
-        .getOrElse(minimumPaneWidth.max(1))
+    val minimumPaneWidth = state.persisted.config.editorConfig.minimumPaneWidth
     // An expanded/maximized panel (issue #817: `Layout.maximizedWorkspaceNodeId`, not a separate presentation) takes
     // over the whole central editor workspace via `expandedPanelRect` below, so its own dock space is excluded here
     // rather than still being reserved for it as an ordinary docked panel.
@@ -153,7 +148,7 @@ object LayoutEngine:
             // top -- unlike the bottom gutter (which only shrinks a total nothing sits below), a top strip must shift
             // everything beneath it down by its own height.
             bounds,
-            minimumEditorWorkspaceWidth,
+            PaneTextArea.minimumWidth(state, _, textAreaInsets, minimumPaneWidth),
             MinimumVerticalPaneHeight,
             uiElementGap
           )
