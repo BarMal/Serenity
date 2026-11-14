@@ -18,6 +18,9 @@ object RendererTrialWindow:
     def pressPageDown: IO[Unit]
     def toggleTheme: IO[Unit]
 
+    /** Clears a notice the start-up left on top of the editor, which would take the trial's keys. */
+    def dismissNotices: IO[Unit]
+
     /** Moves the window's edge, alternating between two sizes. */
     def resize: IO[Unit]
 

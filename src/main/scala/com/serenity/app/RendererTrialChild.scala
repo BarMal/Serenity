@@ -23,7 +23,8 @@ object RendererTrialChild:
       scale: Double,
       backendKey: String,
       renderApi: IO[Option[String]],
-      timeout: FiniteDuration
+      timeout: FiniteDuration,
+      prepare: IO[Unit] = IO.unit
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -44,6 +45,7 @@ object RendererTrialChild:
   def run(setup: Setup, quit: Deferred[IO, Unit], out: PrintStream): IO[Unit] =
     val measured: IO[Outcome] =
       for
+        _          <- setup.prepare
         resolution <- setup.clockResolutionMs
         result     <- RendererWorkload.run(setup.plan, setup.window)
       yield RendererWorkload.outcome(result, setup.scale, resolution)
