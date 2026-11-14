@@ -34,7 +34,11 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
   it should "type prose, not one repeated key" in {
     val text = typed(RendererWorkload.script(Plan.standard))
     text.distinct.length should be > 8
-    text.forall(char => char.isLetter || char == ' ') shouldBe true
+    text.forall(_.isLetter) shouldBe true
+  }
+
+  it should "type only characters that leave ink, so every keystroke changes pixels the clock can see" in {
+    typed(RendererWorkload.script(Plan.standard)).exists(_.isWhitespace) shouldBe false
   }
 
   it should "force the full redraws by alternating a resize and a theme toggle, starting with the resize" in {
