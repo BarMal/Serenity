@@ -289,6 +289,11 @@ object SkiaShapedTextCache:
   /** Below the combining marks, left-to-right Latin runs are all the explicit-run shaper is asked for. */
   private val FirstCharNeedingScriptRuns = '̀'
 
+  /** Whether `text` is all below the combining marks, which is what decides whether a stretch of it is shaped here or
+    * by Skiko's `TextLine`.
+    */
+  private[ui] def shapedByLatinRuns(text: String): Boolean = text.forall(_ < FirstCharNeedingScriptRuns)
+
   final private case class Key(text: String, font: Font)
 
   private type Stretches = ConcurrentHashMap[Key, SkiaShapedStretch]

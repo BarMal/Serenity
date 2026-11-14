@@ -16,8 +16,8 @@ import org.scalatest.matchers.should.Matchers
 class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
 
   private val faces     = TestBundledTypefaces.cacheWithInter()
-  private val measurer  = new SkiaTextMeasurer(faces)
   private val stretches = new SkiaShapedTextCache()
+  private val measurer  = new SkiaTextMeasurer(faces, stretches)
 
   private val Height       = 48
   private val Baseline     = 32f
@@ -26,13 +26,6 @@ class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
   private val NotDrawnHere = Set("ltr_rtl", "tabs")
 
   private val lines = TextMeasureCorpus.lines.filterNot(line => NotDrawnHere.contains(line.id))
-
-  private def clusterStarts(text: String, fonts: LineFonts): Vector[Int] =
-    measurer
-      .itemise(text, 0, text.length, 0, fonts)
-      .flatMap(run => measurer.shape(text, 0, run, 0.toByte).clusters.map(_ + run.startColumn))
-      .distinct
-      .sorted
 
   private def alphaOf(width: Int)(draw: (Canvas, Paint) => Unit): Array[Int] =
     val surface = Surface.Companion.makeRasterN32Premul(width, Height)
@@ -52,7 +45,7 @@ class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
     val carets = measurer.rawCaretXs(text, 0, fonts)
     val skia   = faces.faceFor(pinned.font).font
     val shaped = stretches.stretchOf(text, skia)
-    val starts = clusterStarts(text, fonts)
+    val starts = measurer.clusterStarts(text, fonts.base)
     val ends   = starts.drop(1) :+ text.length
     val width  = widthOf(carets)
     val whole  = alphaOf(width)((canvas, paint) => shaped.draw(canvas, 0, text.length, Margin.toFloat, Baseline, paint))
@@ -65,21 +58,15 @@ class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
       whole.zip(pieces).foldLeft(0)((worst, pair) => math.max(worst, math.abs(pair._1 - pair._2)))
     )
 
-  /** Lines whose drawing depends on which emoji font the host has, so their result is reported, not asserted: with a
-    * colour emoji font installed Skiko's `TextLine` draws a skin-toned thumbs-up as one glyph where the measurer's
-    * shaper cuts it into two (a measured-versus-drawn gap); with none, both sides draw the same missing-glyph boxes.
-    */
-  private val HostDependent = Set("emoji_clusters")
-
-  private def agreement(hostDependent: Boolean): Vector[(String, Int)] =
+  private def agreement(): Vector[(String, Int)] =
     for
       pinned <- TextMeasureCorpus.fonts
-      line   <- lines.filter(line => HostDependent.contains(line.id) == hostDependent)
+      line   <- lines
       worst  <- worstAlphaDifference(pinned, line, 0.0f)
     yield (s"${pinned.label}.${line.id}", worst)
 
   "Each cluster drawn at its measured origin" should "land where the line draws it, for every bundled font and line" in {
-    val results = agreement(hostDependent = false)
+    val results = agreement()
     results should not be empty
     info(
       s"largest alpha difference over ${results.size} lines: ${results.foldLeft(0)((largest, result) => math.max(largest, result._2))} of 255"
@@ -88,12 +75,6 @@ class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
     withClue(off.map((key, worst) => s"$key differs by $worst").mkString("; ")) {
       off shouldBe empty
     }
-  }
-
-  "The lines that depend on the host's emoji font" should "be reported, whatever they show" in {
-    val results = agreement(hostDependent = true)
-    results should not be empty
-    info(s"host dependent lines differ by ${results.map(_._2).mkString(", ")} of 255")
   }
 
   "The same comparison" should "tell a cluster half a pixel from its origin" in {

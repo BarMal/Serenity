@@ -22,7 +22,10 @@ import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, Shapi
   * Shaping takes one lock because a `Shaper` holds state between calls and the font manager is not documented as safe
   * for two threads' first lookups; the faces are built under [[SkiaFontCache]]'s own lock.
   */
-final class SkiaTextMeasurer(faces: SkiaFontCache = new SkiaFontCache()) extends TextMeasurer:
+final class SkiaTextMeasurer(
+    faces: SkiaFontCache = new SkiaFontCache(),
+    stretches: SkiaShapedTextCache = new SkiaShapedTextCache()
+) extends TextMeasurer:
 
   import SkiaTextMeasurer.*
 
@@ -192,20 +195,44 @@ final class SkiaTextMeasurer(faces: SkiaFontCache = new SkiaFontCache()) extends
   private def shapedCarets(text: String, font: Font): Array[Float] =
     if text.isEmpty then Array(0.0f)
     else
-      val collector = shaped(text, font, 0.toByte)
-      val starts    = Array.fill(text.length)(Float.NaN)
-      collector.clusters.zip(collector.xs).foreach { (cluster, x) =>
-        if cluster >= 0 && cluster < text.length && (starts(cluster).isNaN || x < starts(cluster)) then
-          starts(cluster) = x
-      }
-      val clusterStarts = starts.indices.filter(index => !starts(index).isNaN)
-      val spread = clusterStarts.zip(clusterStarts.drop(1) :+ text.length).flatMap { (from, until) =>
+      val (starts, end) = clusterOrigins(text, font)
+      val origins       = starts.indices.filter(index => !starts(index).isNaN)
+      val spread = origins.zip(origins.drop(1) :+ text.length).flatMap { (from, until) =>
         val startX = starts(from)
-        val endX   = if until >= text.length then collector.width else starts(until)
+        val endX   = if until >= text.length then end else starts(until)
         (from until until).map(index => startX + (endX - startX) * (index - from) / (until - from))
       }
-      val leading = Array.fill(clusterStarts.headOption.getOrElse(text.length))(0.0f)
-      (leading ++ spread) :+ collector.width
+      val leading = Array.fill(origins.headOption.getOrElse(text.length))(0.0f)
+      (leading ++ spread) :+ end
+
+  /** The characters that begin a cluster, as `text` is laid out when drawn. */
+  private[ui] def clusterStarts(text: String, font: FontSpec): Vector[Int] =
+    val (starts, _) = clusterOrigins(text, skia(font))
+    starts.indices.filter(index => !starts(index).isNaN).toVector
+
+  /** The x at which each character's cluster begins, NaN for a character inside one, and the trailing edge. Text the
+    * render surface hands to Skiko's `TextLine` (emoji sequences, combining marks, other scripts) is measured from that
+    * stretch, so the origins are where it draws; Latin text is shaped here the way the surface shapes it.
+    */
+  private def clusterOrigins(text: String, font: Font): (Array[Float], Float) =
+    if SkiaShapedTextCache.shapedByLatinRuns(text) then shapedOrigins(text, font) else drawnOrigins(text, font)
+
+  private def shapedOrigins(text: String, font: Font): (Array[Float], Float) =
+    val collector = shaped(text, font, 0.toByte)
+    val starts    = Array.fill(text.length)(Float.NaN)
+    collector.clusters.zip(collector.xs).foreach { (cluster, x) =>
+      if cluster >= 0 && cluster < text.length && (starts(cluster).isNaN || x < starts(cluster)) then
+        starts(cluster) = x
+    }
+    (starts, collector.width)
+
+  private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
+    val stretch = stretches.stretchOf(text, font)
+    val edges   = (0 to text.length).map(index => stretch.leftEdgeOf(index).getOrElse(0.0f))
+    val starts = Array.tabulate(text.length) { index =>
+      if index == 0 || edges(index) > edges(index - 1) then edges(index) else Float.NaN
+    }
+    (starts, edges(text.length))
 
   private def shaped(text: String, font: Font, level: Byte): GlyphCollector =
     val collector = new GlyphCollector()
