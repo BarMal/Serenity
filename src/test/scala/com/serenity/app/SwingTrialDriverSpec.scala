@@ -4,6 +4,8 @@ import java.awt.GraphicsEnvironment
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.SwingUtilities
 
+import scala.concurrent.duration.*
+
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.PixelClock.Region
@@ -42,6 +44,13 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
         }
         .unsafeRunSync()
 
+  private def widthChangedFrom(window: SwingWindow, from: Int): Option[Int] =
+    def poll: IO[Int] = IO.defer {
+      val width = window.currentPreferredWindowSize.width
+      if width != from then IO.pure(width) else IO.sleep(50.millis) *> poll
+    }
+    poll.timeout(3.seconds).attempt.unsafeRunSync().toOption
+
   private def canvasBounds(window: SwingWindow): Region =
     onEdt {
       val origin = window.canvas.getLocationOnScreen
@@ -76,15 +85,9 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
       val across = driver.watchedFor(Step.FullRedraw(Redraw.Resize)).unsafeRunSync()
       (across.x < canvas.x + canvas.width && across.x + across.width > canvas.x + canvas.width) shouldBe true
       driver.resize.unsafeRunSync()
-      Iterator
-        .continually { Thread.sleep(50); window.currentPreferredWindowSize.width }
-        .take(60)
-        .find(_ != before) should not be empty
+      widthChangedFrom(window, before) should not be empty
       val grown = window.currentPreferredWindowSize.width
       driver.resize.unsafeRunSync()
-      Iterator
-        .continually { Thread.sleep(50); window.currentPreferredWindowSize.width }
-        .take(60)
-        .find(_ != grown) should not be empty
+      widthChangedFrom(window, grown) should not be empty
       window.currentPreferredWindowSize.width shouldBe before
     }
