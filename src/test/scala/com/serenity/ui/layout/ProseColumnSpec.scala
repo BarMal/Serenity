@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{AppConfig, AppMode, ConfigRegistry}
+import com.serenity.config.{AppConfig, AppMode, ConfigRegistry, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
@@ -20,13 +20,13 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     ActivePane.textRect(state, LayoutEngine.calculateLayout(state, ViewportSize(viewportWidth, 40))).width
 
   "A prose measure" should "hold the text column at the same number of characters however wide the window is" in {
-    val state = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(60)))
+    val state = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withWrapColumn(WrapColumn.Ch(60)))
 
     List(100, 161, 240).map(textColumnWidth(state, _)) shouldBe List(60, 60, 60)
   }
 
   it should "centre the column, splitting the spare width between the two sides" in {
-    val state  = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(60)))
+    val state  = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withWrapColumn(WrapColumn.Ch(60)))
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
     ActivePane.of(state, layout).leftSpacerRect.width shouldBe 20
@@ -34,14 +34,40 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give a window narrower than the measure its whole width" in {
-    val state = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(60)))
+    val state = terminalState(AppConfig.default.withAppMode(AppMode.Prose).withWrapColumn(WrapColumn.Ch(60)))
 
     textColumnWidth(state, 50) shouldBe 50
   }
 
-  it should "leave a code workspace at full width" in {
-    val state = terminalState(AppConfig.default.withAppMode(AppMode.Code).withProseMeasure(Some(60)))
+  it should "hold a code workspace to the same column, as the wrap column applies in every mode" in {
+    val state = terminalState(AppConfig.default.withAppMode(AppMode.Code).withWrapColumn(WrapColumn.Ch(60)))
 
+    textColumnWidth(state, 100) shouldBe 60
+  }
+
+  it should "count cells as cells and, in a terminal, ch as cells too" in {
+    val cells = terminalState(AppConfig.default.withWrapColumn(WrapColumn.Cells(60)))
+    val ch    = terminalState(AppConfig.default.withWrapColumn(WrapColumn.Ch(60)))
+
+    textColumnWidth(cells, 100) shouldBe textColumnWidth(ch, 100)
+  }
+
+  it should "still cap the text area when word wrap is off" in {
+    val state = terminalState(AppConfig.default.withWordWrap(false).withWrapColumn(WrapColumn.Cells(60)))
+
+    textColumnWidth(state, 100) shouldBe 60
+  }
+
+  it should "leave the text area to its edge when it is the edge" in {
+    textColumnWidth(terminalState(AppConfig.default.withWrapColumn(WrapColumn.Edge)), 100) shouldBe 100
+  }
+
+  it should "be one column's width in column mode, not a cap on the text area" in {
+    val state = terminalState(
+      AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(40))
+    )
+
+    ProseColumn.widthCells(state) shouldBe None
     textColumnWidth(state, 100) shouldBe 100
   }
 
