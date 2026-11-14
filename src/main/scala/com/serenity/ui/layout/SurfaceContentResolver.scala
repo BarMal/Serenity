@@ -128,7 +128,7 @@ object SurfaceContentResolver:
           selectedPath.flatMap(p => Option(p.getFileName).map(_.toString))
         )
       case SurfaceContent.DirectoryTree(tree, selectedPath, scroll) =>
-        PanelContentResolver.resolveDirectoryTree(rect, mode, tree, selectedPath, scroll)
+        PanelContentResolver.resolveDirectoryTree(rect, tree, selectedPath, scroll)
       case SurfaceContent.CommandPalette(runner) =>
         // `OverlayViewModel.contentView` bypasses this call entirely for `CommandPalette` (issue #819, slice 2):
         // painting is done via `CommandRunnerSurfaceComposition`, and `TextOverlayRenderer` ignores `rows` whenever
