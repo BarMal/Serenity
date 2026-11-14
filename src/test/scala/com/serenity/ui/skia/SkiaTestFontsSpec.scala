@@ -4,6 +4,7 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,7 +18,7 @@ class SkiaTestFontsSpec extends AnyFlatSpec with Matchers:
     new Font(file.getFamily, Font.PLAIN, 12)
 
   private def familyDrawn(owner: RenderCaches, awt: Font): String =
-    SkiaTextCaches.of(owner.backendCaches).fonts.faceFor(awt).font.getTypeface.getFamilyName
+    SkiaTextCaches.of(owner.backendCaches).fonts.faceFor(FontSpec.fromAwt(awt)).font.getTypeface.getFamilyName
 
   "A fixture font the system does not hold" should "not be what Skia draws its family with by default" in {
     familyDrawn(RenderCaches.create(), fixture) should not equal fixture.getFamily

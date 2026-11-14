@@ -5,7 +5,6 @@ import java.lang.invoke.{MethodHandle, MethodHandles, MethodType}
 import scala.jdk.CollectionConverters.*
 import scala.util.Try
 
-import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
 import com.serenity.ui.renderer.FontSpec
@@ -15,8 +14,8 @@ import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, Shapi
 /** [[TextMeasurer]] over Skia: HarfBuzz shaping and Skia font metrics, for the day layout measures with what draws
   * (#2660 item 2). Nothing measures with it yet; `TextMeasurerParitySpec` reports how it differs from AWT.
   *
-  * Faces still come from [[SkiaFontCache]], which picks a typeface from the AWT font's family, style and the advance
-  * AWT measures for it, so until the font handle stops being a `java.awt.Font` a number here is Skia shaping on the
+  * Faces come from [[SkiaFontCache]], which picks a typeface from the spec's family and style and, for a spec read from
+  * an AWT font, the advance AWT measures for it, so until that reconciliation goes a number here is Skia shaping on the
   * typeface AWT's advance selects.
   *
   * Shaping takes one lock because a `Shaper` holds state between calls and the font manager is not documented as safe
@@ -35,7 +34,7 @@ final class SkiaTextMeasurer(
 
   def metricsKey: MetricsKey = MetricsKey("skia", Vector.empty)
 
-  private def skia(font: FontSpec): Font = faces.faceFor(font.toAwt).font
+  private def skia(font: FontSpec): Font = faces.faceFor(font).font
 
   def cellMetrics(font: FontSpec): CellMetrics =
     val skiaFont                   = skia(font)
@@ -48,8 +47,11 @@ final class SkiaTextMeasurer(
     )
 
   def measuresProportionally(font: FontSpec): Boolean =
-    val awt = font.toAwt
-    !FontLoader.isMonospacedFont(awt) || FontLoader.ligaturesEnabled(awt) || hasFractionalAdvanceDrift(font)
+    !isMonospaced(font) || font.ligatures || hasFractionalAdvanceDrift(font)
+
+  private def isMonospaced(font: FontSpec): Boolean =
+    val face = skia(font)
+    List("i", "m", "W").map(sample => math.round(face.measureTextWidth(sample))).distinct.sizeIs == 1
 
   private def hasFractionalAdvanceDrift(font: FontSpec): Boolean =
     val measured = skia(font).measureTextWidth(DriftSample)
@@ -158,7 +160,7 @@ final class SkiaTextMeasurer(
           after == index + 1 && glyphs(glyph) == nominalGlyphs(index) &&
           math.abs(xs(glyph + 1) - xs(glyph) - nominal(index)) <= GlyphAdvances.ShapingTolerancePx &&
           GlyphAdvances.isContextFreeCharacter(chars(index)) &&
-          !java.awt.Font.textRequiresLayout(chars.toCharArray, index, index + 1) &&
+          !GlyphAdvances.requiresLayout(chars.toCharArray, index, index + 1) &&
           (nominal(index) == 0.0f || nominal(index) >= GlyphAdvances.SmallestDistinctAdvancePx)
         }
       }

@@ -39,6 +39,20 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
           TextStyle.styledFont(base, style)
       )
 
+  private val specs = new ConcurrentHashMap[Font, FontSpec]()
+
+  /** The spec of a font this cache derived, read once: the draw loop asks for it on every styled run. */
+  private def specOf(font: Font): FontSpec =
+    if specs.size >= maxBaseFonts * maxStylesPerBaseFont then specs.clear()
+    specs.computeIfAbsent(font, FontSpec.fromAwt(_))
+
+  def specFor(base: FontSpec, style: TextStyle): FontSpec =
+    val styled = fontFor(base.toAwt, style)
+    if styled eq base.toAwt then base else specOf(styled)
+
+  def fallbackSpecFor(styled: FontSpec, family: String, ligaturesOn: Boolean = false): FontSpec =
+    specOf(fallbackFontFor(styled.toAwt, family, ligaturesOn))
+
   private val fallbacks = new ConcurrentHashMap[(Font, String, Boolean), Font]()
 
   /** `family` at `styled`'s style, size and ligature setting, or with ligatures on whatever `styled`'s are when

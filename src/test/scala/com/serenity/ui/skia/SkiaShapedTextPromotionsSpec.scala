@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaShapedTextPromotionsSpec extends AnyFlatSpec with Matchers:
 
   private val awtFont = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val font    = new SkiaFontCache().faceFor(awtFont).font
+  private val font    = new SkiaFontCache().faceFor(FontSpec.fromAwt(awtFont)).font
 
   private def lookups(cache: SkiaShapedTextCache, texts: String*): Unit =
     texts.foreach(text => cache.stretchOf(text, font))

@@ -43,7 +43,7 @@ class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
     val fonts  = LineFonts(FontSpec.fromAwt(pinned.font), Vector.empty)
     val text   = line.text
     val carets = measurer.rawCaretXs(text, 0, fonts)
-    val skia   = faces.faceFor(pinned.font).font
+    val skia   = faces.faceFor(FontSpec.fromAwt(pinned.font)).font
     val shaped = stretches.stretchOf(text, skia)
     val starts = measurer.clusterStarts(text, fonts.base)
     val ends   = starts.drop(1) :+ text.length

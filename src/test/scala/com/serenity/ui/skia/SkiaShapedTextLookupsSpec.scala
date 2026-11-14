@@ -2,6 +2,7 @@ package com.serenity.ui.skia
 
 import java.awt.Font
 
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -12,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaShapedTextLookupsSpec extends AnyFlatSpec with Matchers:
 
   private val awtFont = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val font    = new SkiaFontCache().faceFor(awtFont).font
+  private val font    = new SkiaFontCache().faceFor(FontSpec.fromAwt(awtFont)).font
 
   private def lookups(cache: SkiaShapedTextCache, texts: String*): Unit =
     texts.foreach(text => cache.stretchOf(text, font))

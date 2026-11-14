@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.BundledInterFont
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,7 +22,7 @@ final class FrameCountPinnedFontSpec extends AnyFlatSpec with Matchers:
     SkiaTextCaches
       .of(owner.backendCaches)
       .fonts
-      .faceFor(BundledInterFont.plain(14f))
+      .faceFor(FontSpec.fromAwt(BundledInterFont.plain(14f)))
       .font
       .getTypeface
       .getFamilyName shouldBe

@@ -5,6 +5,7 @@ import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
 
 import com.serenity.ui.fonts.LogicalFontFamilies
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -30,7 +31,7 @@ class MeasuredEqualsDrawnSpec extends AnyFlatSpec with Matchers:
       withClue(s"$logical resolved to '$resolved'; ")(resolved should not be logical)
       val awt     = new Font(resolved, Font.PLAIN, 12)
       val awtSize = awt.getStringBounds(probe, context).getWidth
-      val skia    = new SkiaFontCache().faceFor(awt).font.measureTextWidth(probe).toDouble
+      val skia    = new SkiaFontCache().faceFor(FontSpec.fromAwt(awt)).font.measureTextWidth(probe).toDouble
       withClue(s"$logical -> '$resolved': AWT advance $awtSize, Skia advance $skia; ")(
         math.abs(awtSize - skia) / awtSize should be <= 0.001
       )

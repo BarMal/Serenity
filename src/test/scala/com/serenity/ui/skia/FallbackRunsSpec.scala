@@ -5,6 +5,7 @@ import java.util.concurrent.{Callable, Executors}
 
 import com.serenity.SkiaPixels
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.{Font, Paint, Surface, Typeface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -51,7 +52,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       "Serif"      -> new java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 12),
       "SansSerif"  -> new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 12),
       "Monospaced" -> new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    ).map((name, font) => s"$name (${font.getFamily})" -> SkiaTypefaces.fontFor(font))
+    ).map((name, font) => s"$name (${font.getFamily})" -> SkiaTypefaces.fontFor(FontSpec.fromAwt(font)))
     val bundled = SkiaTypefaces.bundledTypefaces.map(t => s"bundled ${t.getFamilyName}" -> new Font(t, 12f))
     (awt ++ bundled).distinctBy((_, font) =>
       (font.getTypeface.getFamilyName, font.getTypeface.isBold, font.getTypeface.isItalic, font.getSize)

@@ -123,8 +123,8 @@ final class SkiaRenderSurface(
   private val fgRef                   = AtomicReference(Color.WHITE)
   private val bgRef                   = AtomicReference(Color.BLACK)
   private val lastPaintColorRef       = AtomicReference(Color.WHITE)
-  private val baseFontRef             = AtomicReference(font.toAwt)
-  private val currentFontRef          = AtomicReference(font.toAwt)
+  private val baseFontRef             = AtomicReference(font)
+  private val currentFontRef          = AtomicReference(font)
   private val alphaRef                = AtomicInteger(OpaqueAlpha)
   private val logicalPixelRowOverride = AtomicReference[Option[(Int, Int)]](None)
 
@@ -137,8 +137,8 @@ final class SkiaRenderSurface(
     SkiaPixelMover(canvas, retainedSurface, changes, phases, deviceScaleX, deviceScaleY, userClipDepth)
 
   override def setFont(newFont: FontSpec): Unit =
-    baseFontRef.set(newFont.toAwt)
-    currentFontRef.set(newFont.toAwt)
+    baseFontRef.set(newFont)
+    currentFontRef.set(newFont)
 
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
@@ -253,18 +253,18 @@ final class SkiaRenderSurface(
 
   override def withFallbackFamily(family: String, ligaturesOn: Boolean)(draw: => Unit): Unit =
     val surfaceFont = currentFontRef.get()
-    currentFontRef.set(styledFonts.fallbackFontFor(surfaceFont, family, ligaturesOn))
+    currentFontRef.set(styledFonts.fallbackSpecFor(surfaceFont, family, ligaturesOn))
     try draw
     finally currentFontRef.set(surfaceFont)
 
   override def shapesStretchesOf(text: String): Boolean =
-    SkiaShapedTextCache.worthShaping(baseFontRef.get(), text)
+    SkiaShapedTextCache.worthShaping(baseFontRef.get().toAwt, text)
 
   /** Draws `s[from, until)` with its first glyph at `x`, shaped when the font or the text asks for it. */
   private def drawText(s: String, from: Int, until: Int, x: Float, baseline: Float): Unit =
     val face = fonts.faceFor(currentFontRef.get())
     val ink  = glyphPaint()
-    if SkiaShapedTextCache.worthShaping(currentFontRef.get(), s) then
+    if SkiaShapedTextCache.worthShaping(currentFontRef.get().toAwt, s) then
       activity.counting(shapedText)(shapedText.stretchOf(s, face.font)).draw(canvas, from, until, x, baseline, ink)
     else
       val _ = canvas.drawString(s.substring(from, until), x, baseline, face.font, ink)
@@ -332,9 +332,9 @@ final class SkiaRenderSurface(
     */
   private def drawRules(leftPx: Int, widthPx: Int, baselinePx: Int): Unit =
     if widthPx > 0 then
-      val awt = currentFontRef.get()
-      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, styledFonts.underlineOf(awt))
-      fonts.faceFor(awt).strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
+      val current = currentFontRef.get()
+      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, styledFonts.underlineOf(current.toAwt))
+      fonts.faceFor(current).strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
 
   private def drawRule(leftPx: Int, widthPx: Int, baselinePx: Int, rule: StyledFontCache.Underline): Unit =
     val thickness = rule.thicknessPx.max((1.0 / deviceScaleY).toFloat)
@@ -410,7 +410,7 @@ final class SkiaRenderSurface(
   def enableStyle(style: TextStyle): Unit =
     underlineRef.set(style.isUnderlined)
     shadowRef.set(style.isShadowed)
-    currentFontRef.set(styledFonts.fontFor(baseFontRef.get(), style))
+    currentFontRef.set(styledFonts.specFor(baseFontRef.get(), style))
 
   def disableStyle(style: TextStyle): Unit =
     underlineRef.set(false)

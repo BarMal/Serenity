@@ -20,7 +20,7 @@ private[layout] object TextMeasureDiagnosis:
   def lines(pinned: PinnedFont, measurer: SkiaTextMeasurer, faces: SkiaFontCache): Vector[String] =
     val awt      = pinned.font
     val frc      = TextLayoutSnapshot.defaultFontRenderContext()
-    val skia     = faces.faceFor(awt).font
+    val skia     = faces.faceFor(FontSpec.fromAwt(awt)).font
     val typeface = skia.getTypeface
     val header = Vector(
       s"### ${pinned.label}",

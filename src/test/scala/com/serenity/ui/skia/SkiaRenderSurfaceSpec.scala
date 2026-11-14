@@ -364,7 +364,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       surface.text.drawRunPx(14f, 26, 100f, metrics.lineHeight, metrics.ascent, text)
     }
 
-    val advance             = caches.fonts.faceFor(awtFont).font.measureTextWidth(text)
+    val advance             = caches.fonts.faceFor(FontSpec.fromAwt(awtFont)).font.measureTextWidth(text)
     val (left, _, right, _) = inkBox(canvas, Color.BLACK.getRGB).getOrElse(fail("expected ink"))
     // A glyph's ink can sit up to a pixel inside its advance box and antialiasing adds one more pixel each side.
     left should (be >= 13 and be <= 17)
@@ -499,7 +499,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       s.flush()
       SkiaPixels.read(over)
 
-    val shaped  = caches.shapedText.stretchOf(stretch, caches.fonts.faceFor(ligated).font)
+    val shaped  = caches.shapedText.stretchOf(stretch, caches.fonts.faceFor(FontSpec.fromAwt(ligated)).font)
     val splitAt = 8
     val splitX  = shaped.leftEdgeOf(splitAt).getOrElse(fail("expected a glyph at the split"))
     val whole =
@@ -556,7 +556,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       val asked = (0 until 64).map { index =>
         pool.submit(
           new java.util.concurrent.Callable[SkiaFace]:
-            def call(): SkiaFace = cache.faceFor(fonts(index % fonts.size))
+            def call(): SkiaFace = cache.faceFor(FontSpec.fromAwt(fonts(index % fonts.size)))
         )
       }
       val faces = asked.map(_.get())
@@ -566,7 +566,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "size a face from the AWT font, with unhinted fractional metrics" in {
-    val face = new SkiaFontCache().faceFor(new Font(Font.SERIF, Font.PLAIN, 17))
+    val face = new SkiaFontCache().faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 17)))
 
     face.font.getSize shouldBe 17f
     face.strikethrough shouldBe None
@@ -578,13 +578,13 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         java.util.Map.of(java.awt.font.TextAttribute.STRIKETHROUGH, java.awt.font.TextAttribute.STRIKETHROUGH_ON)
       )
 
-    new SkiaFontCache().faceFor(struck).strikethrough should not be empty
+    new SkiaFontCache().faceFor(FontSpec.fromAwt(struck)).strikethrough should not be empty
   }
 
   it should "forget its faces rather than grow without bound" in {
     val cache = new SkiaFontCache(maxFaces = 4)
 
-    (10 until 30).foreach(size => cache.faceFor(new Font(Font.SERIF, Font.PLAIN, size)))
+    (10 until 30).foreach(size => cache.faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, size))))
 
     cache.size should be <= 4
   }
