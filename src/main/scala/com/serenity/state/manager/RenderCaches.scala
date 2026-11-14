@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.layout.{LayoutMemos, ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
   GraphemeSegmentationCache,
@@ -81,8 +81,8 @@ object RenderCaches:
     val backend        = new BackendCaches
     lazy val measurer  = measurerFor(backend)
     val measurerSource = () => measurer
-    val shapedText     = ShapedTextCache(measurerSource = measurerSource)
-    val wrappedLines   = WrappedLineCache.sharing(shapedText)
+    val shapedText     = ShapedTextCache()
+    val wrappedLines   = WrappedLineCache.sharing(shapedText, LayoutMemos(measurerSource = measurerSource))
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
