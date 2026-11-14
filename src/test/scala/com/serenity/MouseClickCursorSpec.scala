@@ -10,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{ActivePane, SharedDictionary}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -220,7 +220,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.updateState(state =>
       state.copy(persisted =
-        state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets(0.15, 0.15)))
+        state.persisted.copy(config = state.persisted.config.withTextAreaInsets(TextAreaInsets.percent(0.15, 0.15)))
       )
     ).unsafeRunSync()
     sm.applyEvent(ResizeEvent(ViewportSize(80, 24))).unsafeRunSync()
@@ -273,7 +273,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect    = ActivePane.textColumn(state, layout, PaneId(0))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
     val font = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     // Mouse pixels arrive in the screen grid's coordinates, and that grid is the code font's even for prose.
@@ -314,7 +314,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
 
     val state       = sm.getCurrentState.unsafeRunSync()
     val layout      = LayoutEngine.calculateLayout(state, ViewportSize(80, 24))
-    val paneRect    = LayoutEngine.calculatePaneLayouts(state, layout)(PaneId(0))
+    val paneRect    = ActivePane.textColumn(state, layout, PaneId(0))
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
     // One logical line, long enough to wrap into three visual rows on the cell grid: two full-width rows plus a

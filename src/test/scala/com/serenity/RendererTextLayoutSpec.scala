@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, CursorColorConfig}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{ActivePane, EditingStateFixtures}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -159,10 +159,10 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val uiMetrics   = CellMetrics.fromFont(uiFont)
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val headerRect = List(
-      Some(layout.leftSpacerRect),
-      layout.lineNumberRect,
+      Some(ActivePane.of(state, layout).leftSpacerRect),
+      ActivePane.of(state, layout).lineNumberRect,
       Some(layout.editorPanelRect),
-      Some(layout.rightSpacerRect)
+      Some(ActivePane.of(state, layout).rightSpacerRect)
     ).flatten
     val headerLeft  = headerRect.map(_.x).min
     val headerRight = headerRect.map(_.right).max

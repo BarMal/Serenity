@@ -104,21 +104,36 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
       pageDown = Samples(Vector(5.0, 7.0, 9.0, 100.0), timedOut = 1),
       fullRedraw = Samples(Vector(40.0), timedOut = 0)
     )
-    RendererWorkload.outcome(result) shouldBe Outcome.Measured(
-      RendererChoice.Workload(typingP50Ms = 20.0, fullWindowMs = Map("page-down" -> 8.0, "full-redraw" -> 40.0))
+    RendererWorkload.outcome(result, scale = 2.0) shouldBe Outcome.Measured(
+      RendererChoice.Workload(
+        typingP50Ms = 20.0,
+        typingP95Ms = 30.0,
+        scale = 2.0,
+        fullWindowMs = Map("page-down" -> 8.0, "full-redraw" -> 40.0)
+      )
     )
+  }
+
+  it should "report the typing p95 of the samples, not of the median, and the scale the window ran at" in {
+    val typing = Samples((1 to 100).map(_.toDouble).toVector, timedOut = 0)
+    val result = Result(typing, Samples(Vector(5.0), 0), Samples(Vector(40.0), 0))
+    RendererWorkload.outcome(result, scale = 1.5) match
+      case Outcome.Measured(workload) =>
+        workload.typingP95Ms shouldBe 95.0
+        workload.scale shouldBe 1.5
+      case other => fail(s"expected a measurement, got $other")
   }
 
   it should "fail the run, naming the step, when every sample of a kind timed out" in {
     val result = Result(Samples(Vector(1.0), 0), Samples(Vector.empty, timedOut = 20), Samples(Vector(2.0), 0))
-    RendererWorkload.outcome(result) match
+    RendererWorkload.outcome(result, scale = 2.0) match
       case Outcome.Failed(reason) => reason should (include("page-down") and include("20"))
       case other                  => fail(s"expected a failed run, got $other")
   }
 
   it should "fail the run when nothing was typed back" in {
     val result = Result(Samples(Vector.empty, timedOut = 150), Samples(Vector(1.0), 0), Samples(Vector(2.0), 0))
-    RendererWorkload.outcome(result) match
+    RendererWorkload.outcome(result, scale = 2.0) match
       case Outcome.Failed(reason) => reason should (include("typing") and include("150"))
       case other                  => fail(s"expected a failed run, got $other")
   }

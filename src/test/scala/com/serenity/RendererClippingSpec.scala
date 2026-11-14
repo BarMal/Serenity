@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{ActivePane, SharedDictionary}
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,7 +49,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
 
     val finalState = stateManager.getCurrentState.unsafeRunSync()
     val layout     = LayoutEngine.calculateLayout(finalState, ViewportSize(80, 24))
-    val panelRect  = layout.editorPanelRect
+    val panelRect  = ActivePane.textRect(finalState, layout)
 
     // Get the viewport settings
     val pane     = finalState.persisted.layout.editorPanes(paneId)
@@ -67,7 +67,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(80, 24)
     val mockState    = createMockState()
     val layout       = LayoutEngine.calculateLayout(mockState, viewportSize)
-    val panelRect    = layout.editorPanelRect
+    val panelRect    = ActivePane.textRect(mockState, layout)
 
     // Original problem: text longer than panelRect.width would extend beyond panel
     val startX        = panelRect.x
@@ -91,7 +91,7 @@ class RendererClippingSpec extends AnyFlatSpec with Matchers:
     val viewport  = Viewport.default
     val mockState = createMockState()
     val layout    = LayoutEngine.calculateLayout(mockState, ViewportSize(80, 24))
-    val panelRect = layout.editorPanelRect
+    val panelRect = ActivePane.textRect(mockState, layout)
 
     info(s"Default viewport visibleColumns: ${viewport.visibleColumns}")
     info(s"Calculated panel width: ${panelRect.width}")

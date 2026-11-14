@@ -54,7 +54,7 @@ private[renderer] object RendererScrollReuse:
       ) &&
       overlayRects(context, renderPlan, persistenceKey).forall(overlay =>
         renderPlan.paneLayouts.values.forall(pane =>
-          contentArea(context, renderPlan, pane).forall(area => !overlay.intersects(area))
+          contentArea(context, pane).forall(area => !overlay.intersects(area))
         )
       )
 
@@ -71,18 +71,13 @@ private[renderer] object RendererScrollReuse:
       context.caches.frameState.previousFloatingSurfaceRectsFor(persistenceKey).values
 
   private def contentAreas(context: RenderContext, renderPlan: EditorPaneRenderPlan): List[PixelRect] =
-    renderPlan.paneLayouts.values.toList.flatMap(contentArea(context, renderPlan, _))
+    renderPlan.paneLayouts.values.toList.flatMap(contentArea(context, _))
 
   /** Everything a copied row can touch: the pane's rows, and the line numbers that sit beside them. */
-  private def contentArea(
-    context: RenderContext,
-    renderPlan: EditorPaneRenderPlan,
-    pane: EditorPaneLayout
-  ): Option[PixelRect] =
+  private def contentArea(context: RenderContext, pane: EditorPaneLayout): Option[PixelRect] =
     val toPixels = RendererChromePlan.pixelRectOf(context.cellMetrics)
-    val contract = renderPlan.layoutContract
     PixelRect.unionOf(
-      (pane.contentRect :: (contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList)).map(toPixels)
+      (pane.contentRect :: (pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)).map(toPixels)
     )
 
   /** The rows `record` draws itself, given the rows `damageDirty` already names, and the copies that supply the rest.
@@ -120,11 +115,12 @@ private[renderer] object RendererScrollReuse:
     previous: TextLayoutSnapshot,
     current: TextLayoutSnapshot
   ): List[RowBands] =
-    val contract = renderPlan.layoutContract
     val numbers =
-      if state.persisted.layout.activeEditorPaneId
-            .contains(paneId) && state.chrome.lineNumbers
-      then contract.lineNumberRect.toList ++ contract.rightLineNumberRect.toList
+      if state.chrome.lineNumbers then
+        renderPlan.paneLayouts
+          .get(paneId)
+          .toList
+          .flatMap(pane => pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)
       else Nil
     val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
     def widened(bands: Vector[PixelRect]): Vector[PixelRect] =
@@ -135,8 +131,8 @@ private[renderer] object RendererScrollReuse:
       RendererPaneSetup.paneRowRects(contentRect, context, current).map(bleed)
     ) :: numbers.map { rect =>
       RowBands(
-        widened(RendererGutter.counterRowBands(state, context, previous, rect)),
-        widened(RendererGutter.counterRowBands(state, context, current, rect))
+        widened(RendererGutter.counterRowBands(state, context, paneId, previous, rect)),
+        widened(RendererGutter.counterRowBands(state, context, paneId, current, rect))
       )
     }
 

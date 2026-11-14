@@ -222,15 +222,15 @@ object PinnedPanelLayoutEngine:
           if LayoutRect(
             rect.x,
             rect.y,
-            (layout.leftSpacerRect.x - rect.x + PinnedPanelDragWorkspaceReach).max(rect.width),
+            (layout.editorPanelRect.x - rect.x + PinnedPanelDragWorkspaceReach).max(rect.width),
             rect.height
           ).contains(cellX, cellY) =>
         PanelPosition.Left
       case (PanelPosition.Right, rect)
           if LayoutRect(
-            (layout.rightSpacerRect.right - PinnedPanelDragWorkspaceReach).min(rect.x),
+            (layout.editorPanelRect.right - PinnedPanelDragWorkspaceReach).min(rect.x),
             rect.y,
-            (rect.right - (layout.rightSpacerRect.right - PinnedPanelDragWorkspaceReach)).max(rect.width),
+            (rect.right - (layout.editorPanelRect.right - PinnedPanelDragWorkspaceReach)).max(rect.width),
             rect.height
           ).contains(cellX, cellY) =>
         PanelPosition.Right

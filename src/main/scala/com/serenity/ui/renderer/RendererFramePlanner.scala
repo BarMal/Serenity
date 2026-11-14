@@ -385,7 +385,6 @@ object RendererFramePlanner:
         val repaintRegion =
           Option.when(boundedRepaintEligible) {
             RendererRepaintRegion.rects(
-              state,
               context,
               renderPlan,
               panes,

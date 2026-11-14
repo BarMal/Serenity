@@ -18,9 +18,12 @@ object SettingChoices:
   /** What the loader says about a rejected value of `key`, which is then replaced by `default`. */
   def rejection(key: String, default: String): String =
     val why = key match
-      case "ui.render.backend"                => s"expected ${phrase(RenderBackendKeys)}"
-      case "ui.render.wayland"                => s"expected ${phrase(WaylandRenderKeys)}"
-      case "explorer.open_mode"               => s"expected ${phrase(ExplorerOpenModeKeys)}"
-      case "editor.cursor.offscreen_surfaces" => s"expected ${phrase(OffscreenCursorSurfacesKeys)}"
-      case _                                  => "not a value this setting accepts"
+      case "ui.render.backend"                                => s"expected ${phrase(RenderBackendKeys)}"
+      case "ui.render.wayland"                                => s"expected ${phrase(WaylandRenderKeys)}"
+      case "explorer.open_mode"                               => s"expected ${phrase(ExplorerOpenModeKeys)}"
+      case "editor.cursor.offscreen_surfaces"                 => s"expected ${phrase(OffscreenCursorSurfacesKeys)}"
+      case "editor.text_area.left" | "editor.text_area.right" => s"expected ${Gutter.Accepted}"
+      case "editor.text_area.top" | "editor.text_area.bottom" =>
+        "expected a percentage (12.5 or 12.5%) or a count of cells (12cells)"
+      case _ => "not a value this setting accepts"
     s"$why, using its default ($default)"

@@ -27,6 +27,7 @@ config/ConfigTextPatch.scala	base
 config/DisplayEnums.scala	base
 config/ExplorerOpenMode.scala	base
 config/ExportTypographyConfig.scala	base
+config/Gutter.scala	base
 config/LineNumberLayout.scala	base
 config/OffscreenCursorSurfaces.scala	base
 config/PanelEscapeTarget.scala	base

@@ -10,13 +10,13 @@ import com.serenity.config.{AppConfig, StatusLinePlacement, TabStripMode}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.richtext.RichTextDocument
-import com.serenity.state.manager.StateManagerTestFacade.{executeCommand, updateState}
+import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, executeCommand, switchToPane, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas}
 import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
-import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition}
+import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition, splitPaneHorizontal, splitPaneVertical}
 
 /** Draws a document through the window's incremental path, one image of a pool at a time, and compares each frame with
   * a cold frame of the same state. The window shows only the rects each frame names, as in
@@ -216,6 +216,30 @@ trait ColdFrameHarness:
       CommandRegistry.withToggleUI.findCommand(name) match
         case Some(found) => step(label)(stateManager.executeCommand(found).unsafeRunSync())
         case None        => failures.updateAndGet(_ :+ s"$label: no command named $name")
+
+    /** Opens `text` in a new pane beside (or, for `stacked`, below) the first, and makes it the active one. */
+    def split(text: String, stacked: Boolean, label: String): Unit =
+      step(label) {
+        given com.serenity.rope.Balance = com.serenity.rope.Balance.default
+        val buffer                      = stateManager.createBuffer(text, None).unsafeRunSync()
+        val opened =
+          if stacked then stateManager.splitPaneVertical(paneId, Some(buffer))
+          else stateManager.splitPaneHorizontal(paneId, Some(buffer))
+        val pane = opened.unsafeRunSync()
+        stateManager.switchToPane(pane).unsafeRunSync()
+      }
+
+    /** Makes the `index`th pane, in the order they were opened, the active one. */
+    def focusPane(index: Int, label: String): Unit =
+      step(label) {
+        stateManager.getCurrentState
+          .unsafeRunSync()
+          .persisted
+          .layout
+          .orderedPaneIds
+          .lift(index)
+          .foreach(pane => stateManager.switchToPane(pane).unsafeRunSync())
+      }
 
     /** Replaces the whole state the way a setting change would, then compares the frame it draws with a cold one. */
     def change(label: String)(update: AppState => AppState): Unit =

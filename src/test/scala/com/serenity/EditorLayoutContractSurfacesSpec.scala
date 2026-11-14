@@ -4,6 +4,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.{AppConfig, StatusLinePlacement, TextAreaInsets}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{OverlayViewModel, PinnedPanelViewModel}
 import com.serenity.ui.widget.TextField
@@ -35,7 +36,7 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(true)
           .withStatusLinePlacement(StatusLinePlacement.Pinned)
-          .withTextAreaInsets(TextAreaInsets(left = 0.05, right = 0.05))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.05, right = 0.05))
           .withUiElementGap(Some(1)),
         buffers = Map(buffer.id -> buffer),
         bufferOrder = List(buffer.id),
@@ -404,17 +405,16 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
         config = AppConfig.default
           .withLineNumbers(false)
           .withoutStatusLine
-          .withTextAreaInsets(TextAreaInsets(left = 0.10, right = 0.15))
+          .withTextAreaInsets(TextAreaInsets.percent(left = 0.10, right = 0.15))
       )
     )
 
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
 
-    contract.leftSpacerRect shouldBe calculatedLayout.leftSpacerRect
-    contract.rightSpacerRect shouldBe calculatedLayout.rightSpacerRect
-    contract.topSpacerRect shouldBe calculatedLayout.topSpacerRect
-    contract.bottomSpacerRect shouldBe calculatedLayout.bottomSpacerRect
+    val pane = contract.activePaneLayout.getOrElse(fail("expected an active pane"))
+    contract.sideSpacerRects shouldBe List(pane.leftSpacerRect, pane.rightSpacerRect)
+    pane shouldBe ActivePane.of(state, calculatedLayout)
     contract.workspace.editorPanelRect shouldBe calculatedLayout.editorPanelRect
   }
 
@@ -438,9 +438,10 @@ class EditorLayoutContractSurfacesSpec extends AnyFlatSpec with Matchers:
     val calculatedLayout = LayoutEngine.calculateLayout(state, viewport)
     val contract         = EditorLayoutContract.from(state, viewport, calculatedLayout)
 
-    contract.lineNumberRect shouldBe contract.workspace.lineNumberRect
-    contract.lineNumberRect shouldBe calculatedLayout.lineNumberRect
-    contract.lineNumberRowSlots(itemCount = 3) shouldBe contract.workspace.lineNumberRowSlots(itemCount = 3)
+    val pane = contract.activePaneLayout.getOrElse(fail("expected an active pane"))
+    contract.lineNumberRects shouldBe pane.lineNumberRect.toList
+    pane.lineNumberRect shouldBe ActivePane.of(state, calculatedLayout).lineNumberRect
+    pane.lineNumberRowSlots(itemCount = 3) should not be empty
   }
 
   it should "expose pinned and floating row slots from the shared frame contract" in {

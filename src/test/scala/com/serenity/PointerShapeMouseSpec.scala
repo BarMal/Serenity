@@ -108,7 +108,7 @@ class PointerShapeMouseSpec extends AnyFlatSpec with Matchers with StateManagerT
     sm.updateState(state =>
       state.copy(persisted = state.persisted.copy(config = state.persisted.config.withTextAreaRightInset(0.1)))
     ).unsafeRunSync()
-    val margin = contract(sm).rightSpacerRect
+    val margin = contract(sm).activePaneLayout.getOrElse(fail("expected an active pane")).rightSpacerRect
 
     margin.width should be > 0
     move(sm, margin.x + margin.width / 2, margin.y + margin.height / 2) shouldBe PointerShape.ResizeHorizontal

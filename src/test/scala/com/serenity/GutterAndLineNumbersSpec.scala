@@ -9,6 +9,7 @@ import com.serenity.config.{InterfaceDensity, StatusLineColors, StatusLinePlacem
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -219,9 +220,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     yield
       // Then: Layout should allocate space for line numbers and gutter
       if stateWithLineNumbers.persisted.config.surfaceConfig.showLineNumbers then
-        layout.editorPanelRect.x should be >= lineNumberWidth
-        layout.lineNumberRect should be(defined)
-        layout.lineNumberRect.get.width should be(lineNumberWidth)
+        ActivePane.of(stateWithLineNumbers, layout).contentRect.x should be >= lineNumberWidth
+        ActivePane.of(stateWithLineNumbers, layout).lineNumberRect.map(_.width) shouldBe Some(lineNumberWidth)
 
       if stateWithLineNumbers.persisted.config.statusLine.isPinned then
         layout.gutterRect should be(defined)
@@ -289,7 +289,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val gutter   = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+    val gutter   = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("Expected line number rect"))
 
     RendererEntryPoints.render(
       state,
@@ -329,7 +329,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 24)
     val viewport = ViewportSize(80, 24)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+    val lineRect = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("Expected line number rect"))
 
     RendererEntryPoints.render(
       state,
@@ -369,10 +369,10 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       val surface  = new MockRenderSurface(80, 24)
       val viewport = ViewportSize(80, 24)
       val layout   = LayoutEngine.calculateLayout(state, viewport)
-      val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+      val lineRect = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("Expected line number rect"))
       val firstRowY =
-        LayoutEngine
-          .calculateEditorWorkspaceLayout(state, layout)
+        ActivePane
+          .of(state, layout)
           .lineNumberRowSlots(itemCount = 1)
           .headOption
           .map(_.y)
@@ -413,11 +413,11 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(40, 12)
     val viewport = ViewportSize(40, 12)
     val layout   = LayoutEngine.calculateLayout(state, viewport)
-    val lineRect = layout.lineNumberRect.getOrElse(fail("Expected line number rect"))
+    val lineRect = ActivePane.of(state, layout).lineNumberRect.getOrElse(fail("Expected line number rect"))
     val font     = FontLoader.previewCodeFont(FontConfig(fontSize = 12.0f))
     val snapshot = TextLayoutSnapshot.fromBuffer(
       buffer,
-      layout.editorPanelRect.width * CellMetrics.fromFont(font).charWidth,
+      ActivePane.textRect(state, layout).width * CellMetrics.fromFont(font).charWidth,
       font
     )
     val secondLineVisualRow =
@@ -471,7 +471,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       layout.gutterRect.get.y should be(viewportSize.height - 1)
 
       // Editor panel should have reduced height to accommodate gutter
-      layout.editorPanelRect.height should be < viewportSize.height
+      ActivePane.textRect(stateWithGutter, layout).height should be < viewportSize.height
 
       // Verify gutter styling would be black (this will be tested in rendering)
       checkGutterStyling() shouldBe "black_background"

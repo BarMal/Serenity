@@ -15,14 +15,14 @@ object RendererGutter:
   /** How far, in logical pixels, a label's ink can spill past the band of its row. */
   private val InkSpillPx = 2
 
-  /** Paints the line numbers of the active pane's rows that `rows` names. The other rows' bands are left alone: a
+  /** Paints each pane's line numbers on the rows `rows` names for it. The other rows' bands are left alone: a
     * persisting surface still holds their numbers, and a number repaints only with its own row.
     */
   def renderLineNumbers(
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
-    rows: Repaint[Int],
+    rows: PaneId => Repaint[Int],
     railRows: PaneId => Repaint[Int] = _ => Repaint.all[Int]
   ): Unit =
     if state.chrome.lineNumbers then
@@ -32,12 +32,14 @@ object RendererGutter:
       if paintsColumnRails(state) then renderPerColumnRails(state, context, renderPlan, railRows)
       else
         context.surface.text.setFont(FontSpec.fromAwt(context.uiFont))
-        renderPlan.layoutContract.lineNumberRect.foreach(rect =>
-          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = false, rows)
-        )
-        renderPlan.layoutContract.rightLineNumberRect.foreach(rect =>
-          renderCounterColumn(state, context, renderPlan, rect, dividerOnLeft = true, rows)
-        )
+        renderPlan.layoutContract.panesInOrder.foreach { (paneId, pane) =>
+          pane.lineNumberRect.foreach(rect =>
+            renderCounterColumn(state, context, renderPlan, paneId, rect, dividerOnLeft = false, rows(paneId))
+          )
+          pane.rightLineNumberRect.foreach(rect =>
+            renderCounterColumn(state, context, renderPlan, paneId, rect, dividerOnLeft = true, rows(paneId))
+          )
+        }
 
   /** Whether line numbers are drawn as one rail per e-reader column rather than as the pane's single counter. */
   private[renderer] def paintsColumnRails(state: AppState): Boolean =
@@ -123,16 +125,17 @@ object RendererGutter:
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
+    paneId: PaneId,
     lineRect: LayoutRect,
     dividerOnLeft: Boolean,
     rows: Repaint[Int]
   ): Unit =
     val surface    = context.surface
     val background = gutterBackground(state)
-    val kept = state.persisted.layout.activeEditorPaneId
-      .flatMap(renderPlan.snapshots.get)
+    val kept = renderPlan.snapshots
+      .get(paneId)
       .toList
-      .flatMap(keptRowBands(state, context, _, lineRect, rows))
+      .flatMap(keptRowBands(state, context, paneId, _, lineRect, rows))
     val toPixels = RendererChromePlan.pixelRectOf(context.cellMetrics)
     val repainted =
       if kept.isEmpty then Nil else PixelRect.uncoveredWithin(toPixels(lineRect), kept)
@@ -146,7 +149,8 @@ object RendererGutter:
     // Diagnostic markers share the divider's own column, so they are collected here and repainted afterwards -- once
     // the divider itself has been painted as one continuous stroke -- rather than drawn inline per row, which would
     // have the divider immediately paint back over them.
-    val diagnosticRows = renderLineNumberRows(state, context, renderPlan, lineRect, surface, dividerOnLeft, rows)
+    val diagnosticRows =
+      renderLineNumberRows(state, context, renderPlan, paneId, lineRect, surface, dividerOnLeft, rows)
 
     // The gutter/body boundary, painted once per frame as a single full-height fill (#1483) rather than implicitly by
     // each row's own background fill: a divider assembled that way is only as continuous as every row's fill agrees
@@ -180,6 +184,7 @@ object RendererGutter:
   private[renderer] def keptRowBands(
     state: AppState,
     context: RenderContext,
+    paneId: PaneId,
     snapshot: TextLayoutSnapshot,
     lineRect: LayoutRect,
     rows: Repaint[Int]
@@ -187,7 +192,7 @@ object RendererGutter:
     val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
     if rows.everything then Nil
     else
-      counterRowBands(state, context, snapshot, lineRect).toList.zipWithIndex.collect {
+      counterRowBands(state, context, paneId, snapshot, lineRect).toList.zipWithIndex.collect {
         case (band, row) if !rows.includes(row) => band.copy(xPx = band.xPx - reach, widthPx = band.widthPx + 2 * reach)
       }
 
@@ -198,6 +203,7 @@ object RendererGutter:
   private[renderer] def spillGuardBands(
     state: AppState,
     context: RenderContext,
+    paneId: PaneId,
     snapshot: TextLayoutSnapshot,
     lineRect: LayoutRect,
     rows: Repaint[Int]
@@ -205,7 +211,7 @@ object RendererGutter:
     if rows.everything then Nil
     else
       val reach = math.ceil(SurfaceTextInset.px(state.persisted.config)).toInt
-      val bands = counterRowBands(state, context, snapshot, lineRect)
+      val bands = counterRowBands(state, context, paneId, snapshot, lineRect)
       bands.indices.toList.collect {
         case row if row > 0 && !rows.includes(row) && rows.includes(row - 1) =>
           val band = bands(row)
@@ -226,12 +232,13 @@ object RendererGutter:
   private[renderer] def counterRowBands(
     state: AppState,
     context: RenderContext,
+    paneId: PaneId,
     snapshot: TextLayoutSnapshot,
     lineRect: LayoutRect
   ): Vector[PixelRect] =
     val measured =
-      state.persisted.layout.activeEditorPaneId
-        .flatMap(state.persisted.layout.editorPanes.get)
+      state.persisted.layout.editorPanes
+        .get(paneId)
         .flatMap(_.bufferId)
         .flatMap(state.persisted.buffers.get)
         .exists(useMeasuredLineNumberFont(_, context)) &&
@@ -276,29 +283,34 @@ object RendererGutter:
     state: AppState,
     context: RenderContext,
     renderPlan: EditorPaneRenderPlan,
+    paneId: PaneId,
     lineRect: LayoutRect,
     surface: RenderSurface,
     dividerOnLeft: Boolean,
     rows: Repaint[Int]
   ): List[DiagnosticMarker] =
-    state.persisted.layout.activeEditorPaneId
-      .flatMap(state.persisted.layout.editorPanes.get)
+    state.persisted.layout.editorPanes
+      .get(paneId)
       .toList
       .flatMap { pane =>
         val buffer = pane.bufferId.flatMap(state.persisted.buffers.get)
         val snapshot =
-          state.persisted.layout.activeEditorPaneId
-            .flatMap(renderPlan.snapshots.get)
+          renderPlan.snapshots
+            .get(paneId)
             .orElse {
               for
-                paneLayout <- state.persisted.layout.activeEditorPaneId.flatMap(renderPlan.paneLayouts.get)
+                paneLayout <- renderPlan.paneLayouts.get(paneId)
                 buf        <- buffer
               yield RendererPaneSetup.snapshotForBuffer(buf, paneLayout.contentRect, state, context)
             }
+        val rowCount = snapshot.map(_.visualLines.length).getOrElse(0)
         val rowSlots =
-          if dividerOnLeft then
-            renderPlan.layoutContract.rightLineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
-          else renderPlan.layoutContract.lineNumberRowSlots(snapshot.map(_.visualLines.length).getOrElse(0))
+          renderPlan.paneLayouts
+            .get(paneId)
+            .toList
+            .flatMap(layout =>
+              if dividerOnLeft then layout.rightLineNumberRowSlots(rowCount) else layout.lineNumberRowSlots(rowCount)
+            )
         snapshot.toList.flatMap { snapshot =>
           val rowMetrics   = RendererPaneContent.textRowMetrics(lineRect, context, snapshot)
           val measuredFont = measuredLineNumberFont(buffer, snapshot, context, lineRect)

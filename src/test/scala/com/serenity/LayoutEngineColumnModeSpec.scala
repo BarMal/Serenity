@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.ActivePane
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -195,10 +196,10 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
     )
 
   it should "reserve no single pane-level line-number rail in column mode -- the per-column rails replace it" in {
-    val layout = LayoutEngine.calculateLayoutWithUI(columnModeState(lineNumbers = true), viewportSize)
-
-    layout.lineNumberRect shouldBe None
-    layout.rightLineNumberRect shouldBe None
+    val state  = columnModeState(lineNumbers = true)
+    val layout = LayoutEngine.calculateLayoutWithUI(state, viewportSize)
+    ActivePane.of(state, layout).lineNumberRect shouldBe None
+    ActivePane.of(state, layout).rightLineNumberRect shouldBe None
   }
 
   it should "give the editor panel the full workspace width in column mode with line numbers on (no pane-level gutter shift)" in {

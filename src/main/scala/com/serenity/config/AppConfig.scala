@@ -469,17 +469,23 @@ final case class AppConfig(
   def withTextAreaInsets(insets: TextAreaInsets): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(textAreaInsets = insets))
 
-  def withTextAreaLeftInset(value: Double): AppConfig =
-    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(left = value))
+  def withTextAreaLeft(gutter: Gutter): AppConfig =
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(left = gutter))
 
-  def withTextAreaRightInset(value: Double): AppConfig =
-    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(right = value))
+  def withTextAreaRight(gutter: Gutter): AppConfig =
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(right = gutter))
 
-  def withTextAreaTopInset(value: Double): AppConfig =
-    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(top = value))
+  def withTextAreaTop(gutter: Gutter): AppConfig =
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(top = gutter))
 
-  def withTextAreaBottomInset(value: Double): AppConfig =
-    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(bottom = value))
+  def withTextAreaBottom(gutter: Gutter): AppConfig =
+    withTextAreaInsets(surfaceConfig.textAreaInsets.copy(bottom = gutter))
+
+  /** A side as a share of the width, which is what dragging an edge and the settings dialog set. */
+  def withTextAreaLeftInset(share: Double): AppConfig   = withTextAreaLeft(Gutter.Percent(share))
+  def withTextAreaRightInset(share: Double): AppConfig  = withTextAreaRight(Gutter.Percent(share))
+  def withTextAreaTopInset(share: Double): AppConfig    = withTextAreaTop(Gutter.Percent(share))
+  def withTextAreaBottomInset(share: Double): AppConfig = withTextAreaBottom(Gutter.Percent(share))
 
   def withPreferredWindowSize(size: PreferredWindowSize): AppConfig =
     withWindowConfig(windowConfig.copy(preferredSize = Some(size.normalized)))

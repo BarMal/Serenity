@@ -7,7 +7,7 @@ import java.time.Instant
 import cats.effect.IO
 import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
 import io.circe.syntax.*
-import io.circe.{Decoder, HCursor, Json}
+import io.circe.{Decoder, DecodingFailure, HCursor, Json}
 
 /** What `serenity --optimize-renderer` measured on this machine, kept beside the config so the next run can say whether
   * it still applies (#2618).
@@ -46,6 +46,9 @@ object RendererBenchmarkResult:
     case Applies(stored: Stored)
     case Stale(stored: Stored, changed: List[String])
 
+  /** 2 added the typing p95 and the scale; a file of any other version is read as absent and measured again. */
+  val SchemaVersion: Int = 2
+
   val fileName: String = "render-benchmark.json"
 
   def defaultPath: Path = Paths.get(System.getProperty("user.home"), ".serenity", fileName)
@@ -69,7 +72,12 @@ object RendererBenchmarkResult:
 
   private[app] def outcomeJson(outcome: Outcome): Json = outcome match
     case Outcome.Measured(workload) =>
-      Json.obj("typingP50Ms" -> workload.typingP50Ms.asJson, "fullWindowMs" -> workload.fullWindowMs.asJson)
+      Json.obj(
+        "typingP50Ms"  -> workload.typingP50Ms.asJson,
+        "typingP95Ms"  -> workload.typingP95Ms.asJson,
+        "scale"        -> workload.scale.asJson,
+        "fullWindowMs" -> workload.fullWindowMs.asJson
+      )
     case Outcome.Failed(reason) =>
       Json.obj("failed" -> reason.asJson)
 
@@ -81,6 +89,7 @@ object RendererBenchmarkResult:
   def encode(stored: Stored): String =
     Json
       .obj(
+        "schema"     -> SchemaVersion.asJson,
         "key"        -> keyJson(stored.key),
         "measuredAt" -> stored.measuredAt.toString.asJson,
         "results"    -> resultsJson(stored.results)
@@ -110,9 +119,11 @@ object RendererBenchmarkResult:
       case Some(reason) => Right(Outcome.Failed(reason))
       case None =>
         for
-          typing <- cursor.get[Double]("typingP50Ms")
-          rows   <- cursor.get[Map[String, Double]]("fullWindowMs")
-        yield Outcome.Measured(Workload(typing, rows))
+          typing    <- cursor.get[Double]("typingP50Ms")
+          typingP95 <- cursor.get[Double]("typingP95Ms")
+          scale     <- cursor.get[Double]("scale")
+          rows      <- cursor.get[Map[String, Double]]("fullWindowMs")
+        yield Outcome.Measured(Workload(typing, typingP95, scale, rows))
     }
 
   private given Decoder[Outcome] = outcomeDecoder
@@ -125,7 +136,8 @@ object RendererBenchmarkResult:
 
   private given Decoder[Stored] = (cursor: HCursor) =>
     for
-      key        <- cursor.get[Key]("key")
+      _   <- cursor.get[Int]("schema").filterOrElse(_ == SchemaVersion, DecodingFailure("schema", cursor.history))
+      key <- cursor.get[Key]("key")
       measuredAt <- cursor.get[Instant]("measuredAt")
       results    <- cursor.get[List[CandidateRuns]]("results")
     yield Stored(key, measuredAt, results)

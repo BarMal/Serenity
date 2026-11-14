@@ -130,11 +130,14 @@ class HeadingSpacingPaintSpec extends AnyFlatSpec with Matchers with PersistedFr
   "A line number beside a spaced heading" should "sit in its row's own box, with the space beside it left empty" in {
     val state         = richState(AppConfig.conventional.withHeadingsConfig(headings).withLineNumbers(true))
     val (image, plan) = drawn(state)
-    val numbers       = plan.layoutContract.lineNumberRect.getOrElse(fail("expected a line number column"))
-    val from          = cellMetrics.toPixelX(numbers.x)
-    val to            = cellMetrics.toPixelX(numbers.right) - cellMetrics.charWidth
-    val rows          = boxes(plan)
-    val gutterBg      = theme.panel.background.toAwt.getRGB & 0xffffff
+    val numbers = plan.layoutContract.activePaneLayout
+      .getOrElse(fail("expected an active pane"))
+      .lineNumberRect
+      .getOrElse(fail("expected a line number column"))
+    val from     = cellMetrics.toPixelX(numbers.x)
+    val to       = cellMetrics.toPixelX(numbers.right) - cellMetrics.charWidth
+    val rows     = boxes(plan)
+    val gutterBg = theme.panel.background.toAwt.getRGB & 0xffffff
 
     val numbered = rows.filter(box => box.row.startColumn == 0)
     numbered.size should be >= 6

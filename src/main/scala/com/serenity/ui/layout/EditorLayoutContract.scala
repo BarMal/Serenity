@@ -18,10 +18,6 @@ final case class LayoutContractViolation(
 final case class EditorLayoutContract(
     viewportRect: LayoutRect,
     contentAreaRect: LayoutRect,
-    leftSpacerRect: LayoutRect,
-    rightSpacerRect: LayoutRect,
-    topSpacerRect: LayoutRect,
-    bottomSpacerRect: LayoutRect,
     tabBarRect: Option[LayoutRect],
     workspace: EditorWorkspaceLayout,
     activePaneId: Option[PaneId],
@@ -64,17 +60,14 @@ final case class EditorLayoutContract(
   def gutterRect: Option[LayoutRect] =
     workspace.gutterRect
 
-  def lineNumberRect: Option[LayoutRect] =
-    workspace.lineNumberRect
+  /** The panes in id order, so what is built from every pane's rects does not depend on map iteration. */
+  def panesInOrder: List[(PaneId, EditorPaneLayout)] = workspace.paneLayouts.toList.sortBy(_._1.value)
 
-  def rightLineNumberRect: Option[LayoutRect] =
-    workspace.rightLineNumberRect
+  def sideSpacerRects: List[LayoutRect] =
+    panesInOrder.flatMap((_, pane) => List(pane.leftSpacerRect, pane.rightSpacerRect))
 
-  def lineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
-    workspace.lineNumberRowSlots(itemCount)
-
-  def rightLineNumberRowSlots(itemCount: Int): List[SurfaceContentRowSlot] =
-    workspace.rightLineNumberRowSlots(itemCount)
+  def lineNumberRects: List[LayoutRect] =
+    panesInOrder.flatMap((_, pane) => pane.lineNumberRect.toList ++ pane.rightLineNumberRect.toList)
 
   def panelRect(surfaceId: SurfaceId): Option[LayoutRect] =
     expandedSurfaceRects.get(surfaceId).orElse(pinnedSurfaceRects.get(surfaceId))
@@ -120,13 +113,7 @@ final case class EditorLayoutContract(
       "content area",
       contentAreaRect,
       List(
-        "editor panel"       -> Some(workspace.editorPanelRect),
-        "line numbers"       -> workspace.lineNumberRect,
-        "right line numbers" -> workspace.rightLineNumberRect,
-        "left spacer"        -> Some(leftSpacerRect),
-        "right spacer"       -> Some(rightSpacerRect),
-        "top spacer"         -> Some(topSpacerRect),
-        "bottom spacer"      -> Some(bottomSpacerRect)
+        "editor panel" -> Some(workspace.editorPanelRect)
       )
     )
 
@@ -139,7 +126,11 @@ final case class EditorLayoutContract(
           if activePaneId.contains(paneId) then "active top spacer" else s"pane ${paneId.value} top spacer"
         val bottomSpacerName =
           if activePaneId.contains(paneId) then "active bottom spacer" else s"pane ${paneId.value} bottom spacer"
-        val headerName = if activePaneId.contains(paneId) then "active header" else s"pane ${paneId.value} header"
+        val leftSpacerName  = s"$paneName left spacer"
+        val rightSpacerName = s"$paneName right spacer"
+        val leftRailName    = s"$paneName line numbers"
+        val rightRailName   = s"$paneName right line numbers"
+        val headerName      = if activePaneId.contains(paneId) then "active header" else s"pane ${paneId.value} header"
         containedBy(
           "editor panel",
           workspace.editorPanelRect,
@@ -151,7 +142,12 @@ final case class EditorLayoutContract(
             List(
               contentName      -> Some(pane.contentRect),
               topSpacerName    -> Some(pane.topSpacerRect),
-              bottomSpacerName -> Some(pane.bottomSpacerRect)
+              bottomSpacerName -> Some(pane.bottomSpacerRect),
+              leftSpacerName   -> Some(pane.leftSpacerRect),
+              rightSpacerName  -> Some(pane.rightSpacerRect)
+            ) ++ List(
+              leftRailName  -> pane.lineNumberRect,
+              rightRailName -> pane.rightLineNumberRect
             )
           ) ++
           containedBy(
@@ -406,10 +402,6 @@ object EditorLayoutContract:
     EditorLayoutContract(
       viewportRect = viewportRect,
       contentAreaRect = contentAreaRect,
-      leftSpacerRect = calculatedLayout.leftSpacerRect,
-      rightSpacerRect = calculatedLayout.rightSpacerRect,
-      topSpacerRect = calculatedLayout.topSpacerRect,
-      bottomSpacerRect = calculatedLayout.bottomSpacerRect,
       tabBarRect = calculatedLayout.tabBarRect,
       workspace = workspace,
       activePaneId = state.persisted.layout.activeEditorPaneId,
