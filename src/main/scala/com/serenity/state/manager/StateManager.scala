@@ -16,7 +16,9 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.layout.TextMeasurer
 import com.serenity.ui.presets.UiPresetStore
+import com.serenity.ui.renderer.BackendCaches
 import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -226,11 +228,16 @@ object StateManager:
     restarter: Option[RestartMode => IO[Unit]] = None,
     dictionaryCache: DictionaryCache = DictionaryCache(),
     appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system,
-    scrollCounting: ScrollCounting = ScrollCounting.Inline
+    scrollCounting: ScrollCounting = ScrollCounting.Inline,
+    layoutMeasurerFor: BackendCaches => Option[TextMeasurer] = _ => None
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches =
-      RenderCaches.create(initialConfig.surfaceConfig.rendererFrameStateCacheCapacity, scrollCounting)
+      RenderCaches.create(
+        initialConfig.surfaceConfig.rendererFrameStateCacheCapacity,
+        scrollCounting,
+        measurerFor = layoutMeasurerFor
+      )
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
       themeNames                  <- themeManager.listAvailableThemes.handleErrorWith(_ => IO.pure(Nil))
