@@ -32,8 +32,9 @@ object LegacyWrapColumnKeys:
 
   def handles(key: String): Boolean = replacements.contains(key)
 
-  /** Whether an old key's value is one the old setting would have refused, or the wrap column now does. */
-  def rejects(key: String, value: String): Boolean = read(key, value).isEmpty
+  /** Why an old key's value is refused: the old setting would have refused it, or the wrap column now does. */
+  def rejection(key: String, value: String): Option[String] =
+    Option.when(read(key, value).isEmpty)(s"not ${WrapColumn.Accepted}, using the edge")
 
   private def read(key: String, value: String): Option[WrapColumn] =
     if MeasureKeys.contains(key) then
@@ -82,6 +83,14 @@ object LegacyWrapColumnKeys:
     val old = oldEntries(entries)
     if old.isEmpty || setExplicitly(entries) then config
     else resolve(old, columnModeIn(entries)).chosen.fold(config)((_, wrapColumn) => config.withWrapColumn(wrapColumn))
+
+  /** An old key as a deprecation entry, or what `fallback` makes of any other key. */
+  def deprecation(
+    key: String,
+    entries: List[(String, String)],
+    fallback: String => Option[String]
+  ): Option[DeprecatedConfigEntry] =
+    replacementFor(key, entries).orElse(fallback(key)).map(DeprecatedConfigEntry(key, _))
 
   /** What to tell the user an old key became: the new key, and why its value was not carried over when it was not. */
   def replacementFor(key: String, entries: List[(String, String)]): Option[String] =

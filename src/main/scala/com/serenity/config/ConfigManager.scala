@@ -339,12 +339,7 @@ object ConfigManager:
     val entries      = hoconEntries(source)
     val keyedEntries = entries.map(entry => entry.key -> entry.value)
     val deprecatedEntries = entries
-      .flatMap(entry =>
-        LegacyWrapColumnKeys
-          .replacementFor(entry.key, keyedEntries)
-          .orElse(deprecatedReplacement(entry.key))
-          .map(replacement => DeprecatedConfigEntry(entry.key, replacement))
-      )
+      .flatMap(entry => LegacyWrapColumnKeys.deprecation(entry.key, keyedEntries, deprecatedReplacement))
       .distinctBy(_.key)
     val removedKeys = entries
       .map(_.key)
@@ -522,8 +517,7 @@ object ConfigManager:
               Option.when(value.trim.toIntOption.forall(_ <= 0))(
                 "not a whole number above zero, read as an unversioned file"
               )
-            case key if LegacyWrapColumnKeys.handles(key) =>
-              Option.when(LegacyWrapColumnKeys.rejects(key, value))(s"not ${WrapColumn.Accepted}, using the edge")
+            case key if LegacyWrapColumnKeys.handles(key) => LegacyWrapColumnKeys.rejection(key, value)
             case key if LegacyStatusLineKeys.handles(key) =>
               Option.when(LegacyStatusLineKeys.rejects(key, value))("not a recognised value, using the default")
             case key if key.startsWith("hotkey.") || key.startsWith("keymap.") =>

@@ -1,6 +1,19 @@
 package com.serenity.session
 
-import com.serenity.config.{AppConfig, ConfigRegistry, CursorColorConfig, FocusedKeymapConfig, HotkeyConfig, LegacyStatusLineKeys, LegacyWrapColumnKeys, PreferredWindowSize, SpellCheckConfig, StatusLinePlacement, StatusSegment, TextAreaInsets}
+import com.serenity.config.{
+  AppConfig,
+  ConfigRegistry,
+  CursorColorConfig,
+  FocusedKeymapConfig,
+  HotkeyConfig,
+  LegacyStatusLineKeys,
+  LegacyWrapColumnKeys,
+  PreferredWindowSize,
+  SpellCheckConfig,
+  StatusLinePlacement,
+  StatusSegment,
+  TextAreaInsets
+}
 import com.serenity.lsp.config.LspUserConfig
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import io.circe.{Decoder, Encoder, HCursor, Json}
