@@ -1,7 +1,7 @@
 package com.serenity.app
 
-import java.awt.{Color, Dimension, GraphicsEnvironment}
-import java.util.concurrent.atomic.AtomicReference
+import java.awt.{Color, Dimension, GraphicsEnvironment, Graphics}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import scala.concurrent.duration.*
@@ -21,10 +21,18 @@ class RobotScreenSpec extends AnyFlatSpec with Matchers:
     SwingUtilities.invokeAndWait(() => result.set(Some(body)))
     result.get().getOrElse(fail("the event thread produced nothing"))
 
+  private def awaitPainted(painted: AtomicBoolean): Unit =
+    def poll: IO[Unit] = IO.defer(if painted.get then IO.unit else IO.sleep(20.millis) *> poll)
+    poll.timeout(10.seconds).unsafeRunSync()
+
   private def withPanel[A](body: (JPanel, Region) => A): A =
     assume(!GraphicsEnvironment.isHeadless, "reading the screen needs a display")
     DisplayExclusive:
-      val panel = new JPanel(null)
+      val painted = new AtomicBoolean(false)
+      val panel = new JPanel(null):
+        override def paintComponent(g: Graphics): Unit =
+          super.paintComponent(g)
+          painted.set(true)
       panel.setBackground(Color.BLACK)
       panel.setPreferredSize(new Dimension(120, 80))
       val frame = onEdt {
@@ -36,7 +44,7 @@ class RobotScreenSpec extends AnyFlatSpec with Matchers:
         f
       }
       try
-        Thread.sleep(500)
+        awaitPainted(painted)
         val origin = onEdt(panel.getLocationOnScreen)
         body(panel, Region(origin.x + 10, origin.y + 10, 16, 8))
       finally onEdt(frame.dispose())
