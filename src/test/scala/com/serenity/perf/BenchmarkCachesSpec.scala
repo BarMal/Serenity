@@ -10,10 +10,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.ui.benchmark.BenchmarkCaches
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 /** The render benchmark builds its scenes as the app does (#2465, M1): a pane's whole-document row count is measured
   * after the frame, and the font sets are made once, not again for every cold frame.

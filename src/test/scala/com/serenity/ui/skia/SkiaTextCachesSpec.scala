@@ -6,9 +6,9 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
 

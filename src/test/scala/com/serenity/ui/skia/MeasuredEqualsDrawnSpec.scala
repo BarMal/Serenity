@@ -5,9 +5,9 @@ import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
 
 import com.serenity.ui.fonts.LogicalFontFamilies
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 /** Layout measures with AWT and Skia draws, so the face a logical family resolves to has to advance the same in both:
   * that is what makes measured equal drawn. Compared against fontconfig itself, so it only runs where there is one.

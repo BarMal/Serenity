@@ -2,9 +2,9 @@ package com.serenity.ui.skia
 
 import java.awt.Font
 
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 /** The counters a scaling benchmark reads to say how well the shape cache serves many buffers (#2478): every lookup,
   * and every stretch a rotation drops. Followed by hand with a capacity of one stretch a generation, as the promotion

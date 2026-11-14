@@ -5,10 +5,10 @@ import java.util.concurrent.{Callable, Executors}
 
 import com.serenity.SkiaPixels
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.{Font, Paint, Surface, Typeface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 /** Text with characters the base font lacks is shaped by supplying our own font runs instead of Skiko's `TextLine`,
   * which costs 4 to 8 ms a call whatever the text. Every claim here is a comparison against `TextLine` itself, for

@@ -2,10 +2,10 @@ package com.serenity.perf
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.layout.BundledInterFont
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 final class FrameCountPinnedFontSpec extends AnyFlatSpec with Matchers:
 

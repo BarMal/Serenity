@@ -4,9 +4,9 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 class SkiaTestFontsSpec extends AnyFlatSpec with Matchers:
 

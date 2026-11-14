@@ -4,10 +4,10 @@ import java.awt.Font
 import java.awt.font.TextAttribute
 import java.util.concurrent.atomic.AtomicInteger
 
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.Typeface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
 

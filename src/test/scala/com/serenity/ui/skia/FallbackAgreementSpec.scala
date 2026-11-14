@@ -1,10 +1,10 @@
 package com.serenity.ui.skia
 
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.Font
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
-import com.serenity.ui.renderer.FontSpec
 
 final class FallbackAgreementSpec extends AnyFlatSpec with Matchers:
 
