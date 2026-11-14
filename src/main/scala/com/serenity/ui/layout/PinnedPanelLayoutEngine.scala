@@ -24,7 +24,7 @@ object PinnedPanelLayoutEngine:
     tree: WorkspaceTree,
     panels: List[UiSurface],
     workspaceRect: LayoutRect,
-    minimumEditorWidth: Int,
+    minimumEditorWidth: PaneId => Int,
     minimumEditorHeight: Int,
     uiElementGap: Int
   ): PinnedPanelLayout =
@@ -48,7 +48,7 @@ object PinnedPanelLayoutEngine:
   private def calculateWorkspaceNodeRects(
     root: WorkspaceNode,
     workspaceRect: LayoutRect,
-    minimumEditorWidth: Int,
+    minimumEditorWidth: PaneId => Int,
     minimumEditorHeight: Int,
     uiElementGap: Int
   ): Map[WorkspaceNodeId, LayoutRect] =
@@ -71,7 +71,7 @@ object PinnedPanelLayoutEngine:
 
     def minimumWidth(node: WorkspaceNode, gapDebt: Int): Int =
       node match
-        case _: WorkspaceNode.Leaf          => minimumEditorWidth + gapDebt
+        case leaf: WorkspaceNode.Leaf       => minimumEditorWidth(leaf.paneId) + gapDebt
         case _: WorkspaceNode.DockedSurface => 1
         case split: WorkspaceNode.Split =>
           val charges = split.splitAxis == SplitAxis.Horizontal

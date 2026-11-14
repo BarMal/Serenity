@@ -94,6 +94,10 @@ object ConfigFileFormat:
     field("workspace.mode"),
     comment("Show every setting regardless of the mode filter above"),
     field("workspace.show_all_settings"),
+    comment(
+      "The narrowest a pane's text may be, in cells, before that pane's gutters and line numbers are added; a dock " +
+        "stops growing when the panes beside it are down to this"
+    ),
     field("workspace.minimum_pane_width"),
     blank,
     comment("Saving: write a file's unsaved changes to the file itself. off, after-delay, on-focus-change (switching"),

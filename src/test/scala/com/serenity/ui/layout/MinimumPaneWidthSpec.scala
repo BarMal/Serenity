@@ -55,9 +55,8 @@ class MinimumPaneWidthSpec extends AnyFlatSpec with Matchers:
         config = config
       )
     )
-    val sized = base.copy(runtime =
-      base.runtime.copy(viewportSize = Some(viewport), capabilities = FrontendCapabilities.tui())
-    )
+    val sized =
+      base.copy(runtime = base.runtime.copy(viewportSize = Some(viewport), capabilities = FrontendCapabilities.tui()))
     DockedPanelFixtures.dockAllContent(
       sized,
       List((SurfaceId("right-dock"), SurfaceContent.Diagnostics(Nil), PanelPosition.Right, 150))
