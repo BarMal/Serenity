@@ -1,6 +1,6 @@
 package com.serenity.app
 
-import java.awt.{Color, Dimension, GraphicsEnvironment, Graphics}
+import java.awt.{Color, Dimension, Graphics, GraphicsEnvironment}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.{JFrame, JPanel, SwingUtilities}
 
