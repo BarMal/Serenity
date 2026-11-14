@@ -7,7 +7,8 @@ import org.scalatest.matchers.should.Matchers
 
 class RendererTrialSpec extends AnyFlatSpec with Matchers:
 
-  private val measured = Outcome.Measured(Workload(31.5, 48.0, 2.0, Map("page-down" -> 12.25, "full-redraw" -> 40.0)))
+  private val measured =
+    Outcome.Measured(Workload(31.5, 48.0, 2.0, 1.2, Map("page-down" -> 12.25, "full-redraw" -> 40.0)))
 
   private def report(
     requested: Candidate = Candidate.LayerImage,

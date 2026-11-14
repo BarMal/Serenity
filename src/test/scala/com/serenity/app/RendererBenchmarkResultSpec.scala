@@ -29,11 +29,14 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
     CandidateRuns(
       Candidate.LayerImage,
       List(
-        Outcome.Measured(Workload(31.5, 48.0, 2.0, Map("page-down" -> 12.25, "full-redraw" -> 40.0))),
-        Outcome.Measured(Workload(33.0, 52.5, 2.0, Map("page-down" -> 12.5, "full-redraw" -> 41.0)))
+        Outcome.Measured(Workload(31.5, 48.0, 2.0, 1.2, Map("page-down" -> 12.25, "full-redraw" -> 40.0))),
+        Outcome.Measured(Workload(33.0, 52.5, 2.0, 1.4, Map("page-down" -> 12.5, "full-redraw" -> 41.0)))
       )
     ),
-    CandidateRuns(Candidate.SkiaRaster, List(Outcome.Measured(Workload(44.0, 90.0, 2.0, Map("page-down" -> 20.0))))),
+    CandidateRuns(
+      Candidate.SkiaRaster,
+      List(Outcome.Measured(Workload(44.0, 90.0, 2.0, 1.1, Map("page-down" -> 20.0))))
+    ),
     CandidateRuns(Candidate.LayerPicture, List(Outcome.Failed("every typing sample timed out (150)")))
   )
 
@@ -62,6 +65,7 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
       good.replace("\"typingP50Ms\"", "\"typing\""),
       good.replace("\"typingP95Ms\"", "\"typingP95\""),
       good.replace("\"scale\"", "\"zoom\""),
+      good.replace("\"clockResolutionMs\"", "\"resolution\""),
       good.replace("2026-11-11T17:30:00Z", "yesterday")
     ).foreach(text => withClue(text.take(40))(RendererBenchmarkResult.decode(text) shouldBe None))
   }
@@ -71,7 +75,7 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
       .encode(stored)
       .replace("\"schema\"", "\"schemaWas\"")
     RendererBenchmarkResult.decode(old) shouldBe None
-    val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 2", "\"schema\" : 1")
+    val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 3", "\"schema\" : 2")
     RendererBenchmarkResult.decode(earlier) shouldBe None
   }
 
