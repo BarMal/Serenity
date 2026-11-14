@@ -53,7 +53,8 @@ object PaneTextLayout:
         contentRect,
         surfaceConfig.wordWrapEnabled,
         columnModeEnabled = surfaceConfig.columnModeEnabled,
-        surfaceConfig
+        surfaceConfig,
+        ProseColumn.wrapCells(state)
       )
     val visibleColumns =
       if surfaceConfig.wordWrapEnabled then baseViewport.visibleColumns
@@ -93,7 +94,7 @@ object PaneTextLayout:
       val gutterWidthCells     = LayoutEngine.perColumnGutterWidth(state)
       val columnTextWidthCells = math.max(1, columnWidthCells - gutterWidthCells)
       val columnTextWidthPx    = math.max(1, columnTextWidthCells * gridMetrics.charWidth)
-      val columnCount          = LayoutEngine.resolvedColumnCount(contentRect.width, surfaceConfig)
+      val columnCount = LayoutEngine.resolvedColumnCount(contentRect.width, surfaceConfig, ProseColumn.wrapCells(state))
       val columnSnapshotList = TextLayoutSnapshot.fromBufferColumns(
         buffer.copy(viewport = viewport),
         columnTextWidthPx,

@@ -310,7 +310,7 @@ object LayoutEngine:
       panelRect,
       wordWrapEnabled,
       columnModeEnabled = false,
-      columnTargetWidthCells = SurfaceConfig().columnTargetWidthCells,
+      columnTargetWidthCells = None,
       columnGap = SurfaceConfig().columnGap
     )
 
@@ -333,24 +333,27 @@ object LayoutEngine:
       panelRect,
       wordWrapEnabled,
       columnModeEnabled,
-      SurfaceConfig(columnTargetWidthCells = columnTargetWidthCells, columnGap = columnGap)
+      SurfaceConfig(columnGap = columnGap),
+      columnTargetWidthCells
     )
 
   /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): the count-driven seam. The number of columns comes
     * from [[resolvedColumnCount]] (Auto reproduces the width-driven count; `Some(n)` pins n, clamped to the pane), and
-    * a single column's text width from [[columnWidthCellsForCount]]. Only takes effect while `columnModeEnabled &&
-    * wordWrapEnabled`, otherwise this is the plain full-width viewport sizing.
+    * a single column's text width from [[columnWidthCellsForCount]]. `targetCells` is the wrap column in grid cells
+    * ([[ProseColumn.wrapCells]]). Only takes effect while `columnModeEnabled && wordWrapEnabled`, otherwise this is the
+    * plain full-width viewport sizing.
     */
   def updateBufferViewportDimensions(
     buffer: Buffer,
     panelRect: LayoutRect,
     wordWrapEnabled: Boolean,
     columnModeEnabled: Boolean,
-    surfaceConfig: SurfaceConfig
+    surfaceConfig: SurfaceConfig,
+    targetCells: Option[Int]
   ): Viewport =
     val effectivePanelRect =
       if columnModeEnabled && wordWrapEnabled then
-        val count = resolvedColumnCount(panelRect.width, surfaceConfig)
+        val count = resolvedColumnCount(panelRect.width, surfaceConfig, targetCells)
         panelRect.copy(width = columnWidthCellsForCount(panelRect.width, count, surfaceConfig.columnGap))
       else panelRect
     val resizedViewport = updateViewportDimensions(buffer.viewport, effectivePanelRect)
@@ -360,8 +363,8 @@ object LayoutEngine:
 
     resizedViewport.copy(leftColumn = clampedLeftColumn)
 
-  /** How many columns of `columnTargetWidthCells` (plus `columnGap` between them) fit `contentWidthCells` -- e-reader
-    * style "as many as fit", never fewer than one.
+  /** How many columns of the target width (plus `columnGap` between them) fit `contentWidthCells` -- e-reader style "as
+    * many as fit", never fewer than one.
     */
   def columnCount(contentWidthCells: Int, columnTargetWidthCells: Int, columnGap: Int): Int =
     columnCount(contentWidthCells, Some(columnTargetWidthCells), columnGap)
@@ -386,9 +389,9 @@ object LayoutEngine:
     math.max(1, (contentWidthCells - (count - 1) * gap) / count)
 
   /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): the anti-absurdity floor on a column's text width
-    * in cells -- NOT a readability target (that is `columnTargetWidthCells`, which drives Auto mode), just the point
-    * below which pinning yet another column would leave each one too narrow to hold anything meaningful. It exists only
-    * to bound `columnCount = Some(n)` against the pane in `maxColumnsThatFit`/`resolvedColumnCount`.
+    * in cells -- NOT a readability target (that is the wrap column, which drives Auto mode), just the point below which
+    * pinning yet another column would leave each one too narrow to hold anything meaningful. It exists only to bound
+    * `columnCount = Some(n)` against the pane in `maxColumnsThatFit`/`resolvedColumnCount`.
     */
   val MinColumnTextWidthCells = 8
 
@@ -405,11 +408,9 @@ object LayoutEngine:
     * absurd count can never leave columns below the anti-absurdity floor. A zero-width pane (no laid-out window yet)
     * collapses to a single column on either path, since `maxColumnsThatFit` is then one.
     */
-  def resolvedColumnCount(contentWidthCells: Int, surfaceConfig: SurfaceConfig): Int =
+  def resolvedColumnCount(contentWidthCells: Int, surfaceConfig: SurfaceConfig, targetCells: Option[Int]): Int =
     val requested =
-      surfaceConfig.columnCount.getOrElse(
-        columnCount(contentWidthCells, surfaceConfig.columnTargetWidthCells, surfaceConfig.columnGap)
-      )
+      surfaceConfig.columnCount.getOrElse(columnCount(contentWidthCells, targetCells, surfaceConfig.columnGap))
     requested.max(1).min(maxColumnsThatFit(contentWidthCells, surfaceConfig.columnGap))
 
   /** The width of one column when exactly `count` columns (and the `count - 1` gaps between them) are fitted into
@@ -456,7 +457,8 @@ object LayoutEngine:
                   contentRect,
                   surfaceConfig.wordWrapEnabled,
                   columnModeEnabled = surfaceConfig.columnModeEnabled,
-                  surfaceConfig
+                  surfaceConfig,
+                  ProseColumn.wrapCells(state)
                 )
               )
           }

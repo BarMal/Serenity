@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.config.{AppConfig, AppMode}
+import com.serenity.config.{AppConfig, AppMode, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.AppState
 import org.scalatest.flatspec.AnyFlatSpec
@@ -12,7 +12,7 @@ class ProseColumnOwnershipSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private def guiProseState(): AppState =
-    AppState.initial(AppConfig.default.withAppMode(AppMode.Prose).withProseMeasure(Some(66)))
+    AppState.initial(AppConfig.default.withAppMode(AppMode.Prose).withWrapColumn(WrapColumn.Ch(66)))
 
   "The prose column's glyph widths" should "be measured once per state, however often the column is asked for" in {
     val (a, b) = (guiProseState(), guiProseState())

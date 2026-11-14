@@ -100,7 +100,7 @@ object UiPreset:
           showLineNumbers = source.surfaceConfig.showLineNumbers,
           wordWrapEnabled = source.surfaceConfig.wordWrapEnabled,
           textAreaInsets = source.surfaceConfig.textAreaInsets,
-          proseMeasure = source.surfaceConfig.proseMeasure
+          wrapColumn = source.surfaceConfig.wrapColumn
         )
       )
 
@@ -127,8 +127,7 @@ object UiPreset:
             else base.surfaceConfig.contextualToolbarEnabled,
           textAreaInsets =
             if includeTextAreaInsets then source.surfaceConfig.textAreaInsets else base.surfaceConfig.textAreaInsets,
-          proseMeasure =
-            if includeTextAreaInsets then source.surfaceConfig.proseMeasure else base.surfaceConfig.proseMeasure
+          wrapColumn = if includeTextAreaInsets then source.surfaceConfig.wrapColumn else base.surfaceConfig.wrapColumn
         )
       )
 

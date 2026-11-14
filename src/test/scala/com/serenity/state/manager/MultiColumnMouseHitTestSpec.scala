@@ -2,7 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Ref}
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.MouseClick
 import com.serenity.rope.Balance
@@ -29,7 +29,7 @@ class MultiColumnMouseHitTestSpec extends AnyFlatSpec with Matchers:
       .withLineNumbers(false)
       .withWordWrap(true)
       .withColumnMode(true)
-      .withColumnTargetWidth(20)
+      .withWrapColumn(WrapColumn.Cells(20))
       .withColumnGap(2)
 
   private def stateWith(config: AppConfig): AppState =

@@ -1,6 +1,6 @@
 package com.serenity.state.manager
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -297,7 +297,7 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
     val content = (0 until 40).map(i => s"line $i").mkString("\n")
     // A wide window with a small target column width fits several columns per page.
     val viewportSize = ViewportSize(400, 40)
-    val config       = AppConfig.default.withColumnMode(true).withColumnTargetWidth(20).withColumnGap(2)
+    val config       = AppConfig.default.withColumnMode(true).withWrapColumn(WrapColumn.Cells(20)).withColumnGap(2)
     val buffer = Buffer
       .fromString(bufferId, content)
       .copy(

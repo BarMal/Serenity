@@ -8,6 +8,7 @@ import com.serenity.ui.layout.{
   ColumnPaging,
   LayoutEngine,
   PaneRowBands,
+  ProseColumn,
   RichTextContext,
   ScrollLimits,
   TextLayoutSnapshot,
@@ -447,8 +448,9 @@ object CursorViewport:
             paneLayouts.get(paneId).map(_.contentRect.width)
         }.flatten
         paneContentWidth match
-          case None               => 1
-          case Some(contentWidth) => LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
+          case None => 1
+          case Some(contentWidth) =>
+            LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig, ProseColumn.wrapCells(state))
 
   private def previewFontForBuffer(
     buffer: Buffer,

@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import com.serenity.config.{AppMode, ProseMeasure}
+import com.serenity.config.{AppMode, WrapColumn}
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.{FramePixels, PersistedFrameFixture}
@@ -23,9 +23,7 @@ class SpacerMarginClearSpec extends AnyFlatSpec with Matchers with PersistedFram
   private def proseState(cursorLine: Int): AppState =
     val base = stateOf(proseLines.mkString("\n"), CursorPosition(cursorLine, 0))
     base.copy(persisted =
-      base.persisted.copy(config =
-        base.persisted.config.withAppMode(AppMode.Prose).withProseMeasure(Some(ProseMeasure.Default))
-      )
+      base.persisted.copy(config = base.persisted.config.withAppMode(AppMode.Prose).withWrapColumn(WrapColumn.Ch(66)))
     )
 
   private def stamped(image: FramePixels, x: Int, y: Int): Boolean = (image.rgbAt(x, y) & 0xffffff) == sentinel

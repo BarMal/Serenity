@@ -1,7 +1,7 @@
 package com.serenity.ui.layout
 
 import com.serenity.TestWorkspaceTrees
-import com.serenity.config.{AppConfig, AppMode, Gutter, TextAreaInsets}
+import com.serenity.config.{AppConfig, AppMode, Gutter, TextAreaInsets, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, EditorPane, Focus, PaneId}
@@ -173,15 +173,15 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
       "prose with a measure" -> AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withProseMeasure(Some(60)),
+        .withWrapColumn(WrapColumn.Ch(60)),
       "prose with a measure and line numbers" -> AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(true)
-        .withProseMeasure(Some(60)),
+        .withWrapColumn(WrapColumn.Ch(60)),
       "prose with a measure and insets" -> AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withProseMeasure(Some(60))
+        .withWrapColumn(WrapColumn.Ch(60))
         .withTextAreaInsets(TextAreaInsets.percent(left = 0.3, right = 0.0)),
       "code with gutters in cells" -> AppConfig.default
         .withLineNumbers(false)
@@ -192,17 +192,17 @@ class TextAreaSpec extends AnyFlatSpec with Matchers:
       "prose with auto gutters" -> AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(false)
-        .withProseMeasure(Some(60))
+        .withWrapColumn(WrapColumn.Ch(60))
         .withTextAreaInsets(TextAreaInsets(Gutter.Auto, Gutter.Auto, Gutter.Percent(0.0), Gutter.Percent(0.0))),
       "prose with an auto and a cell gutter" -> AppConfig.default
         .withAppMode(AppMode.Prose)
         .withLineNumbers(true)
-        .withProseMeasure(Some(60))
+        .withWrapColumn(WrapColumn.Ch(60))
         .withTextAreaInsets(TextAreaInsets(Gutter.Cells(10), Gutter.Auto, Gutter.Percent(0.0), Gutter.Percent(0.0))),
       "column mode, as many 80-cell columns as fit" -> AppConfig.default
         .withLineNumbers(true)
         .withColumnMode(true)
-        .withColumnTargetWidth(80)
+        .withWrapColumn(WrapColumn.Cells(80))
     )
 
   settings.foreach { (name, config) =>

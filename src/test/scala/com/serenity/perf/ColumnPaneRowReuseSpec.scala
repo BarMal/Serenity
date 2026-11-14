@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
@@ -40,7 +40,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
     ChromeOn.config
       .withFontConfig(fontConfig)
       .withColumnMode(true)
-      .withColumnTargetWidth(40)
+      .withWrapColumn(WrapColumn.Cells(40))
       .withLineNumbers(false)
 
   private val railedConfig = columnConfig.withLineNumbers(true)

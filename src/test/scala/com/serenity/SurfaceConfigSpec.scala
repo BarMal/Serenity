@@ -45,7 +45,7 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   "SurfaceConfig" should "default column mode off, with a sensible target width and gap" in {
     val default = SurfaceConfig()
     default.columnModeEnabled.shouldBe(false)
-    default.columnTargetWidthCells.shouldBe(None)
+    default.wrapColumn.shouldBe(WrapColumn.Edge)
     default.columnGap.shouldBe(2)
   }
 
@@ -73,13 +73,6 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
   "SurfaceConfig.normalized" should "clamp columnGap to non-negative" in {
     SurfaceConfig(columnGap = -5).normalized.columnGap.shouldBe(0)
     SurfaceConfig(columnGap = 5).normalized.columnGap.shouldBe(5)
-  }
-
-  it should "clamp columnTargetWidthCells to at least 1" in {
-    SurfaceConfig(columnTargetWidthCells = Some(-5)).normalized.columnTargetWidthCells.shouldBe(Some(1))
-    SurfaceConfig(columnTargetWidthCells = Some(0)).normalized.columnTargetWidthCells.shouldBe(Some(1))
-    SurfaceConfig(columnTargetWidthCells = Some(100)).normalized.columnTargetWidthCells.shouldBe(Some(100))
-    SurfaceConfig(columnTargetWidthCells = None).normalized.columnTargetWidthCells.shouldBe(None)
   }
 
   "SurfaceConfig.normalized" should "clamp rendererFrameStateCacheCapacity to AppConfig's configured bounds" in {
@@ -153,18 +146,19 @@ class SurfaceConfigSpec extends AnyFlatSpec with Matchers:
     ConfigRegistry.allKeys.should(contain("editor.text_area.bottom"))
   }
 
-  it should "read the column target width as a cell count or unlimited, and write unlimited by default" in {
-    val field = ConfigRegistry.find("editor.column_target_width").getOrElse(fail("missing editor.column_target_width"))
+  it should "read the wrap column as cells, ch or the edge, and write the edge by default" in {
+    val field = ConfigRegistry.find("editor.wrap_column").getOrElse(fail("missing editor.wrap_column"))
 
     field
-      .read(AppConfig.default.withColumnTargetWidth(60), "unlimited")
+      .read(AppConfig.default.withWrapColumn(WrapColumn.Cells(60)), "unlimited")
       .map(field.setting(_)._2.config.unwrapped) shouldBe
-      Some("unlimited")
-    field.read(AppConfig.default, " Unlimited ").map(field.setting(_)._2.config.unwrapped) shouldBe Some("unlimited")
+      Some("edge")
+    field.read(AppConfig.default, " Edge ").map(field.setting(_)._2.config.unwrapped) shouldBe Some("edge")
     field.read(AppConfig.default, "60").map(field.setting(_)._2.config.unwrapped) shouldBe Some(60)
+    field.read(AppConfig.default, "66ch").map(field.setting(_)._2.config.unwrapped) shouldBe Some("66ch")
     field.read(AppConfig.default, "0") shouldBe None
     field.read(AppConfig.default, "wide") shouldBe None
-    field.setting(AppConfig.default)._2.config.unwrapped shouldBe "unlimited"
+    field.setting(AppConfig.default)._2.config.unwrapped shouldBe "edge"
   }
 
   it should "group appearance and text display settings under AppConfig" in {

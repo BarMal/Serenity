@@ -7,6 +7,7 @@ import com.serenity.config.{
   FocusedKeymapConfig,
   HotkeyConfig,
   LegacyStatusLineKeys,
+  LegacyWrapColumnKeys,
   PreferredWindowSize,
   SpellCheckConfig,
   StatusLinePlacement,
@@ -160,7 +161,8 @@ object SessionConfigCodec:
   def decode(cursor: HCursor): AppConfig =
     val withFields    = restoreOrder.foldLeft(AppConfig.default)((config, field) => field.decode(cursor, config))
     val withComposite = composites.foldLeft(withFields)((config, field) => field.decode(cursor, config))
-    readSupersededShapes(cursor, withComposite)
+    val withOldWidth  = LegacyWrapColumnKeys.appliedToSession(cursor, withComposite)
+    readSupersededShapes(cursor, withOldWidth)
 
   /** Shapes older session files used for the status line, read onto today's one model.
     *

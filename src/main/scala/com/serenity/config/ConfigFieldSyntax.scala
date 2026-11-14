@@ -95,16 +95,14 @@ private[config] object ConfigFieldSyntax:
       }
     )
 
-  /** Characters per line, `off` or `unlimited` for none. */
-  private[config] val proseMeasure: FieldCodec[Option[Int]] =
-    given io.circe.Encoder[Option[Int]] = io.circe.Encoder.encodeOption(using io.circe.Encoder.encodeInt)
-    given io.circe.Decoder[Option[Int]] =
-      io.circe.Decoder.decodeOption(using io.circe.Decoder.decodeInt.map(ProseMeasure.clamp))
+  /** Where a line wraps: `edge`, a count of cells, or `Nch`. */
+  private[config] val wrapColumn: FieldCodec[WrapColumn] =
     FieldCodec.of(
-      text =>
-        if parseBoolean(text).contains(false) || ProseMeasure.isUnlimited(text) then Some(None)
-        else ProseMeasure.parse(text).map(Some.apply),
-      measure => HoconValue.string(measure.fold("off")(ProseMeasure.render))
+      WrapColumn.parse,
+      {
+        case WrapColumn.Cells(count) => HoconValue.number(count)
+        case other                   => HoconValue.string(WrapColumn.render(other))
+      }
     )
 
   private[config] def lowercased[A](values: Array[A]): FieldCodec[A] =

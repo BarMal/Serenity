@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
@@ -32,7 +32,7 @@ class RendererColumnAnnotationsSpec extends AnyFlatSpec with Matchers:
       .withLineNumbers(false)
       .withWordWrap(true)
       .withColumnMode(columnMode)
-      .withColumnTargetWidth(20)
+      .withWrapColumn(WrapColumn.Cells(20))
       .withColumnGap(2)
 
   private def diagnosticOn(line: Int): Diagnostic =

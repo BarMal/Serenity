@@ -294,13 +294,13 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     Files.writeString(file, oldDefault)
     val result = ConfigManagerTestSupport.loadConfigResult(Some(file.toString), ConfigManagerTestSupport.linuxPlan)
 
-    // The old default names `editor.column_target_width = 80`, which is now an opt-in target, not the default.
+    // The old default names `editor.column_target_width = 80`, which only applied in column mode (off by default), so
+    // it is not carried over into the wrap column that applies in every mode.
     result.config shouldBe linuxWrittenDefault
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
-      .withColumnTargetWidth(80)
     result.report.unknownKeys shouldBe Nil
     result.report.invalidEntries shouldBe Nil
-    result.report.deprecatedEntries shouldBe Nil
+    result.report.deprecatedEntries.map(_.key) shouldBe List("editor.column_target_width")
     result.report.removedKeys should not be empty
     result.report.removedKeys.filterNot(_.startsWith("motion.")) should contain theSameElementsAs
       List(
@@ -327,12 +327,12 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
     val decoded = json.as[SessionState].getOrElse(fail("the stored session no longer decodes"))
 
     val hotkeysOfThisPlatform = AppConfig.default.inputConfig.hotkeyConfig
-    // The stored session names `columnTargetWidthCells: 80`, which is now an opt-in target, not the default.
+    // The stored session names `columnTargetWidthCells: 80`, which only applied in column mode (off in it), so it is
+    // not carried over into the wrap column.
     decoded.config.withHotkeyConfig(hotkeysOfThisPlatform) shouldBe AppConfig.default.withOlderBuildsChrome
       .withSpellCheck(SpellCheckConfig(enabled = false, languages = List("en")))
       .withWordWrap(false)
       .withLineNumbers(false)
-      .withColumnTargetWidth(80)
     decoded.config.inputConfig.hotkeyConfig.bindingsFor(HotkeyAction.Save) shouldBe
       HotkeyConfig.forOs("linux").bindingsFor(HotkeyAction.Save)
   }

@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import java.awt.Font
 
 import com.serenity.command.{Command, CommandPaletteState, CommandRegistry, CommandRunner, CommandRunnerSurface}
-import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets}
+import com.serenity.config.{AppConfig, InterfaceDensity, StatusLinePlacement, TextAreaInsets, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
@@ -340,7 +340,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     // A wide pane with a small column target so the fitted column is genuinely narrower than the full pane -- a
     // paragraph long enough to wrap within a 20-cell column but not within the full pane.
     val columnConfig =
-      AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20)
+      AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(20))
     val buffer = Buffer.fromString(bufferId, (1 to 40).map(_ => "word").mkString(" "))
     val state  = stateWith(buffer, columnConfig)
     val size   = ViewportSize(200, 24)
@@ -360,7 +360,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   // with its own x-origin in cells, so the renderer can paint them side by side.
   it should "carry one column-snapshot placement per fitted column with increasing x-offsets when column mode is active" in {
     val columnConfig =
-      AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20).withColumnGap(2)
+      AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(20)).withColumnGap(2)
     // Abundant short lines so every fitted column fills regardless of how many rows a column holds -- otherwise a
     // document that runs out mid-page would legitimately yield fewer placements than columns fit, masking the count.
     val buffer = Buffer.fromString(bufferId, (0 until 2000).map(i => s"line-$i").mkString("\n"))
@@ -410,7 +410,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     // The same buffer instance in both states, so the only thing that differs between them is `columnModeEnabled` --
     // `RopeIdentity`'s identity equality would otherwise make two separately-constructed "alpha beta" buffers differ
     // for an unrelated reason, masking whether the key actually tracks the column-mode toggle.
-    val base      = AppConfig.default.withWordWrap(true).withColumnTargetWidth(20)
+    val base      = AppConfig.default.withWordWrap(true).withWrapColumn(WrapColumn.Cells(20))
     val buffer    = Buffer.fromString(bufferId, "alpha beta")
     val columnOff = stateWith(buffer, base.withColumnMode(false))
     val columnOn  = stateWith(buffer, base.withColumnMode(true))
@@ -423,10 +423,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   // Count-driven columns (issue #1338, Phase 2 / slice 4): `columnCount` feeds `LayoutEngine.resolvedColumnCount`
-  // just as `columnTargetWidthCells`/`columnGap` do, so a live change to it -- with target width and gap unchanged --
+  // just as `wrapColumn`/`columnGap` do, so a live change to it -- with target width and gap unchanged --
   // must also invalidate the cached scene, or the mouse-hit-testing/render scene silently keeps the old column count.
   it should "invalidate the scene key when the explicit column count is changed live" in {
-    val base       = AppConfig.default.withWordWrap(true).withColumnMode(true).withColumnTargetWidth(20)
+    val base       = AppConfig.default.withWordWrap(true).withColumnMode(true).withWrapColumn(WrapColumn.Cells(20))
     val buffer     = Buffer.fromString(bufferId, "alpha beta")
     val autoCount  = stateWith(buffer, base.withColumnCount(None))
     val countThree = stateWith(buffer, base.withColumnCount(Some(3)))
@@ -446,7 +446,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       AppConfig.default
         .withWordWrap(true)
         .withColumnMode(true)
-        .withColumnTargetWidth(20)
+        .withWrapColumn(WrapColumn.Cells(20))
         .withColumnGap(2)
         .withColumnCount(Some(3))
     val buffer = Buffer.fromString(bufferId, (0 until 2000).map(i => s"line-$i").mkString("\n"))

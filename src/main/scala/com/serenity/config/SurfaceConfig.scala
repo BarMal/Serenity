@@ -30,12 +30,9 @@ final case class SurfaceConfig(
     // infrastructure exists today. Only takes effect while `wordWrapEnabled` is also on -- otherwise a no-op, falling
     // back to ordinary vertical scrolling.
     columnModeEnabled: Boolean = false,
-    // Target column width in cells; used only in Auto mode (`columnCount = None`), where the count is however many of
-    // this width (plus `columnGap`) fit the pane. `None` is unlimited: one column fills the pane.
-    columnTargetWidthCells: Option[Int] = None,
     columnGap: Int = 2,
     // Multi-column e-reader layout (issue #1338, Phase 2 / slice 4): count-driven mode. `None` is Auto -- the
-    // width-driven "as many columns of `columnTargetWidthCells` as fit" behaviour above, unchanged. `Some(n)` pins
+    // width-driven "as many columns of the wrap column as fit" behaviour above, unchanged. `Some(n)` pins
     // exactly n columns, each column's width auto-derived to fit. The clamp to the pane-dependent maximum lives in
     // `LayoutEngine.resolvedColumnCount`, not in `normalized` -- `normalized` has no pane width to clamp against.
     columnCount: Option[Int] = None,
@@ -71,9 +68,9 @@ final case class SurfaceConfig(
     renderSkiaVsync: Boolean = false,
     renderSkiaFrames: SkiaFrames = SkiaFrames.Image,
     textAreaInsets: TextAreaInsets = TextAreaInsets(),
-    // Characters per line for the text column in a prose workspace (`ProseMeasure`); `None` leaves the width to the
-    // insets above.
-    proseMeasure: Option[Int] = None,
+    // Where a line wraps inside the text area, in every mode; in column mode it is one column's width, and only in
+    // Auto mode (`columnCount = None`) does it decide how many columns fit.
+    wrapColumn: WrapColumn = WrapColumn.Edge,
     // Per-cache capacity for RendererFrameState's bounded-LRU caches (issue #1433): a Ref-backed Map can't observe
     // GC reachability the way the WeakHashMap it replaced could, so growth is bounded by recency instead. 64 is a
     // conservative default for a single window; tune it up if a session with many concurrently open surfaces (or a
@@ -94,7 +91,6 @@ final case class SurfaceConfig(
     copy(
       rendererFrameStateCacheCapacity = AppConfig.clampRendererFrameStateCacheCapacity(rendererFrameStateCacheCapacity),
       columnGap = columnGap.max(0),
-      columnTargetWidthCells = columnTargetWidthCells.map(_.max(1)),
       commandRunnerVisibleRows = commandRunnerVisibleRows.map(AppConfig.clampCommandRunnerVisibleRows),
       commandRunnerItemGapRows = commandRunnerItemGapRows.map(AppConfig.clampCommandRunnerItemGapRows),
       commandRunnerCursorGapRows = commandRunnerCursorGapRows.map(AppConfig.clampCommandRunnerCursorGapRows),
@@ -102,7 +98,6 @@ final case class SurfaceConfig(
         AppConfig.clampCommandRunnerCursorPeekTapWindowMillis(commandRunnerCursorPeekTapWindowMillis),
       lineNumberLayout = lineNumberLayout.normalized,
       textAreaInsets = textAreaInsets.normalized,
-      proseMeasure = proseMeasure.map(ProseMeasure.clamp),
       tabMaxWidth = TabMaxWidth.clamp(tabMaxWidth),
       diagnosticHighlightBlendWeight = AppConfig.clampDiagnosticHighlightBlendWeight(diagnosticHighlightBlendWeight)
     )

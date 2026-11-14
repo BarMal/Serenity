@@ -88,7 +88,8 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
     * An `Option` contributes twice: once as itself, so that "sometimes set, sometimes not" counts as variation, and
     * once through its contents, so the fields inside a `Some` are covered too. Without the first, a field that is
     * `None` in one sample and `Some(...)` in the next looks like it never varies -- the `Some` case recurses past the
-    * path the `None` case reports. A `Gutter` is the same: it contributes its case, then what the case holds.
+    * path the `None` case reports. A `Gutter` and a `WrapColumn` are the same: it contributes its case, then what the
+    * case holds.
     */
   private def leafValues(config: AppConfig): Map[String, Any] =
     def walk(path: String, value: Any): List[(String, Any)] =
@@ -97,6 +98,10 @@ class ConfigCodecPropertySpec extends AnyFlatSpec with Matchers with ScalaCheckP
           (path -> option) :: option.toList.flatMap(inner => walk(s"$path.value", inner))
         case gutter: Gutter =>
           (path -> gutter.productPrefix) :: gutter.productIterator.toList.flatMap(inner => walk(s"$path.value", inner))
+        case wrapColumn: WrapColumn =>
+          (path -> wrapColumn.productPrefix) :: wrapColumn.productIterator.toList.flatMap(inner =>
+            walk(s"$path.value", inner)
+          )
         case product: Product if product.productArity > 0 && !product.isInstanceOf[Iterable[?]] =>
           product.productElementNames
             .zip(product.productIterator)

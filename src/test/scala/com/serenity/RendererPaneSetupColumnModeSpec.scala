@@ -2,7 +2,7 @@ package com.serenity
 
 import java.awt.Font
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.layout.*
@@ -55,7 +55,7 @@ class RendererPaneSetupColumnModeSpec extends AnyFlatSpec with Matchers:
   // genuinely narrower than the full pane -- the default 80-cell target fits only one column at the pane's own full
   // width, which would not prove wrapping used the column width rather than the pane width.
   private def twoColumnConfig: AppConfig =
-    AppConfig.default.withoutStatusLine.withLineNumbers(false).withColumnMode(true).withColumnTargetWidth(40)
+    AppConfig.default.withoutStatusLine.withLineNumbers(false).withColumnMode(true).withWrapColumn(WrapColumn.Cells(40))
 
   "RendererPaneSetup.snapshotForBuffer" should "show only the active column's rows when column mode is on" in {
     val buffer  = bufferOfLines(60)

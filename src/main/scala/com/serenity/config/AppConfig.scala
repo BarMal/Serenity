@@ -242,12 +242,6 @@ final case class AppConfig(
   def withColumnMode(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(columnModeEnabled = enabled))
 
-  def withColumnTargetWidth(cells: Int): AppConfig =
-    withColumnTargetWidthSetting(Some(cells))
-
-  def withColumnTargetWidthSetting(cells: Option[Int]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(columnTargetWidthCells = cells))
-
   def withColumnGap(cells: Int): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(columnGap = cells))
 
@@ -257,8 +251,8 @@ final case class AppConfig(
   def withFocusedTextBody(enabled: Boolean): AppConfig =
     withSurfaceConfig(surfaceConfig.copy(focusedTextBodyEnabled = enabled))
 
-  def withProseMeasure(measure: Option[Int]): AppConfig =
-    withSurfaceConfig(surfaceConfig.copy(proseMeasure = measure.map(ProseMeasure.clamp)))
+  def withWrapColumn(wrapColumn: WrapColumn): AppConfig =
+    withSurfaceConfig(surfaceConfig.copy(wrapColumn = wrapColumn))
 
   /** Show or hide the command runner's persistent key-hint footer row (issue #931, Stage 3). */
   def withCommandRunnerShowKeyHints(enabled: Boolean): AppConfig =

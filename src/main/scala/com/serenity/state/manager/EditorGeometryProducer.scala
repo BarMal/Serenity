@@ -8,6 +8,7 @@ import com.serenity.ui.layout.{
   CellMetrics,
   ColumnPaging,
   LayoutEngine,
+  ProseColumn,
   RichTextContext,
   TextLayoutSnapshot,
   ViewportSize,
@@ -294,7 +295,7 @@ object EditorGeometryProducer:
         .flatten
         .filter(_ > 0)
         .map { contentWidth =>
-          val count     = LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig)
+          val count     = LayoutEngine.resolvedColumnCount(contentWidth, surfaceConfig, ProseColumn.wrapCells(state))
           val bandWidth = LayoutEngine.columnWidthCellsForCount(contentWidth, count, surfaceConfig.columnGap)
           (bandWidth - LayoutEngine.perColumnGutterWidth(state)).max(1)
         }

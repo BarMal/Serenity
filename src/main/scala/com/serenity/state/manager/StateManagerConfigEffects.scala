@@ -223,8 +223,8 @@ final private[manager] class StateManagerConfigEffects(
         updateTextDisplayConfig(config => config.withColumnMode(!config.surfaceConfig.columnModeEnabled)).void
       case TextDisplayIntent.SetColumnMode(enabled) =>
         updateTextDisplayConfig(config => config.withColumnMode(enabled)).void
-      case TextDisplayIntent.SetColumnTargetWidth(cells) =>
-        updateTextDisplayConfig(config => config.withColumnTargetWidth(cells)).void
+      case TextDisplayIntent.SetWrapColumn(wrapColumn) =>
+        updateTextDisplayConfig(config => config.withWrapColumn(wrapColumn)).void
       case TextDisplayIntent.SetColumnGap(cells) =>
         updateTextDisplayConfig(config => config.withColumnGap(cells)).void
       case TextDisplayIntent.SetColumnCount(count) =>

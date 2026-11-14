@@ -301,7 +301,7 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     config.languageToolsConfig.spellCheck.enabled shouldBe true
     config.surfaceConfig.typewriterScrollingEnabled shouldBe true
     config.surfaceConfig.focusedTextBodyEnabled shouldBe true
-    config.surfaceConfig.proseMeasure shouldBe None
+    config.surfaceConfig.wrapColumn shouldBe WrapColumn.Edge
     config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets()
     config.statusLine.segments should contain(StatusSegment.WordGoal)
     config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF

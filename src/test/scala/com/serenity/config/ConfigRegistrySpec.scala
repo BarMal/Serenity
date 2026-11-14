@@ -29,6 +29,7 @@ class ConfigRegistrySpec extends AnyFlatSpec with Matchers with ScalaCheckProper
       .filterNot(ConfigRegistry.allKeys.contains)
       .filterNot(ConfigGroups.handles)
       .filterNot(LegacyStatusLineKeys.handles)
+      .filterNot(LegacyWrapColumnKeys.handles)
       .filterNot(_ == "config.version")
 
     schemaOnly shouldBe empty

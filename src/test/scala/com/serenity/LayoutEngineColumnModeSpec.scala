@@ -1,6 +1,6 @@
 package com.serenity
 
-import com.serenity.config.AppConfig
+import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.ActivePane
@@ -60,44 +60,44 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
   behavior of "LayoutEngine.resolvedColumnCount"
 
   it should "reproduce the width-driven count in Auto mode (columnCount = None)" in {
-    val surfaceConfig = AppConfig.default.withColumnTargetWidth(80).withColumnGap(2).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe
+    val surfaceConfig = AppConfig.default.withWrapColumn(WrapColumn.Cells(80)).withColumnGap(2).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, Some(80)) shouldBe
       LayoutEngine.columnCount(contentWidthCells = 200, columnTargetWidthCells = 80, columnGap = 2)
   }
 
   it should "fill the pane with one column by default, however wide it is (unlimited line length)" in {
     val surfaceConfig = AppConfig.default.surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 1
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 600, surfaceConfig) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, None) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 600, surfaceConfig, None) shouldBe 1
   }
 
   it should "still lay out several columns once a target width is opted in" in {
-    val surfaceConfig = AppConfig.default.withColumnTargetWidth(80).withColumnGap(2).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 2
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 400, surfaceConfig) shouldBe 4
+    val surfaceConfig = AppConfig.default.withWrapColumn(WrapColumn.Cells(80)).withColumnGap(2).surfaceConfig
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, Some(80)) shouldBe 2
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 400, surfaceConfig, Some(80)) shouldBe 4
   }
 
   it should "pin exactly the configured count when set and it fits" in {
     val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(3)).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 3
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, None) shouldBe 3
   }
 
   it should "clamp an absurd configured count down to what the pane can hold" in {
     val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(1000)).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, None) shouldBe
       LayoutEngine.maxColumnsThatFit(contentWidthCells = 200, gap = 2)
   }
 
   it should "clamp a configured count of zero or less up to one" in {
     val surfaceConfig = AppConfig.default.withColumnGap(2).withColumnCount(Some(0)).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 200, surfaceConfig, None) shouldBe 1
   }
 
   it should "yield a single column when the pane width is unknown (zero content width)" in {
     val autoConfig  = AppConfig.default.withColumnCount(None).surfaceConfig
     val countConfig = AppConfig.default.withColumnCount(Some(3)).surfaceConfig
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, autoConfig) shouldBe 1
-    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, countConfig) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, autoConfig, None) shouldBe 1
+    LayoutEngine.resolvedColumnCount(contentWidthCells = 0, countConfig, None) shouldBe 1
   }
 
   behavior of "LayoutEngine.columnWidthCellsForCount"
@@ -190,7 +190,7 @@ class LayoutEngineColumnModeSpec extends AnyFlatSpec with Matchers:
           .withLineNumbers(lineNumbers)
           .withWordWrap(true)
           .withColumnMode(true)
-          .withColumnTargetWidth(40)
+          .withWrapColumn(WrapColumn.Cells(40))
           .withColumnGap(2)
       )
     )

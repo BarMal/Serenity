@@ -247,7 +247,8 @@ object RendererPaneSetup:
         contentRect,
         surfaceConfig.wordWrapEnabled,
         columnModeEnabled = surfaceConfig.columnModeEnabled,
-        surfaceConfig
+        surfaceConfig,
+        ProseColumn.wrapCells(state)
       )
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
     val fontRenderContext =
