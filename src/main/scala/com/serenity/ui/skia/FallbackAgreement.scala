@@ -1,5 +1,6 @@
 package com.serenity.ui.skia
 
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.{EncodedImageFormat, Font, Paint, Surface}
 
 /** How many strings of the allowlisted symbols the fallback runs shape exactly as Skiko's `TextLine` does, on the fonts
@@ -27,7 +28,7 @@ object FallbackAgreement:
 
   /** The same check for AWT fonts, which is what the benchmark has. */
   def checkAwt(fonts: Vector[(String, java.awt.Font)]): FallbackAgreement =
-    check(fonts.map((name, font) => name -> SkiaTypefaces.fontFor(font)))
+    check(fonts.map((name, font) => name -> SkiaTypefaces.fontFor(FontSpec.fromAwt(font))))
 
   private def agree(routed: SkiaShapedStretch, reference: SkiaShapedStretch, length: Int): Boolean =
     (-1 to length + 1).forall(i => routed.leftEdgeOf(i) == reference.leftEdgeOf(i)) &&

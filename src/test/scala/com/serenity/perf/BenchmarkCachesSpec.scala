@@ -13,6 +13,7 @@ import com.serenity.ui.benchmark.BenchmarkCaches
 import com.serenity.ui.skia.SkiaTextCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 /** The render benchmark builds its scenes as the app does (#2465, M1): a pane's whole-document row count is measured
   * after the frame, and the font sets are made once, not again for every cold frame.
@@ -108,7 +109,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
     val bench      = new BenchmarkCaches(new ByHand)
     val shared     = bench.shared()
     val sharedSkia = SkiaTextCaches.of(shared.backendCaches)
-    val face       = sharedSkia.fonts.faceFor(new Font(Font.SERIF, Font.PLAIN, 14)).font
+    val face       = sharedSkia.fonts.faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 14))).font
     val _          = sharedSkia.shapedText.stretchOf("a cold frame shapes this", face)
     sharedSkia.shapedText.shapings shouldBe 1L
 
@@ -123,7 +124,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
     val bench      = new BenchmarkCaches(new ByHand)
     val shared     = bench.shared()
     val sharedSkia = SkiaTextCaches.of(shared.backendCaches)
-    val _          = sharedSkia.fonts.faceFor(new Font(Font.SERIF, Font.PLAIN, 14))
+    val _          = sharedSkia.fonts.faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 14)))
     SkiaTextCaches.warmupOf(shared.backendCaches).exists(_.faces >= 1) shouldBe true
 
     val cold = bench.cold(shared)

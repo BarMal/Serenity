@@ -183,6 +183,10 @@ private[ui] object GlyphAdvances:
       flags.scanLeft(0)((count, flag) => if flag then count + 1 else count)
     new GlyphAdvances(advances, countBefore(contextFree), kernAfter, countBefore(measurable))
 
+  /** Whether the characters `[from, until)` of `chars` need more than one glyph per character to be laid out. */
+  private[ui] def requiresLayout(chars: Array[Char], from: Int, until: Int): Boolean =
+    Font.textRequiresLayout(chars, from, until)
+
   def hasContextFreeCharacters(text: String): Boolean =
     !Font.textRequiresLayout(text.toCharArray, 0, text.length) && text.forall(isContextFreeCharacter)
 

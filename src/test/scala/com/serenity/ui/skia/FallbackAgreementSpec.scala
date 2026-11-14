@@ -4,14 +4,15 @@ import com.serenity.ui.fonts.FontLoader
 import org.jetbrains.skia.Font
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 final class FallbackAgreementSpec extends AnyFlatSpec with Matchers:
 
   private def fonts: Vector[(String, Font)] =
     val config = FontLoader.FontConfig()
     Vector(
-      "text" -> SkiaTypefaces.fontFor(FontLoader.previewTextFont(config)),
-      "code" -> SkiaTypefaces.fontFor(FontLoader.previewCodeFont(config))
+      "text" -> SkiaTypefaces.fontFor(FontSpec.fromAwt(FontLoader.previewTextFont(config))),
+      "code" -> SkiaTypefaces.fontFor(FontSpec.fromAwt(FontLoader.previewCodeFont(config)))
     )
 
   "The fallback agreement check" should "find one string per allowlisted code point and font, all identical to TextLine" in {

@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import org.jetbrains.skia.Typeface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
 
@@ -23,15 +24,36 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
   private def struckThrough(font: Font): Font =
     font.deriveFont(java.util.Map.of(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON))
 
-  "SkiaFontCache" should "look a typeface up once for fonts that choose their face from the same inputs" in {
+  "SkiaFontCache" should "give two AWT fonts that describe the same spec one face" in {
+    val cache  = new SkiaFontCache()
+    val first  = FontSpec.fromAwt(serif(Font.PLAIN, 14))
+    val second = FontSpec.fromAwt(serif(Font.PLAIN, 14).deriveFont(14.0f))
+    (cache.faceFor(first) eq cache.faceFor(second)) shouldBe true
+    cache.size shouldBe 1
+  }
+
+  it should "choose a face by style alone for a spec made from data, which has no AWT advance to match" in {
+    val seen = new java.util.concurrent.atomic.AtomicReference[Option[SkiaTypefaces.TypefaceKey]](None)
+    val cache = new SkiaFontCache(resolveTypeface = key =>
+      seen.set(Some(key))
+      SkiaTypefaces.typefaceFor(key))
+    val spec = FontSpec(Font.SERIF, "Serif", 14f, false, false, false, false)()
+    val _    = cache.faceFor(spec)
+    seen.get().map(_.advance) shouldBe Some(None)
+    val read = FontSpec.fromAwt(serif(Font.PLAIN, 14))
+    val __   = cache.faceFor(read)
+    seen.get().flatMap(_.advance) should not be empty
+  }
+
+  it should "look a typeface up once for fonts that choose their face from the same inputs" in {
     val resolver = new CountingResolver
     val cache    = new SkiaFontCache(resolveTypeface = resolver(_))
     val plain    = serif(Font.PLAIN, 14)
     val struck   = struckThrough(plain)
     struck should not be plain
 
-    cache.faceFor(plain)
-    cache.faceFor(struck)
+    cache.faceFor(FontSpec.fromAwt(plain))
+    cache.faceFor(FontSpec.fromAwt(struck))
 
     resolver.calls.get shouldBe 1
     cache.size shouldBe 2
@@ -41,7 +63,7 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     val resolver = new CountingResolver
     val cache    = new SkiaFontCache(resolveTypeface = resolver(_))
 
-    List(14, 16, 18).foreach(size => cache.faceFor(serif(Font.PLAIN, size)))
+    List(14, 16, 18).foreach(size => cache.faceFor(FontSpec.fromAwt(serif(Font.PLAIN, size))))
 
     resolver.calls.get shouldBe 3
   }
@@ -50,7 +72,9 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     val resolver = new CountingResolver
     val cache    = new SkiaFontCache(resolveTypeface = resolver(_))
 
-    List(Font.PLAIN, Font.BOLD, Font.ITALIC, Font.BOLD | Font.ITALIC).foreach(style => cache.faceFor(serif(style, 14)))
+    List(Font.PLAIN, Font.BOLD, Font.ITALIC, Font.BOLD | Font.ITALIC).foreach(style =>
+      cache.faceFor(FontSpec.fromAwt(serif(style, 14)))
+    )
 
     resolver.calls.get shouldBe 4
   }
@@ -60,9 +84,9 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     val plain  = serif(Font.PLAIN, 14)
     val struck = struckThrough(plain)
 
-    cache.faceFor(plain)
-    val remembered = cache.faceFor(struck).font
-    val fresh      = SkiaTypefaces.fontFor(struck)
+    cache.faceFor(FontSpec.fromAwt(plain))
+    val remembered = cache.faceFor(FontSpec.fromAwt(struck)).font
+    val fresh      = SkiaTypefaces.fontFor(FontSpec.fromAwt(struck))
 
     remembered.getTypeface.getUniqueId shouldBe fresh.getTypeface.getUniqueId
     remembered.getSize shouldBe fresh.getSize
@@ -76,9 +100,9 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     val cache    = new SkiaFontCache(maxFaces = 1, resolveTypeface = resolver(_))
     val first    = serif(Font.PLAIN, 14)
 
-    cache.faceFor(first)
-    cache.faceFor(serif(Font.PLAIN, 16))
-    cache.faceFor(first)
+    cache.faceFor(FontSpec.fromAwt(first))
+    cache.faceFor(FontSpec.fromAwt(serif(Font.PLAIN, 16)))
+    cache.faceFor(FontSpec.fromAwt(first))
 
     resolver.calls.get shouldBe 3
   }

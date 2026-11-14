@@ -8,6 +8,7 @@ import com.serenity.ui.fonts.FontLoader
 import org.jetbrains.skia.{Font, Paint, Surface, Typeface}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 /** Text with characters the base font lacks is shaped by supplying our own font runs instead of Skiko's `TextLine`,
   * which costs 4 to 8 ms a call whatever the text. Every claim here is a comparison against `TextLine` itself, for
@@ -51,7 +52,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       "Serif"      -> new java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 12),
       "SansSerif"  -> new java.awt.Font(java.awt.Font.SANS_SERIF, java.awt.Font.PLAIN, 12),
       "Monospaced" -> new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    ).map((name, font) => s"$name (${font.getFamily})" -> SkiaTypefaces.fontFor(font))
+    ).map((name, font) => s"$name (${font.getFamily})" -> SkiaTypefaces.fontFor(FontSpec.fromAwt(font)))
     val bundled = SkiaTypefaces.bundledTypefaces.map(t => s"bundled ${t.getFamilyName}" -> new Font(t, 12f))
     (awt ++ bundled).distinctBy((_, font) =>
       (font.getTypeface.getFamilyName, font.getTypeface.isBold, font.getTypeface.isItalic, font.getSize)

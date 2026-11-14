@@ -49,7 +49,7 @@ class SkiaGlyphInkSpec extends AnyFlatSpec with Matchers:
     val paint = Paint()
     paint.setAntiAlias(true)
     paint.setColor(ink.getRGB)
-    val _ = surface.getCanvas.drawString(text, 5f, 20f, caches.fonts.faceFor(awtFont).font, paint)
+    val _ = surface.getCanvas.drawString(text, 5f, 20f, caches.fonts.faceFor(FontSpec.fromAwt(awtFont)).font, paint)
     SkiaPixels.read(surface)
 
   private def channels(argb: Int): List[Int] = List(argb >>> 16 & 0xff, argb >>> 8 & 0xff, argb & 0xff)

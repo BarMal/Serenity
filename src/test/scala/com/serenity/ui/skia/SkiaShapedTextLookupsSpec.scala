@@ -4,6 +4,7 @@ import java.awt.Font
 
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 /** The counters a scaling benchmark reads to say how well the shape cache serves many buffers (#2478): every lookup,
   * and every stretch a rotation drops. Followed by hand with a capacity of one stretch a generation, as the promotion
@@ -12,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaShapedTextLookupsSpec extends AnyFlatSpec with Matchers:
 
   private val awtFont = new Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val font    = new SkiaFontCache().faceFor(awtFont).font
+  private val font    = new SkiaFontCache().faceFor(FontSpec.fromAwt(awtFont)).font
 
   private def lookups(cache: SkiaShapedTextCache, texts: String*): Unit =
     texts.foreach(text => cache.stretchOf(text, font))

@@ -7,6 +7,7 @@ import java.awt.geom.AffineTransform
 import com.serenity.ui.fonts.LogicalFontFamilies
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 /** Layout measures with AWT and Skia draws, so the face a logical family resolves to has to advance the same in both:
   * that is what makes measured equal drawn. Compared against fontconfig itself, so it only runs where there is one.
@@ -30,7 +31,7 @@ class MeasuredEqualsDrawnSpec extends AnyFlatSpec with Matchers:
       withClue(s"$logical resolved to '$resolved'; ")(resolved should not be logical)
       val awt     = new Font(resolved, Font.PLAIN, 12)
       val awtSize = awt.getStringBounds(probe, context).getWidth
-      val skia    = new SkiaFontCache().faceFor(awt).font.measureTextWidth(probe).toDouble
+      val skia    = new SkiaFontCache().faceFor(FontSpec.fromAwt(awt)).font.measureTextWidth(probe).toDouble
       withClue(s"$logical -> '$resolved': AWT advance $awtSize, Skia advance $skia; ")(
         math.abs(awtSize - skia) / awtSize should be <= 0.001
       )

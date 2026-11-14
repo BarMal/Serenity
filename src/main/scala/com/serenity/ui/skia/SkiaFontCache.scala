@@ -1,11 +1,9 @@
 package com.serenity.ui.skia
 
-import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.geom.AffineTransform
 import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.ui.fonts.LogicalFontFamilies
-import com.serenity.ui.renderer.{FontFirstUse, StyledFontCache}
+import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
 import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontStyleSet, FontVariation, Typeface}
 
 /** What painting with one AWT font needs from Skia: the Skia font, and the strikethrough the AWT font asks for, which
@@ -13,13 +11,13 @@ import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontSty
   */
 final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Underline])
 
-/** The Skia font that stands in for each AWT font layout measures with.
+/** The Skia font that stands in for each font spec layout measures with.
   *
-  * Layout measures with `java.awt.Font`, so Skia has to draw the same glyphs at the same advances: the bundled fonts
-  * are loaded from the very files AWT loads them from, and a system family is looked up by name. Metrics are unhinted
-  * and linear, the same fractional advances AWT reports, so a run starting at a layout-given x ends where layout says.
+  * Layout still measures through AWT, so Skia has to draw the same glyphs at the same advances: the bundled fonts are
+  * loaded from the very files AWT loads them from, and a system family is looked up by name. Metrics are unhinted and
+  * linear, the same fractional advances AWT reports, so a run starting at a layout-given x ends where layout says.
   *
-  * A face is built once per distinct AWT font, under one lock, and warmed before it is handed out: the first use of a
+  * A face is built once per distinct font spec, under one lock, and warmed before it is handed out: the first use of a
   * typeface (table loading, the glyph cache) is where `FontFirstUse` found AWT disagreeing with itself across threads,
   * and Skia's font manager is not documented as safe for two threads' first lookups.
   */
@@ -30,11 +28,11 @@ final class SkiaFontCache(
 ):
   import SkiaFontCache.*
 
-  private val faces     = new ConcurrentHashMap[java.awt.Font, SkiaFace]()
+  private val faces     = new ConcurrentHashMap[FontSpec, SkiaFace]()
   private val typefaces = new ConcurrentHashMap[SkiaTypefaces.TypefaceKey, Typeface]()
   private val lock      = new Object
 
-  def faceFor(font: java.awt.Font): SkiaFace =
+  def faceFor(font: FontSpec): SkiaFace =
     Option(faces.get(font)).getOrElse {
       lock.synchronized {
         Option(faces.get(font)).getOrElse {
@@ -50,12 +48,11 @@ final class SkiaFontCache(
 
   def size: Int = faces.size
 
-  private def build(font: java.awt.Font): SkiaFace =
+  private def build(font: FontSpec): SkiaFace =
     val started = System.nanoTime()
-    FontFirstUse.settle(font, StrikeContext)
-    val skia = SkiaTypefaces.fontFor(font, typefaceOf)
-    val _    = skia.measureTextWidth(WarmUpText)
-    val face = SkiaFace(skia, strikethroughOf(font))
+    val skia    = SkiaTypefaces.fontFor(font, typefaceOf)
+    val _       = skia.measureTextWidth(WarmUpText)
+    val face    = SkiaFace(skia, AwtFontReconciliation.strikethroughOf(font))
     warmup.faceBuilt(System.nanoTime() - started)
     face
 
@@ -67,20 +64,11 @@ final class SkiaFontCache(
       typeface
     }
 
-  private def strikethroughOf(font: java.awt.Font): Option[StyledFontCache.Underline] =
-    Option.when(font.getAttributes.get(TextAttribute.STRIKETHROUGH) == TextAttribute.STRIKETHROUGH_ON) {
-      val metrics = font.getLineMetrics("", StrikeContext)
-      StyledFontCache.Underline(metrics.getStrikethroughOffset, metrics.getStrikethroughThickness)
-    }
-
 object SkiaFontCache:
 
   val DefaultMaxFaces: Int = 256
 
   private val WarmUpText = "Hoxi AVATAR fi To"
-
-  /** The strikethrough rule belongs to the font, not to the surface that paints it. */
-  private val StrikeContext = FontRenderContext(AffineTransform(), true, true)
 
 /** Finds the Skia typeface for an AWT font's family and style, and sets a Skia font up the way layout measures. */
 private[skia] object SkiaTypefaces:
@@ -114,22 +102,31 @@ private[skia] object SkiaTypefaces:
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
-  /** Everything the choice of a face reads from an AWT font: two fonts with the same key get the same typeface. */
-  final case class TypefaceKey(family: String, bold: Boolean, italic: Boolean, size: Float, advance: Double)
+  /** Everything the choice of a face reads from a font: two fonts with the same key get the same typeface. `advance` is
+    * what AWT measures a probe string at, when the spec was read from an AWT font; without it the face is chosen by
+    * style alone.
+    */
+  final case class TypefaceKey(
+      family: String,
+      bold: Boolean,
+      italic: Boolean,
+      size: Float,
+      advance: Option[Double]
+  )
 
-  def keyOf(awt: java.awt.Font): TypefaceKey =
+  def keyOf(spec: FontSpec): TypefaceKey =
     TypefaceKey(
-      awt.getFamily,
-      awt.isBold,
-      awt.isItalic,
-      awt.getSize2D.max(1.0f),
-      awt.getStringBounds(MeasureProbe, MeasureContext).getWidth
+      spec.family,
+      spec.bold,
+      spec.italic,
+      spec.sizePt.max(1.0f),
+      AwtFontReconciliation.referenceAdvance(spec)
     )
 
-  def fontFor(awt: java.awt.Font): Font = fontFor(awt, typefaceFor)
+  def fontFor(spec: FontSpec): Font = fontFor(spec, typefaceFor)
 
-  def fontFor(awt: java.awt.Font, typefaceOf: TypefaceKey => Typeface): Font =
-    val key      = keyOf(awt)
+  def fontFor(spec: FontSpec, typefaceOf: TypefaceKey => Typeface): Font =
+    val key      = keyOf(spec)
     val bold     = key.bold
     val italic   = key.italic
     val resolved = typefaceOf(key)
@@ -152,10 +149,7 @@ private[skia] object SkiaTypefaces:
     LogicalFontFamilies.documentedFamily(logical, osName)
 
   /** What AWT measured a probe string at, for choosing among the weights of a family the one that advances the same. */
-  final private case class Reference(size: Float, advance: Double)
-
-  private val MeasureProbe   = "Buffer 1 - unsaved Hamburgefonstiv"
-  private val MeasureContext = FontRenderContext(AffineTransform(), true, true)
+  final private case class Reference(size: Float, advance: Option[Double])
 
   def typefaceFor(key: TypefaceKey): Typeface =
     typefaceFor(key.family, key.bold, key.italic, Reference(key.size, key.advance))
@@ -189,14 +183,14 @@ private[skia] object SkiaTypefaces:
       .flatMap(index => Option(set.getTypeface(index)))
       .map(face => FaceChoice.Candidate(face, face.isBold, face.isItalic, () => advanceOf(face, reference)))
       .toVector
-    FaceChoice.choose(candidates, bold, italic, Some(reference.advance))
+    FaceChoice.choose(candidates, bold, italic, reference.advance)
 
   private def advanceOf(face: Typeface, reference: Reference): Double =
     val font = new Font(face, reference.size)
     font.setSubpixel(true)
     font.setLinearMetrics(true)
     font.setHinting(FontHinting.NONE)
-    font.measureTextWidth(MeasureProbe).toDouble
+    font.measureTextWidth(AwtFontReconciliation.MeasureProbe).toDouble
 
   private def bundledTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
     val sameFamily = Bundled.faces.filter(_.getFamilyName.equalsIgnoreCase(family))

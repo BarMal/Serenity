@@ -8,6 +8,7 @@ import scala.util.Using
 import com.serenity.state.manager.RenderCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
+import com.serenity.ui.renderer.FontSpec
 
 class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
 
@@ -61,8 +62,8 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
     caches.warmup.snapshot.faces shouldBe 0
 
     val awt  = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 14)
-    val face = caches.fonts.faceFor(awt)
-    caches.fonts.faceFor(awt)
+    val face = caches.fonts.faceFor(FontSpec.fromAwt(awt))
+    caches.fonts.faceFor(FontSpec.fromAwt(awt))
     caches.warmup.snapshot.faces shouldBe 1
     caches.warmup.snapshot.faceNanos should be > 0L
     caches.warmup.snapshot.shapings shouldBe 0
