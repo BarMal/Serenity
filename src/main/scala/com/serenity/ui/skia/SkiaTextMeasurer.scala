@@ -325,8 +325,9 @@ final class SkiaTextMeasurer(
     ShapedOrigins(starts, collector.width, pulls)
 
   private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
-    val stretch = stretches.stretchOf(text, font)
-    val edges   = (0 to text.length).map(index => stretch.leftEdgeOf(index).getOrElse(0.0f))
+    val edges = stretches.reading(text, font)(stretch =>
+      (0 to text.length).map(index => stretch.leftEdgeOf(index).getOrElse(0.0f))
+    )
     val starts = Array.tabulate(text.length) { index =>
       if index == 0 || edges(index) > edges(index - 1) then edges(index) else Float.NaN
     }

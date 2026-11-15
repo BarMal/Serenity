@@ -24,6 +24,9 @@ sealed trait SkiaShapedStretch:
   /** Draws the glyphs of `[from, until)` with the first of them at `x`. */
   def draw(canvas: Canvas, from: Int, until: Int, x: Float, baseline: Float, paint: Paint): Unit
 
+  /** Frees the native glyphs of a stretch nothing will draw again, rather than leaving them to the heap's collector. */
+  private[skia] def release(): Unit
+
 /** Latin-script text, shaped by HarfBuzz with caller-supplied runs: the glyphs and their positions stay on the JVM, so
   * a range is a blob built from a slice of them. `TextLine.make` and `Shaper.shape(text, font)` build ICU and font
   * fallback iterators on every call, about 3.7 ms each however short the text (#1812 spike), which these runs skip.
@@ -53,6 +56,11 @@ final private class GlyphStretch(
         .computeIfAbsent((from.toLong << 32) | (until.toLong & 0xffffffffL), _ => rangeOf(from, until))
         .foreach(canvas.drawTextBlob(_, x, baseline, paint))
 
+  private[skia] def release(): Unit =
+    whole.foreach(_.close())
+    ranges.values.forEach(_.foreach(_.close()))
+    ranges.clear()
+
   private def rangeOf(from: Int, until: Int): Option[TextBlob] =
     val selected = glyphs.indices.filter(glyph => clusters(glyph) >= from && clusters(glyph) < until)
     blobOf(selected, selected.foldLeft(Float.MaxValue)((left, glyph) => left.min(xs(glyph))))
@@ -81,6 +89,8 @@ final private class LineStretch(line: TextLine, textLength: Int) extends SkiaSha
     RangeClip.around(canvas, x, baseline, line.getAscent.abs, end - start) {
       val _ = canvas.drawTextLine(line, x - start, baseline, paint)
     }
+
+  private[skia] def release(): Unit = line.close()
 
 /** A range of a line that cannot be sliced is the whole line drawn so the range starts at `x`, clipped to the range. */
 private[skia] object RangeClip:
@@ -113,6 +123,8 @@ final private class RunsStretch(blob: Option[TextBlob], xs: Array[Float], width:
     }
 
   private def edgeAt(offset: Int): Float = if offset >= xs.length then width else xs(offset)
+
+  private[skia] def release(): Unit = blob.foreach(_.close())
 
 private object RunsStretch:
 
@@ -211,6 +223,19 @@ final class SkiaShapedTextCache(
     Option(current.get.get(key)).getOrElse {
       Option(previous.get.get(key)).fold(shapeAndRemember(key))(promote(key, _))
     }
+
+  /** What `read` finds in the stretch of `text`: the remembered one when the text was drawn, otherwise one shaped for
+    * the reading alone and freed after it, so measuring text that is never drawn neither counts as a shaping nor fills
+    * the cache and the native heap with stretches nothing draws.
+    */
+  private[skia] def reading[A](text: String, font: Font)(read: SkiaShapedStretch => A): A =
+    val key = Key(text, font)
+    Option(current.get.get(key)).orElse(Option(previous.get.get(key))) match
+      case Some(stretch) => read(stretch)
+      case None =>
+        val stretch = shapeLock.synchronized(shape(text, font))
+        try read(stretch)
+        finally stretch.release()
 
   private def shapeAndRemember(key: Key): SkiaShapedStretch =
     val _ = shapedN.incrementAndGet()
