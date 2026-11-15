@@ -11,6 +11,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sys
 import subprocess
 import tempfile
@@ -274,6 +275,89 @@ class AbbaScriptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as out:
             result = self._run("", "", out)
         self.assertEqual(2, result.returncode)
+
+
+class AbbaAllocationPassTests(unittest.TestCase):
+    """abba.sh runs a second pass without escape analysis and judges allocation on it (#2618): the default pass's
+    allocation moves by up to about 13% from one JVM launch to the next with no code change."""
+
+    def _fake_java(self, directory: Path) -> Path:
+        script = directory / "bin" / "java"
+        script.parent.mkdir()
+        script.write_text(
+            """#!/usr/bin/env bash
+echo "$*" >> "$FAKE_JAVA_LOG"
+jar=""; previous=""
+for argument in "$@"; do [ "$previous" = "-cp" ] && jar="$argument"; previous="$argument"; done
+side="$(cat "$jar")"
+mode=default
+case "$*" in *-XX:-DoEscapeAnalysis*) mode=noea ;; esac
+variable="ALLOC_${side}_${mode}"
+alloc="${!variable}"
+echo "Serenity performance benchmarks"
+echo "name,warmups,iterations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes"
+echo "x,0,0,0,1.0,1.0,1.0,1.0,${alloc},${alloc},"
+"""
+        )
+        script.chmod(0o755)
+        return script
+
+    def _abba(self, default_b: int, noea_b: int, **extra_env: str) -> tuple[subprocess.CompletedProcess, list[str], Path]:
+        directory = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, directory, True)
+        self._fake_java(directory)
+        for side in ("A", "B"):
+            (directory / f"{side}.jar").write_text(side)
+        log = directory / "java.log"
+        env = dict(
+            os.environ,
+            DISPLAY=":0",
+            PATH=f"{directory / 'bin'}{os.pathsep}{os.environ['PATH']}",
+            FAKE_JAVA_LOG=str(log),
+            ALLOC_A_default="1000000",
+            ALLOC_B_default=str(default_b),
+            ALLOC_A_noea="1329000",
+            ALLOC_B_noea=str(noea_b),
+            **extra_env,
+        )
+        result = subprocess.run(
+            ["bash", str(_ROOT / "bench" / "abba.sh"), str(directory / "A.jar"), str(directory / "B.jar"), str(directory / "out"), "x"],
+            capture_output=True,
+            text=True,
+            check=False,
+            env=env,
+        )
+        return result, log.read_text().splitlines() if log.exists() else [], directory / "out"
+
+    def test_a_default_pass_difference_alone_does_not_block(self) -> None:
+        result, _, _ = self._abba(default_b=1_090_000, noea_b=1_329_000)
+        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
+
+    def test_a_difference_in_the_pass_without_escape_analysis_blocks(self) -> None:
+        result, _, _ = self._abba(default_b=1_000_000, noea_b=1_409_000)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn("allocation_p50_bytes", result.stdout)
+
+    def test_the_second_pass_is_eight_launches_with_the_flag_after_the_eight_without_it(self) -> None:
+        _, launches, _ = self._abba(default_b=1_000_000, noea_b=1_329_000)
+        self.assertEqual(16, len(launches))
+        self.assertTrue(all("-XX:-DoEscapeAnalysis" not in line for line in launches[:8]))
+        self.assertTrue(all("-XX:-DoEscapeAnalysis" in line for line in launches[8:]))
+
+    def test_the_second_pass_writes_its_own_csvs(self) -> None:
+        _, _, out = self._abba(default_b=1_000_000, noea_b=1_329_000)
+        expected = [f"{prefix}{side}-{n}.csv" for prefix in ("", "alloc-") for side in ("a", "b") for n in range(1, 5)]
+        self.assertEqual(sorted(expected), sorted(path.name for path in out.glob("*.csv")))
+
+    def test_the_flag_joins_the_caller_s_java_options(self) -> None:
+        _, launches, _ = self._abba(default_b=1_000_000, noea_b=1_329_000, ABBA_JAVA_OPTS="-Dsun.java2d.uiScale=2")
+        self.assertTrue(all("-Dsun.java2d.uiScale=2" in line for line in launches))
+        self.assertTrue(all("-XX:-DoEscapeAnalysis" in line and "-Dsun.java2d.uiScale=2" in line for line in launches[8:]))
+
+    def test_the_second_pass_can_be_left_out(self) -> None:
+        result, launches, _ = self._abba(default_b=1_090_000, noea_b=1_329_000, ABBA_ALLOCATION_PASS="0")
+        self.assertEqual(8, len(launches))
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

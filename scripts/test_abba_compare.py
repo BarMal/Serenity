@@ -17,6 +17,13 @@ sys.path.insert(0, str(_SCRIPTS))
 from captured_stdout import capture_stdout  # noqa: E402
 
 
+def capture_stderr_quietly():
+    import contextlib
+    import io
+
+    return contextlib.redirect_stderr(io.StringIO())
+
+
 def _load(name: str):
     spec = importlib.util.spec_from_file_location(name, _SCRIPTS / f"{name}.py")
     assert spec is not None and spec.loader is not None
@@ -101,6 +108,99 @@ class AllThreadsAllocationTest(unittest.TestCase):
         found = abba.compare(_all_threads_runs("x", 100_000, None), _all_threads_runs("x", 120_000, None))
         self.assertEqual([f.metric for f in found], ["allocation_p50_bytes"])
         self.assertEqual(abba.rows_missing_all_threads(_all_threads_runs("x", 1, None), _all_threads_runs("x", 1, None)), [])
+
+
+class AllocationPassTest(unittest.TestCase):
+    """Allocation is judged on a second pass run without escape analysis (#2618): with it C2 removes a varying share
+    of a frame's allocation from one JVM launch to the next, so the default pass moves a row's allocation by up to
+    about 13% with no code change."""
+
+    flat = _runs("x", [1.0] * 4, alloc=1_000_000)
+
+    def test_a_default_pass_difference_does_not_block_when_the_allocation_pass_is_flat(self):
+        nine_percent_up = _runs("x", [1.0] * 4, alloc=1_090_000)
+        self.assertEqual(abba.compare(self.flat, nine_percent_up, allocation_a=self.flat, allocation_b=self.flat), [])
+
+    def test_a_six_percent_difference_in_the_allocation_pass_blocks(self):
+        six_percent_up = _runs("x", [1.0] * 4, alloc=1_060_000)
+        found = abba.compare(self.flat, self.flat, allocation_a=self.flat, allocation_b=six_percent_up)
+        self.assertEqual([f.metric for f in found], ["allocation_p50_bytes"])
+
+    def test_time_is_still_judged_on_the_default_pass(self):
+        slower = _runs("x", [1.2] * 4, alloc=1_000_000)
+        found = abba.compare(self.flat, slower, allocation_a=self.flat, allocation_b=self.flat)
+        self.assertEqual([f.metric for f in found], ["p50_ms"])
+
+    def test_retained_bytes_are_still_judged_on_the_default_pass(self):
+        a = _runs("footprint.x", [0.0] * 4, retained=10_000_000)
+        b = _runs("footprint.x", [0.0] * 4, retained=11_100_000)
+        found = abba.compare(a, b, allocation_a=_runs("footprint.x", [0.0] * 4), allocation_b=_runs("footprint.x", [0.0] * 4))
+        self.assertEqual([f.metric for f in found], ["retained_bytes"])
+
+    def test_a_row_the_allocation_pass_lacks_is_not_judged_on_allocation(self):
+        nine_percent_up = _runs("x", [1.0] * 4, alloc=1_090_000)
+        self.assertEqual(abba.compare(self.flat, nine_percent_up, allocation_a=[], allocation_b=[]), [])
+
+    def test_without_an_allocation_pass_allocation_is_judged_on_the_default_pass_as_before(self):
+        six_percent_up = _runs("x", [1.0] * 4, alloc=1_060_000)
+        self.assertEqual(len(abba.compare(self.flat, six_percent_up)), 1)
+
+    def test_every_thread_column_is_taken_from_the_allocation_pass(self):
+        found = abba.compare(
+            _all_threads_runs("x", 2_000, 100_000),
+            _all_threads_runs("x", 2_000, 100_000),
+            allocation_a=_all_threads_runs("x", 2_000, 100_000),
+            allocation_b=_all_threads_runs("x", 2_000, 120_000),
+        )
+        self.assertEqual([f.metric for f in found], ["allocation_all_threads_p50_bytes"])
+
+
+class AllocationPassCommandLineTest(unittest.TestCase):
+    def setUp(self):
+        self.stdout = capture_stdout(self)
+
+    def _csvs(self, directory: str, prefix: str, p50: float, alloc: int) -> list[str]:
+        paths = []
+        for i in range(4):
+            path = Path(directory) / f"{prefix}{i}.csv"
+            path.write_text(
+                "name,warmups,iterations,batch,min_ms,p50_ms,p95_ms,max_ms,allocation_p50_bytes,allocation_p95_bytes,retained_bytes\n"
+                f"x,0,0,0,0,{p50},{p50},0,{alloc},{alloc},\n"
+            )
+            paths.append(str(path))
+        return paths
+
+    def test_the_allocation_csvs_decide_allocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1.0, 1_000_000), self._csvs(directory, "b", 1.0, 1_090_000)
+            alloc_a, alloc_b = self._csvs(directory, "aa", 1.0, 1_329_000), self._csvs(directory, "ab", 1.0, 1_329_000)
+            self.assertEqual(abba.main_with_args(["--a", *a, "--b", *b]), 1)
+            self.assertEqual(
+                abba.main_with_args(["--a", *a, "--b", *b, "--allocation-a", *alloc_a, "--allocation-b", *alloc_b]), 0
+            )
+
+    def test_a_blocking_allocation_csv_pair_exits_one(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1.0, 1_000_000), self._csvs(directory, "b", 1.0, 1_000_000)
+            alloc_a, alloc_b = self._csvs(directory, "aa", 1.0, 1_329_000), self._csvs(directory, "ab", 1.0, 1_409_000)
+            status = abba.main_with_args(["--a", *a, "--b", *b, "--allocation-a", *alloc_a, "--allocation-b", *alloc_b])
+            self.assertEqual(status, 1)
+            self.assertIn("::error::x allocation_p50_bytes", self.stdout.getvalue())
+
+    def test_an_allocation_pass_with_no_data_is_no_data_not_a_pass(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1.0, 1_000_000), self._csvs(directory, "b", 1.0, 1_000_000)
+            missing = [str(Path(directory) / "missing.csv")]
+            status = abba.main_with_args(["--a", *a, "--b", *b, "--allocation-a", *missing, "--allocation-b", *missing])
+            self.assertEqual(status, 2)
+            self.assertIn("::error::The allocation pass has no benchmark rows.", self.stdout.getvalue())
+
+    def test_one_allocation_side_alone_is_a_usage_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            a, b = self._csvs(directory, "a", 1.0, 1_000_000), self._csvs(directory, "b", 1.0, 1_000_000)
+            with self.assertRaises(SystemExit) as raised, capture_stderr_quietly():
+                abba.main_with_args(["--a", *a, "--b", *b, "--allocation-a", *a])
+            self.assertEqual(raised.exception.code, 2)
 
 
 class RetainedThresholdTest(unittest.TestCase):

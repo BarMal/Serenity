@@ -220,14 +220,16 @@ Use it for any change that moves a cache, a lock or an allocation off the hot pa
 bench/abba.sh <A serenity-perf.jar> <B serenity-perf.jar> <out-dir> [name-prefix...]
 ```
 
-The script runs `PerformanceBenchmarks` eight times in the order **A B B A A B B A** (so drift falls on both builds alike), writes `a-1..4.csv` and `b-1..4.csv`, then runs `scripts/abba_compare.py`. Pass the prefixes of the rows the change touches plus `footprint.`; with none the whole suite runs, which takes much longer. `ABBA_JAVA_OPTS` adds JVM flags (for example `-Dsun.java2d.uiScale=2`). Keep the machine otherwise idle.
+The script runs `PerformanceBenchmarks` eight times in the order **A B B A A B B A** (so drift falls on both builds alike), writes `a-1..4.csv` and `b-1..4.csv`, then runs the same eight again with `-XX:-DoEscapeAnalysis` added, writing `alloc-a-1..4.csv` and `alloc-b-1..4.csv`, and runs `scripts/abba_compare.py` over both passes. Pass the prefixes of the rows the change touches plus `footprint.`; with none the whole suite runs, which takes much longer (twice as long now). `ABBA_JAVA_OPTS` adds JVM flags to every launch (for example `-Dsun.java2d.uiScale=2`); `ABBA_ALLOCATION_PASS=0` leaves the second pass out, and allocation is then judged on the first pass, which is not reliable (below). Keep the machine otherwise idle.
+
+**Why allocation has a pass of its own.** With escape analysis, C2 removes part of a frame's allocation, and how much depends on when it compiled what during the warm-up. One jar, launched 40 times, gave `skia.compare.skia_raster.system_monospace.typing_frame_2x` 980 to 995 KB in 32 launches and 857 to 949 KB in the other 8 (down to -13%); with `-XX:-DoEscapeAnalysis` (and with C1 only, `-XX:TieredStopAtLevel=1`) 20 launches each gave 1,329 KB every time, spread 0.1%. A median of four launches therefore moved by up to 8% between two builds of identical code, and the nightly's allocation rows failed on that (the bisect of the failures found no commit; run-to-run level differences of the same size appear between runs of unrelated commits). The second pass measures the allocation the code asks for, exactly, so the 5% threshold means what it says; it is not the allocation the default JVM ends up making after C2, which is the smaller and noisier number. Time and footprint stay on the first pass, since they are the effect of what C2 does. Local measurements, one 4-core container, jar of master at the time.
 
 A benchmark **blocks** the change when B is worse than A by:
 
 | Metric | Blocks when |
 | --- | --- |
 | time (`p50_ms`) | the four-run p50 ranges do not overlap (B's fastest run is slower than A's slowest), B's median is at least 5% slower, **and** at least 0.03 ms slower |
-| allocation (`allocation_p50_bytes`, or `allocation_all_threads_p50_bytes` for a row that reports it on both sides) | B's median is at least 5% **and** at least 8 KiB above A's |
+| allocation (`allocation_p50_bytes`, or `allocation_all_threads_p50_bytes` for a row that reports it on both sides), read from the pass without escape analysis | B's median is at least 5% **and** at least 8 KiB above A's |
 | footprint (`retained_bytes`) | B's median is more than 10% above A's |
 
 The 5% and 0.03 ms floors are separate guards on purpose, as in the CI gate: the ratio alone over-fires on microsecond rows and the delta alone on multi-millisecond ones. Overlapping ranges never block however far the medians are, because the eight runs could not tell the builds apart. A blocked benchmark needs either a fix or a note in the PR that explains it (the `stable_text` footprint rows above are the expected case); `abba_compare.py` exits 1 and prints one `::error::` line per blocking metric.
