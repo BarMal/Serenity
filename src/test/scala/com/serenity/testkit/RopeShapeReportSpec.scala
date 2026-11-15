@@ -8,6 +8,8 @@ class RopeShapeReportSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
+  private def unit(code: Int): String = code.toChar.toString
+
   "A rope's report" should "give each leaf's length and text, in order" in {
     val report = RopeShapeReport.of(RopeBuilder.fromLeaves(List("ab", "cde")))
 
@@ -16,7 +18,7 @@ class RopeShapeReportSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "write a lone surrogate and other non-ASCII units as \\uXXXX, so a log shows what the leaf holds" in {
-    val report = RopeShapeReport.of(RopeBuilder.fromLeaves(List("a\uD83D", "\uDC4Db \u00E9")))
+    val report = RopeShapeReport.of(RopeBuilder.fromLeaves(List("a" + unit(0xd83d), unit(0xdc4d) + "b " + unit(0xe9))))
 
     report should include("[2 \"a\\uD83D\"]")
     report should include("[4 \"\\uDC4Db \\u00E9\"]")

@@ -100,9 +100,12 @@ class RopeWordCountSpec extends AnyFlatSpec with Matchers with ScalaCheckPropert
   "Incremental counts" should "equal a full recount of the text, whatever the leaf splits and edits" in
     forAll(ropeAfterEdits, minSuccessful(300))(agreesWithFullRecount)
 
+  private def unit(code: Int): String = code.toChar.toString
+
   private val seamTokens: Gen[String] = Gen.oneOf(
-    Gen.oneOf("\uD83D", "\uDC68", "\uDC4D", "\uD83C", "\uDDFA", "\uDDF8", "\u200D", "\uFE0F", "\u0301"),
-    Gen.oneOf("\u1112", "\u1161", "\u11AB", "👍🏽", "🇺🇸", family),
+    Gen.oneOf(0xd83d, 0xdc68, 0xdc4d, 0xd83c, 0xddfa, 0xddf8, 0x200d, 0xfe0f, 0x0301).map(unit),
+    Gen.oneOf(0x1112, 0x1161, 0x11ab).map(unit),
+    Gen.oneOf("👍🏽", "🇺🇸", family),
     tokens
   )
 
