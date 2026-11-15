@@ -105,7 +105,11 @@ import sys, re, os
 from statistics import median
 
 results_dir, label = sys.argv[1], sys.argv[2]
-phases = ["input-to-paint", "render", "input-queue", "input-apply", "render-wait", "paint"]
+phases = [
+    "input-to-paint", "render", "input-queue", "input-apply", "render-wait", "paint",
+    "apply-decode", "apply-typed-step", "apply-event", "apply-typed-commit", "apply-damage",
+    "render-layout", "render-draw", "render-flush",
+]
 
 all_runs = {}
 for n in (1, 2, 3):

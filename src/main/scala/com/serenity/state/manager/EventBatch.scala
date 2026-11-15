@@ -6,6 +6,32 @@ import cats.effect.IO
 import com.serenity.keystroke.events.Event
 import com.serenity.state.models.AppState
 
+/** The parts of applying a batch that a stage clock can time apart. */
+enum ApplyStage:
+  /** Reading an input as an event against the state the inputs before it left. */
+  case Decode
+
+  /** Stepping a typed key into a run, before the run is committed. */
+  case TypedStep
+
+  /** Applying any other event: its reducing and its commit together. */
+  case Event
+
+  /** Centring and committing a run of typed keys. */
+  case TypedCommit
+
+/** Times each [[ApplyStage]] of a batch; the batch itself reads no clock. */
+trait ApplyStages:
+  def sync[A](stage: ApplyStage)(work: => A): A
+  def io[A](stage: ApplyStage)(work: IO[A]): IO[A]
+
+object ApplyStages:
+
+  /** Times nothing. */
+  val none: ApplyStages = new ApplyStages:
+    def sync[A](stage: ApplyStage)(work: => A): A    = work
+    def io[A](stage: ApplyStage)(work: IO[A]): IO[A] = work
+
 /** How [[StateEngine.applyEventBatch]] turns its inputs into events.
   *
   * @param decode
@@ -16,11 +42,14 @@ import com.serenity.state.models.AppState
   * @param slice
   *   how long the batch may keep applying inputs; it always applies at least one, then hands the rest back once this
   *   much time has passed, so the caller can publish what it has before carrying on
+  * @param stages
+  *   times the stages of applying, for the frame timings; times nothing unless given
   */
 final case class EventBatchSteps[A](
     decode: (AppState, A) => Event,
     isolate: Event => Boolean,
-    slice: FiniteDuration
+    slice: FiniteDuration,
+    stages: ApplyStages = ApplyStages.none
 )
 
 /** What one [[StateEngine.applyEventBatch]] call applied and the models either side of it. `remaining` is every input
@@ -68,7 +97,9 @@ object EventBatch:
     typedRuns: TypedRuns = TypedRuns.none
   ): IO[EventBatch[A]] =
     def settle(run: Option[TypedRun]): IO[Unit] =
-      run.fold(IO.unit)(pending => typedRuns.commit(pending.start, pending.typed))
+      run.fold(IO.unit)(pending =>
+        steps.stages.io(ApplyStage.TypedCommit)(typedRuns.commit(pending.start, pending.typed))
+      )
     def extended(run: Option[TypedRun], current: Model, typed: Model): TypedRun =
       run.fold(TypedRun(current, typed, 1))(pending => pending.copy(typed = typed, keys = pending.keys + 1))
     def loop(
@@ -84,17 +115,18 @@ object EventBatch:
             if applied.nonEmpty && now >= deadline then settle(run).as((applied, None, remaining))
             else
               run.fold(model)(pending => IO.pure(pending.typed)).flatMap { current =>
-                val event = steps.decode(current.app, input)
+                val event = steps.stages.sync(ApplyStage.Decode)(steps.decode(current.app, input))
                 if steps.isolate(event) then settle(run).as((applied, Some(event), rest))
                 else
-                  typedRuns.step(event, current, now.toNanos) match
+                  steps.stages.sync(ApplyStage.TypedStep)(typedRuns.step(event, current, now.toNanos)) match
                     case Some(typed) =>
                       val next = extended(run, current, typed)
                       if next.keys >= typedRuns.maxKeys then
                         settle(Some(next)) >> loop(rest, applied :+ event, None, deadline)
                       else loop(rest, applied :+ event, Some(next), deadline)
                     case None =>
-                      settle(run) >> apply(event) >> loop(rest, applied :+ event, None, deadline)
+                      settle(run) >> steps.stages.io(ApplyStage.Event)(apply(event)) >>
+                        loop(rest, applied :+ event, None, deadline)
               }
           }
     for

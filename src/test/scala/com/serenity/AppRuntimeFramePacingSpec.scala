@@ -7,7 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.diagnostics.{KeyLatencyTrace, LatencyStage}
+import com.serenity.diagnostics.{FrameTimings, LatencyStage}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.color.RenderColor
@@ -100,7 +100,8 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
   it should "stamp a frame's wake, pacing deadline and model read onto the latency trace" in {
     val interval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60)
     val nanos    = new java.util.concurrent.atomic.AtomicLong(1.second.toNanos)
-    val trace    = KeyLatencyTrace(() => nanos.get())
+    val timings  = FrameTimings(() => nanos.get())
+    val trace    = timings.keyLatency
     trace.setEnabled(true)
     trace.keyReceived(System.currentTimeMillis())
     trace.keyEnqueued()
@@ -144,7 +145,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
           delay => IO(nanos.addAndGet(delay.toNanos)).void,
           frameClock = IO(nanos.get().nanos),
           lastFrameStart = lastStart,
-          keyLatency = trace
+          frameTimings = timings
         )
         .compile
         .drain

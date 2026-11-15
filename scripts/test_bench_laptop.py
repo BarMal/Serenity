@@ -223,6 +223,22 @@ class StatsTests(unittest.TestCase):
             self.assertIn("input-to-paint", result.stdout)
 
 
+    def test_stats_report_the_stages_a_frame_and_an_apply_split_into(self):
+        stages = " | ".join(
+            f"{phase} p50=1.50 p95=3.00 max=4.00 n=9 ms"
+            for phase in (
+                "apply-decode", "apply-typed-step", "apply-event", "apply-typed-commit", "apply-damage",
+                "render-layout", "render-draw", "render-flush",
+            )
+        )
+        with tempfile.TemporaryDirectory() as results:
+            write(os.path.join(results, "x-run1.txt"), f"=== [FRAME] lines ===\n{FRAME} | {stages}\n")
+            result = lib(f'compute_stats "{results}" x')
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            for phase in ("apply-decode", "apply-typed-commit", "render-layout", "render-draw", "render-flush"):
+                self.assertIn(phase, result.stdout)
+
+
 class QuitSequenceTests(unittest.TestCase):
     """What bench-laptop.sh records around the final quit, on top of stop_app's bounded stop (#2507)."""
 

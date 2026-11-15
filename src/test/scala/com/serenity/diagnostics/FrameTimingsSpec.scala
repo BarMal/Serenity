@@ -246,3 +246,26 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     PresentPoint.of("skia-raster") shouldBe "paint-end"
     PresentPoint.of("java2d") shouldBe "paint-end"
   }
+
+  it should "keep the time recorded for a stage of the frame and name it in the log line" in {
+    val (timings, _) = recorder()
+
+    timings.recordPhase(FramePhase.RenderDraw, 4 * Ms)
+    timings.recordPhase(FramePhase.RenderDraw, 6 * Ms)
+    timings.recordPhase(FramePhase.ApplyDamage, 1 * Ms)
+
+    val summary = timings.drain()
+    summary.phases(FramePhase.RenderDraw).count shouldBe 2
+    summary.phases(FramePhase.RenderDraw).maxMs shouldBe 6.0
+    summary.phases(FramePhase.ApplyDamage).p50Ms shouldBe 1.0
+    summary.logLine should (include("render-draw p50=") and include("apply-damage p50="))
+  }
+
+  it should "record nothing for a stage while timing is off" in {
+    val timings = FrameTimings()
+
+    timings.recordPhase(FramePhase.RenderFlush, 4 * Ms)
+    timings.setEnabled(true)
+
+    timings.drain().phases.get(FramePhase.RenderFlush) shouldBe None
+  }

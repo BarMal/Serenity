@@ -120,6 +120,41 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
     runVirtual(program)
   }
 
+  it should "tell the frame timings how a frame's time split into layout, drawing and flushing" in {
+    val timings = com.serenity.diagnostics.FrameTimings()
+    timings.setEnabled(true)
+    val program = for
+      r         <- rig
+      lastStart <- Ref.of[IO, Option[FiniteDuration]](None)
+      _         <- r.emitDamage(Damage.Everything)
+      _ <- AppRuntimeRenderLoops
+        .fastRenderPhase(
+          engine,
+          r.signal,
+          r.pendingDamage,
+          r.pendingPaintDamage,
+          IO.pure(Some(state)),
+          IO.unit,
+          (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, caches: RenderCaches) =>
+            IO {
+              caches.framePhases.layout(())
+              caches.framePhases.draw(caches.framePhases.flush(()))
+            },
+          RenderCaches.create(),
+          lastFrameStart = lastStart,
+          frameTimings = timings
+        )
+        .compile
+        .drain
+    yield timings.drain()
+    val phases = runVirtual(program).phases
+    List(
+      com.serenity.diagnostics.FramePhase.RenderLayout,
+      com.serenity.diagnostics.FramePhase.RenderDraw,
+      com.serenity.diagnostics.FramePhase.RenderFlush
+    ).map(phase => phases.get(phase).map(_.count)) shouldBe List(Some(1), Some(1), Some(1))
+  }
+
   it should "stay in fast mode when damage arrives while its frame is being painted" in {
     val program = for
       r         <- rig
