@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.SkiaFrames
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.ViewportSize
@@ -33,7 +33,7 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
 
   final private class CountedFrames:
     private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
@@ -145,7 +145,7 @@ class FrameCountersRenderSpec extends AnyFlatSpec with Matchers:
 
   "Frame counters left off" should "record nothing while frames are drawn" in {
     val (before, _) = transition(InsertChar('x'))
-    val caches      = RenderCaches.create()
+    val caches      = TestMeasure.renderCaches()
     val surface = SkiaFrames.surfaceOver(
       SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx),
       cellMetrics,

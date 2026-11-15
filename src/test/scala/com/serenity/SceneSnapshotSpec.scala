@@ -6,6 +6,7 @@ import com.serenity.command.{CommandRegistry, CommandRunner}
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
@@ -84,7 +85,12 @@ class SceneSnapshotSpec extends AnyFlatSpec with Matchers:
       .bufferId
       .flatMap(state.persisted.buffers.get)
       .getOrElse(fail("expected buffer"))
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 640, Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = 640,
+      Font(Font.MONOSPACED, Font.PLAIN, 12),
+      wrapCache = TestMeasure.wrapCache()
+    )
 
     scene.editorContract.paneLayout(paneId) shouldBe scene.paneLayouts.get(paneId)
     scene.withTextSnapshots(Map(paneId -> snapshot)).textSnapshot(paneId) shouldBe Some(snapshot)

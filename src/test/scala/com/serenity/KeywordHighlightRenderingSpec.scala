@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.layout.{Layout, ViewportSize}
@@ -78,7 +77,7 @@ class KeywordHighlightRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface
 

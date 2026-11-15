@@ -8,7 +8,7 @@ import com.serenity.ReferenceFrames
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.{CharWidth, WrappedLineCache}
+import com.serenity.ui.layout.CharWidth
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,7 +47,7 @@ class GuiCellGridEmojiSpec extends AnyFlatSpec with Matchers:
       Theme.light,
       syntaxHighlightingEnabled = false,
       styledSegments = Some(List(StyledText(text, style, black, white))),
-      fallback = Some(CellFallback(primary, fallback, WrappedLineCache.bounded()))
+      fallback = Some(CellFallback(primary, fallback, TestMeasure.wrapCache()))
     )
     reference.image
 

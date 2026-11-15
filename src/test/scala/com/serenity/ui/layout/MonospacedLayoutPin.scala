@@ -55,7 +55,7 @@ private[layout] object MonospacedLayoutPin:
     for
       pinned  <- fonts
       widthPx <- WidthsPx
-      entry <- {
+      entry <-
         val laidOut = snapshot(pinned, widthPx)
         val prefix  = s"${pinned.label}@$widthPx"
         Vector(
@@ -73,7 +73,6 @@ private[layout] object MonospacedLayoutPin:
             s"$prefix.row$index.width"  -> line.row.widthPx.toString
           )
         }
-      }
     yield entry
 
   def render(entries: Seq[(String, String)]): String =

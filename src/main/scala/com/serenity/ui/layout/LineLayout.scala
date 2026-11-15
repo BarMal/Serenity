@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.ParagraphRole
@@ -13,7 +12,7 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   resolverForLine,
   singleFontResolver
 }
-import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
+import com.serenity.ui.renderer.FontSpec
 
 /** The line-level inputs of a wrap -- per-run fonts, drop cap role and the room its glyph reserves -- shared by the
   * painted layout and every row count so the two cannot disagree.
@@ -29,7 +28,6 @@ private[layout] object LineLayout:
     bufferLine: Int,
     panelWidthPx: Int,
     font: Font,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     richText: RichTextContext,
@@ -43,14 +41,11 @@ private[layout] object LineLayout:
     val inputs =
       lineLayoutInputs(
         font,
-        frc,
         measuredLayout,
         richText,
         bufferLine,
         lineLength,
         lineText,
-        wrapCache.shapedText,
-        wrapCache.layoutMemos,
         fallbackText = text,
         fallbackFirstColumn = baseColumn,
         wrapCache = wrapCache
@@ -60,7 +55,6 @@ private[layout] object LineLayout:
       bufferLine,
       panelWidthPx,
       inputs.resolver,
-      frc,
       measuredLayout,
       cellMetrics,
       baseColumn,
@@ -77,7 +71,6 @@ private[layout] object LineLayout:
     text: String,
     startColumn: Int,
     font: Font,
-    fontRenderContext: FontRenderContext,
     measuredLayout: Boolean,
     tabSize: Int = IndentationSettings.DefaultTabSize,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
@@ -85,14 +78,11 @@ private[layout] object LineLayout:
   ): LineFontResolver =
     lineLayoutInputs(
       font,
-      fontRenderContext,
       measuredLayout,
       RichTextContext.plain.copy(tabSize = tabSize, fallback = fallback),
       0,
       text.length,
       "",
-      wrapCache.shapedText,
-      wrapCache.layoutMemos,
       fallbackText = text,
       fallbackFirstColumn = startColumn,
       wrapCache = wrapCache
@@ -107,7 +97,6 @@ private[layout] object LineLayout:
     viewport: Viewport,
     panelWidthPx: Int,
     font: Font,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     richText: RichTextContext,
@@ -117,28 +106,15 @@ private[layout] object LineLayout:
     val endColumn   = math.min(rawLine.length, startColumn + math.max(1, viewport.visibleColumns) + OverscanColumns)
     val slice       = rawLine.slice(startColumn, endColumn)
     val inputs =
-      lineLayoutInputs(
-        font,
-        frc,
-        measuredLayout,
-        richText,
-        lineIndex,
-        rawLine.length,
-        rawLine,
-        wrapCache.shapedText,
-        wrapCache.layoutMemos,
-        wrapCache = wrapCache
-      )
+      lineLayoutInputs(font, measuredLayout, richText, lineIndex, rawLine.length, rawLine, wrapCache = wrapCache)
     val row =
       SegmentMeasurement.measureSegment(
         slice,
         startColumn,
         startColumn + slice.length,
         inputs.resolver,
-        frc,
         measuredLayout,
         cellMetrics,
-        wrapCache.shapedText,
         wrapCache.layoutMemos
       )
     val wrapped = DropCapLayout.reservingGlyphHeight(
@@ -159,7 +135,6 @@ private[layout] object LineLayout:
     rawLine: String,
     panelWidthPx: Int,
     font: Font,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     maxVisualLines: Int,
@@ -171,14 +146,11 @@ private[layout] object LineLayout:
       val inputs =
         LineLayout.lineLayoutInputs(
           font,
-          frc,
           measuredLayout,
           richText,
           lineIndex,
           rawLine.length,
           rawLine,
-          wrapCache.shapedText,
-          wrapCache.layoutMemos,
           wrapCache = wrapCache
         )
       val wrapped = TextLayoutSnapshot.wrapLogicalLine(
@@ -186,7 +158,6 @@ private[layout] object LineLayout:
         lineIndex,
         panelWidthPx,
         inputs.resolver,
-        frc,
         measuredLayout,
         cellMetrics,
         0,
@@ -199,18 +170,12 @@ private[layout] object LineLayout:
       val complete = wrapped.length < maxVisualLines
       HeadingSpacingLayout.apply(aligned, inputs.headingLevel, complete, font, measuredLayout, cellMetrics, richText)
 
-  /** A cell grid is forced only when the caller has no glyph metrics at all; otherwise a font is measured glyph by
-    * glyph when it needs to be, or when hiding Markdown markers needs it to be.
+  /** A cell grid is forced when the caller has no glyph metrics at all, or the owner of `memos` no measurer; otherwise
+    * a font is measured glyph by glyph when it needs to be, or when hiding Markdown markers needs it to be.
     */
-  def measuredLayoutFor(
-    font: Font,
-    frc: FontRenderContext,
-    forceCellLayout: Boolean,
-    richText: RichTextContext,
-    probes: FontProbes
-  ): Boolean =
-    !forceCellLayout &&
-      (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, probes))
+  def measuredLayoutFor(font: Font, forceCellLayout: Boolean, richText: RichTextContext, memos: LayoutMemos): Boolean =
+    !forceCellLayout && memos.measurer.isDefined &&
+      (richText.requiresMeasuredLayout || TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(font), memos))
 
   /** `headingLevel` is the level of the heading the line is, whether its paragraph says so or its Markdown does. */
   final case class LineLayoutInputs(
@@ -226,24 +191,20 @@ private[layout] object LineLayout:
     */
   def lineLayoutInputs(
     font: Font,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
     lineText: String,
-    shapedText: ShapedTextCache,
-    memos: LayoutMemos,
     fallbackText: String = "",
     fallbackFirstColumn: Int = 0,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached
   ): LineLayoutInputs =
-    val markdownRuns =
-      if measuredLayout && richText.markdown.isActive then Some(richText.markdown.runsOn(lineIndex, lineText))
-      else None
-    val styled =
-      if !measuredLayout then singleFontResolver(font, richText.tabSize)
-      else
+    val memos     = wrapCache.layoutMemos
+    val measuring = memos.measuring(measuredLayout)
+    val inputs = measuring.map { measured =>
+      val markdownRuns = Option.when(richText.markdown.isActive)(richText.markdown.runsOn(lineIndex, lineText))
+      val styled =
         markdownRuns.fold(
           resolverForLine(
             font,
@@ -254,16 +215,13 @@ private[layout] object LineLayout:
             richText.headings,
             richText.roles
           )
-        )(markdownAwareResolver(font, frc, richText, lineIndex, lineLength, lineText, shapedText, _))
-    val resolver =
-      if !measuredLayout then styled
-      else withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache, frc)
-    val paragraphRole = richText.layoutRole(lineIndex)
-    val dropCap =
-      if measuredLayout then
+        )(markdownAwareResolver(font, richText, lineIndex, lineLength, lineText, measured, _))
+      val paragraphRole = richText.layoutRole(lineIndex)
+      LineLayoutInputs(
+        withFallback(styled, font, richText, lineText, fallbackText, fallbackFirstColumn, wrapCache, measured),
+        paragraphRole,
         DropCapLayout.reserve(
           font,
-          frc,
           richText.document,
           lineIndex,
           paragraphRole,
@@ -271,9 +229,19 @@ private[layout] object LineLayout:
           richText.dropCapGapEm,
           memos,
           richText.letterShape(lineIndex)
-        )
-      else DropCapLayout.Reserve.none
-    LineLayoutInputs(resolver, paragraphRole, dropCap, headingLevelOf(paragraphRole, markdownRuns))
+        ),
+        headingLevelOf(paragraphRole, markdownRuns)
+      )
+    }
+    inputs.getOrElse {
+      val paragraphRole = richText.layoutRole(lineIndex)
+      LineLayoutInputs(
+        singleFontResolver(FontSpec.fromAwt(font), richText.tabSize),
+        paragraphRole,
+        DropCapLayout.Reserve.none,
+        headingLevelOf(paragraphRole, None)
+      )
+    }
 
   private def headingLevelOf(role: ParagraphRole, markdownRuns: Option[Vector[MarkdownInlineSpans.Run]]): Option[Int] =
     role match
@@ -283,7 +251,7 @@ private[layout] object LineLayout:
 
   /** `styled` with the runs the line needs in fallback fonts. The whole logical line is itemised when it is at hand, a
     * wrapped slice (which cannot see what precedes it) otherwise. Code rows keep their pitch whatever glyphs the
-    * fallback fonts add.
+    * fallback fonts add, and set each wide character on two cells of the advance of `0`.
     */
   private def withFallback(
     styled: LineFontResolver,
@@ -293,7 +261,7 @@ private[layout] object LineLayout:
     sliceText: String,
     sliceFirstColumn: Int,
     wrapCache: WrappedLineCache,
-    frc: FontRenderContext
+    measuring: MeasuredBy
   ): LineFontResolver =
     val (text, firstColumn) = if lineText.nonEmpty then (lineText, 0) else (sliceText, sliceFirstColumn)
     if text.isEmpty || wrapCache.isPlainAscii(text) then styled
@@ -305,17 +273,16 @@ private[layout] object LineLayout:
       else
         val coded = if itemised eq styled then styled else itemised.copy(fixedLinePitch = true)
         if WideCells.hasWide(text) || (itemised ne styled) then
-          coded.copy(wideCellPx = WideCells.cellAdvancePx(font, frc))
+          coded.copy(wideCellPx = measuring.measurer.glyphWidthPx(FontSpec.fromAwt(font), "0"))
         else coded
 
   private def markdownAwareResolver(
     font: Font,
-    frc: FontRenderContext,
     richText: RichTextContext,
     lineIndex: Int,
     lineLength: Int,
     lineText: String,
-    shapedText: ShapedTextCache,
+    measuring: MeasuredBy,
     runs: Vector[MarkdownInlineSpans.Run]
   ): LineFontResolver =
     if runs.isEmpty then
@@ -339,4 +306,4 @@ private[layout] object LineLayout:
       )
       richText.markdown
         .columnsOn(lineIndex)
-        .fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, frc, shapedText))
+        .fold(resolver)(MarkdownTableMetrics.padded(lineText, resolver, _, measuring))

@@ -2,6 +2,7 @@ package com.serenity
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +46,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 3
+      columnCount = 3,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     chunks.length shouldBe 3
@@ -64,7 +66,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 2
+      columnCount = 2,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     chunks(0).map(_.bufferLine) shouldBe (16 until 24).toList
@@ -80,7 +83,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 3
+      columnCount = 3,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     chunks.map(_.length) shouldBe List(8, 8, 4)
@@ -94,7 +98,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 2000,
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     chunks.length shouldBe 1
@@ -111,7 +116,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 2000,
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     snapshot.visualLines.map(_.bufferLine) shouldBe (0 until 8).toList
@@ -126,7 +132,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 2000,
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     snapshot.visualLines.map(_.bufferLine) shouldBe (16 until 24).toList
@@ -140,7 +147,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 2000,
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     snapshot.visualLines.map(_.bufferLine) shouldBe (16 until 20).toList
@@ -157,7 +165,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 3
+      columnCount = 3,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     snapshots.length shouldBe 3
@@ -177,7 +186,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 3
+      columnCount = 3,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     val widths = snapshots.map(_.panelWidthPx)
@@ -193,7 +203,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 3
+      columnCount = 3,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     val lengths = snapshots.map(_.visualLines.length)
@@ -208,7 +219,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 2000,
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
     val plural = TextLayoutSnapshot.fromBufferColumns(
       buffer,
@@ -216,7 +228,8 @@ class TextLayoutSnapshotColumnChunkingSpec extends AnyFlatSpec with Matchers:
       font = font,
       cellMetricsOverride = Some(CellMetrics.cellUnit),
       forceCellLayout = true,
-      columnCount = 2
+      columnCount = 2,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     val firstColumnLines = plural.headOption.map(_.visualLines.map(_.bufferLine))

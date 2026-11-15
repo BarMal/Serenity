@@ -60,7 +60,7 @@ class TypewriterCentringSpec extends AnyFlatSpec with Matchers:
     */
   private def bestDistance(state: AppState, cursor: CursorPosition, middle: Int): Int =
     val buffer = state.persisted.buffers(bufferId)
-    val counts = CursorViewport.visualRowsFor(buffer, state, com.serenity.ui.layout.WrappedLineCache.Uncached)
+    val counts = CursorViewport.visualRowsFor(buffer, state, com.serenity.testkit.TestMeasure.wrapCache())
     val tops = for
       line <- math.max(0, cursor.line - 20) to cursor.line
       row  <- 0 until counts.rowsIn(line)

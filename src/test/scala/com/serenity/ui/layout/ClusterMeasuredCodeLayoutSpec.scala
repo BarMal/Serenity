@@ -4,7 +4,9 @@ import java.awt.Font
 import java.nio.file.Paths
 
 import com.serenity.state.models.TextVisualLine
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -29,7 +31,7 @@ class ClusterMeasuredCodeLayoutSpec extends AnyFlatSpec with Matchers:
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
       .deriveFont(Font.PLAIN, 14.0f)
 
-  private val cellPx = WideCells.cellAdvancePx(codeFont, frc)
+  private val cellPx = TestMeasure.measurer.glyphWidthPx(FontSpec.fromAwt(codeFont), "0")
 
   private def rowOf(text: String): TextVisualLine =
     val rows = TextLayoutSnapshot.boundedVisualLinesForText(
@@ -37,9 +39,9 @@ class ClusterMeasuredCodeLayoutSpec extends AnyFlatSpec with Matchers:
       0,
       10_000,
       codeFont,
-      frc,
       forceCellLayout = false,
-      richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = FontConfig().fallback)
+      richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = FontConfig().fallback),
+      wrapCache = TestMeasure.wrapCache()
     )
     rows should have size 1
     rows.head

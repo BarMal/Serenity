@@ -3,6 +3,7 @@ package com.serenity
 import cats.effect.unsafe.implicits.global
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextLayoutSnapshot
@@ -34,7 +35,13 @@ class ProseFontScaleSnapshotSpec extends AnyFlatSpec with Matchers:
       )
     val font =
       FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", textFontSize = baseFontSize)).unsafeRunSync()
-    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 800, font, proseScale = proseScale)
+    TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = 800,
+      font,
+      proseScale = proseScale,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   "A rich-text snapshot" should "use the measured layout" in {
     snapshotFor(12.0f, 1.0f).usesMeasuredLayout shouldBe true

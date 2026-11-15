@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.{Balance, Leaf}
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{Layout, ViewportSize}
@@ -69,7 +68,7 @@ class ScrollReadBoundSpec extends AnyFlatSpec with Matchers:
         state.persisted.buffers + (bufferId -> buffer.copy(viewport = buffer.viewport.copy(topLine = middle + 1)))
       )
     )
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     def render(frame: AppState): Unit =
       RendererEntryPoints.render(

@@ -5,11 +5,9 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.SkiaFrames
-import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontFallback
-import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.skia.SkiaTestFonts
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -37,7 +35,7 @@ class SkiaGuiCellGridFallbackPaintSpec extends AnyFlatSpec with Matchers:
   private val fallback = FontFallback(Vector(subset.getFamily))
 
   private def painted(text: String, chain: Option[FontFallback]): BufferedImage =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     require(SkiaTestFonts.install(caches.backendCaches, "/fonts/SerenityFallbackTest.ttf").isRight)
     val frame = SkiaFrames.newFrame(40 * cell, 3 * metrics.lineHeight)
     val surface =
@@ -53,7 +51,7 @@ class SkiaGuiCellGridFallbackPaintSpec extends AnyFlatSpec with Matchers:
       Theme.light,
       syntaxHighlightingEnabled = false,
       styledSegments = Some(List(StyledText(text, TextStyle.normal, black, white))),
-      fallback = chain.map(CellFallback(primary, _, WrappedLineCache.bounded()))
+      fallback = chain.map(CellFallback(primary, _, TestMeasure.wrapCache()))
     )
     frame.toImage
 

@@ -2,23 +2,22 @@ package com.serenity.ui.layout
 
 import java.util.concurrent.{ConcurrentHashMap, Executor}
 
-/** The [[NominalAdvances]] each font may have its lines counted by, and the fonts that have lost theirs. One for a font
-  * set without ligatures is exact and measured on the spot. One for a font set with ligatures is built by `builder` the
-  * first time the font is asked about (see [[LigatureCertificate]]) and is absent until it is ready, so a line is
-  * wrapped meanwhile and no frame waits for it. A certificate that a painted row contradicts is revoked and stays so.
+/** The [[NominalAdvances]] each font may have its lines counted by, and the fonts that have lost theirs, as the owner's
+  * measurer measures them; with no measurer there are none. One for a font set without ligatures is measured on the
+  * spot. One for a font set with ligatures is built by `builder` the first time the font is asked about (see
+  * [[LigatureCertificate]]) and is absent until it is ready, so a line is wrapped meanwhile and no frame waits for it.
+  * A certificate that a painted row contradicts is revoked and stays so.
   */
-final private[serenity] class RowCertificates(builder: Executor):
+final private[serenity] class RowCertificates(builder: Executor, measurer: () => Option[TextMeasurer]):
 
-  private val exact = MeasurementMemo[NominalAdvances.Key, Option[NominalAdvances]](maxEntries = 64)(key =>
-    NominalAdvances.of(key.font, key.frc)
-  )
+  private val exact = MeasurementMemo[NominalAdvances.Key, Option[NominalAdvances]](maxEntries = 64)(certify)
 
   private val built     = new ConcurrentHashMap[NominalAdvances.Key, Option[NominalAdvances]]()
   private val requested = ConcurrentHashMap.newKeySet[NominalAdvances.Key]()
   private val revoked   = ConcurrentHashMap.newKeySet[NominalAdvances.Key]()
 
   def of(key: NominalAdvances.Key): Option[NominalAdvances] =
-    if revoked.contains(key) then None else exact(key).orElse(shapedFor(key))
+    if revoked.contains(key) then None else if key.font.ligatures then shapedFor(key) else exact(key)
 
   /** Installs `table` as the built certificate of a font set with ligatures, as if the builder had made it: for specs
     * of what a wrong certificate does.
@@ -44,8 +43,14 @@ final private[serenity] class RowCertificates(builder: Executor):
         if requested.add(key) then builder.execute(() => build(key))
         None
 
+  private def certify(key: NominalAdvances.Key): Option[NominalAdvances] =
+    measurer().flatMap(measuring =>
+      if key.font.ligatures then LigatureCertificate.of(key.font, measuring)
+      else NominalAdvances.of(key.font, measuring)
+    )
+
   private def build(key: NominalAdvances.Key): Unit =
-    val _ = built.put(key, LigatureCertificate.of(key.font, key.frc))
+    val _ = built.put(key, certify(key))
 
 private object RowCertificates:
   val log: System.Logger = System.getLogger("com.serenity.ui.layout.RowCertificates")

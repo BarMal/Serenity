@@ -36,7 +36,7 @@ class TransparentBackgroundTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(20, 5),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.flush()
 
@@ -56,7 +56,7 @@ class TransparentBackgroundTuiIntegrationSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(20, 5),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.flush()
 

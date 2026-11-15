@@ -12,7 +12,7 @@ import com.serenity.perf.BenchmarkFixtures.{
   withCursorsOnConsecutiveLines
 }
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.testkit.TestMeasure
@@ -153,7 +153,7 @@ private[perf] object DamageBenchmarks:
     lazy val damage = DamageProducer.forTransition(before, after)
     def repaintAfterCaretMove(): Option[List[PixelRect]] =
       val surface = MockRenderSurface(viewport.width, viewport.height, persistentContent = true)
-      val caches  = RenderCaches.create()
+      val caches  = TestMeasure.renderCaches()
       def frame(state: AppState, frameDamage: Damage) =
         RendererEntryPoints.renderWithRepaintRects(
           state,

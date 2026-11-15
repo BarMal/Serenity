@@ -1,24 +1,23 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.markdown.MarkdownInlineSpans
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{IndentationSettings, MeasuredRow}
 import com.serenity.text.fallback.FontSlot
 import com.serenity.ui.openings.ParagraphRoles
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.theme.{HeadingSettings, MarkdownInlineStyling, RichTextStyling, TextStyle}
 
-/** Caret-stop measurement for one logical line: which AWT font each column measures with, and the x position of every
-  * caret boundary under either the fixed cell grid or the measured (proportional/ligature/rich) path. Pure geometry
-  * over a line of text -- `TextLayoutSnapshot` composes these into visual lines and wraps them.
+/** Caret-stop measurement for one logical line: which font each column measures with, and the x position of every caret
+  * boundary under either the fixed cell grid or the measured (proportional/ligature/rich) path. Pure geometry over a
+  * line of text -- `TextLayoutSnapshot` composes these into visual lines and wraps them.
   */
 private[layout] object TextCaretMeasurement:
 
-  /** The AWT font a single buffer-line column is measured/drawn with, over the buffer's base font. A `hidden` run stays
-    * in the line's text but has no width, so it neither advances the line nor takes a caret stop of its own. The
+  /** The font a single buffer-line column is measured/drawn with, over the buffer's base font. A `hidden` run stays in
+    * the line's text but has no width, so it neither advances the line nor takes a caret stop of its own. The
     * resolver's `extraAdvances` are the dual: a column that is wider than its glyph by that many pixels, which a table
     * uses to pad a cell out to its column. A run with a non-primary `slot` is drawn in a fallback font because the
     * line's own font has no glyph for it; `fixedLinePitch` keeps such runs out of a row's height, as a code buffer's
@@ -29,13 +28,13 @@ private[layout] object TextCaretMeasurement:
   final private[layout] case class ColumnFontRun(
       startColumn: Int,
       endColumn: Int,
-      font: Font,
+      font: FontSpec,
       hidden: Boolean = false,
       slot: FontSlot = FontSlot.Primary
   )
 
   /** `[startColumn, endColumn)` measured in one `font`, or not at all when `hidden`. */
-  final private[layout] case class FontSpan(startColumn: Int, endColumn: Int, font: Font, hidden: Boolean)
+  final private[layout] case class FontSpan(startColumn: Int, endColumn: Int, font: FontSpec, hidden: Boolean)
 
   /** Per-logical-line font lookup for the measured path: maps an absolute buffer column to its run's scaled font, and
     * reports a visual line's height/ascent from the highest ascent and deepest descent of the runs covering it.
@@ -43,7 +42,7 @@ private[layout] object TextCaretMeasurement:
     * exactly.
     */
   final private[layout] case class LineFontResolver(
-      baseFont: Font,
+      baseFont: FontSpec,
       runs: Vector[ColumnFontRun],
       extraAdvances: Map[Int, Float] = Map.empty,
       tabSize: Int = IndentationSettings.DefaultTabSize,
@@ -81,7 +80,7 @@ private[layout] object TextCaretMeasurement:
           if holds(middle) then narrow(middle + 1, high) else narrow(low, middle)
       narrow(0, size)
 
-    def fontAt(column: Int): Font =
+    def fontAt(column: Int): FontSpec =
       runAt(column).map(_.font).getOrElse(baseFont)
 
     def isFallbackAt(column: Int): Boolean =
@@ -128,7 +127,7 @@ private[layout] object TextCaretMeasurement:
       }
       covered < endColumn - startColumn
 
-    def lineMetrics(frc: FontRenderContext, extents: FontLineExtents, startColumn: Int, endColumn: Int): (Int, Int) =
+    def lineMetrics(extents: FontLineExtents, startColumn: Int, endColumn: Int): (Int, Int) =
       val covering = runs.collect {
         case run
             if !run.hidden && run.endColumn > startColumn && run.startColumn < endColumn &&
@@ -139,7 +138,7 @@ private[layout] object TextCaretMeasurement:
       val fonts     = if needsBase then baseFont +: covering else covering
       val (maxAscent, maxDescent) = fonts.foldLeft((1, 0)) {
         case ((ascent, descent), font) =>
-          val extent = extents.of(font, frc)
+          val extent = extents.of(font)
           (math.max(ascent, extent.ascentPx), math.max(descent, extent.descentPx))
       }
       (maxAscent + maxDescent, maxAscent)
@@ -148,7 +147,7 @@ private[layout] object TextCaretMeasurement:
     * single-font behaviour. Used by the plain-text measurement helpers that carry no rich document.
     */
   private[layout] def singleFontResolver(
-    font: Font,
+    font: FontSpec,
     tabSize: Int = IndentationSettings.DefaultTabSize
   ): LineFontResolver =
     LineFontResolver(font, Vector.empty, tabSize = tabSize)
@@ -169,12 +168,12 @@ private[layout] object TextCaretMeasurement:
           .foldLeft((0, Vector.empty[ColumnFontRun])) {
             case ((offset, acc), span) =>
               val end = offset + span.text.length
-              (end, acc :+ ColumnFontRun(offset, end, TextStyle.styledFont(baseFont, span.style)))
+              (end, acc :+ ColumnFontRun(offset, end, FontSpec.fromAwt(TextStyle.styledFont(baseFont, span.style))))
           }
           ._2
           .toVector
       case None => Vector.empty
-    LineFontResolver(baseFont, runs)
+    LineFontResolver(FontSpec.fromAwt(baseFont), runs)
 
   /** The stops a click or a vertical move can land on, by x: a stop before a hidden column shares its x with the stop
     * after it, so it would only ever compete with a column the writer can see. A row's last stop stays, so a row of
@@ -205,68 +204,66 @@ private[layout] object TextCaretMeasurement:
     baseIsMonospaced: Boolean,
     headings: HeadingSettings
   ): LineFontResolver =
+    val base = FontSpec.fromAwt(baseFont)
     def runFor(run: MarkdownInlineSpans.Run): ColumnFontRun =
-      if run.isMarker then ColumnFontRun(run.startColumn, run.endColumn, baseFont, hidden = hideMarkers)
+      if run.isMarker then ColumnFontRun(run.startColumn, run.endColumn, base, hidden = hideMarkers)
       else
         ColumnFontRun(
           run.startColumn,
           run.endColumn,
-          TextStyle.styledFont(
-            baseFont,
-            MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced, baseFont.getSize2D, headings)
+          FontSpec.fromAwt(
+            TextStyle.styledFont(
+              baseFont,
+              MarkdownInlineStyling.textStyle(run.style, baseIsMonospaced, baseFont.getSize2D, headings)
+            )
           )
         )
     val (covered, columnRuns) = runs.foldLeft((0, Vector.empty[ColumnFontRun])) {
       case ((from, acc), run) =>
-        val gap = Option.when(run.startColumn > from)(ColumnFontRun(from, run.startColumn, baseFont))
+        val gap = Option.when(run.startColumn > from)(ColumnFontRun(from, run.startColumn, base))
         (run.endColumn, acc ++ gap :+ runFor(run))
     }
-    LineFontResolver(
-      baseFont,
-      columnRuns ++ Option.when(covered < lineLength)(ColumnFontRun(covered, lineLength, baseFont))
-    )
+    LineFontResolver(base, columnRuns ++ Option.when(covered < lineLength)(ColumnFontRun(covered, lineLength, base)))
 
   private[layout] def caretXs(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
-    measuredLayout: Boolean,
-    cellMetrics: CellMetrics,
-    shapedText: ShapedTextCache
+    measuring: Option[MeasuredBy],
+    cellMetrics: CellMetrics
   ): IArray[Float] =
-    if text.isEmpty then IArray(0.0f)
-    else if !measuredLayout then
-      val charWidth = cellMetrics.charWidth.toFloat
-      if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth, resolver.tabSize)
-      else uniformCaretXs(text, charWidth, resolver.tabSize)
-    else
-      normalizeCollapsedCarets(
-        rawMeasuredCaretXs(text, absoluteStartColumn, resolver, frc, shapedText),
-        resolver,
-        absoluteStartColumn
-      )
+    measuring match
+      case _ if text.isEmpty => IArray(0.0f)
+      case None =>
+        val charWidth = cellMetrics.charWidth.toFloat
+        if cellMetrics.displayWidthAware then displayWidthCaretXs(text, charWidth, resolver.tabSize)
+        else uniformCaretXs(text, charWidth, resolver.tabSize)
+      case Some(measurer) =>
+        normalizeCollapsedCarets(
+          rawMeasuredCaretXs(text, absoluteStartColumn, resolver, measurer),
+          resolver,
+          absoluteStartColumn
+        )
 
   /** Each character's caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph advances
     * when every character is context-free (see [[GlyphAdvances]]), the glyphs of a shaped stretch otherwise (see
-    * [[ShapedCaretStops]]).
+    * [[ExactCaretXs]]).
     */
   private[layout] def rawMeasuredCaretXs(
     text: String,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): IArray[Float] =
     if text.isEmpty then IArray(0.0f)
     else
       val advances =
-        if GlyphAdvances.hasContextFreeCharacters(text) then
-          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, frc, shapedText))
+        if measuring.measurer.mayMeasureByAdvances(text) then
+          Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, measuring.measurer))
         else None
       advances.filter(_.isContextFree(0, text.length)) match
         case Some(measured) => measured.caretsFrom(0, text.length)
-        case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, frc, shapedText)
+        case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, measuring)
 
   /** How many characters of a row fit, plus -- when they came from summed advances -- the candidate's raw carets, so
     * the chosen row reuses them instead of being measured a second time. A kerned character's caret already holds the
@@ -307,28 +304,28 @@ private[layout] object TextCaretMeasurement:
     givenBackPx: Float = 0.0f
   ): SegmentFit =
     val cellMetrics = spec.cellMetrics
-    if !spec.measuredLayout then
-      val charWidth = math.max(1, cellMetrics.charWidth)
-      val widthPx   = panelWidthPx + math.round(givenBackPx)
-      if cellMetrics.displayWidthAware then
-        SegmentFit(fittingDisplayWidthSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
-      else SegmentFit(fittingUniformSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
-    else
-      paragraph
-        .measuredFit(from, panelWidthPx, givenBackPx)
-        .getOrElse(
-          fittingMeasuredSegment(
-            line,
-            from,
-            panelWidthPx,
-            givenBackPx,
-            absoluteStartColumn,
-            spec.resolver,
-            spec.frc,
-            cellMetrics,
-            paragraph.shapedText
+    paragraph.measuring match
+      case None =>
+        val charWidth = math.max(1, cellMetrics.charWidth)
+        val widthPx   = panelWidthPx + math.round(givenBackPx)
+        if cellMetrics.displayWidthAware then
+          SegmentFit(fittingDisplayWidthSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
+        else SegmentFit(fittingUniformSegmentLength(line, from, widthPx, charWidth, spec.resolver.tabSize))
+      case Some(measuring) =>
+        paragraph
+          .measuredFit(from, panelWidthPx, givenBackPx)
+          .getOrElse(
+            fittingMeasuredSegment(
+              line,
+              from,
+              panelWidthPx,
+              givenBackPx,
+              absoluteStartColumn,
+              spec.resolver,
+              cellMetrics,
+              measuring
+            )
           )
-        )
 
   /** The exact search: lays out ever-longer candidates until one overflows the row. */
   private def fittingMeasuredSegment(
@@ -338,25 +335,17 @@ private[layout] object TextCaretMeasurement:
     givenBackPx: Float,
     absoluteStartColumn: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
     cellMetrics: CellMetrics,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): SegmentFit =
     val remainingLength = line.length - from
     val width           = panelWidthPx.toFloat + givenBackPx
 
     @annotation.tailrec
     def loop(limit: Int): SegmentFit =
-      val stops = ExactCaretXs.layoutStops(
-        line.substring(from, from + limit),
-        absoluteStartColumn,
-        resolver,
-        frc,
-        shapedText
-      )
-      // A row fits when its own trailing edge does; where that edge is not known (right-to-left text) the stops decide.
-      val edges =
-        stops.trailing.getOrElse(normalizeCollapsedCarets(stops.carets, resolver, absoluteStartColumn))
+      val stops = ExactCaretXs.layoutStops(line.substring(from, from + limit), absoluteStartColumn, resolver, measuring)
+      // A row fits when its own trailing edge does, which no kerning with the next row's first character moves.
+      val edges      = normalizeCollapsedCarets(stops.edges, resolver, absoluteStartColumn)
       val firstOver  = edges.indexWhere(_ > width)
       val maxFitting = if firstOver < 0 then limit else math.max(0, firstOver - 1)
       if limit >= remainingLength || edges(limit) > width || maxFitting < limit then SegmentFit(math.max(1, maxFitting))

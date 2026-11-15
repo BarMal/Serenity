@@ -76,7 +76,7 @@ private[perf] object SkiaGlFrameBenchmarks:
     frames.draw(settings)(render).fold(reason => throw new IllegalStateException(reason), identity)
 
   private def glFrames(context: SkiaGlContext, metrics: CellMetrics, grid: ViewportSize): Frames =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val settings = GlFrameSettings(
       metrics,
       FontSpec.fromAwt(codeFont),
@@ -91,7 +91,7 @@ private[perf] object SkiaGlFrameBenchmarks:
     Renderer(metrics, grid, onGl(SkiaGlFrames(context, targets), settings), caches)
 
   private def cpuFrames(metrics: CellMetrics, grid: ViewportSize): Frames =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val frame: FramePixels =
       SkiaFrames.newFrame(
         math.ceil(LogicalWidthPx * DeviceScale).toInt,

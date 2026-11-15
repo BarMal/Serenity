@@ -49,7 +49,7 @@ class GutterDividerRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val dividerColumn = gutter.x + gutter.width - 1

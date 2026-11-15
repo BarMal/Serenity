@@ -86,7 +86,7 @@ final class ColumnPagingFixture(
   val columnHeightPx: Int = rowsPerColumn * TestMeasure.cellMetrics(FontLoader.previewTextFont(fontConfig)).lineHeight
 
   /** Kept across layouts as the running editor keeps its own, so a walk over a document measures each line once. */
-  val wrapCache: WrappedLineCache = WrappedLineCache.bounded()
+  val wrapCache: WrappedLineCache = TestMeasure.wrapCache()
 
   /** The columns of the page `viewport` anchors, laid out as the painter lays them out. */
   def columnsAt(viewport: Viewport, count: Int = columnCount, rows: Int = rowsPerColumn): Vector[TextLayoutSnapshot] =

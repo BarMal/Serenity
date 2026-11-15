@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 
 import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{RenderSurface, ScreenIdentity, SurfaceSizing}
 import com.serenity.ui.skia.SkiaTestFonts
@@ -19,7 +20,7 @@ final class SkiaFallbackFrame(
     logicalHeightPx: Int,
     scale: Double
 ):
-  val caches: RenderCaches = RenderCaches.create()
+  val caches: RenderCaches = TestMeasure.renderCaches()
 
   require(
     SkiaTestFonts.install(caches.backendCaches, SkiaFallbackFrame.FontResource).isRight,

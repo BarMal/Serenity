@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, CursorPosition, RichTextState, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.{HeadingSettings, HeadingStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -40,7 +41,7 @@ class HeadingSpacingNavigationSpec extends AnyFlatSpec with Matchers:
     HeadingSettings(styles = HeadingStyle.defaults.map(_.copy(spaceBeforeEm = 2.0f, spaceAfterEm = 1.5f)))
 
   private def snapshotOf(headings: HeadingSettings) =
-    TextLayoutSnapshot.fromBuffer(buffer, 300, font, headings = headings)
+    TextLayoutSnapshot.fromBuffer(buffer, 300, font, headings = headings, wrapCache = TestMeasure.wrapCache())
 
   private def walk(snapshot: TextLayoutSnapshot, direction: Int, from: CursorPosition): List[CursorPosition] =
     LazyList

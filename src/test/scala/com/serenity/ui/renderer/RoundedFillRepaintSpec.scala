@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
@@ -32,8 +32,9 @@ abstract class RoundedFillRepaintBehaviour extends AnyFlatSpec with Matchers:
   private val underlay = CornerUnderlay.all(RenderColor.fromAwt(margin))
 
   private def painted(times: Int, withUnderlay: Boolean): FramePixels =
-    val image    = frames.newFrame(width, height)
-    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = true, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = true, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(window))
     surface.setBackgroundColor(RenderColor.fromAwt(margin))

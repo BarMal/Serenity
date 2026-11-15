@@ -7,7 +7,6 @@ import java.nio.file.Paths
 import javax.imageio.ImageIO
 
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.testkit.TestMeasure
@@ -78,7 +77,7 @@ class ImePreEditScreenshotSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(codeFont),
       metrics,
       None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface.flush()
     reference.image

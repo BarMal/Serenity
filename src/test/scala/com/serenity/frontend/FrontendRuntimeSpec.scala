@@ -5,8 +5,8 @@ import cats.effect.{IO, Ref}
 import com.serenity.input.{InputHandler, InputRouter}
 import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import fs2.Stream
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,7 +49,7 @@ class FrontendRuntimeSpec extends AnyFlatSpec with Matchers:
         (_, _, _, _, _) => calls.update(_ + 1),
         (_, _, _, _, _) => IO.unit
       )
-      _      <- runtime.renderFull(AppState.initial, true, None, Damage.Everything, RenderCaches.create())
+      _      <- runtime.renderFull(AppState.initial, true, None, Damage.Everything, TestMeasure.renderCaches())
       result <- calls.get
     yield result
 
@@ -65,7 +65,7 @@ class FrontendRuntimeSpec extends AnyFlatSpec with Matchers:
         (_, _, _, _, _) => fullCalls.update(_ + 1),
         (_, _, _, _, _) => cursorCalls.update(_ + 1)
       )
-      _            <- runtime.renderCursorOnly(AppState.initial, true, None, Damage.Nothing, RenderCaches.create())
+      _            <- runtime.renderCursorOnly(AppState.initial, true, None, Damage.Nothing, TestMeasure.renderCaches())
       fullResult   <- fullCalls.get
       cursorResult <- cursorCalls.get
     yield (fullResult, cursorResult)

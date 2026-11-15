@@ -1,5 +1,6 @@
 package com.serenity
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,7 +21,8 @@ class TextLayoutSnapshotLineBreakSpec extends AnyFlatSpec with Matchers:
       panelWidthPx = 3,
       font,
       cellMetricsOverride = Some(CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     lines.map(_.text) shouldBe Vector("上海市", "浦东新", "区")
@@ -40,7 +42,8 @@ class TextLayoutSnapshotLineBreakSpec extends AnyFlatSpec with Matchers:
       panelWidthPx = 6, // fits "abc漢字d" (6 chars) by raw character count alone
       font,
       cellMetricsOverride = Some(CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     lines.map(_.text) shouldBe Vector("abc漢字", "defgh")
@@ -59,7 +62,8 @@ class TextLayoutSnapshotLineBreakSpec extends AnyFlatSpec with Matchers:
       panelWidthPx = 5, // fits "10 km" (5 chars) by raw character count alone
       font,
       cellMetricsOverride = Some(CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     lines.map(_.text) shouldBe Vector("10 km", " away")

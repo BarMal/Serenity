@@ -7,7 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, TabListEntry, UiSurface}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{LayoutRect, TabBarLayoutSettings, TabBarSurfaceComposition}
-import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache, TextOverlayRenderer, TextOverlayView}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, TextOverlayRenderer, TextOverlayView}
 import com.serenity.ui.theme.Theme
 import com.serenity.{FramePixels, ReferenceFrames}
 
@@ -24,7 +24,7 @@ private[perf] object TabStripBenchmarks:
   private val cells    = TestMeasure.cellMetrics(font)
   private val columns  = widthPx / cells.charWidth
   private val rect     = LayoutRect(0, 0, columns, 1)
-  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
   private val config = AppConfig.conventional.withUiCornerRadiusPx(12).withDockedCornerStyle(DockedCornerStyle.Floating)
 
   private def stateWith(count: Int): AppState =

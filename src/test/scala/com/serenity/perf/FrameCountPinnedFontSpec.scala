@@ -1,6 +1,6 @@
 package com.serenity.perf
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.BundledInterFont
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextCaches
@@ -16,7 +16,7 @@ final class FrameCountPinnedFontSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give Skia that family for the AWT font the scenarios lay out with" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
     val _     = FrameCountScenarios.pinnedInterCaches(owner)
 
     SkiaTextCaches

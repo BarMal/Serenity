@@ -101,7 +101,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         ) => renderCalls.update(_ + 1),
         requestFastRender = IO.unit,
         cursorIdleInterval = _ => None,
-        renderCaches = com.serenity.state.manager.RenderCaches.create()
+        renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
       )
       calls <- renderCalls.get
     yield calls shouldBe 0
@@ -132,7 +132,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         ) => IO.unit,
         requestFastRender = IO.unit,
         cursorIdleInterval = GuiFrontend.cursorIdleInterval,
-        renderCaches = com.serenity.state.manager.RenderCaches.create()
+        renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
       )
       remaining <- pendingPaintDamage.get
     yield remaining shouldBe damage
@@ -163,7 +163,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
         ) => rendered.update(_ :+ (visible -> cursor)),
         requestFastRender = IO.unit,
         cursorIdleInterval = GuiFrontend.cursorIdleInterval,
-        renderCaches = com.serenity.state.manager.RenderCaches.create()
+        renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
       )
       frames <- rendered.get
     yield frames shouldBe Vector(false -> None)
@@ -200,7 +200,7 @@ class AppRuntimeIdleCursorRenderSpec extends AnyFlatSpec with Matchers:
           ) => painted.update(_ :+ visible),
           requestFastRender = IO.unit,
           cursorIdleInterval = GuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
+          renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
         )
       )
 

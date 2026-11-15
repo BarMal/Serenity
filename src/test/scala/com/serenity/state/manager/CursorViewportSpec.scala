@@ -182,7 +182,8 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
             buffer.document.content.getLine(lineIndex).getOrElse(""),
             lineIndex,
             gridWidthPx,
-            textFont
+            textFont,
+            wrapCache = TestMeasure.wrapCache()
           )
           .length
           .max(1)
@@ -193,7 +194,8 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
             cursorPos.column,
             gridWidthPx,
             textFont,
-            wordWrapEnabled = true
+            wordWrapEnabled = true,
+            wrapCache = TestMeasure.wrapCache()
           )
       val cursorRowFromTop = topVisualRow - adjusted.topVisualLine
 

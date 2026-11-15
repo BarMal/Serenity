@@ -5,7 +5,7 @@ import java.awt.Font
 import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{MarkdownInlineView, MarkerMode}
 import com.serenity.state.models.TextVisualLine
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -43,12 +43,12 @@ class HiddenColumnLayoutSpec extends AnyFlatSpec with Matchers:
       bufferLine,
       widthPx,
       font,
-      frc,
-      richText = context(inline)
+      richText = context(inline),
+      wrapCache = TestMeasure.wrapCache()
     )
 
   private def advance(text: String, font: Font): Float =
-    TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
+    TextLayoutSnapshot.caretXsForText(text, font, TestMeasure.layoutMemos()).last
 
   private def read(text: String, font: Font = serif, widthPx: Int = 4000): TextVisualLine =
     rows(text, view(MarkerMode.Read), font, widthPx).head

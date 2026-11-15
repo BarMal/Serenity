@@ -104,8 +104,8 @@ class SkiaGuiCellGridSelectionSpec extends AnyFlatSpec with Matchers:
       0,
       10_000,
       codeFont,
-      com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext(),
-      richText = com.serenity.ui.layout.RichTextContext.plain
+      richText = com.serenity.ui.layout.RichTextContext.plain,
+      wrapCache = TestMeasure.wrapCache()
     )
     rows.head.row.caretXs.toVector.map(_ / cell.toFloat) shouldBe Vector(0.0f, 1.0f, 2.0f, 4.0f, 5.0f, 6.0f)
   }

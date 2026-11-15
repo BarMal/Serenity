@@ -2,7 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.font.TextAttribute
 
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,8 +21,7 @@ class CaretStopsTuiSpec extends AnyFlatSpec with Matchers:
       TextLayoutSnapshot.caretXsForText(
         text,
         kernedInter,
-        ShapedTextCache(),
-        frc,
+        TestMeasure.layoutMemos(),
         Some(CellMetrics.cellUnit),
         forceCellLayout = true
       )

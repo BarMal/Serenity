@@ -11,11 +11,11 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, CursorPosition, EditingState, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{
   ColdFontProbes,
   LayoutEngine,
-  LayoutMemos,
   ProseColumn,
   ScreenPosition,
   TextLayoutSnapshot,
@@ -189,7 +189,7 @@ private[perf] object CacheOwnershipBenchmarks:
       buffer,
       panelWidthPx = 900,
       font = font,
-      wrapCache = WrappedLineCache.measuring(ShapedTextCache(), LayoutMemos())
+      wrapCache = WrappedLineCache.measuring(ShapedTextCache(), TestMeasure.layoutMemos())
     )
 
   /** Both runtimes start from the same document. The second types the first's letter (`same_text`) or the same letter

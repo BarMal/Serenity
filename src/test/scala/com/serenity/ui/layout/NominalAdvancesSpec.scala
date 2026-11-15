@@ -2,8 +2,9 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -25,17 +26,19 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A code font set without ligatures" should "have a table, at every size, including those the cell grid drifts from" in
     sizes.foreach { size =>
-      withClue(s"$size pt: ")(NominalAdvances.of(codeFont(size, ligatures = false), frc) shouldBe defined)
+      withClue(s"$size pt: ")(
+        NominalAdvances.of(FontSpec.fromAwt(codeFont(size, ligatures = false)), TestMeasure.measurer) shouldBe defined
+      )
     }
 
   it should "list, for each printable character, the advance the measured path gives it" in {
     val shapedText = ShapedTextCache()
     sizes.foreach { size =>
       val font     = codeFont(size, ligatures = false)
-      val resolver = TextCaretMeasurement.singleFontResolver(font)
-      val table    = NominalAdvances.of(font, frc).value
+      val resolver = TextCaretMeasurement.singleFontResolver(FontSpec.fromAwt(font))
+      val table    = NominalAdvances.of(FontSpec.fromAwt(font), TestMeasure.measurer).value
       printable.foreach { char =>
-        val measured = GlyphAdvances.measure(char.toString, 0, 1, 0, resolver, frc, shapedText).caretsFrom(0, 1)(1)
+        val measured = GlyphAdvances.measure(char.toString, 0, 1, 0, resolver, TestMeasure.measurer).caretsFrom(0, 1)(1)
         withClue(s"$size pt, '$char': ")(table.advanceOf(char) shouldBe measured)
       }
     }
@@ -43,16 +46,18 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A code font set with ligatures" should "have no table, since shaping may change what a character advances" in
     sizes.foreach { size =>
-      withClue(s"$size pt: ")(NominalAdvances.of(codeFont(size, ligatures = true), frc) shouldBe None)
+      withClue(s"$size pt: ")(
+        NominalAdvances.of(FontSpec.fromAwt(codeFont(size, ligatures = true)), TestMeasure.measurer) shouldBe None
+      )
     }
 
   "The proportional text font" should "have no table" in {
-    NominalAdvances.of(FontLoader.previewTextFont(config), frc) shouldBe None
+    NominalAdvances.of(FontSpec.fromAwt(FontLoader.previewTextFont(config)), TestMeasure.measurer) shouldBe None
   }
 
   "A line of printable ASCII" should "fit one row when its summed advance plus the wrap's margin is under the width" in {
     val font  = codeFont(12.0f, ligatures = false)
-    val table = NominalAdvances.of(font, frc).value
+    val table = NominalAdvances.of(FontSpec.fromAwt(font), TestMeasure.measurer).value
     val width = table.advanceOf('a') * 10
 
     table.fitsOneRow("a" * 9, math.round(width)) shouldBe true
@@ -61,7 +66,7 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "never be called one row when it holds a character outside printable ASCII" in {
-    val table = NominalAdvances.of(codeFont(12.0f, ligatures = false), frc).value
+    val table = NominalAdvances.of(FontSpec.fromAwt(codeFont(12.0f, ligatures = false)), TestMeasure.measurer).value
 
     List("\tx", "é", "日本語", "á", "x​y").foreach { text =>
       withClue(s"'$text': ")(table.fitsOneRow(text, 100_000) shouldBe false)
@@ -69,5 +74,8 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   "An empty line" should "fit one row" in {
-    NominalAdvances.of(codeFont(12.0f, ligatures = false), frc).value.fitsOneRow("", 1) shouldBe true
+    NominalAdvances
+      .of(FontSpec.fromAwt(codeFont(12.0f, ligatures = false)), TestMeasure.measurer)
+      .value
+      .fitsOneRow("", 1) shouldBe true
   }

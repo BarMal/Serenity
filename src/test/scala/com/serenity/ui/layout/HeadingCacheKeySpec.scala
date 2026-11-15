@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.{HeadingSettings, HeadingStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -44,7 +45,7 @@ class HeadingCacheKeySpec extends AnyFlatSpec with Matchers:
     )
 
   "The wrap cache" should "not serve a heading's rows from before its size changed" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val big   = settingsWithH1(4.0f)
 
     val first  = wrapTitle(cache, HeadingSettings.default)
@@ -58,12 +59,12 @@ class HeadingCacheKeySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give the same rows as an uncached wrap under the changed settings" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val big   = settingsWithH1(4.0f)
     wrapTitle(cache, HeadingSettings.default)
 
     wrapTitle(cache, big).map(row => (row.text, row.widthPx, row.heightPx)) shouldBe
-      wrapTitle(WrappedLineCache.Uncached, big).map(row => (row.text, row.widthPx, row.heightPx))
+      wrapTitle(TestMeasure.wrapCache(), big).map(row => (row.text, row.widthPx, row.heightPx))
   }
 
   "The row-count stamp" should "be the rich-text document itself while headings are the defaults" in {
@@ -82,7 +83,7 @@ class HeadingCacheKeySpec extends AnyFlatSpec with Matchers:
   }
 
   "Visual row counts" should "follow a heading size change through a shared cache" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
 
     def rows(headings: HeadingSettings): Int =
       VisualRowCounts.forBuffer(buffer, panelWidth, font, None, false, cache, headings = headings).rowsIn(0)

@@ -140,7 +140,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
             _: Damage,
             _: com.serenity.state.manager.RenderCaches
           ) => IO(nanos.addAndGet(3.millis.toNanos)) >> IO(trace.framePublished()),
-          com.serenity.state.manager.RenderCaches.create(),
+          com.serenity.testkit.TestMeasure.renderCaches(),
           delay => IO(nanos.addAndGet(delay.toNanos)).void,
           frameClock = IO(nanos.get().nanos),
           lastFrameStart = lastStart,
@@ -203,7 +203,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
           _: Damage,
           _: com.serenity.state.manager.RenderCaches
         ) => clock.get.flatMap(now => renders.update(_ :+ now) >> clock.update(_ + renderTime)),
-        com.serenity.state.manager.RenderCaches.create(),
+        com.serenity.testkit.TestMeasure.renderCaches(),
         delay => delays.update(_ :+ delay) >> clock.update(_ + delay),
         frameClock = clock.get,
         lastFrameStart = lastStart

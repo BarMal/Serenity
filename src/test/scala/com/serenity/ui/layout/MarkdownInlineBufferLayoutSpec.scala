@@ -7,7 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.markdown.MarkerMode
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -23,7 +23,7 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
   private val boldSerif = serif.deriveFont(Font.BOLD)
 
   private def advance(text: String, font: Font): Float =
-    TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
+    TextLayoutSnapshot.caretXsForText(text, font, TestMeasure.layoutMemos()).last
 
   private val wrapsOnlyWithMarkers =
     (advance("aaaa ", serif) + advance("bbbb", boldSerif) + 3.0f).toInt
@@ -58,13 +58,13 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
       buffer,
       wrapsOnlyWithMarkers,
       serif,
-      frc,
       forceCellLayout = forceCellLayout,
-      markdownViewMode = mode
+      markdownViewMode = mode,
+      wrapCache = TestMeasure.wrapCache()
     )
 
   "Row counts" should "follow the view mode on the same cache and the same text" in {
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val buffer = markdownBuffer("aaaa **bbbb**", List(CursorPosition(0, 0)))
 
     rowsOfFirstLine(buffer, MarkdownViewMode.Source, cache) shouldBe 2
@@ -73,7 +73,7 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   they should "follow the caret in live preview, which reveals the line it is on" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val text  = "aaaa **bbbb**\nsecond line"
 
     val caretElsewhere = markdownBuffer(text, List(CursorPosition(1, 0)))
@@ -85,7 +85,7 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   they should "reveal a line a selection reaches" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val text  = "aaaa **bbbb**\nsecond line"
     val selecting = markdownBuffer(text, Nil).copy(
       editing = EditingState.fromCursors(List(Cursor(CursorPosition(1, 3), Some(CursorPosition(0, 1)))))

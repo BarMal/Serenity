@@ -51,7 +51,7 @@ class IntegratedFeaturesSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(80, 24),
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
     buffer.document.content.collect() should include("test_func")

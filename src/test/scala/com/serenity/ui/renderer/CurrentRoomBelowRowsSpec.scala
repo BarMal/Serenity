@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
@@ -45,7 +44,7 @@ class CurrentRoomBelowRowsSpec extends AnyFlatSpec with Matchers:
     )
 
   private def contextAndPlan(state: AppState): (RenderContext, EditorPaneRenderPlan) =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     // A surface that addresses pixels, as the window's does: a room below the rows exists only on one.
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height):
       override def addressesPixels: Boolean = true

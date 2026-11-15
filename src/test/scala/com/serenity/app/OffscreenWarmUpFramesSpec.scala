@@ -47,7 +47,7 @@ class OffscreenWarmUpFramesSpec extends AnyFlatSpec with Matchers:
   private def draw: Run =
     val requested = new AtomicReference(Vector.empty[(Int, Int)])
     val rasters   = new AtomicReference(Vector.empty[OffscreenRaster])
-    val caches    = RenderCaches.create()
+    val caches    = TestMeasure.renderCaches()
     val fake      = target
     val makeRaster = (width: Int, height: Int) =>
       val raster = OffscreenRaster.make(width, height)

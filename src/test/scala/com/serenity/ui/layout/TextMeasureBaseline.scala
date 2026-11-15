@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
 
 /** What AWT measures for the bundled fonts and the corpus lines, as data: cell metrics, whether a font takes the
   * measured layout, whether a ligature font's certificate holds, and for each line its caret x positions on one row and
@@ -53,10 +53,10 @@ object TextMeasureBaseline:
   def entries(): Vector[Entry] = TextMeasureCorpus.fonts.flatMap(measureFont)
 
   private def measureFont(pinned: PinnedFont): Vector[Entry] =
-    val frc         = TextLayoutSnapshot.defaultFontRenderContext()
-    val metrics     = TestMeasure.cellMetrics(pinned.font)
-    val measured    = TextLayoutSnapshot.shouldUseMeasuredLayout(pinned.font, frc, FontProbes())
-    val certificate = LigatureCertificate.of(pinned.font, frc).isDefined
+    val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+    val metrics  = TestMeasure.cellMetrics(pinned.font)
+    val measured = TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(pinned.font), TestMeasure.layoutMemos())
+    val certificate = LigatureCertificate.of(FontSpec.fromAwt(pinned.font), TestMeasure.measurer).isDefined
     val perFont = Vector(
       ints(s"${pinned.label}.cell", Seq(metrics.charWidth, metrics.lineHeight, metrics.ascent)),
       ints(s"${pinned.label}.measured", Seq(if measured then 1 else 0)),
@@ -70,7 +70,8 @@ object TextMeasureBaseline:
       panelWidthPx = widthPx,
       pinned.font,
       wordWrapEnabled = widthPx != Unwrapped,
-      fallback = pinned.fallback
+      fallback = pinned.fallback,
+      wrapCache = TestMeasure.wrapCache()
     )
 
   /** How many glyphs AWT shapes the line to in the font alone, and the character each starts at: what shaping did,

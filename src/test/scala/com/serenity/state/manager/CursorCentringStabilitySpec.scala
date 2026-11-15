@@ -6,6 +6,7 @@ import com.serenity.keystroke.events.{InsertChar, ResizeEvent}
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   LayoutEngine,
@@ -86,7 +87,7 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
   /** The viewport a cache-free (cold) layout of `state` places the cursor with. */
   private def coldViewport(state: AppState): Viewport =
     val b = buffer(state)
-    CursorViewport.adjustForCursor(b, state, b.editing.cursorPositions.head, WrappedLineCache.Uncached)
+    CursorViewport.adjustForCursor(b, state, b.editing.cursorPositions.head, TestMeasure.wrapCache())
 
   /** Screen rows between the viewport top and the cursor's row, both measured cold. */
   private def cursorScreenRow(state: AppState, viewport: Viewport): Int =
@@ -95,19 +96,20 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     val config = state.persisted.config.editorConfig.fontConfig
     val font   = com.serenity.ui.fonts.FontLoader.previewFontForRole(config, b.typographyRole)
     val width  = com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, config)
-    val rows   = VisualRowCounts.forBuffer(b, width, font, None, false, WrappedLineCache.Uncached)
+    val rows   = VisualRowCounts.forBuffer(b, width, font, None, false, TestMeasure.wrapCache())
     val cursorRow = com.serenity.ui.layout.TextLayoutSnapshot.visualLineIndexForCursor(
       b.document.content.getLine(cursor.line).getOrElse(""),
       cursor.column,
       width,
       font,
-      rowAffinity = cursor.rowAffinity
+      rowAffinity = cursor.rowAffinity,
+      wrapCache = TestMeasure.wrapCache()
     )
     rows.rowsBetween(viewport.topLine, cursor.line) + cursorRow - viewport.topVisualLine
 
   private def typeMidParagraph(text: String, line: Int, columns: Int, typewriter: Boolean, keystrokes: Int): Unit =
     val lineLength = text.split("\n", -1)(line).length
-    val cache      = WrappedLineCache.bounded()
+    val cache      = TestMeasure.wrapCache()
     val start      = stateWith(text, CursorPosition(line, lineLength / 2), columns, typewriter)
     val settled = start.copy(persisted =
       start.persisted.copy(buffers =
@@ -169,7 +171,7 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     keystrokes: Int
   ): List[(Option[Int], Some[Int])] =
     val lineLength = text.split("\n", -1)(line).length
-    val caches     = RenderCaches.create()
+    val caches     = TestMeasure.renderCaches()
     val cache      = caches.wrappedLines
     val raw        = stateWith(text, CursorPosition(line, (lineLength * fraction).toInt), columns, typewriter)
     val size       = raw.runtime.viewportSize.getOrElse(fail("no viewport size"))
@@ -248,9 +250,9 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
       withClue(s"resized to $size: ") {
         // The resize commits already placed, so no frame paints the stale offset: against a pane that grew past
         // the document's end that offset paints no rows at all (#1978).
-        paintedSnapshot(resized, RenderCaches.create()).visualLines.length should be > 0
+        paintedSnapshot(resized, TestMeasure.renderCaches()).visualLines.length should be > 0
         // Placement on resize leaves the cursor on the row a cold layout centres it on.
-        paintedCursorRow(resized, RenderCaches.create()) shouldBe coldCentre(resized)
+        paintedCursorRow(resized, TestMeasure.renderCaches()) shouldBe coldCentre(resized)
         buffer(resized).viewport shouldBe coldViewport(resized)
       }
       resized

@@ -30,7 +30,7 @@ import org.scalatest.matchers.should.Matchers
 class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
 
   private val shapedText = ShapedTextCache()
-  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private def renderOverlay(
     surface: RenderSurface,
@@ -266,7 +266,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
 
     val valueX = 1 + "Find ".length
     val caretXs =
-      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(query, font, shapedText, surface.fontRenderContext.get)
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(query, font, TestMeasure.layoutMemos())
     val expectedCursorX = metrics.toPixelX(valueX) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -311,7 +311,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     renderOverlay(surface, overlay, Theme.light, AppConfig.default, cursorVisible = true, font, metrics)
 
     val caretXs =
-      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(rowText, font, shapedText, surface.fontRenderContext.get)
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(rowText, font, TestMeasure.layoutMemos())
     val expectedCursorX = metrics.toPixelX(1) + math.round(caretXs.last)
 
     surface.fillPixelRectCalls.last.xPx shouldBe expectedCursorX
@@ -438,7 +438,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
 
     surface.getRow(1).slice(valueX, valueX + value.length) shouldBe value
     val caretXs =
-      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(value, font, shapedText, surface.fontRenderContext.get)
+      com.serenity.ui.layout.TextLayoutSnapshot.caretXsForText(value, font, TestMeasure.layoutMemos())
     val rawCaretXPx     = metrics.toPixelX(valueX) + math.round(caretXs.last)
     val contentRightXPx = metrics.toPixelX(com.serenity.ui.layout.SurfaceFrameLayout(overlay.rect).contentRect.right)
     val caret           = surface.fillPixelRectCalls.last

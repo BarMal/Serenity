@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, Viewport}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.openings.{ChapterOpenings, EffectiveRole, OpeningContext, ParagraphRoles}
-import com.serenity.ui.renderer.{DropCapRenderer, ShapedTextCache}
+import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -50,13 +50,12 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       buffer.document.content.lineCount,
       240,
       font,
-      frc,
       measuredLayout = true,
       TestMeasure.cellMetrics(font),
       Int.MaxValue,
       richText,
       wordWrapEnabled = true,
-      WrappedLineCache.Uncached
+      TestMeasure.wrapCache()
     )
     TextLayoutSnapshot(
       visualLines = lines,
@@ -71,14 +70,12 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
   "the line layout" should "reserve the glyph's width for a paragraph the resolver declares a drop cap" in {
     val inputs = LineLayout.lineLayoutInputs(
       font,
-      frc,
       measuredLayout = true,
       context(bodyAsCap),
       lineIndex = 0,
       lineLength = prose.length,
       lineText = prose,
-      shapedText = ShapedTextCache(),
-      memos = LayoutMemos()
+      wrapCache = TestMeasure.wrapCache()
     )
 
     inputs.paragraphRole shouldBe ParagraphRole.dropCap(3)
@@ -128,7 +125,7 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = 0,
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
 
     surface.drawRunPxCalls should have size 1

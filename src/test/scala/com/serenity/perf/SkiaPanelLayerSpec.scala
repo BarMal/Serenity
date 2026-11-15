@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.StateManagerTestFacade.updateState
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}
@@ -41,7 +41,7 @@ class SkiaPanelLayerSpec extends AnyFlatSpec with Matchers:
       SurfaceSizing.deviceImageDimension(LaptopFrameBenchmarks.LogicalHeightPx, LaptopFrameBenchmarks.DeviceScale)
     )
 
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 

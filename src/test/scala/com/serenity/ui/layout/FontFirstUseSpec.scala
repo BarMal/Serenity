@@ -6,8 +6,9 @@ import java.awt.geom.AffineTransform
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes, ShapedStretch, ShapedTextCache, StyledFontCache}
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec, ShapedStretch, StyledFontCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -97,8 +98,10 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     ShapedStretch.shape("office", shaped, frc)
     FontFirstUse.isSettled(shaped, frc) shouldBe true
 
+    // Layout measures with Skia; a face built for a spec read from an AWT font still asks AWT for its advance, which
+    // settles the font first (`AwtFontReconciliation`).
     val extent = unsettledFont()
-    FontLineExtents().of(extent, frc)
+    FontLineExtents(TestMeasure.measurer.cellMetrics).of(FontSpec.fromAwt(extent))
     FontFirstUse.isSettled(extent, frc) shouldBe true
 
     val underlined = unsettledFont()
@@ -106,18 +109,30 @@ class FontFirstUseSpec extends AnyFlatSpec with Matchers:
     FontFirstUse.isSettled(underlined, frc) shouldBe true
 
     val dropCap = unsettledFont()
-    DropCapWidths()(dropCap, frc, "A")
+    DropCapWidths(TestMeasure.measurer.glyphWidthPx)(FontSpec.fromAwt(dropCap), "A")
     FontFirstUse.isSettled(dropCap, frc) shouldBe true
 
     val advanced = unsettledFont()
-    GlyphAdvances.measure("Hoxi", 0, 4, 0, LineFontResolver(advanced, Vector.empty), frc, ShapedTextCache())
+    GlyphAdvances.measure(
+      "Hoxi",
+      0,
+      4,
+      0,
+      LineFontResolver(FontSpec.fromAwt(advanced), Vector.empty),
+      TestMeasure.measurer
+    )
     FontFirstUse.isSettled(advanced, frc) shouldBe true
 
     val measured = unsettledFont()
-    GlyphAdvances.layoutAdvanceMatchesSum(measured, frc, FontProbes())
+    TestMeasure.measurer.measuresProportionally(FontSpec.fromAwt(measured))
     FontFirstUse.isSettled(measured, frc) shouldBe true
 
     val caret = unsettledFont()
-    TextCaretMeasurement.rawMeasuredCaretXs("To fi", 0, LineFontResolver(caret, Vector.empty), frc, ShapedTextCache())
+    TextCaretMeasurement.rawMeasuredCaretXs(
+      "To fi",
+      0,
+      LineFontResolver(FontSpec.fromAwt(caret), Vector.empty),
+      MeasuredBy(TestMeasure.measurer, TestMeasure.layoutMemos())
+    )
     FontFirstUse.isSettled(caret, frc) shouldBe true
   }

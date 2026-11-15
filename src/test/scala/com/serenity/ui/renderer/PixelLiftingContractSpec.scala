@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.Font
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
@@ -32,7 +32,8 @@ abstract class PixelLiftingBehaviour extends AnyFlatSpec with Matchers:
       SurfaceSizing.deviceImageDimension(width, scale),
       SurfaceSizing.deviceImageDimension(height, scale)
     )
-    val surface = frames.surfaceOver(image, metrics, font, width, height, scale, persists = true, RenderCaches.create())
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, scale, persists = true, TestMeasure.renderCaches())
     surface.clearViewport(black)
     surface.setForegroundColor(white)
     surface.setBackgroundColor(black)

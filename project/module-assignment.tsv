@@ -197,7 +197,6 @@ ui/layout/PixelRect.scala	base
 ui/layout/ScreenPosition.scala	base
 ui/layout/ScrollbarGeometry.scala	base
 ui/layout/SettledProbe.scala	base
-ui/layout/ShapedCaretStops.scala	base
 ui/layout/SpacingScale.scala	model
 ui/layout/TabStops.scala	base
 ui/layout/TerminalScrollbar.scala	base

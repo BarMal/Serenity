@@ -220,7 +220,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
         FontSpec.fromAwt(font),
         cellMetrics,
         None,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       (0 until initialViewportSize.height).map(surface.getRow).mkString("\n") should include(

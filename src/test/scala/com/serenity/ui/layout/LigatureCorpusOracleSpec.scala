@@ -8,6 +8,7 @@ import scala.util.{Random, Using}
 
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -51,8 +52,8 @@ class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValu
     val lines = corpus.distinct
     sizes.flatMap { size =>
       val font  = ligatureFont(size)
-      val table = LigatureCertificate.of(font, frc).value
-      val cache = WrappedLineCache.bounded()
+      val table = LigatureCertificate.of(FontSpec.fromAwt(font), TestMeasure.measurer).value
+      val cache = TestMeasure.wrapCache()
       lines.iterator
         .flatMap { text =>
           widthsAround(text, font).collect {
@@ -203,7 +204,7 @@ class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValu
 
   it should "call one row a good share of the lines the wrap puts on one row, so the corpus exercises it" in {
     val font  = ligatureFont(12.0f)
-    val table = LigatureCertificate.of(font, frc).value
+    val table = LigatureCertificate.of(FontSpec.fromAwt(font), TestMeasure.measurer).value
     val lines = languageLines()
     lines.count(table.fitsOneRow(_, 1472)) should be > lines.size / 2
   }

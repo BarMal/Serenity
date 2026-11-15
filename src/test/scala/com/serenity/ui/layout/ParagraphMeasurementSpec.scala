@@ -16,7 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
-import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.theme.RichTextStyling
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
@@ -110,7 +110,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       text,
       3,
       widthPx,
-      LineLayout.plainResolver(text, 0, font, frc, measured),
+      LineLayout.plainResolver(text, 0, font, measured),
       frc,
       measured,
       cellMetrics,
@@ -119,12 +119,12 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   "Per-paragraph measurement" should "wrap measured plain text exactly where per-row measurement did" in
     forAll(measuredFonts) { font =>
-      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
+      TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(font), TestMeasure.layoutMemos()) shouldBe true
       forAll(corpus) { line =>
         widths.foreach { widthPx =>
           withClue(s"$font at $widthPx px: ") {
             assertSameRows(
-              TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
+              TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, wrapCache = TestMeasure.wrapCache()),
               legacyLine(line, widthPx, font, TestMeasure.cellMetrics(font), measured = true)
             )
           }
@@ -135,14 +135,28 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   it should "measure single segments as per-row measurement did" in
     forAll(measuredFonts) { font =>
       forAll(corpus) { line =>
-        val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
+        val xs = TextLayoutSnapshot.caretXsForText(line, font, TestMeasure.layoutMemos())
         val legacy =
-          LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, TestMeasure.cellMetrics(font))
+          LegacyLineMeasurement.caretXs(
+            line,
+            0,
+            singleFontResolver(FontSpec.fromAwt(font)),
+            frc,
+            true,
+            TestMeasure.cellMetrics(font)
+          )
         xs.length shouldBe legacy.length
         xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
         assertSameRows(
           Vector(
-            TextLayoutSnapshot.visualLineForText(line, 2, font, ShapedTextCache(), LayoutMemos(), frc, startColumn = 5)
+            TextLayoutSnapshot.visualLineForText(
+              line,
+              2,
+              font,
+              TestMeasure.layoutMemos(),
+              startColumn = 5,
+              wrapCache = TestMeasure.wrapCache()
+            )
           ),
           Vector(
             LegacyLineMeasurement.shapeSegment(
@@ -150,7 +164,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
               2,
               5,
               5 + line.length,
-              LineLayout.plainResolver(line, 5, font, frc, measuredLayout = true),
+              LineLayout.plainResolver(line, 5, font, measuredLayout = true),
               frc,
               true,
               TestMeasure.cellMetrics(font)
@@ -169,19 +183,26 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   )
 
   private def assertShapedLatinMatchesPerRowMeasurement(font: Font): Assertion =
-    TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
+    TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(font), TestMeasure.layoutMemos()) shouldBe true
     forAll(shapedLatinCorpus) { line =>
       widths.foreach { widthPx =>
         withClue(s"$font at $widthPx px: ") {
           assertSameRows(
-            TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, frc),
+            TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, font, wrapCache = TestMeasure.wrapCache()),
             legacyLine(line, widthPx, font, TestMeasure.cellMetrics(font), measured = true)
           )
         }
       }
-      val xs = TextLayoutSnapshot.caretXsForText(line, font, ShapedTextCache(), frc)
+      val xs = TextLayoutSnapshot.caretXsForText(line, font, TestMeasure.layoutMemos())
       val legacy =
-        LegacyLineMeasurement.caretXs(line, 0, singleFontResolver(font), frc, true, TestMeasure.cellMetrics(font))
+        LegacyLineMeasurement.caretXs(
+          line,
+          0,
+          singleFontResolver(FontSpec.fromAwt(font)),
+          frc,
+          true,
+          TestMeasure.cellMetrics(font)
+        )
       xs.length shouldBe legacy.length
       xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
     }
@@ -205,9 +226,9 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
               3,
               widthPx,
               mono,
-              frc,
               cellMetricsOverride = Some(cellMetrics),
-              forceCellLayout = true
+              forceCellLayout = true,
+              wrapCache = TestMeasure.wrapCache()
             )
             rows shouldBe legacyLine(line, widthPx, mono, cellMetrics, measured = false)
           }
@@ -223,13 +244,20 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       Seq(97, 480).foreach { widthPx =>
         Seq(1, 3, 40).foreach { limit =>
           assertSameRows(
-            TextLayoutSnapshot.boundedVisualLinesForText(long, 3, widthPx, font, frc, maxVisualLines = limit),
+            TextLayoutSnapshot.boundedVisualLinesForText(
+              long,
+              3,
+              widthPx,
+              font,
+              maxVisualLines = limit,
+              wrapCache = TestMeasure.wrapCache()
+            ),
             legacyLine(long, widthPx, font, TestMeasure.cellMetrics(font), measured = true, maxVisualLines = limit)
           )
         }
       }
       assertSameRows(
-        TextLayoutSnapshot.boundedVisualLinesForText(long, 3, 1200, font, frc),
+        TextLayoutSnapshot.boundedVisualLinesForText(long, 3, 1200, font, wrapCache = TestMeasure.wrapCache()),
         legacyLine(long, 1200, font, TestMeasure.cellMetrics(font), measured = true)
       )
     }
@@ -283,7 +311,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       val role = RichTextStyling.effectiveRole(paragraph.map(_.role).getOrElse(ParagraphRole.Body), dropCapsEnabled)
       val glyphPx =
         DropCapLayout
-          .reserve(font, frc, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm, LayoutMemos())
+          .reserve(font, document, lineIndex, role, proseScale, DropCapLayout.DefaultGapEm, TestMeasure.layoutMemos())
           .indentPx
       val rows = LegacyLineMeasurement.wrap(
         line,
@@ -319,9 +347,9 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
                   richBuffer(),
                   widthPx,
                   font,
-                  frc,
                   proseScale = proseScale,
-                  dropCapsEnabled = dropCaps
+                  dropCapsEnabled = dropCaps,
+                  wrapCache = TestMeasure.wrapCache()
                 )
               assertSameRows(snapshot.visualLines, legacyBufferRows(richBuffer(), widthPx, font, proseScale, dropCaps))
             }
@@ -333,15 +361,22 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
   it should "split rich text into columns of the same rows as before, as many as fit each column's height" in
     Seq(sans, ligatured).foreach { font =>
       val buffer = richBuffer(visibleLines = 4)
-      val chunks = TextLayoutSnapshot.columnChunksForBuffer(buffer, 160, font, frc, columnCount = 3)
-      val rows   = chunks.flatten
+      val chunks = TextLayoutSnapshot.columnChunksForBuffer(
+        buffer,
+        160,
+        font,
+        columnCount = 3,
+        wrapCache = TestMeasure.wrapCache()
+      )
+      val rows = chunks.flatten
       rows.length should (be > 0 and be <= 12)
       chunks.foreach(_.length should be <= 4)
       assertSameRows(rows, legacyBufferRows(buffer, 160, font, 1.0f, dropCapsEnabled = true).take(rows.length))
     }
 
   private def contextFree(text: String, font: Font): Vector[Boolean] =
-    val advances = GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(font), frc, ShapedTextCache())
+    val advances =
+      GlyphAdvances.measure(text, 0, text.length, 0, singleFontResolver(FontSpec.fromAwt(font)), TestMeasure.measurer)
     text.indices.toVector.map(index => advances.isContextFree(index, index + 1))
 
   "Glyph advances" should "treat plain text and tabs as context-free" in {

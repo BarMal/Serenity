@@ -161,7 +161,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val cursorRects = surface.fillPixelRectCalls
@@ -175,7 +175,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       state.persisted.buffers(BufferId(1)),
       panelWidthPx,
       monoFont,
-      surface.fontRenderContext.getOrElse(fail("missing frc"))
+      wrapCache = TestMeasure.wrapCache()
     )
     val expectedXPx = cellMetrics.toPixelX(paneRect.x) + math.round(
       snapshot.xPxForCursor(CursorPosition(0, 2)).getOrElse(fail("missing cursor x"))
@@ -195,7 +195,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.drawRunPxCalls.exists(_.s.contains("hello")) shouldBe true
   }
@@ -272,7 +272,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
   }
 
@@ -308,7 +308,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lineReads.get() shouldBe math.min(buffer.document.content.lineCount, paneContentHeight) + 1
@@ -345,7 +345,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     collects.get() shouldBe 0
@@ -382,7 +382,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     collects.get() shouldBe 0
@@ -429,7 +429,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lineReads.get() should be < 20_000
@@ -473,7 +473,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     // Live Preview marker hiding may inspect the enclosing semantic block.
@@ -515,7 +515,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lineReads.get() should be < 200_000
@@ -553,7 +553,7 @@ class RendererSnapshotReuseSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(monoFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     lineReads.get()
 

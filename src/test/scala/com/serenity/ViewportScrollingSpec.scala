@@ -261,7 +261,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
         buffer.viewport.visibleColumns,
         finalState.persisted.config.editorConfig.fontConfig
       )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
@@ -337,7 +337,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       buffer.viewport.visibleColumns,
       finalState.persisted.config.editorConfig.fontConfig
     )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
@@ -402,7 +402,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       math.max(1, panelHeightPx / math.max(1, TestMeasure.cellMetrics(font).lineHeight))
     val renderBuffer = buffer.copy(viewport = buffer.viewport.copy(visibleLines = renderedVisibleLines))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 
     // How many "word" tokens fit per wrapped row -- and so how many total visual rows the six paragraphs produce --
     // is font-metric-dependent (word wrap is measured against the real, platform-resolved `previewTextFont`, not a
@@ -417,7 +417,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
         renderBuffer.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = Int.MaxValue - 1)
       ),
       wrapPx,
-      font
+      font,
+      wrapCache = TestMeasure.wrapCache()
     )
     val expectedVisibleCount    = math.min(renderedVisibleLines, fullDocumentSnapshot.visualLines.length)
     val expectedTailVisualLines = fullDocumentSnapshot.visualLines.takeRight(expectedVisibleCount)

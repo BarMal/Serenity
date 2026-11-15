@@ -246,7 +246,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       rs,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val output = writer.toString
@@ -376,7 +376,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         cellMetrics,
         cellMetrics,
         None,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       val output = writer.toString
@@ -403,7 +403,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     // The base frame flushes with the caret hidden and the overlay frame presents it, so both escapes appear: what
@@ -492,7 +492,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
         cellMetrics,
         cellMetrics,
         None,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       val out = writer.toString
@@ -543,7 +543,7 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val out = writer.toString

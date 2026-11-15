@@ -41,7 +41,13 @@ class VisibleBufferLinesSpec extends AnyFlatSpec with Matchers:
 
   private def shownLines(buffer: Buffer, wordWrapEnabled: Boolean): Vector[Int] =
     TextLayoutSnapshot
-      .fromBuffer(buffer, panelWidthPx = charWidthPx * 10, font, wordWrapEnabled = wordWrapEnabled)
+      .fromBuffer(
+        buffer,
+        panelWidthPx = charWidthPx * 10,
+        font,
+        wordWrapEnabled = wordWrapEnabled,
+        wrapCache = TestMeasure.wrapCache()
+      )
       .visualLines
       .map(_.bufferLine)
       .distinct

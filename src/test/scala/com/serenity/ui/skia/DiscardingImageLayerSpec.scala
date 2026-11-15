@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage
 import javax.swing.JPanel
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.FrameSurfaceRequest
@@ -39,20 +40,20 @@ class DiscardingImageLayerSpec extends AnyFlatSpec with Matchers:
 
   "DiscardingImageLayer" should "keep the latest frame's image, and say whether it holds ink" in {
     val window = canvas()
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     frame(window, caches, paint = true)
     DiscardingImageLayer.latestHasInk shouldBe true
   }
 
   it should "say a frame that painted nothing holds none" in {
     val window = canvas()
-    frame(window, RenderCaches.create(), paint = false, persists = false)
+    frame(window, TestMeasure.renderCaches(), paint = false, persists = false)
     DiscardingImageLayer.latestHasInk shouldBe false
   }
 
   it should "start every frame from the pixels the last one left, as the layer's image frames do" in {
     val window = canvas()
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     frame(window, caches, paint = true)
     frame(window, caches, paint = false)
     DiscardingImageLayer.latestHasInk shouldBe true

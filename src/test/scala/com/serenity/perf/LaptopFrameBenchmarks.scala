@@ -127,7 +127,7 @@ private[perf] object LaptopFrameBenchmarks:
       LaptopPresentBenchmarks.benchmarks(presentWindow) ++ skiaInteractionBenchmarks(transitions)
 
   private def renderBenchmarks: List[BenchmarkRunner.Benchmark] =
-    lazy val caches     = RenderCaches.create()
+    lazy val caches     = TestMeasure.renderCaches()
     lazy val prose      = proseState
     lazy val withPanel  = proseWithPinnedPanelState
     lazy val proseImage = frameImage()
@@ -374,7 +374,7 @@ private[perf] object LaptopFrameBenchmarks:
   ):
     private val frame =
       backend.newFrame(math.ceil(LogicalWidthPx * DeviceScale).toInt, math.ceil(LogicalHeightPx * DeviceScale).toInt)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
 
     /** What the latest frame counted, once [[counting]] has switched the counters on. */
@@ -447,7 +447,10 @@ private[perf] object LaptopFrameBenchmarks:
       List(after, before).foreach { expected =>
         val (drawn, counts) = frames.counting((nextFrame(), frames.lastFrame))
         val diff =
-          differingPixels(drawn, LaptopColdFrames.of(backend, expected, RenderCaches.create(), cursorVisible = false))
+          differingPixels(
+            drawn,
+            LaptopColdFrames.of(backend, expected, TestMeasure.renderCaches(), cursorVisible = false)
+          )
         assert(
           diff.isEmpty,
           s"$name: the damaged frame differs from a full frame in ${diff.size} pixels: ${diff.take(8).mkString(" ")}"
@@ -465,7 +468,7 @@ private[perf] object LaptopFrameBenchmarks:
 
   /** A frame of `state` drawn from scratch on Skia's CPU raster, without the caret. */
   private[perf] def rasterColdFrame(state: AppState): FramePixels =
-    LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false)
+    LaptopColdFrames.of(SkiaFrames, state, TestMeasure.renderCaches(), cursorVisible = false)
 
   /** The device pixels where `a` and `b` differ, as `(x, y)`. */
   private[perf] def differingPixels(a: FramePixels, b: FramePixels): IndexedSeq[(Int, Int)] =

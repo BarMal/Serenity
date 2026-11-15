@@ -99,7 +99,7 @@ final class UiScenarioDriver private (
     state.map { current =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
-      val caches        = com.serenity.state.manager.RenderCaches.create()
+      val caches        = com.serenity.testkit.TestMeasure.renderCaches()
       val frame0 = SkiaFrames.newFrame(
         math.ceil(logicalWidth * environment.deviceScale).toInt,
         math.ceil(logicalHeight * environment.deviceScale).toInt

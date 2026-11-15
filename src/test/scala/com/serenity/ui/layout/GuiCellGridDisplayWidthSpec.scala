@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -20,7 +19,14 @@ class GuiCellGridDisplayWidthSpec extends AnyFlatSpec with Matchers:
   private val cellGrid = true
 
   private def rows(text: String, widthPx: Int) =
-    TextLayoutSnapshot.boundedVisualLinesForText(text, 0, widthPx, font, frc, forceCellLayout = cellGrid)
+    TextLayoutSnapshot.boundedVisualLinesForText(
+      text,
+      0,
+      widthPx,
+      font,
+      forceCellLayout = cellGrid,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   "GUI font metrics" should "allow a glyph to take more than one cell" in {
     FontLoader.isMonospacedFont(font) shouldBe true
@@ -51,9 +57,8 @@ class GuiCellGridDisplayWidthSpec extends AnyFlatSpec with Matchers:
       9,
       6 * cellPx,
       font,
-      ShapedTextCache(),
-      frc,
-      forceCellLayout = cellGrid
+      forceCellLayout = cellGrid,
+      wrapCache = TestMeasure.wrapCache()
     )
     // Column 9 sits at cell 18, so a six-cell window ending there starts at cell 12, which is column 6. One cell a
     // character would give column 4, which leaves the cursor three wide characters off screen.

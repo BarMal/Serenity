@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.InsertChar
 import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree, WrappedLineCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,7 +56,7 @@ class CursorCentringWorkSpec extends AnyFlatSpec with Matchers:
 
   /** The most paragraphs any one keystroke wrapped, the first of them placing the viewport in a cold cache. */
   private def mostWrappedPerKeystroke(paragraphCount: Int, cursorLine: Int, typewriter: Boolean): Long =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val start = stateWith(paragraphCount, CursorPosition(cursorLine, 40), typewriter)
     val type_ = (state: AppState) =>
       new EditorPaneComponent(paneId, cache).processEvent(InsertChar('x'), state) match

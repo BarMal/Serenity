@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextLayoutSnapshot
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -17,18 +18,18 @@ class TextLayoutSnapshotProportionalSpec extends AnyFlatSpec with Matchers:
 
   "TextLayoutSnapshot.isProportional" should "be false for a monospaced font" in {
     val buffer = Buffer.fromString(BufferId(0), "hello")
-    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, monoFont)
+    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, monoFont, wrapCache = TestMeasure.wrapCache())
     snap.isProportional shouldBe false
   }
 
   it should "be true for a SANS_SERIF font" in {
     val buffer = Buffer.fromString(BufferId(0), "hello")
-    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, propFont)
+    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, propFont, wrapCache = TestMeasure.wrapCache())
     snap.isProportional shouldBe true
   }
 
   it should "be false for an empty buffer with a monospaced font" in {
     val buffer = Buffer.fromString(BufferId(0), "")
-    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, monoFont)
+    val snap   = TextLayoutSnapshot.fromBuffer(buffer, 200, monoFont, wrapCache = TestMeasure.wrapCache())
     snap.isProportional shouldBe false
   }

@@ -11,6 +11,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
@@ -44,7 +45,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   private val markdownText =
     levelTexts.zipWithIndex.map((text, index) => s"${"#" * (index + 1)} $text").mkString("\n") + "\nplain text"
 
-  private def render(state: AppState, caches: RenderCaches = RenderCaches.create(), cursor: Boolean = false) =
+  private def render(state: AppState, caches: RenderCaches = TestMeasure.renderCaches(), cursor: Boolean = false) =
     val writer  = new StringWriter()
     val surface = new TerminalRenderSurface(viewport.width, viewport.height, writer, CellMetrics.cellUnit)
     val spec    = FontSpec.fromAwt(font)
@@ -283,7 +284,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show a setting changed between frames that share their render caches" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val off    = withHeadings(HeadingsConfig().withLevel(1)(_.copy(underline = Some(false))))
 
     lookOf(render(prose(), caches), "Alpha")._3 shouldBe true
@@ -346,7 +347,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show a bold changed between frames that share their render caches" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val off    = withHeadings(HeadingsConfig().withLevel(2)(_.copy(bold = Some(false))))
 
     lookOf(render(markdown(), caches), "Bravo")._1 shouldBe true
@@ -469,7 +470,7 @@ class HeadingStyleTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "come and go between frames that share their render caches" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val spaced = HeadingsConfig().withLevel(1)(_.copy(spaceAfter = Some(1.0f)))
 
     isRule(

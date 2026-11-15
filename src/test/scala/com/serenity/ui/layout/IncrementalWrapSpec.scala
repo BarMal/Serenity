@@ -17,6 +17,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.WrapFixtures.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -50,7 +51,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
       val width   = widthPx(rnd, layout)
       val exotic  = exoticCase(rnd)
       val before  = paragraphFor(rnd, layout, width, rowsFor(rnd), exotic)
-      val cache   = WrappedLineCache.bounded()
+      val cache   = TestMeasure.wrapCache()
       val rows    = wrap(before, cache, layout, width)
       val changed = edit(rnd, before, rows, exotic).applyTo(before)
       check(cache, changed, layout, width)
@@ -71,7 +72,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
         val layout = layouts(rnd.nextInt(layouts.length))
         val width  = widthPx(rnd, layout)
         val exotic = exoticCase(rnd)
-        val cache  = WrappedLineCache.bounded()
+        val cache  = TestMeasure.wrapCache()
         val start  = paragraphFor(rnd, layout, width, rowsFor(rnd), exotic)
         wrap(start, cache, layout, width)
         val steps = 10 + rnd.nextInt(41)
@@ -112,7 +113,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
           Edit(offset, 1.min(before.length - offset), " ")
         )
         edits.foreach { change =>
-          val cache = WrappedLineCache.bounded()
+          val cache = TestMeasure.wrapCache()
           wrap(before, cache, layout, width)
           check(cache, change.applyTo(before), layout, width)
         }
@@ -127,16 +128,16 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
     val rnd    = Random(20260415L)
     val width  = 30 * layout.charWidthPx
     val before = paragraphFor(rnd, layout, width, 25)
-    val rows   = wrap(before, WrappedLineCache.Uncached, layout, width)
+    val rows   = wrap(before, TestMeasure.wrapCache(), layout, width)
     val movedUp = rows.drop(1).count { row =>
       val wordEnd   = before.indexWhere(_ == ' ', row.startColumn).pipe(end => if end < 0 then before.length else end)
       val shortened = Edit(row.startColumn, 1.max(wordEnd - row.startColumn - 1), "")
-      val cache     = WrappedLineCache.bounded()
+      val cache     = TestMeasure.wrapCache()
       wrap(before, cache, layout, width)
       val changed = shortened.applyTo(before)
       check(cache, changed, layout, width)
       incrementalWraps(cache) shouldBe 1L
-      wrap(changed, WrappedLineCache.Uncached, layout, width).map(_.endColumn).take(rows.indexOf(row)) !=
+      wrap(changed, TestMeasure.wrapCache(), layout, width).map(_.endColumn).take(rows.indexOf(row)) !=
         rows.map(_.endColumn).take(rows.indexOf(row))
     }
     withClue("the sweep must include edits that change a row above the edited one: ")(movedUp should be > 0)
@@ -147,11 +148,11 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
     layouts.foreach { layout =>
       val width  = 18 * layout.charWidthPx + 1
       val before = paragraphFor(rnd, layout, width, 20)
-      val rows   = wrap(before, WrappedLineCache.Uncached, layout, width)
+      val rows   = wrap(before, TestMeasure.wrapCache(), layout, width)
       rows.foreach { row =>
         Vector(Edit(row.startColumn, 0, "z"), Edit(row.startColumn, 0, " "), Edit(row.startColumn, 1, "")).foreach {
           change =>
-            val cache = WrappedLineCache.bounded()
+            val cache = TestMeasure.wrapCache()
             wrap(before, cache, layout, width)
             check(cache, change.applyTo(before), layout, width)
         }
@@ -164,7 +165,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
     layouts.foreach { layout =>
       val width  = 20 * layout.charWidthPx + 2
       val before = paragraphFor(rnd, layout, width, 15)
-      val rows   = wrap(before, WrappedLineCache.Uncached, layout, width)
+      val rows   = wrap(before, TestMeasure.wrapCache(), layout, width)
       rows.drop(1).foreach { row =>
         val spaceBefore = before.lastIndexOf(' ', row.startColumn - 1)
         val wordEnd     = before.indexOf(' ', row.startColumn).pipe(end => if end < 0 then before.length else end)
@@ -176,7 +177,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
           Edit(spaceBefore.max(0), if spaceBefore >= 0 then 1 else 0, "-")
         )
         edits.foreach { change =>
-          val cache = WrappedLineCache.bounded()
+          val cache = TestMeasure.wrapCache()
           wrap(before, cache, layout, width)
           check(cache, change.applyTo(before), layout, width)
         }
@@ -188,7 +189,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
     val layout = layouts.find(_.name == "default-prose").get
     val width  = 30 * layout.charWidthPx
     val before = paragraphFor(Random(11L), layout, width, 30)
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     wrap(before, cache, layout, width)
     check(cache, before + "x", layout, width)
     incrementalWraps(cache) shouldBe 1L
@@ -198,7 +199,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
     val layout = layouts.find(_.name == "serif").get
     val width  = 160
     val before = paragraphFor(Random(5L), layout, width, 20)
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     wrap(before, cache, layout, width, bufferLine = 3)
     check(cache, before.patch(40, "ab", 0), layout, width, bufferLine = 9)
     incrementalWraps(cache) shouldBe 1L
@@ -208,7 +209,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   it should "equal the cold wrap for lines laid out from a later column" in {
     val layout = layouts.find(_.name == "sans").get
     val before = paragraphFor(Random(6L), layout, 150, 10)
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     wrap(before, cache, layout, 150, baseColumn = 7)
     val after = before.patch(30, "q", 0)
     assertSameAsCold(wrap(after, cache, layout, 150, baseColumn = 7), after, layout, 150, baseColumn = 7)
@@ -218,7 +219,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   // -- fallbacks: the cold path is taken and the result is still the cold wrap -------------------------------------
 
   private def assertCold(layout: Layout, width: Int, before: String, after: String): Unit =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     wrap(before, cache, layout, width)
     check(cache, after, layout, width)
     withClue(s"${after.take(60)}: ")(incrementalWraps(cache) shouldBe 0L)
@@ -246,7 +247,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   it should "resume text with emoji under the cell layout, which has no shaping to cut" in {
     val cells  = layouts.find(_.name == "display-width-cells").get
     val before = paragraphFor(Random(8L), cells, 30, 10) + " 🎉 👍🏽 end"
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     wrap(before, cache, cells, 30)
     check(cache, before.patch(20, "ab", 0), cells, 30)
     incrementalWraps(cache) shouldBe 1L
@@ -265,16 +266,16 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back for a row-limited request" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     wrap(text, cache, sans, 160)
     val edited  = text.patch(30, "ab", 0)
     val limited = wrap(edited, cache, sans, 160, maxVisualLines = 3)
-    limited shouldBe wrap(edited, WrappedLineCache.Uncached, sans, 160, maxVisualLines = 3)
+    limited shouldBe wrap(edited, TestMeasure.wrapCache(), sans, 160, maxVisualLines = 3)
     incrementalWraps(cache) shouldBe 0L
   }
 
   it should "never replace a complete entry with a partial one" in {
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val edited = text.patch(30, "ab", 0)
     wrap(text, cache, sans, 160)
     check(cache, edited, sans, 160)
@@ -287,7 +288,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "resume from a complete wrap and not from a row-limited one" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     wrap(text, cache, sans, 160, maxVisualLines = 3)
     check(cache, text.patch(30, "ab", 0), sans, 160)
     incrementalWraps(cache) shouldBe 0L
@@ -308,13 +309,13 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
       role = role
     )
     Vector(ParagraphRole.Body, ParagraphRole.dropCap(lines = 3)).foreach { role =>
-      val cache = WrappedLineCache.bounded()
+      val cache = TestMeasure.wrapCache()
       def snapshot(body: String, wrapCache: WrappedLineCache) =
-        TextLayoutSnapshot.fromBuffer(buffer(bold(body, role)), 200, serif.font, frc, wrapCache = wrapCache)
+        TextLayoutSnapshot.fromBuffer(buffer(bold(body, role)), 200, serif.font, wrapCache = wrapCache)
       val before = text
       snapshot(before, cache)
       val after = before.patch(40, "ab", 0)
-      snapshot(after, cache) shouldBe snapshot(after, WrappedLineCache.Uncached)
+      snapshot(after, cache) shouldBe snapshot(after, TestMeasure.wrapCache())
       withClue(s"$role: ")(incrementalWraps(cache) shouldBe 0L)
     }
   }
@@ -331,20 +332,20 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
       cache => wrap(after, cache, sans, 161),
       cache => wrap(after, cache, sans, 160, baseColumn = 1),
       cache => wrap(after, cache, serif, 160),
-      cache => TextLayoutSnapshot.boundedVisualLinesForText(after, 0, 160, sans.font, noFractional, wrapCache = cache),
+      cache => TextLayoutSnapshot.boundedVisualLinesForText(after, 0, 160, sans.font, wrapCache = cache),
       cache => wrap(after, cache, layouts.head, 160)
     )
     otherShapes.zipWithIndex.foreach { (wrapAfter, index) =>
-      val cache = WrappedLineCache.bounded()
+      val cache = TestMeasure.wrapCache()
       wrap(text, cache, sans, 160)
       val actual = bitwise(wrapAfter(cache))
-      withClue(s"shape $index: ")(actual shouldBe bitwise(wrapAfter(WrappedLineCache.Uncached)))
+      withClue(s"shape $index: ")(actual shouldBe bitwise(wrapAfter(TestMeasure.wrapCache())))
       incrementalWraps(cache) shouldBe 0L
     }
   }
 
   it should "pick a predecessor of the same shape when lines of several shapes are interleaved" in {
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val serif  = layouts.find(_.name == "serif").get
     val widths = Vector(160, 161, 240)
     val fonts  = Vector(sans, serif)
@@ -367,7 +368,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep only the most recent wraps of a shape as predecessors" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val first = text
     wrap(first, cache, sans, 160)
     (1 to WrappedLineCache.MaxRecentPerShape).foreach(index =>

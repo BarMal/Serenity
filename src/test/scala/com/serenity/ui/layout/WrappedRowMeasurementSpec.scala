@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 import java.awt.font.TextAttribute
 
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -43,17 +43,17 @@ class WrappedRowMeasurementSpec extends AnyFlatSpec with Matchers with TableDriv
     forAll(fonts) { font =>
       forAll(lines) { line =>
         Seq(97, 160, 233).foreach { widthPx =>
-          val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 4, widthPx, font, frc)
+          val rows =
+            TextLayoutSnapshot.boundedVisualLinesForText(line, 4, widthPx, font, wrapCache = TestMeasure.wrapCache())
           rows.map(_.text).mkString shouldBe line
           rows.foreach { row =>
             row shouldBe TextLayoutSnapshot.visualLineForText(
               row.text,
               4,
               font,
-              ShapedTextCache(),
-              LayoutMemos(),
-              frc,
-              startColumn = row.startColumn
+              TestMeasure.layoutMemos(),
+              startColumn = row.startColumn,
+              wrapCache = TestMeasure.wrapCache()
             )
           }
         }

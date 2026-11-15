@@ -10,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -57,7 +58,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         widthPx,
         font,
         cellMetricsOverride = Some(metricsOf(font)),
-        wrapCache = WrappedLineCache.bounded()
+        wrapCache = TestMeasure.wrapCache()
       )
       .length
       .max(1)
@@ -83,7 +84,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         val buffer = Buffer.fromString(bufferId, text)
         widthsAround(text, font).foreach { width =>
           withClue(s"$size pt, width $width, '$text': ") {
-            counted(buffer, width, font, WrappedLineCache.bounded()) shouldBe Vector(wrapped(text, width, font))
+            counted(buffer, width, font, TestMeasure.wrapCache()) shouldBe Vector(wrapped(text, width, font))
           }
         }
       }
@@ -103,7 +104,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
       lines.foreach { text =>
         List(200, 640, 1472).foreach { width =>
           withClue(s"$size pt, width $width, '${text.take(20)}': ") {
-            counted(Buffer.fromString(bufferId, text), width, font, WrappedLineCache.bounded()) shouldBe
+            counted(Buffer.fromString(bufferId, text), width, font, TestMeasure.wrapCache()) shouldBe
               Vector(wrapped(text, width, font))
           }
         }
@@ -114,7 +115,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   it should "wrap none of the lines a panel holds on one row" in {
     val font   = codeFont(12.0f, ligatures = false)
     val buffer = Buffer.fromString(bufferId, Vector.tabulate(40)(line => s"  val value$line = $line").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
 
     counted(buffer, 1472, font, cache) shouldBe Vector.fill(40)(1)
 
@@ -124,7 +125,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   it should "wrap a line wider than the panel, and only that line" in {
     val font   = codeFont(12.0f, ligatures = false)
     val buffer = Buffer.fromString(bufferId, Vector("val short = 1", "x" * 600, "val also = 2").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
 
     val rows = counted(buffer, 1472, font, cache)
 
@@ -138,7 +139,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
     val font = codeFont(12.0f, ligatures = false)
     val buffer =
       Buffer.fromString(bufferId, Vector("val a = 1", "\tval b = 2", "val c = \"é\"", "val d = 4").mkString("\n"))
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
 
     counted(buffer, 1472, font, cache)
 
@@ -154,7 +155,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
       font,
       Some(metricsOf(font)),
       false,
-      WrappedLineCache.bounded(),
+      TestMeasure.wrapCache(),
       known = _ => Some(7)
     )
 
@@ -174,7 +175,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   "The proportional text font" should "wrap every line" in {
     val font   = FontLoader.previewTextFont(config)
     val buffer = Buffer.fromString(bufferId, Vector.tabulate(40)(line => s"short line $line").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
 
     counted(buffer, 1472, font, cache)
 
@@ -187,7 +188,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
     val buffer = Buffer
       .fromString(bufferId, document.plainText)
       .copy(richText = RichTextState(richTextDocument = Some(document)))
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
 
     counted(buffer, 1472, font, cache)
 
@@ -197,7 +198,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   "A cell layout forced by the caller" should "wrap every line, since its rows follow the cell grid and not the advances" in {
     val font   = codeFont(12.0f, ligatures = false)
     val buffer = Buffer.fromString(bufferId, Vector.tabulate(40)(line => s"  val value$line = $line").mkString("\n"))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
 
     counted(buffer, 1472, font, cache, forceCells = true)
 
@@ -235,7 +236,9 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
       plainOf.map(family => s"$family 14 pt, kerning on" -> withKern(Font(family, Font.PLAIN, 14).deriveFont(14.0f)))
 
   "A proportional font" should "count every line as the wrap does, with a table or without, at widths either side of the line's own" in {
-    val tabled = proportionalFonts.collect { case (label, font) if NominalAdvances.of(font, frc).isDefined => label }
+    val tabled = proportionalFonts.collect {
+      case (label, font) if NominalAdvances.of(FontSpec.fromAwt(font), TestMeasure.measurer).isDefined => label
+    }
     // Which fonts the guard reaches depends on the platform's font stack. The CI console does not show `info`, so the
     // list also goes beside the test reports, which each operating system uploads.
     val reach = s"proportional fonts that reach the guard on ${System.getProperty("os.name")}: ${tabled.mkString(", ")}"
@@ -245,7 +248,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
       proseLines.foreach { text =>
         widthsAround(text, font).foreach { width =>
           withClue(s"$label, width $width, '$text': ") {
-            counted(Buffer.fromString(bufferId, text), width, font, WrappedLineCache.bounded()) shouldBe
+            counted(Buffer.fromString(bufferId, text), width, font, TestMeasure.wrapCache()) shouldBe
               Vector(wrapped(text, width, font))
           }
         }
@@ -255,5 +258,5 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
 
   it should "have no table when kerning is asked for" in
     proportionalFonts.filter(_._1.endsWith("kerning on")).foreach { (label, font) =>
-      withClue(s"$label: ")(NominalAdvances.of(font, frc) shouldBe None)
+      withClue(s"$label: ")(NominalAdvances.of(FontSpec.fromAwt(font), TestMeasure.measurer) shouldBe None)
     }

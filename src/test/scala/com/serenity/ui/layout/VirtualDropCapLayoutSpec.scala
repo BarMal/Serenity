@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings, VirtualDropCaps}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -49,9 +50,9 @@ class VirtualDropCapLayoutSpec extends AnyFlatSpec with Matchers:
       buffer(document),
       240,
       font,
-      frc,
       dropCapsEnabled = dropCapsEnabled,
-      openings = settings
+      openings = settings,
+      wrapCache = TestMeasure.wrapCache()
     )
 
   private def homeRowOfOpening(snapshot: TextLayoutSnapshot): Int =
@@ -149,8 +150,8 @@ class VirtualDropCapLayoutSpec extends AnyFlatSpec with Matchers:
         .forBuffer(buffer(doc), 240, font, None, forceCellLayout = false, cache, openings = settings)
         .rowsBetween(0, 3)
 
-    val cache = WrappedLineCache.bounded()
-    List(WrappedLineCache.Uncached, cache).foreach { wrapCache =>
+    val cache = TestMeasure.wrapCache()
+    List(TestMeasure.wrapCache(), cache).foreach { wrapCache =>
       counted(on, wrapCache) shouldBe snapshot(doc, on).visualLines.size
     }
     counted(OpeningSettings.default, cache) shouldBe snapshot(doc, OpeningSettings.default).visualLines.size
@@ -171,13 +172,16 @@ class VirtualDropCapLayoutSpec extends AnyFlatSpec with Matchers:
 
   "The visual row counts" should "follow a change of the gap beside drop caps through a warm cache" in {
     val doc   = document(RichTextParagraph.plain(prose, role = ParagraphRole.dropCap(VirtualDropCaps.OpeningLines)))
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     def counted(gapEm: Float): Int =
       VisualRowCounts
         .forBuffer(buffer(doc), 240, font, None, forceCellLayout = false, cache, dropCapGapEm = gapEm)
         .rowsBetween(0, 3)
     def laidOut(gapEm: Float): Int =
-      TextLayoutSnapshot.fromBuffer(buffer(doc), 240, font, frc, dropCapGapEm = gapEm).visualLines.size
+      TextLayoutSnapshot
+        .fromBuffer(buffer(doc), 240, font, dropCapGapEm = gapEm, wrapCache = TestMeasure.wrapCache())
+        .visualLines
+        .size
 
     List(0.0f, 2.0f, 0.0f, 0.5f, 2.0f).foreach(gapEm => counted(gapEm) shouldBe laidOut(gapEm))
   }

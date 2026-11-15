@@ -14,6 +14,7 @@ import com.serenity.session.{SessionId, SessionManager, SessionPersistence, Sess
 import com.serenity.state.effects.Lane
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, PeekContent}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
@@ -84,7 +85,7 @@ private[manager] trait StateManagerEffectHandlersHarness:
       val uiPresetStore           = UiPresetStore(sessionRoot.resolve("ui-presets.json"))
       val windowSizeProvider      = IO.pure(None)
       val markdownPreviewWindow   = MarkdownPreviewWindowAvailability.Unavailable
-      val renderCaches            = RenderCaches.create()
+      val renderCaches            = TestMeasure.renderCaches()
 
     val editor = new EffectEditorPort:
       def enqueueEvent(event: Event): IO[Unit] = eventsVar.update(_ :+ event)

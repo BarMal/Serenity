@@ -26,7 +26,7 @@ class RendererMultiColumnGutterRenderSpec extends AnyFlatSpec with Matchers:
 
   private val paneId   = PaneId(0)
   private val bufferId = BufferId(1)
-  private val caches   = com.serenity.state.manager.RenderCaches.create()
+  private val caches   = com.serenity.testkit.TestMeasure.renderCaches()
 
   private def stateWith(config: AppConfig): AppState =
     // Short numbered lines so each is one visual row and chunk boundaries land on predictable buffer line numbers.

@@ -6,12 +6,13 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent, ModalComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, ReducerResult}
-import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Scrolling, page moves, typewriter centring and jumps read visual-row counts through a cache's per-buffer index.
-  * Every placement must match the one walking each line produces (`WrappedLineCache.Uncached` keeps no index), even as
+  * Every placement must match the one walking each line produces (`TestMeasure.wrapCache()` keeps no index), even as
   * one cache carries its index across edits, wrap widths and fonts.
   */
 class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
@@ -73,7 +74,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       case _                                     => None
 
   "CursorViewport.adjustForCursor" should "centre and bottom-align identically through the index, typewriter or not" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       typewriter <- List(false, true)
       cursor     <- cursors ++ cursors.reverse
@@ -86,7 +87,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "keep matching once the index has to follow edits to the document" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val edits = List(
       (150, 10, "inserted words that wrap the paragraph onto another row " * 3),
       (20, 0, "\n\nnew lines above\n"),
@@ -110,7 +111,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "start a fresh index when the wrap width or the font changes" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       (columns, fontSize) <- List((60, 12.0f), (41, 12.0f), (60, 16.0f), (60, 12.0f))
       cursor              <- cursors
@@ -123,7 +124,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "CursorViewport.adjustForCursorColumnMode" should "anchor column pages identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.foldLeft(stateWith(CursorPosition(0, 0), columnMode = true)) { (previous, cursor) =>
       val state = previous.copy(persisted =
         previous.persisted.copy(buffers = Map(bufferId -> buffer(previous).copy(editing = EditingState(List(cursor)))))
@@ -137,7 +138,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "Page Down and Page Up" should "move the cursor and the viewport identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       event  <- List[TextEntryEvent](PageDown, PageUp, ExtendSelectionPageDown, ExtendSelectionPageUp, ScrollDown(3))
       cursor <- cursors
@@ -150,7 +151,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "EditorGeometryProducer.forPane" should "build the same navigation window through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       rowsAbove <- List(4, 20, 60)
       cursor    <- cursors
@@ -163,7 +164,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "A typewriter keystroke" should "re-centre identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.foreach { cursor =>
       val state = stateWith(cursor, typewriter = true)
       withClue(s"typing at $cursor: ") {
@@ -174,7 +175,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "Go to Line" should "land on the same viewport through the index, by prompt or by command" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       from   <- List(CursorPosition(5, 0), CursorPosition(390, 40))
       target <- List(1, 152, 300, 400)

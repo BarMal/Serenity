@@ -6,7 +6,7 @@ import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
 import com.serenity.SkiaPixels
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FrameSurfaceRequest, RenderImage, RenderSurface}
@@ -32,7 +32,7 @@ class SkiaScrollOverpaintSpec extends AnyFlatSpec with Matchers:
     val canvas = new JPanel
     canvas.setSize(width, height)
     val pool    = new ReusableImagePool()
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val changed = new AtomicReference[Option[List[PixelRect]]](None)
     val shown   = new AtomicReference[Option[BufferedImage]](None)
 

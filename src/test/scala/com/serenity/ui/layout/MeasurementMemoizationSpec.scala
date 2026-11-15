@@ -4,7 +4,9 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,21 +24,25 @@ class MeasurementMemoizationSpec extends AnyFlatSpec with Matchers:
   }
 
   "LineFontResolver.lineMetrics" should "probe each font once however many rows ask" in {
-    val base     = new Font(Font.MONOSPACED, Font.PLAIN, 37)
-    val bigger   = new Font(Font.MONOSPACED, Font.BOLD, 41)
-    val resolver = LineFontResolver(base, Vector(ColumnFontRun(0, 5, bigger), ColumnFontRun(5, 9, base)))
-    val extents  = FontLineExtents()
+    val base   = new Font(Font.MONOSPACED, Font.PLAIN, 37)
+    val bigger = new Font(Font.MONOSPACED, Font.BOLD, 41)
+    val resolver = LineFontResolver(
+      FontSpec.fromAwt(base),
+      Vector(ColumnFontRun(0, 5, FontSpec.fromAwt(bigger)), ColumnFontRun(5, 9, FontSpec.fromAwt(base)))
+    )
+    val extents = FontLineExtents(TestMeasure.measurer.cellMetrics)
 
-    val rows = Vector.fill(50)(resolver.lineMetrics(frc, extents, 0, 9))
+    val rows = Vector.fill(50)(resolver.lineMetrics(extents, 0, 9))
 
     extents.measurements shouldBe 2L
     rows.distinct.size shouldBe 1
   }
 
   it should "report the ceiling of the font's ascent over the ceiling of its descent and leading" in {
-    val font    = new Font(Font.SERIF, Font.PLAIN, 23)
-    val line    = font.getLineMetrics("Mg", frc)
-    val metrics = LineFontResolver(font, Vector.empty).lineMetrics(frc, FontLineExtents(), 0, 4)
+    val font = new Font(Font.SERIF, Font.PLAIN, 23)
+    val line = font.getLineMetrics("Mg", frc)
+    val metrics = LineFontResolver(FontSpec.fromAwt(font), Vector.empty)
+      .lineMetrics(FontLineExtents(TestMeasure.measurer.cellMetrics), 0, 4)
     val ascent  = math.ceil(line.getAscent.toDouble).toInt
     val descent = math.ceil((line.getDescent + line.getLeading).toDouble).toInt
     metrics shouldBe (ascent + descent, ascent)
@@ -45,23 +51,23 @@ class MeasurementMemoizationSpec extends AnyFlatSpec with Matchers:
   it should "measure afresh at another render scale" in {
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 29)
     val scaled  = FontRenderContext(AffineTransform.getScaleInstance(2.0, 2.0), true, true)
-    val extents = FontLineExtents()
-    LineFontResolver(font, Vector.empty).lineMetrics(frc, extents, 0, 4)
-    LineFontResolver(font, Vector.empty).lineMetrics(scaled, extents, 0, 4)
+    val extents = FontLineExtents(TestMeasure.measurer.cellMetrics)
+    LineFontResolver(FontSpec.fromAwt(font), Vector.empty).lineMetrics(extents, 0, 4)
+    LineFontResolver(FontSpec.fromAwt(font), Vector.empty).lineMetrics(extents, 0, 4)
     extents.measurements shouldBe 2L
   }
 
   "DropCapWidths" should "measure a glyph once per font and render context" in {
     val font     = new Font(Font.SERIF, Font.BOLD, 53)
-    val measured = DropCapWidths()
-    val widths   = Vector.fill(20)(measured(font, frc, "W"))
+    val measured = DropCapWidths(TestMeasure.measurer.glyphWidthPx)
+    val widths   = Vector.fill(20)(measured(FontSpec.fromAwt(font), "W"))
     measured.measurements shouldBe 1L
     widths.distinct shouldBe Vector(font.getStringBounds("W", frc).getWidth.toFloat)
   }
 
   it should "stay zero for an empty glyph without measuring" in {
     val font     = new Font(Font.SERIF, Font.BOLD, 59)
-    val measured = DropCapWidths()
-    measured(font, frc, "") shouldBe 0.0f
+    val measured = DropCapWidths(TestMeasure.measurer.glyphWidthPx)
+    measured(FontSpec.fromAwt(font), "") shouldBe 0.0f
     measured.measurements shouldBe 0L
   }

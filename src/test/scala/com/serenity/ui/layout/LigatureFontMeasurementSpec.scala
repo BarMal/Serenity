@@ -10,7 +10,7 @@ import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
-import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -42,14 +42,13 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   private val widths = Seq(40, 97, 233, 480, 1200)
 
-  private def resolver = singleFontResolver(codeFont)
+  private def resolver = singleFontResolver(FontSpec.fromAwt(codeFont))
 
   private def keyFor(text: String, widthPx: Int): WrappedLineKey =
     WrappedLineKey(
       text,
       widthPx,
       resolver,
-      frc,
       measuredLayout = true,
       TestMeasure.cellMetrics(codeFont),
       0,
@@ -74,7 +73,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   "The bundled code font with ligatures on" should "still be measured, not laid out on the cell grid" in {
     FontLoader.ligaturesEnabled(codeFont) shouldBe true
-    TextLayoutSnapshot.shouldUseMeasuredLayout(codeFont, frc, FontProbes()) shouldBe true
+    TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(codeFont), TestMeasure.layoutMemos()) shouldBe true
   }
 
   it should "wrap code exactly where per-row TextLayout measurement did, with the same caret stops" in
@@ -82,7 +81,8 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
       widths.foreach { widthPx =>
         withClue(s"'$line' at $widthPx px: ") {
           assertSameRows(
-            TextLayoutSnapshot.boundedVisualLinesForText(line, 3, widthPx, codeFont, frc),
+            TextLayoutSnapshot
+              .boundedVisualLinesForText(line, 3, widthPx, codeFont, wrapCache = TestMeasure.wrapCache()),
             LegacyLineMeasurement.wrap(
               line,
               3,
@@ -99,7 +99,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "give a single segment the carets TextLayout reports at every character" in
     codeLines.foreach { line =>
-      val xs = TextLayoutSnapshot.caretXsForText(line, codeFont, ShapedTextCache(), frc)
+      val xs = TextLayoutSnapshot.caretXsForText(line, codeFont, TestMeasure.layoutMemos())
       val reference =
         LegacyLineMeasurement.caretXs(line, 0, resolver, frc, true, TestMeasure.cellMetrics(codeFont))
       xs.length shouldBe reference.length
@@ -108,7 +108,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "keep every character of a code line context-free, so no row falls back to a TextLayout" in
     codeLines.foreach { line =>
-      val advances = GlyphAdvances.measure(line, 0, line.length, 0, resolver, frc, ShapedTextCache())
+      val advances = GlyphAdvances.measure(line, 0, line.length, 0, resolver, TestMeasure.measurer)
 
       withClue(s"'$line': ") {
         advances.isContextFree(0, line.length) shouldBe true
@@ -117,22 +117,25 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "fit a row of code from the measured advances rather than the per-row search" in
     codeLines.foreach { line =>
-      val paragraph = ParagraphMeasurement(keyFor(line, 233), 0, Int.MaxValue, ShapedTextCache(), new BoundaryScratch)
+      val paragraph = ParagraphMeasurement(
+        keyFor(line, 233),
+        0,
+        Int.MaxValue,
+        Some(MeasuredBy(TestMeasure.measurer, TestMeasure.layoutMemos())),
+        new BoundaryScratch
+      )
 
       withClue(s"'$line': ") {
         paragraph.measuredFit(0, 233) should not be empty
       }
     }
 
-  it should "shape a line through the shaped-text cache once, however many windows measure it" in {
-    val cache = ShapedTextCache()
-    val line  = codeLines(1)
+  it should "measure a line to the same advances however many windows measure it" in {
+    val line   = codeLines(1)
+    val first  = GlyphAdvances.measure(line, 0, line.length, 0, resolver, TestMeasure.measurer)
+    val second = GlyphAdvances.measure(line, 0, line.length, 0, resolver, TestMeasure.measurer)
 
-    val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, frc, cache)
-    val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, frc, cache)
-
-    cache.shapings shouldBe 1L
-    cache.holds(line, codeFont, frc) shouldBe true
+    second.caretsFrom(0, line.length).toVector shouldBe first.caretsFrom(0, line.length).toVector
   }
 
   private def withFeatures(font: Font, features: (TextAttribute, AnyRef)*): Font =
@@ -142,8 +145,8 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
     val kerned = withFeatures(Font(Font.SERIF, Font.PLAIN, 15), TextAttribute.KERNING -> TextAttribute.KERNING_ON)
     val line   = "AVAVAVA WAWAWA To Ty Yo"
 
-    val advances = GlyphAdvances.measure(line, 0, line.length, 0, singleFontResolver(kerned), frc, ShapedTextCache())
+    val advances =
+      GlyphAdvances.measure(line, 0, line.length, 0, singleFontResolver(FontSpec.fromAwt(kerned)), TestMeasure.measurer)
 
-    GlyphAdvances.advancesAreUniform(kerned, frc, FontProbes()) shouldBe false
     advances.isContextFree(0, line.length) shouldBe false
   }

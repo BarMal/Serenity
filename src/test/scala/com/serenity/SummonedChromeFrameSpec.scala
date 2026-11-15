@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.ActivePane
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{
   CellMetrics,
   Layout,
@@ -67,7 +68,7 @@ class SummonedChromeFrameSpec extends AnyFlatSpec with Matchers:
     )
     val held =
       hidden.copy(runtime = hidden.runtime.copy(summons = hidden.runtime.summons.pressed(ChromeElement.LineNumbers)))
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
 
     paint(hidden, caches)
     val gutter =

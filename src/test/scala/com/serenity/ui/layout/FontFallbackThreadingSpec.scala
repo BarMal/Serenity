@@ -5,6 +5,7 @@ import java.nio.file.Paths
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontFallback
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -38,7 +39,7 @@ class FontFallbackThreadingSpec extends AnyFlatSpec with Matchers:
       font,
       None,
       false,
-      WrappedLineCache.bounded(),
+      TestMeasure.wrapCache(),
       fallback = fallback
     )
     rows.rowsIn(0) shouldBe 2
@@ -49,9 +50,8 @@ class FontFallbackThreadingSpec extends AnyFlatSpec with Matchers:
       buffer,
       panelPx,
       font,
-      frc,
       wordWrapEnabled = true,
-      wrapCache = WrappedLineCache.bounded(),
+      wrapCache = TestMeasure.wrapCache(),
       fallback = fallback
     )
     snapshot.visualLines.map(_.text) shouldBe Vector("中中中中", "中中中中")
@@ -60,7 +60,7 @@ class FontFallbackThreadingSpec extends AnyFlatSpec with Matchers:
 
   "The row-count key" should "differ when the fallback chain does" in {
     def key(chain: FontFallback) =
-      VisualRowKey(BufferId(1), panelPx, font, frc, None, forceCellLayout = false, dropCapsEnabled = true, chain)
+      VisualRowKey(BufferId(1), panelPx, font, None, forceCellLayout = false, dropCapsEnabled = true, chain)
     key(fallback) should not be key(FontFallback.Default)
     key(fallback) shouldBe key(FontFallback(fallback.families))
   }

@@ -82,7 +82,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       Some(cursorColor),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val buffer       = state.persisted.buffers(bufferId)
@@ -91,12 +91,14 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
-    val textSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont)
-    val textWidthPx  = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
-    val textXPx      = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
-    val expectedXPx  = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
+    val textSnapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont, wrapCache = TestMeasure.wrapCache())
+    val textWidthPx = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
+    val textXPx     = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
+    val expectedXPx = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
 
-    val codeSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont)
+    val codeSnapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont, wrapCache = TestMeasure.wrapCache())
     val codeWidthPx  = codeSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no code visual line"))
     val codeXPx      = codeSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no code caret stop"))
     val codeExpected = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)
@@ -125,7 +127,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.setFontCalls should contain(textFont)
@@ -147,7 +149,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       TestMeasure.cellMetrics(uiFont),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.setFontCalls should contain(uiFont)
@@ -168,7 +170,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.setFontCalls.last.getFamily shouldBe Font.SANS_SERIF
@@ -190,7 +192,7 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       Some(cursorColor),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val buffer       = state.persisted.buffers(bufferId)
@@ -199,12 +201,14 @@ class RendererFontIsolationSpec extends AnyFlatSpec with Matchers:
     val contentRect  = LayoutRect(paneRect.x, paneRect.y + 1, paneRect.width, math.max(1, paneRect.height - 1))
     val panelWidthPx = contentRect.width * cellMetrics.charWidth
 
-    val textSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont)
-    val textWidthPx  = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
-    val textXPx      = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
-    val expectedXPx  = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
+    val textSnapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, textFont, wrapCache = TestMeasure.wrapCache())
+    val textWidthPx = textSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no text visual line"))
+    val textXPx     = textSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no text caret stop"))
+    val expectedXPx = cellMetrics.toPixelX(contentRect.x) + math.round(textXPx)
 
-    val codeSnapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont)
+    val codeSnapshot =
+      TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, codeFont, wrapCache = TestMeasure.wrapCache())
     val codeWidthPx  = codeSnapshot.visualLines.headOption.map(_.widthPx).getOrElse(fail("no code visual line"))
     val codeXPx      = codeSnapshot.xPxForCursor(CursorPosition(0, cursorCol)).getOrElse(fail("no code caret stop"))
     val codeExpected = cellMetrics.toPixelX(contentRect.x) + math.round(codeXPx)

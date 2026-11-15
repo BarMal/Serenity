@@ -1,7 +1,7 @@
 package com.serenity.ui.skia
 
-import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.SdlNativeTest
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{BackendCaches, FontSpec, RenderSurface, ScreenIdentity}
@@ -30,7 +30,7 @@ class SkiaGlParityNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWindow
       Width,
       Height,
       1.0,
-      RenderCaches.create().surfaceText,
+      TestMeasure.renderCaches().surfaceText,
       new BackendCaches,
       ScreenIdentity(new Object)
     )

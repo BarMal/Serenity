@@ -60,7 +60,7 @@ private[perf] object SourceRowCountBenchmarks:
 
   /** What wrapping each line on its own says, which no shortcut takes part in. */
   private def wrappedRows(font: Font): Int =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     lines.zipWithIndex.map { (text, line) =>
       TextLayoutSnapshot
         .boundedVisualLinesForText(

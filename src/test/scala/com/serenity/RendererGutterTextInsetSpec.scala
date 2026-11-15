@@ -75,7 +75,7 @@ class RendererGutterTextInsetSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
   "a left-placed line-number counter" should "inset its digits a sub-cell amount from the pane edge, toward the divider" in {

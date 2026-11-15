@@ -40,11 +40,12 @@ object PaneTextLayout:
     cellMetrics: Option[CellMetrics],
     wrappedLines: WrappedLineCache
   ): PaneTextLayout =
-    val gridMetrics      = cellMetrics.getOrElse(CellMetrics.fromFont(codeFont))
+    val memos            = wrappedLines.layoutMemos
+    val gridMetrics      = cellMetrics.getOrElse(TextLayoutSnapshot.cellMetricsOf(codeFont, memos))
     val surfaceConfig    = state.persisted.config.surfaceConfig
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
     val font             = if buffer.usesTextFont then textFont else codeFont
-    val fontMetrics      = cellMetrics.getOrElse(CellMetrics.fromFont(font))
+    val fontMetrics      = cellMetrics.getOrElse(TextLayoutSnapshot.cellMetricsOf(font, memos))
     val width            = contentRect.width * gridMetrics.charWidth
     val heightPx         = contentRect.height * gridMetrics.lineHeight
     val baseViewport = LayoutEngine
@@ -65,8 +66,7 @@ object PaneTextLayout:
             .caretXsForText(
               "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
               font,
-              wrappedLines.shapedText,
-              TextLayoutSnapshot.defaultFontRenderContext()
+              memos
             )
             .lastOption
             .getOrElse(0.0f) / 62.0f

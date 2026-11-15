@@ -74,7 +74,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     // Sanity check: the cell/non-measured path is the one under test -- if this ever starts drawing via drawRunPx

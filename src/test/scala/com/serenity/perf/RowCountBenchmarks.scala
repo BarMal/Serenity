@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{VisualRowCounts, WrappedLineCache}
 
 /** Counting the visual rows of every line of a 1200-line document of prose and code, the document the render benchmark
@@ -39,16 +40,16 @@ private[perf] object RowCountBenchmarks:
     val rows = VisualRowCounts.forBuffer(buffer, widthPx, font, None, false, cache)
     Vector.tabulate(lineCount)(rows.rowsIn).sum
 
-  private def cold(): Int = totalRows(WrappedLineCache.bounded(), narrowPx)
+  private def cold(): Int = totalRows(TestMeasure.wrapCache(), narrowPx)
 
   private def afterGrow(): Int =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val _     = totalRows(cache, narrowPx)
     totalRows(cache, widePx)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    lazy val expectedCold = totalRows(WrappedLineCache.Uncached, narrowPx)
-    lazy val expectedWide = totalRows(WrappedLineCache.Uncached, widePx)
+    lazy val expectedCold = totalRows(TestMeasure.wrapCache(), narrowPx)
+    lazy val expectedWide = totalRows(TestMeasure.wrapCache(), widePx)
     BenchmarkRunner.Benchmark.sharing((expectedCold, expectedWide))(
       List(
         BenchmarkRunner.Benchmark(

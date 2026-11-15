@@ -103,7 +103,7 @@ class SkiaCommandRunnerEditorPaneAccumulationSpec extends AnyFlatSpec with Match
 
   private def renderFrame(pool: Pool, state: AppState, damage: Damage): FramePixels =
     val image  = pool.acquire()
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     val surface = SkiaFrames.surfaceOver(
       image,
       cellMetrics,

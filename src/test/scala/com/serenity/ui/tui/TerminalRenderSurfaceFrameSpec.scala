@@ -5,12 +5,12 @@ import java.io.StringWriter
 
 import com.serenity.config.AppConfig
 import com.serenity.state.models.UiSurface
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
 import com.serenity.ui.renderer.{
   MeasuredTextAdvances,
   PinnedPanelRenderer,
-  ShapedTextCache,
   TextOverlayRenderer,
   TextOverlayView,
   TextPanelRow,
@@ -25,7 +25,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class TerminalRenderSurfaceFrameSpec extends AnyFlatSpec with Matchers:
 
-  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private val cellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
   private val font        = Font(Font.MONOSPACED, Font.PLAIN, 12)

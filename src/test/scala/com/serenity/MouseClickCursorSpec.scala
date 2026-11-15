@@ -282,10 +282,15 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
         FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
       )
     val panelWidthPx = contentRect.width * gridMetrics.charWidth
-    val snapshot     = TextLayoutSnapshot.fromBuffer(state.persisted.buffers(bufferId), panelWidthPx, font)
-    val line         = snapshot.visualLines.head
-    val pixelX       = contentRect.x * gridMetrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
-    val pixelY       = contentRect.y * gridMetrics.lineHeight
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      state.persisted.buffers(bufferId),
+      panelWidthPx,
+      font,
+      wrapCache = TestMeasure.wrapCache()
+    )
+    val line   = snapshot.visualLines.head
+    val pixelX = contentRect.x * gridMetrics.charWidth + math.round(line.xForColumn(1).getOrElse(0.0f) + 1.0f)
+    val pixelY = contentRect.y * gridMetrics.lineHeight
 
     sm.applyEvent(
       MouseClick(

@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import scala.util.Random
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.WrapFixtures.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +16,7 @@ class IncrementalWrapWorkSpec extends AnyFlatSpec with Matchers:
     val layout = layouts.find(_.name == layoutName).get
     val width  = 36 * layout.charWidthPx + 2
     val before = paragraphFor(Random(31L), layout, width, rows)
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val cold   = wrap(before, cache, layout, width)
     val first  = cache.wrapStats
     val after  = change(before)
@@ -34,8 +35,8 @@ class IncrementalWrapWorkSpec extends AnyFlatSpec with Matchers:
     val before = paragraphFor(Random(31L), layout, width, rows)
     val after  = change(before)
     val delta  = after.length - before.length
-    val old = wrap(before, WrappedLineCache.Uncached, layout, width).map(row => (row.startColumn, row.endColumn)).toSet
-    wrap(after, WrappedLineCache.Uncached, layout, width).count { row =>
+    val old    = wrap(before, TestMeasure.wrapCache(), layout, width).map(row => (row.startColumn, row.endColumn)).toSet
+    wrap(after, TestMeasure.wrapCache(), layout, width).count { row =>
       !old((row.startColumn, row.endColumn)) && !old((row.startColumn - delta, row.endColumn - delta))
     }
 

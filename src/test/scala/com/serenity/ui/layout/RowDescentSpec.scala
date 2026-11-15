@@ -4,7 +4,9 @@ import java.awt.Font
 import java.awt.font.FontRenderContext
 import java.awt.geom.AffineTransform
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,14 +17,14 @@ class RowDescentSpec extends AnyFlatSpec with Matchers:
   // Off-grid sizes keep these fonts distinct from the ones the other specs probe.
   private def font(family: String, style: Int, size: Float): Font = Font(family, style, 1).deriveFont(size + 0.25f)
 
-  private val extents = FontLineExtents()
+  private val extents = FontLineExtents(TestMeasure.measurer.cellMetrics)
 
   private val heading = font(Font.SERIF, Font.BOLD, 28f)
   private val body    = font(Font.MONOSPACED, Font.PLAIN, 12f)
 
   private def rowOf(fonts: Vector[Font]): (Int, Int) =
-    val runs = fonts.zipWithIndex.map((f, index) => ColumnFontRun(index * 10, index * 10 + 10, f))
-    LineFontResolver(fonts.head, runs).lineMetrics(frc, extents, 0, fonts.length * 10)
+    val runs = fonts.zipWithIndex.map((f, index) => ColumnFontRun(index * 10, index * 10 + 10, FontSpec.fromAwt(f)))
+    LineFontResolver(FontSpec.fromAwt(fonts.head), runs).lineMetrics(extents, 0, fonts.length * 10)
 
   private def assertRoomForDescenders(fonts: Vector[Font]): Unit =
     val metrics              = fonts.map(_.getLineMetrics("Mgyjpq", frc))

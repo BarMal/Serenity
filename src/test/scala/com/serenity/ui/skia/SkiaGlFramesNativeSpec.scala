@@ -2,8 +2,8 @@ package com.serenity.ui.skia
 
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.SdlNativeTest
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{BackendCaches, FontSpec, RenderSurface, ScreenIdentity, SurfaceContentIdentity}
@@ -24,7 +24,7 @@ class SkiaGlFramesNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWindow
   private val font    = FontSpec.fromAwt(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12))
 
   private def settings(width: Int, height: Int, backend: BackendCaches, screen: ScreenIdentity) =
-    GlFrameSettings(metrics, font, width, height, 1.0, RenderCaches.create().surfaceText, backend, screen)
+    GlFrameSettings(metrics, font, width, height, 1.0, TestMeasure.renderCaches().surfaceText, backend, screen)
 
   private def withFrames[A](use: (SkiaGlFrames, SkiaGlTargets, GlFrameSettings) => A): A =
     onWindow(_.onSdlThread { owner =>

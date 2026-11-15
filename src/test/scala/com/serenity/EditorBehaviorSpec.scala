@@ -385,7 +385,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
     val snapshot = TextLayoutSnapshot.fromBuffer(
       currentState.persisted.buffers(bufferId),
       panelWidthPx,
-      font
+      font,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx = snapshot.xPxForCursor(CursorPosition(0, 4)).getOrElse(fail("missing caret x"))
     val expectedCol  = snapshot.visualLines(2).nearestColumnForXPx(preferredXPx)

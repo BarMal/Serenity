@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
@@ -16,7 +15,6 @@ enum TextMeasure:
 
   case Pixels(
       font: Font,
-      fontRenderContext: FontRenderContext,
       cellPx: Int,
       insetPx: Double,
       advances: MeasuredTextAdvances
@@ -28,7 +26,6 @@ object TextMeasure:
     val fontConfig = state.persisted.config.editorConfig.fontConfig
     Pixels(
       FontLoader.previewUiFont(fontConfig),
-      TextLayoutSnapshot.defaultFontRenderContext(),
       CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth,
       SurfaceTextInset.px(state.persisted.config),
       advances
@@ -45,6 +42,6 @@ object TextWrapping:
   private def fitsIn(widthCells: Int, measure: TextMeasure): String => Boolean =
     measure match
       case TextMeasure.Cells => CellWrapping.fitsCells(widthCells)
-      case TextMeasure.Pixels(font, frc, cellPx, insetPx, advances) =>
+      case TextMeasure.Pixels(font, cellPx, insetPx, advances) =>
         val limitPx = math.max(1.0, widthCells * cellPx - insetPx)
-        row => advances.advanceOf(row, font, frc) <= limitPx
+        row => advances.advanceOf(row, font) <= limitPx

@@ -411,7 +411,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       ),
       TextLayoutSnapshot.gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig),
       font,
-      wordWrapEnabled = true
+      wordWrapEnabled = true,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx = snapshot.xPxForCursor(startCursor).getOrElse(fail("missing caret x"))
     val expectedDown =
@@ -481,7 +482,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
       panelWidth * TestMeasure.cellMetrics(font).charWidth,
       font,
-      wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled
+      wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx    = snapshot.xPxForCursor(beforeCursor).getOrElse(fail("missing caret x"))
     val fallbackAfterUp = beforeCursor.copy(column = beforeCursor.column % panelWidth)

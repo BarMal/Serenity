@@ -4,6 +4,7 @@ import java.awt.Font
 import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{BundledInterFont, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -64,7 +65,7 @@ class ShapedTextCacheSpec extends AnyFlatSpec with Matchers:
   private def stretchAndCarets(text: String, face: Font) =
     (
       ShapedTextCache().stretchOf(text, face, frc),
-      TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc)
+      TextLayoutSnapshot.caretXsForText(text, face, TestMeasure.layoutMemos())
     )
 
   "A caret stop" should "sit at the x of the glyph the line draws for its character, kerned or not" in

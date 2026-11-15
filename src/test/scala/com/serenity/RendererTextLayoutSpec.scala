@@ -72,7 +72,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFontOverride.getOrElse(font)),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface
 
@@ -128,7 +128,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.getRow(1).take(3).trim shouldBe "│"
@@ -196,7 +196,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       uiMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
@@ -341,7 +341,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetric,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.filter(_.s.contains("W")).foreach { call =>
@@ -384,7 +384,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
@@ -424,7 +424,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     RendererEntryPoints.render(
       state,
@@ -435,7 +435,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val visibleCursorRects = visibleSurface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
@@ -480,7 +480,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.fillPixelRectCalls.count(_.color.toAwt == activeColor) shouldBe 1
@@ -522,7 +522,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     blinkOff.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor) shouldBe empty

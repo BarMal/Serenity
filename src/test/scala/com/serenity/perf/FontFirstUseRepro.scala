@@ -5,8 +5,9 @@ import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{DropCapWidths, FontFirstUseProbes, FontLineExtents}
-import com.serenity.ui.renderer.{ShapedStretch, ShapedTextCache, StyledFontCache}
+import com.serenity.ui.renderer.{FontSpec, ShapedStretch, ShapedTextCache, StyledFontCache}
 
 /** Standalone reproduction, run in a fresh JVM per trial (it is a test-scope main, not a spec): many threads make the
   * first use of one font at once through the measuring paths whose results live for the life of the process, then each
@@ -19,8 +20,8 @@ object FontFirstUseRepro:
 
   private val shapedText    = ShapedTextCache()
   private val styledFonts   = StyledFontCache()
-  private val lineExtents   = FontLineExtents()
-  private val dropCapWidths = DropCapWidths()
+  private val lineExtents   = FontLineExtents(TestMeasure.measurer.cellMetrics)
+  private val dropCapWidths = DropCapWidths(TestMeasure.measurer.glyphWidthPx)
 
   private val Texts = Vector(
     "Hoxi AVATAR To Wa Yo",
@@ -63,9 +64,9 @@ object FontFirstUseRepro:
     Texts.foreach { text =>
       val _ = shapedText.stretchOf(text, font, frc)
     }
-    val _ = lineExtents.of(font, frc)
+    val _ = lineExtents.of(FontSpec.fromAwt(font))
     val _ = styledFonts.underlineOf(font)
-    val _ = dropCapWidths(font, frc, "A")
+    val _ = dropCapWidths(FontSpec.fromAwt(font), "A")
     val _ = FontFirstUseProbes.advanceChecks(font, frc)
     Texts.foreach(text => FontFirstUseProbes.measure(text, font, frc, shapedText))
 
@@ -80,9 +81,9 @@ object FontFirstUseRepro:
     val beliefs = Texts.map { text =>
       stretchDigest(shapedText.stretchOf(text, font, frc)) +
         FontFirstUseProbes.advancesDigest(text, font, frc, shapedText)
-    } :+ lineExtents.of(font, frc).toString :+
+    } :+ lineExtents.of(FontSpec.fromAwt(font)).toString :+
       styledFonts.underlineOf(font).toString :+
-      dropCapWidths(font, frc, "A").toString :+
+      dropCapWidths(FontSpec.fromAwt(font), "A").toString :+
       FontFirstUseProbes.advanceChecks(font, frc).toString
     Integer.toHexString(beliefs.mkString("\n").hashCode)
 
@@ -94,19 +95,18 @@ object FontFirstUseRepro:
         )
       }
       .map(_ => "shaped-text")
+    // Layout's extents and drop cap widths come from the Skia measurer, so a fresh measurement of the settled font is
+    // what the raced one must equal.
     val extents =
-      val metrics = font.getLineMetrics("Mg", frc)
-      val settled =
-        FontLineExtents.Extent(
-          math.ceil(metrics.getAscent.toDouble).toInt,
-          math.ceil((metrics.getDescent + metrics.getLeading).toDouble).toInt
-        )
-      Option.when(lineExtents.of(font, frc) != settled)("line-extents")
+      val settled = FontLineExtents(TestMeasure.measurer.cellMetrics).of(FontSpec.fromAwt(font))
+      Option.when(lineExtents.of(FontSpec.fromAwt(font)) != settled)("line-extents")
     val underline =
       val metrics = font.getLineMetrics("", FontRenderContext(AffineTransform(), true, true))
       Option.when(styledFonts.underlineOf(font) != StyledFontCache.Underline.of(metrics))("underline")
     val dropCap =
-      Option.when(dropCapWidths(font, frc, "A") != font.getStringBounds("A", frc).getWidth.toFloat)(
+      Option.when(
+        dropCapWidths(FontSpec.fromAwt(font), "A") != TestMeasure.measurer.glyphWidthPx(FontSpec.fromAwt(font), "A")
+      )(
         "drop-cap-width"
       )
     val advances = Texts

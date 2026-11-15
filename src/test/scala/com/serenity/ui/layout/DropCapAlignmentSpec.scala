@@ -7,6 +7,7 @@ import java.awt.geom.AffineTransform
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -45,7 +46,7 @@ class DropCapAlignmentSpec extends AnyFlatSpec with Matchers:
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 40)
       )
-    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc).visualLines
+    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, wrapCache = TestMeasure.wrapCache()).visualLines
 
   for
     (scale, frc) <- frcs

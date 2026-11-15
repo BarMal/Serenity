@@ -141,7 +141,7 @@ class SkiaRasterWindowSpec extends AnyFlatSpec with Matchers with PersistedFrame
         val first   = stateOf(proseLines.mkString("\n"), CursorPosition(4, 5))
         val second  = typedAt(first, proseLines, line = 4, text = "x")
         val third   = typedAt(second, proseLines, line = 20, text = "yz")
-        val caches  = RenderCaches.create()
+        val caches  = TestMeasure.renderCaches()
         val factory = SkiaRasterSurfaceFactory
 
         val steps = List(
@@ -154,7 +154,7 @@ class SkiaRasterWindowSpec extends AnyFlatSpec with Matchers with PersistedFrame
         steps.foreach {
           case (name, (state, damage)) =>
             val shownIncrementally = present(incremental, state, damage, caches, factory)
-            val drawnFromScratch   = present(scratch, state, Damage.Everything, RenderCaches.create(), factory)
+            val drawnFromScratch   = present(scratch, state, Damage.Everything, TestMeasure.renderCaches(), factory)
             keep(s"sequence-$name", shownIncrementally)
             val (edges, others) = differingPixels(shownIncrementally, drawnFromScratch)
               .partition((x, y) => isEdgeCoverage(shownIncrementally, drawnFromScratch, x, y))

@@ -103,18 +103,26 @@ final class SkiaTextMeasurer(
         .fold(exactCaretXs(text, startColumn, fonts))(_.caretsFrom(0, text.length))
 
   def exactCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
-    if text.isEmpty then IArray(0.0f)
+    exactCaretsAndEdges(text, startColumn, fonts)._1
+
+  override def exactCaretsAndEdges(text: String, startColumn: Int, fonts: LineFonts): (IArray[Float], IArray[Float]) =
+    if text.isEmpty then (IArray(0.0f), IArray(0.0f))
     else
       val carets = new Array[Float](text.length + 1)
+      val edges  = new Array[Float](text.length + 1)
       val end = fontsOver(fonts, startColumn, startColumn + text.length).foldLeft(0.0f) { (origin, run) =>
-        val from  = run.startColumn - startColumn
-        val until = run.endColumn - startColumn
-        val local = shapedCarets(text.substring(from, until), skia(run.font))
-        (0 until until - from).foreach(index => carets(from + index) = origin + local(index))
+        val from            = run.startColumn - startColumn
+        val until           = run.endColumn - startColumn
+        val (local, pulled) = shapedCaretsAndPulls(text.substring(from, until), skia(run.font))
+        (0 until until - from).foreach { index =>
+          carets(from + index) = origin + local(index)
+          edges(from + index) = origin + local(index) - pulled(index)
+        }
         origin + local(until - from)
       }
       carets(text.length) = end
-      IArray.unsafeFromArray(carets)
+      edges(text.length) = end
+      (IArray.unsafeFromArray(carets), IArray.unsafeFromArray(edges))
 
   def shapingCutAtOrAfter(text: String, from: Int, font: FontSpec): Int =
     (math.max(1, from) until text.length).find(isShapingCut(text, _, skia(font))).getOrElse(text.length)
@@ -196,6 +204,29 @@ final class SkiaTextMeasurer(
         }
       }
     }
+
+  /** [[shapedCarets]] and how far kerning pulled each character's glyph towards the glyphs before it, which a row that
+    * ends before the character does not feel: its glyph's x less the furthest any earlier glyph reaches at its own
+    * advance. Only text shaped here by Latin runs is told apart; a mark, a glyph inside a cluster and the first glyph
+    * feel no pull.
+    */
+  private def shapedCaretsAndPulls(text: String, font: Font): (Array[Float], Array[Float]) =
+    val carets = shapedCarets(text, font)
+    val pulls  = new Array[Float](text.length + 1)
+    if text.nonEmpty && SkiaShapedTextCache.shapedByLatinRuns(text) then
+      val collector = shaped(text, font, 0.toByte)
+      val glyphs    = collector.glyphs
+      val nominal   = font.getWidths(glyphs)
+      val seen      = new Array[Boolean](text.length)
+      val _ = glyphs.indices.foldLeft(Float.NegativeInfinity) { (reach, glyph) =>
+        val char = collector.clusters(glyph)
+        val x    = collector.xs(glyph)
+        if char > 0 && char < text.length && !seen(char) then
+          seen(char) = true
+          if glyph > 0 && nominal(glyph) > 0.0f then pulls(char) = x - reach
+        math.max(reach, x + nominal(glyph))
+      }
+    (carets, pulls)
 
   /** The x of each character of `text` shaped alone, then the trailing edge. The characters of one cluster, a
     * ligature's say, share its glyphs: they are spread evenly from the cluster's x to the next one's, so each takes a

@@ -5,7 +5,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.SkiaFrames
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
@@ -30,7 +30,7 @@ class TypingFramePresentSpec extends AnyFlatSpec with Matchers:
 
   final private class ScreenFrames:
     private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
 
     /** The rects the frame asks the window to present, `None` for the whole window. */

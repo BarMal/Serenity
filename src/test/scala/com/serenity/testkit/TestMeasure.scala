@@ -1,19 +1,43 @@
 package com.serenity.testkit
 
 import java.awt.Font
+import java.util.concurrent.Executor
 
-import com.serenity.ui.layout.{CellMetrics, LayoutMemos, WrappedLineCache}
+import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, ScrollCounting}
+import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
+import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 
-/** What a spec measures a font with. Layout specs ask here, and not the measuring code directly, for the numbers they
-  * lay text out in, so the day layout moves to the Skia measurer (#2660 item 2, step D2) is one change in this file and
-  * not in every spec.
+/** What a spec measures a font with: the Skia measurer layout measures with in the app (#2660 item 2, step D2), over
+  * faces that resolve the bundled fonts, the test-only Inter subset included, the same way on every host. Layout specs
+  * ask here, and not the measuring code directly, for the numbers they lay text out in.
   */
 object TestMeasure:
 
-  def cellMetrics(font: Font): CellMetrics = CellMetrics.fromFont(font)
+  /** One measurer for every spec that does not draw: it holds no state a layout could leave behind for another. */
+  lazy val measurer: TextMeasurer = new SkiaTextMeasurer(TestBundledTypefaces.cacheWithInter())
+
+  def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
 
   /** Memos that measure the way a GUI owner's do. */
-  def layoutMemos(): LayoutMemos = LayoutMemos()
+  def layoutMemos(certificateBuilder: Executor = ScrollCountExecutor.shared): LayoutMemos =
+    LayoutMemos(certificateBuilder, () => Some(measurer))
 
   /** A wrap cache over [[layoutMemos]], for specs that lay text out as a GUI owner does. */
   def wrapCache(): WrappedLineCache.Bounded = WrappedLineCache.bounded(layoutMemos = layoutMemos())
+
+  /** A GUI owner's caches: layout measures with the measurer of the faces and stretches its surfaces draw with, as
+    * `Main` wires it. The measurer is made the first time something measures, so a spec may still install a font of its
+    * own into the owner's backend caches before then.
+    */
+  def renderCaches(
+    rendererFrameStateCacheCapacity: Int = 64,
+    scrollCounting: ScrollCounting = ScrollCounting.Inline,
+    styledFonts: StyledFontCache = StyledFontCache()
+  ): RenderCaches =
+    RenderCaches.create(
+      rendererFrameStateCacheCapacity,
+      scrollCounting,
+      styledFonts,
+      measurerFor = owner => Some(SkiaTextMeasurer.of(owner))
+    )

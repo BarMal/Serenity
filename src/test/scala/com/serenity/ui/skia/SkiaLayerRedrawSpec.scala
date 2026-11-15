@@ -7,8 +7,8 @@ import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import scala.annotation.tailrec
 
-import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.FrameSurfaceRequest
@@ -67,7 +67,7 @@ class SkiaLayerRedrawSpec extends AnyFlatSpec with Matchers:
 
     /** A frame with caches of its own, as a cold frame has. */
     def coldFrame(): Unit =
-      val caches = RenderCaches.create()
+      val caches = TestMeasure.renderCaches()
       val request = FrameSurfaceRequest(
         CellMetrics(8, 16, 12),
         new Font(Font.MONOSPACED, Font.PLAIN, 12),

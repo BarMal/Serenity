@@ -3,7 +3,6 @@ package com.serenity
 import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
@@ -82,7 +81,7 @@ class GuiPopupAnchorSpec extends AnyFlatSpec with Matchers:
     )
 
   private def planOf(state: AppState): EditorPaneRenderPlan =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val image  = SkiaFrames.newFrame(logicalW, logicalH)
     val surface =
       SkiaFrames.surfaceOver(image, metrics, codeFont, logicalW, logicalH, 1.0, persists = false, caches)

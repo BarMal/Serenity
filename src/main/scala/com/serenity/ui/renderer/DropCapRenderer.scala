@@ -104,7 +104,6 @@ object DropCapRenderer:
     visualLine: TextVisualLine,
     styledSegments: Option[List[StyledText]],
     baseFont: Font,
-    frc: FontRenderContext,
     proseScale: Float,
     theme: Theme,
     glyphColour: RenderColor,
@@ -116,7 +115,6 @@ object DropCapRenderer:
   ): (TextVisualLine, Option[List[StyledText]]) =
     DropCapGlyph.forParagraph(
       baseFont,
-      frc,
       Some(document),
       visualLine.bufferLine,
       dropCap,
@@ -232,10 +230,10 @@ object DropCapRenderer:
     clipBottomPx: Int = Int.MaxValue
   ): (TextVisualLine, Option[List[StyledText]]) =
     (for
-      _         <- Option.when(measured)(())
-      document  <- snapshot.richTextDocument
-      dropCap   <- homeLineRoleFor(snapshot, visualLine)
-      renderFrc <- frc
+      _        <- Option.when(measured)(())
+      document <- snapshot.richTextDocument
+      dropCap  <- homeLineRoleFor(snapshot, visualLine)
+      _        <- frc
     yield paintMeasuredHomeLine(
       surface,
       document,
@@ -243,7 +241,6 @@ object DropCapRenderer:
       visualLine,
       styledSegments,
       baseFont,
-      renderFrc,
       snapshot.proseScale,
       theme,
       glyphColour,

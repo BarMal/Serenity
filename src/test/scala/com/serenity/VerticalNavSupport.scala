@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.{EditorEvent, TextEntryEvent, VerticalNavig
 import com.serenity.state.manager.EditorGeometryProducer
 import com.serenity.state.models.{AppState, EditorGeometry, NavigationGeometry, PaneId}
 import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.WrappedLineCache
 
 /** Routes an editor event to the right reducer entry in tests: vertical navigation gets geometry built exactly the way
@@ -16,7 +17,7 @@ object VerticalNavSupport:
     event: EditorEvent,
     paneId: PaneId,
     state: AppState,
-    wrapCache: WrappedLineCache = WrappedLineCache.Uncached
+    wrapCache: WrappedLineCache = TestMeasure.wrapCache()
   )(using
     balance: com.serenity.rope.Balance
   ): ReducerResult =

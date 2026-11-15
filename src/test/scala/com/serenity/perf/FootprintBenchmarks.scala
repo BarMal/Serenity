@@ -11,9 +11,9 @@ import com.serenity.perf.BenchmarkFixtures.{
   largeRichTextDocument
 }
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
+import com.serenity.testkit.TestMeasure
 
 /** Heap the app keeps resident for a realistic editing session, reported as `footprint.*` rows beside the timings. Each
   * scenario builds the state the app would hold -- an `AppState`, undo history included -- and nothing else.
@@ -72,7 +72,7 @@ private[perf] object FootprintBenchmarks:
       else text
     List.fill(runtimes) {
       val state  = LaptopFrameBenchmarks.proseStateOf(salted)
-      val caches = RenderCaches.create()
+      val caches = TestMeasure.renderCaches()
       val _      = LaptopFrameBenchmarks.renderedFrame(state, caches, LaptopFrameBenchmarks.frameImage())
       (state, caches)
     }

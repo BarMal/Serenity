@@ -35,7 +35,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
   private def sameInstance(first: AnyRef, second: AnyRef): Boolean = first eq second
 
   "A cached wrap" should "serve a paragraph moved to another buffer line from the very rows it cached" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val above = TextLayoutSnapshot.boundedVisualLinesForText(prose, 3, 180, font, wrapCache = cache)
     val moved = TextLayoutSnapshot.boundedVisualLinesForText(prose, 7, 180, font, wrapCache = cache)
     val back  = TextLayoutSnapshot.boundedVisualLinesForText(prose, 3, 180, font, wrapCache = cache)
@@ -53,7 +53,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
 
   it should "keep every paragraph's cached rows when a line is inserted above them" in {
     val paragraphs = List(RichTextParagraph.plain(prose), RichTextParagraph.plain(prose + " tail"))
-    val cache      = WrappedLineCache.bounded()
+    val cache      = TestMeasure.wrapCache()
     val before     = visualLines(buffer(paragraphs), cache)
     val shifted    = visualLines(buffer(RichTextParagraph.plain("inserted") :: paragraphs), cache)
 
@@ -66,7 +66,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
   it should "place centred and right-aligned carets by a scalar offset over unshifted cached stops" in {
     val metrics = TestMeasure.cellMetrics(font)
     val panel   = metrics.charWidth * 40
-    val cache   = WrappedLineCache.bounded()
+    val cache   = TestMeasure.wrapCache()
     def rowsAligned(alignment: ParagraphAlignment) =
       visualLines(buffer(List(RichTextParagraph.plain("abcd efgh", alignment = alignment))), cache, panel)
 
@@ -94,7 +94,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
     val panel   = metrics.charWidth * 40
     val line = visualLines(
       buffer(List(RichTextParagraph.plain("abcd efgh", alignment = ParagraphAlignment.Right))),
-      WrappedLineCache.bounded(),
+      TestMeasure.wrapCache(),
       panel
     ).head
 
@@ -107,7 +107,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
 
   it should "apply a drop cap inset as a scalar, shifting carets without re-mapping the cached stops" in {
     val dropCap = RichTextParagraph.plain(prose, role = ParagraphRole.dropCap(lines = 2))
-    val cache   = WrappedLineCache.bounded()
+    val cache   = TestMeasure.wrapCache()
     val rows    = visualLines(buffer(List(dropCap)), cache)
 
     rows.length should be >= 3
@@ -134,7 +134,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
     val panel       = metrics.charWidth * 40
     val dropCap     = RichTextParagraph.plain(prose, role = ParagraphRole.dropCap(lines = 2))
     val centred     = dropCap.copy(alignment = ParagraphAlignment.Center)
-    val cache       = WrappedLineCache.bounded()
+    val cache       = TestMeasure.wrapCache()
     val plainRows   = visualLines(buffer(List(dropCap)), cache, panel)
     val centredRows = visualLines(buffer(List(centred)), cache, panel)
 

@@ -74,14 +74,14 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
       surface,
       stateWith(lines),
       Damage.Nothing,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     ) shouldBe None
   }
 
   it should "be empty when the frame is identical to the one on screen" in {
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val state   = stateWith(lines)
-    val caches  = com.serenity.state.manager.RenderCaches.create()
+    val caches  = com.serenity.testkit.TestMeasure.renderCaches()
 
     val _ = repaintRegionFor(surface, state, Damage.Everything, caches)
 
@@ -123,7 +123,7 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     val _      = repaintRegionFor(surface, state, Damage.Everything, caches)
     val region = repaintRegionFor(surface, edited, DamageProducer.forTransition(state, edited), caches)
 
@@ -145,7 +145,7 @@ class RendererRepaintRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     val _      = repaintRegionFor(surface, before, Damage.Everything, caches)
 
     // The status row shows the cursor's line/column, so a cursor move also reports Chrome damage -- which joins the

@@ -103,9 +103,9 @@ class RendererPaneSetupColumnModeSpec extends AnyFlatSpec with Matchers:
       buffer.copy(viewport = LayoutEngine.updateBufferViewportDimensions(buffer, contentRect, wordWrapEnabled = true)),
       contentRect.width * cellMetrics.charWidth,
       monoFont,
-      surfaceOff.fontRenderContext.getOrElse(fail("missing frc")),
       wordWrapEnabled = true,
-      cellMetricsOverride = Some(cellMetrics)
+      cellMetricsOverride = Some(cellMetrics),
+      wrapCache = TestMeasure.wrapCache()
     )
 
     snapshotOff.visualLines.map(_.bufferLine) shouldBe expected.visualLines.map(_.bufferLine)

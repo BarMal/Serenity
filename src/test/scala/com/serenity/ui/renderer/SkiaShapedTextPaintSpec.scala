@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute
 import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot}
 import com.serenity.ui.skia.SkiaTextCaches
@@ -58,7 +59,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     CharacterRenderer.computeGraphemeSpans(text).map(_.startLocalIndex)
 
   private def lineOf(text: String): TextVisualLine =
-    val carets = TextLayoutSnapshot.caretXsForText(text, font, com.serenity.ui.renderer.ShapedTextCache(), frc)
+    val carets = TextLayoutSnapshot.caretXsForText(text, font, TestMeasure.layoutMemos())
     val stops =
       (graphemeStarts(text) :+ text.length).map(column => TextCaretStop(column, carets.lift(column).getOrElse(0.0f)))
     TextVisualLine(0, 0, text.length, text, carets.lastOption.getOrElse(0.0f), stops)
@@ -84,7 +85,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   )
 
   "Painting a measured line" should "shape it once, however many colour runs it has" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
 
     paintLine(surfaceOver(caches), codeLine, threeColours)
 
@@ -92,7 +93,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape nothing when the same line is painted again, on a fresh surface or the same one" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     paintLine(surfaceOver(caches), codeLine, threeColours)
 
     paintLine(surfaceOver(caches), codeLine, threeColours)
@@ -104,7 +105,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape each stretch of one style once, since styles draw in different fonts" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val mixed = List(
       StyledText("val ", TextStyle.normal, black, white),
       StyledText("answer", TextStyle.bold, red, white),
@@ -118,7 +119,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape a line again only when its text or font changes" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     paintLine(surfaceOver(caches), codeLine, threeColours)
 
     paintLine(
@@ -131,7 +132,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "shape a ligature that spans a colour boundary as part of the one line" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val split = List(
       StyledText("of", TextStyle.normal, red, white),
       StyledText("fi", TextStyle.normal, blue, white),

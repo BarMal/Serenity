@@ -5,7 +5,6 @@ import java.nio.file.Paths
 
 import com.serenity.config.{AppConfig, DockedCornerStyle, PaneHeaderCorners}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.testkit.TestMeasure
@@ -96,7 +95,7 @@ abstract class RoundedChromeRenderBehaviour extends AnyFlatSpec with Matchers:
     val widthPx  = columns * metrics.charWidth
     val heightPx = rowCount * metrics.lineHeight
     val frame    = frames.newFrame(widthPx, heightPx)
-    val caches   = RenderCaches.create()
+    val caches   = TestMeasure.renderCaches()
     val surface  = frames.surfaceOver(frame, metrics, codeFont, widthPx, heightPx, 1.0, persists = false, caches)
     RendererEntryPoints.render(
       CompositionPreview.displayed(state, new CompositionRevisions),

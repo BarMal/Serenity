@@ -14,6 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, CommandRunnerReducer, SettingsEffect}
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -68,7 +69,7 @@ class SettingsPreviewSpec extends AnyFlatSpec with Matchers:
       fontConfig => fonts.update(_ :+ fontConfig),
       IO.pure(1.0),
       editor,
-      RenderCaches.create(),
+      TestMeasure.renderCaches(),
       saveConfig = (config, _) => writes.update(_ :+ config).as(Right(()): Either[ConfigError, Unit]),
       showNotice = notice => notices.update(_ :+ notice),
       configOnDisk = configOnDisk

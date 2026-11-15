@@ -58,7 +58,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Markdown")
@@ -110,7 +110,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         ViewportSize(100, 30),
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       surface.drawRunPxCalls.map(_.s).find(_.contains("Line 3, Col 5")) shouldBe Some(expected)
@@ -126,7 +126,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.map(_.s).mkString should include("No active editor pane")
@@ -296,7 +296,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.getRow(gutter.y).slice(gutter.x, gutter.x + gutter.width) shouldBe "   1 "
@@ -336,7 +336,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val firstRenderedLine =
@@ -383,7 +383,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
         cursorVisible = true,
         surface,
         viewport,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       withClue(s"density=$density:") {
@@ -418,7 +418,8 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
     val snapshot = TextLayoutSnapshot.fromBuffer(
       buffer,
       ActivePane.textRect(state, layout).width * TestMeasure.cellMetrics(font).charWidth,
-      font
+      font,
+      wrapCache = TestMeasure.wrapCache()
     )
     val secondLineVisualRow =
       snapshot.visualLines.indexWhere(_.bufferLine == 1) match
@@ -430,7 +431,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val continuationRow =
@@ -508,7 +509,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.map(_.s).mkString should include("Line 2, Col 3")
@@ -548,7 +549,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val call = surface.drawRunPxCalls
@@ -585,7 +586,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val call = surface.drawRunPxCalls
@@ -634,7 +635,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       uiMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val gutterTextDraw =

@@ -269,7 +269,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
           cursorIdleInterval = GuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
+          renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
         )
         .compile
         .drain
@@ -318,7 +318,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
           cursorIdleInterval = tuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
+          renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
         )
         .compile
         .drain

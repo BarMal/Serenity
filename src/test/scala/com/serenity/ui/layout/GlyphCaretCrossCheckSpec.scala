@@ -4,7 +4,7 @@ import java.awt.Font
 import java.awt.font.{TextAttribute, TextHitInfo, TextLayout}
 import java.text.AttributedString
 
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -38,7 +38,7 @@ class GlyphCaretCrossCheckSpec extends AnyFlatSpec with Matchers:
     val text = "Hello, wide world: AVAWAY To WWWW Ty Yo iiii"
     val kernsOnThisPlatform = faces.map {
       case (name, family, face) =>
-        val stops   = TextLayoutSnapshot.caretXsForText(text, face, ShapedTextCache(), frc)
+        val stops   = TextLayoutSnapshot.caretXsForText(text, face, TestMeasure.layoutMemos())
         val layout  = textLayoutLeadingCarets(text, face)
         val nominal = face.createGlyphVector(frc, text)
         val shaped  = face.layoutGlyphVector(frc, text.toCharArray, 0, text.length, Font.LAYOUT_LEFT_TO_RIGHT)

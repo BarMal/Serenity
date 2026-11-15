@@ -6,7 +6,7 @@ import java.awt.geom.AffineTransform
 import com.serenity.state.models.TextVisualLine
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -30,27 +30,42 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
       text,
       3,
       widthPx,
-      singleFontResolver(font),
+      singleFontResolver(FontSpec.fromAwt(font)),
       frc,
       measuredLayout = true,
       TestMeasure.cellMetrics(font)
     )
 
   "A slanted font" should "have no context-free characters, since its layout advance differs from summed advances" in {
-    val advances = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(slanted), frc, ShapedTextCache())
+    val advances = GlyphAdvances.measure(
+      prose,
+      0,
+      prose.length,
+      0,
+      singleFontResolver(FontSpec.fromAwt(slanted)),
+      TestMeasure.measurer
+    )
     advances.isContextFree(0, 1) shouldBe false
-    val plain = GlyphAdvances.measure(prose, 0, prose.length, 0, singleFontResolver(upright), frc, ShapedTextCache())
+    val plain = GlyphAdvances.measure(
+      prose,
+      0,
+      prose.length,
+      0,
+      singleFontResolver(FontSpec.fromAwt(upright)),
+      TestMeasure.measurer
+    )
     plain.isContextFree(0, prose.length) shouldBe true
   }
 
   it should "not be treated as cutting cleanly at any space" in {
-    ShapingBarriers.cutsCleanly(upright, frc, 'T', ShapedTextCache()) shouldBe true
-    ShapingBarriers.cutsCleanly(slanted, frc, 'T', ShapedTextCache()) shouldBe false
+    ShapingBarriers.cutAtOrAfter("a T", 2, FontSpec.fromAwt(upright), TestMeasure.measurer) shouldBe 2
+    ShapingBarriers.cutAtOrAfter("a T", 2, FontSpec.fromAwt(slanted), TestMeasure.measurer) shouldBe 3
   }
 
   it should "wrap exactly where per-row measurement did, with the same widths and carets" in
     Seq(40, 97, 160, 233, 480).foreach { widthPx =>
-      val rows   = TextLayoutSnapshot.boundedVisualLinesForText(prose, 3, widthPx, slanted, frc)
+      val rows =
+        TextLayoutSnapshot.boundedVisualLinesForText(prose, 3, widthPx, slanted, wrapCache = TestMeasure.wrapCache())
       val legacy = legacyRows(prose, widthPx, slanted)
       withClue(s"at $widthPx px: ") {
         rows.map(_.text) shouldBe legacy.map(_.text)
@@ -68,9 +83,16 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
     }
 
   it should "measure caret positions as per-row measurement did" in {
-    val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, ShapedTextCache(), frc)
+    val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, TestMeasure.layoutMemos())
     val legacy =
-      LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, TestMeasure.cellMetrics(slanted))
+      LegacyLineMeasurement.caretXs(
+        prose,
+        0,
+        singleFontResolver(FontSpec.fromAwt(slanted)),
+        frc,
+        true,
+        TestMeasure.cellMetrics(slanted)
+      )
     xs.length shouldBe legacy.length
     xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
   }

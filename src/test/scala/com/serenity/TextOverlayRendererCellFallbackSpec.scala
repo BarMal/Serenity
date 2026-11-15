@@ -18,7 +18,7 @@ import org.scalatest.matchers.should.Matchers
 class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
 
   private val shapedText = ShapedTextCache()
-  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText)
+  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private def renderOverlay(
     surface: RenderSurface,

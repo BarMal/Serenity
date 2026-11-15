@@ -39,10 +39,12 @@ class InterLayoutEvidenceSpec extends AnyFlatSpec with Matchers:
     try Font.createFont(Font.TRUETYPE_FONT, stream).deriveFont(14f)
     finally stream.close()
 
-  private val codeFont = Font.createFont(
-    Font.TRUETYPE_FONT,
-    getClass.getResourceAsStream("/fonts/CourierPrime-Regular.ttf")
-  ).deriveFont(14f)
+  private val codeFont = Font
+    .createFont(
+      Font.TRUETYPE_FONT,
+      getClass.getResourceAsStream("/fonts/CourierPrime-Regular.ttf")
+    )
+    .deriveFont(14f)
 
   private val Sentences = Vector(
     "The quick brown fox jumps over the lazy dog.",
@@ -53,14 +55,14 @@ class InterLayoutEvidenceSpec extends AnyFlatSpec with Matchers:
   )
 
   private val Fixture: String =
-    Vector.tabulate(40)(line => Vector.tabulate(1 + line % 3)(part => Sentences((line + part) % 5)).mkString(" "))
+    Vector
+      .tabulate(40)(line => Vector.tabulate(1 + line % 3)(part => Sentences((line + part) % 5)).mkString(" "))
       .mkString("\n")
 
   private def caches(): RenderCaches =
     val owner = RenderCaches.create(measurerFor = backend =>
       TestBundledTypefaces.installInter(backend)
-      Some(SkiaTextMeasurer.of(backend))
-    )
+      Some(SkiaTextMeasurer.of(backend)))
     val _ = owner.measurer
     owner
 
@@ -141,9 +143,9 @@ class InterLayoutEvidenceSpec extends AnyFlatSpec with Matchers:
     before.count(row => !now.contains(row))
 
   private def overlay(before: BufferedImage, after: BufferedImage): (BufferedImage, Int) =
-    val width   = math.max(before.getWidth, after.getWidth)
-    val height  = math.max(before.getHeight, after.getHeight)
-    val image   = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
+    val width  = math.max(before.getWidth, after.getWidth)
+    val height = math.max(before.getHeight, after.getHeight)
+    val image  = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
     val changed = for
       y <- 0 until height
       x <- 0 until width
@@ -169,8 +171,8 @@ class InterLayoutEvidenceSpec extends AnyFlatSpec with Matchers:
       rows.filter(_.heightPx > 0).map(_.heightPx).distinct.size should be <= 1
 
       val comparison = before.filter(dir => Files.exists(dir.resolve(s"inter-$widthPx.tsv"))).map { dir =>
-        val earlier = readRows(dir.resolve(s"inter-$widthPx.tsv"))
-        val earlierFrame = ImageIO.read(dir.resolve(s"inter-$widthPx.png").toFile)
+        val earlier           = readRows(dir.resolve(s"inter-$widthPx.tsv"))
+        val earlierFrame      = ImageIO.read(dir.resolve(s"inter-$widthPx.png").toFile)
         val (diff, changedPx) = overlay(earlierFrame, frame)
         ImageIO.write(diff, "png", Directory.resolve(s"inter-$widthPx-diff.png").toFile) shouldBe true
         s"\trowsBefore=${earlier.length}\trowsMoved=${movedRows(earlier, rows)}\tchangedPx=$changedPx"

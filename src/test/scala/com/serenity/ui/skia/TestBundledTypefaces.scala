@@ -23,7 +23,7 @@ object TestBundledTypefaces:
 
   def cacheWithInter(): SkiaFontCache = new SkiaFontCache(resolveTypeface = withInter)
 
-  /** Gives `owner` the Skia text caches its surfaces and measurer use with the Inter subset resolvable; must come before
-    * anything draws or measures for it.
+  /** Gives `owner` the Skia text caches its surfaces and measurer use with the Inter subset resolvable; must come
+    * before anything draws or measures for it.
     */
   def installInter(owner: BackendCaches): Unit = SkiaTextCaches.withTypefaces(owner, withInter)

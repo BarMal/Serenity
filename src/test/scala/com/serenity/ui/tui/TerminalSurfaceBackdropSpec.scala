@@ -6,7 +6,6 @@ import java.io.StringWriter
 import com.serenity.command.{Command, CommandIntent, CommandRegistry, CommandRunner, FileIntent}
 import com.serenity.config.{AppConfig, StatusLineColors}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{
   AppState,
   Buffer,
@@ -21,6 +20,7 @@ import com.serenity.state.models.{
   SurfacePresentation,
   UiSurface
 }
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutRect, OverlayRow, OverlaySegment, OverlayTone, ViewportSize}
 import com.serenity.ui.renderer.{
@@ -28,7 +28,6 @@ import com.serenity.ui.renderer.{
   MeasuredTextAdvances,
   PinnedPanelRenderer,
   RendererEntryPoints,
-  ShapedTextCache,
   TextOverlayRenderer,
   TextOverlayView,
   TextPanelRow,
@@ -43,7 +42,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
 
-  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   given Balance = Balance.default
 
@@ -186,7 +185,7 @@ class TerminalSurfaceBackdropSpec extends AnyFlatSpec with Matchers:
         FontSpec.fromAwt(font),
         cellMetrics,
         None,
-        RenderCaches.create()
+        TestMeasure.renderCaches()
       )
 
       val screen        = screenOf(rs, writer, viewport.width, viewport.height)

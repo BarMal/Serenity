@@ -4,7 +4,6 @@ import java.text.StringCharacterIterator
 
 import com.ibm.icu.text.BreakIterator
 import com.serenity.ui.layout.TextCaretMeasurement.SegmentFit
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** What wrapping a logical line needs measured, computed once over a window of it rather than once per row: grapheme
   * boundaries from a single sweep and, for a measured layout, every character's glyph advance. Rows are then fitted and
@@ -17,7 +16,7 @@ final private[layout] class ParagraphMeasurement private (
     end: Int,
     boundaries: Array[Int],
     val advances: Option[GlyphAdvances],
-    val shapedText: ShapedTextCache,
+    val measuring: Option[MeasuredBy],
     breaks: BoundaryScratch
 ):
   import ParagraphMeasurement.*
@@ -29,7 +28,7 @@ final private[layout] class ParagraphMeasurement private (
   def coveringRowAt(from: Int, rowsLeft: Int): ParagraphMeasurement =
     val budget = rowBudget(spec)
     if from >= start && (end == spec.text.length || from + budget <= end) then this
-    else ParagraphMeasurement(spec, from, rowsLeft, shapedText, breaks)
+    else ParagraphMeasurement(spec, from, rowsLeft, measuring, breaks)
 
   /** A row's caret-stop offsets from its start. Agrees with sweeping the row alone whenever the row both starts and
     * ends on this window's boundaries, since grapheme rules never look back past a boundary; a row cut mid-cluster (a
@@ -49,9 +48,9 @@ final private[layout] class ParagraphMeasurement private (
       offsets(count) = until - from
       IArray.unsafeFromArray(offsets)
 
-  /** The row fit the per-row `TextLayout` search would find, read from the measured advances -- or `None` when the
-    * candidate leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or
-    * lands too near the width for float rounding between the two measurements to be ruled out.
+  /** The row fit the per-row exact search would find, read from the measured advances -- or `None` when the candidate
+    * leaves the window, holds a character whose shaping depends on its neighbours beyond a kerning pair, or lands too
+    * near the width for float rounding between the two measurements to be ruled out.
     */
   def measuredFit(from: Int, panelWidthPx: Int, givenBackPx: Float = 0.0f): Option[SegmentFit] =
     val remaining = spec.text.length - from
@@ -87,16 +86,16 @@ private[layout] object ParagraphMeasurement:
     spec: WrappedLineKey,
     from: Int,
     rowsLeft: Int,
-    shapedText: ShapedTextCache,
+    measuring: Option[MeasuredBy],
     breaks: BoundaryScratch
   ): ParagraphMeasurement =
     val budget = rowBudget(spec).toLong
     val wanted = math.max(budget, math.min(MaxWindowChars.toLong, rowsLeft.toLong * budget))
     val end    = math.min(spec.text.length.toLong, from + wanted).toInt
-    val advances = Option.when(spec.measuredLayout)(
-      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, spec.frc, shapedText)
+    val advances = measuring.map(measured =>
+      GlyphAdvances.measure(spec.text, from, end, spec.baseColumn, spec.resolver, measured.measurer)
     )
-    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end, breaks), advances, shapedText, breaks)
+    new ParagraphMeasurement(spec, from, end, boundariesOf(spec.text, from, end, breaks), advances, measuring, breaks)
 
   /** A window over the whole of `spec.text` whose advances were assembled rather than measured in one sweep. It holds
     * no grapheme boundaries, so every row sweeps its own, which agrees with reading them off a window's boundaries.
@@ -104,10 +103,10 @@ private[layout] object ParagraphMeasurement:
   def assembled(
     spec: WrappedLineKey,
     advances: Option[GlyphAdvances],
-    shapedText: ShapedTextCache,
+    measuring: Option[MeasuredBy],
     breaks: BoundaryScratch
   ): ParagraphMeasurement =
-    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, shapedText, breaks)
+    new ParagraphMeasurement(spec, 0, spec.text.length, Array.empty[Int], advances, measuring, breaks)
 
   /** The first candidate the per-row search measures, in characters. */
   def initialCandidateLength(panelWidthPx: Int, cellMetrics: CellMetrics): Int =

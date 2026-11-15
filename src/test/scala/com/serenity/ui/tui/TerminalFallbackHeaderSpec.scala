@@ -4,9 +4,9 @@ import java.awt.Font
 import java.io.StringWriter
 
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Notice, NoticeLevel}
 import com.serenity.state.reducers.{FallbackHeaderReducer, NoticeReducer}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, FallbackHeaderText, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,7 +40,7 @@ class TerminalFallbackHeaderSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       CellMetrics.cellUnit,
       None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface.flush()
     TerminalEmulator.blank(viewport.width, viewport.height).consume(writer.toString)

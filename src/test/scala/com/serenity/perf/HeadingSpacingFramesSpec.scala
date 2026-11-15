@@ -9,7 +9,7 @@ import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.keystroke.events.{InsertChar, PageDown, PageUp}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.manager.StateManagerTestFacade.updateState
-import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
+import com.serenity.state.manager.{DamageProducer, StateManager}
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas, TestMeasure}
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
@@ -89,7 +89,7 @@ class HeadingSpacingFramesSpec extends AnyFlatSpec with Matchers:
 
     private val images      = frames.drawn
     private val screenImage = frames.screen
-    private val caches      = RenderCaches.create()
+    private val caches      = TestMeasure.renderCaches()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
     private val lastOutput  = new AtomicReference(FrameOutput(screen, new AtomicReference(None)))

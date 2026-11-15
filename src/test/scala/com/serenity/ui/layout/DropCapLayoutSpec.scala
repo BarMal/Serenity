@@ -3,6 +3,8 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.richtext.ParagraphRole
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -42,7 +44,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
   "DropCapWidths" should "measure a font's advance width for the glyph text" in {
     val font  = Font(Font.SERIF, Font.BOLD, 36)
     val frc   = TextLayoutSnapshot.defaultFontRenderContext()
-    val width = DropCapWidths()(font, frc, "C")
+    val width = DropCapWidths(TestMeasure.measurer.glyphWidthPx)(FontSpec.fromAwt(font), "C")
 
     width should be > 0.0f
   }
@@ -51,7 +53,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
     val font = Font(Font.SERIF, Font.BOLD, 36)
     val frc  = TextLayoutSnapshot.defaultFontRenderContext()
 
-    DropCapWidths()(font, frc, "") shouldBe 0.0f
+    DropCapWidths(TestMeasure.measurer.glyphWidthPx)(FontSpec.fromAwt(font), "") shouldBe 0.0f
   }
 
   "DropCapLayout.glyphHeightPx" should "be the room of the drop cap's line count at the paragraph's normal line height" in {

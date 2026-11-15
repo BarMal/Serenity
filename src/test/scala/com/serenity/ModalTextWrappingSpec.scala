@@ -8,7 +8,7 @@ import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.accessibility.{AccessibilityRole, AccessibilitySnapshot}
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{MeasuredTextAdvances, RendererEntryPoints, ShapedTextCache}
+import com.serenity.ui.renderer.{MeasuredTextAdvances, RendererEntryPoints}
 import com.serenity.ui.widget.{Loadable, TextField}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -110,7 +110,7 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       screen,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val inside = (rect.y + 1 until rect.bottom - 1).map { y =>
@@ -145,7 +145,7 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       screen,
       ViewportSize(60, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val inside = (rect.y + 1 until rect.bottom - 1).map { y =>
@@ -232,10 +232,9 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
 
   "Pixel wrapping" should "keep every row of a dialog within the content's pixel width" in {
     val font     = Font(Font.SANS_SERIF, Font.PLAIN, 14)
-    val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+    val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
     val measure: TextMeasure.Pixels = TextMeasure.Pixels(
       font,
-      TextLayoutSnapshot.defaultFontRenderContext(),
       TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
       0.0,
       advances
@@ -246,7 +245,7 @@ class ModalTextWrappingSpec extends AnyFlatSpec with Matchers:
       val (frame, plan) = framed(modal, width, measure)
       val rows          = textRows(plan).flatMap(_.text)
       rows.foreach { row =>
-        advances.advanceOf(row, font, measure.fontRenderContext) should be <=
+        advances.advanceOf(row, font) should be <=
           ((width - 2) * measure.cellPx).toFloat
       }
       words(rows) shouldBe words(overridePrompt.title :: overridePrompt.message)

@@ -2,6 +2,7 @@ package com.serenity.state.manager
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextLayoutSnapshot
@@ -23,7 +24,7 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   private val line    = "val owned = items.map(_ + 1).filter(_ >= 2) // a => b != c, distinct to the ownership spec"
 
   "Two RenderCaches" should "own distinct renderer text caches" in {
-    val (a, b) = (RenderCaches.create(), RenderCaches.create())
+    val (a, b) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
 
     (a.shapedText `ne` b.shapedText) shouldBe true
     (a.styledFonts `ne` b.styledFonts) shouldBe true
@@ -32,11 +33,11 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   }
 
   "Laying a ligature line out through a RenderCaches" should "shape it in that owner's cache and no other's" in {
-    val (owner, other) = (RenderCaches.create(), RenderCaches.create())
+    val (owner, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
     val frc            = TextLayoutSnapshot.defaultFontRenderContext()
     owner.shapedText.holds(line, font, frc) shouldBe false
 
-    val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, frc, wrapCache = owner.wrappedLines)
+    val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, wrapCache = owner.wrappedLines)
 
     rows.map(_.text) shouldBe Vector(line)
     owner.shapedText.holds(line, font, frc) shouldBe true
@@ -44,10 +45,10 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   }
 
   "A RenderCaches' measured advances" should "shape through the owner's cache, not a shared one" in {
-    val (owner, other) = (RenderCaches.create(), RenderCaches.create())
+    val (owner, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
     val frc            = TextLayoutSnapshot.defaultFontRenderContext()
 
-    val advance = owner.measuredAdvances.advanceOf(line, font, frc)
+    val advance = owner.measuredAdvances.advanceOf(line, font)
 
     advance should be > 0.0f
     owner.measuredAdvances.measurements shouldBe 1L
@@ -57,7 +58,7 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   }
 
   "A RenderCaches' surface text caches" should "be the owner's own instances" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     (owner.surfaceText.shapedText eq owner.shapedText) shouldBe true
     (owner.surfaceText.styledFonts eq owner.styledFonts) shouldBe true

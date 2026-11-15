@@ -102,7 +102,8 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       dropCapsEnabled = dropCapsEnabled,
       openings = settings,
       dropCapGapEm = gapEm,
-      forceCellLayout = forceCellLayout
+      forceCellLayout = forceCellLayout,
+      wrapCache = TestMeasure.wrapCache()
     )
     Laid(snapshot, font, sizePx, document)
 
@@ -122,7 +123,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = originPx + laid.textTopOf(laid.home),
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get
@@ -163,7 +164,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = topPx,
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
     surface.flush()
     val image           = reference.image

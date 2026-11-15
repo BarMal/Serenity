@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
@@ -44,7 +43,7 @@ class LastPaneRowRectSpec extends AnyFlatSpec with Matchers:
     )
 
   private def contextAndPlan(state: AppState): (RenderContext, EditorPaneRenderPlan) =
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val context = RenderContext(
       surface = surface,

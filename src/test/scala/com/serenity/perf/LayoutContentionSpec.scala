@@ -14,8 +14,8 @@ import org.scalatest.matchers.should.Matchers
 
 /** How layout scales across threads that share one owner's measurer, as the compute pool's do: N threads wrap distinct
   * Inter paragraphs through one wrap cache, and the throughput of each N is written next to one thread's to
-  * `target/test-reports/layout-contention/summary.tsv`. Every thread must wrap a paragraph to the rows one thread
-  * alone wraps it to; the timings are information, nothing fails on them.
+  * `target/test-reports/layout-contention/summary.tsv`. Every thread must wrap a paragraph to the rows one thread alone
+  * wraps it to; the timings are information, nothing fails on them.
   */
 class LayoutContentionSpec extends AnyFlatSpec with Matchers:
 

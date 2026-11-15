@@ -6,6 +6,7 @@ import scala.util.Random
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.PaneRowBands.Row
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +30,7 @@ class PaneRowBandsSpec extends AnyFlatSpec with Matchers:
       forceCellLayout = false,
       wordWrapEnabled = true,
       richText = RichTextContext.plain,
-      wrapCache = WrappedLineCache.Uncached
+      wrapCache = TestMeasure.wrapCache()
     )
 
   private val carets = List(Row(0, 0), Row(3, 1), Row(60, 0), Row(199, 2))
@@ -100,6 +101,6 @@ class PaneRowBandsSpec extends AnyFlatSpec with Matchers:
       forceCellLayout = false,
       wordWrapEnabled = true,
       richText = RichTextContext.plain,
-      wrapCache = WrappedLineCache.Uncached,
+      wrapCache = TestMeasure.wrapCache(),
       readAhead = readAhead
     )

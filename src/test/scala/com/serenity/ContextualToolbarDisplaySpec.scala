@@ -205,7 +205,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       FontSpec.fromAwt(font),
       TestMeasure.cellMetrics(font),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
@@ -271,7 +271,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       FontSpec.fromAwt(font),
       TestMeasure.cellMetrics(font),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val renderedText = surface.putStringCalls.map(_.s).mkString
@@ -333,7 +333,7 @@ class ContextualToolbarDisplaySpec extends AnyFlatSpec with Matchers with Contex
       FontSpec.fromAwt(font),
       TestMeasure.cellMetrics(font),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val row        = surface.getRow(toolbarRowY(state, 0))

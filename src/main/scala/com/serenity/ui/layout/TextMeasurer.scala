@@ -59,7 +59,18 @@ trait TextMeasurer:
     * stops themselves.
     */
   def exactEdges(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float] =
-    TextCaretMeasurement.normalizeCollapsedCarets(exactCaretXs(text, startColumn, fonts))
+    TextCaretMeasurement.normalizeCollapsedCarets(exactCaretsAndEdges(text, startColumn, fonts)._2)
+
+  /** [[exactCaretXs]] and, from the same shaping, where each prefix of `text` ends as [[exactEdges]] has it, before
+    * collapsed carets are spread apart.
+    */
+  def exactCaretsAndEdges(
+    text: String,
+    startColumn: Int,
+    fonts: TextMeasurer.LineFonts
+  ): (IArray[Float], IArray[Float]) =
+    val carets = exactCaretXs(text, startColumn, fonts)
+    (carets, carets)
 
   /** Each character's caret plus the trailing edge as wrapping places it: the fixed cell grid when `measuredLayout` is
     * false, otherwise [[rawCaretXs]] with collapsed carets spread apart.

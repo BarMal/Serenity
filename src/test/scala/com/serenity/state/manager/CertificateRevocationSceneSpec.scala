@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +30,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
 
   private val codeFont       = FontLoader.previewFontForRole(config.editorConfig.fontConfig, TypographyRole.Code)
   private val textFont       = FontLoader.previewFontForRole(config.editorConfig.fontConfig, TypographyRole.Prose)
-  private val certificateKey = NominalAdvances.Key(codeFont, frc)
+  private val certificateKey = NominalAdvances.Key(FontSpec.fromAwt(codeFont))
 
   // Far wider than the pane, so each wraps to several rows, yet a twentieth of that width fits it in one.
   private val lines = Vector.tabulate(120)(line => f"line $line%03d " + "ab -> cd " * 60)

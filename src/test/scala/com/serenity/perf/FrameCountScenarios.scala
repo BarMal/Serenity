@@ -133,12 +133,12 @@ private[perf] object FrameCountScenarios:
 
   /** The family Skia is given for the pinned Inter, or why it could not be installed. */
   private[perf] def pinnedInterFamily: Either[String, String] =
-    SkiaTestFonts.install(RenderCaches.create().backendCaches, PinnedInterResource)
+    SkiaTestFonts.install(TestMeasure.renderCaches().backendCaches, PinnedInterResource)
 
   /** Caches whose Skia draws the pinned Inter from its bundled bytes, not from whichever Inter (or fallback) the
     * machine has: the font is loaded into AWT only, and runs split by the typeface's widths.
     */
-  private[perf] def pinnedInterCaches(caches: RenderCaches = RenderCaches.create()): RenderCaches =
+  private[perf] def pinnedInterCaches(caches: RenderCaches = TestMeasure.renderCaches()): RenderCaches =
     val installed = SkiaTestFonts.install(caches.backendCaches, PinnedInterResource)
     require(installed.isRight, installed.left.getOrElse(""))
     caches

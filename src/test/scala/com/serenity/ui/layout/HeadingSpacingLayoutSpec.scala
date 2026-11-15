@@ -66,7 +66,7 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
   private def snapshotOf(
     buffer: Buffer,
     headings: HeadingSettings,
-    cache: WrappedLineCache = WrappedLineCache.Uncached,
+    cache: WrappedLineCache = TestMeasure.wrapCache(),
     width: Int = panelWidth
   ): TextLayoutSnapshot =
     TextLayoutSnapshot.fromBuffer(buffer, width, font, headings = headings, wrapCache = cache)
@@ -190,7 +190,14 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
     )
     val buffer = richBuffer(sparse).copy(viewport = richBuffer().viewport.copy(visibleLines = 14))
     val columns =
-      TextLayoutSnapshot.fromBufferColumns(buffer, panelWidth, font, columnCount = 3, headings = settings)
+      TextLayoutSnapshot.fromBufferColumns(
+        buffer,
+        panelWidth,
+        font,
+        columnCount = 3,
+        headings = settings,
+        wrapCache = TestMeasure.wrapCache()
+      )
 
     columns.size should be >= 2
     columns.foreach(column => column.visualLines.head.spaceBeforePx shouldBe 0)
@@ -207,7 +214,7 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not enter the wrap cache's key, so changing it wraps nothing again" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     snapshotOf(richBuffer(), HeadingSettings.default, cache)
     val before = cache.wrapStats
 
@@ -218,12 +225,12 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "give a cached layout the same space as an uncached one" in {
-    val cache    = WrappedLineCache.bounded()
+    val cache    = TestMeasure.wrapCache()
     val settings = allSpaced(1.25f, 0.75f)
     snapshotOf(richBuffer(), HeadingSettings.default, cache)
 
     snapshotOf(richBuffer(), settings, cache).visualLines shouldBe
-      snapshotOf(richBuffer(), settings, WrappedLineCache.Uncached).visualLines
+      snapshotOf(richBuffer(), settings, TestMeasure.wrapCache()).visualLines
   }
 
   it should "round to whole rows on a cell grid, a half row or more being one row" in {
@@ -234,7 +241,8 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
         font,
         headings = spaced(2, em, em),
         cellMetricsOverride = Some(CellMetrics.cellUnit),
-        forceCellLayout = true
+        forceCellLayout = true,
+        wrapCache = TestMeasure.wrapCache()
       )
       val row = rowsOfLine(snapshot, 2).head
       (row.spaceBeforePx, row.spaceAfterPx)
@@ -255,7 +263,8 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
       80 * metrics.charWidth,
       Font(Font.MONOSPACED, Font.PLAIN, 12),
       headings = spaced(2, 1.0f, 0.0f),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     rowsOfLine(snapshot, 2).head.spaceBeforePx shouldBe metrics.lineHeight
@@ -272,7 +281,14 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
 
     def lineOf(mode: MarkdownViewMode, line: Int): TextVisualLine =
       TextLayoutSnapshot
-        .fromBuffer(buffer, panelWidth, font, headings = settings, markdownViewMode = mode)
+        .fromBuffer(
+          buffer,
+          panelWidth,
+          font,
+          headings = settings,
+          markdownViewMode = mode,
+          wrapCache = TestMeasure.wrapCache()
+        )
         .visualLines
         .find(_.bufferLine == line)
         .getOrElse(fail(s"no row for line $line"))

@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.unused
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{PaintLog, SkiaRenderSurface, SkiaTextCaches}
@@ -104,7 +105,7 @@ object ReferenceFrames:
         logicalHeightPx,
         scale,
         persists = false,
-        RenderCaches.create()
+        TestMeasure.renderCaches()
       )
     )
 

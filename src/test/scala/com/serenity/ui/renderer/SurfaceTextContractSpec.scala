@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.CellMetrics
@@ -27,8 +27,9 @@ abstract class SurfaceTextContractBehaviour extends AnyFlatSpec with Matchers:
   private val white   = RenderColor.fromAwt(Color.WHITE)
 
   private def blank(base: Font = font): (FramePixels, RenderSurface) =
-    val image   = frames.newFrame(width, height)
-    val surface = frames.surfaceOver(image, metrics, base, width, height, 1.0, persists = false, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, base, width, height, 1.0, persists = false, TestMeasure.renderCaches())
     surface.clearViewport(black)
     surface.setForegroundColor(white)
     surface.setBackgroundColor(black)

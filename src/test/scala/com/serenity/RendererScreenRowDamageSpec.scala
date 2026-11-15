@@ -105,7 +105,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(wrappedParagraph, CursorPosition(0, 0))
     val after   = movedCaret(before, CursorPosition(0, columnOfWord(40)))
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
 
     val _ = render(surface, before, Damage.Everything, caches)
     surface.clear()
@@ -120,7 +120,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
     val surface = new MockRenderSurface(80, 24, persistentContent = true)
     val before  = stateWith(Vector.tabulate(20)(line => s"line $line").mkString("\n"), CursorPosition(3, 0))
     val after   = movedCaret(before, CursorPosition(3, 4))
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
 
     val _      = render(surface, before, Damage.Everything, caches)
     val region = render(surface, after, DamageProducer.forTransition(before, after), caches)
@@ -135,7 +135,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
     val lines   = Vector.tabulate(20)(line => s"line $line").mkString("\n")
     val before  = withStatusLine(stateWith(lines, CursorPosition(3, 0)), StatusLinePlacement.Off)
     val after   = movedCaret(before, CursorPosition(3, 4))
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
 
     val _      = render(surface, before, Damage.Everything, caches)
     val region = render(surface, after, DamageProducer.forTransition(before, after), caches)
@@ -150,7 +150,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
     val lineStart = lines.take(10).map(_.length + 1).sum
     val before    = withStatusLine(stateWith(lines.mkString("\n"), CursorPosition(10, 0)), StatusLinePlacement.Off)
     val after     = inserted(before, lineStart, "x", CursorPosition(10, 1))
-    val caches    = RenderCaches.create()
+    val caches    = TestMeasure.renderCaches()
 
     val _      = render(surface, before, Damage.Everything, caches)
     val region = render(surface, after, DamageProducer.forTransition(before, after), caches)
@@ -166,7 +166,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
     // A newline inserted with the caret left where it was: every row below shifts down a line number, and nothing
     // about the caret or the status row changes to drag the line-number column in by some other route.
     val after  = inserted(before, lines.head.length, "\nnew", CursorPosition(0, 0))
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
 
     val _ = render(surface, before, Damage.Everything, caches)
     surface.clear()

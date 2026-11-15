@@ -54,7 +54,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val dividerColumn = rect.x + rect.width - 1
@@ -75,7 +75,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val dividerColumn = rect.x
@@ -97,7 +97,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.getBg(left.x + left.width - 1, left.y) shouldBe state.persisted.theme.panelBorder
@@ -126,7 +126,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(proseFont),
       TestMeasure.cellMetrics(codeFont),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface
 

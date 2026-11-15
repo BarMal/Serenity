@@ -7,9 +7,9 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.app.{AppStartup, StartupRecovery}
 import com.serenity.config.{AppConfig, LayoutPin, WindowChromeMode}
 import com.serenity.diagnostics.{FramePhase, FrameTimings}
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.Damage
 import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay}
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
@@ -63,7 +63,7 @@ class StartupModalFirstFramePresentSpec extends AnyFlatSpec with Matchers with S
           CellMetrics(8, 16, 13),
           None,
           Damage.Everything,
-          RenderCaches.create(),
+          TestMeasure.renderCaches(),
           SkiaRasterSurfaceFactory
         )
         settle()

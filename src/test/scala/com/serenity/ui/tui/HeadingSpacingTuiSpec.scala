@@ -8,8 +8,8 @@ import com.serenity.config.{AppConfig, HeadingsConfig}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -80,7 +80,7 @@ class HeadingSpacingTuiSpec extends AnyFlatSpec with Matchers:
   private def render(state: AppState, cursorVisible: Boolean = false): TerminalEmulator =
     val writer  = new StringWriter()
     val surface = new TerminalRenderSurface(viewport.width, viewport.height, writer, CellMetrics.cellUnit)
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     RendererEntryPoints.render(
       state,
       cursorVisible,

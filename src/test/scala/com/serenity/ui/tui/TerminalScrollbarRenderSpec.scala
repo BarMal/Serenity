@@ -7,8 +7,8 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppConfig
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, Focus, PaneId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, Layout, LayoutEngine, LayoutRect, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -55,7 +55,7 @@ class TerminalScrollbarRenderSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       CellMetrics.cellUnit,
       None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface.flush()
     TerminalEmulator.blank(viewport.width, viewport.height).consume(writer.toString)
