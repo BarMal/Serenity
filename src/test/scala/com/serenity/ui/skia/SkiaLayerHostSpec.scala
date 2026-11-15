@@ -182,7 +182,12 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       val seen = window.host.renderCount
       window.host.publish(record(scene))
       eventually("a second draw")(window.host.renderCount > seen)
-      lines.toArray.toList shouldBe List(s"[RENDER] skia layer renderApi=${window.host.renderApi}")
+      val reported = lines.toArray.toList.map(_.toString)
+      reported should have size 1
+      val line   = reported.headOption.getOrElse("")
+      val prefix = s"[RENDER] skia layer renderApi=${window.host.renderApi} device="
+      line should startWith(prefix)
+      line.stripPrefix(prefix).trim should not be empty
     }
   }
 

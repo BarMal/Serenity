@@ -39,7 +39,8 @@ final class SkiaLayerHost private (
     syncGpu: Boolean,
     redraw: LayerRedraw,
     report: String => Unit,
-    onDrawEnd: AtomicReference[Option[() => Unit]]
+    onDrawEnd: AtomicReference[Option[() => Unit]],
+    deviceName: AtomicReference[Option[String]]
 ) extends LayerHost:
 
   private val slot         = new PictureSlot[LayerFrame](_.close())
@@ -127,7 +128,7 @@ final class SkiaLayerHost private (
       )
     )
     listener.get().foreach(_.apply())
-    if apiReported.compareAndSet(false, true) then report(s"[RENDER] skia layer renderApi=$renderApi")
+    if apiReported.compareAndSet(false, true) then report(LayerRenderLine.of(renderApi, deviceName.get()))
 
   def baseAvailable: Boolean = published.get()
 
@@ -313,16 +314,21 @@ object SkiaLayerHost:
   ): SkiaLayerHost =
     onEventThread {
       val drawEnd = new AtomicReference[Option[() => Unit]](None)
-      val layer   = newLayer(drawEnd)
-      val host    = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer), report, drawEnd)
+      val device  = new AtomicReference[Option[String]](None)
+      val layer   = newLayer(drawEnd, device)
+      val host    = new SkiaLayerHost(canvas, layer, syncGpu, redraw(layer), report, drawEnd, device)
       host.install()
       host
     }
 
   /** Skiko calls `afterFrameRender` once its frame is drawn and swapped, on the thread that drew it, which is not
-    * always the event thread; the callback is posted there, where the render callback also runs.
+    * always the event thread; the callback is posted there, where the render callback also runs. Skiko also names the
+    * graphics adapter when it sets the layer up, which is kept for the `[RENDER]` line.
     */
-  private def drawEndAnalytics(drawEnd: AtomicReference[Option[() => Unit]]): SkiaLayerAnalytics =
+  private def drawEndAnalytics(
+    drawEnd: AtomicReference[Option[() => Unit]],
+    adapter: AtomicReference[Option[String]]
+  ): SkiaLayerAnalytics =
     new SkiaLayerAnalytics:
       override def device(
         skikoVersion: String,
@@ -330,18 +336,22 @@ object SkiaLayerHost:
         api: GraphicsApi,
         deviceName: String
       ): SkiaLayerAnalytics.DeviceAnalytics =
+        adapter.set(Option(deviceName))
         new SkiaLayerAnalytics.DeviceAnalytics:
           override def afterFrameRender(): Unit =
             drawEnd.get().foreach(callback => SwingUtilities.invokeLater(() => callback()))
 
   // Skiko's accessibility hook is a Kotlin function parameter whose default is "none".
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
-  private def newLayer(drawEnd: AtomicReference[Option[() => Unit]]): SkiaLayer =
+  private def newLayer(
+    drawEnd: AtomicReference[Option[() => Unit]],
+    adapter: AtomicReference[Option[String]]
+  ): SkiaLayer =
     new SkiaLayer(
       null,
       new SkiaLayerProperties(),
       RenderFactory.Companion.getDefault(),
-      drawEndAnalytics(drawEnd),
+      drawEndAnalytics(drawEnd, adapter),
       PixelGeometry.UNKNOWN,
       false
     )
