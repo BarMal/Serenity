@@ -1,6 +1,6 @@
 package com.serenity.ui.renderer
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 
 import org.scalatest.flatspec.AnyFlatSpec
@@ -69,4 +69,29 @@ class BackendCachesSpec extends AnyFlatSpec with Matchers:
       handedOut.distinct should have size 1
     finally
       val _ = pool.shutdownNow()
+  }
+
+  it should "let a backend's caches ask for another backend's caches of the same owner while they are being made" in {
+    val owner = BackendCaches()
+    val keys  = Vector.fill(24)(BackendCacheKey(classOf[Marker]))
+
+    def nested(rest: List[BackendCacheKey[Marker]]): Marker =
+      rest match
+        case key :: tail => owner.getOrCreate(key) { nested(tail); Marker() }
+        case Nil         => Marker()
+
+    noException should be thrownBy nested(keys.toList)
+    keys.forall(owner.holds) shouldBe true
+  }
+
+  it should "hand out the caches a nested ask made to every later ask" in {
+    val owner = BackendCaches()
+    val seen  = AtomicReference(Option.empty[Other])
+
+    val _ = owner.getOrCreate(markerKey) {
+      seen.set(Some(owner.getOrCreate(otherKey)(Other())))
+      Marker()
+    }
+
+    seen.get.map(inner => owner.getOrCreate(otherKey)(Other()) eq inner) shouldBe Some(true)
   }
