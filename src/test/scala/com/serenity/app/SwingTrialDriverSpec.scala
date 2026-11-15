@@ -10,7 +10,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.PixelClock.Region
 import com.serenity.app.RendererWorkload.{Redraw, Step}
-import com.serenity.config.WindowChromeMode
+import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
 import com.serenity.diagnostics.FrameTimings
 import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.terminal.{SwingWindow, SwingWindowHost}
@@ -39,10 +39,20 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
         )
         .use { host =>
           host match
-            case swing: SwingWindowHost => IO(use(swing.window, SwingTrialDriver(swing)))
+            case swing: SwingWindowHost =>
+              settled(swing.window) *> IO(use(swing.window, SwingTrialDriver(swing)))
             case other => IO.raiseError(new IllegalStateException(s"expected a Swing host, got $other"))
         }
         .unsafeRunSync()
+
+  /** A window that has just been shown is still being laid out; its geometry is only worth measuring once two reads a
+    * moment apart agree.
+    */
+  private def settled(window: SwingWindow): IO[Unit] =
+    def geometry = IO((canvasBounds(window), window.currentPreferredWindowSize))
+    def poll(previous: Option[(Region, PreferredWindowSize)]): IO[Unit] =
+      geometry.flatMap(now => if previous.contains(now) then IO.unit else IO.sleep(150.millis) *> poll(Some(now)))
+    poll(None).timeout(10.seconds)
 
   private def widthChangedFrom(window: SwingWindow, from: Int): Option[Int] =
     def poll: IO[Int] = IO.defer {
