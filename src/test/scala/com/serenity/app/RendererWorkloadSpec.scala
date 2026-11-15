@@ -97,9 +97,54 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "carry on after a timeout rather than stop the run" in {
-    val recording = new RecordingWindow(_ => None)
+    val calls     = Iterator.from(0)
+    val recording = new RecordingWindow(_ => if calls.next() % 2 == 0 then None else Some(10.0))
     val performed = runVirtual(RendererWorkload.run(plan, recording.window) *> recording.performed)
     performed should have size 13
+  }
+
+  it should "stop after the first five typed characters when none of them showed, because the screen cannot be read" in {
+    val recording = new RecordingWindow(_ => None)
+    val (performed, result) =
+      runVirtual(RendererWorkload.run(plan, recording.window).flatMap(result => recording.performed.map(_ -> result)))
+    performed.map(_._1) shouldBe RendererWorkload.script(plan).take(5)
+    result.unreadableScreen shouldBe true
+    result.typing shouldBe Samples(Vector.empty, timedOut = 5)
+    result.pageDown shouldBe Samples(Vector.empty, timedOut = 0)
+  }
+
+  it should "not wait out the pace after the keystroke that ends the run" in {
+    val recording = new RecordingWindow(_ => None)
+    val performed = runVirtual(RendererWorkload.run(plan, recording.window) *> recording.performed)
+    performed.map(_._2) shouldBe Vector(0, 80, 160, 240, 320).map(_.millis)
+  }
+
+  it should "carry on when one of the first five typed characters showed" in {
+    val recording = new RecordingWindow(step => if step == Step.Type('t') then None else Some(3.0))
+    val result    = runVirtual(RendererWorkload.run(plan, recording.window))
+    result.unreadableScreen shouldBe false
+    result.typing.timedOut shouldBe 1
+    result.fullRedraw.latenciesMs should have size 4
+  }
+
+  it should "not call the screen unreadable when fewer characters than that were typed" in {
+    val few       = Plan(typedChars = 3, pageDowns = 1, fullRedraws = 1, typingPace = 80.millis, settle = 400.millis)
+    val recording = new RecordingWindow(_ => None)
+    val result    = runVirtual(RendererWorkload.run(few, recording.window))
+    result.unreadableScreen shouldBe false
+    result.typing.timedOut shouldBe 3
+  }
+
+  it should "say how far it has got every thirty steps, and how many timed out" in {
+    val many      = Plan(typedChars = 60, pageDowns = 3, fullRedraws = 1, typingPace = 80.millis, settle = 400.millis)
+    val calls     = Iterator.from(1)
+    val recording = new RecordingWindow(_ => if calls.next() == 7 then None else Some(2.0))
+    val lines = runVirtual {
+      Ref.of[IO, Vector[String]](Vector.empty).flatMap { seen =>
+        RendererWorkload.run(many, recording.window, line => seen.update(_ :+ line)) *> seen.get
+      }
+    }
+    lines shouldBe Vector("[TRIAL] step 30 of 64, 1 timed out", "[TRIAL] step 60 of 64, 1 timed out")
   }
 
   "RendererWorkload.outcome" should "report each kind of step by its median, with the rows named as the choice rule reads them" in {
@@ -134,6 +179,15 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
     RendererWorkload.outcome(result, scale = 2.0, clockResolutionMs = 1.5) match
       case Outcome.Failed(reason) => reason should (include("page-down") and include("20"))
       case other                  => fail(s"expected a failed run, got $other")
+  }
+
+  it should "fail the run, saying the screen cannot be read, when the run stopped because no keystroke showed" in {
+    val result =
+      Result(Samples(Vector.empty, timedOut = 5), Samples(Vector.empty, 0), Samples(Vector.empty, 0), true)
+    RendererWorkload.outcome(result, scale = 2.0, clockResolutionMs = 1.5) match
+      case Outcome.Failed(reason) =>
+        reason shouldBe "the screen showed no change after 5 typed characters: it cannot be read from here"
+      case other => fail(s"expected a failed run, got $other")
   }
 
   it should "fail the run when nothing was typed back" in {

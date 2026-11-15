@@ -22,15 +22,16 @@ object PixelClock:
   private def millis(duration: FiniteDuration): Double = duration.toNanos / 1_000_000.0
 
   /** Grabs a baseline, runs `trigger`, then grabs until the region differs from the baseline: the milliseconds from the
-    * trigger to the end of that grab, or `None` if `timeout` passes first. A screen that cannot be read fails.
+    * trigger to the end of that grab, or `None` if `timeout` passes first, whether in the trigger or in the wait for
+    * the change. A screen that cannot be read fails.
     */
   def timeChange(screen: Screen, region: Region, trigger: IO[Unit], timeout: FiniteDuration): IO[Option[Double]] =
     for
-      baseline <- screen.grab(region)
-      started  <- IO.monotonic
-      _        <- trigger
-      shown    <- poll(screen, region, baseline, started + timeout)
-      answered <- IO.monotonic
+      baseline  <- screen.grab(region)
+      started   <- IO.monotonic
+      triggered <- trigger.as(true).timeoutTo(timeout, IO.pure(false))
+      shown     <- if triggered then poll(screen, region, baseline, started + timeout) else IO.pure(false)
+      answered  <- IO.monotonic
     yield Option.when(shown)(millis(answered - started))
 
   private def poll(screen: Screen, region: Region, baseline: Vector[Int], deadline: FiniteDuration): IO[Boolean] =

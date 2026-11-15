@@ -24,7 +24,9 @@ object RendererTrialChild:
       backendKey: String,
       renderApi: IO[Option[String]],
       timeout: FiniteDuration,
-      prepare: IO[Unit] = IO.unit
+      prepare: IO[Unit] = IO.unit,
+      prepareTimeout: FiniteDuration = 10.seconds,
+      progress: String => IO[Unit] = _ => IO.unit
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -42,12 +44,20 @@ object RendererTrialChild:
     case Candidate.LayerImage | Candidate.LayerPicture => RenderBackend.Skia
     case Candidate.SkiaRaster                          => RenderBackend.SkiaRaster
 
+  private def prepared(setup: Setup): IO[Unit] =
+    setup.prepare.timeoutTo(
+      setup.prepareTimeout,
+      IO.raiseError(
+        new IllegalStateException(s"the window took no start-up input within ${setup.prepareTimeout.toSeconds} s")
+      )
+    )
+
   def run(setup: Setup, quit: Deferred[IO, Unit], out: PrintStream): IO[Unit] =
     val measured: IO[Outcome] =
       for
-        _          <- setup.prepare
+        _          <- prepared(setup)
         resolution <- setup.clockResolutionMs
-        result     <- RendererWorkload.run(setup.plan, setup.window)
+        result     <- RendererWorkload.run(setup.plan, setup.window, setup.progress)
       yield RendererWorkload.outcome(result, setup.scale, resolution)
     val guarded: IO[Outcome] =
       measured
