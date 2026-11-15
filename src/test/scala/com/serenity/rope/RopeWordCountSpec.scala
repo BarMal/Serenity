@@ -1,6 +1,6 @@
 package com.serenity.rope
 
-import com.serenity.testkit.Generators
+import com.serenity.testkit.{Generators, RopeShapeReport}
 import com.serenity.text.{TextCounts, TextStatistics}
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
@@ -92,8 +92,30 @@ class RopeWordCountSpec extends AnyFlatSpec with Matchers with ScalaCheckPropert
       edits <- Gen.listOf(genEdit)
     yield edits.foldLeft(rope)(applied)
 
+  private def agreesWithFullRecount(rope: Rope) =
+    withClue(RopeShapeReport.of(rope) + "\n") {
+      rope.textSummary.counts shouldBe TextCounts.of(rope.collect())
+    }
+
   "Incremental counts" should "equal a full recount of the text, whatever the leaf splits and edits" in
-    forAll(ropeAfterEdits, minSuccessful(300))(rope => rope.textSummary.counts shouldBe TextCounts.of(rope.collect()))
+    forAll(ropeAfterEdits, minSuccessful(300))(agreesWithFullRecount)
+
+  private val seamTokens: Gen[String] = Gen.oneOf(
+    Gen.oneOf("\uD83D", "\uDC68", "\uDC4D", "\uD83C", "\uDDFA", "\uDDF8", "\u200D", "\uFE0F", "\u0301"),
+    Gen.oneOf("\u1112", "\u1161", "\u11AB", "👍🏽", "🇺🇸", family),
+    tokens
+  )
+
+  "Incremental counts over seam-hostile text" should "equal a full recount, with leaves cut inside surrogate pairs and joiners" in {
+    val text = Gen.listOf(seamTokens).map(_.mkString)
+    val rope =
+      for
+        content <- text
+        shaped  <- Generators.ropeOfShape(content)
+      yield shaped
+
+    forAll(rope, minSuccessful(300))(agreesWithFullRecount)
+  }
 
   "Incremental counts over Thai" should "stay within one word per leaf join of a full recount" in {
     val thai = Gen.listOf(Gen.oneOf("สวัสดี", "ครับ", "ภาษาไทย", "ง่าย", " ", "\n")).map(_.mkString)
