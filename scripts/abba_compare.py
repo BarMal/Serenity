@@ -7,11 +7,13 @@ A benchmark blocks when B is worse than A by all of:
 * time: the p50 ranges over each side's four runs do not overlap (B's fastest run is slower than A's slowest), B's median
   p50 is at least 5% slower, and at least 0.03 ms slower;
 * allocation: B's median `allocation_p50_bytes` (`allocation_all_threads_p50_bytes` for a row that reports it on both
-  sides) is at least 5% and at least 8 KiB above A's;
+  sides) is at least 5% and at least 8 KiB above A's. With `--allocation-a`/`--allocation-b` that comparison reads the
+  CSVs of a second pass run without escape analysis, and the time and footprint comparisons read the first pass;
 * footprint: B's median `retained_bytes` is more than 10% above A's.
 
 Usage:
     abba_compare.py --a a1.csv a2.csv a3.csv a4.csv --b b1.csv b2.csv b3.csv b4.csv [--time-delta-ms 0.03] [--report-only]
+                    [--allocation-a ...4 csvs --allocation-b ...4 csvs]
 
 Exit codes: 0 nothing blocks, 1 at least one benchmark blocks, 2 a side has no runs or the CSVs share no benchmark.
 With --report-only the same findings are warnings and the exit code is always 0.
@@ -102,11 +104,27 @@ def retained_finding(name: str, a: list[dict[str, Row]], b: list[dict[str, Row]]
 
 
 def compare(
-    a: list[dict[str, Row]], b: list[dict[str, Row]], time_delta_ms: float = TIME_DELTA_MS
+    a: list[dict[str, Row]],
+    b: list[dict[str, Row]],
+    time_delta_ms: float = TIME_DELTA_MS,
+    allocation_a: list[dict[str, Row]] | None = None,
+    allocation_b: list[dict[str, Row]] | None = None,
 ) -> list[Finding]:
+    """The findings over the two sides' runs. Allocation is judged on `allocation_a`/`allocation_b` when given (the
+    runs of a pass without escape analysis, whose allocation does not move with C2's timing) and on `a`/`b` otherwise."""
     names = sorted({name for run in a for name in run} & {name for run in b for name in run})
-    checks = (lambda n, x, y: time_finding(n, x, y, time_delta_ms), allocation_finding, retained_finding)
-    return [finding for name in names for check in checks if (finding := check(name, a, b)) is not None]
+    alloc_a = a if allocation_a is None else allocation_a
+    alloc_b = b if allocation_b is None else allocation_b
+    return [
+        finding
+        for name in names
+        for finding in (
+            time_finding(name, a, b, time_delta_ms),
+            allocation_finding(name, alloc_a, alloc_b),
+            retained_finding(name, a, b),
+        )
+        if finding is not None
+    ]
 
 
 def _load_runs(paths: list[str]) -> list[dict[str, Row]]:
@@ -126,6 +144,8 @@ def main_with_args(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--a", nargs="+", required=True, help="CSVs of the baseline build, in run order")
     parser.add_argument("--b", nargs="+", required=True, help="CSVs of the candidate build, in run order")
+    parser.add_argument("--allocation-a", nargs="+", help="CSVs of the baseline build's pass without escape analysis")
+    parser.add_argument("--allocation-b", nargs="+", help="CSVs of the candidate build's pass without escape analysis")
     parser.add_argument(
         "--time-delta-ms",
         type=float,
@@ -138,6 +158,8 @@ def main_with_args(argv: list[str]) -> int:
         help="Print what would block as ::warning:: lines and always exit 0, for rows that are tracked, not gated",
     )
     args = parser.parse_args(argv)
+    if (args.allocation_a is None) != (args.allocation_b is None):
+        parser.error("--allocation-a and --allocation-b go together")
     level = "warning" if args.report_only else "error"
     a_runs, b_runs = _load_runs(args.a), _load_runs(args.b)
     if not a_runs or not b_runs:
@@ -147,8 +169,13 @@ def main_with_args(argv: list[str]) -> int:
     if not shared:
         print(f"::{level}::The A and B runs share no benchmark.")
         return 0 if args.report_only else 2
-    findings = compare(a_runs, b_runs, args.time_delta_ms)
-    skipped = rows_missing_all_threads(a_runs, b_runs)
+    alloc_a_runs = _load_runs(args.allocation_a) if args.allocation_a else None
+    alloc_b_runs = _load_runs(args.allocation_b) if args.allocation_b else None
+    if args.allocation_a and not (alloc_a_runs and alloc_b_runs):
+        print(f"::{level}::The allocation pass has no benchmark rows.")
+        return 0 if args.report_only else 2
+    findings = compare(a_runs, b_runs, args.time_delta_ms, alloc_a_runs, alloc_b_runs)
+    skipped = rows_missing_all_threads(alloc_a_runs or a_runs, alloc_b_runs or b_runs)
     if skipped:
         print(f"::notice::{len(skipped)} row(s) not judged on allocation, one side lacks the all-threads column: {', '.join(skipped)}")
     for finding in findings:
