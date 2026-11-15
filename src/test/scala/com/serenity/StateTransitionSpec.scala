@@ -8,6 +8,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, PeekStateReducer}
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{DirEntry, PeekContent, SplitAxis, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -25,7 +26,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
 
       // Given: Multiple panes
       buffer1 <- stateManager.createBuffer("First buffer", None)
@@ -58,7 +59,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
 
       // Given: Initial state with active pane
       bufferId     <- stateManager.createBuffer("Some content", None)
@@ -92,7 +93,7 @@ class StateTransitionSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
 
       // Given: Active pane with cursor position
       bufferId <- stateManager.createBuffer("Content", None)

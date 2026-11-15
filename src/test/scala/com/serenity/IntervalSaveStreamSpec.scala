@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.VirtualTime.runVirtual
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -24,7 +25,7 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       emitted      <- stateManager.runtimeLifecycle.intervalSaveStream.take(1).compile.toList
     yield emitted shouldBe List.empty
 
@@ -38,7 +39,7 @@ class IntervalSaveStreamSpec extends AnyFlatSpec with Matchers:
 
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, policy, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, policy, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       _            <- stateManager.runtimeLifecycle.intervalSaveStream.take(2).compile.drain
     yield succeed
 

@@ -7,6 +7,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,7 +25,8 @@ class StateManagerTypingActivitySpec extends AnyFlatSpec with Matchers:
     StateManager(
       LoggerFactory[IO].getLogger(using LoggerName("StateManagerTypingActivitySpec")),
       initialConfig = AppConfig.default,
-      dictionaryCache = SharedDictionary.cacheFor(AppConfig.default)
+      dictionaryCache = SharedDictionary.cacheFor(AppConfig.default),
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
     )
       .unsafeRunSync()
 

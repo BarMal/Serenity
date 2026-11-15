@@ -15,6 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.{SharedDictionary, SteppedClock}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
@@ -80,7 +81,8 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("parity")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = scenario.config)))
       bufferId <- stateManager.createBuffer(document, None)

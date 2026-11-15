@@ -10,6 +10,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -69,7 +70,8 @@ class StartupRecentFoldersSpec extends AnyFlatSpec with Matchers with StateManag
       manager <- StateManager.apply(
         testLogger(s"StartupRecentFoldersSpec-$name"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       state <- AppStartup.initializeState(
         manager,

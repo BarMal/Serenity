@@ -14,6 +14,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -372,7 +373,8 @@ object UiScenarioDriver:
         sessionRootOverride = Some(configuredSessionRoot),
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default),
-        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig)
+        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       driver <- over(manager, environment, artifactDirectory)
     yield driver

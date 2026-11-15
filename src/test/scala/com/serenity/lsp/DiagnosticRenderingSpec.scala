@@ -10,6 +10,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.SystemEventReducer
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.Location
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -145,7 +146,7 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "StateManager" should "apply LspDiagnosticsReceived and update diagnostics in AppState" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("DiagnosticRenderingSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
 
     val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error))

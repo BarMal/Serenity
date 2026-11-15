@@ -120,6 +120,10 @@ trait TextMeasurer:
   /** The largest cut at or before `limit` that shaping in `font` does not read across, or 0. */
   def shapingCutAtOrBefore(text: String, limit: Int, font: FontSpec): Int
 
+  /** Whether shaping `text` in `font` reads nothing across `cut`. */
+  def isShapingCut(text: String, cut: Int, font: FontSpec): Boolean =
+    cut > 0 && cut < text.length && shapingCutAtOrAfter(text, cut, font) == cut
+
   /** False when some character of `text` is shaped from its neighbours whatever the font, so [[advances]] cannot stand
     * in for laying the text out.
     */

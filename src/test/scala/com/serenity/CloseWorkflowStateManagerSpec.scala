@@ -12,6 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.manager.{QuitOutcome, StateManager}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.{AwaitCondition, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -36,7 +37,7 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(fileDialog: Option[FileDialog] = None): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CloseWorkflowStateManagerSpec"))
-    StateManager.apply(logger, fileDialog = fileDialog, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    StateManager.apply(logger, fileDialog = fileDialog, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,

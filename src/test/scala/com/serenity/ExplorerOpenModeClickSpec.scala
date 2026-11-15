@@ -14,6 +14,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, FileEffect, ReducerResult}
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -57,7 +58,7 @@ class ExplorerOpenModeClickSpec extends AnyFlatSpec with Matchers:
       )
     )
     val logger = LoggerFactory[IO].getLogger(using LoggerName("ExplorerOpenModeClickSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
     sm.updateState { state =>
       val configured = mode.fold(state)(m =>
         state.copy(persisted = state.persisted.copy(config = state.persisted.config.withExplorerOpenMode(m)))

@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.{EditingStateFixtures, SharedDictionary}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +23,7 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
   "activeBufferTextStatistics" should "update as the active buffer's content changes" in {
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
 
       bufferId     <- stateManager.createBuffer("one two three", None)
       initialState <- stateManager.getCurrentState

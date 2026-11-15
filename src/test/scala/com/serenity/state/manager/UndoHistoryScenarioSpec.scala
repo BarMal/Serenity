@@ -19,6 +19,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, createPane, markBufferSaved, switchToPane}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.{setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +38,7 @@ class UndoHistoryScenarioSpec extends AnyFlatSpec with Matchers:
     def maxUndoDepth: Int = SessionManager.SessionPolicy().maxUndoDepth
 
     val stateManager: StateManager =
-      StateManager(NoOpLogger[IO], policy = SessionManager.SessionPolicy(maxUndoDepth = maxUndoDepth)).unsafeRunSync()
+      StateManager(NoOpLogger[IO], policy = SessionManager.SessionPolicy(maxUndoDepth = maxUndoDepth), layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
 
     val paneA: PaneId     = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
     val bufferA: BufferId = stateManager.createBuffer("alpha", None).unsafeRunSync()

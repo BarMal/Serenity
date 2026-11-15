@@ -14,6 +14,7 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.PopupSurfaceReducer
 import com.serenity.testkit.AwaitCondition.awaitValue
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,7 +32,7 @@ class ModelessModalOutsideClickSpec extends AnyFlatSpec with Matchers:
 
   private def editorWith(text: String): (StateManager, BufferId) =
     val logger   = LoggerFactory[IO].getLogger(using LoggerName("ModelessModalOutsideClickSpec"))
-    val sm       = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm       = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
     val bufferId = sm.createBuffer(text, None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()

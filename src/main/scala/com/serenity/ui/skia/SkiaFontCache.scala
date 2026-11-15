@@ -24,7 +24,7 @@ final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Unde
 final class SkiaFontCache(
     maxFaces: Int = SkiaFontCache.DefaultMaxFaces,
     warmup: WarmupStats = new WarmupStats(),
-    resolveTypeface: SkiaTypefaces.TypefaceKey => Typeface = SkiaTypefaces.typefaceFor
+    resolveTypeface: SkiaTypefaces.TypefaceKey => Typeface = SkiaTypefaces.sharedTypefaceFor
 ):
   import SkiaFontCache.*
 
@@ -153,6 +153,29 @@ private[skia] object SkiaTypefaces:
 
   def typefaceFor(key: TypefaceKey): Typeface =
     typefaceFor(key.family, key.bold, key.italic, Reference(key.size, key.advance))
+
+  private val resolved  = new ConcurrentHashMap[TypefaceKey, Typeface]()
+  private val resolving = new Object
+
+  /** Most typefaces a process keeps resolved before it starts again. */
+  private val MaxResolved = 1024
+
+  /** [[typefaceFor]], looked up once per key for the whole process. A typeface is immutable data, but resolving one
+    * opens or clones its font file in native memory, and every owner that measures (each window's state and each
+    * surface) would otherwise hold its own copy of the same faces, a variable font's weight clone at every size among
+    * them.
+    */
+  def sharedTypefaceFor(key: TypefaceKey): Typeface =
+    Option(resolved.get(key)).getOrElse {
+      resolving.synchronized {
+        Option(resolved.get(key)).getOrElse {
+          if resolved.size >= MaxResolved then resolved.clear()
+          val typeface = typefaceFor(key)
+          val _        = resolved.put(key, typeface)
+          typeface
+        }
+      }
+    }
 
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean, reference: Reference): Typeface =
     systemTypeface(family, bold, italic, reference)

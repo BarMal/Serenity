@@ -13,7 +13,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Writes where the Skia measurer differs from AWT, and asserts only what holds however large the differences are.
-  * Against the checked-in baseline for the bundled fonts (`target/test-reports/text-measure-parity/`). The system fonts
+  * Against the frozen AWT reference for the bundled fonts, `text-measure/awt-reference.tsv`, and not against
+  * `baseline.tsv`, which is the Skia layout itself since step D2 and would make the report a tautology
+  * (`target/test-reports/text-measure-parity/`). The system fonts
   * have no baseline and AWT is not called for them: their rows are Skia's own absolute values, which only show that the
   * measurer answers on this host and say little about parity.
   */
@@ -29,13 +31,13 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
   )
 
   private lazy val sections: Vector[Section] =
-    val golden              = TextMeasureBaseline.load().fold(reason => fail(reason), identity)
+    val golden              = TextMeasureBaseline.loadAwtReference().fold(reason => fail(reason), identity)
     val skia                = TextMeasureCorpus.fonts.flatMap(pinned => TextMeasureParity.skiaEntries(pinned, measurer))
     val (compared, skipped) = TextMeasureParity.compare(golden, skia)
     Vector(
       Section(
         "Bundled fonts against the checked-in baseline",
-        "AWT numbers are `text-measure/baseline.tsv` (captured on CI). Floats in pixels at 14 pt.",
+        "AWT numbers are `text-measure/awt-reference.tsv`, frozen when layout moved to Skia. Floats in pixels at 14 pt.",
         compared,
         skipped
       )

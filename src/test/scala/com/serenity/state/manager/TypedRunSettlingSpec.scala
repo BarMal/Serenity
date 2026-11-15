@@ -42,7 +42,8 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("typed-run")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       bufferId <- stateManager.createBuffer(proseDocument, None)

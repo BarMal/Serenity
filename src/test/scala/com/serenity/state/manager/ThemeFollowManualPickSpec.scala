@@ -9,6 +9,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -33,7 +34,8 @@ class ThemeFollowManualPickSpec extends AnyFlatSpec with Matchers:
           org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
           sessionRootOverride = Some(root),
           initialConfig = config,
-          appearanceDetector = detector
+          appearanceDetector = detector,
+          layoutMeasurerFor = TestMeasure.layoutMeasurerFor
         )
       )
       .unsafeRunSync()

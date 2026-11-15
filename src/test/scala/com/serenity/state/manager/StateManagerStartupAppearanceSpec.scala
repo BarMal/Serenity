@@ -7,6 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.TestTemp
 import com.serenity.config.{AppConfig, ThemeFollowConfig}
 import com.serenity.rope.Balance
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -26,7 +27,8 @@ class StateManagerStartupAppearanceSpec extends AnyFlatSpec with Matchers:
         org.typelevel.log4cats.noop.NoOpLogger.impl[IO],
         sessionRootOverride = Some(root),
         initialConfig = AppConfig.default.withThemeFollowConfig(ThemeFollowConfig(followSystem = followSystem)),
-        appearanceDetector = detector
+        appearanceDetector = detector,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
     }
 

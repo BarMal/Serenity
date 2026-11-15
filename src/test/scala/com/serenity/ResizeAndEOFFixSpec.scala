@@ -8,6 +8,7 @@ import com.serenity.keystroke.{InputKey, KeyStrokeInfo}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.RenderController
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,7 +24,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   "RenderController.handleResize" should "immediately trigger re-render when resize is detected" in {
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       initialState <- stateManager.getCurrentState
 
       newSize = ViewportSize(120, 40)
@@ -45,7 +46,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   it should "not trigger re-render when no resize is detected" in {
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       initialState <- stateManager.getCurrentState
 
       resizeTriggered <- IO.ref(false)
@@ -109,7 +110,7 @@ class ResizeAndEOFFixSpec extends AnyFlatSpec with Matchers:
   it should "handle EOF event properly in StateManager to trigger graceful shutdown" in {
     val program = for
       logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       _            <- stateManager.applyEvent(com.serenity.keystroke.events.Quit)
     yield succeed
 

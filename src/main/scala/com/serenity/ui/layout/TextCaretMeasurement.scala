@@ -246,7 +246,8 @@ private[layout] object TextCaretMeasurement:
         )
 
   /** Each character's caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph advances
-    * when every character is context-free (see [[GlyphAdvances]]), the glyphs of a shaped stretch otherwise (see
+    * and pair kerning when every character is measurable (see [[GlyphAdvances]]), the glyphs of a shaped stretch
+    * otherwise (see
     * [[ExactCaretXs]]).
     */
   private[layout] def rawMeasuredCaretXs(
@@ -261,7 +262,7 @@ private[layout] object TextCaretMeasurement:
         if measuring.measurer.mayMeasureByAdvances(text) then
           Some(GlyphAdvances.measure(text, 0, text.length, absoluteStartColumn, resolver, measuring.measurer))
         else None
-      advances.filter(_.isContextFree(0, text.length)) match
+      advances.filter(_.isMeasurable(0, text.length)) match
         case Some(measured) => measured.caretsFrom(0, text.length)
         case None           => ExactCaretXs.layoutCaretXs(text, absoluteStartColumn, resolver, measuring)
 

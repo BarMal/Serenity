@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -28,7 +29,7 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       // This mimics what Main.scala does
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
 
-      stateManager       <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager       <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       stateAfterCreation <- stateManager.getCurrentState
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)

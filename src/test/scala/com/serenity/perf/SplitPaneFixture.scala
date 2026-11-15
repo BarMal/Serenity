@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, switchToPane, updateState}
 import com.serenity.state.manager.{CursorViewport, StateManager}
 import com.serenity.state.models.{AppState, BufferId, PaneId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition, splitPaneHorizontal, splitPaneVertical}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
@@ -44,7 +45,8 @@ private[perf] object SplitPaneFixture:
     val manager = StateManager(
       NoOpLogger[IO],
       sessionRootOverride = Some(TestTemp.directory("serenity-split-pane-frames")),
-      dictionaryCache = WarmDictionary.cacheFor(config)
+      dictionaryCache = WarmDictionary.cacheFor(config),
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
     ).unsafeRunSync()
     val shown = (for
       _       <- manager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))

@@ -16,6 +16,7 @@ import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateSt
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,7 +50,8 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("typed-run-join")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       bufferId <- stateManager.createBuffer(proseDocument, None)

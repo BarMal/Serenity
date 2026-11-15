@@ -13,6 +13,7 @@ import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, ViewportSize}
 import com.serenity.ui.presets.UiPresetStore
@@ -33,7 +34,8 @@ object StateManagerTestFacade:
     StateManager.apply(
       logger,
       initialConfig = initialConfig,
-      dictionaryCache = SharedDictionary.cacheFor(initialConfig)
+      dictionaryCache = SharedDictionary.cacheFor(initialConfig),
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
     )
 
   /** A state manager whose model starts from `seed` applied to the initial state, for specs that need a state validated

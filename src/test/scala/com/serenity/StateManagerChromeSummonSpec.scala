@@ -13,6 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -28,7 +29,7 @@ class StateManagerChromeSummonSpec extends AnyFlatSpec with Matchers:
 
   private def after(events: com.serenity.keystroke.events.Event*): AppState =
     (for
-      stateManager <- StateManager(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       _            <- events.toList.foldLeft(IO.unit)((done, event) => done >> stateManager.applyEvent(event))
       state        <- stateManager.getCurrentState
     yield state).unsafeRunSync()

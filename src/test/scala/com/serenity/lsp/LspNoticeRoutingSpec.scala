@@ -10,6 +10,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.state.reducers.NoticeReducer
 import com.serenity.testkit.AwaitCondition
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -33,7 +34,7 @@ class LspNoticeRoutingSpec extends AnyFlatSpec with Matchers:
 
   private def asked: StateManager =
     val manager =
-      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("LspNoticeRoutingSpec"))).unsafeRunSync()
+      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("LspNoticeRoutingSpec")), layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
     manager.lspEffectSource.notices.show(question).unsafeRunSync()
     awaitQuestion(manager)(_.nonEmpty)
     manager

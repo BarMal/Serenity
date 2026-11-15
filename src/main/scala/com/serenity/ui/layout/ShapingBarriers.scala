@@ -36,5 +36,5 @@ private[layout] object ShapingBarriers:
     text.charAt(cut - 1) == ' ' && {
       val from = math.max(0, cut - ContextChars)
       val near = text.substring(from, math.min(text.length, cut + ContextChars))
-      measurer.shapingCutAtOrAfter(near, cut - from, font) == cut - from
+      measurer.isShapingCut(near, cut - from, font)
     }

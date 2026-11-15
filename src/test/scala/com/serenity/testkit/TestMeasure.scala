@@ -5,7 +5,7 @@ import java.util.concurrent.Executor
 
 import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, ScrollCounting}
 import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextMeasurer, WrappedLineCache}
-import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
+import com.serenity.ui.renderer.{BackendCaches, FontSpec, StyledFontCache}
 import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 
 /** What a spec measures a font with: the Skia measurer layout measures with in the app (#2660 item 2, step D2), over
@@ -26,6 +26,11 @@ object TestMeasure:
   /** A wrap cache over [[layoutMemos]], for specs that lay text out as a GUI owner does. */
   def wrapCache(): WrappedLineCache.Bounded = WrappedLineCache.bounded(layoutMemos = layoutMemos())
 
+  /** What `Main` hands a GUI `StateManager` to measure with: the measurer of the faces and stretches its owner's
+    * surfaces draw with.
+    */
+  val layoutMeasurerFor: BackendCaches => Option[TextMeasurer] = owner => Some(SkiaTextMeasurer.of(owner))
+
   /** A GUI owner's caches: layout measures with the measurer of the faces and stretches its surfaces draw with, as
     * `Main` wires it. The measurer is made the first time something measures, so a spec may still install a font of its
     * own into the owner's backend caches before then.
@@ -39,5 +44,5 @@ object TestMeasure:
       rendererFrameStateCacheCapacity,
       scrollCounting,
       styledFonts,
-      measurerFor = owner => Some(SkiaTextMeasurer.of(owner))
+      measurerFor = layoutMeasurerFor
     )

@@ -9,7 +9,7 @@ import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineM
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches, FontSpec}
 import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, ShapingOptions}
-import org.jetbrains.skia.{Font, Paint}
+import org.jetbrains.skia.{Font, ManagedString, Paint}
 
 /** [[TextMeasurer]] over Skia: HarfBuzz shaping and Skia font metrics, for the day layout measures with what draws
   * (#2660 item 2). Nothing measures with it yet; `TextMeasurerParitySpec` reports how it differs from AWT.
@@ -99,7 +99,7 @@ final class SkiaTextMeasurer(
       val byAdvances =
         Option.when(mayMeasureByAdvances(text))(advances(text, 0, text.length, startColumn, fonts))
       byAdvances
-        .filter(_.isContextFree(0, text.length))
+        .filter(_.isMeasurable(0, text.length))
         .fold(exactCaretXs(text, startColumn, fonts))(_.caretsFrom(0, text.length))
 
   def exactCaretXs(text: String, startColumn: Int, fonts: LineFonts): IArray[Float] =
@@ -130,6 +130,9 @@ final class SkiaTextMeasurer(
   def shapingCutAtOrBefore(text: String, limit: Int, font: FontSpec): Int =
     (math.min(limit, text.length - 1) to 1 by -1).find(isShapingCut(text, _, skia(font))).getOrElse(0)
 
+  override def isShapingCut(text: String, cut: Int, font: FontSpec): Boolean =
+    cut > 0 && cut < text.length && isShapingCut(text, cut, skia(font))
+
   private[ui] def mayMeasureByAdvances(text: String): Boolean = GlyphAdvances.hasContextFreeCharacters(text)
 
   private[ui] def advances(
@@ -139,25 +142,30 @@ final class SkiaTextMeasurer(
     startColumn: Int,
     fonts: LineFonts
   ): GlyphAdvances =
-    val count       = until - from
-    val advances    = new Array[Float](count)
-    val contextFree = new Array[Boolean](count)
+    val count      = until - from
+    val advances   = new Array[Float](count)
+    val kernAfter  = new Array[Float](count)
+    val measurable = new Array[Boolean](count)
     fontsOver(fonts, startColumn + from, startColumn + until).foreach { run =>
       val start = run.startColumn - (startColumn + from)
       val end   = run.endColumn - (startColumn + from)
-      measureRun(text.substring(from + start, from + end), skia(run.font), start, advances, contextFree)
+      measureRun(text.substring(from + start, from + end), skia(run.font), start, advances, kernAfter, measurable)
     }
-    GlyphAdvances.of(advances, contextFree, new Array[Float](count), contextFree.clone())
+    val contextFree = Array.tabulate(count)(index => measurable(index) && kernAfter(index) == 0.0f)
+    GlyphAdvances.of(advances, contextFree, kernAfter, measurable)
 
-  /** A character's nominal advance, and whether shaping leaves it that advance in its own glyph: not kerned, not part
-    * of a ligature, not substituted. A run with a surrogate pair is left unmeasured, as AWT's is.
+  /** A character's nominal advance, and whether shaping leaves it that advance in its own glyph: not part of a
+    * ligature, not substituted, and not kerned, or kerned only by the pair it makes with the next character, as shaping
+    * that pair alone kerns it, which is kept in `kernAfter`. A run with a surrogate pair is left unmeasured, as AWT's
+    * is.
     */
   private def measureRun(
     chars: String,
     font: Font,
     offset: Int,
     advances: Array[Float],
-    contextFree: Array[Boolean]
+    kernAfter: Array[Float],
+    measurable: Array[Boolean]
   ): Unit =
     if chars.nonEmpty && chars.codePointCount(0, chars.length) == chars.length then
       val nominalGlyphs = font.getStringGlyphs(chars)
@@ -166,19 +174,57 @@ final class SkiaTextMeasurer(
       val glyphs        = collector.glyphs
       val xs            = collector.xs :+ collector.width
       val clusters      = collector.clusters
-      val glyphAt       = clusters.indices.groupBy(clusters(_))
+      val glyphCount    = new Array[Int](chars.length)
+      val glyphOf       = Array.fill(chars.length)(-1)
+      clusters.indices.foreach { glyph =>
+        val char = clusters(glyph)
+        if char >= 0 && char < chars.length then
+          glyphCount(char) += 1
+          glyphOf(char) = glyph
+      }
+      def ownGlyph(index: Int): Option[Int] =
+        Option.when(glyphCount(index) == 1)(glyphOf(index)).filter { glyph =>
+          val after = if glyph + 1 < clusters.length then clusters(glyph + 1) else chars.length
+          after == index + 1 && glyphs(glyph) == nominalGlyphs(index)
+        }
+      val array = chars.toCharArray
       chars.indices.foreach { index =>
         advances(offset + index) = nominal(index)
-        val own = glyphAt.getOrElse(index, IndexedSeq.empty)
-        contextFree(offset + index) = own.toList.headOption.filter(_ => own.size == 1).exists { glyph =>
-          val after = if glyph + 1 < clusters.length then clusters(glyph + 1) else chars.length
-          after == index + 1 && glyphs(glyph) == nominalGlyphs(index) &&
-          math.abs(xs(glyph + 1) - xs(glyph) - nominal(index)) <= GlyphAdvances.ShapingTolerancePx &&
-          GlyphAdvances.isContextFreeCharacter(chars(index)) &&
-          !GlyphAdvances.requiresLayout(chars.toCharArray, index, index + 1) &&
+        val plain = GlyphAdvances.isContextFreeCharacter(chars(index)) &&
+          !GlyphAdvances.requiresLayout(array, index, index + 1) &&
           (nominal(index) == 0.0f || nominal(index) >= GlyphAdvances.SmallestDistinctAdvancePx)
+        ownGlyph(index).filter(_ => plain).foreach { glyph =>
+          val shift = xs(glyph + 1) - xs(glyph) - nominal(index)
+          if math.abs(shift) <= GlyphAdvances.ShapingTolerancePx then measurable(offset + index) = true
+          else if index + 1 < chars.length && ownGlyph(index + 1).isDefined then
+            val pair = pairKerning(font, chars(index), chars(index + 1))
+            if pair != 0.0f && math.abs(shift - pair) <= GlyphAdvances.ShapingTolerancePx then
+              measurable(offset + index) = true
+              kernAfter(offset + index) = pair
         }
       }
+
+  /** How far `first` pulls `second` closer (negative) when the two are shaped alone, read once per face and pair: a
+    * width read off a long run carries rounding that differs from run to run.
+    */
+  private def pairKerning(font: Font, first: Char, second: Char): Float =
+    if pairs.size >= MaxPairs then pairs.clear()
+    pairs
+      .computeIfAbsent(
+        PairKey(font, first, second),
+        _ =>
+          val text      = s"$first$second"
+          val collector = shaped(text, font, 0.toByte)
+          val glyphs    = font.getStringGlyphs(text)
+          val kerning =
+            if collector.glyphs.length == 2 && collector.glyphs.sameElements(glyphs) then
+              collector.xs(1) - font.getWidths(glyphs)(0)
+            else 0.0f
+          java.lang.Float.valueOf(kerning)
+      )
+      .floatValue
+
+  private val pairs = new java.util.concurrent.ConcurrentHashMap[PairKey, java.lang.Float]()
 
   /** Whether shaping `text` in `font` reads nothing across `cut`: the two halves shaped alone have the glyphs and the
     * positions the whole has (a contextual alternate changes a glyph without moving it). Never inside a surrogate pair,
@@ -195,13 +241,19 @@ final class SkiaTextMeasurer(
       val tail       = shaped(text.substring(cut), font, 0.toByte)
       val sameGlyphs = whole.glyphs.toVector == head.glyphs.toVector ++ tail.glyphs.toVector
       sameGlyphs && {
-        val wholeCarets = shapedCarets(text, font)
-        val headCarets  = shapedCarets(text.substring(0, cut), font)
-        val tailCarets  = shapedCarets(text.substring(cut), font)
-        wholeCarets.indices.forall { index =>
-          val rebuilt = if index <= cut then headCarets(index) else headCarets(cut) + tailCarets(index - cut)
-          math.abs(wholeCarets(index) - rebuilt) <= CutTolerancePx
-        }
+        if SkiaShapedTextCache.shapedByLatinRuns(text) then
+          // Latin runs are drawn from these very positions, so the glyphs agreeing glyph for glyph is the cut holding.
+          val rebuilt = head.xs.toVector ++ tail.xs.toVector.map(_ + head.width)
+          math.abs(whole.width - head.width - tail.width) <= CutTolerancePx &&
+          whole.xs.toVector.zip(rebuilt).forall((x, y) => math.abs(x - y) <= CutTolerancePx)
+        else
+          val wholeCarets = shapedCarets(text, font)
+          val headCarets  = shapedCarets(text.substring(0, cut), font)
+          val tailCarets  = shapedCarets(text.substring(cut), font)
+          wholeCarets.indices.forall { index =>
+            val rebuilt = if index <= cut then headCarets(index) else headCarets(cut) + tailCarets(index - cut)
+            math.abs(wholeCarets(index) - rebuilt) <= CutTolerancePx
+          }
       }
     }
 
@@ -211,22 +263,13 @@ final class SkiaTextMeasurer(
     * feel no pull.
     */
   private def shapedCaretsAndPulls(text: String, font: Font): (Array[Float], Array[Float]) =
-    val carets = shapedCarets(text, font)
-    val pulls  = new Array[Float](text.length + 1)
-    if text.nonEmpty && SkiaShapedTextCache.shapedByLatinRuns(text) then
-      val collector = shaped(text, font, 0.toByte)
-      val glyphs    = collector.glyphs
-      val nominal   = font.getWidths(glyphs)
-      val seen      = new Array[Boolean](text.length)
-      val _ = glyphs.indices.foldLeft(Float.NegativeInfinity) { (reach, glyph) =>
-        val char = collector.clusters(glyph)
-        val x    = collector.xs(glyph)
-        if char > 0 && char < text.length && !seen(char) then
-          seen(char) = true
-          if glyph > 0 && nominal(glyph) > 0.0f then pulls(char) = x - reach
-        math.max(reach, x + nominal(glyph))
-      }
-    (carets, pulls)
+    if text.isEmpty then (Array(0.0f), Array(0.0f))
+    else if SkiaShapedTextCache.shapedByLatinRuns(text) then
+      val origins = shapedOrigins(text, font)
+      (spreadCarets(text, origins.starts, origins.end), origins.pulls)
+    else
+      val (starts, end) = drawnOrigins(text, font)
+      (spreadCarets(text, starts, end), new Array[Float](text.length + 1))
 
   /** The x of each character of `text` shaped alone, then the trailing edge. The characters of one cluster, a
     * ligature's say, share its glyphs: they are spread evenly from the cluster's x to the next one's, so each takes a
@@ -236,14 +279,17 @@ final class SkiaTextMeasurer(
     if text.isEmpty then Array(0.0f)
     else
       val (starts, end) = clusterOrigins(text, font)
-      val origins       = starts.indices.filter(index => !starts(index).isNaN)
-      val spread = origins.zip(origins.drop(1) :+ text.length).flatMap { (from, until) =>
-        val startX = starts(from)
-        val endX   = if until >= text.length then end else starts(until)
-        (from until until).map(index => startX + (endX - startX) * (index - from) / (until - from))
-      }
-      val leading = Array.fill(origins.headOption.getOrElse(text.length))(0.0f)
-      (leading ++ spread) :+ end
+      spreadCarets(text, starts, end)
+
+  private def spreadCarets(text: String, starts: Array[Float], end: Float): Array[Float] =
+    val origins = starts.indices.filter(index => !starts(index).isNaN)
+    val spread = origins.zip(origins.drop(1) :+ text.length).flatMap { (from, until) =>
+      val startX = starts(from)
+      val endX   = if until >= text.length then end else starts(until)
+      (from until until).map(index => startX + (endX - startX) * (index - from) / (until - from))
+    }
+    val leading = Array.fill(origins.headOption.getOrElse(text.length))(0.0f)
+    (leading ++ spread) :+ end
 
   /** The characters that begin a cluster, as `text` is laid out when drawn. */
   private[ui] def clusterStarts(text: String, font: FontSpec): Vector[Int] =
@@ -255,16 +301,28 @@ final class SkiaTextMeasurer(
     * stretch, so the origins are where it draws; Latin text is shaped here the way the surface shapes it.
     */
   private def clusterOrigins(text: String, font: Font): (Array[Float], Float) =
-    if SkiaShapedTextCache.shapedByLatinRuns(text) then shapedOrigins(text, font) else drawnOrigins(text, font)
+    if SkiaShapedTextCache.shapedByLatinRuns(text) then
+      val origins = shapedOrigins(text, font)
+      (origins.starts, origins.end)
+    else drawnOrigins(text, font)
 
-  private def shapedOrigins(text: String, font: Font): (Array[Float], Float) =
+  /** One shaping of Latin `text`: where each character's cluster starts (NaN inside one), the trailing edge, and the
+    * pull of each character's own glyph as [[shapedCaretsAndPulls]] reads it.
+    */
+  private def shapedOrigins(text: String, font: Font): ShapedOrigins =
     val collector = shaped(text, font, 0.toByte)
     val starts    = Array.fill(text.length)(Float.NaN)
-    collector.clusters.zip(collector.xs).foreach { (cluster, x) =>
-      if cluster >= 0 && cluster < text.length && (starts(cluster).isNaN || x < starts(cluster)) then
-        starts(cluster) = x
+    val pulls     = new Array[Float](text.length + 1)
+    val nominal   = font.getWidths(collector.glyphs)
+    val _ = collector.clusters.indices.foldLeft(Float.NegativeInfinity) { (reach, glyph) =>
+      val cluster = collector.clusters(glyph)
+      val x       = collector.xs(glyph)
+      if cluster >= 0 && cluster < text.length then
+        if starts(cluster).isNaN && glyph > 0 && cluster > 0 && nominal(glyph) > 0.0f then pulls(cluster) = x - reach
+        if starts(cluster).isNaN || x < starts(cluster) then starts(cluster) = x
+      math.max(reach, x + nominal(glyph))
     }
-    (starts, collector.width)
+    ShapedOrigins(starts, collector.width, pulls)
 
   private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
     val stretch = stretches.stretchOf(text, font)
@@ -276,13 +334,16 @@ final class SkiaTextMeasurer(
 
   private def shaped(text: String, font: Font, level: Byte): GlyphCollector =
     val collector = new GlyphCollector()
+    // One run in the one font, as the draw path shapes Latin text (`shapeLatin`). The overload that finds the runs
+    // itself builds ICU and font fallback iterators on every call, milliseconds however short the text, and resolves a
+    // fallback typeface for each that native memory keeps until the heap is next collected; layout gives text its
+    // fallback fonts itself. The native copy of the text is freed here for the same reason.
+    val end = text.length
     shaperLock.synchronized {
-      if level % 2 == 0 then
-        val _ = shaper.shape(text, font, options, Float.MaxValue, collector)
-      else
-        val end = text.length
+      val managed = new ManagedString(text)
+      try
         val _ = shaper.shape(
-          text,
+          managed,
           Iterator.single(org.jetbrains.skia.shaper.FontRun(end, font)).asJava,
           Iterator.single(BidiRun(end, level.toInt)).asJava,
           Iterator.single(ScriptRun(end, scriptOf(text))).asJava,
@@ -291,10 +352,18 @@ final class SkiaTextMeasurer(
           Float.MaxValue,
           collector
         )
+      finally managed.close()
     }
     collector
 
 object SkiaTextMeasurer:
+
+  final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
+
+  final private case class PairKey(font: Font, first: Char, second: Char)
+
+  /** Pairs whose kerning is kept before the memo starts again: far more than any document's distinct pairs. */
+  private val MaxPairs = 65536
 
   private val Key = BackendCacheKey(classOf[SkiaTextMeasurer])
 

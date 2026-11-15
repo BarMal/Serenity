@@ -6,6 +6,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The states and managers specs about line numbers, pane headers, the status bar and the tab strip start from:
@@ -22,6 +23,6 @@ object ChromeOn:
   def initial(using Balance): AppState = AppState.initial(config)
 
   def stateManager(logger: Logger[IO])(using Balance, LoggerFactory[IO]): IO[StateManager] =
-    StateManager.apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.default)
+    StateManager.apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
 
   def empty: AppState = AppState.empty(config)

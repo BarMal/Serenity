@@ -1,6 +1,6 @@
 package com.serenity.ui.layout
 
-import com.serenity.ui.layout.TextMeasurer.LineFonts
+import com.serenity.ui.layout.TextMeasurer.FontRun
 import com.serenity.ui.renderer.FontSpec
 
 /** The [[NominalAdvances]] of a font set with ligatures, which shaping gives other glyphs, so its characters are not
@@ -29,8 +29,7 @@ private[layout] object LigatureCertificate:
 
   /** The width the measurer shapes `text` to in `font`, ligatures and all. */
   def measuredShaper(font: FontSpec, measurer: TextMeasurer): Shaper = text =>
-    val carets = measurer.exactCaretXs(text, 0, LineFonts(font, Vector.empty))
-    carets(carets.length - 1)
+    measurer.shape(text, 0, FontRun(0, text.length, font), 0.toByte).advancePx
 
   def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
     of(font, measurer, measuredShaper(font, measurer), wrapRows(font, measurer))

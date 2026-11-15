@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -55,7 +56,7 @@ class AppRuntimeBackgroundCommitSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val program = for
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       observed     <- Ref.of[IO, Vector[(Boolean, Boolean)]](Vector.empty)
       _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
         observed.update(_ :+ (before.runtime.chapterGhostsVisible -> after.runtime.chapterGhostsVisible))

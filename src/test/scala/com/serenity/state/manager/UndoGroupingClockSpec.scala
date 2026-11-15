@@ -9,6 +9,7 @@ import cats.effect.{Deferred, IO}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.createBuffer
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.VirtualTime
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
@@ -34,7 +35,7 @@ class UndoGroupingClockSpec extends AnyFlatSpec with Matchers:
 
   private def editor: IO[StateManager] =
     for
-      stateManager <- StateManager(NoOpLogger[IO], sessionRootOverride = Some(TestTemp.directory("undo-clock")))
+      stateManager <- StateManager(NoOpLogger[IO], sessionRootOverride = Some(TestTemp.directory("undo-clock")), layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       bufferId     <- stateManager.createBuffer("lorem ipsum dolor sit amet", None)
       state        <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head

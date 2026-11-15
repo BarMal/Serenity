@@ -35,7 +35,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       finalState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -80,7 +80,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       for
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
-        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
         finalState <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
@@ -115,7 +115,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       openedState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -140,7 +140,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
     val result = for
       themeManager <- IO.pure(AppThemeManager.create)
       defaultTheme <- themeManager.initializeWithTheme()
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
       finalState <- AppStartup.initializeState(
         stateManager,
         stateManager.sessionStartupInfo,
@@ -176,7 +176,7 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       val result = for
         themeManager <- IO.pure(AppThemeManager.create)
         defaultTheme <- themeManager.initializeWithTheme()
-        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+        stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
         finalState <- AppStartup.initializeState(
           stateManager,
           stateManager.sessionStartupInfo,
@@ -241,14 +241,16 @@ class MainStartupSpec extends AnyFlatSpec with Matchers:
       firstManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- firstManager.updateState(state => state.copy(persisted = state.persisted.copy(theme = Theme.light)))
       _ <- firstManager.saveSession
       secondManager <- StateManager.apply(
         logger,
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       startupTheme <- AppStartup.startupTheme(secondManager.sessionStartupInfo, AppThemeManager.create)
       finalState <- AppStartup.initializeState(

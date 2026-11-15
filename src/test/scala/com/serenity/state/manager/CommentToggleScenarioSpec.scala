@@ -9,6 +9,7 @@ import com.serenity.setBufferForPane
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.LoggerFactory
@@ -23,7 +24,7 @@ class CommentToggleScenarioSpec extends AnyFlatSpec with Matchers:
   private val source = "def f =\n  val a = 1\n\n  a"
 
   private trait ScalaBuffer:
-    val stateManager: StateManager = StateManager(NoOpLogger[IO]).unsafeRunSync()
+    val stateManager: StateManager = StateManager(NoOpLogger[IO], layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
     val bufferId: BufferId         = stateManager.createBuffer(source, None).unsafeRunSync()
     val paneId: PaneId             = stateManager.getCurrentState.unsafeRunSync().persisted.layout.editorPanes.keys.head
 

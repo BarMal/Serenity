@@ -19,7 +19,7 @@ object TestBundledTypefaces:
     }
 
   private def withInter(key: SkiaTypefaces.TypefaceKey): Typeface =
-    Option.when(key.family == "Inter")(inter).flatten.getOrElse(SkiaTypefaces.typefaceFor(key))
+    Option.when(key.family == "Inter")(inter).flatten.getOrElse(SkiaTypefaces.sharedTypefaceFor(key))
 
   def cacheWithInter(): SkiaFontCache = new SkiaFontCache(resolveTypeface = withInter)
 

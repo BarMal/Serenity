@@ -13,6 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage, TypingActivity}
 import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.VirtualTime.runVirtual
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -144,7 +145,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
               sm <- StateManager(
                 LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
                 initialConfig = noBackgroundAnalysis,
-                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
+                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis),
+                layoutMeasurerFor = TestMeasure.layoutMeasurerFor
               )
               timer  <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
               _      <- sm.runtimeLifecycle.observeCommits(timer.onCommit(_, _))
@@ -190,7 +192,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
               sm <- StateManager(
                 LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
                 initialConfig = floatingStatusLine.persisted.config,
-                dictionaryCache = SharedDictionary.cacheFor(floatingStatusLine.persisted.config)
+                dictionaryCache = SharedDictionary.cacheFor(floatingStatusLine.persisted.config),
+                layoutMeasurerFor = TestMeasure.layoutMeasurerFor
               )
               seen  <- Ref.of[IO, Vector[Damage]](Vector.empty)
               timer <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
@@ -219,7 +222,8 @@ class TypingQuietTimerSpec extends AnyFlatSpec with Matchers:
               sm <- StateManager(
                 LoggerFactory[IO].getLogger(using LoggerName("TypingQuietTimerSpec")),
                 initialConfig = noBackgroundAnalysis,
-                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis)
+                dictionaryCache = SharedDictionary.cacheFor(noBackgroundAnalysis),
+                layoutMeasurerFor = TestMeasure.layoutMeasurerFor
               )
               timer          <- TypingQuietTimer.create(supervisor, TypingQuietTimer.expireIn(sm))
               observedByWake <- Ref.of[IO, Int](0)
