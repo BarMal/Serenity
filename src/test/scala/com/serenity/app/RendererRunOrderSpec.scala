@@ -34,7 +34,7 @@ class RendererRunOrderSpec extends AnyFlatSpec with Matchers:
       RendererRunOrder.candidates(thorough).foreach(c => order.count(_ == c) shouldBe 2)
     }
 
-  "RendererRunOrder.minutes" should "say how long a run takes, at about two minutes per trial" in {
-    RendererRunOrder.minutes(thorough = false) shouldBe 8
-    RendererRunOrder.minutes(thorough = true) shouldBe 12
+  "RendererRunOrder.minutes" should "say how long a run takes, at about three minutes per trial" in {
+    RendererRunOrder.minutes(thorough = false) shouldBe 12
+    RendererRunOrder.minutes(thorough = true) shouldBe 18
   }
