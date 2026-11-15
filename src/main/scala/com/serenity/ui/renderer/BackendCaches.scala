@@ -14,8 +14,20 @@ final class BackendCaches:
 
   private val slots = new ConcurrentHashMap[BackendCacheKey[?], AnyRef]()
 
-  /** The caches of `key`, made by `make` if this is the first ask. Concurrent first asks make them once. */
+  /** The caches of `key`, made by `make` if this is the first ask. Concurrent first asks make them once, and `make` may
+    * itself ask for other caches of this owner: `computeIfAbsent` cannot allow that, since it throws when two keys in
+    * flight share a bin.
+    */
   def getOrCreate[A <: AnyRef](key: BackendCacheKey[A])(make: => A): A =
-    key.kind.cast(slots.computeIfAbsent(key, _ => make))
+    key.kind.cast(Option(slots.get(key)).getOrElse(createOnce(key, make)))
+
+  private def createOnce[A <: AnyRef](key: BackendCacheKey[A], make: => A): AnyRef =
+    slots.synchronized {
+      Option(slots.get(key)).getOrElse {
+        val made = make
+        slots.put(key, made)
+        made
+      }
+    }
 
   def holds(key: BackendCacheKey[?]): Boolean = slots.containsKey(key)
