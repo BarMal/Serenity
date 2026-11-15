@@ -9,7 +9,7 @@ import com.serenity.app.RendererChoice.Candidate
   */
 object RendererRunOrder:
 
-  private val MinutesPerTrial = 2
+  private val MinutesPerTrial = 3
 
   def candidates(thorough: Boolean): List[Candidate] =
     List(Candidate.LayerImage, Candidate.SkiaRaster) ++ Option.when(thorough)(Candidate.LayerPicture)
@@ -18,5 +18,5 @@ object RendererRunOrder:
     val modes = candidates(thorough)
     modes ++ modes.reverse
 
-  /** A window start, a warm-up and the workload take about two minutes. */
+  /** A window start, a warm-up, the workload and the window's stop took about three minutes in a measured run. */
   def minutes(thorough: Boolean): Int = order(thorough).size * MinutesPerTrial

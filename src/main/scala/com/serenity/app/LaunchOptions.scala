@@ -202,8 +202,8 @@ object LaunchOptions:
     Opts
       .flag(
         "optimize-renderer",
-        "Measure the renderers on this machine, recommend the clearly fastest and quit. It takes about 8 minutes " +
-          "(12 with --thorough), opens windows and types into them: leave the keyboard and mouse alone."
+        "Measure the renderers on this machine, recommend the clearly fastest and quit. It takes about 12 minutes " +
+          "(18 with --thorough), opens windows and types into them: leave the keyboard and mouse alone."
       )
       .orFalse
 

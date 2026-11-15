@@ -76,8 +76,8 @@ class RendererOptimizeCommandSpec extends AnyFlatSpec with Matchers:
 
   "RendererOptimizeCommand.run" should "say how long it takes and that it types into windows, before it starts" in {
     val (_, text, _) = run(options(), layerWins)
-    text should (include("8 minutes") and include("keyboard and mouse") and include("Ctrl+C"))
-    run(options("--thorough"), layerWins)._2 should include("12 minutes")
+    text should (include("12 minutes") and include("keyboard and mouse") and include("Ctrl+C"))
+    run(options("--thorough"), layerWins)._2 should include("18 minutes")
   }
 
   it should "refuse, and start no trial, when there is no display to open windows on" in {
