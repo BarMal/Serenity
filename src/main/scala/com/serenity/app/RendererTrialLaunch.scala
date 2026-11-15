@@ -11,6 +11,7 @@ import com.serenity.app.RendererWorkload.{Plan, Step, Window}
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowHost
 import com.serenity.ui.terminal.SwingWindowHost
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 /** What `--renderer-trial=<mode>` does at the first painted frame (#2618): after a short warm-up it runs the trial in
   * the background, as `--startup-probe` runs its probe, and `quit` is released when it has printed its line.
@@ -53,24 +54,27 @@ object RendererTrialLaunch:
     host match
       case swing: SwingWindowHost =>
         val driver = SwingTrialDriver(swing)
-        RobotScreen().memoize.map { screen =>
-          val window: Window =
-            step => screen.flatMap(grabbing => RendererTrialWindow(driver, grabbing, stepTimeout).perform(step))
-          Setup(
-            candidate = candidate,
-            plan = plan,
-            window = window,
-            clockResolutionMs = for
-              grabbing <- screen
-              region   <- driver.watchedFor(Step.Type('a'))
-              quickest <- PixelClock.resolution(grabbing, region, ResolutionSamples)
-            yield quickest,
-            scale = DisplayScale.forComponent(swing.window.canvas).x,
-            backendKey = backendKey,
-            renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
-            timeout = RendererTrialChild.Timeout,
-            prepare = driver.dismissNotices *> IO.sleep(NoticeSettle)
-          )
+        Slf4jLogger.create[IO].flatMap(logger => RobotScreen().memoize.map(screen => (logger, screen))).map {
+          (logger, screen) =>
+            val window: Window =
+              step => screen.flatMap(grabbing => RendererTrialWindow(driver, grabbing, stepTimeout).perform(step))
+            Setup(
+              candidate = candidate,
+              plan = plan,
+              window = window,
+              clockResolutionMs = for
+                grabbing <- screen
+                region   <- driver.watchedFor(Step.Type('a'))
+                quickest <- PixelClock.resolution(grabbing, region, ResolutionSamples)
+              yield quickest,
+              scale = DisplayScale.forComponent(swing.window.canvas).x,
+              backendKey = backendKey,
+              renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
+              timeout = RendererTrialChild.Timeout,
+              prepare = driver.dismissNotices *> IO.sleep(NoticeSettle),
+              prepareTimeout = stepTimeout + NoticeSettle,
+              progress = line => logger.info(line)
+            )
         }
       case _ =>
         val refused = new UnsupportedOperationException("this window host cannot run a trial")

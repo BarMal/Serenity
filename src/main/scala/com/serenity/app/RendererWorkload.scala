@@ -2,8 +2,8 @@ package com.serenity.app
 
 import scala.concurrent.duration.*
 
+import cats.Monad
 import cats.effect.IO
-import cats.syntax.all.*
 import com.serenity.app.RendererChoice.{Outcome, Workload}
 
 /** What one renderer trial does to the window, and what it keeps from it (#2618).
@@ -34,14 +34,16 @@ object RendererWorkload:
     case FullRedraw
 
   /** `typingPace` separates keystrokes; `settle` is the wait after every other step, so a page or a redraw is never
-    * still painting when the next one starts.
+    * still painting when the next one starts. When none of the first `unreadableAfter` keystrokes shows, the screen is
+    * taken to be unreadable and the run stops there: every later step would wait out its own timeout for nothing.
     */
   final case class Plan(
       typedChars: Int,
       pageDowns: Int,
       fullRedraws: Int,
       typingPace: FiniteDuration,
-      settle: FiniteDuration
+      settle: FiniteDuration,
+      unreadableAfter: Int = 5
   )
 
   object Plan:
@@ -54,7 +56,12 @@ object RendererWorkload:
 
   final case class Samples(latenciesMs: Vector[Double], timedOut: Int)
 
-  final case class Result(typing: Samples, pageDown: Samples, fullRedraw: Samples)
+  final case class Result(
+      typing: Samples,
+      pageDown: Samples,
+      fullRedraw: Samples,
+      unreadableScreen: Boolean = false
+  )
 
   private val prose = "thequickbrownfoxjumpsoverthelazydog"
 
@@ -65,25 +72,58 @@ object RendererWorkload:
         Step.FullRedraw(if index % 2 == 0 then Redraw.Resize else Redraw.ThemeToggle)
       )
 
-  def run(plan: Plan, window: Window): IO[Result] =
-    script(plan)
-      .traverse(step => window.perform(step).flatTap(_ => IO.sleep(wait(plan, step))).map(step -> _))
-      .map { answers =>
-        def samples(kind: Kind): Samples =
-          val ofKind = answers.filter((step, _) => step.kind == kind).map(_._2)
-          Samples(ofKind.flatten, ofKind.count(_.isEmpty))
-        Result(
-          typing = samples(Kind.Typing),
-          pageDown = samples(Kind.PageDown),
-          fullRedraw = samples(Kind.FullRedraw)
-        )
-      }
+  private val ProgressEvery = 30
+
+  /** Runs the script, saying through `progress` how far it has got every [[ProgressEvery]] steps. */
+  def run(plan: Plan, window: Window, progress: String => IO[Unit] = _ => IO.unit): IO[Result] =
+    val steps = script(plan)
+    Monad[IO].tailRecM(Vector.empty[(Step, Option[Double])]) { answers =>
+      steps.lift(answers.size) match
+        case None => IO.pure(Right(result(answers, unreadable = false)))
+        case Some(step) =>
+          window.perform(step).flatMap { answer =>
+            val done = answers :+ (step -> answer)
+            if noKeystrokeShowed(plan, done) then IO.pure(Right(result(done, unreadable = true)))
+            else reportProgress(done, steps.size, progress) *> IO.sleep(wait(plan, step)).as(Left(done))
+          }
+    }
+
+  private def noKeystrokeShowed(plan: Plan, answers: Vector[(Step, Option[Double])]): Boolean =
+    plan.unreadableAfter > 0 && answers.size == plan.unreadableAfter &&
+      answers.forall((step, answer) => step.kind == Kind.Typing && answer.isEmpty)
+
+  private def reportProgress(
+    answers: Vector[(Step, Option[Double])],
+    total: Int,
+    progress: String => IO[Unit]
+  ): IO[Unit] =
+    IO.whenA(answers.size % ProgressEvery == 0)(
+      progress(s"[TRIAL] step ${answers.size} of $total, ${answers.count(_._2.isEmpty)} timed out")
+    )
+
+  private def result(answers: Vector[(Step, Option[Double])], unreadable: Boolean): Result =
+    def samples(kind: Kind): Samples =
+      val ofKind = answers.filter((step, _) => step.kind == kind).map(_._2)
+      Samples(ofKind.flatten, ofKind.count(_.isEmpty))
+    Result(
+      typing = samples(Kind.Typing),
+      pageDown = samples(Kind.PageDown),
+      fullRedraw = samples(Kind.FullRedraw),
+      unreadableScreen = unreadable
+    )
 
   private def wait(plan: Plan, step: Step): FiniteDuration = step match
     case _: Step.Type => plan.typingPace
     case _            => plan.settle
 
   def outcome(result: Result, scale: Double, clockResolutionMs: Double): Outcome =
+    if result.unreadableScreen then
+      Outcome.Failed(
+        s"the screen showed no change after ${result.typing.timedOut} typed characters: it cannot be read from here"
+      )
+    else measured(result, scale, clockResolutionMs)
+
+  private def measured(result: Result, scale: Double, clockResolutionMs: Double): Outcome =
     val unanswered = List("typing" -> result.typing, "page-down" -> result.pageDown, "full-redraw" -> result.fullRedraw)
       .filter((_, samples) => samples.latenciesMs.isEmpty)
     if unanswered.nonEmpty then

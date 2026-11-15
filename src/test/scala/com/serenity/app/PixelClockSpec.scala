@@ -101,3 +101,17 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
     }
     count shouldBe 50
   }
+
+  it should "answer none, without grabbing again, when the trigger itself does not finish within the timeout" in {
+    val (elapsed, grabbed) = runVirtual {
+      for
+        ref   <- Ref.of[IO, Vector[Int]](blank)
+        grabs <- Ref.of[IO, List[Region]](Nil)
+        screen = fakeScreen(5.millis, ref, grabs)
+        result <- PixelClock.timeChange(screen, region, IO.never, 200.millis)
+        count  <- grabs.get.map(_.size)
+      yield (result, count)
+    }
+    elapsed shouldBe None
+    grabbed shouldBe 1
+  }

@@ -36,7 +36,12 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     runVirtual(run(out))
     bytes.toString("UTF-8")
 
-  private def setup(window: Window, resolution: IO[Double] = IO.pure(1.5), backend: String = "skia"): Setup =
+  private def setup(
+    window: Window,
+    resolution: IO[Double] = IO.pure(1.5),
+    backend: String = "skia",
+    prepare: IO[Unit] = IO.unit
+  ): Setup =
     Setup(
       candidate = Candidate.LayerImage,
       plan = plan,
@@ -45,7 +50,9 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       scale = 2.0,
       backendKey = backend,
       renderApi = IO.pure(Some("OPENGL")),
-      timeout = 5.minutes
+      timeout = 5.minutes,
+      prepare = prepare,
+      prepareTimeout = 3.seconds
     )
 
   private def lineOf(text: String): RendererTrial.Report =
@@ -151,4 +158,23 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       )
     }
     lineOf(text).outcome should matchPattern { case Outcome.Failed(reason) if reason.contains("java2d") => }
+  }
+
+  it should "fail the trial, saying so, when the start-up step never finishes, instead of waiting for the ceiling" in {
+    val printed = runVirtual {
+      for
+        quit <- Deferred[IO, Unit]
+        text <- IO {
+          val bytes = new ByteArrayOutputStream()
+          bytes -> new PrintStream(bytes, true, "UTF-8")
+        }
+        started <- IO.monotonic
+        _       <- RendererTrialChild.run(setup(_ => IO.pure(Some(12.0)), prepare = IO.never), quit, text._2)
+        ended   <- IO.monotonic
+      yield (text._1.toString("UTF-8"), ended - started)
+    }
+    lineOf(printed._1).outcome should matchPattern {
+      case Outcome.Failed(reason) if reason.contains("start-up") && reason.contains("3 s") =>
+    }
+    printed._2 shouldBe 3.seconds
   }
