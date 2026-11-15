@@ -5,8 +5,9 @@ import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CellMetrics, PixelRect, TextLayoutSnapshot}
+import com.serenity.ui.layout.{PixelRect, TextLayoutSnapshot}
 import com.serenity.ui.renderer.{
   Effects,
   FontSpec,
@@ -84,7 +85,7 @@ class MockRenderSurface(
   override def clearViewportExcept(color: RenderColor, preserved: scala.collection.immutable.List[PixelRect]): Unit =
     if preserved.isEmpty then clearViewport(color)
     else
-      val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+      val metrics = TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12))
       setBackgroundColor(color)
       for y <- 0 until height; x <- 0 until width do
         val cellLeftPx = x * metrics.charWidth
@@ -186,8 +187,8 @@ class MockRenderSurface(
     val metrics =
       currentFont
         .get()
-        .map(CellMetrics.fromFont)
-        .getOrElse(CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
+        .map(TestMeasure.cellMetrics)
+        .getOrElse(TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
     val startX = math.floor(xPx / metrics.charWidth.toDouble).toInt
     val endX   = math.max(startX + s.length, startX + 1)
     val row    = math.floor(yPx / metrics.lineHeight.toDouble).toInt
@@ -222,7 +223,7 @@ class MockRenderSurface(
 
   private def pixelYForRow(row: Int): Int =
     pixelRowOverride.get().collect { case (cellRow, pixelY) if cellRow == row => pixelY }.getOrElse {
-      CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
+      TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12)).toPixelY(row)
     }
 
   final case class StrokeRectCall(x: Int, y: Int, w: Int, h: Int, color: RenderColor, strokeWidth: Float)
@@ -287,7 +288,7 @@ class MockRenderSurface(
 
   def getBg(x: Int, y: Int): RenderColor =
     if y >= 0 && y < height && x >= 0 && x < width then
-      val metrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+      val metrics = TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12))
       fillPixelRectCallsBuffer
         .findLast { call =>
           x * metrics.charWidth >= call.xPx && x * metrics.charWidth < call.xPx + call.widthPx &&

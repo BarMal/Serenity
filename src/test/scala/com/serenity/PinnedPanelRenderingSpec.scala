@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -14,7 +15,7 @@ class PinnedPanelRenderingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val cellMetrics = CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+  private val cellMetrics = TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 
   "PinnedPanelRenderer" should "use semantic panel colors rather than hard-coded ANSI backgrounds" in {
     val surface = new MockRenderSurface(40, 12)

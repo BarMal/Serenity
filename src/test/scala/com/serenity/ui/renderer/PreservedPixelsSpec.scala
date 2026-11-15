@@ -4,7 +4,8 @@ import java.awt.Font
 
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.PaneId
-import com.serenity.ui.layout.{CalculatedLayout, CellMetrics, LayoutRect, PixelRect}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{CalculatedLayout, LayoutRect, PixelRect}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,7 +20,7 @@ class PreservedPixelsSpec extends AnyFlatSpec with Matchers:
   private val kept   = List(PixelRect(0, 0, 100, 20), PixelRect(0, 60, 100, 40))
 
   private def contextOver(surface: MockRenderSurface): RenderContext =
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     RenderContext(
       surface = surface,
       layout = CalculatedLayout(

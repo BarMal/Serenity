@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
@@ -20,7 +21,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
   private val bufferId    = BufferId(1)
   private val viewport    = ViewportSize(80, 24)
   private val codeFont    = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val cellMetrics = com.serenity.ui.layout.CellMetrics.fromFont(codeFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
 
   private def editorState: AppState =
     val buffer =

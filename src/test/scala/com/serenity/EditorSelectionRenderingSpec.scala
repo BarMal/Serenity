@@ -5,7 +5,7 @@ import java.nio.file.Path
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.{ActivePane, EditingStateFixtures}
+import com.serenity.testkit.{ActivePane, EditingStateFixtures, TestMeasure}
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
@@ -101,7 +101,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     )
 
     val title       = "notes.md"
-    val cellMetrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val cellMetrics = TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 12))
     val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, 12).deriveFont(12.0f)
     val expectedPlacement = TextAlignment.placeLine(
       title,
@@ -170,7 +170,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
     ).flatten
     val headerLeft  = headerRects.map(_.x).min
     val headerRight = headerRects.map(_.right).max
-    val cellMetrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val cellMetrics = TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 12))
     val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, 12).deriveFont(12.0f)
     val expectedPlacement = TextAlignment.placeLine(
       title,

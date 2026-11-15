@@ -3,6 +3,7 @@ package com.serenity.ui.renderer
 import java.awt.Color
 
 import com.serenity.config.{AppConfig, CursorColorConfig}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, LayoutRect}
 import com.serenity.ui.theme.Theme
@@ -19,7 +20,7 @@ import org.scalatest.matchers.should.Matchers
 class RendererCursorGlyphsSpec extends AnyFlatSpec with Matchers:
 
   private val font        = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val cellMetrics = CellMetrics.fromFont(font)
+  private val cellMetrics = TestMeasure.cellMetrics(font)
   private val rect        = LayoutRect(2, 0, 10, 5) // cells [2, 12)
 
   "caretWithin" should "place a caret already inside the pane at its desired position unmoved" in {

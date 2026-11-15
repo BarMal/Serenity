@@ -8,16 +8,8 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.ui.layout.{
-  CellMetrics,
-  Layout,
-  LayoutEngine,
-  ViewportSize,
-  WorkspaceNode,
-  WorkspaceNodeId,
-  WorkspaceTree
-}
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
+import com.serenity.ui.layout.{Layout, LayoutEngine, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -141,7 +133,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       size,
       FontSpec.fromAwt(mono),
       FontSpec.fromAwt(text),
-      CellMetrics.fromFont(mono),
+      TestMeasure.cellMetrics(mono),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )
@@ -168,8 +160,8 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
 
-    CellMetrics.fromFont(textFont).charWidth should not be CellMetrics.fromFont(codeFont).charWidth
-    snapshot.panelWidthPx shouldBe contentRect.width * CellMetrics.fromFont(codeFont).charWidth
+    TestMeasure.cellMetrics(textFont).charWidth should not be TestMeasure.cellMetrics(codeFont).charWidth
+    snapshot.panelWidthPx shouldBe contentRect.width * TestMeasure.cellMetrics(codeFont).charWidth
     all(snapshot.visualLines.map(_.widthPx)) should be <= snapshot.panelWidthPx.toFloat
   }
 
@@ -215,7 +207,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       size,
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
-      CellMetrics.fromFont(codeFont),
+      TestMeasure.cellMetrics(codeFont),
       None,
       caches
     )
@@ -246,7 +238,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       size,
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
-      CellMetrics.fromFont(codeFont),
+      TestMeasure.cellMetrics(codeFont),
       None,
       caches
     )
@@ -351,7 +343,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val snapshot    = cache.scene.textSnapshot(paneId).getOrElse(fail("expected prepared text snapshot"))
     val contentRect = cache.scene.paneLayouts(paneId).contentRect
 
-    snapshot.panelWidthPx should be < (contentRect.width * CellMetrics.fromFont(codeFont).charWidth)
+    snapshot.panelWidthPx should be < (contentRect.width * TestMeasure.cellMetrics(codeFont).charWidth)
     all(snapshot.visualLines.map(_.widthPx)) should be <= snapshot.panelWidthPx.toFloat
     snapshot.visualLines.size should be > 1
   }

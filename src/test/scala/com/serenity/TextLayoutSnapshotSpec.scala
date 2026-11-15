@@ -7,6 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.richtext.{ParagraphAlignment, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.{Balance, Leaf, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextLayoutSnapshot}
@@ -80,7 +81,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "prefer word boundaries when wrapping text" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val buffer = Buffer
       .fromString(BufferId(8), "hello world again")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4))
@@ -92,7 +93,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "keep logical lines unwrapped when word wrap is disabled" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val buffer = Buffer
       .fromString(BufferId(12), "hello world again")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 4))
@@ -140,7 +141,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "skip wrapped visual rows from the top of a long logical line" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val buffer = Buffer
       .fromString(BufferId(9), "alpha beta gamma")
       .copy(
@@ -160,7 +161,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "ignore horizontal scroll when word wrap is enabled" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val buffer = Buffer
       .fromString(BufferId(16), "alpha beta gamma")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 6, visibleColumns = 8, visibleLines = 3))
@@ -173,7 +174,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "bound wrapped line shaping to the requested visible rows" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val lines = TextLayoutSnapshot.boundedVisualLinesForText(
       text = "abcdefghijkl",
@@ -188,7 +189,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "shape only visible wrapped rows from a large logical line" in {
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val buffer = Buffer
       .fromString(BufferId(15), "abcdefghijklmnopqrstuvwxyz" * 100)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 3, visibleLines = 2))
@@ -244,7 +245,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
@@ -267,7 +268,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
 
@@ -286,7 +287,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2)
       )
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val snapshot       = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
@@ -428,7 +429,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val leftColumn = TextLayoutSnapshot.leftColumnForCursorVisibility(
       lineText = "iiiiiiiiWW",
       cursorColumn = 10,
-      visibleWidthPx = CellMetrics.fromFont(font).charWidth * 4,
+      visibleWidthPx = TestMeasure.cellMetrics(font).charWidth * 4,
       font = font,
       shapedText = ShapedTextCache()
     )
@@ -539,7 +540,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   it should "advance a wide character two cells on a font-derived cell grid, as the terminal grid does" in {
     val font    = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
 
     val xs = TextLayoutSnapshot.caretXsForText(
       "a漢b",

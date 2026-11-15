@@ -9,7 +9,8 @@ import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{PanelPosition, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity, SurfaceSizing}
 import com.serenity.{DockedPanelFixtures, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,8 +27,8 @@ class SkiaPanelLayerSpec extends AnyFlatSpec with Matchers:
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
   private val outlineId = SurfaceId("outline")

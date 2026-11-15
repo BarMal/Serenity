@@ -10,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, TestWorkspaceTrees}
@@ -38,7 +39,7 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
     )
 
   private def codeFont = baseFont.deriveFont(Font.PLAIN, 14.0f * scale)
-  private def metrics  = CellMetrics.fromFont(codeFont)
+  private def metrics  = TestMeasure.cellMetrics(codeFont)
 
   private def stateWith(config: AppConfig, tabs: List[BufferId]): AppState =
     val buffers = tabs.map(id => Buffer.fromString(id, "The quick brown fox.\n" * 20))

@@ -10,6 +10,7 @@ import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -42,7 +43,7 @@ private[perf] object SkiaFrameBenchmarks:
     private val frame     = backend.newFrame(deviceSize(LogicalWidthPx), deviceSize(LogicalHeightPx))
     private val caches    = RenderCaches.create()
     private val screen    = ScreenIdentity(this)
-    private val uiMetrics = CellMetrics.fromFont(uiFont)
+    private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
     private def deviceSize(logicalPx: Int): Int = math.ceil(logicalPx * DeviceScale).toInt
 
@@ -104,7 +105,7 @@ private[perf] object SkiaFrameBenchmarks:
     IORuntime
   ): List[BenchmarkRunner.Benchmark] =
     lazy val font    = codeFont
-    lazy val metrics = CellMetrics.fromFont(font)
+    lazy val metrics = TestMeasure.cellMetrics(font)
     lazy val grid =
       ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
     lazy val (stateManager, _)           = LaptopFrameBenchmarks.proseStateManager(grid = grid)

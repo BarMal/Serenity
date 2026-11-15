@@ -3,7 +3,7 @@ package com.serenity.ui.color
 import java.awt.Color
 
 import com.serenity.ReferenceFrames
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.testkit.TestMeasure
 import org.scalacheck.Gen
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -102,7 +102,7 @@ class RenderColorSpec extends AnyFlatSpec with Matchers with ScalaCheckPropertyC
 
   "A render surface" should "paint exactly the RenderColor it is handed and report it back unchanged" in {
     val font      = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val reference = ReferenceFrames.over(20, 20, CellMetrics.fromFont(font), font, 20, 20)
+    val reference = ReferenceFrames.over(20, 20, TestMeasure.cellMetrics(font), font, 20, 20)
     val surface   = reference.surface
     val teal      = RenderColor.fromArgb(0xff336699)
 

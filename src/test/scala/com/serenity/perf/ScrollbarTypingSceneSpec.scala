@@ -5,7 +5,8 @@ import java.awt.Font
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.state.manager.RenderCaches
-import com.serenity.ui.layout.{CellMetrics, ViewportSize, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +19,7 @@ class ScrollbarTypingSceneSpec extends AnyFlatSpec with Matchers:
 
   private val codeFont = LaptopFrameBenchmarks.codeFont
   private val textFont = Font(Font.SERIF, Font.PLAIN, 14)
-  private val metrics  = CellMetrics.fromFont(codeFont)
+  private val metrics  = TestMeasure.cellMetrics(codeFont)
   private val viewport = ViewportSize(1500 / metrics.charWidth, 1000 / metrics.lineHeight)
 
   "The scene built after a keystroke" should "wrap only the lines the keystroke reached" in {

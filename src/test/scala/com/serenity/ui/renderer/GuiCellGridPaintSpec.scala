@@ -4,8 +4,8 @@ import java.awt.Font
 import java.awt.image.BufferedImage
 
 import com.serenity.ReferenceFrames
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class GuiCellGridPaintSpec extends AnyFlatSpec with Matchers:
 
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 14)
-  private val metrics  = CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
   private val cell     = metrics.charWidth
   private val red      = RenderColor.fromRgba(255, 0, 0)
   private val white    = RenderColor.fromRgba(255, 255, 255)

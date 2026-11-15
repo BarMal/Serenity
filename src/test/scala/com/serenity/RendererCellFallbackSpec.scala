@@ -6,8 +6,8 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.EditingStateFixtures
-import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
+import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -22,7 +22,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
 
   private val monoFont     = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val propFont     = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val monoMetrics  = CellMetrics.fromFont(monoFont)
+  private val monoMetrics  = TestMeasure.cellMetrics(monoFont)
   private val viewportSize = ViewportSize(80, 24)
 
   private def buildState(

@@ -4,6 +4,7 @@ import java.awt.Font
 import java.awt.geom.AffineTransform
 
 import com.serenity.state.models.TextVisualLine
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
@@ -32,7 +33,7 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
       singleFontResolver(font),
       frc,
       measuredLayout = true,
-      CellMetrics.fromFont(font)
+      TestMeasure.cellMetrics(font)
     )
 
   "A slanted font" should "have no context-free characters, since its layout advance differs from summed advances" in {
@@ -69,7 +70,7 @@ class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers:
   it should "measure caret positions as per-row measurement did" in {
     val xs = TextLayoutSnapshot.caretXsForText(prose, slanted, ShapedTextCache(), frc)
     val legacy =
-      LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, CellMetrics.fromFont(slanted))
+      LegacyLineMeasurement.caretXs(prose, 0, singleFontResolver(slanted), frc, true, TestMeasure.cellMetrics(slanted))
     xs.length shouldBe legacy.length
     xs.zip(legacy).foreach((x, expected) => x shouldBe expected +- tolerance)
   }

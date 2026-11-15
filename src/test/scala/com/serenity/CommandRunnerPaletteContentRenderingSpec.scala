@@ -7,7 +7,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.command.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
@@ -30,7 +30,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
     .loadCodeFont(FontLoader.FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, enableLigatures = true))
     .unsafeRunSync()
 
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
 
   private def singlePaneLayout: Layout =
     Layout(

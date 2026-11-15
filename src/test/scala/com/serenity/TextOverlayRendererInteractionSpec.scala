@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.{ConfirmPrompt, Modal}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
@@ -51,7 +52,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   "TextOverlayRenderer" should "paint close prompt controls from shared composition boxes" in {
     val surface = new MockRenderSurface(50, 14)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val frame = LayoutRect(
       2,
       1,
@@ -119,7 +120,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "keep reflowed close prompt controls inside a constrained frame" in {
     val surface = new MockRenderSurface(40, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val frame   = LayoutRect(2, 2, 30, 4)
     val overlay = TextOverlayView(
       rect = frame,
@@ -136,7 +137,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "render close workflow action choices when the frame reserves enough content rows" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 50, 5),
       header = Some(OverlayRow("unsaved changes")),
@@ -212,7 +213,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   "TextOverlayRenderer" should "scroll a long editable split row horizontally to keep the caret visible" in {
     val surface = new MockRenderSurface(20, 8)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "Editor Font Size: 1234567890"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 12, 5),
@@ -240,7 +241,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "place an editable split row caret after the inline value segment" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val query   = "iiiiWWWW"
     val rowText = s"Find $query"
     val overlay = TextOverlayView(
@@ -274,7 +275,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "paint a plain editable row caret using the cursor colour" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),
@@ -295,7 +296,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "place a plain editable row caret at the measured text end for proportional fonts" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),
@@ -319,7 +320,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "render editable plain row text and caret with the same measured baseline" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),
@@ -344,7 +345,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "keep measured row text and caret pixel writes inside the content rect" in {
     val surface = new MockRenderSurface(30, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 18)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "WWWWWWWWWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(3, 1, 8, 5),
@@ -375,7 +376,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
   it should "keep editable command setting columns anchored when the value overflows" in {
     val surface = new MockRenderSurface(40, 6)
     val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "Line Number Margin: Scale (0.0-4.0) 12345678901234567890"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 24, 5),
@@ -405,7 +406,7 @@ class TextOverlayRendererInteractionSpec extends AnyFlatSpec with Matchers:
     val surface  = new MockRenderSurface(80, 8)
     val gridFont = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val font     = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics  = CellMetrics.fromFont(gridFont)
+    val metrics  = TestMeasure.cellMetrics(gridFont)
     val value    = "250"
     val rowText  = s"Animation Duration: Duration in ms $value"
     val overlay = TextOverlayView(

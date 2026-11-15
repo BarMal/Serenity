@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +16,7 @@ class GuiCellGridDisplayWidthSpec extends AnyFlatSpec with Matchers:
 
   private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 14)
-  private val cellPx   = CellMetrics.fromFont(font).charWidth
+  private val cellPx   = TestMeasure.cellMetrics(font).charWidth
   private val cellGrid = true
 
   private def rows(text: String, widthPx: Int) =
@@ -23,7 +24,7 @@ class GuiCellGridDisplayWidthSpec extends AnyFlatSpec with Matchers:
 
   "GUI font metrics" should "allow a glyph to take more than one cell" in {
     FontLoader.isMonospacedFont(font) shouldBe true
-    CellMetrics.fromFont(font).displayWidthAware shouldBe true
+    TestMeasure.cellMetrics(font).displayWidthAware shouldBe true
   }
 
   "A cell-grid row with a wide character" should "put the next caret two cells later" in {

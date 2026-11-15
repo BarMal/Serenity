@@ -11,9 +11,10 @@ import com.serenity.perf.LaptopFrameBenchmarks.{LogicalHeightPx, LogicalWidthPx}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 import org.typelevel.log4cats.noop.NoOpLogger
 
 /** `skia.laptop.render.typing_frame_2x` with a ligature font, and with a letter the frame has never seen on every call.
@@ -34,7 +35,7 @@ private[perf] object LigatureTypingBenchmarks:
 
   def benchmarks(using IORuntime): List[BenchmarkRunner.Benchmark] =
     lazy val font              = ligatureFont
-    lazy val metrics           = CellMetrics.fromFont(font)
+    lazy val metrics           = TestMeasure.cellMetrics(font)
     lazy val grid              = ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
     lazy val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
     def current: AppState      = stateManager.getCurrentState.unsafeRunSync()

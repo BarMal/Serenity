@@ -10,7 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.{ActivePane, SharedDictionary}
+import com.serenity.testkit.{ActivePane, SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -278,7 +278,7 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
     val font = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Prose)
     // Mouse pixels arrive in the screen grid's coordinates, and that grid is the code font's even for prose.
     val gridMetrics =
-      CellMetrics.fromFont(
+      TestMeasure.cellMetrics(
         FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, TypographyRole.Code)
       )
     val panelWidthPx = contentRect.width * gridMetrics.charWidth

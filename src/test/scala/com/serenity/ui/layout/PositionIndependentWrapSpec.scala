@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -63,7 +64,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "place centred and right-aligned carets by a scalar offset over unshifted cached stops" in {
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val panel   = metrics.charWidth * 40
     val cache   = WrappedLineCache.bounded()
     def rowsAligned(alignment: ParagraphAlignment) =
@@ -89,7 +90,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "hit-test an aligned row in the same coordinates it reports its carets in" in {
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val panel   = metrics.charWidth * 40
     val line = visualLines(
       buffer(List(RichTextParagraph.plain("abcd efgh", alignment = ParagraphAlignment.Right))),
@@ -129,7 +130,7 @@ class PositionIndependentWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "add a centred drop cap paragraph's alignment to its inset" in {
-    val metrics     = CellMetrics.fromFont(font)
+    val metrics     = TestMeasure.cellMetrics(font)
     val panel       = metrics.charWidth * 40
     val dropCap     = RichTextParagraph.plain(prose, role = ParagraphRole.dropCap(lines = 2))
     val centred     = dropCap.copy(alignment = ParagraphAlignment.Center)

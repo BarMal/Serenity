@@ -17,6 +17,7 @@ import com.serenity.perf.BenchmarkFixtures.{
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
 import com.serenity.ui.renderer.{CharacterRenderer, FontSpec, RendererCursorOverlay, RendererEntryPoints}
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
@@ -34,8 +35,8 @@ private[perf] object RenderBenchmarks:
   private val monoFont         = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont         = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont           = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  val cellMetrics: CellMetrics = CellMetrics.fromFont(monoFont)
-  val uiMetrics: CellMetrics   = CellMetrics.fromFont(uiFont)
+  val cellMetrics: CellMetrics = TestMeasure.cellMetrics(monoFont)
+  val uiMetrics: CellMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewportSize     = BenchmarkFixtures.viewportSize
   private val frameWidthPx     = viewportSize.width * cellMetrics.charWidth
   private val frameHeightPx    = viewportSize.height * cellMetrics.lineHeight

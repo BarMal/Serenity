@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, LayoutRect, OverlayRow}
 import com.serenity.ui.renderer.*
 import com.serenity.ui.theme.Theme
@@ -34,7 +35,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   "TextOverlayRenderer" should "render a proportional-font overlay row via putString when the surface has no FontRenderContext" in {
     val surface = new MockRenderSurface(80, 8, fontRenderContextOverride = None)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),
@@ -55,7 +56,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "render the overlay row cursor as an inverse-video cell character when the surface has no FontRenderContext" in {
     val surface = new MockRenderSurface(80, 8, fontRenderContextOverride = None)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),
@@ -77,7 +78,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "still use drawRunPx for a proportional-font overlay row when the surface does report a FontRenderContext (GUI mode unchanged)" in {
     val surface = new MockRenderSurface(80, 8)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val metrics = CellMetrics.fromFont(font)
+    val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
     val overlay = TextOverlayView(
       rect = LayoutRect(0, 0, 40, 5),

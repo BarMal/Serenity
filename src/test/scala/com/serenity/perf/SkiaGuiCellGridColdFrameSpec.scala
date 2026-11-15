@@ -11,8 +11,9 @@ import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.{Event, InsertChar}
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -39,8 +40,8 @@ class SkiaGuiCellGridColdFrameSpec extends AnyFlatSpec with Matchers:
   private val codeFont    = physical("/fonts/CourierPrime-Regular.ttf", 10.0f)
   private val textFont    = codeFont
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewport    = ViewportSize(1500 / cellMetrics.charWidth, 1000 / cellMetrics.lineHeight)
 
   private val plainText = Vector.tabulate(40)(line => s"line $line plain mixed text and more end").mkString("\n")

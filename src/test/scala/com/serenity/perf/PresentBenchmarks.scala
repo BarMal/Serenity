@@ -16,6 +16,7 @@ import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{
   FrameOutput,
@@ -43,8 +44,8 @@ private[perf] object PresentBenchmarks:
   private val codeFont  = LaptopFrameBenchmarks.codeFont
   private val textFont  = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val metrics   = CellMetrics.fromFont(codeFont)
-  private val uiMetrics = CellMetrics.fromFont(uiFont)
+  private val metrics   = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
   /** A canvas that reports a device scale without being on screen. */
   final private class ScaledConfiguration(scale: Double) extends GraphicsConfiguration:
@@ -59,7 +60,7 @@ private[perf] object PresentBenchmarks:
 
   /** The fonts a window draws with; the cell metrics follow the code font. */
   final private[perf] case class Fonts(code: Font, text: Font):
-    val metrics: CellMetrics = CellMetrics.fromFont(code)
+    val metrics: CellMetrics = TestMeasure.cellMetrics(code)
 
   private[perf] object Fonts:
     val default: Fonts = Fonts(codeFont, textFont)

@@ -4,8 +4,9 @@ import java.awt.Font
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
+import com.serenity.ui.layout.{LayoutMemos, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
 
 /** Counting the visual rows of every line of a 1,200-line source file in the bundled code font, from a fresh cache and
   * at a 1472 px panel (#2447 B2):
@@ -51,7 +52,7 @@ private[perf] object SourceRowCountBenchmarks:
       buffer,
       widthPx,
       font,
-      Some(CellMetrics.fromFont(font)),
+      Some(TestMeasure.cellMetrics(font)),
       false,
       WrappedLineCache.bounded(layoutMemos = memos)
     )
@@ -67,7 +68,7 @@ private[perf] object SourceRowCountBenchmarks:
           line,
           widthPx,
           font,
-          cellMetricsOverride = Some(CellMetrics.fromFont(font)),
+          cellMetricsOverride = Some(TestMeasure.cellMetrics(font)),
           wrapCache = cache
         )
         .length

@@ -3,7 +3,8 @@ package com.serenity
 import com.serenity.config.StatusLinePlacement
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{CellMetrics, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -21,7 +22,7 @@ class RendererScreenRowDamageSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
   private val viewport = ViewportSize(80, 24)
   private val font     = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val metrics  = CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
 
   private val wrappedParagraph = (0 until 200).map(index => f"w$index%03d").mkString(" ")
 

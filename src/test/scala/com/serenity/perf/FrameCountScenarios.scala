@@ -9,8 +9,9 @@ import com.serenity.keystroke.events.{Event, PageDown, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.benchmark.ShapingTraffic
-import com.serenity.ui.layout.{BundledInterFont, CellMetrics, ViewportSize}
+import com.serenity.ui.layout.{BundledInterFont, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.skia.SkiaTestFonts
 import com.serenity.ui.tui.TuiFrameCountScenario
@@ -31,8 +32,8 @@ private[perf] object FrameCountScenarios:
   private val codeFont    = BundledInterFont.plain(12f)
   private val textFont    = BundledInterFont.plain(14f)
   private val uiFont      = BundledInterFont.plain(12f)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewport = ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
 
   /** Reported for every surface scenario; the terminal frame also reports [[FrameCounter.TuiBytes]]. */

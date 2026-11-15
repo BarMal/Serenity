@@ -9,8 +9,7 @@ import javax.swing.SwingUtilities
 import com.serenity.config.WindowChromeMode
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.DisplayExclusive
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererEntryPoints}
 import com.serenity.ui.terminal.SwingWindow
 import com.serenity.{FrameBackend, PersistedFrameFixture, SkiaFrames}
@@ -25,7 +24,7 @@ class SkiaRasterWindowSpec extends AnyFlatSpec with Matchers with PersistedFrame
   override protected def frames: FrameBackend = SkiaFrames
 
   private val evidence  = Path.of("target", "test-reports", "skia-raster-window")
-  private val uiMetrics = CellMetrics.fromFont(uiFont)
+  private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
   private def settle(): Unit =
     SwingUtilities.invokeAndWait(() => ())

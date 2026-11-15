@@ -5,8 +5,9 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextRowMetrics, ViewportSize}
+import com.serenity.ui.layout.{TextRowMetrics, ViewportSize}
 import com.serenity.ui.renderer.{EditorPaneRenderPlan, RendererFramePlanner}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,7 +25,7 @@ class GuiPopupAnchorSpec extends AnyFlatSpec with Matchers:
   private val fonts    = FontLoader.FontConfig()
   private val codeFont = FontLoader.previewCodeFont(fonts)
   private val textFont = FontLoader.previewTextFont(fonts)
-  private val metrics  = CellMetrics.fromFont(codeFont)
+  private val metrics  = TestMeasure.cellMetrics(codeFont)
   private val logicalW = 900
   private val logicalH = 600
   private val viewport = ViewportSize(logicalW / metrics.charWidth, logicalH / metrics.lineHeight)

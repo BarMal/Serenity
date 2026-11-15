@@ -7,6 +7,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.{HeadingSettings, HeadingStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -248,7 +249,7 @@ class HeadingSpacingLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "round to whole cell rows in the cell grid's own unit when a font draws the grid" in {
-    val metrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val metrics = TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 12))
     val snapshot = TextLayoutSnapshot.fromBuffer(
       richBuffer(),
       80 * metrics.charWidth,

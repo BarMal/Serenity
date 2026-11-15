@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RenderContext, RendererPaneSetup}
 import com.serenity.ui.theme.Theme
@@ -20,7 +21,7 @@ class RendererPaneSetupColumnModeSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val monoFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val cellMetrics = CellMetrics.fromFont(monoFont)
+  private val cellMetrics = TestMeasure.cellMetrics(monoFont)
   private val contentRect = LayoutRect(0, 0, 100, 10)
 
   private def renderContext(surface: MockRenderSurface): RenderContext =

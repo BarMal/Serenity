@@ -8,7 +8,7 @@ import com.serenity.diagnostics.FrameCounts
 import com.serenity.lsp.config.LanguageId
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
-import com.serenity.testkit.FrameMismatchDump
+import com.serenity.testkit.{FrameMismatchDump, TestMeasure}
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RenderSurface, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
@@ -32,8 +32,8 @@ trait PersistedFrameFixture:
   protected lazy val codeFont: Font           = Font(Font.MONOSPACED, Font.PLAIN, 12)
   protected val textFont: Font                = Font(Font.SERIF, Font.PLAIN, 14)
   protected val uiFont: Font                  = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  protected lazy val cellMetrics: CellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics                       = CellMetrics.fromFont(uiFont)
+  protected lazy val cellMetrics: CellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics                       = TestMeasure.cellMetrics(uiFont)
   protected lazy val logicalW: Int            = 900
   protected lazy val logicalH: Int            = 600
   protected lazy val viewport: ViewportSize =

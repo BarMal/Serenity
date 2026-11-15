@@ -1,6 +1,7 @@
 package com.serenity
 
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
@@ -19,7 +20,7 @@ class RendererCursorRepaintSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
   private val viewport = ViewportSize(80, 24)
   private val font     = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val metrics  = com.serenity.ui.layout.CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
 
   private val lines = Vector("alpha", "beta", "gamma", "delta", "epsilon")
 

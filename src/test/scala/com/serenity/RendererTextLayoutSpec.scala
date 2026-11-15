@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, CursorColorConfig}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.{ActivePane, EditingStateFixtures}
+import com.serenity.testkit.{ActivePane, EditingStateFixtures, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -62,7 +62,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     )
 
     val surface     = new MockRenderSurface(viewportSize.width, viewportSize.height)
-    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
+    val cellMetrics = cellMetricsOverride.getOrElse(TestMeasure.cellMetrics(font))
     RendererEntryPoints.render(
       state,
       cursorVisible = true,
@@ -81,7 +81,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
   "RendererEntryPoints.render" should "place a proportional-text cursor using measured advances rather than raw column count" in {
     val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = TestMeasure.cellMetrics(font)
     val surface     = renderState("iW", CursorPosition(0, 1), font)
     // Proportional text renders via drawRunPx, not putString.
     val runCalls    = surface.drawRunPxCalls.filter(_.s == "iW")
@@ -117,7 +117,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val viewportSize = ViewportSize(11, 6)
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val font         = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
-    val cellMetrics  = CellMetrics.fromFont(font)
+    val cellMetrics  = TestMeasure.cellMetrics(font)
 
     RendererEntryPoints.render(
       state,
@@ -155,8 +155,8 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val font   = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
     val uiFont = Font(Font.SANS_SERIF, Font.PLAIN, font.getSize).deriveFont(font.getSize2D)
-    val cellMetrics = CellMetrics.fromFont(font)
-    val uiMetrics   = CellMetrics.fromFont(uiFont)
+    val cellMetrics = TestMeasure.cellMetrics(font)
+    val uiMetrics   = TestMeasure.cellMetrics(uiFont)
     val layout      = LayoutEngine.calculateLayout(state, viewportSize)
     val headerRect = List(
       Some(ActivePane.of(state, layout).leftSpacerRect),
@@ -207,7 +207,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "render a measured editor cursor using the full primary row height" in {
     val font = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val textMetrics = CellMetrics.fromFont(font)
+    val textMetrics = TestMeasure.cellMetrics(font)
     val rowMetrics = CellMetrics(
       charWidth = textMetrics.charWidth,
       lineHeight = textMetrics.lineHeight + 6,
@@ -230,7 +230,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         FontConfig(textFontFamily = "Serif", textFontSize = 22.0f)
       )
       .unsafeRunSync()
-    val codeMetrics = CellMetrics.fromFont(codeFont)
+    val codeMetrics = TestMeasure.cellMetrics(codeFont)
     val surface = renderState(
       "Serenity writes measured prose",
       CursorPosition(0, 8),
@@ -258,7 +258,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       "Alpha\nBeta",
       CursorPosition(0, 0),
       codeFont,
-      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      cellMetricsOverride = Some(TestMeasure.cellMetrics(codeFont)),
       textFontOverride = Some(textFont),
       config = ChromeOn.config.withLineNumbers(true).withoutStatusLine
     )
@@ -277,7 +277,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "keep a measured cursor on the rendered text row below the first content row" in {
     val font       = FontLoader.loadTextFont(FontConfig(textFontFamily = "SansSerif", fontSize = 12.0f)).unsafeRunSync()
-    val rowMetrics = CellMetrics.fromFont(font)
+    val rowMetrics = TestMeasure.cellMetrics(font)
     val surface =
       renderState("top\nbottom", CursorPosition(1, 1), font, cellMetricsOverride = Some(rowMetrics))
     val cursorRects = surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor)
@@ -306,7 +306,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val viewport   = ViewportSize(12, 4)
     val codeFont   = Font(Font.MONOSPACED, Font.PLAIN, 12)
     val textFont   = Font(Font.SANS_SERIF, Font.PLAIN, 18)
-    val cellMetric = CellMetrics.fromFont(codeFont)
+    val cellMetric = TestMeasure.cellMetrics(codeFont)
     val text       = "W" * 32
     val buffer =
       val base = Buffer.fromString(bufferId, text)
@@ -373,7 +373,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
     val surface     = new MockRenderSurface(100, 30)
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = TestMeasure.cellMetrics(font)
 
     RendererEntryPoints.render(
       state,
@@ -411,7 +411,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         config = bareConfig
       )
     )
-    val cellMetrics    = CellMetrics.fromFont(font)
+    val cellMetrics    = TestMeasure.cellMetrics(font)
     val visibleSurface = new MockRenderSurface(100, 30)
     val hiddenSurface  = new MockRenderSurface(100, 30)
 
@@ -469,7 +469,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
     val surface     = new MockRenderSurface(100, 30)
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = TestMeasure.cellMetrics(font)
 
     RendererEntryPoints.render(
       state,
@@ -511,7 +511,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
         config = bareConfig
       )
     )
-    val cellMetrics = CellMetrics.fromFont(font)
+    val cellMetrics = TestMeasure.cellMetrics(font)
 
     RendererEntryPoints.render(
       state,
@@ -563,7 +563,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
 
     renderedRow.take(60).trim.length should be >= 60
     surface.fillPixelRectCalls.filter(_.color == Theme.light.cursorColor).head.xPx should be >=
-      (60 * CellMetrics.fromFont(font).charWidth)
+      (60 * TestMeasure.cellMetrics(font).charWidth)
   }
 
   it should "render unwrapped document-font rows to at least the grid pane width" in {
@@ -578,7 +578,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       codeFont,
       viewport,
       viewportSize = ViewportSize(80, 10),
-      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      cellMetricsOverride = Some(TestMeasure.cellMetrics(codeFont)),
       textFontOverride = Some(textFont),
       config = bareConfig.withWordWrap(false)
     )
@@ -600,7 +600,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
       codeFont,
       viewport,
       viewportSize = ViewportSize(100, 10),
-      cellMetricsOverride = Some(CellMetrics.fromFont(codeFont)),
+      cellMetricsOverride = Some(TestMeasure.cellMetrics(codeFont)),
       textFontOverride = Some(textFont),
       config = bareConfig.withWordWrap(false)
     )

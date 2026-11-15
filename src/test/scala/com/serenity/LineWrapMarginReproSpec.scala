@@ -8,6 +8,7 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
@@ -32,7 +33,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
   ): (List[(Int, List[MockRenderSurface#DrawRunPxCall])], Float, List[MockRenderSurface#FillPixelRectCall], String) =
     val paneId      = PaneId(0)
     val bufferId    = BufferId(1)
-    val cellMetrics = CellMetrics.fromFont(codeFont)
+    val cellMetrics = TestMeasure.cellMetrics(codeFont)
     val content     = "abcdefghij" * 9
 
     // A Prose-role buffer uses the text (wider) font; a Code-role buffer uses the code font.
@@ -140,7 +141,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
   "TextLayoutSnapshot.gridWrapWidthPx" should "size the wrap width from the code font, not the buffer font" in {
     val config    = AppConfig.default.editorConfig.fontConfig
     val columns   = 40
-    val codeWidth = CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
+    val codeWidth = TestMeasure.cellMetrics(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
     TextLayoutSnapshot.gridWrapWidthPx(columns, config) shouldBe columns * codeWidth
   }
 

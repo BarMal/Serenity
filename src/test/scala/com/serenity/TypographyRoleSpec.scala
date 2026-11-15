@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{LayoutEngine, ViewportSize}
@@ -41,8 +42,8 @@ class TypographyRoleSpec extends AnyFlatSpec with Matchers:
       codeFont = codeFont,
       textFont = textFont,
       uiFont = uiFont,
-      cellMetrics = com.serenity.ui.layout.CellMetrics.fromFont(codeFont),
-      uiMetrics = com.serenity.ui.layout.CellMetrics.fromFont(uiFont)
+      cellMetrics = TestMeasure.cellMetrics(codeFont),
+      uiMetrics = TestMeasure.cellMetrics(uiFont)
     )
 
     context.fontForRole(TypographyRole.Code) shouldBe codeFont

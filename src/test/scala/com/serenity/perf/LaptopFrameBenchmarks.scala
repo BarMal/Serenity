@@ -23,6 +23,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.manager.{CursorViewport, DamageProducer, RenderCaches, StateManager}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, PanelPosition, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, FrameOutput, RendererEntryPoints, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.terminal.SwingWindow
@@ -63,7 +64,7 @@ private[perf] object LaptopFrameBenchmarks:
 
   private[perf] val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private[perf] val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
-  private[perf] val cellMetrics = CellMetrics.fromFont(codeFont)
+  private[perf] val cellMetrics = TestMeasure.cellMetrics(codeFont)
   private[perf] val viewport =
     ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
   private val bufferId = BufferId(1)
@@ -358,7 +359,7 @@ private[perf] object LaptopFrameBenchmarks:
     )
 
   private val uiFont    = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  private val uiMetrics = CellMetrics.fromFont(uiFont)
+  private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
   /** A window's frame loop over one persisting image of `backend`: one screen, and every frame told what the transition
     * into it damaged, as `AppRuntime` reports it, so only damaged rows are redrawn and the rest of the image is kept.

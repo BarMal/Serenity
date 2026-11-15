@@ -6,6 +6,7 @@ import com.serenity.MockRenderSurface
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.openings.{ChapterOpenings, EffectiveRole, OpeningContext, ParagraphRoles}
 import com.serenity.ui.renderer.{DropCapRenderer, ShapedTextCache}
 import com.serenity.ui.theme.RichTextStyling
@@ -51,7 +52,7 @@ class ParagraphRoleResolverAgreementSpec extends AnyFlatSpec with Matchers:
       font,
       frc,
       measuredLayout = true,
-      CellMetrics.fromFont(font),
+      TestMeasure.cellMetrics(font),
       Int.MaxValue,
       richText,
       wordWrapEnabled = true,

@@ -6,15 +6,8 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import com.serenity.config.StatusLinePlacement
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{
-  CellMetrics,
-  LayoutRect,
-  PixelRect,
-  ViewportSize,
-  WorkspaceNode,
-  WorkspaceNodeId,
-  WorkspaceTree
-}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{LayoutRect, PixelRect, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.renderer.{EditorPaneRenderPlan, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -33,7 +26,7 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
   private val bufferId = BufferId(1)
   private val viewport = ViewportSize(120, 40)
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val metrics  = CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
   private val widthPx  = viewport.width * metrics.charWidth
   private val heightPx = viewport.height * metrics.lineHeight
   private val lines    = Vector.tabulate(60)(line => s"line $line")

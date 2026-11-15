@@ -8,6 +8,7 @@ import scala.util.Random
 import com.serenity.richtext.{RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -45,7 +46,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
         )
       }
 
-  private def metricsOf(font: Font): CellMetrics = CellMetrics.fromFont(font)
+  private def metricsOf(font: Font): CellMetrics = TestMeasure.cellMetrics(font)
 
   /** What the wrap itself says: the count `VisualRowCounts.forBuffer` takes for a line it does not shortcut. */
   private def wrapped(text: String, widthPx: Int, font: Font): Int =

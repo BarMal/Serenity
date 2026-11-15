@@ -20,8 +20,8 @@ import com.serenity.richtext.{
 import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameDiff, FrameMismatchDump, PresentAreas}
-import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, PresentAreas, TestMeasure}
+import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{ChromeOn, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -44,8 +44,8 @@ abstract class SkiaPageDownRichDocumentFramesSplit(part: Int, parts: Int) extend
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val textFont    = Font(Font.SERIF, Font.PLAIN, 14)
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
   final private case class Window(width: Int, height: Int):
     def viewport: ViewportSize = ViewportSize(width / cellMetrics.charWidth, height / cellMetrics.lineHeight)

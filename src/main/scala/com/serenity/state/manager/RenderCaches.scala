@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.layout.{LayoutMemos, ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
   GraphemeSegmentationCache,
@@ -54,14 +54,14 @@ final class RenderCaches private (
     val backendCaches: BackendCaches,
     val framePhases: FramePhaseClock,
     val scrollRows: ScrollRowsReporter,
-    measurerFor: BackendCaches => Option[TextMeasurer]
+    measurerSource: () => Option[TextMeasurer]
 ):
 
-  /** What layout measures with, made from this owner's backend caches the first time it is asked for: the backend that
-    * draws for this owner supplies it, so layout and painting share faces and shaped stretches. None measures nothing:
-    * layout is the cell grid.
+  /** What layout measures with, made from this owner's backend caches the first time it is asked for, by this or by any
+    * of the caches layout measures through: the backend that draws for this owner supplies it, so layout and painting
+    * share faces and shaped stretches. None measures nothing: layout is the cell grid.
     */
-  lazy val measurer: Option[TextMeasurer] = measurerFor(backendCaches)
+  def measurer: Option[TextMeasurer] = measurerSource()
 
   /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
@@ -78,8 +78,11 @@ object RenderCaches:
     styledFonts: StyledFontCache = StyledFontCache(),
     measurerFor: BackendCaches => Option[TextMeasurer] = _ => None
   ): RenderCaches =
-    val shapedText   = ShapedTextCache()
-    val wrappedLines = WrappedLineCache.sharing(shapedText)
+    val backend        = new BackendCaches
+    lazy val measurer  = measurerFor(backend)
+    val measurerSource = () => measurer
+    val shapedText     = ShapedTextCache()
+    val wrappedLines   = WrappedLineCache.sharing(shapedText, LayoutMemos(measurerSource = measurerSource))
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
@@ -95,8 +98,8 @@ object RenderCaches:
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
       new TabBarMeasures,
       new CompositionRevisions,
-      new BackendCaches,
+      backend,
       new FramePhaseClock(),
       ScrollRowsReporter.fromSystemProperty(),
-      measurerFor
+      measurerSource
     )

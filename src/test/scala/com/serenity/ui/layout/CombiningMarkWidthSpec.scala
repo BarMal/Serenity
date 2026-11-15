@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -18,7 +19,7 @@ class CombiningMarkWidthSpec extends AnyFlatSpec with Matchers:
 
   private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
   private val font   = Font(Font.MONOSPACED, Font.PLAIN, 14)
-  private val cellPx = CellMetrics.fromFont(font).charWidth
+  private val cellPx = TestMeasure.cellMetrics(font).charWidth
   private def rows(text: String, widthPx: Int = 10_000) =
     TextLayoutSnapshot.boundedVisualLinesForText(text, 0, widthPx, font, frc, forceCellLayout = true)
 

@@ -6,9 +6,10 @@ import java.awt.image.BufferedImage
 import java.nio.file.Paths
 
 import com.serenity.ReferenceFrames
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, WrappedLineCache}
+import com.serenity.ui.layout.{TextLayoutSnapshot, WrappedLineCache}
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -34,7 +35,7 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
       java.util.Map.of[TextAttribute, Integer](TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)
     )
 
-  private val metrics  = CellMetrics.fromFont(ligaturesOff)
+  private val metrics  = TestMeasure.cellMetrics(ligaturesOff)
   private val cell     = metrics.charWidth
   private val fallback = FontFallback(Vector.empty, FontLoader.emojiFontFamily)
 

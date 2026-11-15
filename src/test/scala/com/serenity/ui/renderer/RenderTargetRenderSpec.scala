@@ -4,8 +4,8 @@ import java.awt.image.BufferedImage
 
 import com.serenity.PersistedFrameFixture
 import com.serenity.state.models.{AppState, CursorPosition}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.display.DisplayScale.DeviceScale
-import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +28,7 @@ class RenderTargetRenderSpec extends AnyFlatSpec with Matchers with PersistedFra
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
       FontSpec.fromAwt(uiFont),
-      CellMetrics.fromFont(uiFont),
+      TestMeasure.cellMetrics(uiFont),
       None,
       repaintOnFlush = true,
       surfaces = SkiaRasterSurfaceFactory
@@ -69,7 +69,7 @@ class RenderTargetRenderSpec extends AnyFlatSpec with Matchers with PersistedFra
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
       FontSpec.fromAwt(uiFont),
-      CellMetrics.fromFont(uiFont),
+      TestMeasure.cellMetrics(uiFont),
       None,
       surfaces = SkiaRasterSurfaceFactory
     )
@@ -89,7 +89,7 @@ class RenderTargetRenderSpec extends AnyFlatSpec with Matchers with PersistedFra
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(textFont),
       FontSpec.fromAwt(uiFont),
-      CellMetrics.fromFont(uiFont),
+      TestMeasure.cellMetrics(uiFont),
       None
     )
 

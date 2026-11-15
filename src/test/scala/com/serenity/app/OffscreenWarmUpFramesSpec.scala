@@ -8,8 +8,9 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.display.DisplayScale.DeviceScale
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.FakeRenderTarget
 import com.serenity.ui.skia.{OffscreenRaster, SkiaTextCaches}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,7 +25,7 @@ class OffscreenWarmUpFramesSpec extends AnyFlatSpec with Matchers:
 
   private val viewport = ViewportSize(80, 24)
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val metrics  = CellMetrics.fromFont(font)
+  private val metrics  = TestMeasure.cellMetrics(font)
   private val widthPx  = viewport.width * metrics.charWidth
   private val heightPx = viewport.height * metrics.lineHeight
 

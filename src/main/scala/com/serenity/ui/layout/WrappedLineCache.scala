@@ -243,8 +243,8 @@ object WrappedLineCache:
     new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache(), layoutMemos)
 
   /** A default-sized cache whose wraps measure through `shapedText`, which the painter of the same owner must share. */
-  def sharing(shapedText: ShapedTextCache): Bounded =
-    new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText, LayoutMemos())
+  def sharing(shapedText: ShapedTextCache, layoutMemos: LayoutMemos = LayoutMemos()): Bounded =
+    new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText, layoutMemos)
 
   final private case class TableColumnsEntry(
       content: Rope,

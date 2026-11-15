@@ -8,7 +8,15 @@ import com.serenity.state.manager.ScrollCountExecutor
   * and descent of a font, the width and fit of a drop cap glyph, and the break iterators text is wrapped with. Each is
   * a pure function of its key, so an owner only ever pays to measure a font once, and two owners share nothing.
   */
-final private[serenity] class LayoutMemos(certificateBuilder: Executor = ScrollCountExecutor.shared):
+final private[serenity] class LayoutMemos(
+    certificateBuilder: Executor = ScrollCountExecutor.shared,
+    measurerSource: () => Option[TextMeasurer] = () => None
+):
+
+  /** What layout measures with for the owner of these memos, asked for only when something measures. None is the cell
+    * grid.
+    */
+  def measurer: Option[TextMeasurer] = measurerSource()
 
   val lineExtents: FontLineExtents = FontLineExtents()
 

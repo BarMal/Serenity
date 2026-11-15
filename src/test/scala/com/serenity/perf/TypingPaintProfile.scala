@@ -4,7 +4,8 @@ import cats.effect.unsafe.IORuntime
 import com.serenity.config.{AppConfig, LayoutPreset, SpellCheckConfig, StatusLinePlacement, TabStripMode, UiLayout}
 import com.serenity.rope.Balance
 import com.serenity.state.models.Damage
-import com.serenity.ui.layout.{CellMetrics, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory
 
@@ -51,7 +52,7 @@ private[perf] object TypingPaintProfile:
     english: Boolean = false
   )(using IORuntime): PresentBenchmarks.Cycling =
     given Balance = Balance.default
-    val metrics   = CellMetrics.fromFont(LaptopFrameBenchmarks.codeFont)
+    val metrics   = TestMeasure.cellMetrics(LaptopFrameBenchmarks.codeFont)
     val grid      = ViewportSize(widthPx / metrics.charWidth, heightPx / metrics.lineHeight)
     val (prose, _) =
       if english then

@@ -2,6 +2,7 @@ package com.serenity.ui.renderer
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.{AboveCursorStackFixtures, DockedPanelFixtures, MockRenderSurface, TestWorkspaceTrees}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -80,7 +81,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
     val overlay = layout.aboveCursorOverlayRect.getOrElse(fail("expected an above-cursor overlay rect"))
     // Mirrors the (defaultFont, cellMetrics) `RendererEntryPoints.render`'s no-font overload resolves to internally.
-    val cellMetrics = CellMetrics.fromFont(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12))
+    val cellMetrics = TestMeasure.cellMetrics(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12))
     val leftPx      = cellMetrics.toPixelX(overlay.x)
     val topPx       = cellMetrics.toPixelY(overlay.y)
     val expectedRect = PixelRect(

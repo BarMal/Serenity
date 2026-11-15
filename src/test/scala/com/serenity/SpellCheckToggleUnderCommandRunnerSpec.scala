@@ -12,7 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.FixedFontCatalog
+import com.serenity.testkit.{FixedFontCatalog, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
@@ -41,9 +41,9 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
     .loadCodeFont(FontLoader.FontConfig(codeFontFamily = FontLoader.BundledCodeFontFamily, enableLigatures = true))
     .unsafeRunSync()
 
-  private val cellMetrics = CellMetrics.fromFont(codeFont)
+  private val cellMetrics = TestMeasure.cellMetrics(codeFont)
   private val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  private val uiMetrics   = CellMetrics.fromFont(uiFont)
+  private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewport    = ViewportSize(90, 30)
   private val widthPx     = viewport.width * cellMetrics.charWidth
   private val heightPx    = viewport.height * cellMetrics.lineHeight

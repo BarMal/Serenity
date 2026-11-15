@@ -6,6 +6,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 import scala.util.{Random, Using}
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,7 +39,7 @@ class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValu
         0,
         widthPx,
         font,
-        cellMetricsOverride = Some(CellMetrics.fromFont(font)),
+        cellMetricsOverride = Some(TestMeasure.cellMetrics(font)),
         wrapCache = cache
       )
       .length

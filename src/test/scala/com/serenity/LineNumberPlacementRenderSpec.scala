@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.config.{LineNumberLayout, LineNumberSide}
 import com.serenity.state.models.*
-import com.serenity.testkit.ActivePane
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
@@ -108,7 +108,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
 
   private val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val proseFont   = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val cellWidthPx = CellMetrics.fromFont(codeFont).charWidth
+  private val cellWidthPx = TestMeasure.cellMetrics(codeFont).charWidth
   private val subPixelPx  = 0.5f
 
   /** A digit-free prose buffer, so every all-digit measured run is a line number drawn in the prose font. */
@@ -124,7 +124,7 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
       viewport,
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(proseFont),
-      CellMetrics.fromFont(codeFont),
+      TestMeasure.cellMetrics(codeFont),
       None,
       com.serenity.state.manager.RenderCaches.create()
     )

@@ -13,8 +13,8 @@ import com.serenity.richtext.RichTextDocument
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, executeCommand, switchToPane, updateState}
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
-import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas}
-import com.serenity.ui.layout.{BundledInterFont, CellMetrics, PixelRect, ViewportSize}
+import com.serenity.testkit.{FrameDiff, FrameMismatchDump, FramePlanReport, PresentAreas, TestMeasure}
+import com.serenity.ui.layout.{BundledInterFont, PixelRect, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, FramePlan, RendererFramePlanner, ScreenIdentity}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames, setCursorPosition, splitPaneHorizontal, splitPaneVertical}
 
@@ -30,8 +30,8 @@ trait ColdFrameHarness:
   protected val codeFont    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   protected val textFont    = BundledInterFont.plain(15f)
   protected val uiFont      = Font(Font.SANS_SERIF, Font.PLAIN, codeFont.getSize).deriveFont(codeFont.getSize2D)
-  protected val cellMetrics = CellMetrics.fromFont(codeFont)
-  protected val uiMetrics   = CellMetrics.fromFont(uiFont)
+  protected val cellMetrics = TestMeasure.cellMetrics(codeFont)
+  protected val uiMetrics   = TestMeasure.cellMetrics(uiFont)
 
   protected val windowWidth  = 640
   protected val windowHeight = 600

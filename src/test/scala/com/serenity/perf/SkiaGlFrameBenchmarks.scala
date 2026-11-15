@@ -8,6 +8,7 @@ import cats.effect.unsafe.IORuntime
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.sdl.{Sdl, SdlGlWindow}
@@ -47,7 +48,7 @@ private[perf] object SkiaGlFrameBenchmarks:
       caches: RenderCaches
   ) extends Frames:
     private val screen    = ScreenIdentity(this)
-    private val uiMetrics = CellMetrics.fromFont(uiFont)
+    private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 
     def render(state: AppState, damage: Damage): Unit =
       draw { surface =>
@@ -145,7 +146,7 @@ private[perf] object SkiaGlFrameBenchmarks:
     )
 
   private def benchmarks(context: SkiaGlContext)(using IORuntime): List[BenchmarkRunner.Benchmark] =
-    val metrics           = CellMetrics.fromFont(codeFont)
+    val metrics           = TestMeasure.cellMetrics(codeFont)
     val grid              = ViewportSize(LogicalWidthPx / metrics.charWidth, LogicalHeightPx / metrics.lineHeight)
     val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = grid)
     val (before, after)   = TypingTransition.of(stateManager)

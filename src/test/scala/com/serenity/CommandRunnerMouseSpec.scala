@@ -7,6 +7,7 @@ import com.serenity.config.InterfaceDensity
 import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
@@ -279,7 +280,7 @@ class CommandRunnerMouseSpec extends AnyFlatSpec with Matchers with StateManager
       )
 
   private def floatingMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
+    TestMeasure.cellMetrics(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
 
   /** Enters "settings-status-line" (search "status line" exact-matches its label; issue #1057 -- was
     * "settings-language", then "settings-cursor" until the status line took over its segment rows).

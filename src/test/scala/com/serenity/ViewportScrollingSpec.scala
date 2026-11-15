@@ -8,9 +8,9 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, TextLayoutSnapshot, ViewportSize}
+import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -396,10 +396,10 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     // across platforms. Mirroring the same resize here measures what production actually renders (#1041's
     // `effectiveVisibleLines`), not an incidental platform coincidence.
     val codeLineHeightPx =
-      CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+      TestMeasure.cellMetrics(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
     val panelHeightPx = buffer.viewport.visibleLines * codeLineHeightPx
     val renderedVisibleLines =
-      math.max(1, panelHeightPx / math.max(1, CellMetrics.fromFont(font).lineHeight))
+      math.max(1, panelHeightPx / math.max(1, TestMeasure.cellMetrics(font).lineHeight))
     val renderBuffer = buffer.copy(viewport = buffer.viewport.copy(visibleLines = renderedVisibleLines))
 
     val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font)

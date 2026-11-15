@@ -4,8 +4,9 @@ import com.serenity.MockRenderSurface
 import com.serenity.command.{Command, CommandIntent, SessionIntent}
 import com.serenity.config.{AppConfig, HotkeyAction, HotkeyConfig}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{CalculatedLayout, CellMetrics, LayoutRect, ViewportSize}
+import com.serenity.ui.layout.{CalculatedLayout, LayoutRect, ViewportSize}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -20,7 +21,7 @@ import org.scalatest.matchers.should.Matchers
 class RendererStartPageSpec extends AnyFlatSpec with Matchers:
 
   private val font        = new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-  private val cellMetrics = CellMetrics.fromFont(font)
+  private val cellMetrics = TestMeasure.cellMetrics(font)
   private val theme       = Theme.dark
 
   private def contextWith(surface: MockRenderSurface): RenderContext =

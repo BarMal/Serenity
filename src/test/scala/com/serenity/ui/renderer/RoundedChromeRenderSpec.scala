@@ -8,6 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
 import com.serenity.ui.theme.Theme
@@ -39,7 +40,7 @@ abstract class RoundedChromeRenderBehaviour extends AnyFlatSpec with Matchers:
     )
 
   private def codeFont = baseFont.deriveFont(Font.PLAIN, 14.0f * scale)
-  private def metrics  = CellMetrics.fromFont(codeFont)
+  private def metrics  = TestMeasure.cellMetrics(codeFont)
 
   private def configWith(
     radius: Int,

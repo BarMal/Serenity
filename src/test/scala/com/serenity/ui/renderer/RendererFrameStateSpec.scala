@@ -5,7 +5,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.MockRenderSurface
 import com.serenity.state.models.{BufferId, Damage, PaneId, SurfaceId}
-import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{PixelRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -32,8 +33,8 @@ class RendererFrameStateSpec extends AnyFlatSpec with Matchers:
     new Font(Font.MONOSPACED, Font.PLAIN, 12),
     new Font(Font.MONOSPACED, Font.PLAIN, 12),
     new Font(Font.MONOSPACED, Font.PLAIN, 12),
-    CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)),
-    CellMetrics.fromFont(new Font(Font.MONOSPACED, Font.PLAIN, 12)),
+    TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12)),
+    TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12)),
     cursorVisible = true,
     cursorColor = None
   )

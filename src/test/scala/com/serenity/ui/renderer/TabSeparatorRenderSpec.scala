@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.Theme
@@ -70,7 +71,7 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
     val state    = stateWith(config)
     val codeFont = FontLoader.previewCodeFont(config.editorConfig.fontConfig)
     val uiFont   = FontLoader.previewUiFont(config.editorConfig.fontConfig)
-    val metrics  = CellMetrics.fromFont(codeFont)
+    val metrics  = TestMeasure.cellMetrics(codeFont)
     val widthPx  = columns * metrics.charWidth
     val heightPx = rows * metrics.lineHeight
     val frame    = frames.newFrame(widthPx, heightPx)
@@ -85,7 +86,7 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(codeFont),
       FontSpec.fromAwt(uiFont),
       metrics,
-      CellMetrics.fromFont(uiFont),
+      TestMeasure.cellMetrics(uiFont),
       None,
       caches
     )

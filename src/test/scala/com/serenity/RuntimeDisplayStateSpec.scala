@@ -6,6 +6,7 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.app.RuntimeDisplayState
 import com.serenity.rope.Balance
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,9 +24,9 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
   "RuntimeDisplayState" should "derive cell metrics from the current runtime font" in {
     val runtime = RuntimeDisplayState.create(FontConfig(fontSize = 12.0f, uiFontSize = 14.0f)).unsafeRunSync()
 
-    runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
-    runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
-    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
+    runtime.codeMetrics shouldBe TestMeasure.cellMetrics(runtime.codeFont)
+    runtime.textMetrics shouldBe TestMeasure.cellMetrics(runtime.textFont)
+    runtime.uiMetrics shouldBe TestMeasure.cellMetrics(runtime.uiFont)
   }
 
   it should "refresh both runtime fonts and metrics when the font config changes" in {
@@ -48,9 +49,9 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     runtime.codeFont.getSize2D shouldBe 18.0f
     runtime.textFont.getSize2D shouldBe 18.0f
     runtime.uiFont.getSize2D shouldBe 16.0f
-    runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
-    runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
-    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
+    runtime.codeMetrics shouldBe TestMeasure.cellMetrics(runtime.codeFont)
+    runtime.textMetrics shouldBe TestMeasure.cellMetrics(runtime.textFont)
+    runtime.uiMetrics shouldBe TestMeasure.cellMetrics(runtime.uiFont)
     runtime.codeFont.getSize2D should not be originalCodeFont.getSize2D
     runtime.codeMetrics should not be originalCodeMetric
   }
@@ -73,9 +74,9 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     runtime.codeFont.getSize2D shouldBe 18.0f
     runtime.textFont.getSize2D shouldBe 21.0f
     runtime.uiFont.getSize2D shouldBe 24.0f
-    runtime.codeMetrics shouldBe CellMetrics.fromFont(runtime.codeFont)
-    runtime.textMetrics shouldBe CellMetrics.fromFont(runtime.textFont)
-    runtime.uiMetrics shouldBe CellMetrics.fromFont(runtime.uiFont)
+    runtime.codeMetrics shouldBe TestMeasure.cellMetrics(runtime.codeFont)
+    runtime.textMetrics shouldBe TestMeasure.cellMetrics(runtime.textFont)
+    runtime.uiMetrics shouldBe TestMeasure.cellMetrics(runtime.uiFont)
   }
 
   it should "use code metrics for the primary editor grid" in {
@@ -183,13 +184,13 @@ class RuntimeDisplayStateSpec extends AnyFlatSpec with Matchers:
     // A reader holding one snapshot cannot observe a font from one generation beside a metric from
     // another, which is exactly what six independently-set references allowed.
     before.codeFont.getSize2D shouldBe 12.0f
-    before.codeMetrics shouldBe CellMetrics.fromFont(before.codeFont)
-    before.uiMetrics shouldBe CellMetrics.fromFont(before.uiFont)
+    before.codeMetrics shouldBe TestMeasure.cellMetrics(before.codeFont)
+    before.uiMetrics shouldBe TestMeasure.cellMetrics(before.uiFont)
 
     val after = runtime.snapshot
     after.codeFont.getSize2D shouldBe 24.0f
-    after.codeMetrics shouldBe CellMetrics.fromFont(after.codeFont)
-    after.uiMetrics shouldBe CellMetrics.fromFont(after.uiFont)
+    after.codeMetrics shouldBe TestMeasure.cellMetrics(after.codeFont)
+    after.uiMetrics shouldBe TestMeasure.cellMetrics(after.uiFont)
   }
 
   it should "keep every accessor agreeing with the current snapshot" in {
