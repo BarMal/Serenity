@@ -14,13 +14,13 @@ leaves your settings alone unless you ask it to write the answer (#2618).
 ## Running it
 
 ```
-serenity --optimize-renderer              # announces about 8 minutes, 4 trials
-serenity --optimize-renderer --thorough   # announces about 12 minutes, 6 trials: layer+picture too
+serenity --optimize-renderer              # about 12 minutes, 4 trials
+serenity --optimize-renderer --thorough   # about 18 minutes, 6 trials: layer+picture too
 serenity --optimize-renderer --apply      # also write a recommended mode to config.conf
 ```
 
-The announced time counts two minutes a trial. Starting and stopping each window takes longer than that: a run of the
-four trials measured 12 minutes 43 seconds on a virtual display, so allow about three minutes a trial.
+The time counts three minutes a trial, which starting and stopping each window included: a run of the four trials
+measured 12 minutes 43 seconds on a virtual display.
 
 It opens a window for each trial and types into it, scrolls it, resizes it and changes its theme. **Leave the keyboard
 and mouse alone while it runs**; it says so, and waits five seconds before it starts (Ctrl+C cancels). Every mode runs
@@ -33,7 +33,8 @@ Each trial is a separate process in safe mode, on a generated document, so your 
 
 It switches only when a mode is clearly better: at least 15% lower typing median than the others, no full-window row
 (page-down, full redraw) more than 15% worse, and a gap more than twice the spread between that mode's own two runs.
-Otherwise it says so and keeps your mode. A mode with any failed run is reported, never chosen.
+Otherwise it says so and keeps your mode. A trial that fails is run once more, and says so as it does; a mode with a
+run that still fails is reported, never chosen.
 
 Without `--apply` it prints the lines to set. With `--apply` it writes `ui.render.backend` (and `ui.render.skia_frames`
 for the layer) and nothing else, and only when it recommends a switch. A change needs a restart.

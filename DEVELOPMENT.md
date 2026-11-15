@@ -561,7 +561,9 @@ parts, each a file under `com.serenity.app` with a spec beside it:
   child printed (`RendererTrial`), recommends (`RendererChoice`) and keeps the result (`RendererBenchmarkResult`, in
   `~/.serenity/render-benchmark.json`, schema 3: a file of any other version is read as absent). `RendererTarget`
   reports each mode against the 16.7 ms typing p95 target at 2x and says "not judged" when the clock resolves more
-  coarsely than a quarter of it.
+  coarsely than a quarter of it. A trial that fails (no usable line, a timeout, a child that cannot start) is run once
+  more straight away; the retry replaces it as the run, is announced as it starts, and is listed in the final report
+  (`Finished.retries`).
 - `ProcessSpawner` runs one child per trial through `ProcessService`: the same java, JVM flags and class path, `--safe-mode`,
   the mode's `--renderer` and `-Dserenity.skia.layerFrames`, and a generated document (`TrialDocument`) to scroll.
 - The child is the hidden `--renderer-trial=<layer+image|layer+picture|skia-raster>` flag (not in `--help`, refused outside
