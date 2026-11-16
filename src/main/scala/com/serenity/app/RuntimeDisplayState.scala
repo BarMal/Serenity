@@ -7,7 +7,8 @@ import cats.effect.IO
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.skia.SkiaCellMetrics
+import com.serenity.ui.renderer.FontSpec
+import com.serenity.ui.skia.SkiaFontCache
 import org.typelevel.log4cats.Logger
 
 /** The fonts and cell metrics the renderer is currently drawing with.
@@ -77,10 +78,14 @@ object RuntimeDisplayState:
     def isValid: Boolean = codeMetrics.isValid && textMetrics.isValid && uiMetrics.isValid
 
   /** `metricsOf` sizes the grid of each font; by default the Skia measurer's, which is what layout measures with. */
-  def create(config: FontConfig, metricsOf: Font => CellMetrics = SkiaCellMetrics.measuring())(using
+  def create(config: FontConfig, metricsOf: Font => CellMetrics = skiaMetrics())(using
     logger: Logger[IO]
   ): IO[RuntimeDisplayState] =
     load(config, metricsOf).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot), metricsOf))
+
+  private def skiaMetrics(): Font => CellMetrics =
+    val fonts = new SkiaFontCache()
+    font => fonts.cellMetrics(FontSpec.fromAwt(font))
 
   private def load(config: FontConfig, metricsOf: Font => CellMetrics)(using logger: Logger[IO]): IO[Snapshot] =
     for

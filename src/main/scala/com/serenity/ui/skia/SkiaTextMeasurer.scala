@@ -1,9 +1,6 @@
 package com.serenity.ui.skia
 
-import java.lang.invoke.{MethodHandle, MethodHandles, MethodType}
-
 import scala.jdk.CollectionConverters.*
-import scala.util.Try
 
 import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
@@ -40,15 +37,7 @@ final class SkiaTextMeasurer(
 
   private def skia(font: FontSpec): Font = faces.faceFor(font).font
 
-  def cellMetrics(font: FontSpec): CellMetrics =
-    val skiaFont                   = skia(font)
-    val (ascent, descent, leading) = verticalMetrics(skiaFont)
-    CellMetrics(
-      math.max(1, math.ceil(skiaFont.measureTextWidth("M").toDouble).toInt),
-      math.max(1, math.ceil((descent - ascent + leading).toDouble).toInt),
-      math.max(1, math.ceil((-ascent).toDouble).toInt),
-      displayWidthAware = true
-    )
+  def cellMetrics(font: FontSpec): CellMetrics = faces.cellMetrics(font)
 
   def measuresProportionally(font: FontSpec): Boolean =
     !isMonospaced(font) || font.ligatures || hasFractionalAdvanceDrift(font)
@@ -429,32 +418,10 @@ object SkiaTextMeasurer:
   /** Positions of the same text shaped whole and in two parts that differ by less than this are the same positions. */
   private val CutTolerancePx = 0.001f
 
-  /** Skiko hands its `FontMetrics` value class out as a float array under a name Scala cannot call, in the order top,
-    * ascent, descent, bottom, leading.
-    */
-  private val MetricsOf: Option[MethodHandle] =
-    Try(
-      MethodHandles
-        .publicLookup()
-        .findVirtual(classOf[Font], "getMetrics-l-OL_C8", MethodType.methodType(classOf[Array[Float]]))
-    ).toOption
-
   /** Whether the Skiko in use still answers [[verticalMetrics]]; `SkiaTextMeasurerSpec` fails if it does not. */
-  private[ui] def hasVerticalMetrics: Boolean = MetricsOf.isDefined
+  private[ui] def hasVerticalMetrics: Boolean = SkiaVerticalMetrics.available
 
-  /** Skia's ascent (negative above the baseline), descent and leading for a font; without the Skiko accessor, the
-    * proportions of a typical face, which the spec above catches before anyone measures with them.
-    */
-  private[skia] def verticalMetrics(font: Font): (Float, Float, Float) =
-    MetricsOf
-      .map { handle =>
-        val answer: Object = handle.invoke(font)
-        answer
-      }
-      .collect { case metrics: Array[Float] => (metrics(1), metrics(2), metrics(4)) }
-      .getOrElse(
-        (-0.9f * font.getSize, 0.25f * font.getSize, 0.0f)
-      )
+  private[skia] def verticalMetrics(font: Font): (Float, Float, Float) = SkiaVerticalMetrics.of(font)
 
   private def scriptOf(text: String): String =
     text

@@ -1,8 +1,12 @@
 package com.serenity.ui.skia
 
+import java.lang.invoke.{MethodHandle, MethodHandles, MethodType}
 import java.util.concurrent.ConcurrentHashMap
 
+import scala.util.Try
+
 import com.serenity.ui.fonts.LogicalFontFamilies
+import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
 import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontStyleSet, FontVariation, Typeface}
 
@@ -50,6 +54,17 @@ final class SkiaFontCache(
     }
 
   def size: Int = faces.size
+
+  /** The grid a font is laid out on: the width of its `M` rounded up, and its line height and ascent. */
+  def cellMetrics(font: FontSpec): CellMetrics =
+    val skia                       = faceFor(font).font
+    val (ascent, descent, leading) = SkiaVerticalMetrics.of(skia)
+    CellMetrics(
+      math.max(1, math.ceil(skia.measureTextWidth("M").toDouble).toInt),
+      math.max(1, math.ceil((descent - ascent + leading).toDouble).toInt),
+      math.max(1, math.ceil((-ascent).toDouble).toInt),
+      displayWidthAware = true
+    )
 
   /** Whether text is shaped with `font`'s ligatures on: what the spec it was built for says, and on for any other font.
     */
@@ -225,3 +240,29 @@ private[skia] object SkiaTypefaces:
         catch case _: Exception => None
         finally stream.close()
       }
+
+/** Skia's vertical metrics of a font. Skiko hands its `FontMetrics` value class out as a float array under a name Scala
+  * cannot call, in the order top, ascent, descent, bottom, leading.
+  */
+private[skia] object SkiaVerticalMetrics:
+
+  private val MetricsOf: Option[MethodHandle] =
+    Try(
+      MethodHandles
+        .publicLookup()
+        .findVirtual(classOf[Font], "getMetrics-l-OL_C8", MethodType.methodType(classOf[Array[Float]]))
+    ).toOption
+
+  def available: Boolean = MetricsOf.isDefined
+
+  /** Ascent (negative above the baseline), descent and leading; without the Skiko accessor, the proportions of a
+    * typical face, which the measurer's spec catches before anyone measures with them.
+    */
+  def of(font: Font): (Float, Float, Float) =
+    MetricsOf
+      .map { handle =>
+        val answer: Object = handle.invoke(font)
+        answer
+      }
+      .collect { case metrics: Array[Float] => (metrics(1), metrics(2), metrics(4)) }
+      .getOrElse((-0.9f * font.getSize, 0.25f * font.getSize, 0.0f))

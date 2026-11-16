@@ -29,10 +29,9 @@ class SkiaTextMeasurerUnwiredSpec extends AnyFlatSpec with Matchers:
         .sorted
     }
 
-  "Only SkiaTextMeasurer itself, the grid's metrics and the GUI launch" should "name SkiaTextMeasurer" in {
+  "Only SkiaTextMeasurer itself and the GUI launch" should "name SkiaTextMeasurer" in {
     mainSourcesContaining("SkiaTextMeasurer") shouldBe List(
       "scala/Main.scala",
-      "scala/com/serenity/ui/skia/SkiaCellMetrics.scala",
       "scala/com/serenity/ui/skia/SkiaTextMeasurer.scala"
     )
   }
