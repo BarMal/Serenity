@@ -42,7 +42,7 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.InputSettings
-import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
+import com.serenity.ui.renderer.{CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
@@ -555,7 +555,8 @@ object Main extends IOApp:
                   onPreferredWindowSizeChanged = size => IO.blocking(host.control.resizeToPreferred(size)),
                   fileDialog = Some(fileDialog),
                   scrollCounting = scrollCounting,
-                  layoutMeasurerFor = owner => Some(SkiaTextMeasurer.of(owner))
+                  layoutMeasurerFor = owner => Some(SkiaTextMeasurer.of(owner)),
+                  sharedBackendCaches = new CacheSlots
                 )
               ),
               awaitExternalQuit =

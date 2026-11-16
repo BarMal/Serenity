@@ -18,10 +18,10 @@ object SkiaTextCaches:
 
   private val Key = BackendCacheKey(classOf[SkiaTextCaches])
 
-  def fresh(): SkiaTextCaches =
+  def fresh(typefaces: SharedTypefaces = new SharedTypefaces()): SkiaTextCaches =
     val warmup = new WarmupStats()
     SkiaTextCaches(
-      new SkiaFontCache(warmup = warmup),
+      new SkiaFontCache(warmup = warmup, resolveTypeface = typefaces.typefaceFor),
       new SkiaShapedTextCache(warmup = warmup),
       new SkiaImageCache(),
       warmup = warmup
@@ -42,7 +42,11 @@ object SkiaTextCaches:
     )
 
   /** The set `owner` draws with, made the first time it is asked for. */
-  def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh())
+  def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh(typefacesOf(owner)))
+
+  /** The typefaces every owner built over `owner`'s shared slots resolves through. */
+  def typefacesOf(owner: BackendCaches): SharedTypefaces =
+    owner.shared.getOrCreate(SharedTypefaces.Key)(new SharedTypefaces())
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 

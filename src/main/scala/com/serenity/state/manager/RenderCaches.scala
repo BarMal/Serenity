@@ -6,6 +6,7 @@ import com.serenity.state.reducers.CompositionRevisions
 import com.serenity.ui.layout.{LayoutMemos, ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
 import com.serenity.ui.renderer.{
   BackendCaches,
+  CacheSlots,
   GraphemeSegmentationCache,
   LabelSprites,
   MeasuredTextAdvances,
@@ -76,9 +77,10 @@ object RenderCaches:
     rendererFrameStateCacheCapacity: Int = 64,
     scrollCounting: ScrollCounting = ScrollCounting.Inline,
     styledFonts: StyledFontCache = StyledFontCache(),
-    measurerFor: BackendCaches => Option[TextMeasurer] = _ => None
+    measurerFor: BackendCaches => Option[TextMeasurer] = _ => None,
+    sharedBackendCaches: CacheSlots = new CacheSlots
   ): RenderCaches =
-    val backend        = new BackendCaches
+    val backend        = new BackendCaches(sharedBackendCaches)
     lazy val measurer  = measurerFor(backend)
     val measurerSource = () => measurer
     val shapedText     = ShapedTextCache()

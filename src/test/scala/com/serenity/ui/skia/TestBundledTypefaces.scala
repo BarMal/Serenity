@@ -18,8 +18,11 @@ object TestBundledTypefaces:
       finally stream.close()
     }
 
+  /** One holder for every test of the JVM, so the fallback faces are opened once. */
+  private val typefaces = new SharedTypefaces()
+
   private def withInter(key: SkiaTypefaces.TypefaceKey): Typeface =
-    Option.when(key.family == "Inter")(inter).flatten.getOrElse(SkiaTypefaces.sharedTypefaceFor(key))
+    Option.when(key.family == "Inter")(inter).flatten.getOrElse(typefaces.typefaceFor(key))
 
   def cacheWithInter(): SkiaFontCache = new SkiaFontCache(resolveTypeface = withInter)
 

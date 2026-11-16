@@ -16,7 +16,7 @@ object SkiaTestFonts:
       val family = typeface.getFamilyName
       SkiaTextCaches.withTypefaces(
         owner,
-        key => if key.family.equalsIgnoreCase(family) then typeface else SkiaTypefaces.sharedTypefaceFor(key)
+        key => if key.family.equalsIgnoreCase(family) then typeface else SkiaTextCaches.typefacesOf(owner).typefaceFor(key)
       )
       family
     }
