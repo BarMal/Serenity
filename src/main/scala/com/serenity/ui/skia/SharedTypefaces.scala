@@ -36,4 +36,4 @@ object SharedTypefaces:
 
   val DefaultLimit: Int = 1024
 
-  val Key: BackendCacheKey[SharedTypefaces] = BackendCacheKey(classOf[SharedTypefaces])
+  private[skia] val Key = BackendCacheKey(classOf[SharedTypefaces])

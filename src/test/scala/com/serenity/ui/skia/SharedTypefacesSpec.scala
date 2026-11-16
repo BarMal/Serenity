@@ -62,11 +62,13 @@ final class SharedTypefacesSpec extends AnyFlatSpec with Matchers:
     val holder = SharedTypefaces(
       key =>
         resolved.incrementAndGet()
-        SkiaTypefaces.typefaceFor(key),
+        SkiaTypefaces.typefaceFor(key)
+      ,
       limit = 1
     )
     val sizes = Vector(11, 12, 13).map(size => FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, size)))
-    val faces = sizes.map(spec => new SkiaFontCache(resolveTypeface = holder.typefaceFor).faceFor(spec).font.getTypeface)
+    val faces =
+      sizes.map(spec => new SkiaFontCache(resolveTypeface = holder.typefaceFor).faceFor(spec).font.getTypeface)
 
     faces should have size 3
     resolved.get should be >= 3
