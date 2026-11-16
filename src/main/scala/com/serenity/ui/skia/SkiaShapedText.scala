@@ -257,6 +257,7 @@ final class SkiaShapedTextCache(
 
   private def shape(text: String, font: Font): SkiaShapedStretch =
     if text.forall(_ < FirstCharNeedingScriptRuns) then shapeLatin(text, font)
+    else if BidiShaping.shapesAsRuns(text) then shapeBidi(text, font)
     else shapeWithRuns(text, font).getOrElse(shapeLine(text, font))
 
   /** Text of plain characters and a few simple symbols, shaped with the font runs `TextLine` would choose; `None` when
@@ -284,6 +285,22 @@ final class SkiaShapedTextCache(
   private[skia] def shapeLine(text: String, font: Font): SkiaShapedStretch =
     val _ = lineN.incrementAndGet()
     new LineStretch(TextLine.Companion.make(text, font), text.length)
+
+  /** Text that reads right to left somewhere, shaped in bidi and script runs so its glyphs come out in visual order. */
+  private def shapeBidi(text: String, font: Font): SkiaShapedStretch =
+    val end       = text.length
+    val collector = new GlyphCollector()
+    shaper.shape(
+      text,
+      Iterator.single(FontRun(end, font)).asJava,
+      BidiShaping.levelRuns(text).iterator.asJava,
+      BidiShaping.scriptRuns(text).iterator.asJava,
+      Iterator.single(LanguageRun(end, "en")).asJava,
+      ShapingFeatures.optionsFor(ligaturesOf(font)),
+      Float.MaxValue,
+      collector
+    )
+    new GlyphStretch(font, end, collector.glyphs, collector.xs, collector.clusters)
 
   private def shapeLatin(text: String, font: Font): SkiaShapedStretch =
     val end       = text.length
@@ -323,11 +340,48 @@ object SkiaShapedTextCache:
 
   private type Stretches = ConcurrentHashMap[Key, SkiaShapedStretch]
 
+/** The runs Skia's shaper is given for text that reads right to left somewhere: the bidi level of each stretch of it
+  * and the script of each, so the shaper reorders the runs into visual order and shapes each in its direction. The
+  * glyphs the draw path paints and the glyphs the measurer measures are both shaped from these runs.
+  */
+private[skia] object BidiShaping:
+
+  /** Whether `text` has a right-to-left character and nothing Skiko's `TextLine` is better at (emoji sequences). */
+  def shapesAsRuns(text: String): Boolean =
+    text.exists(char =>
+      Character.getDirectionality(char) match
+        case Character.DIRECTIONALITY_RIGHT_TO_LEFT | Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC => true
+        case _                                                                                      => false
+    ) && !text.exists(Character.isSurrogate)
+
+  def levelRuns(text: String): Vector[BidiRun] =
+    val bidi = java.text.Bidi(text, java.text.Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT)
+    Vector.tabulate(bidi.getRunCount)(run => BidiRun(bidi.getRunLimit(run), bidi.getRunLevel(run)))
+
+  /** A script run for each stretch of one script; what has no script of its own (spaces, digits, punctuation) takes the
+    * script before it, or the one after it at the start of the text.
+    */
+  def scriptRuns(text: String): Vector[ScriptRun] =
+    val own: Vector[Option[String]] = text.toVector.map { char =>
+      Character.UnicodeScript.of(char) match
+        case Character.UnicodeScript.HEBREW                                     => Some("Hebr")
+        case Character.UnicodeScript.ARABIC                                     => Some("Arab")
+        case Character.UnicodeScript.COMMON | Character.UnicodeScript.INHERITED => None
+        case _                                                                  => Some("Latn")
+    }
+    val first = own.flatten.headOption.getOrElse("Latn")
+    val tags  = own.scanLeft(first)((previous, tag) => tag.getOrElse(previous)).drop(1)
+    tags.indices
+      .filter(index => index == tags.length - 1 || tags(index + 1) != tags(index))
+      .toVector
+      .map(index => ScriptRun(index + 1, tags(index)))
+
 /** Collects the glyph ids, x positions and source clusters of each shaped run, left to right. */
 final private class GlyphCollector extends RunHandler:
   private val glyphIds     = scala.collection.mutable.ArrayBuilder.ofShort()
   private val glyphXs      = scala.collection.mutable.ArrayBuilder.ofFloat()
   private val glyphYs      = scala.collection.mutable.ArrayBuilder.ofFloat()
+  private val glyphLevels  = scala.collection.mutable.ArrayBuilder.ofByte()
   private val glyphCluster = scala.collection.mutable.ArrayBuilder.ofInt()
   private val penX         = new Array[Float](1)
 
@@ -337,6 +391,9 @@ final private class GlyphCollector extends RunHandler:
   lazy val glyphs: Array[Short] = glyphIds.result()
   lazy val xs: Array[Float]     = glyphXs.result()
   lazy val ys: Array[Float]     = glyphYs.result()
+
+  /** The bidi level of the run each glyph was shaped in; odd levels read right to left. */
+  lazy val levels: Array[Byte]  = glyphLevels.result()
   lazy val clusters: Array[Int] = glyphCluster.result()
 
   def beginLine(): Unit               = ()
@@ -352,4 +409,5 @@ final private class GlyphCollector extends RunHandler:
       glyphYs.addOne(position.getY)
     }
     glyphCluster.addAll(runClusters)
+    runGlyphs.foreach(_ => glyphLevels.addOne(info.getBidiLevel.toByte))
     penX(0) += info.getAdvanceX

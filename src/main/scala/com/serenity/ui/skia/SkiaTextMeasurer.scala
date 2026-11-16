@@ -305,6 +305,9 @@ final class SkiaTextMeasurer(
     else if SkiaShapedTextCache.shapedByLatinRuns(text) then
       val origins = shapedOrigins(text, font)
       (spreadCarets(text, origins.starts, origins.end), origins.pulls)
+    else if BidiShaping.shapesAsRuns(text) then
+      val origins = bidiOrigins(text, font)
+      (spreadCarets(text, origins.starts, origins.end), origins.pulls)
     else
       val (starts, end) = drawnOrigins(text, font)
       (spreadCarets(text, starts, end), new Array[Float](text.length + 1))
@@ -342,6 +345,9 @@ final class SkiaTextMeasurer(
     if SkiaShapedTextCache.shapedByLatinRuns(text) then
       val origins = shapedOrigins(text, font)
       (origins.starts, origins.end)
+    else if BidiShaping.shapesAsRuns(text) then
+      val origins = bidiOrigins(text, font)
+      (origins.starts, origins.end)
     else drawnOrigins(text, font)
 
   /** One shaping of Latin `text`: where each character's cluster starts (NaN inside one), the trailing edge, and the
@@ -361,6 +367,25 @@ final class SkiaTextMeasurer(
       math.max(reach, x + nominal(glyph))
     }
     ShapedOrigins(starts, collector.width, pulls)
+
+  /** Where each character's caret goes in text that reads right to left somewhere: the edge its glyph starts at in
+    * reading direction, which is the glyph's x for a left-to-right character and its right edge for a right-to-left
+    * one, NaN for a character inside a cluster, and the trailing edge, which is the advance of the whole line. Nothing
+    * pulls a character in such text, so a row that ends before it feels no kerning from it.
+    */
+  private def bidiOrigins(text: String, font: Font): ShapedOrigins =
+    val collector = shaped(text, font, 0.toByte)
+    val nominal   = font.getWidths(collector.glyphs)
+    val starts    = Array.fill(text.length)(Float.NaN)
+    collector.clusters.indices.foreach { glyph =>
+      val cluster = collector.clusters(glyph)
+      if cluster >= 0 && cluster < text.length then
+        val rightToLeft = collector.levels(glyph) % 2 == 1
+        val edge        = if rightToLeft then collector.xs(glyph) + nominal(glyph) else collector.xs(glyph)
+        val keep = starts(cluster).isNaN || (if rightToLeft then edge > starts(cluster) else edge < starts(cluster))
+        if keep then starts(cluster) = edge
+    }
+    ShapedOrigins(starts, collector.width, new Array[Float](text.length + 1))
 
   private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
     val edges = stretches.reading(text, font)(stretch =>
@@ -401,8 +426,10 @@ final class SkiaTextMeasurer(
         val _ = shaper.shape(
           managed,
           Iterator.single(org.jetbrains.skia.shaper.FontRun(end, font)).asJava,
-          Iterator.single(BidiRun(end, level.toInt)).asJava,
-          Iterator.single(ScriptRun(end, scriptOf(text))).asJava,
+          (if level == 0 && BidiShaping.shapesAsRuns(text) then BidiShaping.levelRuns(text).iterator
+           else Iterator.single(BidiRun(end, level.toInt))).asJava,
+          (if level == 0 && BidiShaping.shapesAsRuns(text) then BidiShaping.scriptRuns(text).iterator
+           else Iterator.single(ScriptRun(end, scriptOf(text)))).asJava,
           Iterator.single(LanguageRun(end, "en")).asJava,
           ShapingFeatures.optionsFor(faces.ligaturesOf(font)),
           Float.MaxValue,
