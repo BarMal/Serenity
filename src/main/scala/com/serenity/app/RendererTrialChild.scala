@@ -28,7 +28,8 @@ object RendererTrialChild:
       prepareTimeout: FiniteDuration = 10.seconds,
       progress: String => IO[Unit] = _ => IO.unit,
       inApp: Option[IO[Window]] = None,
-      device: IO[Option[String]] = IO.pure(None)
+      device: IO[Option[String]] = IO.pure(None),
+      canvasPixels: IO[Long] = IO.pure(0L)
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -46,13 +47,13 @@ object RendererTrialChild:
     case Candidate.LayerImage | Candidate.LayerPicture => RenderBackend.Skia
     case Candidate.SkiaRaster                          => RenderBackend.SkiaRaster
 
-  private def pixelOutcome(setup: Setup, result: Result, resolution: Double): Outcome =
-    RendererWorkload.outcome(result, setup.scale, resolution)
+  private def pixelOutcome(setup: Setup, result: Result, resolution: Double, pixels: Long): Outcome =
+    RendererWorkload.outcome(result, setup.scale, resolution, canvasPixels = pixels)
 
   /** When the screen cannot be read, measures again by the app's own stamps if the window can, leaving the resize out.
     */
-  private def inApp(setup: Setup, unread: Result): IO[Outcome] =
-    setup.inApp.fold(IO.pure(RendererWorkload.outcome(unread, setup.scale, 0.0))) { start =>
+  private def inApp(setup: Setup, unread: Result, pixels: Long): IO[Outcome] =
+    setup.inApp.fold(IO.pure(RendererWorkload.outcome(unread, setup.scale, 0.0, canvasPixels = pixels))) { start =>
       for
         window <- start
         result <- RendererWorkload.run(setup.plan.copy(resize = false), window, setup.progress)
@@ -61,7 +62,7 @@ object RendererTrialChild:
           Outcome.Failed(
             "the screen cannot be read from here, and the in-app clock saw no keystroke painted either"
           )
-        else RendererWorkload.outcome(result, setup.scale, 0.0, Clock.InApp)
+        else RendererWorkload.outcome(result, setup.scale, 0.0, Clock.InApp, pixels)
     }
 
   private def prepared(setup: Setup): IO[Unit] =
@@ -77,9 +78,11 @@ object RendererTrialChild:
       for
         _          <- prepared(setup)
         resolution <- setup.clockResolutionMs
+        pixels     <- setup.canvasPixels.handleError(_ => 0L)
         result     <- RendererWorkload.run(setup.plan, setup.window, setup.progress)
         outcome <-
-          if result.unreadableScreen then inApp(setup, result) else IO.pure(pixelOutcome(setup, result, resolution))
+          if result.unreadableScreen then inApp(setup, result, pixels)
+          else IO.pure(pixelOutcome(setup, result, resolution, pixels))
       yield outcome
     val guarded: IO[Outcome] =
       measured

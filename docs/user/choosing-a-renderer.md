@@ -51,6 +51,12 @@ where each mode stands against it. **No mode reaches it on the reference laptop 
 that none of them closes. The target is judged only at 2x, and only when the measuring clock is fine enough for it (see
 below); otherwise the report says it was not judged and why.
 
+"2x" is judged by the pixels the trial really drew: the target applies when the trial's canvas had at least 5
+megapixels, whatever scale the JVM reported. The scale is not trusted because an X11 toolkit under XWayland reports 1.0
+on a 2x monitor. Each run keeps both in the result file, the canvas size as `canvasPixels` and the scale the JVM reported
+as `jvmScale`. A trial on a smaller canvas is reported as not judged, with how many megapixels it had and how many the
+target needs, rather than judged against a lighter load than 2x.
+
 ## How it measures, and where that stops
 
 The trial watches a small region of the screen with `java.awt.Robot` and times how long a typed key, a page-down, a

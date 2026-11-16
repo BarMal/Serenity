@@ -213,3 +213,12 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
       case Outcome.Measured(workload) => workload.clock shouldBe RendererChoice.Clock.Pixel
       case other                      => fail(s"expected a measurement, got $other")
   }
+
+  it should "carry the number of pixels the trial's canvas had, whatever scale the JVM reported" in {
+    val result = Result(Samples(Vector(1.0), 0), Samples(Vector(1.0), 0), Samples(Vector(1.0), 0))
+    RendererWorkload.outcome(result, scale = 1.0, clockResolutionMs = 1.5, canvasPixels = 2_722_440L) match
+      case Outcome.Measured(workload) =>
+        workload.canvasPixels shouldBe 2_722_440L
+        workload.scale shouldBe 1.0
+      case other => fail(s"expected a measurement, got $other")
+  }

@@ -7,14 +7,22 @@ import org.scalatest.matchers.should.Matchers
 
 class RendererTargetSpec extends AnyFlatSpec with Matchers:
 
-  private def run(p95: Double, scale: Double = 2.0, resolution: Double = 1.0): Outcome =
+  private val SixMegapixels = 6_000_000L
+
+  private def run(
+    p95: Double,
+    scale: Double = 2.0,
+    resolution: Double = 1.0,
+    canvasPixels: Long = SixMegapixels
+  ): Outcome =
     Outcome.Measured(
       Workload(
         typingP50Ms = p95 / 2,
         typingP95Ms = p95,
         scale = scale,
         clockResolutionMs = resolution,
-        fullWindowMs = Map.empty
+        fullWindowMs = Map.empty,
+        canvasPixels = canvasPixels
       )
     )
 
@@ -32,9 +40,22 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
       case other => fail(s"expected a miss, got $other")
   }
 
-  it should "not judge a run at another scale, and say what scale it ran at" in {
-    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, scale = 1.0))) match
-      case Verdict.NotJudged(reason) => reason should (include("1.0x") and include("2x"))
+  it should "judge by the pixels the trial drew, whatever scale the JVM reported: 2x is a canvas of at least 5 megapixels" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, scale = 1.0, canvasPixels = 5_000_000L))) shouldBe
+      Verdict.Meets(10.0)
+    RendererTarget.judge(runs(Candidate.LayerImage, run(40.0, scale = 1.0, canvasPixels = 12_000_000L))) shouldBe
+      a[Verdict.Misses]
+  }
+
+  it should "not judge a canvas with fewer pixels than that, and say how many it had and how many it needs" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, scale = 2.0, canvasPixels = 2_722_440L))) match
+      case Verdict.NotJudged(reason) => reason should (include("2.7 megapixels") and include("5.0 megapixels"))
+      case other                     => fail(s"expected no verdict, got $other")
+  }
+
+  it should "not judge a run whose canvas size was not recorded" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, canvasPixels = 0L))) match
+      case Verdict.NotJudged(reason) => reason should include("not recorded")
       case other                     => fail(s"expected no verdict, got $other")
   }
 
@@ -48,8 +69,11 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
     RendererTarget.judge(runs(Candidate.LayerImage, run(10.0, resolution = 16.7 / 4.0))) shouldBe a[Verdict.Meets]
   }
 
-  it should "not judge runs that were measured at different scales" in {
-    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0), run(10.0, scale = 1.0))) shouldBe a[Verdict.NotJudged]
+  it should "judge a mode by the smallest canvas any of its runs drew on" in {
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0), run(10.0, canvasPixels = 3_000_000L))) shouldBe
+      a[Verdict.NotJudged]
+    RendererTarget.judge(runs(Candidate.LayerImage, run(10.0), run(14.0, canvasPixels = 8_000_000L))) shouldBe
+      Verdict.Meets(12.0)
   }
 
   it should "not judge a mode with no completed run" in {
@@ -76,7 +100,7 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "report modes it could not judge without claiming none reaches the target" in {
-    val lines = RendererTarget.lines(List(runs(Candidate.LayerImage, run(10.0, scale = 1.0))))
+    val lines = RendererTarget.lines(List(runs(Candidate.LayerImage, run(10.0, canvasPixels = 1_000_000L))))
     lines.head should (include("layer+image") and include("not judged"))
     lines.mkString("\n") should not include "No renderer mode reaches"
   }
@@ -95,7 +119,8 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "say a verdict is on the in-app clock, a lower bound, when the runs were measured by it" in {
-    val inApp = Outcome.Measured(Workload(8.0, 12.0, 2.0, 0.0, Map.empty, clock = Clock.InApp))
-    val text  = RendererTarget.lines(List(runs(Candidate.LayerImage, inApp))).mkString("\n")
+    val inApp =
+      Outcome.Measured(Workload(8.0, 12.0, 2.0, 0.0, Map.empty, clock = Clock.InApp, canvasPixels = SixMegapixels))
+    val text = RendererTarget.lines(List(runs(Candidate.LayerImage, inApp))).mkString("\n")
     text should (include("target met") and include("clock=in-app") and include("lower bound"))
   }

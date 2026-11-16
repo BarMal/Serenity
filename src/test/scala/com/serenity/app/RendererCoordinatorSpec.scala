@@ -23,7 +23,9 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     if candidate == Candidate.SkiaRaster then RenderBackend.SkiaRaster else RenderBackend.Skia
 
   private def measured(typing: Double, p95: Double): Outcome =
-    Outcome.Measured(Workload(typing, p95, 2.0, 1.0, Map("page-down" -> 40.0, "full-redraw" -> 60.0)))
+    Outcome.Measured(
+      Workload(typing, p95, 2.0, 1.0, Map("page-down" -> 40.0, "full-redraw" -> 60.0), canvasPixels = 6_000_000L)
+    )
 
   private def printed(candidate: Candidate, outcome: Outcome, device: Option[String] = None): String =
     RendererTrial.line(RendererTrial.Report(candidate, backendOf(candidate), Some("OPENGL"), outcome, device))

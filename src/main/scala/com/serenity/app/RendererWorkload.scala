@@ -121,19 +121,21 @@ object RendererWorkload:
     result: Result,
     scale: Double,
     clockResolutionMs: Double,
-    clock: RendererChoice.Clock = RendererChoice.Clock.Pixel
+    clock: RendererChoice.Clock = RendererChoice.Clock.Pixel,
+    canvasPixels: Long = 0L
   ): Outcome =
     if result.unreadableScreen then
       Outcome.Failed(
         s"the screen showed no change after ${result.typing.timedOut} typed characters: it cannot be read from here"
       )
-    else measured(result, scale, clockResolutionMs, clock)
+    else measured(result, scale, clockResolutionMs, clock, canvasPixels)
 
   private def measured(
     result: Result,
     scale: Double,
     clockResolutionMs: Double,
-    clock: RendererChoice.Clock
+    clock: RendererChoice.Clock,
+    canvasPixels: Long
   ): Outcome =
     val unanswered = List("typing" -> result.typing, "page-down" -> result.pageDown, "full-redraw" -> result.fullRedraw)
       .filter((_, samples) => samples.latenciesMs.isEmpty)
@@ -151,6 +153,7 @@ object RendererWorkload:
           scale = scale,
           clockResolutionMs = clockResolutionMs,
           clock = clock,
+          canvasPixels = canvasPixels,
           fullWindowMs = Map(
             "page-down"   -> RendererChoice.median(result.pageDown.latenciesMs.toList),
             "full-redraw" -> RendererChoice.median(result.fullRedraw.latenciesMs.toList)
