@@ -35,6 +35,8 @@ final class SkiaTextMeasurer(
   private val shaperLock = new Object
   private val inkPaint   = new Paint()
   private val shaper     = Shaper.Companion.make()
+  private lazy val certShaper = Shaper.Companion.make()
+  private val certLock        = new Object
 
   def metricsKey: MetricsKey = MetricsKey("skia", Vector.empty)
 
@@ -342,10 +344,12 @@ final class SkiaTextMeasurer(
     // fallback typeface for each that native memory keeps until the heap is next collected; layout gives text its
     // fallback fonts itself. The native copy of the text is freed here for the same reason.
     val end = text.length
-    shaperLock.synchronized {
+    val (shapingLock, shapingShaper) =
+      if com.serenity.ui.layout.ExpCert.offShaperLock then (certLock, certShaper) else (shaperLock, shaper)
+    shapingLock.synchronized {
       val managed = new ManagedString(text)
       try
-        val _ = shaper.shape(
+        val _ = shapingShaper.shape(
           managed,
           Iterator.single(org.jetbrains.skia.shaper.FontRun(end, font)).asJava,
           Iterator.single(BidiRun(end, level.toInt)).asJava,

@@ -57,16 +57,20 @@ private[serenity] object NominalAdvances:
   private lazy val Battery: Vector[String] =
     val pairs   = for first <- Printable; second <- Printable yield s"$first$second"
     val triples = for a <- SymbolsSpace; b <- SymbolsSpace; c <- SymbolsSpace yield s"$a$b$c"
-    (pairs ++ triples).grouped(ElementsPerRun).map(_.mkString).toVector
+    (if ExpCert.on("d") then pairs else pairs ++ triples).grouped(ElementsPerRun).map(_.mkString).toVector
 
   private val ElementsPerRun = 333
 
   /** The table for `font`, or `None` when the measurer may set some character at an advance other than its own. */
   def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
-    table(font, measurer).filter(_ =>
-      Battery.forall(run =>
-        measurer.mayMeasureByAdvances(run) &&
-          measurer.advances(run, 0, run.length, 0, LineFonts(font, Vector.empty)).isContextFree(0, run.length)
+    ExpCert.cached(font, measurer)(
+      ExpCert.certifying(
+        table(font, measurer).filter(_ =>
+          Battery.forall(run =>
+            measurer.mayMeasureByAdvances(run) &&
+              measurer.advances(run, 0, run.length, 0, LineFonts(font, Vector.empty)).isContextFree(0, run.length)
+          )
+        )
       )
     )
 
