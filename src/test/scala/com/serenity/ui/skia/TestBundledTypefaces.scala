@@ -1,6 +1,6 @@
 package com.serenity.ui.skia
 
-import com.serenity.ui.renderer.{BackendCaches, CacheSlots}
+import com.serenity.ui.renderer.BackendCaches
 import org.jetbrains.skia.{Data, FontMgr, Typeface}
 
 /** A [[SkiaFontCache]] for fonts the tests load through AWT alone: the Inter subset and the two test fonts of the
@@ -31,13 +31,6 @@ object TestBundledTypefaces:
 
   private def resolveWithFixtures(key: SkiaTypefaces.TypefaceKey): Typeface =
     fixtures.getOrElse(key.family.toLowerCase, SkiaTypefaces.typefaceFor(key))
-
-  /** The slots every test owner of the JVM is built over, so each resolves the fixture fonts as well as the system's.
-    */
-  val sharedSlots: CacheSlots =
-    val slots = new CacheSlots
-    val _     = slots.getOrCreate(SharedTypefaces.Key)(typefaces)
-    slots
 
   def cacheWithInter(): SkiaFontCache = new SkiaFontCache(resolveTypeface = typefaces.typefaceFor)
 
