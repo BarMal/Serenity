@@ -178,11 +178,13 @@ final class SkiaTextMeasurer(
       val clusters      = collector.clusters
       val glyphCount    = new Array[Int](chars.length)
       val glyphOf       = Array.fill(chars.length)(-1)
+      val firstGlyphOf  = Array.fill(chars.length)(-1)
       clusters.indices.foreach { glyph =>
         val char = clusters(glyph)
         if char >= 0 && char < chars.length then
           glyphCount(char) += 1
           glyphOf(char) = glyph
+          if firstGlyphOf(char) < 0 then firstGlyphOf(char) = glyph
       }
       def ownGlyph(index: Int): Option[Int] =
         Option.when(glyphCount(index) == 1)(glyphOf(index)).filter { glyph =>
@@ -205,6 +207,47 @@ final class SkiaTextMeasurer(
               kernAfter(offset + index) = pair
         }
       }
+      measurableRuns(chars, nominal, xs, firstGlyphOf, offset, measurable)
+
+  /** Short runs of characters with equal advances that shaping sets exactly where their advances put them end to end,
+    * though not each at its own: a ligature such as `=>` in a monospaced code font, or glyphs a contextual alternate
+    * widens and narrows by the same amount. Spread evenly across the run, which is how carets inside a ligature are
+    * placed, they are the characters' own advances, so a row can be measured from them as if shaping had not touched
+    * the run.
+    */
+  private def measurableRuns(
+    chars: String,
+    nominal: Array[Float],
+    xs: Array[Float],
+    firstGlyphOf: Array[Int],
+    offset: Int,
+    measurable: Array[Boolean]
+  ): Unit =
+    val array = chars.toCharArray
+    def plain(index: Int): Boolean =
+      GlyphAdvances.isContextFreeCharacter(array(index)) && !GlyphAdvances.requiresLayout(array, index, index + 1) &&
+        nominal(index) >= GlyphAdvances.SmallestDistinctAdvancePx
+    def originOf(index: Int): Option[Float] =
+      if index == chars.length then Some(xs.last)
+      else Option.when(firstGlyphOf(index) >= 0)(xs(firstGlyphOf(index)))
+    chars.indices.foreach { first =>
+      if !measurable(offset + first) && plain(first) then
+        val start = originOf(first)
+        val run = (2 to MaxMeasurableRun).iterator
+          .map(length => first + length)
+          .takeWhile(_ <= chars.length)
+          .find { end =>
+            val within = first until end
+            within.forall(plain) &&
+            within.forall(index => math.abs(nominal(index) - nominal(first)) <= GlyphAdvances.ShapingTolerancePx) &&
+            start
+              .zip(originOf(end))
+              .exists((from, to) =>
+                math.abs(to - from - within.map(nominal).sum) <= GlyphAdvances.ShapingTolerancePx * within.length
+              )
+          }
+        run.foreach(end => (first until end).foreach(index => measurable(offset + index) = true))
+    }
 
   /** How far `first` pulls `second` closer (negative) when the two are shaped alone, read once per face and pair: a
     * width read off a long run carries rounding that differs from run to run.
@@ -360,6 +403,8 @@ final class SkiaTextMeasurer(
     collector
 
 object SkiaTextMeasurer:
+
+  private val MaxMeasurableRun = 4
 
   final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
 

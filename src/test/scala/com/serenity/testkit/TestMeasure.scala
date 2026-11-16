@@ -34,7 +34,7 @@ object TestMeasure:
   /** What `Main` shares between its owners, made once for the test JVM, so the fonts one spec opens are the fonts the
     * next one finds.
     */
-  val sharedBackendCaches: CacheSlots = new CacheSlots
+  val sharedBackendCaches: CacheSlots = TestBundledTypefaces.sharedSlots
 
   /** A GUI owner's caches: layout measures with the measurer of the faces and stretches its surfaces draw with, as
     * `Main` wires it. The measurer is made the first time something measures, so a spec may still install a font of its
