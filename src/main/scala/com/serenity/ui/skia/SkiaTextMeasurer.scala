@@ -81,7 +81,7 @@ final class SkiaTextMeasurer(
         level,
         IArray.from(glyphs.map(_.toInt)),
         IArray.from(collector.xs :+ collector.width),
-        IArray.fill(glyphs.length + 1)(0.0f),
+        IArray.from(collector.ys :+ 0.0f),
         IArray.from(collector.clusters)
       )
 

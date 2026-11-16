@@ -19,17 +19,24 @@ import com.serenity.ui.renderer.FontSpec
   */
 private[layout] object LigatureCertificate:
 
-  /** How wide `text` is shaped as layout shapes it; it must not keep the text. */
-  type Shaper = String => Float
+  /** How wide `text` is shaped as layout shapes it, and whether any glyph of it is set off the baseline. */
+  final case class ShapedRun(width: Float, offBaseline: Boolean)
+
+  /** Shapes `text` as the layout does for a font asking for ligatures; it must not keep the text. */
+  type Shaper = String => ShapedRun
 
   /** The rows a wrap gives `text` at a width of the given pixels. */
   type RowsOf = (String, Int) => Int
 
   private val WidthTolerancePerCharPx = 0.01f
+  private val BaselineTolerancePx     = 0.001f
 
-  /** The width the measurer shapes `text` to in `font`, ligatures and all. */
+  /** The width the measurer shapes `text` to in `font`, ligatures and all, and whether it sets a glyph off the
+    * baseline.
+    */
   def measuredShaper(font: FontSpec, measurer: TextMeasurer): Shaper = text =>
-    measurer.shape(text, 0, FontRun(0, text.length, font), 0.toByte).advancePx
+    val run = measurer.shape(text, 0, FontRun(0, text.length, font), 0.toByte)
+    ShapedRun(run.advancePx, run.ys.exists(y => math.abs(y) > BaselineTolerancePx))
 
   def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
     of(font, measurer, measuredShaper(font, measurer), wrapRows(font, measurer))
@@ -60,8 +67,9 @@ private[layout] object LigatureCertificate:
     }
 
   private def faithful(run: String, table: NominalAdvances, shaper: Shaper): Boolean =
-    val sum = run.foldLeft(0.0f)((width, char) => width + table.advanceOf(char))
-    math.abs(shaper(run) - sum) <= WidthTolerancePerCharPx * run.length
+    val sum    = run.foldLeft(0.0f)((width, char) => width + table.advanceOf(char))
+    val shaped = shaper(run)
+    !shaped.offBaseline && math.abs(shaped.width - sum) <= WidthTolerancePerCharPx * run.length
 
   private def agreesWithWrap(table: NominalAdvances, rowsOf: RowsOf): Boolean =
     batteryLines.forall { text =>

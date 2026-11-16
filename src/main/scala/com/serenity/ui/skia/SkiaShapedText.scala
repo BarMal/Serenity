@@ -327,6 +327,7 @@ object SkiaShapedTextCache:
 final private class GlyphCollector extends RunHandler:
   private val glyphIds     = scala.collection.mutable.ArrayBuilder.ofShort()
   private val glyphXs      = scala.collection.mutable.ArrayBuilder.ofFloat()
+  private val glyphYs      = scala.collection.mutable.ArrayBuilder.ofFloat()
   private val glyphCluster = scala.collection.mutable.ArrayBuilder.ofInt()
   private val penX         = new Array[Float](1)
 
@@ -335,6 +336,7 @@ final private class GlyphCollector extends RunHandler:
 
   lazy val glyphs: Array[Short] = glyphIds.result()
   lazy val xs: Array[Float]     = glyphXs.result()
+  lazy val ys: Array[Float]     = glyphYs.result()
   lazy val clusters: Array[Int] = glyphCluster.result()
 
   def beginLine(): Unit               = ()
@@ -345,6 +347,9 @@ final private class GlyphCollector extends RunHandler:
 
   def commitRun(info: RunInfo, runGlyphs: Array[Short], positions: Array[Point], runClusters: Array[Int]): Unit =
     glyphIds.addAll(runGlyphs)
-    positions.foreach(position => glyphXs.addOne(position.getX))
+    positions.foreach { position =>
+      glyphXs.addOne(position.getX)
+      glyphYs.addOne(position.getY)
+    }
     glyphCluster.addAll(runClusters)
     penX(0) += info.getAdvanceX

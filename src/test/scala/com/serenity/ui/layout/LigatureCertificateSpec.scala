@@ -10,8 +10,8 @@ import org.scalatest.matchers.should.Matchers
 /** The per-font certificate for a font set with ligatures (#2447 B2). Shaping may give a character another glyph there,
   * so the certificate is granted only when shaping every pair of printable ASCII and every triple of symbols and space
   * leaves each run at the width of its characters' own advances, and when counting a battery of code-like lines by the
-  * table agrees with wrapping them. Shaping is the measurer's (#2660 item 2, step D2), which places Latin runs on the
-  * baseline and reports no vertical offset, so a glyph off the baseline is no longer something a shaper can claim.
+  * table agrees with wrapping them. Shaping is the measurer's (#2660 item 2, step D2), which reports the vertical
+  * offset of every glyph, so a run that sets a glyph off the baseline is refused as it was when AWT shaped it.
   */
 class LigatureCertificateSpec extends AnyFlatSpec with Matchers with OptionValues:
 
@@ -59,13 +59,30 @@ class LigatureCertificateSpec extends AnyFlatSpec with Matchers with OptionValue
   }
 
   it should "be refused when shaping a pair sets the run off the width of its characters" in {
-    val widened: LigatureCertificate.Shaper = text => honest(text) + (if text == "=>" then 0.5f else 0.0f)
+    val widened: LigatureCertificate.Shaper = text =>
+      val run = honest(text)
+      if text == "=>" then run.copy(width = run.width + 0.5f) else run
     LigatureCertificate.of(ligatureFont(12.0f), measurer, widened, rows(ligatureFont(12.0f))) shouldBe None
   }
 
   it should "be refused when shaping a triple of symbols sets the run off the width of its characters" in {
-    val narrowed: LigatureCertificate.Shaper = text => honest(text) - (if text == "<$>" then 0.5f else 0.0f)
+    val narrowed: LigatureCertificate.Shaper = text =>
+      val run = honest(text)
+      if text == "<$>" then run.copy(width = run.width - 0.5f) else run
     LigatureCertificate.of(ligatureFont(12.0f), measurer, narrowed, rows(ligatureFont(12.0f))) shouldBe None
+  }
+
+  it should "be refused when shaping a triple of symbols puts a glyph off the baseline" in {
+    val raised: LigatureCertificate.Shaper = text =>
+      val run = honest(text)
+      if text == "<$>" then run.copy(offBaseline = true) else run
+    LigatureCertificate.of(ligatureFont(12.0f), measurer, raised, rows(ligatureFont(12.0f))) shouldBe None
+  }
+
+  "The measurer" should "report a baseline offset for every glyph it shapes, and none after the last" in {
+    val run = measurer.shape("e\u0323", 0, TextMeasurer.FontRun(0, 2, ligatureFont(12.0f)), 0)
+    run.ys.length shouldBe run.glyphs.length + 1
+    run.ys.last shouldBe 0.0f
   }
 
   it should "be refused when a code-like line the table calls one row wraps to more" in {
