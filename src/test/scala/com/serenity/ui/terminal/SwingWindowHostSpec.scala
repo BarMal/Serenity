@@ -15,6 +15,7 @@ import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{FileDropHandler, InputHandler, InputRouter}
 import com.serenity.keystroke.events.{Escape, Event, InsertChar, PageDown}
 import com.serenity.keystroke.translators.TextEntryTranslator
+import com.serenity.testkit.DisplayExclusive
 import com.serenity.ui.host.{InputSettings, WindowHost}
 import com.serenity.ui.layout.CellMetrics
 import org.scalatest.flatspec.AnyFlatSpec
@@ -25,17 +26,18 @@ class SwingWindowHostSpec extends AnyFlatSpec with Matchers:
 
   private def withHost[A](use: WindowHost => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A Swing window needs a display")
-    SwingWindowHost
-      .resource(
-        SwingWindow.DefaultMetrics,
-        SwingWindow.DefaultMetrics,
-        WindowChromeMode.Auto,
-        None,
-        FrameTimings(),
-        "host spec"
-      )
-      .use(host => IO(use(host)))
-      .unsafeRunSync()
+    DisplayExclusive:
+      SwingWindowHost
+        .resource(
+          SwingWindow.DefaultMetrics,
+          SwingWindow.DefaultMetrics,
+          WindowChromeMode.Auto,
+          None,
+          FrameTimings(),
+          "host spec"
+        )
+        .use(host => IO(use(host)))
+        .unsafeRunSync()
 
   /** A real window's stream can carry pointer moves the test did not make, so the typed character is the first
     * `InsertChar`, not the first event.

@@ -5,6 +5,7 @@ import java.io.PrintStream
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO}
+import cats.syntax.all.*
 import com.serenity.app.RendererChoice.Candidate
 import com.serenity.app.RendererTrialChild.Setup
 import com.serenity.app.RendererWorkload.{Plan, Step, Window}
@@ -26,11 +27,24 @@ object RendererTrialLaunch:
 
   private val ResolutionSamples = 50
 
-  /** The start-up's safe-mode notice closes with a short animation; the trial waits for it. */
-  private val NoticeSettle = 500.millis
+  /** The start-up's safe-mode notice closes with a short animation, and a window sized up is laid out again: the trial
+    * waits until what it will watch has stayed the same for this long, looking at it this often, for at most the cap.
+    */
+  private val QuietFor  = 300.millis
+  private val QuietPoll = 50.millis
+  private val QuietCap  = 5.seconds
 
   /** What sizing a window up to the screen may take, beyond the step timeout, before the trial gives up on it. */
   private val FitAllowance = 5.seconds
+
+  /** Waits for the regions the workload watches first to stop changing, so nothing but the trial's own steps does it.
+    */
+  private def quietScreen(driver: SwingTrialDriver, screen: IO[PixelClock.Screen]): IO[Unit] =
+    for
+      grabbing <- screen
+      regions  <- List(Step.Type('a'), Step.PageDown).traverse(driver.watchedFor)
+      _        <- PixelClock.quiet(grabbing, regions, QuietFor, QuietPoll, QuietCap)
+    yield ()
 
   def firstFrame(
     options: LaunchOptions,
@@ -83,8 +97,8 @@ object RendererTrialLaunch:
               renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
               device = IO(swing.window.layerPresenter.flatMap(_.deviceName)),
               timeout = RendererTrialChild.Timeout,
-              prepare = driver.dismissNotices *> driver.fitToScreen *> IO.sleep(NoticeSettle),
-              prepareTimeout = stepTimeout + NoticeSettle + FitAllowance,
+              prepare = driver.dismissNotices *> driver.fitToScreen *> quietScreen(driver, screen),
+              prepareTimeout = stepTimeout + QuietCap + FitAllowance,
               progress = line => logger.info(line),
               inApp = Some(
                 IO { frameTimings.keyLatency.setEnabled(true); frameTimings.setEnabled(true) }

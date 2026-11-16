@@ -42,6 +42,33 @@ object PixelClock:
           .flatMap(now => if now >= deadline then IO.pure(false) else poll(screen, region, baseline, deadline))
     }
 
+  /** Waits until the regions have stayed exactly as they are for `quietFor`, looking every `poll`, and answers whether
+    * they did before `cap` passed. A window that is still being laid out, or a notice still animating away, shows as
+    * change; a trial that starts before that ends takes it for the step it is timing.
+    */
+  def quiet(
+    screen: Screen,
+    regions: List[Region],
+    quietFor: FiniteDuration,
+    poll: FiniteDuration,
+    cap: FiniteDuration
+  ): IO[Boolean] =
+    val grabAll = regions.traverse(screen.grab)
+    def watch(previous: List[Vector[Int]], changedAt: FiniteDuration, deadline: FiniteDuration): IO[Boolean] =
+      IO.sleep(poll) *> grabAll.flatMap(now =>
+        IO.monotonic.flatMap { at =>
+          val since = if now != previous then at else changedAt
+          if at - since >= quietFor then IO.pure(true)
+          else if at >= deadline then IO.pure(false)
+          else watch(now, since, deadline)
+        }
+      )
+    for
+      started <- IO.monotonic
+      first   <- grabAll
+      settled <- watch(first, started, started + cap)
+    yield settled
+
   /** The quickest of `samples` grabs, in milliseconds: the least a change can be late by in this clock. */
   def resolution(screen: Screen, region: Region, samples: Int): IO[Double] =
     List
