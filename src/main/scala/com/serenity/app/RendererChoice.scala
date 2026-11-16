@@ -24,8 +24,20 @@ object RendererChoice:
       typingP95Ms: Double,
       scale: Double,
       clockResolutionMs: Double,
-      fullWindowMs: Map[String, Double]
+      fullWindowMs: Map[String, Double],
+      clock: Clock = Clock.Pixel
   )
+
+  /** What a run's times were read from: the screen's pixels, or, where the screen cannot be read, the app's own stamps
+    * of when each step was painted.
+    */
+  enum Clock(val label: String):
+    case Pixel extends Clock("pixel")
+    case InApp extends Clock("in-app")
+
+  /** What the in-app clock leaves out, which makes its figures lower bounds. */
+  private[app] val InAppCaveat: String =
+    "clock=in-app: a lower bound, without the OS-to-event-thread hop; full-redraw is theme toggles only"
 
   enum Outcome:
     case Measured(workload: Workload)
@@ -53,7 +65,8 @@ object RendererChoice:
       candidate: Candidate,
       typingMs: Double,
       spreadMs: Double,
-      rowsMs: Map[String, Double]
+      rowsMs: Map[String, Double],
+      clock: Clock
   )
 
   /** The nearest-rank percentile: the smallest sample with at least `percent` of the samples at or below it. */
@@ -73,16 +86,18 @@ object RendererChoice:
       candidate,
       median(typing),
       (for highest <- typing.maxOption; lowest <- typing.minOption yield highest - lowest).getOrElse(0.0),
-      rowNames.map(name => name -> median(workloads.flatMap(_.fullWindowMs.get(name)))).toMap
+      rowNames.map(name => name -> median(workloads.flatMap(_.fullWindowMs.get(name)))).toMap,
+      if workloads.exists(_.clock == Clock.InApp) then Clock.InApp else Clock.Pixel
     )
 
   private def ms(value: Double): String = "%.1f".formatLocal(Locale.ROOT, value)
 
   private def evidenceOf(measures: List[Measure]): List[String] =
     measures.sortBy(_.typingMs).map { measure =>
-      val rows = measure.rowsMs.toList.sortBy(_._1).map((name, value) => s"$name ${ms(value)} ms")
-      val tail = if rows.isEmpty then "" else rows.mkString(", ", ", ", "")
-      s"${measure.candidate.label}: typing p50 ${ms(measure.typingMs)} ms$tail"
+      val rows  = measure.rowsMs.toList.sortBy(_._1).map((name, value) => s"$name ${ms(value)} ms")
+      val tail  = if rows.isEmpty then "" else rows.mkString(", ", ", ", "")
+      val clock = if measure.clock == Clock.InApp then s" ($InAppCaveat)" else ""
+      s"${measure.candidate.label}: typing p50 ${ms(measure.typingMs)} ms$tail$clock"
     }
 
   /** Why `winner` does not clearly beat `other`, if it does not. */

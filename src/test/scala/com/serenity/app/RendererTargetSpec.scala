@@ -93,3 +93,9 @@ class RendererTargetSpec extends AnyFlatSpec with Matchers:
     }
     RendererTarget.annotate(keep, results).reason shouldBe keep.reason
   }
+
+  it should "say a verdict is on the in-app clock, a lower bound, when the runs were measured by it" in {
+    val inApp = Outcome.Measured(Workload(8.0, 12.0, 2.0, 0.0, Map.empty, clock = Clock.InApp))
+    val text  = RendererTarget.lines(List(runs(Candidate.LayerImage, inApp))).mkString("\n")
+    text should (include("target met") and include("clock=in-app") and include("lower bound"))
+  }

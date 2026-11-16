@@ -220,3 +220,15 @@ class RendererChoiceSpec extends AnyFlatSpec with Matchers:
     text should include("30.0")
     text should include("50.0")
   }
+
+  it should "say in its evidence that a mode was measured by the in-app clock, and what that clock leaves out" in {
+    val inApp = workload(30.0, "page-down" -> 40.0).copy(clock = Clock.InApp)
+    val result = recommend(
+      current = Candidate.SkiaRaster,
+      List(measured(Candidate.LayerImage, inApp), measured(Candidate.SkiaRaster, workload(50.0, "page-down" -> 40.0)))
+    )
+    val lines = result.evidence
+    lines.find(_.startsWith("layer+image")).getOrElse("") should
+      (include("clock=in-app") and include("lower bound") and include("OS-to-event-thread"))
+    lines.find(_.startsWith("skia-raster")).getOrElse("") should not include "clock="
+  }

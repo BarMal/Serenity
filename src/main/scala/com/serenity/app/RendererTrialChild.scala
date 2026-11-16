@@ -5,8 +5,8 @@ import java.io.PrintStream
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO}
-import com.serenity.app.RendererChoice.{Candidate, Outcome}
-import com.serenity.app.RendererWorkload.{Plan, Window}
+import com.serenity.app.RendererChoice.{Candidate, Clock, Outcome}
+import com.serenity.app.RendererWorkload.{Plan, Result, Window}
 
 /** What a `--renderer-trial=<mode>` child does (#2618): run the workload in its window, print one `RENDERER_TRIAL` line
   * with what it measured, and quit. Whatever goes wrong, it prints a line saying so: a child that printed nothing would
@@ -26,7 +26,8 @@ object RendererTrialChild:
       timeout: FiniteDuration,
       prepare: IO[Unit] = IO.unit,
       prepareTimeout: FiniteDuration = 10.seconds,
-      progress: String => IO[Unit] = _ => IO.unit
+      progress: String => IO[Unit] = _ => IO.unit,
+      inApp: Option[IO[Window]] = None
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -44,6 +45,24 @@ object RendererTrialChild:
     case Candidate.LayerImage | Candidate.LayerPicture => RenderBackend.Skia
     case Candidate.SkiaRaster                          => RenderBackend.SkiaRaster
 
+  private def pixelOutcome(setup: Setup, result: Result, resolution: Double): Outcome =
+    RendererWorkload.outcome(result, setup.scale, resolution)
+
+  /** When the screen cannot be read, measures again by the app's own stamps if the window can, leaving the resize out.
+    */
+  private def inApp(setup: Setup, unread: Result): IO[Outcome] =
+    setup.inApp.fold(IO.pure(RendererWorkload.outcome(unread, setup.scale, 0.0))) { start =>
+      for
+        window <- start
+        result <- RendererWorkload.run(setup.plan.copy(resize = false), window, setup.progress)
+      yield
+        if result.unreadableScreen then
+          Outcome.Failed(
+            "the screen cannot be read from here, and the in-app clock saw no keystroke painted either"
+          )
+        else RendererWorkload.outcome(result, setup.scale, 0.0, Clock.InApp)
+    }
+
   private def prepared(setup: Setup): IO[Unit] =
     setup.prepare.timeoutTo(
       setup.prepareTimeout,
@@ -58,7 +77,9 @@ object RendererTrialChild:
         _          <- prepared(setup)
         resolution <- setup.clockResolutionMs
         result     <- RendererWorkload.run(setup.plan, setup.window, setup.progress)
-      yield RendererWorkload.outcome(result, setup.scale, resolution)
+        outcome <-
+          if result.unreadableScreen then inApp(setup, result) else IO.pure(pixelOutcome(setup, result, resolution))
+      yield outcome
     val guarded: IO[Outcome] =
       measured
         .timeoutTo(setup.timeout, IO.pure(Outcome.Failed(s"the trial timed out after ${setup.timeout.toSeconds} s")))
