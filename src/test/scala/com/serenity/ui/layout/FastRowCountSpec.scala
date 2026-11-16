@@ -165,7 +165,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
   "A code font with ligatures" should "wrap every line until its certificate is built, since shaping may change what a character advances" in {
     val font   = codeFont(12.0f, ligatures = true)
     val buffer = Buffer.fromString(bufferId, Vector.tabulate(40)(line => s"  val value$line = $line").mkString("\n"))
-    val cache  = WrappedLineCache.bounded(layoutMemos = LayoutMemos((_: Runnable) => ()))
+    val cache  = WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos((_: Runnable) => ()))
 
     counted(buffer, 1472, font, cache) shouldBe Vector.fill(40)(1)
 

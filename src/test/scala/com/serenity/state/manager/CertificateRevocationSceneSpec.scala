@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.testkit.TestMeasure
 import java.util.concurrent.Executor
 
 import com.serenity.config.AppConfig
@@ -63,10 +64,10 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
       .extent
       .totalRows
 
-  private val wrapOnly: Int = totalRows(WrappedLineCache.bounded(layoutMemos = LayoutMemos(never)))
+  private val wrapOnly: Int = totalRows(WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos(never)))
 
   "A certificate that undercounts what the layout paints" should "be revoked by the scene that paints the lines" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     val honest = memos.rowCertificates.of(certificateKey).value
     memos.rowCertificates.plant(certificateKey, honest.scaled(0.05f))
@@ -77,7 +78,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "leave the pane's scroll extent as the wrap counts it, off-screen lines included" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     memos.rowCertificates.plant(certificateKey, memos.rowCertificates.of(certificateKey).value.scaled(0.05f))
 
@@ -86,7 +87,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   "A certificate that agrees with what the layout paints" should "survive the scene and give the wrap's extent" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     memos.rowCertificates.of(certificateKey) shouldBe defined
 
