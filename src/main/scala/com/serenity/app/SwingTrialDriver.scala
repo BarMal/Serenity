@@ -1,5 +1,6 @@
 package com.serenity.app
 
+import java.awt.{GraphicsEnvironment, Toolkit}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicReference}
 import javax.swing.SwingUtilities
 
@@ -27,6 +28,19 @@ final class SwingTrialDriver(host: SwingWindowHost) extends RendererTrialWindow.
   def pressPageDown: IO[Unit]             = host.pressPageDown
   def toggleTheme: IO[Unit]               = host.toggleTheme
   def dismissNotices: IO[Unit]            = host.pressEscape
+
+  /** Sizes the window to the screen, less the width the resize step grows it by, and waits for the toolkit to lay it
+    * out, so the canvas the trial starts on has the pixels the 2x target is judged on.
+    */
+  def fitToScreen: IO[Unit] =
+    IO.blocking {
+      val screen = GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice.getDefaultConfiguration
+      val insets = Toolkit.getDefaultToolkit.getScreenInsets(screen)
+      val bounds = screen.getBounds
+      val usable = (bounds.width - insets.left - insets.right, bounds.height - insets.top - insets.bottom)
+      window.resizeToPreferred(TrialWindowSize.forScreen(usable._1, usable._2, ResizeStep), recentre = true)
+      SwingUtilities.invokeAndWait(() => ())
+    }
 
   def resize: IO[Unit] =
     IO.blocking {

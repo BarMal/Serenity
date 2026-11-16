@@ -29,6 +29,9 @@ object RendererTrialLaunch:
   /** The start-up's safe-mode notice closes with a short animation; the trial waits for it. */
   private val NoticeSettle = 500.millis
 
+  /** What sizing a window up to the screen may take, beyond the step timeout, before the trial gives up on it. */
+  private val FitAllowance = 5.seconds
+
   def firstFrame(
     options: LaunchOptions,
     host: WindowHost,
@@ -80,8 +83,8 @@ object RendererTrialLaunch:
               renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
               device = IO(swing.window.layerPresenter.flatMap(_.deviceName)),
               timeout = RendererTrialChild.Timeout,
-              prepare = driver.dismissNotices *> IO.sleep(NoticeSettle),
-              prepareTimeout = stepTimeout + NoticeSettle,
+              prepare = driver.dismissNotices *> driver.fitToScreen *> IO.sleep(NoticeSettle),
+              prepareTimeout = stepTimeout + NoticeSettle + FitAllowance,
               progress = line => logger.info(line),
               inApp = Some(
                 IO { frameTimings.keyLatency.setEnabled(true); frameTimings.setEnabled(true) }

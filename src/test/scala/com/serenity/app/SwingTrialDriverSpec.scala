@@ -25,7 +25,7 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
     SwingUtilities.invokeAndWait(() => result.set(Some(body)))
     result.get().getOrElse(fail("the event thread produced nothing"))
 
-  private def withDriver[A](use: (SwingWindow, RendererTrialWindow.Driver) => A): A =
+  private def withDriver[A](use: (SwingWindow, SwingTrialDriver) => A): A =
     assume(!GraphicsEnvironment.isHeadless, "A Swing window needs a display")
     DisplayExclusive:
       SwingWindowHost
@@ -100,4 +100,27 @@ class SwingTrialDriverSpec extends AnyFlatSpec with Matchers:
       driver.resize.unsafeRunSync()
       widthChangedFrom(window, grown) should not be empty
       window.currentPreferredWindowSize.width shouldBe before
+    }
+
+  "SwingTrialDriver.fitToScreen" should "size the window to the screen, leaving the resize step's width, before the workload" in
+    withDriver { (window, driver) =>
+      val screen       = GraphicsEnvironment.getLocalGraphicsEnvironment.getDefaultScreenDevice.getDefaultConfiguration
+      val insets       = java.awt.Toolkit.getDefaultToolkit.getScreenInsets(screen)
+      val bounds       = screen.getBounds
+      val usableWidth  = bounds.width - insets.left - insets.right
+      val usableHeight = bounds.height - insets.top - insets.bottom
+
+      driver.fitToScreen.unsafeRunSync()
+
+      window.currentPreferredWindowSize shouldBe TrialWindowSize.forScreen(usableWidth, usableHeight, resizeStep = 80)
+    }
+
+  it should "leave the window able to take the resize step from there" in
+    withDriver { (window, driver) =>
+      driver.fitToScreen.unsafeRunSync()
+      val fitted = window.currentPreferredWindowSize.width
+
+      driver.resize.unsafeRunSync()
+
+      widthChangedFrom(window, fitted) shouldBe Some(fitted + 80)
     }
