@@ -6,6 +6,9 @@ import java.awt.font.TextAttribute
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
+import com.serenity.ui.skia.TestBundledTypefaces
+import org.jetbrains.skia.{FontFeature, TextLine}
+import org.jetbrains.skia.shaper.ShapingOptions
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -14,6 +17,18 @@ import org.scalatest.matchers.should.Matchers
   * last. The measurer kerns every face (#2660 item 2, step D2); the faces asked for kerning here are those AWT kerned.
   */
 class RowFitsPanelSpec extends AnyFlatSpec with Matchers:
+
+  private val skiaFaces = TestBundledTypefaces.cacheWithInter()
+
+  private val withoutLigatures = ShapingOptions.Companion
+    .getDEFAULT()
+    .withFeatures(Array("liga", "clig", "calt").map(tag => new FontFeature(tag, false)))
+
+  /** The width Skia itself shapes `text` to: the oracle is Skia's shaper, not the measurer under test. */
+  private def shapedAdvance(text: String, face: Font): Float =
+    val line = TextLine.Companion.make(text, skiaFaces.faceFor(FontSpec.fromAwt(face)).font, withoutLigatures)
+    try line.getWidth
+    finally line.close()
 
   private def kerned(face: Font): Font =
     face.deriveFont(java.util.Map.of(TextAttribute.KERNING, TextAttribute.KERNING_ON))
@@ -52,7 +67,7 @@ class RowFitsPanelSpec extends AnyFlatSpec with Matchers:
 
         (1 to text.length).foreach { count =>
           withClue(s"$name, ${text.take(count)}: ") {
-            edges(count) shouldBe TestMeasure.measurer.exactCaretXs(text.take(count), 0, fonts).last +- 0.01f
+            edges(count) shouldBe shapedAdvance(text.take(count), face) +- 0.01f
           }
         }
     }
