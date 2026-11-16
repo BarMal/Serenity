@@ -277,7 +277,9 @@ class CommandRunnerActivationSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val sm =
-      com.serenity.state.manager.StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+      com.serenity.state.manager.StateManager
+        .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+        .unsafeRunSync()
 
     sm.updateState(s =>
       s.copy(persisted =

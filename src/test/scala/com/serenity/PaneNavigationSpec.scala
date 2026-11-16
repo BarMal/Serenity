@@ -22,7 +22,11 @@ class PaneNavigationSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+
+    val stateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
+
     val wideTerminal = com.serenity.ui.layout.ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "cycle forward through buffers with Ctrl+Tab (NextTab)" in new NavigationFixture:

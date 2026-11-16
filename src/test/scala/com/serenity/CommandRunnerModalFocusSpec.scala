@@ -23,7 +23,9 @@ class CommandRunnerModalFocusSpec extends AnyFlatSpec with Matchers:
 
   private def withRunnerOpen(): (StateManager, SurfaceId) =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CommandRunnerModalFocusSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
     sm.applyEvent(InsertChar('x')).unsafeRunSync()
     sm.applyEvent(ToggleCommandRunner).unsafeRunSync()
     val runnerId = sm.getCurrentState.unsafeRunSync().commandPickerSurface.map(_.id).getOrElse(fail("no runner"))

@@ -22,7 +22,11 @@ class PaneWidthConstraintSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager        = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+
+    val stateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
+
     val defaultMinPaneWidth = 50 // Expected default minimum
 
   it should "enforce minimum pane width of 50 characters by default" in new PaneConstraintFixture:

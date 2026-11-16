@@ -61,7 +61,12 @@ class CommandExecutionTracingSpec extends AnyFlatSpec with Matchers:
     val recorded            = Ref.unsafe[IO, List[String]](Nil)
     val logger              = RecordingLogger(recorded)
     given LoggerFactory[IO] = RecordingLoggerFactory(logger)
-    (StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync(), recorded)
+    (
+      StateManager
+        .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+        .unsafeRunSync(),
+      recorded
+    )
 
   private def commandLines(recorded: Ref[IO, List[String]]): List[String] =
     recorded.get.unsafeRunSync().filter(_.startsWith("DEBUG [COMMAND]")).map(_.stripPrefix("DEBUG "))

@@ -31,8 +31,10 @@ class ModelessModalOutsideClickSpec extends AnyFlatSpec with Matchers:
   private val text     = (1 to 40).map(line => s"line number $line of the document").mkString("\n")
 
   private def editorWith(text: String): (StateManager, BufferId) =
-    val logger   = LoggerFactory[IO].getLogger(using LoggerName("ModelessModalOutsideClickSpec"))
-    val sm       = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val logger = LoggerFactory[IO].getLogger(using LoggerName("ModelessModalOutsideClickSpec"))
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
     val bufferId = sm.createBuffer(text, None).unsafeRunSync()
     sm.setBufferForPane(PaneId(0), bufferId).unsafeRunSync()
     sm.applyEvent(ResizeEvent(viewport)).unsafeRunSync()

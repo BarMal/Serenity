@@ -21,8 +21,12 @@ class PaneOrderSpec extends AnyFlatSpec with Matchers:
   trait PaneFixture:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm: StateManager    = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
-    val pane0: PaneId       = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
+
+    val sm: StateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
+
+    val pane0: PaneId = sm.getCurrentState.unsafeRunSync().persisted.layout.activeEditorPaneId.get
 
   /** Every split axis in the tree, outermost first. */
   private def treeAxes(node: WorkspaceNode): List[SplitAxis] =

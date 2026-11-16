@@ -23,6 +23,11 @@ object ChromeOn:
   def initial(using Balance): AppState = AppState.initial(config)
 
   def stateManager(logger: Logger[IO])(using Balance, LoggerFactory[IO]): IO[StateManager] =
-    StateManager.apply(logger, initialConfig = config, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+    StateManager.apply(
+      logger,
+      initialConfig = config,
+      dictionaryCache = SharedDictionary.default,
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+    )
 
   def empty: AppState = AppState.empty(config)

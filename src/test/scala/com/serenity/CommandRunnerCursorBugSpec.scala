@@ -25,7 +25,11 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
   "renderCursorOnly behavior with Command Runner" should "not render editor cursor when command runner is focused" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val test = for
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Set up initial state with some text and cursor position
       _ <- stateManager.applyEvent(InsertChar('H'))
@@ -70,7 +74,11 @@ class CommandRunnerCursorBugSpec extends AnyFlatSpec with Matchers:
   "Command Runner Positioning" should "render at consistent center position regardless of editor cursor location" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val test = for
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Set terminal size for consistent testing
       _ <- stateManager.applyEvent(ResizeEvent(ViewportSize(80, 24)))

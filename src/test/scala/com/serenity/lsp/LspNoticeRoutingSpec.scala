@@ -34,7 +34,12 @@ class LspNoticeRoutingSpec extends AnyFlatSpec with Matchers:
 
   private def asked: StateManager =
     val manager =
-      StateManager.apply(LoggerFactory[IO].getLogger(using LoggerName("LspNoticeRoutingSpec")), layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+      StateManager
+        .apply(
+          LoggerFactory[IO].getLogger(using LoggerName("LspNoticeRoutingSpec")),
+          layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+        )
+        .unsafeRunSync()
     manager.lspEffectSource.notices.show(question).unsafeRunSync()
     awaitQuestion(manager)(_.nonEmpty)
     manager

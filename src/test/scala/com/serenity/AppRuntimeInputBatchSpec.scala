@@ -34,10 +34,15 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
 
   private def editorWithEmptyBuffer(config: AppConfig = AppConfig.default): IO[StateManager] =
     for
-      stateManager <- StateManager(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config), layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
-      bufferId     <- stateManager.createNewEmptyBuffer
-      state        <- stateManager.getCurrentState
-      _            <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
+      stateManager <- StateManager(
+        logger,
+        initialConfig = config,
+        dictionaryCache = SharedDictionary.cacheFor(config),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      bufferId <- stateManager.createNewEmptyBuffer
+      state    <- stateManager.getCurrentState
+      _        <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
     yield stateManager
 
   private def focusedText(state: AppState): Option[String] =

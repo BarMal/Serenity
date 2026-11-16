@@ -48,7 +48,9 @@ class ChapterGhostHotkeySpec extends AnyFlatSpec with Matchers:
   it should "flip the ghost flag through the whole event pipeline, and back" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm: StateManager    = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val sm: StateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
 
     sm.applyEvent(ToggleChapterGhosts).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().runtime.chapterGhostsVisible shouldBe false

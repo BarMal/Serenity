@@ -50,8 +50,10 @@ class AppModeSwitchCommandsSpec extends AnyFlatSpec with Matchers:
   it should "change the workspace's app mode when executed, in either direction" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager        = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
-    def appMode             = stateManager.getCurrentState.unsafeRunSync().persisted.config.appMode
+    val stateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
+    def appMode = stateManager.getCurrentState.unsafeRunSync().persisted.config.appMode
     def run(id: String) =
       stateManager.executeCommand(CommandRegistry.withToggleUI.findCommand(id).get).unsafeRunSync()
 

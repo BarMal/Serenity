@@ -31,8 +31,12 @@ class RendererBoundarySpec extends AnyFlatSpec with Matchers:
     val mockScreen          = new MockScreen(80, 24)
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Setup: Create buffer with text longer than panel width
       bufferId <- stateManager.createBuffer("", None)

@@ -245,10 +245,9 @@ private[layout] object TextCaretMeasurement:
           absoluteStartColumn
         )
 
-  /** Each character's caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph advances
-    * and pair kerning when every character is measurable (see [[GlyphAdvances]]), the glyphs of a shaped stretch
-    * otherwise (see
-    * [[ExactCaretXs]]).
+  /** Each character's caret plus the run's full advance, before [[normalizeCollapsedCarets]]: summed glyph advances and
+    * pair kerning when every character is measurable (see [[GlyphAdvances]]), the glyphs of a shaped stretch otherwise
+    * (see [[ExactCaretXs]]).
     */
   private[layout] def rawMeasuredCaretXs(
     text: String,

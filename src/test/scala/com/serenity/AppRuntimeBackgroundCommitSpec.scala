@@ -56,8 +56,12 @@ class AppRuntimeBackgroundCommitSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val program = for
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
-      observed     <- Ref.of[IO, Vector[(Boolean, Boolean)]](Vector.empty)
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      observed <- Ref.of[IO, Vector[(Boolean, Boolean)]](Vector.empty)
       _ <- stateManager.runtimeLifecycle.observeCommits((before, after) =>
         observed.update(_ :+ (before.runtime.chapterGhostsVisible -> after.runtime.chapterGhostsVisible))
       )

@@ -1,5 +1,6 @@
 package com.serenity
 
+import java.awt.Font
 import java.util.concurrent.atomic.AtomicInteger
 
 import cats.effect.IO
@@ -20,6 +21,8 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
 
   given Balance    = Balance.default
   given Logger[IO] = Slf4jLogger.getLogger[IO]
+  private def fromBuffer(buffer: Buffer, panelWidthPx: Int, font: Font, wordWrapEnabled: Boolean = true) =
+    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx, font, wordWrapEnabled, wrapCache = TestMeasure.wrapCache())
 
   // `Rope` is sealed, so a test double can no longer extend it directly; it delegates to a real `Leaf`/`Branch` tree
   // while itself extending the still-open `Leaf` purely to satisfy the type system -- every method that matters for
@@ -71,7 +74,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 5, visibleLines = 4))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 24, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 24, font)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("abc", "def", "ghi", "j")
     snapshot.visualLines.map(line => line.startColumn -> line.endColumn) shouldBe
@@ -85,12 +88,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(8), "hello world again")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 8, visibleLines = 4))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 8,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("hello ", "world ", "again")
   }
@@ -103,13 +101,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 4))
 
     val snapshot =
-      TextLayoutSnapshot.fromBuffer(
-        buffer,
-        panelWidthPx = metrics.charWidth * 8,
-        font,
-        wordWrapEnabled = false,
-        wrapCache = TestMeasure.wrapCache()
-      )
+      fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font, wordWrapEnabled = false)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("hello world again")
     TextLayoutSnapshot.visualLineIndexForCursor(
@@ -133,7 +125,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    fromBuffer(buffer, panelWidthPx = 400, font)
 
     lineCountCount.get() shouldBe 1
   }
@@ -144,13 +136,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(14), "abcdefghijklmnopqrstuvwxyz")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 5, visibleLines = 4))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = 400,
-      font,
-      wordWrapEnabled = false,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("cdefghi")
     snapshot.visualLines.map(line => line.startColumn -> line.endColumn) shouldBe Vector(2 -> 9)
@@ -171,12 +157,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 8,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("beta ", "gamma")
   }
@@ -188,12 +169,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(16), "alpha beta gamma")
       .copy(viewport = Viewport(topLine = 0, leftColumn = 6, visibleColumns = 8, visibleLines = 3))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 8,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 8, font)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("alpha ", "beta ", "gamma")
     snapshot.visualLines.map(line => line.startColumn -> line.endColumn) shouldBe Vector(0 -> 6, 6 -> 11, 11 -> 16)
@@ -222,12 +198,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .fromString(BufferId(15), "abcdefghijklmnopqrstuvwxyz" * 100)
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 3, visibleLines = 2))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 3,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 3, font)
 
     snapshot.visualLines.map(_.text) shouldBe Vector("abc", "def")
   }
@@ -238,7 +209,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
     val line     = snapshot.visualLines.head
 
     line.caretStops.map(_.column) shouldBe Vector(0, 1, 2, 3, 4, 5, 6)
@@ -256,13 +227,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 20, visibleLines = 2))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = 400,
-      font,
-      wordWrapEnabled = false,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
     val line = snapshot.visualLines.head
 
     line.caretStops.map(_.column) shouldBe Vector(0, 1, 3, 4, 5, 6, 7, 8, 10, 11)
@@ -286,12 +251,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 10,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
     val expectedOffset = ((metrics.charWidth * 10).toFloat - line.widthPx) / 2.0f
 
@@ -314,12 +274,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 10,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
 
     snapshot.richTextDocument shouldBe None
     snapshot.visualLines.head.xOffsetPx shouldBe 0.0f
@@ -338,12 +293,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = metrics.charWidth * 10,
-      font,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
     val expectedOffset = (metrics.charWidth * 10).toFloat - line.widthPx
 
@@ -362,7 +312,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
     val deltas   = proportionalDeltas(snapshot)
 
     deltas.distinct.size should be > 1
@@ -378,7 +328,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
     val line     = snapshot.visualLines.head
     val xNearW   = line.xForColumn(1).getOrElse(fail("missing caret stop")) + 0.1f
 
@@ -455,7 +405,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
     val secondLineEnd = CursorPosition(1, 4)
     val preferredXPx  = snapshot.xPxForCursor(secondLineEnd).getOrElse(fail("missing caret x"))
     val firstLine     = snapshot.visualLines.head
@@ -471,13 +421,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       .copy(viewport = Viewport(topLine = 0, leftColumn = 2, visibleColumns = 20, visibleLines = 2))
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(
-      buffer,
-      panelWidthPx = 400,
-      font,
-      wordWrapEnabled = false,
-      wrapCache = TestMeasure.wrapCache()
-    )
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
     val line = snapshot.visualLines.head
 
     line.text shouldBe "cdef"
@@ -514,7 +458,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 400, font, wrapCache = TestMeasure.wrapCache())
+    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
     val xs       = snapshot.visualLines.head.caretStops.map(_.xPx)
 
     xs should have size 4

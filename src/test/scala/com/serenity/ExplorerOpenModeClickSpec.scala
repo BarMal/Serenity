@@ -58,7 +58,9 @@ class ExplorerOpenModeClickSpec extends AnyFlatSpec with Matchers:
       )
     )
     val logger = LoggerFactory[IO].getLogger(using LoggerName("ExplorerOpenModeClickSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
     sm.updateState { state =>
       val configured = mode.fold(state)(m =>
         state.copy(persisted = state.persisted.copy(config = state.persisted.config.withExplorerOpenMode(m)))

@@ -22,8 +22,12 @@ class WordCountStateSpec extends AnyFlatSpec with Matchers:
 
   "activeBufferTextStatistics" should "update as the active buffer's content changes" in {
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       bufferId     <- stateManager.createBuffer("one two three", None)
       initialState <- stateManager.getCurrentState

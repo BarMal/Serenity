@@ -37,7 +37,14 @@ class CloseWorkflowStateManagerSpec extends AnyFlatSpec with Matchers:
 
   private def createStateManager(fileDialog: Option[FileDialog] = None): StateManager =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("CloseWorkflowStateManagerSpec"))
-    StateManager.apply(logger, fileDialog = fileDialog, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    StateManager
+      .apply(
+        logger,
+        fileDialog = fileDialog,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      .unsafeRunSync()
 
   private def executeCommandThroughRunner(
     stateManager: StateManager,

@@ -15,9 +15,9 @@ import org.scalatest.matchers.should.Matchers
 /** Writes where the Skia measurer differs from AWT, and asserts only what holds however large the differences are.
   * Against the frozen AWT reference for the bundled fonts, `text-measure/awt-reference.tsv`, and not against
   * `baseline.tsv`, which is the Skia layout itself since step D2 and would make the report a tautology
-  * (`target/test-reports/text-measure-parity/`). The system fonts
-  * have no baseline and AWT is not called for them: their rows are Skia's own absolute values, which only show that the
-  * measurer answers on this host and say little about parity.
+  * (`target/test-reports/text-measure-parity/`). The system fonts have no baseline and AWT is not called for them:
+  * their rows are Skia's own absolute values, which only show that the measurer answers on this host and say little
+  * about parity.
   */
 class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
 

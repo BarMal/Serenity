@@ -35,7 +35,11 @@ class MenuClipboardExportSpec extends AnyFlatSpec with Matchers:
 
   private def inEditor(batches: List[List[PendingInput]]): IO[(Vector[String], String)] =
     for
-      stateManager    <- StateManager(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      stateManager <- StateManager(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
       bufferId        <- stateManager.createNewEmptyBuffer
       state           <- stateManager.getCurrentState
       _               <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)

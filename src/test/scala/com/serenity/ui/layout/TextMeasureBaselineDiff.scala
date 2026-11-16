@@ -11,7 +11,8 @@ import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 /** Every row of `text-measure/baseline.tsv` that moved when layout went from AWT to the Skia measurer (#2660 item 2,
   * step D2), each with the class of [[TextMeasureClassification]] it falls in: a caret by its own class, a line height
   * by the rounding Skia's line box takes, a wrap row by the carets it follows, a shaping row by what HarfBuzz does that
-  * AWT's glyph vector did not. Run `app/Test/runMain com.serenity.ui.layout.TextMeasureBaselineDiff <awt> <skia> <out>`.
+  * AWT's glyph vector did not. Run
+  * `app/Test/runMain com.serenity.ui.layout.TextMeasureBaselineDiff <awt> <skia> <out>`.
   */
 object TextMeasureBaselineDiff:
 
@@ -44,15 +45,16 @@ object TextMeasureBaselineDiff:
     val before = awt.map(entry => entry.key -> entry.values).toMap
     val after  = skia.map(entry => entry.key -> entry.values).toMap
     val keys   = (awt.map(_.key) ++ skia.map(_.key)).distinct.toVector
-    val moved = keys.filterNot(key =>
-      before.get(key).zip(after.get(key)).exists((a, s) => same(kindOf(key), a, s))
-    )
-    val caretVerdicts = moved.filter(kindOf(_) == "carets").map { key =>
-      val (a, s) = (before.getOrElse(key, Vector.empty), after.getOrElse(key, Vector.empty))
-      lineOf(key) -> (if a.length != s.length then Vector(Reason.Flagged) else caretReasons(key, a, s))
-    }.toMap
+    val moved  = keys.filterNot(key => before.get(key).zip(after.get(key)).exists((a, s) => same(kindOf(key), a, s)))
+    val caretVerdicts = moved
+      .filter(kindOf(_) == "carets")
+      .map { key =>
+        val (a, s) = (before.getOrElse(key, Vector.empty), after.getOrElse(key, Vector.empty))
+        lineOf(key) -> (if a.length != s.length then Vector(Reason.Flagged) else caretReasons(key, a, s))
+      }
+      .toMap
     moved.map { key =>
-      val (a, s) = (before.getOrElse(key, Vector.empty), after.getOrElse(key, Vector.empty))
+      val (a, s)             = (before.getOrElse(key, Vector.empty), after.getOrElse(key, Vector.empty))
       val (reason, accepted) = classify(key, a, s, caretVerdicts)
       Row(key, a, s, reason, accepted)
     }

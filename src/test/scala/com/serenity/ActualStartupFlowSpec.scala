@@ -29,7 +29,11 @@ class ActualStartupFlowSpec extends AnyFlatSpec with Matchers:
       // This mimics what Main.scala does
       logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
 
-      stateManager       <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
       stateAfterCreation <- stateManager.getCurrentState
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)

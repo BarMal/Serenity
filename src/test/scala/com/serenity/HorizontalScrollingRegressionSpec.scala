@@ -21,7 +21,9 @@ class HorizontalScrollingRegressionSpec extends AnyFlatSpec with Matchers:
   "Horizontal scrolling" should "keep the cursor visible during long character insertion" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("HorizontalScrollingRegression"))
-    val stateManager        = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val stateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
 
     val bufferId = stateManager.createBuffer("", None).unsafeRunSync()
     val state    = stateManager.getCurrentState.unsafeRunSync()

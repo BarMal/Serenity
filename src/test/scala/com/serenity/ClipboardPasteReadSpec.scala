@@ -34,10 +34,14 @@ class ClipboardPasteReadSpec extends AnyFlatSpec with Matchers:
 
   private def editorWithEmptyBuffer: IO[StateManager] =
     for
-      stateManager <- StateManager(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
-      bufferId     <- stateManager.createNewEmptyBuffer
-      state        <- stateManager.getCurrentState
-      _            <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
+      stateManager <- StateManager(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      bufferId <- stateManager.createNewEmptyBuffer
+      state    <- stateManager.getCurrentState
+      _        <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
     yield stateManager
 
   private def focusedText(state: AppState): Option[String] =

@@ -146,7 +146,9 @@ class DiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
 
   "StateManager" should "apply LspDiagnosticsReceived and update diagnostics in AppState" in {
     val logger = LoggerFactory[IO].getLogger(using LoggerName("DiagnosticRenderingSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
 
     val uri   = openBufferUri
     val diags = List(diag(0, DiagnosticSeverity.Error))

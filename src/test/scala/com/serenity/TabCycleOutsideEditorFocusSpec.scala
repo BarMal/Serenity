@@ -32,7 +32,9 @@ class TabCycleOutsideEditorFocusSpec extends AnyFlatSpec with Matchers:
   /** A state manager with four buffers in order and the third shown in the only pane. */
   private def fourBuffers(): (StateManager, Vector[BufferId]) =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("TabCycleOutsideEditorFocusSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
     (1 to 3).foreach(index => sm.createBuffer(s"buffer $index", None).unsafeRunSync())
     val order = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.toVector
     order should have size 4

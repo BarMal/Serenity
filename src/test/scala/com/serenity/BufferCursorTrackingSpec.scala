@@ -22,7 +22,11 @@ class BufferCursorTrackingSpec extends AnyFlatSpec with Matchers:
     given com.serenity.rope.Balance = com.serenity.rope.Balance.default
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
     val logger                      = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val stateManager = StateManager.apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor).unsafeRunSync()
+
+    val stateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
+
     val wideTerminal = ViewportSize(400, 24) // Wide enough for multiple panes
 
   it should "maintain cursor position per buffer when switching between buffers" in new CursorTrackingFixture:

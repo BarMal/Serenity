@@ -35,9 +35,13 @@ class UndoGroupingClockSpec extends AnyFlatSpec with Matchers:
 
   private def editor: IO[StateManager] =
     for
-      stateManager <- StateManager(NoOpLogger[IO], sessionRootOverride = Some(TestTemp.directory("undo-clock")), layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
-      bufferId     <- stateManager.createBuffer("lorem ipsum dolor sit amet", None)
-      state        <- stateManager.getCurrentState
+      stateManager <- StateManager(
+        NoOpLogger[IO],
+        sessionRootOverride = Some(TestTemp.directory("undo-clock")),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      bufferId <- stateManager.createBuffer("lorem ipsum dolor sit amet", None)
+      state    <- stateManager.getCurrentState
       paneId = state.persisted.layout.editorPanes.keys.head
       _ <- stateManager.setBufferForPane(paneId, bufferId)
       _ <- stateManager.applyEvent(ResizeEvent(ViewportSize(110, 36)))
