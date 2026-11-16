@@ -228,7 +228,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
     val snapshot = fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
-    val line = snapshot.visualLines.head
+    val line     = snapshot.visualLines.head
 
     line.caretStops.map(_.column) shouldBe Vector(0, 1, 3, 4, 5, 6, 7, 8, 10, 11)
     line.xForColumn(2) shouldBe line.xForColumn(3)
@@ -251,7 +251,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
+    val snapshot       = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
     val expectedOffset = ((metrics.charWidth * 10).toFloat - line.widthPx) / 2.0f
 
@@ -293,7 +293,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font    = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
+    val snapshot       = fromBuffer(buffer, panelWidthPx = metrics.charWidth * 10, font)
     val line           = snapshot.visualLines.head
     val expectedOffset = (metrics.charWidth * 10).toFloat - line.widthPx
 
@@ -405,7 +405,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
       )
       .unsafeRunSync()
 
-    val snapshot = fromBuffer(buffer, panelWidthPx = 400, font)
+    val snapshot      = fromBuffer(buffer, panelWidthPx = 400, font)
     val secondLineEnd = CursorPosition(1, 4)
     val preferredXPx  = snapshot.xPxForCursor(secondLineEnd).getOrElse(fail("missing caret x"))
     val firstLine     = snapshot.visualLines.head
@@ -422,7 +422,7 @@ class TextLayoutSnapshotSpec extends AnyFlatSpec with Matchers:
     val font = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()
 
     val snapshot = fromBuffer(buffer, panelWidthPx = 400, font, wordWrapEnabled = false)
-    val line = snapshot.visualLines.head
+    val line     = snapshot.visualLines.head
 
     line.text shouldBe "cdef"
     line.startColumn shouldBe 2
