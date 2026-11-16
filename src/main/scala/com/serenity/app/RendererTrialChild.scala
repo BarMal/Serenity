@@ -27,7 +27,8 @@ object RendererTrialChild:
       prepare: IO[Unit] = IO.unit,
       prepareTimeout: FiniteDuration = 10.seconds,
       progress: String => IO[Unit] = _ => IO.unit,
-      inApp: Option[IO[Window]] = None
+      inApp: Option[IO[Window]] = None,
+      device: IO[Option[String]] = IO.pure(None)
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -87,14 +88,16 @@ object RendererTrialChild:
     for
       outcome <- guarded
       api     <- setup.renderApi.handleError(_ => None)
+      device  <- setup.device.handleError(_ => None)
       report = RenderBackend.values.find(_.configKey == setup.backendKey) match
-        case Some(backend) => RendererTrial.Report(setup.candidate, backend, api, outcome)
+        case Some(backend) => RendererTrial.Report(setup.candidate, backend, api, outcome, device)
         case None =>
           RendererTrial.Report(
             setup.candidate,
             backendFor(setup.candidate),
             api,
-            Outcome.Failed(s"the window reported a backend this build does not know: ${setup.backendKey}")
+            Outcome.Failed(s"the window reported a backend this build does not know: ${setup.backendKey}"),
+            device
           )
       _ <- IO { out.println(RendererTrial.line(report)); out.flush() }
       _ <- quit.complete(()).void

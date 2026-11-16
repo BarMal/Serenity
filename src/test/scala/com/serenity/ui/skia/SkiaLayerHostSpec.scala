@@ -531,3 +531,10 @@ class SkiaLayerHostSpec extends AnyFlatSpec with Matchers:
       eventually("every draw reported again")(redraw.drawsStarted.get == window.host.renderCount)
     }
   }
+
+  it should "say which adapter Skiko set the layer up on, once it has drawn" in
+    withWindow { window =>
+      window.host.publish(record(scene))
+      eventually("the first frame")(window.host.renderCount > 0)
+      window.host.deviceName.getOrElse("").trim should not be empty
+    }

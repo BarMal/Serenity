@@ -16,13 +16,20 @@ object RendererTrial:
 
   val Marker: String = "RENDERER_TRIAL"
 
-  final case class Report(requested: Candidate, backend: RenderBackend, renderApi: Option[String], outcome: Outcome)
+  final case class Report(
+      requested: Candidate,
+      backend: RenderBackend,
+      renderApi: Option[String],
+      outcome: Outcome,
+      device: Option[String] = None
+  )
 
   def line(report: Report): String =
     val json = Json.obj(
       "requested" -> report.requested.label.asJson,
       "backend"   -> report.backend.configKey.asJson,
       "renderApi" -> report.renderApi.asJson,
+      "device"    -> report.device.asJson,
       "outcome"   -> RendererBenchmarkResult.outcomeJson(report.outcome)
     )
     s"$Marker ${json.noSpaces}"
@@ -38,14 +45,23 @@ object RendererTrial:
       requested <- cursor.get[Candidate]("requested")
       backend   <- cursor.get[RenderBackend]("backend")
       renderApi <- cursor.get[Option[String]]("renderApi")
+      device    <- cursor.get[Option[String]]("device")
       outcome   <- cursor.downField("outcome").as[Outcome](using RendererBenchmarkResult.outcomeDecoder)
-    yield Report(requested, backend, renderApi, outcome)
+    yield Report(requested, backend, renderApi, outcome, device)
 
   def read(text: String): Option[Report] =
     Option
       .when(text.startsWith(s"$Marker "))(text.drop(Marker.length + 1))
       .flatMap(json => io.circe.parser.parse(json).toOption)
       .flatMap(_.as[Report].toOption)
+
+  /** The adapter the child's window ran on, from the one trial line it printed, whatever its outcome; none from a child
+    * that printed no line, an unreadable one or several.
+    */
+  def deviceOf(output: String): Option[String] =
+    output.linesIterator.filter(_.startsWith(Marker)).toList match
+      case line :: Nil => read(line).flatMap(_.device)
+      case _           => None
 
   private def backendFor(candidate: Candidate): RenderBackend = candidate match
     case Candidate.LayerImage | Candidate.LayerPicture => RenderBackend.Skia

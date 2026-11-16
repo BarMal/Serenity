@@ -42,7 +42,8 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     backend: String = "skia",
     prepare: IO[Unit] = IO.unit,
     inApp: Option[Window] = None,
-    workload: Plan = plan
+    workload: Plan = plan,
+    device: Option[String] = None
   ): Setup =
     Setup(
       candidate = Candidate.LayerImage,
@@ -55,7 +56,8 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       timeout = 5.minutes,
       prepare = prepare,
       prepareTimeout = 3.seconds,
-      inApp = inApp.map(IO.pure)
+      inApp = inApp.map(IO.pure),
+      device = IO.pure(device)
     )
 
   private def lineOf(text: String): RendererTrial.Report =
@@ -229,4 +231,9 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     lineOf(printed(setup(_ => IO.pure(None), workload = plan.copy(typedChars = 6)))).outcome should matchPattern {
       case Outcome.Failed(reason) if reason.contains("cannot be read from here") =>
     }
+  }
+
+  it should "print the adapter the window ran on" in {
+    lineOf(printed(setup(_ => IO.pure(Some(12.0)), device = Some("llvmpipe")))).device shouldBe Some("llvmpipe")
+    lineOf(printed(setup(_ => IO.pure(Some(12.0))))).device shouldBe None
   }

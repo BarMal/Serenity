@@ -40,7 +40,7 @@ final class SkiaLayerHost private (
     redraw: LayerRedraw,
     report: String => Unit,
     onDrawEnd: AtomicReference[Option[() => Unit]],
-    deviceName: AtomicReference[Option[String]]
+    adapterName: AtomicReference[Option[String]]
 ) extends LayerHost:
 
   private val slot         = new PictureSlot[LayerFrame](_.close())
@@ -128,7 +128,7 @@ final class SkiaLayerHost private (
       )
     )
     listener.get().foreach(_.apply())
-    if apiReported.compareAndSet(false, true) then report(LayerRenderLine.of(renderApi, deviceName.get()))
+    if apiReported.compareAndSet(false, true) then report(LayerRenderLine.of(renderApi, adapterName.get()))
 
   def baseAvailable: Boolean = published.get()
 
@@ -147,6 +147,8 @@ final class SkiaLayerHost private (
   override def onDrawEnded(callback: () => Unit): Unit = onDrawEnd.set(Some(callback))
 
   def renderApi: String = layer.getRenderApi.toString
+
+  override def deviceName: Option[String] = adapterName.get()
 
   override def drawStats: LayerDrawStats =
     val count                     = publishes.get()

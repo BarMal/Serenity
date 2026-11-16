@@ -73,6 +73,7 @@ object RendererTrialLaunch:
               scale = DisplayScale.forComponent(swing.window.canvas).x,
               backendKey = backendKey,
               renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
+              device = IO(swing.window.layerPresenter.flatMap(_.deviceName)),
               timeout = RendererTrialChild.Timeout,
               prepare = driver.dismissNotices *> IO.sleep(NoticeSettle),
               prepareTimeout = stepTimeout + NoticeSettle,

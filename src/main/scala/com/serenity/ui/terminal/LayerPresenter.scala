@@ -36,6 +36,9 @@ trait LayerPresenter:
   /** The render API the layer ended up with, which is a software one where the GPU's could not start. */
   def renderApi: String
 
+  /** The graphics adapter the layer was set up on, as the toolkit names it, once it is known. */
+  def deviceName: Option[String] = None
+
   /** What the layer's draws have cost so far; a presenter that does not measure reports [[LayerDrawStats.None]]. */
   def drawStats: LayerDrawStats = LayerDrawStats.None
 

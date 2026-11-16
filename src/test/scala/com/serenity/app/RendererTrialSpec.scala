@@ -14,8 +14,9 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
     requested: Candidate = Candidate.LayerImage,
     backend: RenderBackend = RenderBackend.Skia,
     renderApi: Option[String] = Some("OPENGL"),
-    outcome: Outcome = measured
-  ) = Report(requested, backend, renderApi, outcome)
+    outcome: Outcome = measured,
+    device: Option[String] = None
+  ) = Report(requested, backend, renderApi, outcome, device)
 
   "RendererTrial.line" should "be one line that starts with the marker the coordinator looks for" in {
     val line = RendererTrial.line(report())
@@ -99,4 +100,22 @@ class RendererTrialSpec extends AnyFlatSpec with Matchers:
     val failed = report(outcome = Outcome.Failed("every page-down sample timed out (20)"))
     RendererTrial.outcomeOf(RendererTrial.line(failed), Candidate.LayerImage) shouldBe
       Outcome.Failed("every page-down sample timed out (20)")
+  }
+
+  it should "carry the adapter the window ran on, and read a line that has none as none" in {
+    val named = report(device = Some("Mesa Intel(R) UHD Graphics 620 (KBL GT2)"))
+    RendererTrial.read(RendererTrial.line(named)) shouldBe Some(named)
+    RendererTrial.read(
+      """RENDERER_TRIAL {"requested":"layer+image","backend":"skia","renderApi":"OPENGL","outcome":{"failed":"x"}}"""
+    ) shouldBe Some(report(outcome = Outcome.Failed("x")))
+  }
+
+  "RendererTrial.deviceOf" should "give the adapter a child reported, even from a failed run, and none otherwise" in {
+    val named = RendererTrial.line(report(outcome = Outcome.Failed("timed out"), device = Some("llvmpipe")))
+    val noisy = s"starting\n$named\nquitting\n"
+    val twice = s"$named\n$named"
+    RendererTrial.deviceOf(noisy) shouldBe Some("llvmpipe")
+    RendererTrial.deviceOf(RendererTrial.line(report())) shouldBe None
+    RendererTrial.deviceOf("no trial line at all") shouldBe None
+    RendererTrial.deviceOf(twice) shouldBe None
   }

@@ -1,6 +1,6 @@
 package com.serenity.app
 
-import java.nio.file.Path
+import java.nio.file.{Files, Path}
 import java.time.Instant
 
 import scala.collection.mutable.ListBuffer
@@ -25,8 +25,8 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
   private def measured(typing: Double, p95: Double): Outcome =
     Outcome.Measured(Workload(typing, p95, 2.0, 1.0, Map("page-down" -> 40.0, "full-redraw" -> 60.0)))
 
-  private def printed(candidate: Candidate, outcome: Outcome): String =
-    RendererTrial.line(RendererTrial.Report(candidate, backendOf(candidate), Some("OPENGL"), outcome))
+  private def printed(candidate: Candidate, outcome: Outcome, device: Option[String] = None): String =
+    RendererTrial.line(RendererTrial.Report(candidate, backendOf(candidate), Some("OPENGL"), outcome, device))
 
   private class Script(answers: Map[Candidate, List[IO[String]]]):
     val started: ListBuffer[Candidate] = ListBuffer.empty
@@ -249,4 +249,35 @@ class RendererCoordinatorSpec extends AnyFlatSpec with Matchers:
     val text          = RendererCoordinator.report(retried).mkString("\n")
     text should (include("Trial 1") and include("layer+image") and include(hung) and include("it was run again"))
     RendererCoordinator.report(finished).mkString("\n") should not include "it was run again"
+  }
+
+  it should "keep the adapter the first trial that reported one ran on in the key it saves" in {
+    val script = new Script(
+      Map(
+        Candidate.LayerImage -> List(
+          IO.pure(printed(Candidate.LayerImage, measured(30.0, 46.0), Some("llvmpipe (LLVM 19.1.1)"))),
+          IO.pure(printed(Candidate.LayerImage, measured(32.0, 50.0), Some("another adapter")))
+        ),
+        Candidate.SkiaRaster -> List(
+          IO.pure(printed(Candidate.SkiaRaster, measured(50.0, 80.0))),
+          IO.pure(printed(Candidate.SkiaRaster, measured(52.0, 84.0)))
+        )
+      )
+    )
+    val (_, path) = optimize(script)
+    RendererBenchmarkResult.decode(Files.readString(path)).map(_.key) shouldBe
+      Some(machine.copy(glRenderer = "llvmpipe (LLVM 19.1.1)"))
+  }
+
+  it should "count a failed trial that reported its adapter, and leave the key as it was when none did" in {
+    val failedWith =
+      printed(Candidate.LayerImage, Outcome.Failed("the screen cannot be read"), Some("Mesa Intel(R) UHD"))
+    val withDevice = new Script(
+      twoModesAnswers.updated(Candidate.LayerImage, List(IO.pure(failedWith), IO.pure(failedWith)))
+    )
+    val (_, withPath) = optimize(withDevice)
+    RendererBenchmarkResult.decode(Files.readString(withPath)).map(_.key.glRenderer) shouldBe Some("Mesa Intel(R) UHD")
+
+    val (_, withoutPath) = optimize(new Script(twoModesAnswers))
+    RendererBenchmarkResult.decode(Files.readString(withoutPath)).map(_.key) shouldBe Some(machine)
   }
