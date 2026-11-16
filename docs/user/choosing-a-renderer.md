@@ -22,7 +22,8 @@ serenity --optimize-renderer --apply      # also write a recommended mode to con
 The time counts three minutes a trial, which starting and stopping each window included: a run of the four trials
 measured 12 minutes 43 seconds on a virtual display.
 
-It opens a window for each trial and types into it, scrolls it, resizes it and changes its theme. **Leave the keyboard
+It opens a window for each trial, sizes it up to the screen (less the 80 pixels its resize step grows it by), and types
+into it, scrolls it, resizes it and changes its theme. **Leave the keyboard
 and mouse alone while it runs**; it says so, and waits five seconds before it starts (Ctrl+C cancels). Every mode runs
 twice, once on the way out and once on the way back, so a machine that warms up or throttles during the run favours
 none of them.
