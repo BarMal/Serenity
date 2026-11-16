@@ -413,3 +413,97 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     trace.drain().backend shouldBe "skia"
     trace.drain().summaryLine should include("backend=skia presented=draw-cycle-end")
   }
+
+  "A keystroke's stage split" should "carry the batch's apply stages and the frame's render stages, after the total" in {
+    val key =
+      oneKeystroke.copy(splits = Map(LatencySplit.ApplyDecode -> 1 * Ms, LatencySplit.ApplyTypedCommit -> 3 * Ms))
+    val frame = itsFrame.copy(splits = Map(LatencySplit.RenderLayout -> 4 * Ms, LatencySplit.RenderFlush -> 6 * Ms))
+
+    val latency = KeyLatency.of(key, frame, paintFinishedAt = 53 * Ms)
+
+    latency.splits shouldBe Map(
+      LatencySplit.ApplyDecode      -> 1 * Ms,
+      LatencySplit.ApplyTypedCommit -> 3 * Ms,
+      LatencySplit.RenderLayout     -> 4 * Ms,
+      LatencySplit.RenderFlush      -> 6 * Ms
+    )
+    latency.logLine shouldBe oneKeystrokeLine.stripSuffix(" ms") +
+      " apply_decode=1.00 apply_typed_commit=3.00 render_layout=4.00 render_flush=6.00 ms"
+  }
+
+  it should "add no field to a keystroke that has none" in {
+    KeyLatency.of(oneKeystroke, itsFrame, paintFinishedAt = 53 * Ms).splits shouldBe empty
+  }
+
+  it should "give each stage that any keystroke has a p50 and p95 row after key_to_screen, and no row for the others" in {
+    val with4 = KeyLatency.of(
+      oneKeystroke.copy(splits = Map(LatencySplit.ApplyDecode -> 4 * Ms)),
+      itsFrame,
+      paintFinishedAt = 53 * Ms
+    )
+    val without = KeyLatency.of(oneKeystroke, itsFrame, paintFinishedAt = 53 * Ms)
+    val window  = LatencyWindow(5000.0, Vector(with4, without), unpainted = 0)
+
+    window.summaryLine should include("key_to_screen p50=")
+    window.summaryLine should endWith("| apply_decode p50=0.00 p95=4.00 ms")
+    window.summaryLine should not include "render_draw"
+  }
+
+  it should "attribute the apply stages measured in a dispatch to the keystrokes that dispatch applied, and no later one" in {
+    val (trace, clock) = recorder()
+    trace.keyReceived(System.currentTimeMillis())
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.applyStageMeasured(LatencySplit.ApplyDecode, 2 * Ms)
+    trace.applyStageMeasured(LatencySplit.ApplyDecode, 1 * Ms)
+    trace.keysApplied(1)
+    trace.keyReceived(System.currentTimeMillis())
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.applyStageMeasured(LatencySplit.ApplyTypedStep, 5 * Ms)
+    trace.keysApplied(1)
+    trace.damageEmitted()
+    clock.advanceMs(1)
+    trace.frameWoke()
+    trace.frameModelRead()
+    trace.framePublished()
+    trace.frameEnded()
+    trace.paintStarted()
+    trace.paintFinished()
+
+    trace.drain().keys.map(_.splits) shouldBe Vector(
+      Map(LatencySplit.ApplyDecode    -> 3 * Ms),
+      Map(LatencySplit.ApplyTypedStep -> 5 * Ms)
+    )
+  }
+
+  it should "attribute the render stages of a frame to its keystrokes, even when the paint finished before they were known" in {
+    val (trace, clock) = recorder()
+    trace.keyReceived(System.currentTimeMillis())
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.keysApplied(1)
+    trace.damageEmitted()
+    clock.advanceMs(1)
+    trace.frameWoke()
+    trace.frameModelRead()
+    trace.framePublished()
+    trace.paintStarted()
+    trace.paintFinished()
+    trace.frameStaged(Map(LatencySplit.RenderLayout -> 2 * Ms, LatencySplit.RenderDraw -> 7 * Ms))
+    trace.frameEnded()
+
+    trace.drain().keys.map(_.splits) shouldBe Vector(
+      Map(LatencySplit.RenderLayout -> 2 * Ms, LatencySplit.RenderDraw -> 7 * Ms)
+    )
+  }
+
+  it should "map the frame phases that have a split to it, and no other" in {
+    LatencySplit.ofPhase(FramePhase.ApplyTypedStep) shouldBe Some(LatencySplit.ApplyTypedStep)
+    LatencySplit.ofPhase(FramePhase.RenderFlush) shouldBe Some(LatencySplit.RenderFlush)
+    LatencySplit.ofPhase(FramePhase.ApplyDamage) shouldBe None
+    LatencySplit.ofPhase(FramePhase.Paint) shouldBe None
+  }

@@ -6,12 +6,22 @@ Usage: python3 bench/latency-summary.py serenity.log [more.log ...]
 Prints p50/p95/max per stage over every keystroke line, plus each stage's share of the summed p50s, so the stage
 holding the unexplained time stands out. `when_to_edt` is wall-clock milliseconds between the OS event and the
 event thread; `total` is monotonic from the event thread to the end of the paint, so the two add up to the
-keystroke's in-app latency.
+keystroke's in-app latency. The `apply_*` and `render_*` fields, when present, split `apply` and `render` into the
+parts its batch and its frame spent; they are listed under the stages, indented, and left out of the shares.
 """
 
 import re
 import sys
 
+SPLITS = (
+    "apply_decode",
+    "apply_typed_step",
+    "apply_event",
+    "apply_typed_commit",
+    "render_layout",
+    "render_draw",
+    "render_flush",
+)
 LINE = re.compile(r"\[LATENCY\] seq=\d+ (.*) ms$")
 FIELD = re.compile(r"(\w+)=(-?[0-9.]+)")
 
@@ -43,13 +53,15 @@ def main(paths):
     count = len(stages[order[0]])
     print(f"{count} keystrokes")
     print(f"{'stage':<18} {'p50':>8} {'p95':>8} {'max':>8} {'p50 share':>10}  (ms)")
-    parts = [name for name in order if name != "total"]
+    parts = [name for name in order if name != "total" and name not in SPLITS]
     p50s = {name: nearest_rank(sorted(stages[name]), 0.50) for name in order}
     summed = sum(p50s[name] for name in parts) or 1.0
-    for name in order:
+    for name in [name for name in order if name not in SPLITS] + [name for name in order if name in SPLITS]:
         values = sorted(stages[name])
-        share = "" if name == "total" else f"{100.0 * p50s[name] / summed:>9.1f}%"
-        print(f"{name:<18} {p50s[name]:>8.2f} {nearest_rank(values, 0.95):>8.2f} {values[-1]:>8.2f} {share:>10}")
+        split = name in SPLITS
+        share = "" if name == "total" or split else f"{100.0 * p50s[name] / summed:>9.1f}%"
+        label = f"  {name}" if split else name
+        print(f"{label:<18} {p50s[name]:>8.2f} {nearest_rank(values, 0.95):>8.2f} {values[-1]:>8.2f} {share:>10}")
     return 0
 
 

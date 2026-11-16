@@ -13,11 +13,28 @@ import cats.effect.IO
 enum FramePhase(val label: String):
   case InputQueue extends FramePhase("input-queue")
   case InputApply extends FramePhase("input-apply")
-  case RenderWait extends FramePhase("render-wait")
-  case Sync       extends FramePhase("sync")
+
+  /** The stages an input's application splits into, one sample per input or event, not per frame: reading the input as
+    * an event, stepping a typed key, applying any other event (its reducing and committing together), committing a run
+    * of typed keys, and publishing the damage a dispatch leaves.
+    */
+  case ApplyDecode      extends FramePhase("apply-decode")
+  case ApplyTypedStep   extends FramePhase("apply-typed-step")
+  case ApplyEvent       extends FramePhase("apply-event")
+  case ApplyTypedCommit extends FramePhase("apply-typed-commit")
+  case ApplyDamage      extends FramePhase("apply-damage")
+  case RenderWait       extends FramePhase("render-wait")
+  case Sync             extends FramePhase("sync")
 
   /** The whole frame on the render thread, `Sync` included. */
-  case Render       extends FramePhase("render")
+  case Render extends FramePhase("render")
+
+  /** What a frame's render splits into: building the scene (layout), drawing it without the flush, and flushing the
+    * surface. The first two are the time inside each, so they do not add up to `Render`, which also holds the rest.
+    */
+  case RenderLayout extends FramePhase("render-layout")
+  case RenderDraw   extends FramePhase("render-draw")
+  case RenderFlush  extends FramePhase("render-flush")
   case PaintWait    extends FramePhase("paint-wait")
   case Paint        extends FramePhase("paint")
   case InputToPaint extends FramePhase("input-to-paint")
@@ -197,6 +214,9 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
       val now = clock()
       val _   = state.updateAndGet(transition(_, now))
 
+  /** Adds one sample of `nanos` to a stage of the frame, for the stages measured by a clock of their own. */
+  def recordPhase(phase: FramePhase, nanos: Long): Unit = update((current, _) => current.record(phase, nanos))
+
   def inputArrived(): Unit       = update(_.inputArrived(_))
   def inputApplyFinished(): Unit = update(_.inputApplyFinished(_))
   def renderStarted(): Unit      = update(_.renderStarted(_))
@@ -224,18 +244,24 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
     keyLatency.paintFinished()
 
   def timed[A](phase: FramePhase)(work: => A): A =
-    if enabled.get() then
+    if measuring then
       val start = clock()
       try work
-      finally update((current, end) => current.record(phase, end - start))
+      finally recordMeasured(phase, clock() - start)
     else work
 
   def timedIO[A](phase: FramePhase)(work: IO[A]): IO[A] =
-    IO(enabled.get()).flatMap { on =>
-      if on then
-        IO(clock()).flatMap(start => work.guarantee(IO(update((current, end) => current.record(phase, end - start)))))
+    IO(measuring).flatMap { on =>
+      if on then IO(clock()).flatMap(start => work.guarantee(IO(recordMeasured(phase, clock() - start))))
       else work
     }
+
+  /** Whether a timed stage has anywhere to be recorded: the frame timings, or the latency trace's stage split. */
+  private def measuring: Boolean = enabled.get() || keyLatency.isEnabled
+
+  private def recordMeasured(phase: FramePhase, nanos: Long): Unit =
+    update((current, _) => current.record(phase, nanos))
+    LatencySplit.ofPhase(phase).foreach(keyLatency.applyStageMeasured(_, nanos))
 
   /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
   def timedFrame(kind: FrameKind, paintEc: scala.concurrent.ExecutionContext)(

@@ -7,7 +7,7 @@ import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.semigroup.*
 import com.serenity.config.AppConfig
-import com.serenity.diagnostics.{FrameTimings, KeyLatencyTrace, Trace}
+import com.serenity.diagnostics.{FramePhase, FramePhaseClock, FrameTimings, KeyLatencyTrace, LatencySplit, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
@@ -209,11 +209,23 @@ private[serenity] object AppRuntimeRenderLoops:
       steps = EventBatchSteps[PendingInput](
         decode = decodeInput(config, translators),
         isolate = ClipboardEventSync.touchesSystemClipboard,
-        slice = AppRuntime.fastFrameInterval(config.surfaceConfig.renderFpsTarget) / 2
+        slice = AppRuntime.fastFrameInterval(config.surfaceConfig.renderFpsTarget) / 2,
+        stages = applyStages(context.frameTimings)
       )
       _ <- dispatchInputs(context, steps, inputs)
       _ <- refreshFocusedInputTranslator(context.stateManager, context.inputRouter, context.translatorCache)
     yield ()
+
+  /** The stages of applying a batch, timed into the frame timings: one sample per input or event. */
+  private def applyStages(timings: FrameTimings): ApplyStages =
+    def phase(stage: ApplyStage): FramePhase = stage match
+      case ApplyStage.Decode      => FramePhase.ApplyDecode
+      case ApplyStage.TypedStep   => FramePhase.ApplyTypedStep
+      case ApplyStage.Event       => FramePhase.ApplyEvent
+      case ApplyStage.TypedCommit => FramePhase.ApplyTypedCommit
+    new ApplyStages:
+      def sync[A](stage: ApplyStage)(work: => A): A    = timings.timed(phase(stage))(work)
+      def io[A](stage: ApplyStage)(work: IO[A]): IO[A] = timings.timedIO(phase(stage))(work)
 
   /** Each dispatch's damage is published as soon as it lands, so the oldest input of a long batch shows in the next
     * frame instead of waiting for the inputs queued behind it.
@@ -232,9 +244,10 @@ private[serenity] object AppRuntimeRenderLoops:
       _     <- context.observeBatch(batch.before.app, batch.after.app)
       _     <- ClipboardEventSync.exportIfCopied(batch.before.app, batch.after.app, context.systemClipboard)
       _ <- IO.whenA(batch.applied.nonEmpty)(
-        context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app)) >>
-          context.damagePublishedFor(batch.after.app) >>
-          IO(context.frameTimings.keyLatency.damageEmitted())
+        context.frameTimings.timedIO(FramePhase.ApplyDamage)(
+          context.emitDamage(DamageProducer.forTransition(batch.before.app, batch.after.app)) >>
+            context.damagePublishedFor(batch.after.app)
+        ) >> IO(context.frameTimings.keyLatency.damageEmitted())
       )
       _ <- batch.isolated.fold(IO.unit)(applyIsolated(context, steps, _))
       _ <- IO.whenA(batch.remaining.nonEmpty)(dispatchInputs(context, steps, batch.remaining))
@@ -329,12 +342,13 @@ private[serenity] object AppRuntimeRenderLoops:
     sleep: FiniteDuration => IO[Unit] = IO.sleep,
     frameClock: IO[FiniteDuration] = IO.monotonic,
     lastFrameStart: Ref[IO, Option[FiniteDuration]] = Ref.unsafe[IO, Option[FiniteDuration]](None),
-    keyLatency: KeyLatencyTrace = KeyLatencyTrace(),
+    frameTimings: FrameTimings = FrameTimings(),
     lastDrawnState: Ref[IO, Option[AppState]] = Ref.unsafe[IO, Option[AppState]](None),
     damagePublishedFor: Ref[IO, Option[AppState]] = Ref.unsafe[IO, Option[AppState]](None),
     transitionDamage: Option[(AppState, AppState) => Damage] = None,
     cursorVisible: IO[Boolean] = IO.pure(true)
   )(using logger: Logger[IO], balance: com.serenity.rope.Balance): Stream[IO, Unit] =
+    val keyLatency = frameTimings.keyLatency
     Stream
       .eval(
         for
@@ -363,8 +377,17 @@ private[serenity] object AppRuntimeRenderLoops:
             transitionDamage.getOrElse((before, after) => DamageProducer.forTransition(before, after))
           )
           caretVisible <- cursorVisible
+          phasesBefore <- IO(renderCaches.framePhases.snapshot)
           _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
             renderFull(model.app, caretVisible, None, paintDamage, renderCaches)
+          )
+          _ <- IO.whenA(frameTimings.isEnabled || keyLatency.isEnabled)(
+            IO(FramePhaseClock.split(phasesBefore, renderCaches.framePhases.snapshot)).flatMap(split =>
+              IO {
+                split.foreach((phase, nanos) => frameTimings.recordPhase(phase, nanos))
+                keyLatency.frameStaged(split.flatMap((phase, nanos) => LatencySplit.ofPhase(phase).map(_ -> nanos)))
+              }
+            )
           )
           _ <- IO(keyLatency.frameEnded())
         yield ()

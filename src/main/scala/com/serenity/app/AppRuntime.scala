@@ -347,7 +347,7 @@ object AppRuntime:
                     lastFrameStart = lastFastFrameStart,
                     lastDrawnState = lastDrawnState,
                     damagePublishedFor = damagePublishedFor,
-                    keyLatency = runtime.frameTimings.keyLatency,
+                    frameTimings = runtime.frameTimings,
                     cursorVisible = cursorVisible.get
                   )
 
