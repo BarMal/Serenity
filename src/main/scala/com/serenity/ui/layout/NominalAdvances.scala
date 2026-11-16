@@ -61,14 +61,19 @@ private[serenity] object NominalAdvances:
 
   private val ElementsPerRun = 333
 
-  /** The table for `font`, or `None` when the measurer may set some character at an advance other than its own. */
+  /** The table for `font`, or `None` when the measurer may set some character at an advance other than its own: always
+    * for a font set with ligatures, whose certificate is [[LigatureCertificate]]'s.
+    */
   def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
-    table(font, measurer).filter(_ =>
-      Battery.forall(run =>
-        measurer.mayMeasureByAdvances(run) &&
-          measurer.advances(run, 0, run.length, 0, LineFonts(font, Vector.empty)).isContextFree(0, run.length)
+    Option
+      .unless(font.ligatures)(font)
+      .flatMap(table(_, measurer))
+      .filter(_ =>
+        Battery.forall(run =>
+          measurer.mayMeasureByAdvances(run) &&
+            measurer.advances(run, 0, run.length, 0, LineFonts(font, Vector.empty)).isContextFree(0, run.length)
+        )
       )
-    )
 
   /** Each printable character's own advance in `font`, whatever shaping may do to a run of them. The caller answers for
     * that: see [[LigatureCertificate]].
