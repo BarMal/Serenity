@@ -68,6 +68,9 @@ it (4.2 ms).
   kept with each run in the result file. If the app's own clock sees no keystroke either, the trial fails and says so.
 - A resize is watched by the pixels across the edge the window moves. Where the desktop behind the window is the same
   colour as the editor's background, resizes cannot be seen and count as unmeasured; theme changes still are.
-- The GL renderer is not part of the machine key, so a graphics driver update alone does not mark a result stale.
+- The GL renderer is part of the machine key: the adapter the layer window reports (the name Skiko gives its
+  analytics hook, the GL renderer string on OpenGL, `Software` for the software renderer). It comes from the first trial
+  that reports one, even a failed trial, and stays `unknown` when none does (a run of the raster mode alone has no
+  layer, so no adapter).
 - Run on AC power and with nothing else busy: a notification, a battery profile or a busy machine can change a ranking,
   which is why the spread between a mode's two runs is part of the rule.
