@@ -11,6 +11,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
 import com.serenity.ui.renderer.FontSpec
+import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
@@ -136,6 +137,16 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
     val second = GlyphAdvances.measure(line, 0, line.length, 0, resolver, TestMeasure.measurer)
 
     second.caretsFrom(0, line.length).toVector shouldBe first.caretsFrom(0, line.length).toVector
+  }
+
+  it should "shape a line once, however many windows measure it" in {
+    val measurer = new SkiaTextMeasurer(TestBundledTypefaces.cacheWithInter())
+    val line     = codeLines(1)
+
+    val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, measurer)
+    val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, measurer)
+
+    measurer.shaperRuns shouldBe 1L
   }
 
   private def withFeatures(font: Font, features: (TextAttribute, AnyRef)*): Font =

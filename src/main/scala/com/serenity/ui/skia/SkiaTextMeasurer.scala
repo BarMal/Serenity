@@ -30,8 +30,12 @@ final class SkiaTextMeasurer(
   import SkiaTextMeasurer.*
 
   private val shaperLock = new Object
+  private val shapingN   = new java.util.concurrent.atomic.AtomicLong(0)
   private val inkPaint   = new Paint()
   private val shaper     = Shaper.Companion.make()
+
+  /** How many times the shaper has run for this measurer. */
+  private[ui] def shaperRuns: Long = shapingN.get
 
   def metricsKey: MetricsKey = MetricsKey("skia", Vector.empty)
 
@@ -367,13 +371,30 @@ final class SkiaTextMeasurer(
     }
     (starts, edges(text.length))
 
+  /** The shaping of `text` in `font`, made once however many windows ask for it: what a shaping holds is JVM arrays, so
+    * keeping them costs no native memory. Long text and an over-full cache are shaped afresh, so it stays bounded.
+    */
   private def shaped(text: String, font: Font, level: Byte): GlyphCollector =
+    if text.length > MaxCachedChars then shapeNow(text, font, level)
+    else
+      val key = ShapedKey(text, font, level)
+      Option(shapings.get(key)).getOrElse {
+        val collector = shapeNow(text, font, level)
+        if shapings.size >= MaxCachedShapings then shapings.clear()
+        val _ = shapings.put(key, collector)
+        collector
+      }
+
+  private val shapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, GlyphCollector]()
+
+  private def shapeNow(text: String, font: Font, level: Byte): GlyphCollector =
     val collector = new GlyphCollector()
     // One run in the one font, as the draw path shapes Latin text (`shapeLatin`). The overload that finds the runs
     // itself builds ICU and font fallback iterators on every call, milliseconds however short the text, and resolves a
     // fallback typeface for each that native memory keeps until the heap is next collected; layout gives text its
     // fallback fonts itself. The native copy of the text is freed here for the same reason.
     val end = text.length
+    val _   = shapingN.incrementAndGet()
     shaperLock.synchronized {
       val managed = new ManagedString(text)
       try
@@ -394,6 +415,12 @@ final class SkiaTextMeasurer(
 object SkiaTextMeasurer:
 
   private val MaxMeasurableRun = 4
+
+  final private case class ShapedKey(text: String, font: Font, level: Byte)
+
+  private val MaxCachedChars = 4096
+
+  private val MaxCachedShapings = 4096
 
   final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
 
