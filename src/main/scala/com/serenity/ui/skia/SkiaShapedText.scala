@@ -8,7 +8,7 @@ import scala.util.Try
 
 import cats.syntax.all.*
 import com.serenity.ui.renderer.ShapeTraffic
-import org.jetbrains.skia.shaper.{BidiRun, FontRun, LanguageRun, RunHandler, RunInfo, ScriptRun, Shaper, ShapingOptions}
+import org.jetbrains.skia.shaper.{BidiRun, FontRun, LanguageRun, RunHandler, RunInfo, ScriptRun, Shaper}
 import org.jetbrains.skia.{Canvas, Font, Paint, Point, TextBlob, TextBlobBuilder, TextLine}
 
 /** Text shaped once in one Skia font, from which any range of it can be drawn without shaping it again. The Skia
@@ -182,12 +182,12 @@ private object RunsStretch:
 final class SkiaShapedTextCache(
     capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity,
     warmup: WarmupStats = new WarmupStats(),
-    fallbacks: FallbackFonts = FallbackFonts.system
+    fallbacks: FallbackFonts = FallbackFonts.system,
+    ligaturesOf: Font => Boolean = _ => true
 ) extends ShapeTraffic:
   import SkiaShapedTextCache.*
 
   private val shaper     = timed(warmup.shaperMade)(Shaper.Companion.make())
-  private val options    = ShapingOptions.Companion.getDEFAULT()
   private val current    = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val previous   = new java.util.concurrent.atomic.AtomicReference(new Stretches())
   private val shapedN    = new java.util.concurrent.atomic.AtomicLong(0)
@@ -273,7 +273,7 @@ final class SkiaShapedTextCache(
           Iterator.single(BidiRun(text.length, 0)).asJava,
           Iterator.single(ScriptRun(text.length, "Latn")).asJava,
           Iterator.single(LanguageRun(text.length, "en")).asJava,
-          options,
+          ShapingFeatures.optionsFor(ligaturesOf(font)),
           Float.MaxValue,
           collector
         )
@@ -294,7 +294,7 @@ final class SkiaShapedTextCache(
       Iterator.single(BidiRun(end, 0)).asJava,
       Iterator.single(ScriptRun(end, "Latn")).asJava,
       Iterator.single(LanguageRun(end, "en")).asJava,
-      options,
+      ShapingFeatures.optionsFor(ligaturesOf(font)),
       Float.MaxValue,
       collector
     )

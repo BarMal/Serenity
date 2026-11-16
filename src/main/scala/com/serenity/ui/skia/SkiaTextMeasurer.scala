@@ -8,7 +8,7 @@ import scala.util.Try
 import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches, FontSpec}
-import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper, ShapingOptions}
+import org.jetbrains.skia.shaper.{BidiRun, LanguageRun, ScriptRun, Shaper}
 import org.jetbrains.skia.{Font, ManagedString, Paint}
 
 /** [[TextMeasurer]] over Skia: HarfBuzz shaping and Skia font metrics, for the day layout measures with what draws
@@ -22,16 +22,19 @@ import org.jetbrains.skia.{Font, ManagedString, Paint}
   * for two threads' first lookups; the faces are built under [[SkiaFontCache]]'s own lock.
   */
 final class SkiaTextMeasurer(
-    faces: SkiaFontCache = new SkiaFontCache(),
-    stretches: SkiaShapedTextCache = new SkiaShapedTextCache()
+    faces: SkiaFontCache,
+    stretches: SkiaShapedTextCache
 ) extends TextMeasurer:
+
+  def this(faces: SkiaFontCache) = this(faces, new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf))
+
+  def this() = this(new SkiaFontCache())
 
   import SkiaTextMeasurer.*
 
   private val shaperLock = new Object
   private val inkPaint   = new Paint()
   private val shaper     = Shaper.Companion.make()
-  private val options    = ShapingOptions.Companion.getDEFAULT()
 
   def metricsKey: MetricsKey = MetricsKey("skia", Vector.empty)
 
@@ -154,10 +157,10 @@ final class SkiaTextMeasurer(
     val contextFree = Array.tabulate(count)(index => measurable(index) && kernAfter(index) == 0.0f)
     GlyphAdvances.of(advances, contextFree, kernAfter, measurable)
 
-  /** A character's nominal advance, and whether shaping leaves it that advance in its own glyph: not part of a
-    * ligature, not substituted, and not kerned, or kerned only by the pair it makes with the next character, as shaping
-    * that pair alone kerns it, which is kept in `kernAfter`. A run with a surrogate pair is left unmeasured, as AWT's
-    * is.
+  /** A character's nominal advance, and whether shaping leaves it that advance in a glyph of its own: not part of a
+    * ligature, not kerned (a variant glyph set at the nominal advance, which a contextual alternate may choose, is
+    * still that advance), or kerned only by the pair it makes with the next character, as shaping that pair alone kerns
+    * it, which is kept in `kernAfter`. A run with a surrogate pair is left unmeasured, as AWT's is.
     */
   private def measureRun(
     chars: String,
@@ -171,7 +174,6 @@ final class SkiaTextMeasurer(
       val nominalGlyphs = font.getStringGlyphs(chars)
       val nominal       = font.getWidths(nominalGlyphs)
       val collector     = shaped(chars, font, 0.toByte)
-      val glyphs        = collector.glyphs
       val xs            = collector.xs :+ collector.width
       val clusters      = collector.clusters
       val glyphCount    = new Array[Int](chars.length)
@@ -185,7 +187,7 @@ final class SkiaTextMeasurer(
       def ownGlyph(index: Int): Option[Int] =
         Option.when(glyphCount(index) == 1)(glyphOf(index)).filter { glyph =>
           val after = if glyph + 1 < clusters.length then clusters(glyph + 1) else chars.length
-          after == index + 1 && glyphs(glyph) == nominalGlyphs(index)
+          after == index + 1
         }
       val array = chars.toCharArray
       chars.indices.foreach { index =>
@@ -349,7 +351,7 @@ final class SkiaTextMeasurer(
           Iterator.single(BidiRun(end, level.toInt)).asJava,
           Iterator.single(ScriptRun(end, scriptOf(text))).asJava,
           Iterator.single(LanguageRun(end, "en")).asJava,
-          options,
+          ShapingFeatures.optionsFor(faces.ligaturesOf(font)),
           Float.MaxValue,
           collector
         )

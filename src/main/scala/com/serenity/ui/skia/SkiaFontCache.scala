@@ -29,6 +29,7 @@ final class SkiaFontCache(
   import SkiaFontCache.*
 
   private val faces     = new ConcurrentHashMap[FontSpec, SkiaFace]()
+  private val ligatures = new ConcurrentHashMap[Font, Boolean]()
   private val typefaces = new ConcurrentHashMap[SkiaTypefaces.TypefaceKey, Typeface]()
   private val lock      = new Object
 
@@ -38,8 +39,10 @@ final class SkiaFontCache(
         Option(faces.get(font)).getOrElse {
           if faces.size >= maxFaces then
             faces.clear()
+            ligatures.clear()
             typefaces.clear()
           val face = build(font)
+          val _    = ligatures.put(face.font, font.ligatures)
           val _    = faces.put(font, face)
           face
         }
@@ -47,6 +50,10 @@ final class SkiaFontCache(
     }
 
   def size: Int = faces.size
+
+  /** Whether text is shaped with `font`'s ligatures on: what the spec it was built for says, and on for any other font.
+    */
+  def ligaturesOf(font: Font): Boolean = Option(ligatures.get(font)).forall(identity)
 
   private def build(font: FontSpec): SkiaFace =
     val started = System.nanoTime()

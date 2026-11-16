@@ -20,9 +20,10 @@ object SkiaTextCaches:
 
   def fresh(typefaces: SharedTypefaces = new SharedTypefaces()): SkiaTextCaches =
     val warmup = new WarmupStats()
+    val fonts  = new SkiaFontCache(warmup = warmup, resolveTypeface = typefaces.typefaceFor)
     SkiaTextCaches(
-      new SkiaFontCache(warmup = warmup, resolveTypeface = typefaces.typefaceFor),
-      new SkiaShapedTextCache(warmup = warmup),
+      fonts,
+      new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
       new SkiaImageCache(),
       warmup = warmup
     )
@@ -32,10 +33,11 @@ object SkiaTextCaches:
     */
   private[skia] def withTypefaces(owner: BackendCaches, resolve: SkiaTypefaces.TypefaceKey => Typeface): Unit =
     val warmup = new WarmupStats()
+    val fonts  = new SkiaFontCache(warmup = warmup, resolveTypeface = resolve)
     val _ = owner.getOrCreate(Key)(
       SkiaTextCaches(
-        new SkiaFontCache(warmup = warmup, resolveTypeface = resolve),
-        new SkiaShapedTextCache(warmup = warmup),
+        fonts,
+        new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
         new SkiaImageCache(),
         warmup = warmup
       )
@@ -56,8 +58,14 @@ object SkiaTextCaches:
   def keepingFonts(from: BackendCaches, into: BackendCaches): Unit =
     if heldBy(from) then
       val warmup = new WarmupStats()
+      val fonts  = of(from).fonts
       val _ = into.getOrCreate(Key)(
-        SkiaTextCaches(of(from).fonts, new SkiaShapedTextCache(warmup = warmup), new SkiaImageCache(), warmup = warmup)
+        SkiaTextCaches(
+          fonts,
+          new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
+          new SkiaImageCache(),
+          warmup = warmup
+        )
       )
 
   /** What first use has cost `owner`'s Skia text caches so far, if it has any. */
