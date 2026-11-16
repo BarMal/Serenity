@@ -269,3 +269,26 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
 
     timings.drain().phases.get(FramePhase.RenderFlush) shouldBe None
   }
+
+  it should "hand the time of an apply stage to the latency trace even while frame timing is off" in {
+    val clock   = ManualClock()
+    val timings = FrameTimings(() => clock.read())
+    timings.keyLatency.setEnabled(true)
+    timings.keyLatency.keyReceived(System.currentTimeMillis())
+    timings.keyLatency.keyEnqueued()
+    timings.keyLatency.keysDequeued(1)
+    timings.keyLatency.dispatchStarted()
+
+    timings.timed(FramePhase.ApplyDecode)(clock.advanceMs(3))
+    timings.keyLatency.keysApplied(1)
+    timings.keyLatency.damageEmitted()
+    timings.keyLatency.frameWoke()
+    timings.keyLatency.frameModelRead()
+    timings.keyLatency.framePublished()
+    timings.keyLatency.frameEnded()
+    timings.keyLatency.paintStarted()
+    timings.keyLatency.paintFinished()
+
+    timings.keyLatency.drain().keys.map(_.splits) shouldBe Vector(Map(LatencySplit.ApplyDecode -> 3 * Ms))
+    timings.drain().phases shouldBe empty
+  }

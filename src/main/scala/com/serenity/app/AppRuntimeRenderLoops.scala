@@ -7,7 +7,7 @@ import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.semigroup.*
 import com.serenity.config.AppConfig
-import com.serenity.diagnostics.{FramePhase, FramePhaseClock, FrameTimings, KeyLatencyTrace, Trace}
+import com.serenity.diagnostics.{FramePhase, FramePhaseClock, FrameTimings, KeyLatencyTrace, LatencySplit, Trace}
 import com.serenity.input.*
 import com.serenity.keystroke.events.Event
 import com.serenity.state.manager.*
@@ -381,9 +381,13 @@ private[serenity] object AppRuntimeRenderLoops:
           _ <- withRuntimeDiagnostics("render loop", "fast.full-render", IO.pure(Some(model.app)))(
             renderFull(model.app, caretVisible, None, paintDamage, renderCaches)
           )
-          _ <- IO.whenA(frameTimings.isEnabled)(
-            IO(FramePhaseClock.split(phasesBefore, renderCaches.framePhases.snapshot))
-              .flatMap(split => IO(split.foreach((phase, nanos) => frameTimings.recordPhase(phase, nanos))))
+          _ <- IO.whenA(frameTimings.isEnabled || keyLatency.isEnabled)(
+            IO(FramePhaseClock.split(phasesBefore, renderCaches.framePhases.snapshot)).flatMap(split =>
+              IO {
+                split.foreach((phase, nanos) => frameTimings.recordPhase(phase, nanos))
+                keyLatency.frameStaged(split.flatMap((phase, nanos) => LatencySplit.ofPhase(phase).map(_ -> nanos)))
+              }
+            )
           )
           _ <- IO(keyLatency.frameEnded())
         yield ()

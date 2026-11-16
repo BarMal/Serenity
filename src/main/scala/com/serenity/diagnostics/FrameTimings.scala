@@ -244,18 +244,24 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
     keyLatency.paintFinished()
 
   def timed[A](phase: FramePhase)(work: => A): A =
-    if enabled.get() then
+    if measuring then
       val start = clock()
       try work
-      finally update((current, end) => current.record(phase, end - start))
+      finally recordMeasured(phase, clock() - start)
     else work
 
   def timedIO[A](phase: FramePhase)(work: IO[A]): IO[A] =
-    IO(enabled.get()).flatMap { on =>
-      if on then
-        IO(clock()).flatMap(start => work.guarantee(IO(update((current, end) => current.record(phase, end - start)))))
+    IO(measuring).flatMap { on =>
+      if on then IO(clock()).flatMap(start => work.guarantee(IO(recordMeasured(phase, clock() - start))))
       else work
     }
+
+  /** Whether a timed stage has anywhere to be recorded: the frame timings, or the latency trace's stage split. */
+  private def measuring: Boolean = enabled.get() || keyLatency.isEnabled
+
+  private def recordMeasured(phase: FramePhase, nanos: Long): Unit =
+    update((current, _) => current.record(phase, nanos))
+    LatencySplit.ofPhase(phase).foreach(keyLatency.applyStageMeasured(_, nanos))
 
   /** Syncs window state and draws in a single hop onto the paint thread: each hop is a wait the frame pays for. */
   def timedFrame(kind: FrameKind, paintEc: scala.concurrent.ExecutionContext)(
