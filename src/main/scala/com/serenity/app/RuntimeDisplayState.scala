@@ -7,6 +7,7 @@ import cats.effect.IO
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.skia.SkiaCellMetrics
 import org.typelevel.log4cats.Logger
 
 /** The fonts and cell metrics the renderer is currently drawing with.
@@ -29,7 +30,8 @@ import org.typelevel.log4cats.Logger
   * accept for their writes doesn't even arise here; only the reads are synchronous.
   */
 final class RuntimeDisplayState private (
-    current: AtomicReference[RuntimeDisplayState.Snapshot]
+    current: AtomicReference[RuntimeDisplayState.Snapshot],
+    metricsOf: Font => CellMetrics
 ):
 
   /** The current fonts and metrics as one coherent value. Prefer this wherever more than one is needed. */
@@ -50,7 +52,7 @@ final class RuntimeDisplayState private (
   /** Load `config` and publish it as one generation, or keep the current one if its metrics are unusable. */
   def update(config: FontConfig)(using logger: Logger[IO]): IO[Unit] =
     RuntimeDisplayState
-      .load(config)
+      .load(config, metricsOf)
       .flatMap { next =>
         if next.isValid then IO(current.set(next))
         else
@@ -74,10 +76,13 @@ object RuntimeDisplayState:
   ):
     def isValid: Boolean = codeMetrics.isValid && textMetrics.isValid && uiMetrics.isValid
 
-  def create(config: FontConfig)(using logger: Logger[IO]): IO[RuntimeDisplayState] =
-    load(config).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot)))
+  /** `metricsOf` sizes the grid of each font; by default the Skia measurer's, which is what layout measures with. */
+  def create(config: FontConfig, metricsOf: Font => CellMetrics = SkiaCellMetrics.measuring())(using
+    logger: Logger[IO]
+  ): IO[RuntimeDisplayState] =
+    load(config, metricsOf).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot), metricsOf))
 
-  private def load(config: FontConfig)(using logger: Logger[IO]): IO[Snapshot] =
+  private def load(config: FontConfig, metricsOf: Font => CellMetrics)(using logger: Logger[IO]): IO[Snapshot] =
     for
       codeFont <- FontLoader.loadCodeFont(config)
       textFont <- FontLoader.loadTextFont(config)
@@ -86,7 +91,7 @@ object RuntimeDisplayState:
       codeFont = codeFont,
       textFont = textFont,
       uiFont = uiFont,
-      codeMetrics = CellMetrics.fromFont(codeFont),
-      textMetrics = CellMetrics.fromFont(textFont),
-      uiMetrics = CellMetrics.fromFont(uiFont)
+      codeMetrics = metricsOf(codeFont),
+      textMetrics = metricsOf(textFont),
+      uiMetrics = metricsOf(uiFont)
     )

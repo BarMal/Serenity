@@ -44,7 +44,7 @@ final class SkiaTextMeasurer(
     val skiaFont                   = skia(font)
     val (ascent, descent, leading) = verticalMetrics(skiaFont)
     CellMetrics(
-      math.max(1, math.round(skiaFont.measureTextWidth("M"))),
+      math.max(1, math.ceil(skiaFont.measureTextWidth("M").toDouble).toInt),
       math.max(1, math.ceil((descent - ascent + leading).toDouble).toInt),
       math.max(1, math.ceil((-ascent).toDouble).toInt),
       displayWidthAware = true
