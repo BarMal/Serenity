@@ -6,13 +6,14 @@ import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.skia.SkiaTextCaches
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
-/** The layout side of [[RenderCaches]] ownership, with no surface involved: laying a line out through one owner leaves
-  * it shaped in that owner's cache and in nobody else's. The painter's side is in
+/** The layout side of [[RenderCaches]] ownership, with no surface involved: laying a line out through one owner
+  * measures it with that owner's Skia text caches and with nobody else's. The painter's side is in
   * [[com.serenity.ui.skia.SkiaTextCachesOwnershipSpec]].
   */
 class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
@@ -32,29 +33,27 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
     (a.measuredAdvances `ne` b.measuredAdvances) shouldBe true
   }
 
-  "Laying a ligature line out through a RenderCaches" should "shape it in that owner's cache and no other's" in {
+  "Laying a ligature line out through a RenderCaches" should "measure it with that owner's text caches and no other's" in {
     val (owner, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
-    val frc            = TextLayoutSnapshot.defaultFontRenderContext()
-    owner.shapedText.holds(line, font, frc) shouldBe false
+    SkiaTextCaches.heldBy(owner.backendCaches) shouldBe false
 
     val rows = TextLayoutSnapshot.boundedVisualLinesForText(line, 0, widthPx, font, wrapCache = owner.wrappedLines)
 
     rows.map(_.text) shouldBe Vector(line)
-    owner.shapedText.holds(line, font, frc) shouldBe true
-    other.shapedText.holds(line, font, frc) shouldBe false
+    SkiaTextCaches.of(owner.backendCaches).fonts.size should be > 0
+    SkiaTextCaches.heldBy(other.backendCaches) shouldBe false
   }
 
-  "A RenderCaches' measured advances" should "shape through the owner's cache, not a shared one" in {
+  "A RenderCaches' measured advances" should "measure through the owner's text caches, not a shared one" in {
     val (owner, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
-    val frc            = TextLayoutSnapshot.defaultFontRenderContext()
 
     val advance = owner.measuredAdvances.advanceOf(line, font)
 
     advance should be > 0.0f
     owner.measuredAdvances.measurements shouldBe 1L
     other.measuredAdvances.measurements shouldBe 0L
-    owner.shapedText.holds(line, font, frc) shouldBe true
-    other.shapedText.holds(line, font, frc) shouldBe false
+    SkiaTextCaches.heldBy(owner.backendCaches) shouldBe true
+    SkiaTextCaches.heldBy(other.backendCaches) shouldBe false
   }
 
   "A RenderCaches' surface text caches" should "be the owner's own instances" in {

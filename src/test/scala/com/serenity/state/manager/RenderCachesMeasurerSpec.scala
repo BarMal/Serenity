@@ -2,8 +2,7 @@ package com.serenity.state.manager
 
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.serenity.testkit.TestMeasure
-import com.serenity.ui.layout.TextMeasurer
+import com.serenity.ui.layout.{LayoutMemos, TextMeasurer}
 import com.serenity.ui.renderer.BackendCaches
 import com.serenity.ui.skia.SkiaTextMeasurer
 import org.scalatest.flatspec.AnyFlatSpec
@@ -12,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
 final class RenderCachesMeasurerSpec extends AnyFlatSpec with Matchers:
 
   "RenderCaches" should "have no measurer unless its creator names how to make one" in {
-    TestMeasure.renderCaches().measurer shouldBe None
+    RenderCaches.create().measurer shouldBe None
   }
 
   it should "make the measurer from its own backend caches, once, and only when it is asked for" in {
@@ -44,5 +43,5 @@ final class RenderCachesMeasurerSpec extends AnyFlatSpec with Matchers:
   }
 
   "LayoutMemos made on their own" should "have no measurer" in {
-    TestMeasure.layoutMemos().measurer shouldBe None
+    LayoutMemos().measurer shouldBe None
   }
