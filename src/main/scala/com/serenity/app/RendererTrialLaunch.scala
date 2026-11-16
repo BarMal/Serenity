@@ -71,6 +71,11 @@ object RendererTrialLaunch:
                 quickest <- PixelClock.resolution(grabbing, region, ResolutionSamples)
               yield quickest,
               scale = DisplayScale.forComponent(swing.window.canvas).x,
+              canvasPixels = IO {
+                val canvas = swing.window.canvas
+                val scale  = DisplayScale.forComponent(canvas)
+                (canvas.getWidth * scale.x).round * (canvas.getHeight * scale.y).round
+              },
               backendKey = backendKey,
               renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
               device = IO(swing.window.layerPresenter.flatMap(_.deviceName)),

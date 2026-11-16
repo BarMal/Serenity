@@ -12,10 +12,12 @@ import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Clock, Outcome
   */
 object RendererTarget:
 
-  val TargetMs: Double    = 16.7
-  val TargetScale: Double = 2.0
+  val TargetMs: Double = 16.7
 
-  private val ScaleTolerance = 0.05
+  /** What "2x" means here: a canvas of at least this many device pixels, which is what the trial really drew. The scale
+    * the JVM reports is not used: under XWayland it says 1.0 on a 2x monitor.
+    */
+  val MinCanvasPixels: Long = 5_000_000L
 
   /** A clock that resolves more coarsely than a quarter of the target cannot support a verdict on it. */
   val MaxResolutionMs: Double = TargetMs / 4.0
@@ -25,14 +27,20 @@ object RendererTarget:
     case Misses(p95Ms: Double, overByMs: Double)
     case NotJudged(reason: String)
 
-  private def ms(value: Double): String    = "%.1f".formatLocal(Locale.ROOT, value)
-  private def times(value: Double): String = s"${ms(value)}x"
+  private def ms(value: Double): String        = "%.1f".formatLocal(Locale.ROOT, value)
+  private def megapixels(pixels: Long): String = ms(pixels / 1_000_000.0)
 
   def judge(runs: CandidateRuns): Verdict =
     val measured: List[Workload] = runs.runs.collect { case Outcome.Measured(workload) => workload }
-    measured.map(_.scale).distinct match
-      case Nil => Verdict.NotJudged("no completed run")
-      case scale :: Nil if math.abs(scale - TargetScale) <= ScaleTolerance =>
+    measured.map(_.canvasPixels).minOption match
+      case None => Verdict.NotJudged("no completed run")
+      case Some(0L) =>
+        Verdict.NotJudged("the canvas size was not recorded, so it cannot be said to be 2x")
+      case Some(pixels) if pixels < MinCanvasPixels =>
+        Verdict.NotJudged(
+          s"the canvas had ${megapixels(pixels)} megapixels; the target is defined at 2x, ${megapixels(MinCanvasPixels)} megapixels or more"
+        )
+      case Some(_) =>
         val resolution = RendererChoice.median(measured.map(_.clockResolutionMs))
         val p95        = RendererChoice.median(measured.map(_.typingP95Ms))
         if resolution > MaxResolutionMs then
@@ -41,9 +49,6 @@ object RendererTarget:
           )
         else if p95 <= TargetMs then Verdict.Meets(p95)
         else Verdict.Misses(p95, p95 - TargetMs)
-      case scale :: Nil => Verdict.NotJudged(s"measured at ${times(scale)}; the target is defined at 2x")
-      case scales =>
-        Verdict.NotJudged(s"the runs were measured at different scales (${scales.map(times).mkString(", ")})")
 
   /** One line for each mode, then, when at least one mode was judged, which of them meet the target or that none does.
     */

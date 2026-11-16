@@ -16,8 +16,10 @@ object RendererChoice:
     case LayerPicture extends Candidate("layer+picture")
     case SkiaRaster   extends Candidate("skia-raster")
 
-  /** One run of the workload: the typing median and 95th percentile, the display scale it ran at, the clock's
-    * resolution, and the median of each full-window row it measured.
+  /** One run of the workload: the typing median and 95th percentile, the display scale the JVM reported (which an X11
+    * toolkit under XWayland leaves at 1.0 on a 2x monitor, so it says little about the pixels drawn), the clock's
+    * resolution, the median of each full-window row it measured, and how many device pixels the canvas had when it
+    * started, which is what the 2x target is judged on (0 when not recorded).
     */
   final case class Workload(
       typingP50Ms: Double,
@@ -25,7 +27,8 @@ object RendererChoice:
       scale: Double,
       clockResolutionMs: Double,
       fullWindowMs: Map[String, Double],
-      clock: Clock = Clock.Pixel
+      clock: Clock = Clock.Pixel,
+      canvasPixels: Long = 0L
   )
 
   /** What a run's times were read from: the screen's pixels, or, where the screen cannot be read, the app's own stamps

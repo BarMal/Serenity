@@ -46,10 +46,11 @@ object RendererBenchmarkResult:
     case Applies(stored: Stored)
     case Stale(stored: Stored, changed: List[String])
 
-  /** 2 added the typing p95 and the scale, 3 the clock's resolution, 4 which clock a run was measured by; a file of any
-    * other version is read as absent and measured again.
+  /** 2 added the typing p95 and the scale, 3 the clock's resolution, 4 which clock a run was measured by, 5 the canvas
+    * size and the scale under its true name, `jvmScale`; a file of any other version is read as absent and measured
+    * again.
     */
-  val SchemaVersion: Int = 4
+  val SchemaVersion: Int = 5
 
   val fileName: String = "render-benchmark.json"
 
@@ -77,7 +78,8 @@ object RendererBenchmarkResult:
       Json.obj(
         "typingP50Ms"       -> workload.typingP50Ms.asJson,
         "typingP95Ms"       -> workload.typingP95Ms.asJson,
-        "scale"             -> workload.scale.asJson,
+        "jvmScale"          -> workload.scale.asJson,
+        "canvasPixels"      -> workload.canvasPixels.asJson,
         "clockResolutionMs" -> workload.clockResolutionMs.asJson,
         "clock"             -> workload.clock.label.asJson,
         "fullWindowMs"      -> workload.fullWindowMs.asJson
@@ -128,11 +130,12 @@ object RendererBenchmarkResult:
         for
           typing     <- cursor.get[Double]("typingP50Ms")
           typingP95  <- cursor.get[Double]("typingP95Ms")
-          scale      <- cursor.get[Double]("scale")
+          scale      <- cursor.get[Double]("jvmScale")
+          pixels     <- cursor.get[Long]("canvasPixels")
           resolution <- cursor.get[Double]("clockResolutionMs")
           clock      <- cursor.get[Clock]("clock")
           rows       <- cursor.get[Map[String, Double]]("fullWindowMs")
-        yield Outcome.Measured(Workload(typing, typingP95, scale, resolution, rows, clock))
+        yield Outcome.Measured(Workload(typing, typingP95, scale, resolution, rows, clock, pixels))
     }
 
   private given Decoder[Outcome] = outcomeDecoder

@@ -43,7 +43,8 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     prepare: IO[Unit] = IO.unit,
     inApp: Option[Window] = None,
     workload: Plan = plan,
-    device: Option[String] = None
+    device: Option[String] = None,
+    canvasPixels: Long = 0L
   ): Setup =
     Setup(
       candidate = Candidate.LayerImage,
@@ -57,7 +58,8 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       prepare = prepare,
       prepareTimeout = 3.seconds,
       inApp = inApp.map(IO.pure),
-      device = IO.pure(device)
+      device = IO.pure(device),
+      canvasPixels = IO.pure(canvasPixels)
     )
 
   private def lineOf(text: String): RendererTrial.Report =
@@ -236,4 +238,21 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
   it should "print the adapter the window ran on" in {
     lineOf(printed(setup(_ => IO.pure(Some(12.0)), device = Some("llvmpipe")))).device shouldBe Some("llvmpipe")
     lineOf(printed(setup(_ => IO.pure(Some(12.0))))).device shouldBe None
+  }
+
+  it should "report the pixels of the canvas it measured on, by either clock" in {
+    def pixels(text: String): Long = lineOf(text).outcome match
+      case Outcome.Measured(workload) => workload.canvasPixels
+      case other                      => fail(s"expected a measurement, got $other")
+    pixels(printed(setup(_ => IO.pure(Some(12.0)), canvasPixels = 2_722_440L))) shouldBe 2_722_440L
+    pixels(
+      printed(
+        setup(
+          _ => IO.pure(None),
+          inApp = Some(_ => IO.pure(Some(9.0))),
+          workload = plan.copy(typedChars = 6),
+          canvasPixels = 6_000_000L
+        )
+      )
+    ) shouldBe 6_000_000L
   }
