@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.app.RendererBenchmarkResult.{Key, Standing, Stored}
-import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
+import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Clock, Outcome, Workload}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -75,8 +75,10 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
       .encode(stored)
       .replace("\"schema\"", "\"schemaWas\"")
     RendererBenchmarkResult.decode(old) shouldBe None
-    val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 3", "\"schema\" : 2")
-    RendererBenchmarkResult.decode(earlier) shouldBe None
+    List(2, 3).foreach { version =>
+      val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 4", s"\"schema\" : $version")
+      RendererBenchmarkResult.decode(earlier) shouldBe None
+    }
   }
 
   "RendererBenchmarkResult.standing" should "be absent when nothing was stored" in {
@@ -144,4 +146,22 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
     val path = RendererBenchmarkResult.defaultPath
     path.getFileName.toString shouldBe "render-benchmark.json"
     path.getParent.getFileName.toString shouldBe ".serenity"
+  }
+
+  it should "keep the clock a run was measured by, and read a run without one as the pixel clock's" in {
+    val inApp = Stored(
+      machine,
+      Instant.parse("2026-11-16T10:00:00Z"),
+      List(
+        CandidateRuns(
+          Candidate.LayerImage,
+          List(Outcome.Measured(Workload(20.0, 30.0, 1.0, 0.0, Map("page-down" -> 9.0), clock = Clock.InApp)))
+        )
+      )
+    )
+    val text = RendererBenchmarkResult.encode(inApp)
+    text should include("\"clock\" : \"in-app\"")
+    RendererBenchmarkResult.decode(text) shouldBe Some(inApp)
+    RendererBenchmarkResult.decode(RendererBenchmarkResult.encode(stored)) shouldBe Some(stored)
+    RendererBenchmarkResult.encode(stored) should include("\"clock\" : \"pixel\"")
   }

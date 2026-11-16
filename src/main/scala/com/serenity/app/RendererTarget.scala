@@ -2,7 +2,7 @@ package com.serenity.app
 
 import java.util.Locale
 
-import com.serenity.app.RendererChoice.{CandidateRuns, Outcome, Recommendation, Workload}
+import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Clock, Outcome, Recommendation, Workload}
 
 /** How each measured renderer mode stands against the typing target of #2489: input to paint at 2x, p95 at or below
   * 16.7 ms.
@@ -49,11 +49,19 @@ object RendererTarget:
     */
   def lines(results: List[CandidateRuns]): List[String] =
     val judged = results.map(runs => runs.candidate -> judge(runs))
+    def caveat(candidate: Candidate): String =
+      val inApp = results
+        .find(_.candidate == candidate)
+        .exists(_.runs.exists {
+          case Outcome.Measured(workload) => workload.clock == Clock.InApp
+          case _                          => false
+        })
+      if inApp then s" (${RendererChoice.InAppCaveat})" else ""
     val perMode = judged.map {
       case (candidate, Verdict.Meets(p95)) =>
-        s"${candidate.label}: typing p95 ${ms(p95)} ms at 2x, ${ms(TargetMs)} ms target met"
+        s"${candidate.label}: typing p95 ${ms(p95)} ms at 2x, ${ms(TargetMs)} ms target met${caveat(candidate)}"
       case (candidate, Verdict.Misses(p95, over)) =>
-        s"${candidate.label}: typing p95 ${ms(p95)} ms at 2x, ${ms(TargetMs)} ms target missed by ${ms(over)} ms"
+        s"${candidate.label}: typing p95 ${ms(p95)} ms at 2x, ${ms(TargetMs)} ms target missed by ${ms(over)} ms${caveat(candidate)}"
       case (candidate, Verdict.NotJudged(reason)) => s"${candidate.label}: target not judged ($reason)"
     }
     val meeting = judged.collect { case (candidate, _: Verdict.Meets) => candidate.label }

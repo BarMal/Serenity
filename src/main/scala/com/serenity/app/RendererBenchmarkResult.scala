@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths, StandardCopyOption}
 import java.time.Instant
 
 import cats.effect.IO
-import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
+import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Clock, Outcome, Workload}
 import io.circe.syntax.*
 import io.circe.{Decoder, DecodingFailure, HCursor, Json}
 
@@ -46,10 +46,10 @@ object RendererBenchmarkResult:
     case Applies(stored: Stored)
     case Stale(stored: Stored, changed: List[String])
 
-  /** 2 added the typing p95 and the scale, 3 the clock's resolution; a file of any other version is read as absent and
-    * measured again.
+  /** 2 added the typing p95 and the scale, 3 the clock's resolution, 4 which clock a run was measured by; a file of any
+    * other version is read as absent and measured again.
     */
-  val SchemaVersion: Int = 3
+  val SchemaVersion: Int = 4
 
   val fileName: String = "render-benchmark.json"
 
@@ -79,6 +79,7 @@ object RendererBenchmarkResult:
         "typingP95Ms"       -> workload.typingP95Ms.asJson,
         "scale"             -> workload.scale.asJson,
         "clockResolutionMs" -> workload.clockResolutionMs.asJson,
+        "clock"             -> workload.clock.label.asJson,
         "fullWindowMs"      -> workload.fullWindowMs.asJson
       )
     case Outcome.Failed(reason) =>
@@ -117,6 +118,9 @@ object RendererBenchmarkResult:
   private given Decoder[Candidate] =
     Decoder.decodeString.emap(label => Candidate.values.find(_.label == label).toRight(s"not a candidate: $label"))
 
+  private given Decoder[Clock] =
+    Decoder.decodeString.emap(label => Clock.values.find(_.label == label).toRight(s"not a clock: $label"))
+
   private[app] val outcomeDecoder: Decoder[Outcome] = (cursor: HCursor) =>
     cursor.downField("failed").as[Option[String]].flatMap {
       case Some(reason) => Right(Outcome.Failed(reason))
@@ -126,8 +130,9 @@ object RendererBenchmarkResult:
           typingP95  <- cursor.get[Double]("typingP95Ms")
           scale      <- cursor.get[Double]("scale")
           resolution <- cursor.get[Double]("clockResolutionMs")
+          clock      <- cursor.get[Clock]("clock")
           rows       <- cursor.get[Map[String, Double]]("fullWindowMs")
-        yield Outcome.Measured(Workload(typing, typingP95, scale, resolution, rows))
+        yield Outcome.Measured(Workload(typing, typingP95, scale, resolution, rows, clock))
     }
 
   private given Decoder[Outcome] = outcomeDecoder

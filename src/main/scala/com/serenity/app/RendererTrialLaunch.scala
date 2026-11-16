@@ -8,6 +8,7 @@ import cats.effect.{Deferred, IO}
 import com.serenity.app.RendererChoice.Candidate
 import com.serenity.app.RendererTrialChild.Setup
 import com.serenity.app.RendererWorkload.{Plan, Step, Window}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowHost
 import com.serenity.ui.terminal.SwingWindowHost
@@ -36,10 +37,11 @@ object RendererTrialLaunch:
     out: PrintStream = System.out,
     plan: Plan = Plan.standard,
     stepTimeout: FiniteDuration = StepTimeout,
-    warmUp: FiniteDuration = WarmUp
+    warmUp: FiniteDuration = WarmUp,
+    frameTimings: FrameTimings = FrameTimings()
   ): IO[Unit] =
     options.rendererTrial.fold(IO.unit)(candidate =>
-      (IO.sleep(warmUp) *> setup(candidate, host, backendKey, plan, stepTimeout).flatMap(
+      (IO.sleep(warmUp) *> setup(candidate, host, backendKey, plan, stepTimeout, frameTimings).flatMap(
         RendererTrialChild.run(_, quit, out)
       )).start.void
     )
@@ -49,7 +51,8 @@ object RendererTrialLaunch:
     host: WindowHost,
     backendKey: String,
     plan: Plan,
-    stepTimeout: FiniteDuration
+    stepTimeout: FiniteDuration,
+    frameTimings: FrameTimings
   ): IO[Setup] =
     host match
       case swing: SwingWindowHost =>
@@ -73,7 +76,11 @@ object RendererTrialLaunch:
               timeout = RendererTrialChild.Timeout,
               prepare = driver.dismissNotices *> IO.sleep(NoticeSettle),
               prepareTimeout = stepTimeout + NoticeSettle,
-              progress = line => logger.info(line)
+              progress = line => logger.info(line),
+              inApp = Some(
+                IO { frameTimings.keyLatency.setEnabled(true); frameTimings.setEnabled(true) }
+                  .as(InAppTrialWindow(driver, frameTimings, stepTimeout))
+              )
             )
         }
       case _ =>
