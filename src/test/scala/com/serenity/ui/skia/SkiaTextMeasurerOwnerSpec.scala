@@ -28,22 +28,9 @@ final class SkiaTextMeasurerOwnerSpec extends AnyFlatSpec with Matchers:
       SkiaTextMeasurer.of(owner).glyphWidthPx(font, "Hello")
   }
 
-  it should "read the stretches the owner's surface draws, and shape nothing more" in {
+  it should "measure the stretches the owner's surface draws" in {
     val owner  = new BackendCaches
-    val caches = SkiaTextCaches.of(owner)
-    val _      = caches.shapedText.stretchOf("café 😀", caches.fonts.faceFor(font).font)
-    val shaped = caches.shapedText.shapings
-
-    val _ = SkiaTextMeasurer.of(owner).exactCaretXs("café 😀", 0, LineFonts(font, Vector.empty))
-
-    caches.shapedText.shapings shouldBe shaped
-  }
-
-  it should "neither count a shaping nor keep a stretch for text it measures and the surface never draws" in {
-    val owner  = new BackendCaches
-    val caches = SkiaTextCaches.of(owner)
-
-    val _ = SkiaTextMeasurer.of(owner).exactCaretXs("café 😀", 0, LineFonts(font, Vector.empty))
-
-    (caches.shapedText.shapings, caches.shapedText.lookups) shouldBe (0L, 0L)
+    val before = SkiaTextCaches.of(owner).shapedText.lookups
+    val _      = SkiaTextMeasurer.of(owner).exactCaretXs("café 😀", 0, LineFonts(font, Vector.empty))
+    SkiaTextCaches.of(owner).shapedText.lookups should be > before
   }

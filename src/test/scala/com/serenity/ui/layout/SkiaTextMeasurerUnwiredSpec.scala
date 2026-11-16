@@ -9,9 +9,9 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The Skia measurer is handed to the state manager at the one place the owner approved (step D0, #2660 item 2), and
-  * since step D2 layout reads it, through the `LayoutMemos` its wrap cache carries and nowhere else. A new file that
-  * names it, or a file outside layout that reads a measurer, fails here, so that spreading it is a decision and not a
-  * side effect.
+  * nothing reads it yet: layout still measures through AWT until the later steps of D move each part onto it. A new
+  * file that names it, or reads `RenderCaches.measurer`, fails here, so that spreading it is a decision and not a side
+  * effect.
   */
 class SkiaTextMeasurerUnwiredSpec extends AnyFlatSpec with Matchers:
 
@@ -36,6 +36,6 @@ class SkiaTextMeasurerUnwiredSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  "Only layout" should "read a measurer" in {
-    mainSourcesContaining(".measurer").filterNot(_.startsWith("scala/com/serenity/ui/layout/")) shouldBe Nil
+  "Nothing but RenderCaches" should "read the measurer a RenderCaches holds" in {
+    mainSourcesContaining(".measurer") shouldBe Nil
   }
