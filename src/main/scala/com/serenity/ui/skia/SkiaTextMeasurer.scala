@@ -164,7 +164,26 @@ final class SkiaTextMeasurer(
     kernAfter: Array[Float],
     measurable: Array[Boolean]
   ): Unit =
-    if chars.nonEmpty && chars.codePointCount(0, chars.length) == chars.length then
+    if chars.exists(Character.isSurrogate) then
+      surrogateFreeStretches(chars).foreach((from, until) =>
+        measureRun(chars.substring(from, until), font, offset + from, advances, kernAfter, measurable)
+      )
+    else measureStretch(chars, font, offset, advances, kernAfter, measurable)
+
+  private def surrogateFreeStretches(chars: String): Vector[(Int, Int)] =
+    val bounds = chars.indices.filter(index => Character.isSurrogate(chars(index)))
+    val edges  = (-1 +: bounds) :+ chars.length
+    edges.zip(edges.drop(1)).map((before, after) => (before + 1, after)).filter((from, until) => from < until).toVector
+
+  private def measureStretch(
+    chars: String,
+    font: Font,
+    offset: Int,
+    advances: Array[Float],
+    kernAfter: Array[Float],
+    measurable: Array[Boolean]
+  ): Unit =
+    if chars.nonEmpty then
       val nominalGlyphs = font.getStringGlyphs(chars)
       val nominal       = font.getWidths(nominalGlyphs)
       val collector     = shaped(chars, font, 0.toByte)
@@ -188,7 +207,8 @@ final class SkiaTextMeasurer(
       val array = chars.toCharArray
       chars.indices.foreach { index =>
         advances(offset + index) = nominal(index)
-        val plain = GlyphAdvances.isContextFreeCharacter(chars(index)) &&
+        val plain = hasGlyphOrNeedsNone(chars(index), nominalGlyphs(index)) &&
+          GlyphAdvances.isContextFreeCharacter(chars(index)) &&
           !GlyphAdvances.requiresLayout(array, index, index + 1) &&
           (nominal(index) == 0.0f || nominal(index) >= GlyphAdvances.SmallestDistinctAdvancePx)
         ownGlyph(index).filter(_ => plain).foreach { glyph =>
@@ -201,7 +221,7 @@ final class SkiaTextMeasurer(
               kernAfter(offset + index) = pair
         }
       }
-      measurableRuns(chars, nominal, xs, firstGlyphOf, offset, measurable)
+      measurableRuns(chars, nominal, nominalGlyphs, xs, firstGlyphOf, offset, measurable)
 
   /** Short runs of characters with equal advances that shaping sets exactly where their advances put them end to end,
     * though not each at its own: a ligature such as `=>` in a monospaced code font, or glyphs a contextual alternate
@@ -212,6 +232,7 @@ final class SkiaTextMeasurer(
   private def measurableRuns(
     chars: String,
     nominal: Array[Float],
+    nominalGlyphs: Array[Short],
     xs: Array[Float],
     firstGlyphOf: Array[Int],
     offset: Int,
@@ -219,7 +240,8 @@ final class SkiaTextMeasurer(
   ): Unit =
     val array = chars.toCharArray
     def plain(index: Int): Boolean =
-      GlyphAdvances.isContextFreeCharacter(array(index)) && !GlyphAdvances.requiresLayout(array, index, index + 1) &&
+      hasGlyphOrNeedsNone(array(index), nominalGlyphs(index)) && GlyphAdvances.isContextFreeCharacter(array(index)) &&
+        !GlyphAdvances.requiresLayout(array, index, index + 1) &&
         nominal(index) >= GlyphAdvances.SmallestDistinctAdvancePx
     def originOf(index: Int): Option[Float] =
       if index == chars.length then Some(xs.last)
@@ -449,6 +471,18 @@ final class SkiaTextMeasurer(
 object SkiaTextMeasurer:
 
   private val MaxMeasurableRun = 4
+
+  /** The glyph a font gives a character it has none for. A character set in it is laid out in the font the draw path
+    * falls back to, which only the drawn stretch knows, so its advance is not the nominal one.
+    */
+  private val MissingGlyph: Short = 0
+
+  /** Whether `char` has the glyph it is measured by: a control or a space draws nothing, so having none is not a
+    * missing glyph.
+    */
+  private def hasGlyphOrNeedsNone(char: Char, glyph: Short): Boolean =
+    glyph != MissingGlyph || Character.isISOControl(char) || Character.isWhitespace(char) ||
+      Character.isSpaceChar(char)
 
   final private case class ShapedKey(text: String, font: Font, level: Byte)
 
