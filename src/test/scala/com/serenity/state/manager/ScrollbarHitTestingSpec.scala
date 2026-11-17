@@ -39,7 +39,8 @@ class ScrollbarHitTestingSpec extends AnyFlatSpec with Matchers:
     )
     LayoutEngine.syncViewportDimensions(state, viewportSize)
 
-  private def sceneOf(state: AppState): UiSceneSnapshot = AuthoritativeUiScene().forState(state, viewportSize)
+  private def sceneOf(state: AppState): UiSceneSnapshot =
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()).forState(state, viewportSize)
 
   private def run[A](state: AppState)(transition: Transition[A]): (ReducerResult, A) =
     MouseTransition.run(state)(transition)

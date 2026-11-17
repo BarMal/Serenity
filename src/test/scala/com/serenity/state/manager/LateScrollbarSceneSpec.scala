@@ -76,7 +76,10 @@ class LateScrollbarSceneSpec extends AnyFlatSpec with Matchers:
 
   /** What the pane's scrollbar was before it was counted late: the whole document measured inside the frame. */
   private def exactExtent(state: AppState): ScrollExtent =
-    AuthoritativeUiScene().forState(state, viewportSize).paneScrolls(paneId).extent
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      .forState(state, viewportSize)
+      .paneScrolls(paneId)
+      .extent
 
   private def wraps(scene: AuthoritativeUiScene): Long = scene.wrappedLines match
     case bounded: WrappedLineCache.Bounded => bounded.wrapStats.coldWraps + bounded.wrapStats.incrementalWraps

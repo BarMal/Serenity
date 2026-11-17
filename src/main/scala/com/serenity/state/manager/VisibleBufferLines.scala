@@ -3,7 +3,7 @@ package com.serenity.state.manager
 import com.serenity.lsp.model.LineRange
 import com.serenity.state.models.{AppState, Buffer, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.CellMetrics
+import com.serenity.ui.layout.TextLayoutSnapshot
 
 /** The buffer lines a pane may be showing, for a language server asked only about what is on screen.
   *
@@ -39,8 +39,13 @@ object VisibleBufferLines:
     if state.runtime.capabilities.isCellGrid then visibleLines
     else
       val fontConfig = state.persisted.config.editorConfig.fontConfig
+      val memos      = state.runtime.anchorWraps.lines.layoutMemos
       val codeHeight =
-        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+        TextLayoutSnapshot
+          .cellMetricsOf(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code), memos)
+          .lineHeight
       val bufferHeight =
-        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)).lineHeight
+        TextLayoutSnapshot
+          .cellMetricsOf(FontLoader.previewFontForRole(fontConfig, buffer.typographyRole), memos)
+          .lineHeight
       math.max(1, visibleLines * codeHeight / math.max(1, bufferHeight))

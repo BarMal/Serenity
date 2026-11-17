@@ -206,7 +206,7 @@ class ValidatedWritesSpec extends AnyFlatSpec with Matchers:
       val statePort = new EventStatePort:
         val logger              = quietLogger
         val mouseTargetCacheRef = cacheRef
-        val authoritativeScene  = AuthoritativeUiScene()
+        val authoritativeScene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
       val effectPort = EventEffectPort(
         interpretEffect = _ => IO.unit,
         interpretCommand = (_, _) => stateRef.get.flatMap(current => seen.update(_ :+ current))

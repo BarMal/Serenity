@@ -12,7 +12,10 @@ import com.serenity.ui.layout.*
 private[manager] object MouseHitTestGeometry:
 
   def floatingCellMetrics(state: AppState): CellMetrics =
-    CellMetrics.fromFont(FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig))
+    TextLayoutSnapshot.cellMetricsOf(
+      FontLoader.previewCodeFont(state.persisted.config.editorConfig.fontConfig),
+      state.runtime.anchorWraps.lines.layoutMemos
+    )
 
   /** Multi-column e-reader layout (issue #1338, Phase 2 / slice 5): which page column a click at `xCellsFromContent`
     * (cells right of the pane's content-rect left edge) lands in, given the same [[ColumnSnapshotPlacement]]s slice 1

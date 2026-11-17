@@ -49,7 +49,8 @@ class OpeningsLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
     )
 
   private def keyFor(config: AppConfig, overrides: OpeningOverride = OpeningOverride.Empty): MouseTargetLayoutKey =
-    AuthoritativeUiScene().layoutKeyFor(stateOf(config, overrides), viewport)
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      .layoutKeyFor(stateOf(config, overrides), viewport)
 
   private def configured(update: OpeningSettings => OpeningSettings): AppConfig =
     AppConfig.default.copy(openingsConfig = update(OpeningSettings.default.copy(enabled = true)))
@@ -116,7 +117,7 @@ class OpeningsLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
   }
 
   "The prepared scene" should "be rebuilt when a document override changes, and reused when nothing did" in {
-    val scene     = AuthoritativeUiScene()
+    val scene     = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
     val on        = configured(identity)
     val before    = MouseTargetCache.fromState(stateOf(on), viewport, scene).scene
     val unchanged = MouseTargetCache.fromState(stateOf(on), viewport, scene).scene

@@ -36,7 +36,11 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
   private def buffer(state: AppState): Buffer = state.persisted.buffers(BufferId(0))
 
   private def contentRect(state: AppState): LayoutRect =
-    MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene()).scene.paneLayouts(PaneId(0)).contentRect
+    MouseTargetCache
+      .fromState(state, viewport, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
+      .scene
+      .paneLayouts(PaneId(0))
+      .contentRect
 
   "EditorMouseTargeting.targetAt" should "resolve a point inside the pane to that pane, its buffer, and a cursor" in {
     val state = editorState("alpha beta\ngamma")
@@ -46,7 +50,7 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
       EditorMouseTargeting.targetAt(
         MouseClick(rect.x, rect.y),
         state,
-        MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene())
+        MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
       )
 
     target.map(_.map((paneId, targetBuffer, _) => (paneId, targetBuffer.id))) shouldBe Right(
@@ -60,7 +64,7 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     EditorMouseTargeting.targetAt(
       MouseClick(500, 500),
       state,
-      MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene())
+      MouseTargetCache.fromState(state, viewport, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
     ) shouldBe
       Right(None)
   }
@@ -172,7 +176,14 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val (x, y) = explorerRowPoint(state, 2)
 
     val (result, claimed) =
-      run(state)(PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true, AuthoritativeUiScene()))
+      run(state)(
+        PinnedPanelMouseHitTesting.select(
+          MouseClick(x, y),
+          state,
+          focusPanel = true,
+          AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        )
+      )
 
     claimed shouldBe true
     selectedPath(result.state) shouldBe Some(readme)
@@ -183,13 +194,23 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     val state  = withExplorer
     val (x, y) = explorerRowPoint(state, 2)
 
-    val (result, claimed) = run(state)(PinnedPanelMouseHitTesting.hover(MouseMove(x, y), state, AuthoritativeUiScene()))
+    val (result, claimed) = run(state)(
+      PinnedPanelMouseHitTesting.hover(
+        MouseMove(x, y),
+        state,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
+    )
 
     claimed shouldBe true
     selectedPath(result.state) shouldBe Some(readme)
     result.state.persisted.focus shouldBe state.persisted.focus
     run(result.state)(
-      PinnedPanelMouseHitTesting.hover(MouseMove(x, y), result.state, AuthoritativeUiScene())
+      PinnedPanelMouseHitTesting.hover(
+        MouseMove(x, y),
+        result.state,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
     )._1.state shouldBe
       theSameInstanceAs(result.state)
   }
@@ -201,13 +222,18 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
     )
     val (x, y) = explorerRowPoint(state, 2)
     val selected = run(state)(
-      PinnedPanelMouseHitTesting.select(MouseClick(x, y), state, focusPanel = true, AuthoritativeUiScene())
+      PinnedPanelMouseHitTesting.select(
+        MouseClick(x, y),
+        state,
+        focusPanel = true,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
     )._1.state
 
     PinnedPanelMouseHitTesting.activation(
       MouseClick(x, y, clickCount = 2),
       selected,
-      AuthoritativeUiScene()
+      AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
     ) should matchPattern {
       case Some(
             ComponentResult.ReducerUpdate(
@@ -215,7 +241,11 @@ class EditorAndPanelMouseTransitionSpec extends AnyFlatSpec with Matchers:
             )
           ) =>
     }
-    PinnedPanelMouseHitTesting.activation(MouseClick(x, y), selected, AuthoritativeUiScene()) shouldBe None
+    PinnedPanelMouseHitTesting.activation(
+      MouseClick(x, y),
+      selected,
+      AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+    ) shouldBe None
   }
 
   "PinnedPanelMouseHitTesting.textAreaInsetFromDrag" should "resolve a drag in the top spacer to a top inset" in {

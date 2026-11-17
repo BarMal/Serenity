@@ -38,7 +38,8 @@ class UiSceneScrollSpec extends AnyFlatSpec with Matchers:
     )
     LayoutEngine.syncViewportDimensions(state, viewportSize)
 
-  private def sceneOf(state: AppState): UiSceneSnapshot = AuthoritativeUiScene().forState(state, viewportSize)
+  private def sceneOf(state: AppState): UiSceneSnapshot =
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()).forState(state, viewportSize)
 
   private val shortLines = Vector.tabulate(300)(line => s"line $line")
   private val paragraphs = Vector.tabulate(60)(line => s"Paragraph $line " + "lorem ipsum dolor sit amet " * 40)

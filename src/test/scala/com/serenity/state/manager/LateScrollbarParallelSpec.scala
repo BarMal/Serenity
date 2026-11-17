@@ -82,7 +82,12 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, after)))
 
   private def extents(state: AppState, size: ViewportSize = viewport): Map[PaneId, ScrollExtent] =
-    AuthoritativeUiScene().forState(state, size).paneScrolls.view.mapValues(_.extent).toMap
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      .forState(state, size)
+      .paneScrolls
+      .view
+      .mapValues(_.extent)
+      .toMap
 
   final private class Notices:
     val heard   = new ConcurrentLinkedQueue[PaneId]()

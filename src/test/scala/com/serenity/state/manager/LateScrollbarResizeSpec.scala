@@ -102,7 +102,10 @@ class LateScrollbarResizeSpec extends AnyFlatSpec with Matchers:
     state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(bufferId, edited)))
 
   private def exactExtent(state: AppState, columns: Int): ScrollExtent =
-    AuthoritativeUiScene().forState(state, ViewportSize(columns, rows)).paneScrolls(paneId).extent
+    AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      .forState(state, ViewportSize(columns, rows))
+      .paneScrolls(paneId)
+      .extent
 
   "A pane being resized" should "keep the bar it last had exactly until the settled size is counted" in {
     val window = new Window
