@@ -19,6 +19,11 @@ object TestMeasure:
 
   def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
 
+  /** How far the font really advances one character, which a run laid out by the measurer is spaced by, not the whole
+    * pixels of its grid cell.
+    */
+  def glyphAdvancePx(font: Font): Float = measurer.glyphWidthPx(FontSpec.fromAwt(font), "M")
+
   /** Memos that measure the way a GUI owner's do. */
   def layoutMemos(certificateBuilder: Executor = ScrollCountExecutor.shared): LayoutMemos =
     LayoutMemos(certificateBuilder, () => Some(measurer))
