@@ -20,7 +20,8 @@ import org.jetbrains.skia.{Font, ManagedString, Paint}
   */
 final class SkiaTextMeasurer(
     faces: SkiaFontCache,
-    stretches: SkiaShapedTextCache
+    stretches: SkiaShapedTextCache,
+    bidiFallbacks: FallbackFonts = FallbackFonts.systemByFamily
 ) extends TextMeasurer:
 
   def this(faces: SkiaFontCache) = this(faces, new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf))
@@ -375,8 +376,12 @@ final class SkiaTextMeasurer(
     */
   private def bidiOrigins(text: String, font: Font): ShapedOrigins =
     val collector = shaped(text, font, 0.toByte)
-    val nominal   = font.getWidths(collector.glyphs)
-    val starts    = Array.fill(text.length)(Float.NaN)
+    val fonts     = BidiShaping.fontsOf(BidiShaping.fontRuns(text, font, bidiFallbacks))
+    val nominal = collector.glyphs.indices.map { glyph =>
+      val cluster = collector.clusters(glyph)
+      fonts(math.max(0, math.min(cluster, fonts.length - 1))).getWidths(Array(collector.glyphs(glyph)))(0)
+    }
+    val starts = Array.fill(text.length)(Float.NaN)
     collector.clusters.indices.foreach { glyph =>
       val cluster = collector.clusters(glyph)
       if cluster >= 0 && cluster < text.length then
@@ -418,17 +423,19 @@ final class SkiaTextMeasurer(
     // itself builds ICU and font fallback iterators on every call, milliseconds however short the text, and resolves a
     // fallback typeface for each that native memory keeps until the heap is next collected; layout gives text its
     // fallback fonts itself. The native copy of the text is freed here for the same reason.
-    val end = text.length
-    val _   = shapingN.incrementAndGet()
+    val end    = text.length
+    val asBidi = level == 0 && BidiShaping.shapesAsRuns(text)
+    val _      = shapingN.incrementAndGet()
     shaperLock.synchronized {
       val managed = new ManagedString(text)
       try
         val _ = shaper.shape(
           managed,
-          Iterator.single(org.jetbrains.skia.shaper.FontRun(end, font)).asJava,
-          (if level == 0 && BidiShaping.shapesAsRuns(text) then BidiShaping.levelRuns(text).iterator
+          (if asBidi then BidiShaping.skiaFontRuns(BidiShaping.fontRuns(text, font, bidiFallbacks)).iterator
+           else Iterator.single(org.jetbrains.skia.shaper.FontRun(end, font))).asJava,
+          (if asBidi then BidiShaping.levelRuns(text).iterator
            else Iterator.single(BidiRun(end, level.toInt))).asJava,
-          (if level == 0 && BidiShaping.shapesAsRuns(text) then BidiShaping.scriptRuns(text).iterator
+          (if asBidi then BidiShaping.scriptRuns(text).iterator
            else Iterator.single(ScriptRun(end, scriptOf(text)))).asJava,
           Iterator.single(LanguageRun(end, "en")).asJava,
           ShapingFeatures.optionsFor(faces.ligaturesOf(font)),

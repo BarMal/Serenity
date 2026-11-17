@@ -63,11 +63,21 @@ object FallbackFonts:
     */
   def system: FallbackFonts = new FallbackFonts(SystemMatcher)
 
+  /** As [[system]] but asking for the base font's own family, which is how AWT's logical fonts reach their fallbacks
+    * (FreeSerif, not DejaVu Sans, for Hebrew in DejaVu Serif): for text `TextLine` is not asked to draw, right to left
+    * text shaped in bidi runs.
+    */
+  def systemByFamily: FallbackFonts = new FallbackFonts(SystemMatcherByFamily)
+
   /** The request names no family. */
   @SuppressWarnings(Array("org.wartremover.warts.Null"))
   private val noFamily: String = null
 
-  private val SystemMatcher: Option[Matcher] =
+  private val SystemMatcher: Option[Matcher] = systemMatcher(askForFamily = false)
+
+  private val SystemMatcherByFamily: Option[Matcher] = systemMatcher(askForFamily = true)
+
+  private def systemMatcher(askForFamily: Boolean): Option[Matcher] =
     Try {
       val lookup  = MethodHandles.publicLookup()
       val styleOf = lookup.findVirtual(classOf[Typeface], "getFontStyle-Owqf3f4", MethodType.methodType(classOf[Int]))
@@ -80,7 +90,8 @@ object FallbackFonts:
       val find: Matcher = (base, character) =>
         styleOf.invoke(base) match
           case style: java.lang.Integer =>
-            val found: Object = matchCharacter.invoke(manager, noFamily, style.intValue, Array.empty[String], character)
+            val family        = if askForFamily then base.getFamilyName else noFamily
+            val found: Object = matchCharacter.invoke(manager, family, style.intValue, Array.empty[String], character)
             Option(found).collect { case typeface: Typeface => typeface }
           case _ => None
       find

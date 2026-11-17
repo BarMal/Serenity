@@ -36,7 +36,8 @@ final private class GlyphStretch(
     textLength: Int,
     glyphs: Array[Short],
     xs: Array[Float],
-    clusters: Array[Int]
+    clusters: Array[Int],
+    fontOfChar: Int => Font
 ) extends SkiaShapedStretch:
 
   private val MaxRanges = 64
@@ -66,14 +67,39 @@ final private class GlyphStretch(
     blobOf(selected, selected.foldLeft(Float.MaxValue)((left, glyph) => left.min(xs(glyph))))
 
   private def blobOf(selected: Seq[Int], leftmost: Float = 0f): Option[TextBlob] =
-    Option.when(selected.nonEmpty)(
-      TextBlob.Companion.makeFromPosH(
-        selected.map(glyphs(_)).toArray,
-        selected.map(xs(_) - leftmost).toArray,
+    Option.when(selected.nonEmpty) {
+      val fonts = selected.map(glyph => fontOfChar(clusters(glyph)))
+      if fonts.forall(_ eq font) then
+        TextBlob.Companion.makeFromPosH(
+          selected.map(glyphs(_)).toArray,
+          selected.map(xs(_) - leftmost).toArray,
+          0f,
+          font
+        )
+      else mixedBlob(selected, fonts, leftmost)
+    }
+
+  /** The glyphs of fallback fonts beside the base font's, one run of the blob for each stretch in one font. */
+  @SuppressWarnings(Array("org.wartremover.warts.Null"))
+  private def mixedBlob(selected: Seq[Int], fonts: Seq[Font], leftmost: Float): TextBlob =
+    val builder = new TextBlobBuilder()
+    val groups = selected.zip(fonts).foldLeft(Vector.empty[(Font, Vector[Int])]) {
+      case (groups, (glyph, glyphFont)) =>
+        groups.lastOption match
+          case Some((previous, members)) if previous eq glyphFont =>
+            groups.dropRight(1) :+ ((previous, members :+ glyph))
+          case _ => groups :+ ((glyphFont, Vector(glyph)))
+    }
+    groups.foreach { (groupFont, members) =>
+      val _ = builder.appendRunPosH(
+        groupFont,
+        members.map(glyphs(_)).toArray,
+        members.map(xs(_) - leftmost).toArray,
         0f,
-        font
+        null
       )
-    )
+    }
+    builder.build()
 
 /** Any other text, laid out by Skia's own shaper with its bidi, script and font-fallback runs. A line cannot be sliced,
   * so a range is the line drawn so its range starts at `x` and clipped to the range.
@@ -183,7 +209,8 @@ final class SkiaShapedTextCache(
     capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity,
     warmup: WarmupStats = new WarmupStats(),
     fallbacks: FallbackFonts = FallbackFonts.system,
-    ligaturesOf: Font => Boolean = _ => true
+    ligaturesOf: Font => Boolean = _ => true,
+    bidiFallbacks: FallbackFonts = FallbackFonts.systemByFamily
 ) extends ShapeTraffic:
   import SkiaShapedTextCache.*
 
@@ -286,13 +313,17 @@ final class SkiaShapedTextCache(
     val _ = lineN.incrementAndGet()
     new LineStretch(TextLine.Companion.make(text, font), text.length)
 
-  /** Text that reads right to left somewhere, shaped in bidi and script runs so its glyphs come out in visual order. */
+  /** Text that reads right to left somewhere, shaped in bidi and script runs so its glyphs come out in visual order,
+    * each character in the font that has it: the base font where it can, a fallback font where it cannot.
+    */
   private def shapeBidi(text: String, font: Font): SkiaShapedStretch =
     val end       = text.length
+    val runs      = BidiShaping.fontRuns(text, font, bidiFallbacks)
+    val fonts     = BidiShaping.fontsOf(runs)
     val collector = new GlyphCollector()
     shaper.shape(
       text,
-      Iterator.single(FontRun(end, font)).asJava,
+      BidiShaping.skiaFontRuns(runs).iterator.asJava,
       BidiShaping.levelRuns(text).iterator.asJava,
       BidiShaping.scriptRuns(text).iterator.asJava,
       Iterator.single(LanguageRun(end, "en")).asJava,
@@ -300,7 +331,7 @@ final class SkiaShapedTextCache(
       Float.MaxValue,
       collector
     )
-    new GlyphStretch(font, end, collector.glyphs, collector.xs, collector.clusters)
+    new GlyphStretch(font, end, collector.glyphs, collector.xs, collector.clusters, fonts(_))
 
   private def shapeLatin(text: String, font: Font): SkiaShapedStretch =
     val end       = text.length
@@ -315,7 +346,7 @@ final class SkiaShapedTextCache(
       Float.MaxValue,
       collector
     )
-    new GlyphStretch(font, end, collector.glyphs, collector.xs, collector.clusters)
+    new GlyphStretch(font, end, collector.glyphs, collector.xs, collector.clusters, _ => font)
 
 object SkiaShapedTextCache:
 
@@ -353,6 +384,18 @@ private[skia] object BidiShaping:
         case Character.DIRECTIONALITY_RIGHT_TO_LEFT | Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC => true
         case _                                                                                      => false
     ) && !text.exists(Character.isSurrogate)
+
+  /** The font of each stretch of `text`: the base font for the characters it has, the fallback font the system chooses
+    * for the ones it lacks; a single base-font run when some character has no font at all.
+    */
+  def fontRuns(text: String, base: Font, fallbacks: FallbackFonts): Vector[(Int, Font)] =
+    FallbackRuns.runsFor(text, base, fallbacks, spacesJoinRun = false).getOrElse(Vector((text.length, base)))
+
+  /** The font of every character, from the runs [[fontRuns]] gives. */
+  def fontsOf(runs: Vector[(Int, Font)]): Vector[Font] = runs.flatMap((count, font) => Vector.fill(count)(font))
+
+  def skiaFontRuns(runs: Vector[(Int, Font)]): Vector[FontRun] =
+    runs.scanLeft(0)(_ + _._1).drop(1).zip(runs).map((end, run) => FontRun(end, run._2))
 
   def levelRuns(text: String): Vector[BidiRun] =
     val bidi = java.text.Bidi(text, java.text.Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT)

@@ -27,7 +27,6 @@ final class SkiaBidiAgreementSpec extends AnyFlatSpec with Matchers:
   private val lines = Vector(
     "mixed"         -> "abc שלום עולם def",
     "right to left" -> "שלום עולם",
-    "arabic"        -> "ab مرحبا cd",
     "digits"        -> "שלום 123 abc"
   )
 
@@ -50,7 +49,7 @@ final class SkiaBidiAgreementSpec extends AnyFlatSpec with Matchers:
     val whole = alphaOf(width)((canvas, paint) => stretch.draw(canvas, 0, text.length, Margin.toFloat, Baseline, paint))
     val pieces = alphaOf(width) { (canvas, paint) =>
       starts.zip(ends).foreach { (from, until) =>
-        val advance = measurer.glyphWidthPx(spec, text.substring(from, until))
+        val advance = measurer.rawCaretXs(text.substring(from, until), 0, LineFonts(spec, Vector.empty)).last
         val left    = if bidi.getLevelAt(from) % 2 == 1 then carets(from) - advance else carets(from)
         stretch.draw(canvas, from, until, Margin + left + shift, Baseline, paint)
       }
@@ -62,6 +61,19 @@ final class SkiaBidiAgreementSpec extends AnyFlatSpec with Matchers:
     withClue(off.map((name, worst) => s"$name differs by $worst").mkString("; ")) {
       off shouldBe empty
     }
+  }
+
+  "An Arabic line, whose letters join and so cannot be drawn a cluster at a time," should "end where it is drawn" in {
+    val text    = "ab \u0645\u0631\u062d\u0628\u0627 cd"
+    val spec    = FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 14))
+    val carets  = measurer.rawCaretXs(text, 0, LineFonts(spec, Vector.empty))
+    val stretch = stretches.stretchOf(text, faces.faceFor(spec).font)
+    val width   = math.ceil(carets.max).toInt + 2 * Margin
+    val alpha = alphaOf(width)((canvas, paint) => stretch.draw(canvas, 0, text.length, Margin.toFloat, Baseline, paint))
+    val inkRight = (0 until width).filter(x => (0 until Height).exists(y => alpha(y * width + x) > 0)).max
+
+    carets.last should be >= (inkRight - Margin).toFloat - 1.0f
+    carets.last should be <= (inkRight - Margin).toFloat + 4.0f
   }
 
   "The same comparison" should "tell a cluster half a pixel from its caret" in {

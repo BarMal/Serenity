@@ -49,14 +49,22 @@ private[skia] object FallbackRuns:
     val kind = Character.getType(c)
     kind == Character.SPACE_SEPARATOR || Punctuation(kind)
 
-  /** The run lengths and their fonts, or `None` when some character has no font at all. */
-  def runsFor(text: String, base: Font, fallbacks: FallbackFonts): Option[Vector[(Int, Font)]] =
+  /** The run lengths and their fonts, or `None` when some character has no font at all. A space or punctuation mark
+    * goes with the run before it when `spacesJoinRun` (as `TextLine` sets it), and otherwise takes the base font when
+    * that has it (as AWT's logical fonts set it).
+    */
+  def runsFor(
+    text: String,
+    base: Font,
+    fallbacks: FallbackFonts,
+    spacesJoinRun: Boolean = true
+  ): Option[Vector[(Int, Font)]] =
     def has(font: Font, c: Char): Boolean = font.getTypeface.getUTF32Glyph(c.toInt) != 0
     val assigned = text.foldLeft(Option((Vector.empty[Font], base, Option.empty[Font]))) {
       case (None, _) => None
       case (Some((fonts, current, last)), c) =>
         val next: Option[(Font, Option[Font])] =
-          if staysInRun(c) && has(current, c) then Some((current, last))
+          if spacesJoinRun && staysInRun(c) && has(current, c) then Some((current, last))
           else if has(base, c) then Some((base, last))
           else
             last.filter(has(_, c)) match
