@@ -55,14 +55,19 @@ final class SkiaFontCache(
 
   def size: Int = faces.size
 
-  /** The grid a font is laid out on: the width of its `M` rounded up, and its line height and ascent. */
+  /** The grid a font is laid out on: the width of its `M` rounded up, its ascent rounded up and, under the baseline,
+    * its descent and leading rounded up, so the line is the two summed and a descender always has the room Skia says it
+    * needs. Rounding the sum instead can leave a pixel too few under the baseline.
+    */
   def cellMetrics(font: FontSpec): CellMetrics =
     val skia                       = faceFor(font).font
     val (ascent, descent, leading) = SkiaVerticalMetrics.of(skia)
+    val aboveBaseline              = math.ceil((-ascent).toDouble).toInt
+    val belowBaseline              = math.ceil((descent + leading).toDouble).toInt
     CellMetrics(
       math.max(1, math.ceil(skia.measureTextWidth("M").toDouble).toInt),
-      math.max(1, math.ceil((descent - ascent + leading).toDouble).toInt),
-      math.max(1, math.ceil((-ascent).toDouble).toInt),
+      math.max(1, aboveBaseline + belowBaseline),
+      math.max(1, aboveBaseline),
       displayWidthAware = true
     )
 

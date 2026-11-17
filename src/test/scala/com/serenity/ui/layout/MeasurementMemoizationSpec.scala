@@ -38,14 +38,14 @@ class MeasurementMemoizationSpec extends AnyFlatSpec with Matchers:
     rows.distinct.size shouldBe 1
   }
 
-  it should "report the ceiling of the font's line height over the ceiling of its ascent, as Skia gives them" in {
+  it should "report the ceiling of the font's ascent over the ceiling of its descent and leading, as Skia gives them" in {
     val font                                   = new Font(Font.SERIF, Font.PLAIN, 23)
     val (skiaAscent, skiaDescent, skiaLeading) = TestMeasure.skiaMetrics(font)
     val metrics = LineFontResolver(FontSpec.fromAwt(font), Vector.empty)
       .lineMetrics(FontLineExtents(TestMeasure.measurer.cellMetrics), 0, 4)
-    val ascent = math.ceil(-skiaAscent.toDouble).toInt
-    val height = math.ceil((skiaDescent - skiaAscent + skiaLeading).toDouble).toInt
-    metrics shouldBe (height, ascent)
+    val ascent  = math.ceil(-skiaAscent.toDouble).toInt
+    val descent = math.ceil((skiaDescent + skiaLeading).toDouble).toInt
+    metrics shouldBe (ascent + descent, ascent)
   }
 
   it should "measure afresh at another render scale, which is another size of the font" in {
