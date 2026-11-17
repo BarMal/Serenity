@@ -171,7 +171,14 @@ object ColumnPagingFixture:
       // Every chapter's headings are kept with the paragraph after them, which can leave all of them at a column's top;
       // this one follows the short last column of the document, so a heading with room above it is always drawn.
       paragraph("Coda", ParagraphRole.Heading(2)),
-      paragraph("The end.")
+      paragraph("The end."),
+      // Short sections after it, so some heading has body text above it in its column whatever a row measures.
+      paragraph("Notes", ParagraphRole.Heading(2)),
+      paragraph("One note."),
+      paragraph("More notes", ParagraphRole.Heading(2)),
+      paragraph("Another note."),
+      paragraph("Last notes", ParagraphRole.Heading(2)),
+      paragraph("A final note.")
     )
   )
 
