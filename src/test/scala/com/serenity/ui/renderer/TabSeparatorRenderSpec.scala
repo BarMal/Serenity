@@ -91,7 +91,7 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
     )
     surface.flush()
     val strip = LayoutEngine.calculateLayout(state, ViewportSize(columns, rows)).tabBarRect.getOrElse(fail("no strip"))
-    val settings = TabBarLayoutSettings.of(state)
+    val settings = TabBarLayoutSettings.of(state, measures = caches.tabBarMeasures)
     val composition = state.tabBarSurface.map(_.content) match
       case Some(SurfaceContent.TabBar(entries, active)) =>
         TabBarSurfaceComposition.forTabBar(entries, active, strip, settings)
