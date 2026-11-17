@@ -67,7 +67,7 @@ class CursorViewportColumnPagingSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(line, 0)
     from.copy(
       editing = EditingState(List(cursor)),
-      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor)
+      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, TestMeasure.wrapCache())
     )
 
   "the test setup" should "draw fewer rows per column than the code grid counts" in {
