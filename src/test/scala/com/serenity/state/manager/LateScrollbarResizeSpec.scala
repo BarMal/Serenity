@@ -59,8 +59,12 @@ class LateScrollbarResizeSpec extends AnyFlatSpec with Matchers:
     val executor = new ByHand
     val quiet    = new ManualQuiet
     val notified = mutable.ListBuffer.empty[PaneId]
+
     val scene: AuthoritativeUiScene =
-      AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, notified += _, quiet))
+      AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.deferred(executor, notified += _, quiet)
+      )
 
     def at(state: AppState, columns: Int): UiSceneSnapshot = scene.forState(state, ViewportSize(columns, rows))
 

@@ -59,7 +59,10 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
       thread
     }
     val counts = new Semaphore(0)
-    val scene  = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => counts.release())
+    )
     val first  = stateOf(text(0))
     val states = (1 to 25).scanLeft(first)((before, round) => replaced(before, text(round)))
 
@@ -83,8 +86,11 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
     }
     val executor = new HoldableExecutor(inner)
     val counts   = new Semaphore(0)
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
-    val states   = (1 to 25).scanLeft(stateOf(text(0)))((before, round) => replaced(before, text(round)))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => counts.release())
+    )
+    val states = (1 to 25).scanLeft(stateOf(text(0)))((before, round) => replaced(before, text(round)))
 
     states.init.zipWithIndex.foreach { (state, announced) =>
       scene.forState(state, viewportSize)

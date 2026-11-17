@@ -60,8 +60,9 @@ class AuthoritativeUiSceneConcurrencySpec extends AnyFlatSpec with Matchers with
     val release = CountDownLatch(1)
 
     def scene: AuthoritativeUiScene =
-      AuthoritativeUiScene(decorateBuild =
-        real =>
+      AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        decorateBuild = real =>
           (state, size, codeFont, textFont, metrics) =>
             builds.incrementAndGet()
             if state eq gatedState then
@@ -88,8 +89,9 @@ class AuthoritativeUiSceneConcurrencySpec extends AnyFlatSpec with Matchers with
   it should "give hit-testing geometry built from its own fonts, not the ones the renderer painted with" in {
     val state     = stateWith("alpha\nbeta")
     val codeFonts = java.util.concurrent.ConcurrentLinkedQueue[Font]()
-    val scene = AuthoritativeUiScene(decorateBuild =
-      real =>
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      decorateBuild = real =>
         (st, size, codeFont, textFont, metrics) =>
           codeFonts.add(codeFont)
           real(st, size, codeFont, textFont, metrics)
@@ -125,8 +127,9 @@ class AuthoritativeUiSceneConcurrencySpec extends AnyFlatSpec with Matchers with
   it should "rebuild after a failed build instead of caching the failure" in {
     val state    = stateWith("alpha")
     val attempts = AtomicInteger(0)
-    val scene = AuthoritativeUiScene(decorateBuild =
-      real =>
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      decorateBuild = real =>
         (st, size, codeFont, textFont, metrics) =>
           if attempts.incrementAndGet() == 1 then sys.error("layout failed")
           else real(st, size, codeFont, textFont, metrics)

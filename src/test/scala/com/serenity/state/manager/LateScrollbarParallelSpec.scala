@@ -129,8 +129,11 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "Four panes of different buffers counted on four threads" should "each end with the bar one thread counts, told once" in
     withPool(4) { pool =>
       val notices = new Notices
-      val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
-      val state   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+      val scene = AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.deferred(pool, notices.tell)
+      )
+      val state = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
 
       scene.forState(state, viewport).paneScrolls shouldBe empty
       toldOnce(notices, state)
@@ -141,8 +144,11 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "Four panes of one buffer counted on four threads" should "each end with the bar one thread counts, told once" in
     withPool(4) { pool =>
       val notices = new Notices
-      val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
-      val state   = fourPanes(Vector(prose("shared")))
+      val scene = AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.deferred(pool, notices.tell)
+      )
+      val state = fourPanes(Vector(prose("shared")))
 
       scene.forState(state, viewport)
       toldOnce(notices, state)
@@ -153,10 +159,13 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "Edits and resizes across four panes on four threads" should "end with each pane's bar for its last text and width" in
     withPool(4) { pool =>
       val notices = new Notices
-      val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
-      val random  = new Random(2483)
-      val first   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
-      val sizes   = Vector(ViewportSize(100, 30), ViewportSize(96, 30), ViewportSize(88, 30))
+      val scene = AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.deferred(pool, notices.tell)
+      )
+      val random = new Random(2483)
+      val first  = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+      val sizes  = Vector(ViewportSize(100, 30), ViewportSize(96, 30), ViewportSize(88, 30))
 
       val (last, lastSize) = (1 to 40).foldLeft((first, sizes.head)) {
         case ((before, _), round) =>
@@ -176,8 +185,11 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "Bars whose notices came from earlier texts" should "still be waited on until the last text's bar lands" in {
     val pool    = new HoldableExecutor(ScrollCountExecutor.pool(1))
     val notices = new Notices
-    val scene   = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(pool, notices.tell))
-    val first   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(pool, notices.tell)
+    )
+    val first = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
     val edits =
       (1 to 40).scanLeft(first)((before, round) => edited(before, BufferId(1), prose(s"round $round", 300)))
 
@@ -200,8 +212,11 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "Panes whose rows share an index" should "start one count between them and tell every pane" in {
     val executor = new ByHand
     val notices  = new Notices
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, notices.tell))
-    val state    = fourPanes(Vector(prose("shared")))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, notices.tell)
+    )
+    val state = fourPanes(Vector(prose("shared")))
 
     scene.forState(state, viewport).paneScrolls shouldBe empty
     executor.started shouldBe 1
@@ -213,8 +228,11 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
 
   "Panes whose rows are their own" should "each start a count" in {
     val executor = new ByHand
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => ()))
-    val state    = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => ())
+    )
+    val state = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
 
     scene.forState(state, viewport)
 
@@ -224,9 +242,12 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "A shared count whose first pane is replaced by an edit" should "still count for the panes that stand" in {
     val executor = new ByHand
     val notices  = new Notices
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, notices.tell))
-    val state    = fourPanes(Vector(prose("shared")))
-    val later    = edited(state, BufferId(1), prose("changed"))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, notices.tell)
+    )
+    val state = fourPanes(Vector(prose("shared")))
+    val later = edited(state, BufferId(1), prose("changed"))
 
     scene.forState(state, viewport)
     scene.forState(later, viewport)
@@ -239,10 +260,13 @@ class LateScrollbarParallelSpec extends AnyFlatSpec with Matchers:
   "The panes' counts" should "start with the focused pane's, then the others in pane order" in {
     val executor = new ByHand
     val notices  = new Notices
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, notices.tell))
-    val state    = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
-    val ids      = panes(state)
-    val focused  = ids.last
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, notices.tell)
+    )
+    val state   = fourPanes(Vector("a", "b", "c", "d").map(prose(_)))
+    val ids     = panes(state)
+    val focused = ids.last
     val refocused =
       state.copy(persisted =
         state.persisted.copy(

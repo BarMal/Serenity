@@ -155,7 +155,10 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
     val heard    = mutable.ListBuffer.empty[PaneId]
     notice.listen(heard += _)
     val scene =
-      AuthoritativeUiScene(scrollCounting = ScrollCounting.forFrontend(FrontendCapabilities.gui, executor, notice))
+      AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.forFrontend(FrontendCapabilities.gui, executor, notice)
+      )
 
     scene.forState(longDocument, viewportSize).paneScrolls shouldBe empty
     executor.runAll()
@@ -166,8 +169,9 @@ class ScrollCountWiringSpec extends AnyFlatSpec with Matchers:
 
   "A terminal frontend" should "keep counting inside the frame, with nothing handed to a worker" in {
     val executor = new ByHand
-    val scene = AuthoritativeUiScene(scrollCounting =
-      ScrollCounting.forFrontend(FrontendCapabilities.tui(), executor, new ScrollCountNotice)
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.forFrontend(FrontendCapabilities.tui(), executor, new ScrollCountNotice)
     )
 
     scene.forState(longDocument, viewportSize).paneScrolls should contain key paneId

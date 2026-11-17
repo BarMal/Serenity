@@ -37,8 +37,12 @@ class LateScrollbarSceneSpec extends AnyFlatSpec with Matchers:
   final private class Counted:
     val executor = new ByHand
     val notified = mutable.ListBuffer.empty[PaneId]
+
     val scene: AuthoritativeUiScene =
-      AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, notified += _))
+      AuthoritativeUiScene(
+        wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+        scrollCounting = ScrollCounting.deferred(executor, notified += _)
+      )
 
   private def stateOf(text: String, topLine: Int = 0): AppState =
     val buffer   = Buffer.fromString(bufferId, text)
