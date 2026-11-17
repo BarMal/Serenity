@@ -40,3 +40,11 @@ final class SkiaLigatureFeaturesSpec extends AnyFlatSpec with Matchers:
   it should "draw fewer clusters than characters" in {
     drawnClusters(monaspace(ligatures = true)) should be < Dots.length
   }
+
+  it should "set the letters of text that Skiko's line shaper sets, flags included, as it sets them beside Latin text" in {
+    val serif  = FontSpec.fromAwt(java.awt.Font(java.awt.Font.SERIF, java.awt.Font.ITALIC, 17))
+    val caches = SkiaTextCaches.fresh()
+    val face   = caches.fonts.faceFor(serif).font
+    val edge   = (text: String) => caches.shapedText.stretchOf(text, face).leftEdgeOf(5)
+    edge("flags \uD83C\uDDEC\uD83C\uDDE7").zip(edge("flags xx")).foreach((flag, latin) => flag shouldBe latin +- 0.01f)
+  }

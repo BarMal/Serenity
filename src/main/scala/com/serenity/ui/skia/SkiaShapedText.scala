@@ -311,7 +311,7 @@ final class SkiaShapedTextCache(
 
   private[skia] def shapeLine(text: String, font: Font): SkiaShapedStretch =
     val _ = lineN.incrementAndGet()
-    new LineStretch(TextLine.Companion.make(text, font), text.length)
+    new LineStretch(TextLine.Companion.make(text, font, ShapingFeatures.optionsFor(ligaturesOf(font))), text.length)
 
   /** Text that reads right to left somewhere, shaped in bidi and script runs so its glyphs come out in visual order,
     * each character in the font that has it: the base font where it can, a fallback font where it cannot.
