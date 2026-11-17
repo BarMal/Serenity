@@ -8,7 +8,7 @@ import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.SkiaFontCache
+import com.serenity.ui.skia.{SharedTypefaces, SkiaFontCache}
 import org.typelevel.log4cats.Logger
 
 /** The fonts and cell metrics the renderer is currently drawing with.
@@ -77,14 +77,17 @@ object RuntimeDisplayState:
   ):
     def isValid: Boolean = codeMetrics.isValid && textMetrics.isValid && uiMetrics.isValid
 
-  /** `metricsOf` sizes the grid of each font; by default the Skia measurer's, which is what layout measures with. */
-  def create(config: FontConfig, metricsOf: Font => CellMetrics = skiaMetrics())(using
+  /** `metricsOf` sizes the grid of each font; by default the Skia measurer's, which is what layout measures with. The
+    * GUI passes [[skiaMetrics]] over the typefaces its windows share, so that the grid and the layout resolve a logical
+    * family to the same face.
+    */
+  def create(config: FontConfig, metricsOf: Font => CellMetrics = skiaMetrics(new SharedTypefaces()))(using
     logger: Logger[IO]
   ): IO[RuntimeDisplayState] =
     load(config, metricsOf).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot), metricsOf))
 
-  private def skiaMetrics(): Font => CellMetrics =
-    val fonts = new SkiaFontCache()
+  def skiaMetrics(typefaces: SharedTypefaces): Font => CellMetrics =
+    val fonts = new SkiaFontCache(resolveTypeface = typefaces.typefaceFor)
     font => fonts.cellMetrics(FontSpec.fromAwt(font))
 
   private def load(config: FontConfig, metricsOf: Font => CellMetrics)(using logger: Logger[IO]): IO[Snapshot] =

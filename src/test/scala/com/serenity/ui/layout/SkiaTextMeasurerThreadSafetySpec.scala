@@ -4,7 +4,7 @@ import java.util.concurrent.{Callable, CountDownLatch, Executors}
 
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.SkiaTextMeasurer
+import com.serenity.ui.skia.{SkiaFontCache, SkiaTextMeasurer}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -26,10 +26,10 @@ class SkiaTextMeasurerThreadSafetySpec extends AnyFlatSpec with Matchers:
       xs.toVector.map(java.lang.Float.floatToRawIntBits) :+ cell.charWidth :+ cell.lineHeight :+ cell.ascent
 
   "Threads measuring from cold" should "get the numbers a single thread gets" in {
-    val reference = measure(new SkiaTextMeasurer())
+    val reference = measure(new SkiaTextMeasurer(new SkiaFontCache()))
     val pool      = Executors.newFixedThreadPool(threads)
     try
-      val shared = new SkiaTextMeasurer()
+      val shared = new SkiaTextMeasurer(new SkiaFontCache())
       val start  = new CountDownLatch(1)
       val runs = (1 to threads).map { _ =>
         pool.submit(

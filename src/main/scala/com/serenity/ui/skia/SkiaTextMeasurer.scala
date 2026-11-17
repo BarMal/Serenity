@@ -26,8 +26,6 @@ final class SkiaTextMeasurer(
 
   def this(faces: SkiaFontCache) = this(faces, new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf))
 
-  def this() = this(new SkiaFontCache())
-
   import SkiaTextMeasurer.*
 
   private val shaperLock = new Object

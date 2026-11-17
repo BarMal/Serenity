@@ -19,7 +19,7 @@ final class SkiaLigatureFeaturesSpec extends AnyFlatSpec with Matchers:
     FontSpec.fromAwt(FontLoader.previewCodeFont(FontLoader.FontConfig(fontSize = 14.0f, enableLigatures = ligatures)))
 
   private def measuredClusters(spec: FontSpec): Int =
-    val measurer = new SkiaTextMeasurer()
+    val measurer = new SkiaTextMeasurer(new SkiaFontCache())
     measurer.shape(Dots, 0, FontRun(0, Dots.length, spec), 0).clusters.distinct.length
 
   private def drawnClusters(spec: FontSpec): Int =
@@ -55,7 +55,7 @@ final class SkiaLigatureFeaturesSpec extends AnyFlatSpec with Matchers:
     val plain = java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 15)
     val off   = FontSpec.fromAwt(plain)
     val on = FontSpec.fromAwt(plain.deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)))
-    val measurer = new SkiaTextMeasurer()
+    val measurer = new SkiaTextMeasurer(new SkiaFontCache())
     def widthOf(spec: FontSpec, text: String): Float =
       measurer.rawCaretXs(text, 0, LineFonts(spec, Vector.empty)).last
     Seq(
