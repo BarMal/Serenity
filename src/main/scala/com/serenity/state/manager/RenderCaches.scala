@@ -4,6 +4,7 @@ import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
 import com.serenity.ui.layout.{
+  AnchorWrapCache,
   CellMetrics,
   LayoutMemos,
   ScrollRowsReporter,
@@ -70,6 +71,9 @@ final class RenderCaches private (
     * share faces and shaped stretches. None measures nothing: layout is the cell grid.
     */
   def measurer: Option[TextMeasurer] = measurerSource()
+
+  /** The wraps measured while locating a caret, on the measurer this owner draws and lays out with. */
+  def anchorWraps: AnchorWrapCache = AnchorWrapCache()(() => measurer)
 
   /** The grid of `font` that layout measures on: the owner's measurer's, and AWT's where the owner has none. */
   def cellMetricsOf(font: java.awt.Font): CellMetrics =
