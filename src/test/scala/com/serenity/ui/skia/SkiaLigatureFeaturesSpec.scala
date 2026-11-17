@@ -1,7 +1,9 @@
 package com.serenity.ui.skia
 
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.TextMeasurer.FontRun
+import java.awt.font.TextAttribute
+
+import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts}
 import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -47,4 +49,18 @@ final class SkiaLigatureFeaturesSpec extends AnyFlatSpec with Matchers:
     val face   = caches.fonts.faceFor(serif).font
     val edge   = (text: String) => caches.shapedText.stretchOf(text, face).leftEdgeOf(5)
     edge("flags \uD83C\uDDEC\uD83C\uDDE7").zip(edge("flags xx")).foreach((flag, latin) => flag shouldBe latin +- 0.01f)
+  }
+
+  "An emoji sequence in a font with ligatures off" should "be set as wide as with them on, as emoji composition is not a typographic ligature" in {
+    val plain = java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 15)
+    val off   = FontSpec.fromAwt(plain)
+    val on = FontSpec.fromAwt(plain.deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)))
+    val measurer = new SkiaTextMeasurer()
+    def widthOf(spec: FontSpec, text: String): Float =
+      measurer.rawCaretXs(text, 0, LineFonts(spec, Vector.empty)).last
+    Seq(
+      "flag"      -> "\uD83C\uDDEC\uD83C\uDDE7",
+      "family"    -> "\uD83D\uDC68\u200D\uD83D\uDC69\u200D\uD83D\uDC67\u200D\uD83D\uDC66",
+      "skin tone" -> "\uD83D\uDC4D\uD83C\uDFFD"
+    ).foreach((name, sequence) => withClue(s"$name: ")(widthOf(off, sequence) shouldBe widthOf(on, sequence) +- 0.01f))
   }
