@@ -41,6 +41,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
     withAttribute(Font(Font.SANS_SERIF, Font.PLAIN, 12), TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)
   private val kerned = withAttribute(Font(Font.SERIF, Font.PLAIN, 15), TextAttribute.KERNING, TextAttribute.KERNING_ON)
   private val mono   = Font(Font.MONOSPACED, Font.PLAIN, 12)
+  private val monoLigatured = withAttribute(mono, TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON)
 
   private val measuredFonts = Table(
     "font",
@@ -380,12 +381,16 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
     text.indices.toVector.map(index => advances.isContextFree(index, index + 1))
 
   "Glyph advances" should "treat plain text and tabs as context-free" in {
-    contextFree("plain words\tand\t\ttabs, digits 123 and punctuation!", sans).forall(identity) shouldBe true
-    contextFree("plain words\tand\t\ttabs", ligatured).forall(identity) shouldBe true
+    contextFree("plain words\tand\t\ttabs, digits 123 and punctuation!", mono).forall(identity) shouldBe true
+    contextFree("plain words\tand\t\ttabs", monoLigatured).forall(identity) shouldBe true
+  }
+
+  it should "need per-row measurement for the letters Inter kerns" in {
+    contextFree("WAVE", sans).take(2) shouldBe Vector(false, false)
   }
 
   it should "need per-row measurement for kerning pairs, complex scripts, surrogates and format characters" in {
-    contextFree("WAVE", sans).forall(identity) shouldBe true
+    contextFree("WAVE", mono).forall(identity) shouldBe true
     contextFree("WAVE", kerned).contains(false) shouldBe true
     contextFree("abc مرحبا", sans).drop(4).contains(true) shouldBe false
     contextFree("a👍🏽b", sans) shouldBe Vector(true, false, false, false, false, true)
