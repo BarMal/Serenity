@@ -146,9 +146,21 @@ object DropCapGlyph:
     key: FitKey,
     measurer: TextMeasurer
   ): Float =
-    val reachPx = aboveBaselinePx(fontAt(tallestPx), key.text, measurer)
-    if reachPx <= roomAboveBaselinePx then tallestPx
-    else (tallestPx * roomAboveBaselinePx / reachPx).max(shortestPx)
+    @annotation.tailrec
+    def fit(sizePx: Float, attemptsLeft: Int): Float =
+      val reachPx = aboveBaselinePx(fontAt(sizePx), key.text, measurer)
+      if reachPx <= roomAboveBaselinePx then sizePx
+      else
+        val scaled = (sizePx * roomAboveBaselinePx / reachPx).min(sizePx - MinShrinkPx).max(shortestPx)
+        if scaled <= shortestPx || attemptsLeft <= 0 then scaled else fit(scaled, attemptsLeft - 1)
+    fit(tallestPx, MaxFitAttempts)
+
+  /** A glyph's ink does not scale exactly with its size, so the first scaling can leave it a pixel above the row; it is
+    * scaled again, by at least this much, until it fits.
+    */
+  private val MinShrinkPx = 0.05f
+
+  private val MaxFitAttempts = 6
 
   private def aboveBaselinePx(font: FontSpec, text: String, measurer: TextMeasurer): Int =
     val inkTop = measurer.inkBounds(font, text).top
