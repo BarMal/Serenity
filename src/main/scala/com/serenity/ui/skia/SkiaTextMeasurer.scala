@@ -412,7 +412,24 @@ final class SkiaTextMeasurer(
     }
     ShapedOrigins(starts, collector.width, new Array[Float](text.length + 1))
 
+  /** Where `TextLine` puts each character of `text`, made once however many candidate rows ask: shaping a line this way
+    * costs milliseconds, and a wrap measures the same rows again and again. What is kept is JVM arrays, so it costs no
+    * native memory; long text and an over-full memo are shaped afresh, so it stays bounded.
+    */
   private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
+    if text.length > MaxCachedChars then shapedByDrawing(text, font)
+    else
+      val key = ShapedKey(text, font, 0.toByte)
+      Option(drawnShapings.get(key)).getOrElse {
+        val origins = shapedByDrawing(text, font)
+        if drawnShapings.size >= MaxCachedDrawn then drawnShapings.clear()
+        val _ = drawnShapings.put(key, origins)
+        origins
+      }
+
+  private val drawnShapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, (Array[Float], Float)]()
+
+  private def shapedByDrawing(text: String, font: Font): (Array[Float], Float) =
     val edges = stretches.reading(text, font)(stretch =>
       (0 to text.length).map(index => stretch.leftEdgeOf(index).getOrElse(0.0f))
     )
@@ -487,6 +504,8 @@ object SkiaTextMeasurer:
   private val MaxCachedChars = 4096
 
   private val MaxCachedShapings = 4096
+
+  private val MaxCachedDrawn = 32768
 
   final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
 
