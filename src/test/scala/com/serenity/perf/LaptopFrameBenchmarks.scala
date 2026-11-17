@@ -211,8 +211,8 @@ private[perf] object LaptopFrameBenchmarks:
         val surface = state.persisted.config.surfaceConfig
         val viewport =
           if surface.columnModeEnabled && surface.wordWrapEnabled then
-            CursorViewport.adjustForCursorColumnMode(buffer, state, cursor)
-          else CursorViewport.adjustForCursor(buffer, state, cursor)
+            CursorViewport.adjustForCursorColumnMode(buffer, state, cursor, TestMeasure.wrapCache())
+          else CursorViewport.adjustForCursor(buffer, state, cursor, TestMeasure.wrapCache())
         val placed = buffer.copy(viewport = viewport)
         state.copy(persisted = state.persisted.copy(buffers = state.persisted.buffers.updated(id, placed)))
       case None => state
