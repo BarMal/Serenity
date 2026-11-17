@@ -59,7 +59,7 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
     do
       val state  = stateWith(cursor, typewriter)
       val buffer = state.persisted.buffers(bufferId)
-      val placed = CursorViewport.adjustForCursor(buffer, state, cursor)
+      val placed = CursorViewport.adjustForCursor(buffer, state, cursor, TestMeasure.measuringWrap())
       withClue(s"cursor $cursor, typewriter $typewriter: ") {
         CursorViewport.adjustForCursor(buffer, state, cursor, cache) shouldBe placed
         CursorViewport.adjustForCursor(buffer, state, cursor, cache) shouldBe placed
@@ -71,7 +71,12 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
     val buffer = state.persisted.buffers(bufferId)
     val placed = CursorViewport.adjustForCursor(buffer, state, CursorPosition(59, 0), TestMeasure.wrapCache())
     val centred =
-      CursorViewport.adjustForCursor(buffer, stateWith(CursorPosition(59, 0), typewriter = true), CursorPosition(59, 0))
+      CursorViewport.adjustForCursor(
+        buffer,
+        stateWith(CursorPosition(59, 0), typewriter = true),
+        CursorPosition(59, 0),
+        TestMeasure.wrapCache()
+      )
     (placed.topLine, placed.topVisualLine) should not be ((centred.topLine, centred.topVisualLine))
   }
 
@@ -82,7 +87,7 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
         val before = stateWith(from)
         val after  = stateWith(to)
         CursorViewport.ensureVisibleCursors(before, after, cache) shouldBe
-          CursorViewport.ensureVisibleCursors(before, after)
+          CursorViewport.ensureVisibleCursors(before, after, TestMeasure.measuringWrap())
       case _ => ()
     }
   }
@@ -93,9 +98,9 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor)
       withClue(s"cursor $cursor: ") {
         EditorGeometryProducer.forPane(state, paneId, wrapCache = cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId)
+          EditorGeometryProducer.forPane(state, paneId, wrapCache = TestMeasure.measuringWrap())
         EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20, wrapCache = cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20)
+          EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20, wrapCache = TestMeasure.measuringWrap())
       }
     }
   }
