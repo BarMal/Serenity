@@ -115,3 +115,51 @@ class PixelClockSpec extends AnyFlatSpec with Matchers:
     elapsed shouldBe None
     grabbed shouldBe 1
   }
+
+  "PixelClock.quiet" should "answer true once the regions have stayed the same for the quiet span" in {
+    val (quiet, grabs) = runVirtual {
+      for
+        ref   <- Ref.of[IO, Vector[Int]](blank)
+        grabs <- Ref.of[IO, List[Region]](Nil)
+        screen = fakeScreen(1.millis, ref, grabs)
+        _      <- (IO.sleep(120.millis) *> ref.set(inked)).start
+        result <- PixelClock.quiet(screen, List(region), quietFor = 300.millis, poll = 50.millis, cap = 5.seconds)
+        count  <- grabs.get.map(_.size)
+      yield (result, count)
+    }
+    quiet shouldBe true
+    grabs should be > 6
+  }
+
+  it should "not call a screen quiet that keeps changing, and give up at the cap instead of waiting for ever" in {
+    val (quiet, elapsed) = runVirtual {
+      for
+        ref   <- Ref.of[IO, Vector[Int]](blank)
+        grabs <- Ref.of[IO, List[Region]](Nil)
+        screen = fakeScreen(1.millis, ref, grabs)
+        flicker <- (IO.sleep(20.millis) *> ref.update(pixels =>
+          if pixels == blank then inked else blank
+        )).foreverM.start
+        started <- IO.monotonic
+        result  <- PixelClock.quiet(screen, List(region), quietFor = 300.millis, poll = 50.millis, cap = 2.seconds)
+        ended   <- IO.monotonic
+        _       <- flicker.cancel
+      yield (result, ended - started)
+    }
+    quiet shouldBe false
+    elapsed should (be >= 2.seconds and be < 3.seconds)
+  }
+
+  it should "answer true at once, after the quiet span, for a screen that never changes" in {
+    val elapsed = runVirtual {
+      for
+        ref     <- Ref.of[IO, Vector[Int]](blank)
+        grabs   <- Ref.of[IO, List[Region]](Nil)
+        started <- IO.monotonic
+        result  <- PixelClock.quiet(fakeScreen(1.millis, ref, grabs), List(region), 300.millis, 50.millis, 5.seconds)
+        ended   <- IO.monotonic
+      yield (result, ended - started)
+    }
+    elapsed._1 shouldBe true
+    elapsed._2 should (be >= 300.millis and be < 500.millis)
+  }
