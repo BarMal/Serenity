@@ -143,7 +143,7 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   }
 
   it should "evict the least recently used lines beyond its line bound" in {
-    val cache = WrappedLineCache.bounded(maxLines = 3)
+    val cache = WrappedLineCache.bounded(maxLines = 3, layoutMemos = TestMeasure.layoutMemos())
     (0 until 10).foreach(index => wrap(s"line $index $prose", cache))
     cache.size shouldBe 3
     wrap("line 7 " + prose, cache)
@@ -152,7 +152,8 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   }
 
   it should "evict by retained characters as well as by line count" in {
-    val cache = WrappedLineCache.bounded(maxChars = prose.length.toLong * 2 + 10)
+    val cache =
+      WrappedLineCache.bounded(maxChars = prose.length.toLong * 2 + 10, layoutMemos = TestMeasure.layoutMemos())
     (0 until 6).foreach(index => wrap(s"$index$prose", cache))
     cache.size shouldBe 2
     cache.retainedChars should be <= (prose.length.toLong * 2 + 10)
