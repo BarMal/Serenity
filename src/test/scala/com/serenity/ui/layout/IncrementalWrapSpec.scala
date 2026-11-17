@@ -1,9 +1,5 @@
 package com.serenity.ui.layout
 
-import java.awt.RenderingHints
-import java.awt.font.FontRenderContext
-import java.awt.geom.AffineTransform
-
 import scala.util.Random
 import scala.util.chaining.*
 
@@ -321,18 +317,26 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "fall back whenever any non-text ingredient differs, and never resume across shapes" in {
-    val noFractional = FontRenderContext(
-      AffineTransform(),
-      RenderingHints.VALUE_TEXT_ANTIALIAS_ON,
-      RenderingHints.VALUE_FRACTIONALMETRICS_OFF
-    )
     val serif = layouts.find(_.name == "serif").get
     val after = text.patch(40, "ab", 0)
+    // Another grid cell is another shape. The render context this case once varied is no ingredient of a wrap that the
+    // owner's measurer sizes, and a call that leaves the cell to the measurer is the same shape as the fixture's.
+    val wideCell =
+      val cell = sans.cellMetrics.getOrElse(TestMeasure.cellMetrics(sans.font))
+      cell.copy(charWidth = cell.charWidth + 1)
     val otherShapes: Vector[WrappedLineCache => Vector[TextVisualLine]] = Vector(
       cache => wrap(after, cache, sans, 161),
       cache => wrap(after, cache, sans, 160, baseColumn = 1),
       cache => wrap(after, cache, serif, 160),
-      cache => TextLayoutSnapshot.boundedVisualLinesForText(after, 0, 160, sans.font, wrapCache = cache),
+      cache =>
+        TextLayoutSnapshot.boundedVisualLinesForText(
+          after,
+          0,
+          160,
+          sans.font,
+          cellMetricsOverride = Some(wideCell),
+          wrapCache = cache
+        ),
       cache => wrap(after, cache, layouts.head, 160)
     )
     otherShapes.zipWithIndex.foreach { (wrapAfter, index) =>
