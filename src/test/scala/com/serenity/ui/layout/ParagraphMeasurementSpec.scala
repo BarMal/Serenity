@@ -17,10 +17,7 @@ import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.{resolverForLine, singleFontResolver}
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.TestBundledTypefaces
 import com.serenity.ui.theme.RichTextStyling
-import org.jetbrains.skia.{FontFeature, TextLine}
-import org.jetbrains.skia.shaper.ShapingOptions
 import org.scalatest.Assertion
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +26,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 /** Measuring a paragraph once and slicing rows out of it must wrap exactly where measuring every row with its own
   * `TextLayout` did ([[LegacyLineMeasurement]]), with caret positions equal up to float rounding.
   */
-class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks:
+class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks with SkiaRowOracle:
 
   given Balance = Balance.default
 
@@ -97,85 +94,6 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
       }
     }
     succeed
-
-  private val skiaFaces = TestBundledTypefaces.cacheWithInter()
-
-  /** The width Skia's own shaper gives `text` in `font`, with the fallback fonts it picks for what the font lacks: an
-    * oracle that is neither AWT nor the measurer under test.
-    */
-  private def skiaWidthOf(text: String, font: Font): Float =
-    val face = skiaFaces.faceFor(FontSpec.fromAwt(font)).font
-    val options =
-      if skiaFaces.ligaturesOf(face) then ShapingOptions.Companion.getDEFAULT()
-      else
-        ShapingOptions.Companion.getDEFAULT().withFeatures(Array("liga", "clig", "calt").map(new FontFeature(_, false)))
-    val line = TextLine.Companion.make(text, face, options)
-    try line.getWidth
-    finally line.close()
-
-  /** Emoji and CJK take their glyphs from fallback fonts that AWT's per-row measurement sized and cut differently, so
-    * their rows are checked against Skia and the AWT oracle stays for every other line.
-    */
-  private def fallsBackInSkia(line: String): Boolean =
-    line.exists(char =>
-      Character.isSurrogate(char) || Set(
-        Character.UnicodeScript.HAN,
-        Character.UnicodeScript.HIRAGANA,
-        Character.UnicodeScript.KATAKANA
-      ).contains(Character.UnicodeScript.of(char))
-    )
-
-  private val SkiaWidthTolerancePx = 1.0f
-
-  private def isWideCluster(cluster: String): Boolean =
-    cluster.codePoints().anyMatch(codePoint => Character.isEmojiPresentation(codePoint)) ||
-      cluster.exists(char =>
-        Set(Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA, Character.UnicodeScript.KATAKANA)
-          .contains(Character.UnicodeScript.of(char))
-      )
-
-  /** A row of a monospaced code line sets each wide cluster (an emoji sequence, a CJK character) on exactly two cells
-    * of the font's advance, as the terminal does ([[WideCells]]), whichever font draws its glyph; so the row's own
-    * shaped width is not what is compared, but the caret distance across every wide cluster is.
-    */
-  private def assertWideClustersTakeTwoCells(row: TextVisualLine, line: String, font: Font): Assertion =
-    val twoCells = 2 * skiaWidthOf("M", font)
-    val breaks   = java.text.BreakIterator.getCharacterInstance
-    breaks.setText(row.text)
-    val bounds =
-      Iterator.iterate(breaks.first())(_ => breaks.next()).takeWhile(_ != java.text.BreakIterator.DONE).toVector
-    val xOfOffset = row.caretStops.map(stop => stop.column - row.startColumn -> stop.xPx).toMap
-    bounds.zip(bounds.drop(1)).foreach { (from, until) =>
-      if isWideCluster(row.text.substring(from, until)) then
-        xOfOffset.get(from).zip(xOfOffset.get(until)).foreach((start, end) => (end - start) shouldBe twoCells +- 0.01f)
-    }
-    succeed
-
-  private def assertSkiaRows(rows: Vector[TextVisualLine], line: String, widthPx: Int, font: Font): Assertion =
-    rows.map(_.text).mkString shouldBe line
-    val boundaries = graphemeBoundaries(line)
-    rows.filter(row => boundaries.contains(row.startColumn) && boundaries.contains(row.endColumn)).foreach { row =>
-      withClue(s"row '${row.text}' of $font at $widthPx px: ") {
-        if font.getFamily == Font.MONOSPACED then assertWideClustersTakeTwoCells(row, line, font)
-        else row.widthPx shouldBe skiaWidthOf(row.text, font) +- SkiaWidthTolerancePx
-        if widthPx >= 40 then row.widthPx should be <= widthPx + SkiaWidthTolerancePx
-      }
-    }
-    succeed
-
-  /** A row too narrow for an emoji sequence is cut inside it, so it holds half a cluster; shaped alone such text is not
-    * what the row was measured as, which is why only rows that start and end on a grapheme boundary are compared.
-    */
-  private def graphemeBoundaries(line: String): Set[Int] =
-    val breaks = java.text.BreakIterator.getCharacterInstance
-    breaks.setText(line)
-    Iterator.iterate(breaks.first())(_ => breaks.next()).takeWhile(_ != java.text.BreakIterator.DONE).toSet
-
-  private def assertSkiaCarets(carets: Vector[Float], line: String, font: Font): Assertion =
-    carets.length shouldBe line.length + 1
-    carets.headOption shouldBe Some(0.0f)
-    carets.zip(carets.drop(1)).foreach((from, to) => to should be >= from)
-    carets.lastOption.getOrElse(0.0f) shouldBe skiaWidthOf(line, font) +- SkiaWidthTolerancePx
 
   private def assertSameStops(actual: Vector[TextCaretStop], expected: Vector[TextCaretStop]): Unit =
     actual.map(_.column) shouldBe expected.map(_.column)
