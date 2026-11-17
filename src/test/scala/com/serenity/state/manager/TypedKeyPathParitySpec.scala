@@ -109,7 +109,7 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
     def placedEdit(edit: HistoryEntry.BufferEdit): HistoryEntry.BufferEdit =
       edit
         .restore(model.app)
-        .map((restored, _) => ViewportResolution.resolve(restored))
+        .map((restored, _) => ViewportResolution.resolve(restored, TestMeasure.wrapCache()))
         .flatMap(_.persisted.buffers.get(edit.bufferId))
         .fold(edit)(buffer => edit.copy(snapshot = edit.snapshot.copy(viewport = buffer.viewport)))
     def placed(step: HistoryStep): HistoryStep = step.entry match

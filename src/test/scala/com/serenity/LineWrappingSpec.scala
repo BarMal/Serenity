@@ -648,7 +648,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val stateAfterTyping = stateManager.getCurrentState.unsafeRunSync()
     val geometry = com.serenity.state.manager.EditorGeometryProducer
-      .forPane(stateAfterTyping, paneId)
+      .forPane(stateAfterTyping, paneId, wrapCache = com.serenity.testkit.TestMeasure.wrapCache())
       .getOrElse(fail("expected geometry for pane"))
     geometry.navigation.visualLines.size should be >= 3
     val middleRow = geometry.navigation.visualLines(1)
