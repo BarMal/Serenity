@@ -202,7 +202,9 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
     val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
     titleDraw.font shouldBe Some(uiFont)
     titleDraw.xPx shouldBe expectedXPx +- 0.001f
-    firstNonSpaceColumn(surface, 0) shouldBe math.floor(expectedXPx / uiMetrics.charWidth.toDouble).toInt
+    firstNonSpaceColumn(surface, 0) shouldBe math
+      .floor(expectedXPx / TestMeasure.glyphAdvancePx(uiFont).toDouble + 0.001)
+      .toInt
   }
 
   it should "render a measured editor cursor using the full primary row height" in {
