@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
@@ -45,8 +46,8 @@ class DropCapsKeySpec extends AnyFlatSpec with Matchers:
     scene.textSnapshots(paneId).visualLines.head.xOffsetPx
 
   "Toggling drop caps" should "lay the drop cap paragraph out differently when built from scratch (control)" in {
-    val on  = AuthoritativeUiScene().forState(dropCapState(true), viewport)
-    val off = AuthoritativeUiScene().forState(dropCapState(false), viewport)
+    val on  = AuthoritativeUiScene(TestMeasure.wrapCache()).forState(dropCapState(true), viewport)
+    val off = AuthoritativeUiScene(TestMeasure.wrapCache()).forState(dropCapState(false), viewport)
 
     firstRowInset(on) should be > 0.0f
     firstRowInset(off) shouldBe 0.0f
@@ -56,7 +57,7 @@ class DropCapsKeySpec extends AnyFlatSpec with Matchers:
     val enabled = dropCapState(true)
     val disabled =
       enabled.copy(persisted = enabled.persisted.copy(config = enabled.persisted.config.withDropCapsEnabled(false)))
-    val scene = AuthoritativeUiScene()
+    val scene = AuthoritativeUiScene(TestMeasure.wrapCache())
 
     val before = MouseTargetCache.fromState(enabled, viewport, scene)
     val after  = MouseTargetCache.fromState(disabled, viewport, scene)

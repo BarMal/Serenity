@@ -1,5 +1,6 @@
 package com.serenity.state.manager
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.command.{
   CommandIntent,
   CommandRegistry,
@@ -62,10 +63,10 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.withHeadingsConfig(HeadingsConfig().withLevel(1)(update))
 
   private def keyFor(config: AppConfig): MouseTargetLayoutKey =
-    AuthoritativeUiScene().layoutKeyFor(stateWith(config), viewport)
+    AuthoritativeUiScene(TestMeasure.wrapCache()).layoutKeyFor(stateWith(config), viewport)
 
   private def titleRow(config: AppConfig, aligned: ParagraphAlignment = ParagraphAlignment.Left) =
-    val scene = AuthoritativeUiScene()
+    val scene = AuthoritativeUiScene(TestMeasure.wrapCache())
     val state = stateWith(config, aligned)
     MouseTargetCache
       .fromState(state, viewport, scene)
@@ -115,7 +116,7 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
   }
 
   "The prepared scene" should "be rebuilt when a heading size changes, and reused when nothing did" in {
-    val scene     = AuthoritativeUiScene()
+    val scene     = AuthoritativeUiScene(TestMeasure.wrapCache())
     val before    = MouseTargetCache.fromState(stateWith(AppConfig.default), viewport, scene).scene
     val unchanged = MouseTargetCache.fromState(stateWith(AppConfig.default), viewport, scene).scene
     val after     = MouseTargetCache.fromState(stateWith(withH1(_.copy(size = Some(3.0f)))), viewport, scene).scene
@@ -125,7 +126,7 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "paint a heading in a new colour from the first frame after it changes" in {
-    val scene = AuthoritativeUiScene()
+    val scene = AuthoritativeUiScene(TestMeasure.wrapCache())
     val red   = RenderColor.fromRgba(0xcc, 0x33, 0x33)
 
     def h1Colour(config: AppConfig): Option[HeadingColour] =
@@ -174,7 +175,7 @@ class HeadingLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave body paragraphs unaligned by a heading alignment" in {
-    val scene = AuthoritativeUiScene()
+    val scene = AuthoritativeUiScene(TestMeasure.wrapCache())
     val state = stateWith(withH1(_.copy(align = Some(ParagraphAlignment.Center))))
     val rows = MouseTargetCache
       .fromState(state, viewport, scene)

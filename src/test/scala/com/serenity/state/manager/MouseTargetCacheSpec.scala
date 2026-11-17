@@ -20,7 +20,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   private val paneId             = PaneId(0)
   private val bufferId           = BufferId(1)
-  private val authoritativeScene = AuthoritativeUiScene()
+  private val authoritativeScene = AuthoritativeUiScene(TestMeasure.wrapCache())
 
   private def stateWith(buffer: Buffer, config: AppConfig = AppConfig.default): AppState =
     AppState.initial.copy(persisted =
@@ -77,7 +77,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state    = stateWith(Buffer.fromString(bufferId, "alpha"), floating)
     val typing   = state.copy(runtime = state.runtime.observeTyping(1L))
     val quiet    = typing.copy(runtime = typing.runtime.copy(typingActivity = TypingActivity.idle))
-    val scene    = AuthoritativeUiScene()
+    val scene    = AuthoritativeUiScene(TestMeasure.wrapCache())
 
     quiet.floatingStatusLineSurface should not be empty
     scene.layoutKeyFor(typing, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe empty
