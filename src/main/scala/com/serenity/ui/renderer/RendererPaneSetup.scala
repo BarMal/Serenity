@@ -268,7 +268,11 @@ object RendererPaneSetup:
     val visibleLines = ScrollLimits.rowsThatFit(panelHeightPx, bufferMetrics.lineHeight)
     context.caches.scrollRows.report(
       buffer.id,
-      ScrollRowCounts(baseViewport.visibleLines, CursorViewport.rowsThatFit(buffer, state), visibleLines)
+      ScrollRowCounts(
+        baseViewport.visibleLines,
+        CursorViewport.rowsThatFit(buffer, state, context.caches.wrappedLines.layoutMemos),
+        visibleLines
+      )
     )
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,

@@ -70,8 +70,8 @@ object TextLayoutSnapshot:
     * so scroll and navigation math must wrap at the grid width the renderer uses -- not the buffer font's own
     * `M`-width, which over-estimates the width for a proportional prose font and pushes wrapped rows off screen.
     */
-  def gridWrapWidthPx(gridColumns: Int, fontConfig: FontLoader.FontConfig): Int =
-    gridColumns * CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth
+  def gridWrapWidthPx(gridColumns: Int, fontConfig: FontLoader.FontConfig, memos: LayoutMemos): Int =
+    gridColumns * cellMetricsOf(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code), memos).charWidth
 
   /** `cellMetrics` is the unit every non-measured (cell-based) layout call below expresses its "pixel" positions in --
     * defaulting to the font's own cell as the owner's measurer gives it ([[cellMetricsOf]]) so every caller that does

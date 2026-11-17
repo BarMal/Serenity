@@ -7,6 +7,7 @@ import com.serenity.ui.layout.{
   ColumnPager,
   ColumnPaging,
   LayoutEngine,
+  LayoutMemos,
   PaneRowBands,
   ProseColumn,
   RichTextContext,
@@ -90,8 +91,8 @@ object CursorViewport:
     val viewport                   = buffer.viewport
     val fontConfig                 = currentState.persisted.config.editorConfig.fontConfig
     val font                       = previewFontForBuffer(buffer, fontConfig)
-    val gridWidthPx                = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig)
-    val effectiveVisibleLines      = rowsDrawnPerScreen(viewport, fontConfig, font, isTui)
+    val gridWidthPx = TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig, wrapCache.layoutMemos)
+    val effectiveVisibleLines = rowsDrawnPerScreen(viewport, fontConfig, font, isTui, wrapCache.layoutMemos)
     // Count wrapped rows the way the terminal actually drew them: TUI wraps on a fixed 1px-per-cell grid
     // (`CellMetrics.cellUnit` + forceCellLayout), never a pixel measurement of the inert proportional prose font, which
     // folds each line across a different number of rows and so mis-places the centred viewport. Mirrors
@@ -158,7 +159,7 @@ object CursorViewport:
         wrapCache,
         readAhead = readAhead
       )
-    val paneHeightPx = paneHeightPxFor(viewport, fontConfig, isTui)
+    val paneHeightPx = paneHeightPxFor(viewport, fontConfig, isTui, wrapCache.layoutMemos)
     val caret        = PaneRowBands.Row(cursor.line, cursorVisualLine)
     val caretBoxPx   = bands.textBoxPx(caret)
     val current      = PaneRowBands.Row(viewport.topLine, if wordWrapEnabled then viewport.topVisualLine else 0)
@@ -241,11 +242,18 @@ object CursorViewport:
   /** The pane's height in the units its rows' bands are measured in: cells in the terminal, pixels of the code grid the
     * pane is laid out on in the window.
     */
-  private def paneHeightPxFor(viewport: Viewport, fontConfig: FontLoader.FontConfig, isTui: Boolean): Int =
+  private def paneHeightPxFor(
+    viewport: Viewport,
+    fontConfig: FontLoader.FontConfig,
+    isTui: Boolean,
+    memos: LayoutMemos
+  ): Int =
     if isTui then viewport.visibleLines
     else
       viewport.visibleLines *
-        CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).lineHeight
+        TextLayoutSnapshot
+          .cellMetricsOf(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code), memos)
+          .lineHeight
 
   /** The visual rows of `buffer`'s lines as the pane wraps them, for the limits the wheel and the cursor both keep to.
     */
@@ -263,7 +271,7 @@ object CursorViewport:
       VisualRowCounts.forBuffer(
         buffer,
         if isTui then viewport.visibleColumns * CellMetrics.cellUnit.charWidth
-        else TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig),
+        else TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, fontConfig, wrapCache.layoutMemos),
         previewFontForBuffer(buffer, fontConfig),
         if isTui then Some(CellMetrics.cellUnit) else None,
         isTui,
@@ -278,13 +286,14 @@ object CursorViewport:
       )
 
   /** The rows of the pane's own font that fit `buffer`'s pane. */
-  private[serenity] def rowsThatFit(buffer: Buffer, currentState: AppState): Int =
+  private[serenity] def rowsThatFit(buffer: Buffer, currentState: AppState, memos: LayoutMemos): Int =
     val fontConfig = currentState.persisted.config.editorConfig.fontConfig
     rowsDrawnPerScreen(
       buffer.viewport,
       fontConfig,
       previewFontForBuffer(buffer, fontConfig),
-      currentState.runtime.capabilities.isCellGrid
+      currentState.runtime.capabilities.isCellGrid,
+      memos
     )
 
   /** `viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from the panel's
@@ -300,10 +309,15 @@ object CursorViewport:
     viewport: Viewport,
     fontConfig: FontLoader.FontConfig,
     font: java.awt.Font,
-    isTui: Boolean
+    isTui: Boolean,
+    memos: LayoutMemos
   ): Int =
     if isTui then viewport.visibleLines
-    else ScrollLimits.rowsThatFit(paneHeightPxFor(viewport, fontConfig, isTui), CellMetrics.fromFont(font).lineHeight)
+    else
+      ScrollLimits.rowsThatFit(
+        paneHeightPxFor(viewport, fontConfig, isTui, memos),
+        TextLayoutSnapshot.cellMetricsOf(font, memos).lineHeight
+      )
 
   /** Column-based document layout (issue #1338, Phase 1): discrete snapping only -- the viewport always lands on the
     * first column of the page holding the cursor's column, so that column is shown from its own top row. Columns are
@@ -385,8 +399,8 @@ object CursorViewport:
       val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
       val wrapWidthPx =
         if isTui then textColumns * CellMetrics.cellUnit.charWidth
-        else TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
-      val visibleLines = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui))
+        else TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig, wrapCache.layoutMemos)
+      val visibleLines = math.max(1, rowsDrawnPerScreen(viewport, fontConfig, font, isTui, wrapCache.layoutMemos))
       ColumnPages(
         columnPagerFor(buffer, state, wrapWidthPx, font, visibleLines, cellMetricsOverride, isTui, wrapCache),
         columnCountForBuffer(buffer, state),

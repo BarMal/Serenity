@@ -259,7 +259,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        finalState.persisted.config.editorConfig.fontConfig
+        finalState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
@@ -335,7 +336,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
     val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
       buffer.viewport.visibleColumns,
-      finalState.persisted.config.editorConfig.fontConfig
+      finalState.persisted.config.editorConfig.fontConfig,
+      TestMeasure.layoutMemos()
     )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
@@ -383,7 +385,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val buffer     = finalState.persisted.buffers(bufferId)
     val fontConfig = finalState.persisted.config.editorConfig.fontConfig
     val font       = FontLoader.previewTextFont(fontConfig)
-    val wrapPx     = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
+    val wrapPx =
+      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig, TestMeasure.layoutMemos())
 
     // `buffer.viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from
     // the pane's grid rows) and is never itself resized for this buffer's own (proportional, Prose-role) font --

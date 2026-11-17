@@ -145,7 +145,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     val config    = AppConfig.default.editorConfig.fontConfig
     val columns   = 40
     val codeWidth = TestMeasure.cellMetrics(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
-    TextLayoutSnapshot.gridWrapWidthPx(columns, config) shouldBe columns * codeWidth
+    TextLayoutSnapshot.gridWrapWidthPx(columns, config, TestMeasure.layoutMemos()) shouldBe columns * codeWidth
   }
 
   // The scroll bug: CursorViewport.adjustForCursor decided which visual row holds the cursor (and hence
@@ -195,7 +195,8 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       val gridWrapWidthPx =
         TextLayoutSnapshot.gridWrapWidthPx(
           syncedBuffer.viewport.visibleColumns,
-          state.persisted.config.editorConfig.fontConfig
+          state.persisted.config.editorConfig.fontConfig,
+          TestMeasure.layoutMemos()
         )
       val trueVisualRow =
         TextLayoutSnapshot.visualLineIndexForCursor(

@@ -74,7 +74,7 @@ final class ColumnPagingFixture(
   /** The cells one column wraps its text in, as `CursorViewport` and the painter both derive them. */
   val textColumns: Int = math.max(1, buffer.viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(state))
 
-  val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
+  val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig, TestMeasure.layoutMemos())
 
   /** The rows one column draws, sized the way the renderer sizes the pane it paints. */
   val rowsPerColumn: Int =

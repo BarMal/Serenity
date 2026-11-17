@@ -95,8 +95,9 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
     val cursor = b.editing.cursorPositions.head
     val config = state.persisted.config.editorConfig.fontConfig
     val font   = com.serenity.ui.fonts.FontLoader.previewFontForRole(config, b.typographyRole)
-    val width  = com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(viewport.visibleColumns, config)
-    val rows   = VisualRowCounts.forBuffer(b, width, font, None, false, TestMeasure.wrapCache())
+    val width = com.serenity.ui.layout.TextLayoutSnapshot
+      .gridWrapWidthPx(viewport.visibleColumns, config, TestMeasure.layoutMemos())
+    val rows = VisualRowCounts.forBuffer(b, width, font, None, false, TestMeasure.wrapCache())
     val cursorRow = com.serenity.ui.layout.TextLayoutSnapshot.visualLineIndexForCursor(
       b.document.content.getLine(cursor.line).getOrElse(""),
       cursor.column,

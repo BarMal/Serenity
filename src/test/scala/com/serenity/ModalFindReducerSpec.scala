@@ -376,7 +376,8 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers with FindModalFixtu
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        updatedState.persisted.config.editorConfig.fontConfig
+        updatedState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 

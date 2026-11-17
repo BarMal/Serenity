@@ -259,7 +259,8 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        updatedState.persisted.config.editorConfig.fontConfig
+        updatedState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
     val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 

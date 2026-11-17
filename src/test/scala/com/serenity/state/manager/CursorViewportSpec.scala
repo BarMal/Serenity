@@ -175,7 +175,8 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       val panelHeightPx       = buffer.viewport.visibleLines * TestMeasure.cellMetrics(codeFont).lineHeight
       val actuallyVisibleRows = math.max(1, panelHeightPx / TestMeasure.cellMetrics(textFont).lineHeight)
 
-      val gridWidthPx = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
+      val gridWidthPx =
+        TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig, TestMeasure.layoutMemos())
       def visualRowsFor(lineIndex: Int): Int =
         TextLayoutSnapshot
           .boundedVisualLinesForText(

@@ -409,7 +409,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       startBuffer.copy(viewport =
         startBuffer.viewport.copy(leftColumn = 0, topLine = 0, topVisualLine = 0, visibleLines = paragraph.length)
       ),
-      TextLayoutSnapshot.gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig),
+      TextLayoutSnapshot
+        .gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig, TestMeasure.layoutMemos()),
       font,
       wordWrapEnabled = true,
       wrapCache = TestMeasure.wrapCache()

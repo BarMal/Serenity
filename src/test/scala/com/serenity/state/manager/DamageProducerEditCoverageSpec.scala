@@ -389,7 +389,8 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
 
     val font = com.serenity.ui.fonts.FontLoader.previewTextFont(after.persisted.config.editorConfig.fontConfig)
     val wrapPx =
-      com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(80, after.persisted.config.editorConfig.fontConfig)
+      com.serenity.ui.layout.TextLayoutSnapshot
+        .gridWrapWidthPx(80, after.persisted.config.editorConfig.fontConfig, TestMeasure.layoutMemos())
     val beforeSnapshot =
       com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val afterSnapshot =

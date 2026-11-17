@@ -51,7 +51,7 @@ class ViewportInvariantTuiSpec extends TuiSpec:
         else
           val limit = ScrollLimits.last(
             CursorViewport.visualRowsFor(buffer, current, TestMeasure.wrapCache()),
-            CursorViewport.rowsThatFit(buffer, current)
+            CursorViewport.rowsThatFit(buffer, current, TestMeasure.layoutMemos())
           )
           val (line, row) = limit.clamp(top.line, top.row)
           Some(ColumnPaging.ColumnStart(line, row))
