@@ -340,7 +340,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
       wrap(text, cache, sans, 160)
       val actual = bitwise(wrapAfter(cache))
       withClue(s"shape $index: ")(actual shouldBe bitwise(wrapAfter(TestMeasure.wrapCache())))
-      incrementalWraps(cache) shouldBe 0L
+      withClue(s"shape $index: ")(incrementalWraps(cache) shouldBe 0L)
     }
   }
 
@@ -359,7 +359,7 @@ class IncrementalWrapSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "forget predecessors the line cache has evicted" in {
-    val cache = WrappedLineCache.bounded(maxLines = 2)
+    val cache = WrappedLineCache.bounded(maxLines = 2, layoutMemos = TestMeasure.layoutMemos())
     wrap(text, cache, sans, 160)
     (0 until 4).foreach(index => wrap(paragraphFor(Random(100L + index), sans, 160, 12), cache, sans, 160))
     val before = incrementalWraps(cache)
