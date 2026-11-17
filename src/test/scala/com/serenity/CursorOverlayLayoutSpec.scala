@@ -485,10 +485,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+    // Below the cursor now that prose rows are shorter than the grid's leave room under it, and tall enough a window
+    // that the runner's half row is not clamped away at the bottom: the offsets point down, not up.
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
-    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe -0.25
-    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe -0.5
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
   }
 
   it should "size a find overlay to fit its header, query row, result, and footer" in {
