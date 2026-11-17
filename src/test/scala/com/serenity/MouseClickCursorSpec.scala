@@ -29,7 +29,8 @@ class MouseClickCursorSpec extends AnyFlatSpec with Matchers:
       .apply(
         logger,
         dictionaryCache = SharedDictionary.default,
-        initialConfig = com.serenity.ChromeOn.config
+        initialConfig = com.serenity.ChromeOn.config,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )(using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
