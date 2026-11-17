@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
+import com.serenity.state.manager.{CursorViewport, StateManager}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.{SharedDictionary, TestMeasure}
@@ -174,7 +174,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Viewport should have scrolled to keep cursor visible
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be < (viewport.topLine + CursorViewport.rowsThatFit(
+      buffer,
+      finalState,
+      TestMeasure.layoutMemos()
+    ))
 
     // Viewport top line should be > 0 since we scrolled
     viewport.topLine should be > 0
@@ -231,7 +236,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Viewport should have scrolled to keep the cursor visible
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be < (viewport.topLine + CursorViewport.rowsThatFit(
+      buffer,
+      finalState,
+      TestMeasure.layoutMemos()
+    ))
 
     // Viewport top line should be > 0 since we scrolled
     viewport.topLine should be > 0

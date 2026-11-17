@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.{ActivePane, TestMeasure}
@@ -252,7 +253,13 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     // Cursor should be visible within viewport
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be <
+      (viewport.topLine + CursorViewport.rowsThatFit(
+        finalBuffer,
+        finalState,
+        com.serenity.testkit.TestMeasure.layoutMemos()
+      ))
   }
 
   it should "dynamically update viewport dimensions based on terminal size" in {
