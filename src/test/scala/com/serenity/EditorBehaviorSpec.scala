@@ -592,7 +592,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val stateManager: StateManager =
       StateManager
-        .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+          using
           com.serenity.rope.Balance.default,
           LoggerFactory[IO]
         )
