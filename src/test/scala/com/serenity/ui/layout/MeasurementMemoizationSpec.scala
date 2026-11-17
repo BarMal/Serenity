@@ -38,22 +38,23 @@ class MeasurementMemoizationSpec extends AnyFlatSpec with Matchers:
     rows.distinct.size shouldBe 1
   }
 
-  it should "report the ceiling of the font's ascent over the ceiling of its descent and leading" in {
-    val font = new Font(Font.SERIF, Font.PLAIN, 23)
-    val line = font.getLineMetrics("Mg", frc)
+  it should "report the ceiling of the font's line height over the ceiling of its ascent, as Skia gives them" in {
+    val font                                   = new Font(Font.SERIF, Font.PLAIN, 23)
+    val (skiaAscent, skiaDescent, skiaLeading) = TestMeasure.skiaMetrics(font)
     val metrics = LineFontResolver(FontSpec.fromAwt(font), Vector.empty)
       .lineMetrics(FontLineExtents(TestMeasure.measurer.cellMetrics), 0, 4)
-    val ascent  = math.ceil(line.getAscent.toDouble).toInt
-    val descent = math.ceil((line.getDescent + line.getLeading).toDouble).toInt
-    metrics shouldBe (ascent + descent, ascent)
+    val ascent = math.ceil(-skiaAscent.toDouble).toInt
+    val height = math.ceil((skiaDescent - skiaAscent + skiaLeading).toDouble).toInt
+    metrics shouldBe (height, ascent)
   }
 
-  it should "measure afresh at another render scale" in {
+  it should "measure afresh at another render scale, which is another size of the font" in {
     val font    = new Font(Font.MONOSPACED, Font.PLAIN, 29)
-    val scaled  = FontRenderContext(AffineTransform.getScaleInstance(2.0, 2.0), true, true)
+    val scaled  = font.deriveFont(2.0f * font.getSize2D)
     val extents = FontLineExtents(TestMeasure.measurer.cellMetrics)
     LineFontResolver(FontSpec.fromAwt(font), Vector.empty).lineMetrics(extents, 0, 4)
-    LineFontResolver(FontSpec.fromAwt(font), Vector.empty).lineMetrics(extents, 0, 4)
+    LineFontResolver(FontSpec.fromAwt(scaled), Vector.empty).lineMetrics(extents, 0, 4)
+    LineFontResolver(FontSpec.fromAwt(scaled), Vector.empty).lineMetrics(extents, 0, 4)
     extents.measurements shouldBe 2L
   }
 

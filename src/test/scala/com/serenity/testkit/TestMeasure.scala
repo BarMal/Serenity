@@ -27,6 +27,9 @@ object TestMeasure:
   def skiaInk(font: Font, text: String): org.jetbrains.skia.Rect =
     skiaFaces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
 
+  /** The ascent (negative above the baseline), descent and leading Skia itself gives `font`. */
+  def skiaMetrics(font: Font): (Float, Float, Float) = com.serenity.ui.skia.SkiaTestMetrics.of(font)
+
   /** How far the font really advances one character, which a run laid out by the measurer is spaced by, not the whole
     * pixels of its grid cell.
     */
