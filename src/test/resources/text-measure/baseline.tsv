@@ -105,7 +105,7 @@ courier_prime.zero_advance.ends@600	10
 courier_prime.zero_advance.widths@600	83.9453
 courier_prime.zero_advance.heights@600	16
 courier_prime.ltr_rtl.glyphs	22
-courier_prime.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+courier_prime.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 courier_prime.ltr_rtl.stops	23
 courier_prime_bold.cell	9,16,11
 courier_prime_bold.measured	1
@@ -210,7 +210,7 @@ courier_prime_bold.zero_advance.ends@600	10
 courier_prime_bold.zero_advance.widths@600	83.9453
 courier_prime_bold.zero_advance.heights@600	16
 courier_prime_bold.ltr_rtl.glyphs	22
-courier_prime_bold.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+courier_prime_bold.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 courier_prime_bold.ltr_rtl.stops	23
 monaspace_neon.cell	9,17,11
 monaspace_neon.measured	1
@@ -315,7 +315,7 @@ monaspace_neon.zero_advance.ends@600	10
 monaspace_neon.zero_advance.widths@600	86.7996
 monaspace_neon.zero_advance.heights@600	17
 monaspace_neon.ltr_rtl.glyphs	22
-monaspace_neon.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+monaspace_neon.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 monaspace_neon.ltr_rtl.stops	23
 monaspace_neon_ligatures.cell	9,17,11
 monaspace_neon_ligatures.measured	1
@@ -420,7 +420,7 @@ monaspace_neon_ligatures.zero_advance.ends@600	10
 monaspace_neon_ligatures.zero_advance.widths@600	86.7996
 monaspace_neon_ligatures.zero_advance.heights@600	17
 monaspace_neon_ligatures.ltr_rtl.glyphs	22
-monaspace_neon_ligatures.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+monaspace_neon_ligatures.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 monaspace_neon_ligatures.ltr_rtl.stops	23
 inter_subset.cell	13,17,14
 inter_subset.measured	1
@@ -447,8 +447,8 @@ inter_subset.kerning_prose.rows@600	1
 inter_subset.kerning_prose.ends@600	53
 inter_subset.kerning_prose.widths@600	334.8789
 inter_subset.kerning_prose.heights@600	17
-inter_subset.ligature_code.glyphs	45
-inter_subset.ligature_code.clusters	0,1,2,4,5,6,7,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46
+inter_subset.ligature_code.glyphs	47
+inter_subset.ligature_code.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46
 inter_subset.ligature_code.carets	0.0000,7.8613,11.7988,21.0615,30.3242,34.2617,42.8340,46.7715,53.2109,62.4736,66.4111,74.4092,78.3467,83.3916,88.4365,92.3740,100.9463,104.8838,108.9102,118.1729,122.1104,130.2725,134.2100,143.4727,152.7354,161.9980,165.9355,171.1172,175.0547,184.3174,193.5801,197.5176,206.1035,210.0410,219.3037,228.5664,232.5039,240.7822,244.7197,253.7363,262.7529,266.6904,270.0811,274.0186,278.6738,283.3291,287.2666,290.6572
 inter_subset.ligature_code.rows@240	2
 inter_subset.ligature_code.ends@240	36,47
@@ -509,7 +509,7 @@ inter_subset.zero_advance.ends@600	10
 inter_subset.zero_advance.widths@600	88.3203
 inter_subset.zero_advance.heights@600	17
 inter_subset.ltr_rtl.glyphs	22
-inter_subset.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+inter_subset.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 inter_subset.ltr_rtl.stops	23
 inter_subset_ligatures.cell	13,17,14
 inter_subset_ligatures.measured	1
@@ -598,5 +598,5 @@ inter_subset_ligatures.zero_advance.ends@600	10
 inter_subset_ligatures.zero_advance.widths@600	88.3203
 inter_subset_ligatures.zero_advance.heights@600	17
 inter_subset_ligatures.ltr_rtl.glyphs	22
-inter_subset_ligatures.ltr_rtl.clusters	0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21
+inter_subset_ligatures.ltr_rtl.clusters	0,1,2,3,7,6,5,4,8,9,10,11,12,17,16,15,14,13,18,19,20,21
 inter_subset_ligatures.ltr_rtl.stops	23
