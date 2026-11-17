@@ -91,7 +91,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val rect   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
     val sized  = buffer(state).copy(viewport = LayoutEngine.updateBufferViewportDimensions(buffer(state), rect, true))
     val sizedState = state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> sized)))
-    val viewport   = CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head)
+    val viewport =
+      CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head, TestMeasure.wrapCache())
     sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
 
   /** The cell row `cursor` is painted on, and the pane's middle row, as the painter and popups place them. */

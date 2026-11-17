@@ -248,7 +248,7 @@ class CursorCentringStabilitySpec extends AnyFlatSpec with Matchers:
 
   private def resizeThroughSizes(trailingLines: Vector[String]): Unit =
     resizeSizes.foldLeft(placedInLongParagraph(60, trailingLines)) { (before, size) =>
-      val resized = EventPipelineTransitions.resized(ResizeEvent(size), before).state
+      val resized = EventPipelineTransitions.resized(ResizeEvent(size), before, TestMeasure.wrapCache()).state
       withClue(s"resized to $size: ") {
         // The resize commits already placed, so no frame paints the stale offset: against a pane that grew past
         // the document's end that offset paints no rows at all (#1978).
