@@ -85,18 +85,18 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get
     val glyphFont  = TextStyle.styledFont(sample.font, glyphStyle)
-    val ink        = glyphFont.createGlyphVector(frc, letter).getVisualBounds
+    val ink        = TestMeasure.skiaInk(glyphFont, letter)
     val baseline   = (call.yPx + call.ascentPx).toFloat
     Drawn(
       baseline,
-      baseline + ink.getMinY.toFloat,
-      baseline + ink.getMaxY.toFloat,
-      math.ceil(ink.getMaxX).toFloat,
+      baseline + ink.getTop,
+      baseline + ink.getBottom,
+      math.ceil(ink.getRight.toDouble).toFloat,
       drawLine
     )
 
   private def capHeightOf(font: Font): Float =
-    -font.createGlyphVector(frc, "H").getVisualBounds.getMinY.toFloat
+    -TestMeasure.skiaInk(font, "H").getTop
 
   private def topOfRow(snapshot: TextLayoutSnapshot, row: Int): Int = snapshot.rowHeightsPx.take(row).sum
 
