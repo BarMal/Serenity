@@ -143,13 +143,9 @@ object RenderBenchmarkRunner:
     val code   = FontLoader.previewCodeFont(config)
     val text   = FontLoader.previewTextFont(config)
     val ui     = FontLoader.previewUiFont(config)
-    Fonts(
-      FontSpec.fromAwt(code),
-      FontSpec.fromAwt(text),
-      FontSpec.fromAwt(ui),
-      CellMetrics.fromFont(code),
-      CellMetrics.fromFont(ui)
-    )
+    val spec   = (FontSpec.fromAwt(code), FontSpec.fromAwt(text), FontSpec.fromAwt(ui))
+    val grid   = SkiaTextCaches.fresh().fonts
+    Fonts(spec._1, spec._2, spec._3, grid.cellMetrics(spec._1), grid.cellMetrics(spec._3))
 
   private def measure(
     options: RenderBenchmarkOptions,

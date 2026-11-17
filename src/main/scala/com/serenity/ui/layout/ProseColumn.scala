@@ -6,8 +6,7 @@ import java.awt.image.BufferedImage
 import com.serenity.config.WrapColumn
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
 
 /** The wrap column as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
 object ProseColumn:
@@ -26,7 +25,7 @@ object ProseColumn:
       case WrapColumn.Cells(count)                                       => Some(count)
       case WrapColumn.Ch(count) if state.runtime.capabilities.isCellGrid => Some(count)
       case WrapColumn.Ch(count) =>
-        val widths = glyphWidths(state.persisted.config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
+        val widths = glyphWidths(state)
         Some(cells(count, widths.chPx, widths.gridCellPx))
 
   /** The most the text area is capped to, in grid cells: the wrap column, except in column mode, where it is the width
@@ -41,7 +40,7 @@ object ProseColumn:
   def chInCells(state: AppState): Double =
     if state.runtime.capabilities.isCellGrid then 1.0
     else
-      val widths = glyphWidths(state.persisted.config.editorConfig.fontConfig, state.runtime.proseGlyphWidths)
+      val widths = glyphWidths(state)
       widths.chPx / widths.gridCellPx.max(1)
 
   /** Left and right spacer widths that leave at most `columnCells` of `availableWidth` for text, centred, never
@@ -54,16 +53,25 @@ object ProseColumn:
       (insetLeft.max(spareLeft), insetRight.max(spare - spareLeft))
     }
 
-  private def glyphWidths(config: FontConfig, kept: ProseGlyphWidths): GlyphWidths =
-    kept.of(config)(
+  /** Both widths come from the owner's measurer when the state has one, which is what the grid and the prose are laid
+    * out with; without one, from AWT as before.
+    */
+  private def glyphWidths(state: AppState): GlyphWidths =
+    val config = state.persisted.config.editorConfig.fontConfig
+    val memos  = state.runtime.anchorWraps.lines.layoutMemos
+    state.runtime.proseGlyphWidths.of(config)(
       GlyphWidths(
-        chPx = chAdvancePx(FontLoader.previewTextFont(config)),
-        gridCellPx = CellMetrics.fromFont(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
+        chPx = chAdvancePx(FontLoader.previewTextFont(config), memos),
+        gridCellPx =
+          TextLayoutSnapshot.cellMetricsOf(FontLoader.previewFontForRole(config, TypographyRole.Code), memos).charWidth
       )
     )
 
+  private def chAdvancePx(font: Font, memos: LayoutMemos): Double =
+    memos.measurer.fold(awtChAdvancePx(font))(_.glyphWidthPx(FontSpec.fromAwt(font), "0").toDouble.max(1.0))
+
   /** Measured the way [[CellMetrics.fromFont]] measures the grid cell, so the two widths share a rendering context. */
-  private def chAdvancePx(font: Font): Double =
+  private def awtChAdvancePx(font: Font): Double =
     val graphics = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics()
     graphics.setFont(font)
     FontFirstUse.settle(font, graphics.getFontRenderContext)

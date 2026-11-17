@@ -26,7 +26,12 @@ object TextMeasure:
     val fontConfig = state.persisted.config.editorConfig.fontConfig
     Pixels(
       FontLoader.previewUiFont(fontConfig),
-      CellMetrics.fromFont(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code)).charWidth,
+      TextLayoutSnapshot
+        .cellMetricsOf(
+          FontLoader.previewFontForRole(fontConfig, TypographyRole.Code),
+          state.runtime.anchorWraps.lines.layoutMemos
+        )
+        .charWidth,
       SurfaceTextInset.px(state.persisted.config),
       advances
     )
