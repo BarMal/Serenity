@@ -91,7 +91,9 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
   private def centred(state: AppState, bufferId: BufferId): Option[Boolean] =
     state.persisted.buffers.get(bufferId).flatMap { buffer =>
       buffer.editing.cursorPositions.headOption.map(cursor =>
-        CursorViewport.adjustForCursor(buffer, state, cursor).copy(placement = ViewportPlacement.Placed) ==
+        CursorViewport
+          .adjustForCursor(buffer, state, cursor, TestMeasure.wrapCache())
+          .copy(placement = ViewportPlacement.Placed) ==
           buffer.viewport
       )
     }
