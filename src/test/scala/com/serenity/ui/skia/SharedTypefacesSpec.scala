@@ -30,6 +30,19 @@ final class SharedTypefacesSpec extends AnyFlatSpec with Matchers:
     resolved.get shouldBe 1
   }
 
+  it should "resolve every logical family to the same typeface" in {
+    val holder = SharedTypefaces()
+    val one    = new SkiaFontCache(resolveTypeface = holder.typefaceFor)
+    val two    = new SkiaFontCache(resolveTypeface = holder.typefaceFor)
+
+    List(Font.SANS_SERIF, Font.SERIF, Font.MONOSPACED, Font.DIALOG, Font.DIALOG_INPUT).foreach { family =>
+      val spec = FontSpec.fromAwt(new Font(family, Font.PLAIN, 14))
+      withClue(family)(
+        two.faceFor(spec).font.getTypeface.getUniqueId shouldBe one.faceFor(spec).font.getTypeface.getUniqueId
+      )
+    }
+  }
+
   "Font caches over separate holders" should "each resolve their own" in {
     val resolved = AtomicInteger(0)
     val one      = new SkiaFontCache(resolveTypeface = countingHolder(resolved).typefaceFor)
