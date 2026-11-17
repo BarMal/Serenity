@@ -56,12 +56,6 @@ object RendererEntryPoints:
   )(startup: StartupPage => A)(editor: UiSceneSnapshot => A): A =
     startPageOnly(state).fold(editor(buildScene))(startup)
 
-  /** The grid a caller that names no metrics gets for `font`: the one the owner's measurer lays out on, so the grid and
-    * the layout agree, and AWT's where the owner has no measurer.
-    */
-  private def defaultMetrics(font: java.awt.Font, caches: RenderCaches): CellMetrics =
-    caches.measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(FontSpec.fromAwt(font)))
-
   def render(
     state: AppState,
     cursorVisible: Boolean,
@@ -176,7 +170,7 @@ object RendererEntryPoints:
       textFont,
       FontSpec.fromAwt(defaultUiFont),
       cellMetrics,
-      defaultMetrics(defaultUiFont, caches),
+      caches.cellMetricsOf(defaultUiFont),
       cursorColor,
       damage,
       caches
@@ -407,7 +401,7 @@ object RendererEntryPoints:
       viewportSize,
       FontSpec.fromAwt(defaultFont),
       FontSpec.fromAwt(defaultFont),
-      defaultMetrics(defaultFont, caches),
+      caches.cellMetricsOf(defaultFont),
       cursorColor,
       damage,
       caches

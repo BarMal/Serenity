@@ -3,7 +3,14 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{LayoutMemos, ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.layout.{
+  CellMetrics,
+  LayoutMemos,
+  ScrollRowsReporter,
+  TabBarMeasures,
+  TextMeasurer,
+  WrappedLineCache
+}
 import com.serenity.ui.renderer.{
   BackendCaches,
   CacheSlots,
@@ -63,6 +70,10 @@ final class RenderCaches private (
     * share faces and shaped stretches. None measures nothing: layout is the cell grid.
     */
   def measurer: Option[TextMeasurer] = measurerSource()
+
+  /** The grid of `font` that layout measures on: the owner's measurer's, and AWT's where the owner has none. */
+  def cellMetricsOf(font: java.awt.Font): CellMetrics =
+    measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
 
   /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
