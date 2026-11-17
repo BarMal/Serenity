@@ -173,7 +173,6 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   it should "keep text outside the allowlist on TextLine" in {
     val outside = Vector(
       "combining mark"     -> "é x",
-      "Arabic"             -> "ال x",
       "joiner in a row"    -> "a‍b",
       "bidi isolate"       -> "a⁦b⁩",
       "CJK"                -> "中文 x",
@@ -185,6 +184,19 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
         val cache = new SkiaShapedTextCache()
         cache.stretchOf(string, font)
         cache.lineShapings shouldBe 1L
+      }
+    }
+  }
+
+  it should "shape right-to-left text in bidi runs, not through TextLine" in {
+    val font = lacking
+    List("Arabic" -> "ال x", "Hebrew" -> "\u05e9\u05dc\u05d5\u05dd x").foreach { (label, string) =>
+      withClue(label) {
+        val cache  = new SkiaShapedTextCache()
+        val shaped = cache.stretchOf(string, font)
+
+        cache.lineShapings shouldBe 0L
+        shaped.leftEdgeOf(0) should not be empty
       }
     }
   }
