@@ -102,25 +102,15 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   private def differencesOn(fontName: String, font: Font): Vector[String] =
     val routedCache    = new SkiaShapedTextCache()
     val referenceCache = new SkiaShapedTextCache()
-    FallbackRuns.checkedCodePoints.grouped(CodePointsPerCollection).toVector.flatMap { group =>
-      val found =
-        for
-          cp              <- group
-          (context, wrap) <- Contexts
-          string = text(cp, wrap)
-          found <-
-            val routed    = routedCache.stretchOf(string, font)
-            val reference = referenceCache.shapeLine(string, font)
-            differences(routed, reference, string.length).map(what => f"$fontName / U+$cp%04X / $context: $what")
-        yield found
-      System.gc()
-      found
-    }
-
-  /** The shaped lines are native objects that only a collection frees, and four workers on an idle heap would hold
-    * several gigabytes of them between collections.
-    */
-  private val CodePointsPerCollection = 400
+    for
+      cp              <- FallbackRuns.checkedCodePoints
+      (context, wrap) <- Contexts
+      string = text(cp, wrap)
+      found <-
+        val routed    = routedCache.stretchOf(string, font)
+        val reference = referenceCache.shapeLine(string, font)
+        differences(routed, reference, string.length).map(what => f"$fontName / U+$cp%04X / $context: $what")
+    yield found
 
   /** The differences grouped by font and context, with the code points, so a CI log shows the pattern at a glance. */
   private def summary(failures: Vector[String]): String =
