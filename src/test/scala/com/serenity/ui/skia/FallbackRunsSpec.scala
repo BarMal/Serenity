@@ -68,12 +68,16 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
 
   private def pixels(stretch: SkiaShapedStretch, from: Int, until: Int): Array[Int] =
     val surface = Surface.Companion.makeRasterN32Premul(260, 44)
-    val canvas  = surface.getCanvas
-    val _       = canvas.clear(0xffffffff)
     val paint   = new Paint()
-    paint.setColor(0xff000000)
-    stretch.draw(canvas, from, until, 12f, 30f, paint)
-    SkiaPixels.read(surface)
+    try
+      val canvas = surface.getCanvas
+      val _      = canvas.clear(0xffffffff)
+      paint.setColor(0xff000000)
+      stretch.draw(canvas, from, until, 12f, 30f, paint)
+      SkiaPixels.read(surface)
+    finally
+      paint.close()
+      surface.close()
 
   private def ranges(length: Int): Vector[(Int, Int)] =
     (Vector((0, length)) ++ (0 until length).map(i => (i, i + 1)) ++ Vector((1, length - 1)))
@@ -92,14 +96,19 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
   /** Four workers: each font's comparisons are independent, and the reference side, `TextLine`, is the slow part. */
   private val Workers = 4
 
+  /** One routed and one reference cache for the whole font: each owns a native `Shaper` that is never closed, and a
+    * cache per string left tens of thousands of them to the garbage collector, which a mostly idle heap does not run.
+    */
   private def differencesOn(fontName: String, font: Font): Vector[String] =
+    val routedCache    = new SkiaShapedTextCache()
+    val referenceCache = new SkiaShapedTextCache()
     for
       cp              <- FallbackRuns.checkedCodePoints
       (context, wrap) <- Contexts
       string = text(cp, wrap)
       found <-
-        val routed    = new SkiaShapedTextCache().stretchOf(string, font)
-        val reference = new SkiaShapedTextCache().shapeLine(string, font)
+        val routed    = routedCache.stretchOf(string, font)
+        val reference = referenceCache.shapeLine(string, font)
         differences(routed, reference, string.length).map(what => f"$fontName / U+$cp%04X / $context: $what")
     yield found
 

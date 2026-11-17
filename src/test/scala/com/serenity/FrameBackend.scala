@@ -122,8 +122,11 @@ object SkiaPixels:
         ColorSpace.Companion.getSRGB()
       )
     val whole = Bitmap()
-    require(whole.allocPixels(info) && surface.readPixels(whole, 0, 0), "cannot read the surface")
-    val bytes  = whole.readPixels(info, surface.getWidth * 4, 0, 0)
+    val bytes =
+      try
+        require(whole.allocPixels(info) && surface.readPixels(whole, 0, 0), "cannot read the surface")
+        whole.readPixels(info, surface.getWidth * 4, 0, 0)
+      finally whole.close()
     val pixels = new Array[Int](surface.getWidth * surface.getHeight)
     java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(pixels)
     pixels
