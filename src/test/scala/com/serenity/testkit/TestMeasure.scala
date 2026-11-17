@@ -5,7 +5,7 @@ import java.util.concurrent.Executor
 
 import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, ScrollCounting}
 import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextMeasurer, WrappedLineCache}
-import com.serenity.ui.renderer.{BackendCaches, CacheSlots, FontSpec, StyledFontCache}
+import com.serenity.ui.renderer.{BackendCaches, CacheSlots, FontSpec, ShapedTextCache, StyledFontCache}
 import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 
 /** What a spec measures a font with: the Skia measurer layout measures with in the app (#2660 item 2, step D2), over
@@ -38,6 +38,11 @@ object TestMeasure:
 
   /** A wrap cache over [[layoutMemos]], for specs that lay text out as a GUI owner does. */
   def wrapCache(): WrappedLineCache.Bounded = WrappedLineCache.bounded(layoutMemos = layoutMemos())
+
+  /** Measures every wrap afresh with the GUI owner's measurer and remembers none, the reference a remembering cache is
+    * compared with: what [[WrappedLineCache.Uncached]], which has no measurer, would be for a cell grid.
+    */
+  def measuringWrap(): WrappedLineCache.Measuring = WrappedLineCache.measuring(ShapedTextCache(), layoutMemos())
 
   /** What `Main` hands a GUI `StateManager` to measure with: the measurer of the faces and stretches its owner's
     * surfaces draw with.

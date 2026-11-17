@@ -82,7 +82,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor, typewriter)
       withClue(s"cursor $cursor, typewriter $typewriter: ") {
         CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-          CursorViewport.adjustForCursor(buffer(state), state, cursor)
+          CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
       }
   }
 
@@ -103,7 +103,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
           val state = stateWith(cursor, text = next)
           withClue(s"after inserting at $line:$column, cursor $cursor: ") {
             CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-              CursorViewport.adjustForCursor(buffer(state), state, cursor)
+              CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
           }
         }
         next
@@ -119,7 +119,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor, columns = columns, fontSize = fontSize)
       withClue(s"$columns columns at ${fontSize}pt, cursor $cursor: ") {
         CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-          CursorViewport.adjustForCursor(buffer(state), state, cursor)
+          CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
       }
   }
 
@@ -129,7 +129,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = previous.copy(persisted =
         previous.persisted.copy(buffers = Map(bufferId -> buffer(previous).copy(editing = EditingState(List(cursor)))))
       )
-      val placed = CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor)
+      val placed = CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor, TestMeasure.measuringWrap())
       withClue(s"cursor $cursor: ") {
         CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor, cache) shouldBe placed
       }
@@ -146,7 +146,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor)
       withClue(s"$event from $cursor: ") {
         reduced(new EditorPaneComponent(paneId, cache).processEvent(event, state)) shouldBe
-          reduced(new EditorPaneComponent(paneId).processEvent(event, state))
+          reduced(new EditorPaneComponent(paneId, TestMeasure.measuringWrap()).processEvent(event, state))
       }
   }
 
@@ -159,7 +159,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor)
       withClue(s"$rowsAbove rows above $cursor: ") {
         EditorGeometryProducer.forPane(state, paneId, rowsAbove, cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId, rowsAbove)
+          EditorGeometryProducer.forPane(state, paneId, rowsAbove, TestMeasure.measuringWrap())
       }
   }
 
@@ -169,7 +169,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor, typewriter = true)
       withClue(s"typing at $cursor: ") {
         reduced(new EditorPaneComponent(paneId, cache).processEvent(InsertChar('x'), state)) shouldBe
-          reduced(new EditorPaneComponent(paneId).processEvent(InsertChar('x'), state))
+          reduced(new EditorPaneComponent(paneId, TestMeasure.measuringWrap()).processEvent(InsertChar('x'), state))
       }
     }
   }
@@ -184,8 +184,12 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val prompt = ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine(target.toString)), state).state
       withClue(s"from $from to line $target: ") {
         reduced(ModalComponent(ModalType.TextPrompt, cache).processEvent(ModalSubmit, prompt)) shouldBe
-          reduced(ModalComponent(ModalType.TextPrompt).processEvent(ModalSubmit, prompt))
+          reduced(ModalComponent(ModalType.TextPrompt, TestMeasure.measuringWrap()).processEvent(ModalSubmit, prompt))
         val goTo = NavigationIntent.GoToBufferLine(bufferId, target - 1)
-        NavigationTransitions.navigation(goTo, state, cache) shouldBe NavigationTransitions.navigation(goTo, state)
+        NavigationTransitions.navigation(goTo, state, cache) shouldBe NavigationTransitions.navigation(
+          goTo,
+          state,
+          TestMeasure.measuringWrap()
+        )
       }
   }
