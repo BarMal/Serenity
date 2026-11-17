@@ -50,7 +50,11 @@ class CursorViewportColumnPagingSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = base.runtime.copy(capabilities = FrontendCapabilities.gui, viewportSize = Some(viewportSize))
+      runtime = base.runtime.copy(
+        capabilities = FrontendCapabilities.gui,
+        viewportSize = Some(viewportSize),
+        anchorWraps = TestMeasure.anchorWraps()
+      )
     )
 
   /** The rows one column draws, computed the way the renderer sizes the pane it paints. */

@@ -57,7 +57,11 @@ final class ColumnPagingFixture(
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = base.runtime.copy(capabilities = FrontendCapabilities.gui, viewportSize = Some(viewportSize))
+      runtime = base.runtime.copy(
+        capabilities = FrontendCapabilities.gui,
+        viewportSize = Some(viewportSize),
+        anchorWraps = TestMeasure.anchorWraps()
+      )
     )
     val synced = LayoutEngine.syncViewportDimensions(unsynced, viewportSize)
     val sized  = synced.persisted.buffers(bufferId)

@@ -4,7 +4,7 @@ import java.awt.Font
 import java.util.concurrent.Executor
 
 import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, ScrollCounting}
-import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.layout.{AnchorWrapCache, CellMetrics, LayoutMemos, TextMeasurer, WrappedLineCache}
 import com.serenity.ui.renderer.{BackendCaches, CacheSlots, FontSpec, ShapedTextCache, StyledFontCache}
 import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 
@@ -43,6 +43,9 @@ object TestMeasure:
     * compared with: what [[WrappedLineCache.Uncached]], which has no measurer, would be for a cell grid.
     */
   def measuringWrap(): WrappedLineCache.Measuring = WrappedLineCache.measuring(ShapedTextCache(), layoutMemos())
+
+  /** The anchor wraps a GUI owner's state carries: measured, as the renderer lays the same rows out. */
+  def anchorWraps(): AnchorWrapCache = AnchorWrapCache()(() => Some(measurer))
 
   /** What `Main` hands a GUI `StateManager` to measure with: the measurer of the faces and stretches its owner's
     * surfaces draw with.

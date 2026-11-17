@@ -75,7 +75,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(paneId)
       ),
-      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(columns + 10, 30)))
+      runtime =
+        base.runtime.copy(viewportSize = Some(ViewportSize(columns + 10, 30)), anchorWraps = TestMeasure.anchorWraps())
     )
 
   private def withFonts(config: AppConfig, fonts: FontLoader.FontConfig): AppConfig =

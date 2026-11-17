@@ -16,7 +16,7 @@ import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
-import com.serenity.ui.layout.TextMeasurer
+import com.serenity.ui.layout.{AnchorWrapCache, TextMeasurer}
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.renderer.{BackendCaches, CacheSlots}
 import com.serenity.ui.theme.appearance.OsAppearanceDetector
@@ -248,7 +248,10 @@ object StateManager:
         Model(
           app = initialState.copy(runtime =
             initialState.runtime
-              .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
+              .copy(
+                themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames),
+                anchorWraps = AnchorWrapCache()(() => renderCaches.measurer)
+              )
           ),
           undo = UndoState(maxUndoDepth = policy.maxUndoDepth)
         )

@@ -69,6 +69,7 @@ class GuiPopupAnchorSpec extends AnyFlatSpec with Matchers:
         config = config
       ),
       runtime = initial.runtime.copy(
+        anchorWraps = TestMeasure.anchorWraps(),
         viewportSize = Some(viewport),
         uiSurfaces = List(
           UiSurface(

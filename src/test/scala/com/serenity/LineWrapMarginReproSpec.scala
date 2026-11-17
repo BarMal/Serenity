@@ -207,7 +207,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
           wrapCache = TestMeasure.wrapCache()
         )
 
-      val adjusted = CursorViewport.adjustForCursor(syncedBuffer, state, cursor)
+      val adjusted = CursorViewport.adjustForCursor(syncedBuffer, state, cursor, TestMeasure.wrapCache())
 
       info(s"gridWrapWidthPx=$gridWrapWidthPx trueVisualRow=$trueVisualRow topVisualLine=${adjusted.topVisualLine}")
 
