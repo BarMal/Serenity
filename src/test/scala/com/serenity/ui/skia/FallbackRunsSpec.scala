@@ -11,17 +11,25 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Text with characters the base font lacks is shaped by supplying our own font runs instead of Skiko's `TextLine`,
-  * which costs 4 to 8 ms a call whatever the text. Every claim here is a comparison against `TextLine` itself, for
-  * every code point of the allowlist, so the two cannot drift apart unnoticed.
+  * which costs 4 to 8 ms a call whatever the text. Every claim here is a comparison against `TextLine` itself, for the
+  * code points of `FallbackRuns.checkedCodePoints` (every one of the allowlist but the ideographs, of which a fixed
+  * sample), so the two cannot drift apart unnoticed.
   */
 final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
 
   /** The ranges the owner approved, before the controls are taken out. */
-  private val ApprovedRanges = Vector(0x2500 to 0x257f, 0x2190 to 0x21ff, 0x2000 to 0x206f)
+  private val ApprovedRanges =
+    Vector(0x2500 to 0x257f, 0x2190 to 0x21ff, 0x2000 to 0x206f, 0x3000 to 0x30ff, 0x4e00 to 0x9fff, 0xff00 to 0xffef)
 
   /** Bidi and joiner controls, and the line and paragraph separators, which differed from `TextLine` on macOS. */
   private val Controls: Set[Int] =
     Set(0x200c, 0x200d, 0x200e, 0x200f, 0x2028, 0x2029) ++ (0x202a to 0x202e) ++ (0x2066 to 0x2069)
+
+  /** Marks that combine with the character before them, which `TextLine` shapes with it: the ideographic tone marks,
+    * the kana voiced sound marks and their halfwidth forms.
+    */
+  private val Combining: Set[Int] =
+    (0x302a to 0x302f).toSet ++ Set(0x3099, 0x309a, 0xff9e, 0xff9f)
 
   private val Contexts: Vector[(String, String => String)] = Vector(
     "alone"             -> (c => c),
@@ -86,7 +94,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
 
   private def differencesOn(fontName: String, font: Font): Vector[String] =
     for
-      cp              <- ApprovedRanges.flatten.filter(FallbackRuns.isAllowlisted).toVector
+      cp              <- FallbackRuns.checkedCodePoints
       (context, wrap) <- Contexts
       string = text(cp, wrap)
       found <-
@@ -113,8 +121,9 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       .mkString("\n")
 
   "The allowlist" should "be the approved ranges without the bidi and joiner controls, the separators and undefined code points" in {
-    val approved = ApprovedRanges.flatten.filterNot(Controls).filter(Character.isDefined)
-    val listed   = ApprovedRanges.flatten.filter(FallbackRuns.isAllowlisted)
+    val approved =
+      ApprovedRanges.flatten.filterNot(Controls).filterNot(Combining).filter(Character.isDefined)
+    val listed = ApprovedRanges.flatten.filter(FallbackRuns.isAllowlisted)
 
     listed shouldBe approved
     Controls.exists(FallbackRuns.isAllowlisted) shouldBe false
@@ -123,7 +132,19 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
     FallbackRuns.isAllowlisted(0x2fff) shouldBe false
   }
 
-  "Text shaped with our own runs" should "equal TextLine for every allowlisted code point, in four contexts, on every base font" in {
+  "The checked code points" should "be every allowlisted one but the ideographs, and of those the edges, the stride and the common ones" in {
+    val checked    = FallbackRuns.checkedCodePoints.toSet
+    val ideographs = 0x4e00 to 0x9fff
+    FallbackRuns.codePoints.filterNot(ideographs.contains).forall(checked) shouldBe true
+    checked(0x4e00) shouldBe true
+    checked(0x9fff) shouldBe true
+    ideographs.by(FallbackRuns.IdeographStride).filter(FallbackRuns.isAllowlisted).forall(checked) shouldBe true
+    "的一是不了人我在有他".codePoints().toArray.forall(checked) shouldBe true
+    FallbackRuns.IdeographStride shouldBe 61
+    checked.count(ideographs.contains) should be < 500
+  }
+
+  "Text shaped with our own runs" should "equal TextLine for every checked code point, in four contexts, on every base font" in {
     val pool = Executors.newFixedThreadPool(Workers)
     val failures =
       try
@@ -175,7 +196,7 @@ final class FallbackRunsSpec extends AnyFlatSpec with Matchers:
       "combining mark"     -> "é x",
       "joiner in a row"    -> "a‍b",
       "bidi isolate"       -> "a⁦b⁩",
-      "CJK"                -> "中文 x",
+      "Hangul"             -> "한국어 x",
       "emoji with variant" -> "❤️ x"
     )
     val font = lacking

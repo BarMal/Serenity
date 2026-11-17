@@ -18,7 +18,7 @@ final class FallbackAgreementSpec extends AnyFlatSpec with Matchers:
   "The fallback agreement check" should "find one string per allowlisted code point and font, all identical to TextLine" in {
     val result = FallbackAgreement.check(fonts)
 
-    result.checked shouldBe fonts.size * FallbackRuns.codePoints.size
+    result.checked shouldBe fonts.size * FallbackRuns.checkedCodePoints.size
     result.identical shouldBe result.checked
     result.differing shouldBe empty
   }

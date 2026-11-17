@@ -19,7 +19,7 @@ object FallbackAgreement:
     val results = distinct.flatMap { (name, font) =>
       val routed    = new SkiaShapedTextCache(fallbacks = fallbacks)
       val reference = new SkiaShapedTextCache()
-      FallbackRuns.codePoints.map { codePoint =>
+      FallbackRuns.checkedCodePoints.map { codePoint =>
         val text = s"  ${new String(Character.toChars(codePoint))}  "
         (f"$name U+$codePoint%04X", agree(routed.stretchOf(text, font), reference.shapeLine(text, font), text.length))
       }
