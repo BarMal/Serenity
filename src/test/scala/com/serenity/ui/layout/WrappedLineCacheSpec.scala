@@ -1,8 +1,8 @@
 package com.serenity.ui.layout
 
-import java.awt.font.FontRenderContext
+import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
-import java.awt.{Font, RenderingHints}
+import java.awt.Font
 
 import com.serenity.richtext.{
   InlineMark,
@@ -99,16 +99,9 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
 
   it should "miss whenever any ingredient of the wrap changes" in {
     val cache = TestMeasure.wrapCache()
-    val plainFractional = FontRenderContext(
-      AffineTransform(),
-      RenderingHints.VALUE_TEXT_ANTIALIAS_OFF,
-      RenderingHints.VALUE_FRACTIONALMETRICS_ON
-    )
-    val noFractional = FontRenderContext(
-      AffineTransform(),
-      RenderingHints.VALUE_TEXT_ANTIALIAS_ON,
-      RenderingHints.VALUE_FRACTIONALMETRICS_OFF
-    )
+    // Layout reads the font's own ingredients, not a render context (Skia has none): ligatures and slant are two.
+    val withLigatures = sans.deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON))
+    val italic        = sans.deriveFont(Font.ITALIC)
     val variants: List[() => Vector[TextVisualLine]] = List(
       () => wrap(prose, cache),
       () => wrap(prose + "!", cache),
@@ -116,8 +109,8 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       () => wrap(prose, cache, font = serif),
       () => wrap(prose, cache, font = sans.deriveFont(14.0f)),
       () => wrap(prose, cache, font = sans.deriveFont(Font.BOLD)),
-      () => wrap(prose, cache, fontRenderContext = plainFractional),
-      () => wrap(prose, cache, fontRenderContext = noFractional),
+      () => wrap(prose, cache, font = withLigatures),
+      () => wrap(prose, cache, font = italic),
       () => wrap(prose, cache, font = mono, forceCellLayout = true),
       () => wrap(prose, cache, font = mono, cellMetrics = Some(CellMetrics(1, 1, 0)), forceCellLayout = true),
       () => wrap(prose, cache, font = mono, cellMetrics = Some(CellMetrics(1, 1, 0, true)), forceCellLayout = true)
