@@ -9,6 +9,5 @@ import com.serenity.ui.renderer.FontSpec
   */
 object SkiaTestMetrics:
 
-  private lazy val faces = TestBundledTypefaces.cacheWithInter()
-
-  def of(font: Font): (Float, Float, Float) = SkiaVerticalMetrics.of(faces.faceFor(FontSpec.fromAwt(font)).font)
+  def of(font: Font): (Float, Float, Float) =
+    SkiaVerticalMetrics.of(com.serenity.testkit.TestMeasure.faces.faceFor(FontSpec.fromAwt(font)).font)

@@ -4,7 +4,6 @@ import java.awt.Font
 
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.TestBundledTypefaces
 import org.jetbrains.skia.{FontFeature, TextLine}
 import org.jetbrains.skia.shaper.ShapingOptions
 import org.scalatest.Assertion
@@ -16,20 +15,25 @@ import org.scalatest.matchers.should.Matchers
 trait SkiaRowOracle:
   self: Matchers =>
 
-  protected val skiaFaces = TestBundledTypefaces.cacheWithInter()
+  protected def skiaFaces: com.serenity.ui.skia.SkiaFontCache = com.serenity.testkit.TestMeasure.faces
 
-  /** The width Skia's own shaper gives `text` in `font`, with the fallback fonts it picks for what the font lacks: an
-    * oracle that is neither AWT nor the measurer under test.
+  /** The width Skia's own shaper gives `text` in `font`: an oracle that is neither AWT nor the measurer under test, in
+    * the faces the measurer lays out with (a logical family such as `SansSerif` can resolve to another physical font in
+    * another font cache: a row measured in Inter and checked in IPAGothic came 3.4 px apart).
     */
-  protected def skiaWidthOf(text: String, font: Font): Float =
-    val face = skiaFaces.faceFor(FontSpec.fromAwt(font)).font
-    val options =
-      if skiaFaces.ligaturesOf(face) then ShapingOptions.Companion.getDEFAULT()
-      else
-        ShapingOptions.Companion.getDEFAULT().withFeatures(Array("liga", "clig", "calt").map(new FontFeature(_, false)))
-    val line = TextLine.Companion.make(text, face, options)
-    try line.getWidth
-    finally line.close()
+  protected def skiaWidthOf(text: String, font: Font): Option[Float] =
+    Some {
+      val face = skiaFaces.faceFor(FontSpec.fromAwt(font)).font
+      val options =
+        if skiaFaces.ligaturesOf(face) then ShapingOptions.Companion.getDEFAULT()
+        else
+          ShapingOptions.Companion
+            .getDEFAULT()
+            .withFeatures(Array("liga", "clig", "calt").map(new FontFeature(_, false)))
+      val line = TextLine.Companion.make(text, face, options)
+      try line.getWidth
+      finally line.close()
+    }
 
   /** Emoji and CJK take their glyphs from fallback fonts that AWT's per-row measurement sized and cut differently, so
     * their rows are checked against Skia and the AWT oracle stays for every other line.
@@ -57,7 +61,7 @@ trait SkiaRowOracle:
     * shaped width is not what is compared, but the caret distance across every wide cluster is.
     */
   protected def assertWideClustersTakeTwoCells(row: TextVisualLine, line: String, font: Font): Assertion =
-    val twoCells = 2 * skiaWidthOf("M", font)
+    val twoCells = 2 * skiaWidthOf("M", font).getOrElse(0.0f)
     val breaks   = java.text.BreakIterator.getCharacterInstance
     breaks.setText(row.text)
     val bounds =
@@ -80,7 +84,7 @@ trait SkiaRowOracle:
       .foreach { row =>
         withClue(s"row '${row.text}' of $font at $widthPx px: ") {
           if font.getFamily == Font.MONOSPACED then assertWideClustersTakeTwoCells(row, line, font)
-          else row.widthPx shouldBe skiaWidthOf(row.text, font) +- SkiaWidthTolerancePx
+          else skiaWidthOf(row.text, font).foreach(expected => row.widthPx shouldBe expected +- SkiaWidthTolerancePx)
           if widthPx >= 40 then row.widthPx should be <= widthPx + SkiaWidthTolerancePx
         }
       }
@@ -98,4 +102,7 @@ trait SkiaRowOracle:
     carets.length shouldBe line.length + 1
     carets.headOption shouldBe Some(0.0f)
     carets.zip(carets.drop(1)).foreach((from, to) => to should be >= from)
-    carets.lastOption.getOrElse(0.0f) shouldBe skiaWidthOf(line, font) +- SkiaWidthTolerancePx
+    skiaWidthOf(line, font).foreach(expected =>
+      carets.lastOption.getOrElse(0.0f) shouldBe expected +- SkiaWidthTolerancePx
+    )
+    succeed

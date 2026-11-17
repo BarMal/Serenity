@@ -15,17 +15,21 @@ import com.serenity.ui.skia.{SkiaTextMeasurer, TestBundledTypefaces}
 object TestMeasure:
 
   /** One measurer for every spec that does not draw: it holds no state a layout could leave behind for another. */
-  lazy val measurer: TextMeasurer = new SkiaTextMeasurer(TestBundledTypefaces.cacheWithInter())
+  /** The faces the measurer lays out with, which every Skia oracle of a spec takes its fonts from too: which physical
+    * font a logical family such as `SansSerif` resolves to can differ from one font cache to another on a machine, and
+    * an oracle in a different font than the layout measures proves nothing.
+    */
+  lazy val faces: com.serenity.ui.skia.SkiaFontCache = TestBundledTypefaces.cacheWithInter()
+
+  lazy val measurer: TextMeasurer = new SkiaTextMeasurer(faces)
 
   def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
-
-  private lazy val skiaFaces = TestBundledTypefaces.cacheWithInter()
 
   /** The ink Skia itself gives `text` in `font`, independent of the measurer under test: the oracle for where a glyph
     * stands, in place of AWT's glyph vector.
     */
   def skiaInk(font: Font, text: String): org.jetbrains.skia.Rect =
-    skiaFaces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
+    faces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
 
   /** The ascent (negative above the baseline), descent and leading Skia itself gives `font`. */
   def skiaMetrics(font: Font): (Float, Float, Float) = com.serenity.ui.skia.SkiaTestMetrics.of(font)
