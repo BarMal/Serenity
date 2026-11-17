@@ -187,7 +187,8 @@ private[perf] object LaptopFrameBenchmarks:
       .apply(
         NoOpLogger[IO],
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = dictionaryCache.getOrElse(WarmDictionary.cacheFor(config))
+        dictionaryCache = dictionaryCache.getOrElse(WarmDictionary.cacheFor(config)),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       .unsafeRunSync()
     val proseBufferId = (for
