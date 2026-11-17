@@ -19,6 +19,14 @@ object TestMeasure:
 
   def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
 
+  private lazy val skiaFaces = TestBundledTypefaces.cacheWithInter()
+
+  /** The ink Skia itself gives `text` in `font`, independent of the measurer under test: the oracle for where a glyph
+    * stands, in place of AWT's glyph vector.
+    */
+  def skiaInk(font: Font, text: String): org.jetbrains.skia.Rect =
+    skiaFaces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
+
   /** How far the font really advances one character, which a run laid out by the measurer is spaced by, not the whole
     * pixels of its grid cell.
     */

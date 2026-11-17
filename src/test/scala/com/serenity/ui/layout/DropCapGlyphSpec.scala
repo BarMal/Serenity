@@ -8,7 +8,6 @@ import org.scalatest.matchers.should.Matchers
 
 class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
   private val font = BundledInterFont.plain(14.0f)
 
   private def glyphOf(text: String, lines: Int, proseScale: Float = 1.0f): Option[DropCapGlyph] =
@@ -62,13 +61,13 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
   it should "reserve the room a descender hangs into below the last line" in {
     val glyph = glyphOf("Quiet", 2).getOrElse(fail("expected a glyph"))
-    val tail  = glyph.font.createGlyphVector(frc, "Q").getVisualBounds.getMaxY
+    val tail  = TestMeasure.skiaInk(glyph.font, "Q").getBottom.toDouble
 
     glyph.heightPx.toDouble should be >= glyph.baselinePx + tail
   }
 
   private def inkRightOf(glyph: DropCapGlyph): Double =
-    math.ceil(glyph.font.createGlyphVector(frc, glyph.text).getVisualBounds.getMaxX)
+    math.ceil(TestMeasure.skiaInk(glyph.font, glyph.text).getRight)
 
   it should "keep the indent at the glyph's ink right edge plus the gap in em of the body font" in
     List("I", "W", "T", "Q", "J").foreach { letter =>
@@ -82,9 +81,9 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
   it should "clear the ink of a letter that reaches left of the draw origin" in {
     val glyph = glyphOf("J", 3).getOrElse(fail("expected a glyph"))
-    val ink   = glyph.font.createGlyphVector(frc, "J").getVisualBounds
+    val ink   = TestMeasure.skiaInk(glyph.font, "J")
 
-    glyph.indentPx(0.0f).toDouble should be >= ink.getMaxX
+    glyph.indentPx(0.0f).toDouble should be >= ink.getRight.toDouble
   }
 
   "DropCapLayout.reserve" should "be the glyph's ink edge plus the gap and its height for a drop cap, and nothing otherwise" in {
