@@ -38,7 +38,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
-      )
+      ),
+      runtime = initial.runtime.copy(anchorWraps = com.serenity.testkit.TestMeasure.anchorWraps())
     )
 
   "LayoutEngine.calculateLayout" should "place a peek overlay above the anchored cursor when space is available" in {
