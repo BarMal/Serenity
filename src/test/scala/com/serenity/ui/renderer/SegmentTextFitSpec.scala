@@ -25,10 +25,10 @@ class SegmentTextFitSpec extends AnyFlatSpec with Matchers:
 
   private def newAdvances() = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
-  "SegmentTextFit" should "cut a title where it is cut without remembered advances" in {
+  "SegmentTextFit" should "cut a title where a fresh measure of it, remembering nothing, cuts it" in {
     val advances = newAdvances()
 
-    titles.map(cut(_, Some(advances))) shouldBe titles.map(cut(_, None))
+    titles.map(cut(_, Some(advances))) shouldBe titles.map(title => cut(title, Some(newAdvances())))
   }
 
   it should "measure nothing a second time for the same titles" in {
