@@ -2,8 +2,6 @@ package com.serenity.state.manager
 
 import com.serenity.lsp.model.LineRange
 import com.serenity.state.models.{AppState, Buffer, TypographyRole}
-import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.TextLayoutSnapshot
 
 /** The buffer lines a pane may be showing, for a language server asked only about what is on screen.
   *
@@ -21,12 +19,15 @@ object VisibleBufferLines:
     val first    = math.min(math.max(0, topLine), lastLine)
     LineRange(first, math.min(lastLine, first + math.max(1, rows) - 1))
 
-  def of(buffer: Buffer, state: AppState): LineRange =
+  /** `lineHeightOf` is the line height of the font a role is drawn in, which the caller reads off the owner's measurer:
+    * this object is below the layout in the module graph.
+    */
+  def of(buffer: Buffer, state: AppState, lineHeightOf: TypographyRole => Int): LineRange =
     val lineCount = buffer.document.content.lineCount
     val surface   = state.persisted.config.surfaceConfig
     val rows =
       if surface.columnModeEnabled && surface.wordWrapEnabled then lineCount
-      else rowsFitting(buffer, state)
+      else rowsFitting(buffer, state, lineHeightOf)
     range(buffer.viewport.topLine, rows, lineCount)
 
   /** Rows of the font the buffer is drawn in that fit the pane. `visibleLines` is sized on the code font's line height
@@ -34,18 +35,10 @@ object VisibleBufferLines:
     * proportionally more or fewer rows -- the same conversion `CursorViewport` scrolls by. A cell grid has one row
     * height whatever the font.
     */
-  private def rowsFitting(buffer: Buffer, state: AppState): Int =
+  private def rowsFitting(buffer: Buffer, state: AppState, lineHeightOf: TypographyRole => Int): Int =
     val visibleLines = buffer.viewport.visibleLines
     if state.runtime.capabilities.isCellGrid then visibleLines
     else
-      val fontConfig = state.persisted.config.editorConfig.fontConfig
-      val memos      = state.runtime.anchorWraps.lines.layoutMemos
-      val codeHeight =
-        TextLayoutSnapshot
-          .cellMetricsOf(FontLoader.previewFontForRole(fontConfig, TypographyRole.Code), memos)
-          .lineHeight
-      val bufferHeight =
-        TextLayoutSnapshot
-          .cellMetricsOf(FontLoader.previewFontForRole(fontConfig, buffer.typographyRole), memos)
-          .lineHeight
+      val codeHeight   = lineHeightOf(TypographyRole.Code)
+      val bufferHeight = lineHeightOf(buffer.typographyRole)
       math.max(1, visibleLines * codeHeight / math.max(1, bufferHeight))

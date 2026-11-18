@@ -6,6 +6,8 @@ import com.serenity.lsp.config.LanguageId
 import com.serenity.lsp.{DocumentDelta, LspEffect}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.layout.TextLayoutSnapshot
 
 /** State, effect interpretation, and candidate-buffer computation the event pipeline exposes for LSP document-change
   * synchronisation. `candidateLspBufferIds` stays owned by the pipeline (and its own spec) since it is shared with
@@ -87,8 +89,14 @@ private[manager] object LspDocumentSync:
     LspQueueEffect.Enqueue(LspEffect.FileOpened(uri, languageId, buffer.document.content))
 
   private def visibleRange(uri: String, languageId: LanguageId, buffer: Buffer, state: AppState): LspQueueEffect =
-    val lines = VisibleBufferLines.of(buffer, state)
+    val lines = VisibleBufferLines.of(buffer, state, lineHeightOf(state))
     LspQueueEffect.Enqueue(LspEffect.VisibleRangeChanged(uri, languageId, lines.first, lines.last))
+
+  /** The line height of the font each role is drawn in, as the owner's measurer sizes it. */
+  private def lineHeightOf(state: AppState): TypographyRole => Int =
+    val fontConfig = state.persisted.config.editorConfig.fontConfig
+    val memos      = state.runtime.anchorWraps.lines.layoutMemos
+    role => TextLayoutSnapshot.cellMetricsOf(FontLoader.previewFontForRole(fontConfig, role), memos).lineHeight
 
   def announceClosed(lspQueue: LspEffectQueue)(before: AppState, after: AppState): IO[Unit] =
     closedDocuments(before, after).traverse_(lspQueue.enqueue)
