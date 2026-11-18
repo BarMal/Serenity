@@ -14,8 +14,9 @@ import org.scalatest.matchers.should.Matchers
   */
 class SlantedFontMeasurementSpec extends AnyFlatSpec with Matchers with SkiaRowOracle:
 
-  private val upright = Font("Inter", Font.PLAIN, 13)
-  private val slanted = Font("Inter", Font.ITALIC, 13)
+  // The bundled Inter subset, which no machine needs to have installed and which has no italic of its own.
+  private val upright = BundledInterFont.plain(13f)
+  private val slanted = upright.deriveFont(Font.ITALIC)
 
   private val prose =
     "The quick brown fox jumps over the lazy dog, again and again, until the row finally has to wrap somewhere."
