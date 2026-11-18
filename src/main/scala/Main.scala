@@ -42,8 +42,8 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.InputSettings
-import com.serenity.ui.renderer.{BackendCaches, CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
-import com.serenity.ui.skia.{SkiaTextCaches, SkiaTextMeasurer}
+import com.serenity.ui.renderer.{CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
+import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
 import fs2.Stream
@@ -398,10 +398,7 @@ object Main extends IOApp:
     for
       smokeReady <- Deferred[IO, Unit]
       sharedSlots = new CacheSlots
-      displayState <- RuntimeDisplayState.create(
-        appConfig.editorConfig.fontConfig,
-        RuntimeDisplayState.skiaMetrics(SkiaTextCaches.typefacesOf(BackendCaches(sharedSlots)))
-      )
+      displayState <- RuntimeDisplayState.createSharing(appConfig.editorConfig.fontConfig, sharedSlots)
       initialDisplay = displayState.snapshot
       frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (

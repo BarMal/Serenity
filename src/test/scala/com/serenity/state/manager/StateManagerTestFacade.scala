@@ -12,8 +12,7 @@ import com.serenity.session.SessionManager
 import com.serenity.state.core.EditorState
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.{PanelContent, PanelPosition, PanelTarget, ViewportSize}
 import com.serenity.ui.presets.UiPresetStore

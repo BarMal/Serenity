@@ -16,8 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, Damage, Focus}
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

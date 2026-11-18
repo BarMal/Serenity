@@ -12,8 +12,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar}
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
-import com.serenity.testkit.TestMeasure
-import com.serenity.testkit.{AwaitCondition, SharedDictionary}
+import com.serenity.testkit.{AwaitCondition, SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager

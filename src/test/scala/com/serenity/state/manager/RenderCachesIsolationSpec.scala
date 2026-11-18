@@ -7,8 +7,7 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

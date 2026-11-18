@@ -17,8 +17,8 @@ import com.serenity.richtext.{
   RichTextStyle,
   RtfDocumentCodec
 }
-import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.DamageProducer
+import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, FrameMismatchDump, PresentAreas, TestMeasure}
 import com.serenity.ui.layout.{PixelRect, ViewportSize}

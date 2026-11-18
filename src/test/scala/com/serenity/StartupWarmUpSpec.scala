@@ -18,8 +18,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
-import com.serenity.testkit.TestMeasure
-import com.serenity.testkit.{HangBound, SharedDictionary}
+import com.serenity.testkit.{HangBound, SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec

@@ -11,8 +11,7 @@ import com.serenity.app.AppStartup
 import com.serenity.session.{SessionManager, SessionState, UnreadableReason, UnreadableSession}
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager

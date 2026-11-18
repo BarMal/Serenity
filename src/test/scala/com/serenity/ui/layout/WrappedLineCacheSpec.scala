@@ -1,8 +1,8 @@
 package com.serenity.ui.layout
 
+import java.awt.Font
 import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
-import java.awt.Font
 
 import com.serenity.richtext.{
   InlineMark,

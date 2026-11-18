@@ -1,11 +1,11 @@
 package com.serenity.state.manager
 
-import com.serenity.testkit.TestMeasure
 import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{LayoutEngine, ProseColumn, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers

@@ -17,8 +17,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, LspQueueEffect}
-import com.serenity.testkit.TestMeasure
-import com.serenity.testkit.{SharedDictionary, StateDifference, VirtualTime}
+import com.serenity.testkit.{SharedDictionary, StateDifference, TestMeasure, VirtualTime}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec

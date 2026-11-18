@@ -1,7 +1,6 @@
 package com.serenity.ui.skia
 
-import com.serenity.testkit.SdlNativeTest
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SdlNativeTest, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{BackendCaches, FontSpec, RenderSurface, ScreenIdentity}

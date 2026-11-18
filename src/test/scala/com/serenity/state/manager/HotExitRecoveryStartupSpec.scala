@@ -12,8 +12,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionInt
 import com.serenity.keystroke.events.{Direction, InsertChar, ModalNavigate, ModalSubmit}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.{StateManagerTestSupport, TestTemp}

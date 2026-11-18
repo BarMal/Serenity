@@ -7,8 +7,7 @@ import javax.swing.{JFrame, JPanel, SwingUtilities}
 
 import scala.annotation.tailrec
 
-import com.serenity.testkit.DisplayExclusive
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.FrameSurfaceRequest

@@ -1,12 +1,11 @@
 package com.serenity.state.manager
 
-import com.serenity.testkit.TestMeasure
 import com.serenity.config.{AppConfig, ConfigRegistry, LineNumberLayout, LineNumberSide}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.ConfigGenerators
+import com.serenity.testkit.{ConfigGenerators, TestMeasure}
 import com.serenity.ui.layout.{Layout, UiSceneSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.theme.DropCapColour
 import org.scalacheck.Gen

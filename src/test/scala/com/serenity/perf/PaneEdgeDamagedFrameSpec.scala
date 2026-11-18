@@ -7,8 +7,7 @@ import com.serenity.keystroke.events.{PageDown, ScrollDown}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, Damage}
-import com.serenity.testkit.MacOsSeamQuarantine
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{MacOsSeamQuarantine, TestMeasure}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

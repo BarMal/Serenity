@@ -6,8 +6,8 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.{Balance, Leaf}
-import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.DamageProducer
+import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec

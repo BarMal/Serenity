@@ -2,8 +2,7 @@ package com.serenity.ui.skia
 
 import java.util.concurrent.atomic.AtomicReference
 
-import com.serenity.testkit.SdlNativeTest
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SdlNativeTest, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{BackendCaches, FontSpec, RenderSurface, ScreenIdentity, SurfaceContentIdentity}

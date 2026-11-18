@@ -1,7 +1,6 @@
 package com.serenity.perf
 
-import com.serenity.testkit.ActivePane
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.layout.LayoutEngine
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec

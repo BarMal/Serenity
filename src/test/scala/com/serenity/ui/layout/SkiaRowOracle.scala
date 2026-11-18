@@ -4,8 +4,8 @@ import java.awt.Font
 
 import com.serenity.state.models.TextVisualLine
 import com.serenity.ui.renderer.FontSpec
-import org.jetbrains.skia.{FontFeature, TextLine}
 import org.jetbrains.skia.shaper.ShapingOptions
+import org.jetbrains.skia.{FontFeature, TextLine}
 import org.scalatest.Assertion
 import org.scalatest.matchers.should.Matchers
 

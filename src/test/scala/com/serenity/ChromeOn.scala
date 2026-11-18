@@ -5,8 +5,7 @@ import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
-import com.serenity.testkit.SharedDictionary
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import org.typelevel.log4cats.{Logger, LoggerFactory}
 
 /** The states and managers specs about line numbers, pane headers, the status bar and the tab strip start from:

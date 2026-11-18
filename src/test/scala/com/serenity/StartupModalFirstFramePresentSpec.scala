@@ -8,8 +8,7 @@ import com.serenity.app.{AppStartup, StartupRecovery}
 import com.serenity.config.{AppConfig, LayoutPin, WindowChromeMode}
 import com.serenity.diagnostics.{FramePhase, FrameTimings}
 import com.serenity.state.models.Damage
-import com.serenity.testkit.DisplayExclusive
-import com.serenity.testkit.TestMeasure
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay}
 import com.serenity.ui.skia.SkiaRasterSurfaceFactory

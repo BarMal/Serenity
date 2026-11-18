@@ -7,8 +7,8 @@ import cats.effect.IO
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.FontSpec
-import com.serenity.ui.skia.{SharedTypefaces, SkiaFontCache}
+import com.serenity.ui.renderer.{BackendCaches, CacheSlots, FontSpec}
+import com.serenity.ui.skia.{SharedTypefaces, SkiaFontCache, SkiaTextCaches}
 import org.typelevel.log4cats.Logger
 
 /** The fonts and cell metrics the renderer is currently drawing with.
@@ -78,15 +78,18 @@ object RuntimeDisplayState:
     def isValid: Boolean = codeMetrics.isValid && textMetrics.isValid && uiMetrics.isValid
 
   /** `metricsOf` sizes the grid of each font; by default the Skia measurer's, which is what layout measures with. The
-    * GUI passes [[skiaMetrics]] over the typefaces its windows share, so that the grid and the layout resolve a logical
-    * family to the same face.
+    * GUI uses [[createSharing]], so that the grid and the layout resolve a logical family to the same face.
     */
   def create(config: FontConfig, metricsOf: Font => CellMetrics = skiaMetrics(new SharedTypefaces()))(using
     logger: Logger[IO]
   ): IO[RuntimeDisplayState] =
     load(config, metricsOf).map(snapshot => new RuntimeDisplayState(new AtomicReference(snapshot), metricsOf))
 
-  def skiaMetrics(typefaces: SharedTypefaces): Font => CellMetrics =
+  /** As [[create]], with the grid sized over the typefaces the windows of `slots` share. */
+  def createSharing(config: FontConfig, slots: CacheSlots)(using logger: Logger[IO]): IO[RuntimeDisplayState] =
+    create(config, skiaMetrics(SkiaTextCaches.typefacesOf(BackendCaches(slots))))
+
+  private def skiaMetrics(typefaces: SharedTypefaces): Font => CellMetrics =
     val fonts = new SkiaFontCache(resolveTypeface = typefaces.typefaceFor)
     font => fonts.cellMetrics(FontSpec.fromAwt(font))
 

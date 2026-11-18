@@ -7,8 +7,8 @@ import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextMeasurer.LineFonts
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.TestBundledTypefaces
-import org.jetbrains.skia.{FontFeature, TextLine}
 import org.jetbrains.skia.shaper.ShapingOptions
+import org.jetbrains.skia.{FontFeature, TextLine}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 

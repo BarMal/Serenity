@@ -9,8 +9,7 @@ import cats.effect.{Deferred, IO}
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.createBuffer
-import com.serenity.testkit.TestMeasure
-import com.serenity.testkit.VirtualTime
+import com.serenity.testkit.{TestMeasure, VirtualTime}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec

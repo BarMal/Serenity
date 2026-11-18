@@ -6,8 +6,8 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.effect.unsafe.implicits.global
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
-import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.manager.DamageProducer
+import com.serenity.state.manager.StateManagerTestFacade.updateState
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{PanelPosition, ViewportSize}

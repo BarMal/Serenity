@@ -1,8 +1,8 @@
 package com.serenity.ui.skia
 
-import com.serenity.ui.fonts.FontLoader
 import java.awt.font.TextAttribute
 
+import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.TextMeasurer.{FontRun, LineFonts}
 import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec

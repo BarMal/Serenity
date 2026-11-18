@@ -15,8 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
-import com.serenity.testkit.TestMeasure
-import com.serenity.testkit.{SharedDictionary, SteppedClock}
+import com.serenity.testkit.{SharedDictionary, SteppedClock, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec

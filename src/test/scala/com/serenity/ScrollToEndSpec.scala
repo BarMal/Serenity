@@ -1,9 +1,9 @@
 package com.serenity
 
-import com.serenity.testkit.TestMeasure
 import com.serenity.keystroke.events.{ScrollDown, ScrollUp}
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextRowMetrics
 import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
