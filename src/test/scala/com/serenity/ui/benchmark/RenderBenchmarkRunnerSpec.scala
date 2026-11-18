@@ -2,7 +2,7 @@ package com.serenity.ui.benchmark
 
 import java.awt.{GraphicsEnvironment, Window}
 
-import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import com.serenity.ui.renderer.FrameSurfaceFactory
 import com.serenity.ui.skia.{LayerSurfaceFactory, SkiaRasterSurfaceFactory, SynchronousSkiaLayerSurfaceFactory}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -23,7 +23,9 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     startup: String = "",
     rasterFactory: Option[FrameSurfaceFactory] = None
   ): BenchmarkReport =
-    DisplayExclusive(RenderBenchmarkRunner.run(options, skiaFactory, skiaProbe, startup, rasterFactory))
+    DisplayExclusive(
+      RenderBenchmarkRunner.run(options, TestMeasure.layoutMeasurerFor, skiaFactory, skiaProbe, startup, rasterFactory)
+    )
 
   /** The report with every window still showing when the run is done, listed while the lock is still held, so none is
     * another spec's.
@@ -34,7 +36,7 @@ class RenderBenchmarkRunnerSpec extends AnyFlatSpec with Matchers:
     rasterFactory: Option[FrameSurfaceFactory] = None
   ): (BenchmarkReport, List[Window]) =
     DisplayExclusive.withShowingWindowsAfter(
-      RenderBenchmarkRunner.run(options, skiaFactory, Right(()), "", rasterFactory)
+      RenderBenchmarkRunner.run(options, TestMeasure.layoutMeasurerFor, skiaFactory, Right(()), "", rasterFactory)
     )
 
   private def withDisplay(): Unit =

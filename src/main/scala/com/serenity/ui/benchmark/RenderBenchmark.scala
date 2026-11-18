@@ -8,6 +8,8 @@ import java.time.format.DateTimeFormatter
 
 import cats.effect.{ExitCode, IO}
 import com.serenity.app.RenderBackendSelection.Probe
+import com.serenity.ui.layout.TextMeasurer
+import com.serenity.ui.renderer.BackendCaches
 import com.serenity.ui.skia.{SkiaProbe, SkiaRasterSurfaceFactory}
 
 /** `--render-benchmark`: runs the side-by-side timing, prints the report and keeps it as Markdown and JSON, without
@@ -22,6 +24,7 @@ object RenderBenchmark:
     options: RenderBenchmarkOptions,
     outputDirectory: Path,
     out: PrintStream,
+    measurerFor: BackendCaches => Option[TextMeasurer],
     startup: String = ""
   ): IO[ExitCode] =
     if GraphicsEnvironment.isHeadless then
@@ -33,6 +36,7 @@ object RenderBenchmark:
         report <- IO.blocking(
           RenderBenchmarkRunner.run(
             options,
+            measurerFor,
             skiaProbe = skiaProbe(probe),
             startup = startup,
             rasterFactory = Some(SkiaRasterSurfaceFactory)

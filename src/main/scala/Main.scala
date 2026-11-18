@@ -85,6 +85,7 @@ object Main extends IOApp:
                 _,
                 java.nio.file.Path.of("."),
                 System.out,
+                SkiaTextMeasurer.forLayout,
                 startup =
                   s"toolkit ${graphics.toolkit.choice} (${graphics.toolkit.reason}); ${graphics.backend.logLine}"
               )
@@ -556,7 +557,7 @@ object Main extends IOApp:
                   onPreferredWindowSizeChanged = size => IO.blocking(host.control.resizeToPreferred(size)),
                   fileDialog = Some(fileDialog),
                   scrollCounting = scrollCounting,
-                  layoutMeasurerFor = owner => Some(SkiaTextMeasurer.of(owner)),
+                  layoutMeasurerFor = SkiaTextMeasurer.forLayout,
                   sharedBackendCaches = sharedSlots
                 )
               ),

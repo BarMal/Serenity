@@ -525,6 +525,9 @@ object SkiaTextMeasurer:
       new SkiaTextMeasurer(caches.fonts, caches.shapedText)
     }
 
+  /** What a window's layout is wired to measure with: the measurer of the owner's own faces and stretches. */
+  def forLayout(owner: BackendCaches): Option[TextMeasurer] = Some(of(owner))
+
   private val DriftSample = "iiiiiiiiiiii"
 
   /** Positions of the same text shaped whole and in two parts that differ by less than this are the same positions. */
