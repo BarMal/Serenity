@@ -9,7 +9,6 @@ class OpeningsConfigSpec extends AnyFlatSpec with Matchers:
   private val keys = List(
     "openings.enabled",
     "openings.letter",
-    "openings.raised_row",
     "openings.hybrid_sink_lines",
     "openings.small_caps",
     "openings.epigraph",
@@ -45,7 +44,6 @@ class OpeningsConfigSpec extends AnyFlatSpec with Matchers:
     defaults shouldBe Map(
       "openings.enabled"           -> Some("false"),
       "openings.letter"            -> Some("drop"),
-      "openings.raised_row"        -> Some("grow"),
       "openings.hybrid_sink_lines" -> Some("2"),
       "openings.small_caps"        -> Some("false"),
       "openings.epigraph"          -> Some("auto"),
@@ -57,12 +55,10 @@ class OpeningsConfigSpec extends AnyFlatSpec with Matchers:
     AppConfig.default.openingsConfig.enabled shouldBe false
   }
 
-  it should "read every letter mode, raised-row behaviour and rule" in {
+  it should "read every letter mode and rule" in {
     read("openings.letter" -> "raised").letterMode shouldBe LetterMode.Raised
     read("openings.letter" -> "hybrid").letterMode shouldBe LetterMode.Hybrid
     read("openings.letter" -> "drop").letterMode shouldBe LetterMode.Drop
-    read("openings.raised_row" -> "clamp").raisedRow shouldBe RaisedRowRule.Clamp
-    read("openings.raised_row" -> "grow").raisedRow shouldBe RaisedRowRule.Grow
     read("openings.epigraph" -> "never").rules.epigraph shouldBe EpigraphRule.Never
     read("openings.epigraph" -> "marker").rules.epigraph shouldBe EpigraphRule.ExplicitOnly
     read("openings.epigraph" -> "auto").rules.epigraph shouldBe EpigraphRule.AutoDetect
@@ -97,7 +93,6 @@ class OpeningsConfigSpec extends AnyFlatSpec with Matchers:
   it should "refuse a value that names nothing" in
     List(
       "openings.letter"            -> "sideways",
-      "openings.raised_row"        -> "shrink",
       "openings.epigraph"          -> "sometimes",
       "openings.scene_break"       -> "ornate",
       "openings.hand_drop_cap"     -> "both",
@@ -113,7 +108,6 @@ class OpeningsConfigSpec extends AnyFlatSpec with Matchers:
       OpeningSettings(
         enabled = true,
         letterMode = LetterMode.Hybrid,
-        raisedRow = RaisedRowRule.Clamp,
         hybridSinkLines = 5,
         smallCapsFirstLine = true,
         epigraphMarker = "motto",

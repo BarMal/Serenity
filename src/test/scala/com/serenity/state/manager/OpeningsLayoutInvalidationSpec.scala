@@ -78,7 +78,6 @@ class OpeningsLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
 
     List(
       "letter"    -> configured(_.copy(letterMode = LetterMode.Raised)),
-      "raisedRow" -> configured(_.copy(raisedRow = RaisedRowRule.Clamp)),
       "sink"      -> configured(_.copy(hybridSinkLines = 4)),
       "smallCaps" -> configured(_.copy(smallCapsFirstLine = true)),
       "marker"    -> configured(_.copy(epigraphMarker = "motto")),
@@ -98,7 +97,6 @@ class OpeningsLayoutInvalidationSpec extends AnyFlatSpec with Matchers:
 
     List(
       "letter"    -> OpeningOverride(letterMode = Some(LetterMode.Hybrid)),
-      "raisedRow" -> OpeningOverride(raisedRow = Some(RaisedRowRule.Clamp)),
       "sink"      -> OpeningOverride(hybridSinkLines = Some(5)),
       "smallCaps" -> OpeningOverride(smallCapsFirstLine = Some(true)),
       "marker"    -> OpeningOverride(epigraphMarker = Some("motto")),

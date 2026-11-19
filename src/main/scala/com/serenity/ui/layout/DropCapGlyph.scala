@@ -15,9 +15,8 @@ import com.serenity.ui.theme.{RichTextStyling, TextStyle}
   * `baselinePx` and `heightPx` are measured down from the top of the first line. The height covers the room of the
   * lines the cap spans and anything the letter itself hangs below the last baseline, a `Q`'s tail or a `J`'s hook.
   *
-  * A rising letter whose row grows is fitted to one more line than it spans, so its capitals stand one line above those
-  * of the first line, and `growthPx` is how far its ink reaches above the top of the first line, which that line makes
-  * room for. One whose row does not grow is shrunk until its ink reaches no higher than the top of the first line.
+  * A rising letter is fitted to one more line than it spans, so its capitals stand one line above those of the first
+  * line, and `growthPx` is how far its ink reaches above the top of the first line, which that line makes room for.
   */
 final case class DropCapGlyph(
     text: String,
@@ -107,16 +106,14 @@ object DropCapGlyph:
       FontFirstUse.settle(font, key.frc)
       font
     val sizePx = key.shape match
-      case LetterShape.Drop         => sizeFor(key.lines)
-      case LetterShape.Rising(true) => sizeFor(key.lines + 1)
-      case LetterShape.Rising(false) =>
-        shrunkToFit(sizeFor(key.lines + 1), sizeFor(1), baselinePx, fontAt, key)
+      case LetterShape.Drop   => sizeFor(key.lines)
+      case LetterShape.Rising => sizeFor(key.lines + 1)
     val font       = fontAt(sizePx)
     val ink        = font.createGlyphVector(key.frc, key.text).getVisualBounds
     val hangPx     = math.ceil(ink.getMaxY).toInt.max(0)
     val inkRightPx = math.ceil(ink.getMaxX).toInt.max(0)
     val growthPx =
-      if key.shape == LetterShape.Rising(growsRow = true) then riseAbove(baselinePx, font, key.text, key.frc) else 0
+      if key.shape.rises then riseAbove(baselinePx, font, key.text, key.frc) else 0
     DropCapGlyph(
       key.text,
       key.text.length,
@@ -129,21 +126,6 @@ object DropCapGlyph:
       bodyFont.getSize2D,
       growthPx
     )
-
-  /** The largest size up to `tallestPx` at which the letter's capitals, or its ink if that goes higher, reach no higher
-    * above its baseline than `roomAboveBaselinePx`, the room from the top of the first row down to the baseline; never
-    * below `shortestPx`, the size at which its capitals are as tall as the body's.
-    */
-  private def shrunkToFit(
-    tallestPx: Float,
-    shortestPx: Float,
-    roomAboveBaselinePx: Int,
-    fontAt: Float => Font,
-    key: FitKey
-  ): Float =
-    val reachPx = aboveBaselinePx(fontAt(tallestPx), key.text, key.frc)
-    if reachPx <= roomAboveBaselinePx then tallestPx
-    else (tallestPx * roomAboveBaselinePx / reachPx).max(shortestPx)
 
   private def aboveBaselinePx(font: Font, text: String, frc: FontRenderContext): Int =
     val inkMinY = font.createGlyphVector(frc, text).getVisualBounds.getMinY
