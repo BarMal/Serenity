@@ -3,7 +3,7 @@
 # and commit this file with a line in the PR saying why the counts moved.
 first_frame.rows-drawn	52
 first_frame.rows-preserved	0
-first_frame.runs	93
+first_frame.runs	92
 first_frame.shapings	0
 first_frame.present-px	1481040
 first_frame.chrome-painted	1
@@ -27,7 +27,7 @@ scroll_1_line.present-px	1394424
 scroll_1_line.chrome-painted	1
 scroll_3_lines.rows-drawn	9
 scroll_3_lines.rows-preserved	43
-scroll_3_lines.runs	16
+scroll_3_lines.runs	17
 scroll_3_lines.shapings	0
 scroll_3_lines.present-px	1394424
 scroll_3_lines.chrome-painted	1
