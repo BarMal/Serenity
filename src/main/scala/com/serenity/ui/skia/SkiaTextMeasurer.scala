@@ -195,7 +195,8 @@ final class SkiaTextMeasurer(
   ): Unit =
     if chars.nonEmpty then
       val length        = chars.length
-      val nominalGlyphs = font.getStringGlyphs(chars)
+      // Surrogate-free, so each char is its own code point; Skiko's string overload builds them through a Kotlin sequence.
+      val nominalGlyphs = font.getUTF32Glyphs(chars.toCharArray.map(_.toInt))
       val nominal       = font.getWidths(nominalGlyphs)
       val shapedStretch = shaped(chars, font, 0.toByte)
       val clusters      = shapedStretch.clusters

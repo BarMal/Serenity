@@ -37,7 +37,20 @@ final case class FontSpec(
 
 object FontSpec:
 
+  /** The spec of `font`. A font does not change, and layout asks about the same few font instances over and over, so
+    * the last few read are kept by identity: reading a font's attributes builds a map each time.
+    */
   def fromAwt(font: Font): FontSpec =
+    val slot = System.identityHashCode(font) & (RecentlyRead.length() - 1)
+    Option(RecentlyRead.get(slot)).filter(_._1 eq font).map(_._2).getOrElse {
+      val spec = readFrom(font)
+      RecentlyRead.set(slot, (font, spec))
+      spec
+    }
+
+  private val RecentlyRead = new java.util.concurrent.atomic.AtomicReferenceArray[(Font, FontSpec)](16)
+
+  private def readFrom(font: Font): FontSpec =
     val attributes = font.getAttributes
     FontSpec(
       font.getFamily,
