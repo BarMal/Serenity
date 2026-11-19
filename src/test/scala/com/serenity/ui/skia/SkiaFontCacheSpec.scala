@@ -32,17 +32,14 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     cache.size shouldBe 1
   }
 
-  it should "choose a face by style alone for a spec made from data, which has no AWT advance to match" in {
-    val seen = new java.util.concurrent.atomic.AtomicReference[Option[SkiaTypefaces.TypefaceKey]](None)
-    val cache = new SkiaFontCache(resolveTypeface = key =>
-      seen.set(Some(key))
-      SkiaTypefaces.typefaceFor(key))
-    val spec = FontSpec(Font.SERIF, "Serif", 14f, false, false, false, false)()
-    val _    = cache.faceFor(spec)
-    seen.get().map(_.advance) shouldBe Some(None)
-    val read = FontSpec.fromAwt(serif(Font.PLAIN, 14))
-    val __   = cache.faceFor(read)
-    seen.get().flatMap(_.advance) should not be empty
+  it should "choose a face from the family and style alone, so a spec made from data and one read from AWT share it" in {
+    val resolver = new CountingResolver
+    val cache    = new SkiaFontCache(resolveTypeface = resolver(_))
+    val data     = FontSpec(Font.SERIF, "Serif", 14f, false, false, false, false)()
+    val read     = FontSpec.fromAwt(serif(Font.PLAIN, 14))
+
+    cache.faceFor(data).font.getTypeface.getUniqueId shouldBe cache.faceFor(read).font.getTypeface.getUniqueId
+    resolver.calls.get shouldBe 1
   }
 
   it should "look a typeface up once for fonts that choose their face from the same inputs" in {
@@ -59,13 +56,15 @@ final class SkiaFontCacheSpec extends AnyFlatSpec with Matchers:
     cache.size shouldBe 2
   }
 
-  it should "look a typeface up again for another size, which can choose another face" in {
+  it should "look a typeface up once for a family and style however many sizes it is used at" in {
     val resolver = new CountingResolver
     val cache    = new SkiaFontCache(resolveTypeface = resolver(_))
 
-    List(14, 16, 18).foreach(size => cache.faceFor(FontSpec.fromAwt(serif(Font.PLAIN, size))))
+    val faces = List(14, 16, 18).map(size => cache.faceFor(FontSpec.fromAwt(serif(Font.PLAIN, size))))
 
-    resolver.calls.get shouldBe 3
+    resolver.calls.get shouldBe 1
+    faces.map(_.font.getSize) shouldBe List(14.0f, 16.0f, 18.0f)
+    faces.map(_.font.getTypeface.getUniqueId).distinct should have size 1
   }
 
   it should "look a typeface up for each style of a family" in {

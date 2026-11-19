@@ -129,26 +129,12 @@ private[skia] object SkiaTypefaces:
   /** Whether a bundled face carries `family`, whatever the system holds. */
   def hasBundled(family: String): Boolean = Bundled.faces.exists(_.getFamilyName.equalsIgnoreCase(family))
 
-  /** Everything the choice of a face reads from a font: two fonts with the same key get the same typeface. `advance` is
-    * what AWT measures a probe string at, when the spec was read from an AWT font; without it the face is chosen by
-    * style alone.
+  /** Everything the choice of a face reads from a font: two fonts with the same key get the same typeface, at whatever
+    * size each is drawn.
     */
-  final case class TypefaceKey(
-      family: String,
-      bold: Boolean,
-      italic: Boolean,
-      size: Float,
-      advance: Option[Double]
-  )
+  final case class TypefaceKey(family: String, bold: Boolean, italic: Boolean)
 
-  def keyOf(spec: FontSpec): TypefaceKey =
-    TypefaceKey(
-      spec.family,
-      spec.bold,
-      spec.italic,
-      spec.sizePt.max(1.0f),
-      AwtFontReconciliation.referenceAdvance(spec)
-    )
+  def keyOf(spec: FontSpec): TypefaceKey = TypefaceKey(spec.family, spec.bold, spec.italic)
 
   def fontFor(spec: FontSpec): Font = fontFor(spec, typefaceFor)
 
@@ -157,7 +143,7 @@ private[skia] object SkiaTypefaces:
     val bold     = key.bold
     val italic   = key.italic
     val resolved = typefaceOf(key)
-    val font     = new Font(resolved, key.size)
+    val font     = new Font(resolved, spec.sizePt.max(1.0f))
     font.setSubpixel(true)
     font.setLinearMetrics(true)
     font.setHinting(FontHinting.NONE)
@@ -175,49 +161,37 @@ private[skia] object SkiaTypefaces:
   def physicalFamilyFor(logical: String, osName: String): Option[String] =
     LogicalFontFamilies.documentedFamily(logical, osName)
 
-  /** What AWT measured a probe string at, for choosing among the weights of a family the one that advances the same. */
-  final private case class Reference(size: Float, advance: Option[Double])
-
   def typefaceFor(key: TypefaceKey): Typeface =
-    typefaceFor(key.family, key.bold, key.italic, Reference(key.size, key.advance))
+    typefaceFor(key.family, key.bold, key.italic)
 
-  private def typefaceFor(family: String, bold: Boolean, italic: Boolean, reference: Reference): Typeface =
-    systemTypeface(family, bold, italic, reference)
-      .orElse(
-        physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic, reference))
-      )
+  private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
+    systemTypeface(family, bold, italic)
+      .orElse(physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic)))
       .orElse(bundledTypeface(family, bold, italic))
-      .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic, reference))
-      .orElse(systemTypeface("sans-serif", bold, italic, reference))
-      .orElse(anySystemTypeface(bold, italic, reference))
+      .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic))
+      .orElse(systemTypeface("sans-serif", bold, italic))
+      .orElse(anySystemTypeface(bold, italic))
       .getOrElse(Typeface.Companion.makeEmpty())
 
   /** The installed face of `family` closest to the requested style. `FontStyle` is a Kotlin value class as of Skiko
     * 0.153, so its factory methods carry compiler-mangled names that Scala cannot call stably; the style set's faces
     * report `isBold` and `isItalic` plainly.
     */
-  private def systemTypeface(family: String, bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
-    Option(FontMgr.Companion.getDefault().matchFamily(family)).flatMap(closest(_, bold, italic, reference))
+  private def systemTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
+    Option(FontMgr.Companion.getDefault().matchFamily(family)).flatMap(closest(_, bold, italic))
 
-  private def anySystemTypeface(bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
+  private def anySystemTypeface(bold: Boolean, italic: Boolean): Option[Typeface] =
     val manager = FontMgr.Companion.getDefault()
     (0 until manager.getFamiliesCount).iterator
-      .flatMap(index => Option(manager.makeStyleSet(index)).flatMap(closest(_, bold, italic, reference)))
+      .flatMap(index => Option(manager.makeStyleSet(index)).flatMap(closest(_, bold, italic)))
       .nextOption()
 
-  private def closest(set: FontStyleSet, bold: Boolean, italic: Boolean, reference: Reference): Option[Typeface] =
+  private def closest(set: FontStyleSet, bold: Boolean, italic: Boolean): Option[Typeface] =
     val candidates = (0 until set.count()).iterator
       .flatMap(index => Option(set.getTypeface(index)))
-      .map(face => FaceChoice.Candidate(face, face.isBold, face.isItalic, () => advanceOf(face, reference)))
+      .map(face => FaceChoice.Candidate(face, SkiaFontWeight.of(face), face.isItalic))
       .toVector
-    FaceChoice.choose(candidates, bold, italic, reference.advance)
-
-  private def advanceOf(face: Typeface, reference: Reference): Double =
-    val font = new Font(face, reference.size)
-    font.setSubpixel(true)
-    font.setLinearMetrics(true)
-    font.setHinting(FontHinting.NONE)
-    font.measureTextWidth(AwtFontReconciliation.MeasureProbe).toDouble
+    FaceChoice.choose(candidates, bold, italic)
 
   private def bundledTypeface(family: String, bold: Boolean, italic: Boolean): Option[Typeface] =
     val sameFamily = Bundled.faces.filter(_.getFamilyName.equalsIgnoreCase(family))
@@ -245,6 +219,24 @@ private[skia] object SkiaTypefaces:
         catch case _: Exception => None
         finally stream.close()
       }
+
+/** A face's weight, which Skiko hands out as part of a Kotlin value class under a name Scala cannot call stably. The
+  * weight is the low half of the packed style; without the accessor a face is regular or bold by its flag.
+  */
+private[skia] object SkiaFontWeight:
+
+  private val StyleOf: Option[MethodHandle] =
+    classOf[Typeface].getMethods
+      .find(m => m.getName.startsWith("getFontStyle-") && m.getParameterCount == 0 && m.getReturnType == classOf[Int])
+      .flatMap(method => Try(MethodHandles.publicLookup().unreflect(method)).toOption)
+
+  def of(face: Typeface): Int =
+    StyleOf
+      .flatMap { handle =>
+        val packed: Object = handle.invoke(face)
+        Option(packed).collect { case value: Integer => value.intValue & 0xffff }
+      }
+      .getOrElse(if face.isBold then FaceChoice.BoldWeight else FaceChoice.RegularWeight)
 
 /** Skia's vertical metrics of a font. Skiko hands its `FontMetrics` value class out as a float array under a name Scala
   * cannot call, in the order top, ascent, descent, bottom, leading.

@@ -57,7 +57,7 @@ class TextMeasurerParitySpec extends AnyFlatSpec with Matchers:
     val directory = Paths.get("target", "test-reports", "text-measure-parity")
     val header = List(
       s"JDK ${System.getProperty("java.version")}, ${System.getProperty("os.name")} ${System.getProperty("os.arch")}",
-      "Typeface selection is still reconciled to AWT (`SkiaTypefaces.keyOf`), so a Skia number here is Skia shaping on the typeface AWT's advance picks",
+      "Typeface selection is Skia's own style matching (`FaceChoice`), so a Skia number here is Skia shaping on the face Skia picks for the weight",
       "The Inter subset is resolved to its own bytes (`TestBundledTypefaces`): it is an AWT-only test font that Skia would not find on a host without Inter installed",
       "Compared: cell metrics, the measured-layout decision, carets of one unwrapped row and one-row line heights",
       "Not compared before layout runs through the measurer (step D): wrap points, row counts, tabs, wide and emoji clusters, right-to-left carets"
