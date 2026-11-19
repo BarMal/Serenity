@@ -5,8 +5,8 @@ import org.scalatest.matchers.should.Matchers
 
 class FaceChoiceSpec extends AnyFlatSpec with Matchers:
 
-  private def face(name: String, weight: Int, italic: Boolean = false) =
-    FaceChoice.Candidate(name, weight, italic)
+  private def face(name: String, weight: Int, italic: Boolean = false, family: String = "Inter") =
+    FaceChoice.Candidate(name, weight, italic, family)
 
   private val inter = Vector(
     face("Black", 900),
@@ -60,4 +60,23 @@ class FaceChoiceSpec extends AnyFlatSpec with Matchers:
 
   it should "choose nothing from no candidates" in {
     FaceChoice.choose(Vector.empty[FaceChoice.Candidate[String]], bold = false, italic = false) shouldBe None
+  }
+
+  it should "draw the family listed first, not whichever family has a face of the weight nearest to the one asked for" in {
+    val generic = Vector(
+      face("Inter Medium", 500, family = "Inter"),
+      face("Inter Bold", 700, family = "Inter"),
+      face("Gothic Regular", 400, family = "Gothic")
+    )
+    FaceChoice.choose(generic, bold = false, italic = false) shouldBe Some("Inter Medium")
+    FaceChoice.choose(generic, bold = true, italic = false) shouldBe Some("Inter Bold")
+  }
+
+  it should "take an italic face from a later family when the first has none" in {
+    val generic = Vector(
+      face("Serif Regular", 400, family = "Serif"),
+      face("Free Regular", 400, family = "Free"),
+      face("Free Italic", 400, italic = true, family = "Free")
+    )
+    FaceChoice.choose(generic, bold = false, italic = true) shouldBe Some("Free Italic")
   }

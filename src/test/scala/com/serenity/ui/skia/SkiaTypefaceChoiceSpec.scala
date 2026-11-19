@@ -42,3 +42,20 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
       val oracle = skiaMatch(set, if bold then 700 else 400, if italic then Italic else 0)
       withClue(s"chosen ${describe(chosen)}, Skia matches ${describe(oracle)}: ")(describe(chosen) shouldBe describe(oracle))
     }
+
+  private val logicalFamilies = List(
+    Font.SANS_SERIF -> "sans-serif",
+    Font.DIALOG     -> "sans-serif",
+    Font.SERIF      -> "serif",
+    Font.MONOSPACED -> "monospace"
+  )
+
+  for (logical, generic) <- logicalFamilies; (label, bold) <- List(("plain", false), ("bold", true)) do
+    s"A $label $logical font" should "be drawn in the family the font manager lists first for the generic name" in {
+      val set = FontMgr.Companion.getDefault().matchFamily(generic)
+      assume(set != null && set.count() > 0, s"$generic is not a family name of this machine's font manager")
+      val best   = Option(set.getTypeface(0)).map(_.getFamilyName)
+      val spec   = FontSpec.fromAwt(new Font(logical, if bold then Font.BOLD else Font.PLAIN, 14))
+      val chosen = SkiaTypefaces.fontFor(spec).getTypeface.getFamilyName
+      Option(chosen) shouldBe best
+    }

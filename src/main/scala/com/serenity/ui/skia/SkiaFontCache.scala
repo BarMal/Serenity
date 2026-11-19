@@ -164,11 +164,16 @@ private[skia] object SkiaTypefaces:
   def typefaceFor(key: TypefaceKey): Typeface =
     typefaceFor(key.family, key.bold, key.italic)
 
+  /** A logical family is the platform's documented family where the JDK documents one, else the font manager's best
+    * family for its generic name (fontconfig knows `sans-serif`, not `SansSerif`, and answers an unknown name with
+    * whatever covers the most scripts); any other family is looked up by its own name.
+    */
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
-    systemTypeface(family, bold, italic)
-      .orElse(physicalFamilyFor(family, System.getProperty("os.name", "")).flatMap(systemTypeface(_, bold, italic)))
+    physicalFamilyFor(family, System.getProperty("os.name", ""))
+      .flatMap(systemTypeface(_, bold, italic))
+      .orElse(LogicalFamilies.get(family.toLowerCase).flatMap(systemTypeface(_, bold, italic)))
+      .orElse(systemTypeface(family, bold, italic))
       .orElse(bundledTypeface(family, bold, italic))
-      .orElse(systemTypeface(LogicalFamilies.getOrElse(family.toLowerCase, family), bold, italic))
       .orElse(systemTypeface("sans-serif", bold, italic))
       .orElse(anySystemTypeface(bold, italic))
       .getOrElse(Typeface.Companion.makeEmpty())
@@ -189,7 +194,7 @@ private[skia] object SkiaTypefaces:
   private def closest(set: FontStyleSet, bold: Boolean, italic: Boolean): Option[Typeface] =
     val candidates = (0 until set.count()).iterator
       .flatMap(index => Option(set.getTypeface(index)))
-      .map(face => FaceChoice.Candidate(face, SkiaFontWeight.of(face), face.isItalic))
+      .map(face => FaceChoice.Candidate(face, SkiaFontWeight.of(face), face.isItalic, face.getFamilyName))
       .toVector
     FaceChoice.choose(candidates, bold, italic)
 
