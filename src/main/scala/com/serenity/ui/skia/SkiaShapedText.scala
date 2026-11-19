@@ -439,6 +439,11 @@ final private class GlyphCollector extends RunHandler:
   lazy val levels: Array[Byte]  = glyphLevels.result()
   lazy val clusters: Array[Int] = glyphCluster.result()
 
+  /** What the shaping came to, without the builders that gathered it: a builder keeps the over-sized buffer it grew
+    * into, so a collector held in a memo holds every glyph twice.
+    */
+  def frozen: ShapedGlyphs = ShapedGlyphs(glyphs, xs, ys, levels, clusters, width)
+
   def beginLine(): Unit               = ()
   def runInfo(info: RunInfo): Unit    = ()
   def commitRunInfo(): Unit           = ()
@@ -454,3 +459,13 @@ final private class GlyphCollector extends RunHandler:
     glyphCluster.addAll(runClusters)
     runGlyphs.foreach(_ => glyphLevels.addOne(info.getBidiLevel.toByte))
     penX(0) += info.getAdvanceX
+
+/** One shaping's glyphs, their positions, bidi levels and source clusters, and its advance. */
+final private[skia] case class ShapedGlyphs(
+  glyphs: Array[Short],
+  xs: Array[Float],
+  ys: Array[Float],
+  levels: Array[Byte],
+  clusters: Array[Int],
+  width: Float
+)

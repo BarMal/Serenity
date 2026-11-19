@@ -441,7 +441,7 @@ final class SkiaTextMeasurer(
   /** The shaping of `text` in `font`, made once however many windows ask for it: what a shaping holds is JVM arrays, so
     * keeping them costs no native memory. Long text and an over-full cache are shaped afresh, so it stays bounded.
     */
-  private def shaped(text: String, font: Font, level: Byte): GlyphCollector =
+  private def shaped(text: String, font: Font, level: Byte): ShapedGlyphs =
     if text.length > MaxCachedChars then shapeNow(text, font, level)
     else
       val key = ShapedKey(text, font, level)
@@ -452,9 +452,9 @@ final class SkiaTextMeasurer(
         collector
       }
 
-  private val shapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, GlyphCollector]()
+  private val shapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, ShapedGlyphs]()
 
-  private def shapeNow(text: String, font: Font, level: Byte): GlyphCollector =
+  private def shapeNow(text: String, font: Font, level: Byte): ShapedGlyphs =
     val collector = new GlyphCollector()
     // One run in the one font, as the draw path shapes Latin text (`shapeLatin`). The overload that finds the runs
     // itself builds ICU and font fallback iterators on every call, milliseconds however short the text, and resolves a
@@ -481,7 +481,7 @@ final class SkiaTextMeasurer(
         )
       finally managed.close()
     }
-    collector
+    collector.frozen
 
 object SkiaTextMeasurer:
 
