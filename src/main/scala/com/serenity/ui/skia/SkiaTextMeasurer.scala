@@ -135,13 +135,27 @@ final class SkiaTextMeasurer(
     startColumn: Int,
     fonts: LineFonts
   ): GlyphAdvances =
+    val base = startColumn + from
+    val runs = fontsOver(fonts, base, startColumn + until)
+    val key = AdvancesKey(
+      text.substring(from, until),
+      runs.map(run => FontRun(run.startColumn - base, run.endColumn - base, run.font))
+    )
+    advanceMemo.getOrCompute(key)(measureAdvances(text, from, until, base, runs))
+
+  /** What a paragraph's advances come to does not depend on the width it is wrapped at, so every wrap of it, at any
+    * width, reads the measurement the first made for as long as any of them holds it.
+    */
+  private val advanceMemo = new WeakMemo[AdvancesKey, GlyphAdvances]()
+
+  private def measureAdvances(text: String, from: Int, until: Int, base: Int, runs: Vector[FontRun]): GlyphAdvances =
     val count      = until - from
     val advances   = new Array[Float](count)
     val kernAfter  = new Array[Float](count)
     val measurable = new Array[Boolean](count)
-    fontsOver(fonts, startColumn + from, startColumn + until).foreach { run =>
-      val start = run.startColumn - (startColumn + from)
-      val end   = run.endColumn - (startColumn + from)
+    runs.foreach { run =>
+      val start = run.startColumn - base
+      val end   = run.endColumn - base
       measureRun(text.substring(from + start, from + end), skia(run.font), start, advances, kernAfter, measurable)
     }
     val contextFree = contextFreeOf(measurable, kernAfter)
@@ -529,12 +543,17 @@ final class SkiaTextMeasurer(
       val key = ShapedKey(text, font, level)
       Option(shapings.get(key)).getOrElse {
         val collector = shapeNow(text, font, level)
-        if shapings.size >= MaxCachedShapings then shapings.clear()
-        val _ = shapings.put(key, collector)
+        if shapings.size >= MaxCachedShapings || shapedChars.get + text.length > MaxCachedShapingChars then
+          shapings.clear()
+          shapedChars.set(0L)
+        if Option(shapings.put(key, collector)).isEmpty then
+          val _ = shapedChars.addAndGet(text.length.toLong)
         collector
       }
 
   private val shapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, ShapedGlyphs]()
+
+  private val shapedChars = new java.util.concurrent.atomic.AtomicLong(0L)
 
   private def shapeNow(text: String, font: Font, level: Byte): ShapedGlyphs =
     val collector = new GlyphCollector()
@@ -587,6 +606,12 @@ object SkiaTextMeasurer:
 
   private val MaxCachedShapings = 4096
 
+  /** Characters of text whose shapings are kept before the memo starts again. What a wrap needs of a paragraph is read
+    * once into its advances, which the wrap keeps, so what this holds beyond the text being worked on is resident for
+    * little.
+    */
+  private[skia] val MaxCachedShapingChars = 49152
+
   private val MaxCachedDrawn = 32768
 
   final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
@@ -594,6 +619,8 @@ object SkiaTextMeasurer:
   final private case class PairKey(font: Font, first: Char, second: Char)
 
   final private case class CutKey(text: String, cut: Int, font: Font)
+
+  final private case class AdvancesKey(text: String, runs: Vector[FontRun])
 
   /** Texts longer than a cut's few characters of context are decided afresh. */
   private val MaxCachedCutChars = 64
