@@ -19,12 +19,14 @@ import org.jetbrains.skia.{Font, ManagedString, Paint}
 final class SkiaTextMeasurer(
     faces: SkiaFontCache,
     stretches: SkiaShapedTextCache,
-    bidiFallbacks: FallbackFonts = FallbackFonts.systemByFamily
+    bidiFallbacks: FallbackFonts = FallbackFonts.systemByFamily,
+    memos: ShapingMemos = new ShapingMemos()
 ) extends TextMeasurer:
 
   def this(faces: SkiaFontCache) = this(faces, new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf))
 
   import SkiaTextMeasurer.*
+  import ShapingMemos.{AdvancesKey, CutKey, PairKey, ShapedKey}
 
   private val shaperLock = new Object
   private val shapingN   = new java.util.concurrent.atomic.AtomicLong(0)
@@ -141,13 +143,10 @@ final class SkiaTextMeasurer(
       text.substring(from, until),
       runs.map(run => FontRun(run.startColumn - base, run.endColumn - base, run.font))
     )
-    advanceMemo.getOrCompute(key)(measureAdvances(text, from, until, base, runs))
+    memos.advances.getOrCompute(key)(measureAdvances(text, from, until, base, runs))
 
-  /** What a paragraph's advances come to does not depend on the width it is wrapped at, so every wrap of it, at any
-    * width, reads the measurement the first made for as long as any of them holds it.
-    */
-  private val advanceMemo = new WeakMemo[AdvancesKey, GlyphAdvances]()
-
+  // What a paragraph's advances come to does not depend on the width it is wrapped at, so every wrap of it, at any
+  // width, reads the measurement the first made for as long as any of them holds it.
   private def measureAdvances(text: String, from: Int, until: Int, base: Int, runs: Vector[FontRun]): GlyphAdvances =
     val count      = until - from
     val advances   = new Array[Float](count)
@@ -310,10 +309,10 @@ final class SkiaTextMeasurer(
     * width read off a long run carries rounding that differs from run to run.
     */
   private def pairKerning(font: Font, first: Char, second: Char): Float =
-    if pairs.size >= MaxPairs then pairs.clear()
-    pairs
+    if memos.pairs.size >= MaxPairs then memos.pairs.clear()
+    memos.pairs
       .computeIfAbsent(
-        PairKey(font, first, second),
+        PairKey(faces.shapingKeyOf(font), first, second),
         _ =>
           val text      = s"$first$second"
           val collector = shaped(text, font, 0.toByte)
@@ -325,8 +324,6 @@ final class SkiaTextMeasurer(
           java.lang.Float.valueOf(kerning)
       )
       .floatValue
-
-  private val pairs = new java.util.concurrent.ConcurrentHashMap[PairKey, java.lang.Float]()
 
   private def contextFreeOf(measurable: Array[Boolean], kernAfter: Array[Float]): Array[Boolean] =
     val flags = new Array[Boolean](measurable.length)
@@ -350,11 +347,11 @@ final class SkiaTextMeasurer(
     !splitsCluster && {
       if text.length > MaxCachedCutChars then shapingCutHolds(text, cut, font)
       else
-        val key = CutKey(text, cut, font)
-        Option(cutDecisions.get(key)).map(_.booleanValue).getOrElse {
+        val key = CutKey(text, cut, faces.shapingKeyOf(font))
+        Option(memos.cuts.get(key)).map(_.booleanValue).getOrElse {
           val decision = shapingCutHolds(text, cut, font)
-          if cutDecisions.size >= MaxCachedCuts then cutDecisions.clear()
-          val _ = cutDecisions.put(key, java.lang.Boolean.valueOf(decision))
+          if memos.cuts.size >= MaxCachedCuts then memos.cuts.clear()
+          val _ = memos.cuts.put(key, java.lang.Boolean.valueOf(decision))
           decision
         }
     }
@@ -363,8 +360,6 @@ final class SkiaTextMeasurer(
     * recur across a document, so the three shapings a decision costs are made once and, being of no use to anything
     * else, not kept.
     */
-  private val cutDecisions = new java.util.concurrent.ConcurrentHashMap[CutKey, java.lang.Boolean]()
-
   private def shapingCutHolds(text: String, cut: Int, font: Font): Boolean =
     val whole = shaped(text, font, 0.toByte)
     val head  = shapeNow(text.substring(0, cut), font, 0.toByte)
@@ -516,15 +511,13 @@ final class SkiaTextMeasurer(
   private def drawnOrigins(text: String, font: Font): (Array[Float], Float) =
     if text.length > MaxCachedChars then shapedByDrawing(text, font)
     else
-      val key = ShapedKey(text, font, 0.toByte)
-      Option(drawnShapings.get(key)).getOrElse {
+      val key = ShapedKey(text, faces.shapingKeyOf(font), 0.toByte)
+      Option(memos.drawn.get(key)).getOrElse {
         val origins = shapedByDrawing(text, font)
-        if drawnShapings.size >= MaxCachedDrawn then drawnShapings.clear()
-        val _ = drawnShapings.put(key, origins)
+        if memos.drawn.size >= MaxCachedDrawn then memos.drawn.clear()
+        val _ = memos.drawn.put(key, origins)
         origins
       }
-
-  private val drawnShapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, (Array[Float], Float)]()
 
   private def shapedByDrawing(text: String, font: Font): (Array[Float], Float) =
     val edges = stretches.reading(text, font)(stretch =>
@@ -541,20 +534,16 @@ final class SkiaTextMeasurer(
   private def shaped(text: String, font: Font, level: Byte): ShapedGlyphs =
     if text.length > MaxCachedChars then shapeNow(text, font, level)
     else
-      val key = ShapedKey(text, font, level)
-      Option(shapings.get(key)).getOrElse {
+      val key = ShapedKey(text, faces.shapingKeyOf(font), level)
+      Option(memos.shapings.get(key)).getOrElse {
         val collector = shapeNow(text, font, level)
-        if shapings.size >= MaxCachedShapings || shapedChars.get + text.length > MaxCachedShapingChars then
-          shapings.clear()
-          shapedChars.set(0L)
-        if Option(shapings.put(key, collector)).isEmpty then
-          val _ = shapedChars.addAndGet(text.length.toLong)
+        if memos.shapings.size >= MaxCachedShapings || memos.shapedChars.get + text.length > MaxCachedShapingChars then
+          memos.shapings.clear()
+          memos.shapedChars.set(0L)
+        if Option(memos.shapings.put(key, collector)).isEmpty then
+          val _ = memos.shapedChars.addAndGet(text.length.toLong)
         collector
       }
-
-  private val shapings = new java.util.concurrent.ConcurrentHashMap[ShapedKey, ShapedGlyphs]()
-
-  private val shapedChars = new java.util.concurrent.atomic.AtomicLong(0L)
 
   private def shapeNow(text: String, font: Font, level: Byte): ShapedGlyphs =
     val collector = new GlyphCollector()
@@ -601,8 +590,6 @@ object SkiaTextMeasurer:
     glyph != MissingGlyph || Character.isISOControl(char) || Character.isWhitespace(char) ||
       Character.isSpaceChar(char)
 
-  final private case class ShapedKey(text: String, font: Font, level: Byte)
-
   private val MaxCachedChars = 4096
 
   private val MaxCachedShapings = 4096
@@ -617,11 +604,6 @@ object SkiaTextMeasurer:
 
   final private case class ShapedOrigins(starts: Array[Float], end: Float, pulls: Array[Float])
 
-  final private case class PairKey(font: Font, first: Char, second: Char)
-
-  final private case class CutKey(text: String, cut: Int, font: Font)
-
-  final private case class AdvancesKey(text: String, runs: Vector[FontRun])
 
   /** Texts longer than a cut's few characters of context are decided afresh. */
   private val MaxCachedCutChars = 64
@@ -639,7 +621,7 @@ object SkiaTextMeasurer:
   def of(owner: BackendCaches): SkiaTextMeasurer =
     owner.getOrCreate(Key) {
       val caches = SkiaTextCaches.of(owner)
-      new SkiaTextMeasurer(caches.fonts, caches.shapedText)
+      new SkiaTextMeasurer(caches.fonts, caches.shapedText, memos = SkiaTextCaches.shapingsOf(owner))
     }
 
   /** What a window's layout is wired to measure with: the measurer of the owner's own faces and stretches. */

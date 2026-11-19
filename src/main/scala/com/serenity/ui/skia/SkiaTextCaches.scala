@@ -50,6 +50,10 @@ object SkiaTextCaches:
   def typefacesOf(owner: BackendCaches): SharedTypefaces =
     owner.shared.getOrCreate(SharedTypefaces.Key)(new SharedTypefaces())
 
+  /** What shaping has come to, for every owner built over `owner`'s shared slots. */
+  private[skia] def shapingsOf(owner: BackendCaches): ShapingMemos =
+    owner.shared.getOrCreate(ShapingMemos.Key)(new ShapingMemos())
+
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 
   /** Gives `into` what a new document leaves of `from`'s caches: the faces stay, since they depend on the fonts and not
