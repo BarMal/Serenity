@@ -442,7 +442,7 @@ final private class GlyphCollector extends RunHandler:
   /** What the shaping came to, without the builders that gathered it: a builder keeps the over-sized buffer it grew
     * into, so a collector held in a memo holds every glyph twice.
     */
-  def frozen: ShapedGlyphs = ShapedGlyphs(glyphs, xs, ys, levels, clusters, width)
+  def frozen: ShapedGlyphs = ShapedGlyphs.of(glyphs, xs, ys, levels, clusters, width)
 
   def beginLine(): Unit               = ()
   def runInfo(info: RunInfo): Unit    = ()
@@ -460,12 +460,43 @@ final private class GlyphCollector extends RunHandler:
     runGlyphs.foreach(_ => glyphLevels.addOne(info.getBidiLevel.toByte))
     penX(0) += info.getAdvanceX
 
-/** One shaping's glyphs, their positions, bidi levels and source clusters, and its advance. */
+/** One shaping's glyphs, their x positions and source clusters, and its advance. A y offset or bidi level that is the
+  * same for every glyph, as it is for almost all text, is not held per glyph: `offsets` and `mixedLevels` are empty
+  * then.
+  */
 final private[skia] case class ShapedGlyphs(
   glyphs: Array[Short],
   xs: Array[Float],
-  ys: Array[Float],
-  levels: Array[Byte],
   clusters: Array[Int],
-  width: Float
-)
+  width: Float,
+  offsets: Array[Float],
+  mixedLevels: Array[Byte],
+  level: Byte
+):
+
+  def yOf(glyph: Int): Float     = if offsets.isEmpty then 0.0f else offsets(glyph)
+  def levelOf(glyph: Int): Byte = if mixedLevels.isEmpty then level else mixedLevels(glyph)
+
+private[skia] object ShapedGlyphs:
+
+  private val NoOffsets = new Array[Float](0)
+  private val NoLevels  = new Array[Byte](0)
+
+  def of(
+    glyphs: Array[Short],
+    xs: Array[Float],
+    ys: Array[Float],
+    levels: Array[Byte],
+    clusters: Array[Int],
+    width: Float
+  ): ShapedGlyphs =
+    val level = levels.headOption.getOrElse(0.toByte)
+    ShapedGlyphs(
+      glyphs,
+      xs,
+      clusters,
+      width,
+      if ys.forall(_ == 0.0f) then NoOffsets else ys,
+      if levels.forall(_ == level) then NoLevels else levels,
+      level
+    )

@@ -84,7 +84,7 @@ final class SkiaTextMeasurer(
         level,
         IArray.from(glyphs.map(_.toInt)),
         IArray.from(collector.xs :+ collector.width),
-        IArray.from(collector.ys :+ 0.0f),
+        IArray.from(Array.tabulate(glyphs.length)(collector.yOf) :+ 0.0f),
         IArray.from(collector.clusters)
       )
 
@@ -405,7 +405,7 @@ final class SkiaTextMeasurer(
     collector.clusters.indices.foreach { glyph =>
       val cluster = collector.clusters(glyph)
       if cluster >= 0 && cluster < text.length then
-        val rightToLeft = collector.levels(glyph) % 2 == 1
+        val rightToLeft = collector.levelOf(glyph) % 2 == 1
         val edge        = if rightToLeft then collector.xs(glyph) + nominal(glyph) else collector.xs(glyph)
         val keep = starts(cluster).isNaN || (if rightToLeft then edge > starts(cluster) else edge < starts(cluster))
         if keep then starts(cluster) = edge

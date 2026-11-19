@@ -34,3 +34,24 @@ class SkiaShapingMemoSpec extends AnyFlatSpec with Matchers:
       withClue(s"${entry.getClass.getSimpleName} holds ${heavy.mkString(", ")}: ")(heavy shouldBe empty)
     }
   }
+
+  it should "hold no y offsets or levels per glyph for left-to-right text, and its levels for mixed text" in {
+    val plain = "Left to right only, with nothing to tell apart."
+    val mixed = "abc \u05e9\u05dc\u05d5\u05dd def"
+    val _     = (measurer.exactCaretXs(plain, 0, fonts), measurer.exactCaretXs(mixed, 0, fonts))
+
+    def length(entry: AnyRef, name: String): Int =
+      val field = entry.getClass.getDeclaredFields.find(_.getName == name).get
+      field.setAccessible(true)
+      java.lang.reflect.Array.getLength(field.get(entry))
+
+    val byText = memoOf(measurer).entrySet.toArray.toVector.map { entry =>
+      val pair = entry.asInstanceOf[java.util.Map.Entry[AnyRef, AnyRef]]
+      val key  = pair.getKey.asInstanceOf[Product].productElement(0).asInstanceOf[String]
+      key -> pair.getValue
+    }.toMap
+
+    length(byText(plain), "offsets") shouldBe 0
+    length(byText(plain), "mixedLevels") shouldBe 0
+    length(byText(mixed), "mixedLevels") should be > 0
+  }
