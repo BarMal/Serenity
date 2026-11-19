@@ -5,9 +5,11 @@ import java.io.PrintStream
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO}
+import cats.syntax.all.*
 import com.serenity.app.RendererChoice.Candidate
 import com.serenity.app.RendererTrialChild.Setup
 import com.serenity.app.RendererWorkload.{Plan, Step, Window}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.WindowHost
 import com.serenity.ui.terminal.SwingWindowHost
@@ -25,8 +27,24 @@ object RendererTrialLaunch:
 
   private val ResolutionSamples = 50
 
-  /** The start-up's safe-mode notice closes with a short animation; the trial waits for it. */
-  private val NoticeSettle = 500.millis
+  /** The start-up's safe-mode notice closes with a short animation, and a window sized up is laid out again: the trial
+    * waits until what it will watch has stayed the same for this long, looking at it this often, for at most the cap.
+    */
+  private val QuietFor  = 300.millis
+  private val QuietPoll = 50.millis
+  private val QuietCap  = 5.seconds
+
+  /** What sizing a window up to the screen may take, beyond the step timeout, before the trial gives up on it. */
+  private val FitAllowance = 5.seconds
+
+  /** Waits for the regions the workload watches first to stop changing, so nothing but the trial's own steps does it.
+    */
+  private def quietScreen(driver: SwingTrialDriver, screen: IO[PixelClock.Screen]): IO[Unit] =
+    for
+      grabbing <- screen
+      regions  <- List(Step.Type('a'), Step.PageDown).traverse(driver.watchedFor)
+      _        <- PixelClock.quiet(grabbing, regions, QuietFor, QuietPoll, QuietCap)
+    yield ()
 
   def firstFrame(
     options: LaunchOptions,
@@ -36,10 +54,11 @@ object RendererTrialLaunch:
     out: PrintStream = System.out,
     plan: Plan = Plan.standard,
     stepTimeout: FiniteDuration = StepTimeout,
-    warmUp: FiniteDuration = WarmUp
+    warmUp: FiniteDuration = WarmUp,
+    frameTimings: FrameTimings = FrameTimings()
   ): IO[Unit] =
     options.rendererTrial.fold(IO.unit)(candidate =>
-      (IO.sleep(warmUp) *> setup(candidate, host, backendKey, plan, stepTimeout).flatMap(
+      (IO.sleep(warmUp) *> setup(candidate, host, backendKey, plan, stepTimeout, frameTimings).flatMap(
         RendererTrialChild.run(_, quit, out)
       )).start.void
     )
@@ -49,7 +68,8 @@ object RendererTrialLaunch:
     host: WindowHost,
     backendKey: String,
     plan: Plan,
-    stepTimeout: FiniteDuration
+    stepTimeout: FiniteDuration,
+    frameTimings: FrameTimings
   ): IO[Setup] =
     host match
       case swing: SwingWindowHost =>
@@ -68,12 +88,22 @@ object RendererTrialLaunch:
                 quickest <- PixelClock.resolution(grabbing, region, ResolutionSamples)
               yield quickest,
               scale = DisplayScale.forComponent(swing.window.canvas).x,
+              canvasPixels = IO {
+                val canvas = swing.window.canvas
+                val scale  = DisplayScale.forComponent(canvas)
+                (canvas.getWidth * scale.x).round * (canvas.getHeight * scale.y).round
+              },
               backendKey = backendKey,
               renderApi = IO(swing.window.layerPresenter.map(_.renderApi)),
+              device = IO(swing.window.layerPresenter.flatMap(_.deviceName)),
               timeout = RendererTrialChild.Timeout,
-              prepare = driver.dismissNotices *> IO.sleep(NoticeSettle),
-              prepareTimeout = stepTimeout + NoticeSettle,
-              progress = line => logger.info(line)
+              prepare = driver.dismissNotices *> driver.fitToScreen *> quietScreen(driver, screen),
+              prepareTimeout = stepTimeout + QuietCap + FitAllowance,
+              progress = line => logger.info(line),
+              inApp = Some(
+                IO { frameTimings.keyLatency.setEnabled(true); frameTimings.setEnabled(true) }
+                  .as(InAppTrialWindow(driver, frameTimings, stepTimeout))
+              )
             )
         }
       case _ =>

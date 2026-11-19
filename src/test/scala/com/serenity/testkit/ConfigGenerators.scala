@@ -15,7 +15,6 @@ import com.serenity.ui.openings.{
   LetterMode,
   OpeningRules,
   OpeningSettings,
-  RaisedRowRule,
   SceneBreakRule
 }
 import com.serenity.ui.theme.{DropCapColour, HeadingColour, HeadingStyle}
@@ -189,14 +188,13 @@ object ConfigGenerators:
     for
       enabled   <- Gen.oneOf(true, false)
       letter    <- oneOfEnum(LetterMode.values)
-      raisedRow <- oneOfEnum(RaisedRowRule.values)
       sink      <- Gen.choose(OpeningSettings.MinSinkLines, OpeningSettings.MaxSinkLines)
       smallCaps <- Gen.oneOf(true, false)
       marker    <- Gen.alphaNumStr.suchThat(_.nonEmpty)
       epigraph  <- oneOfEnum(EpigraphRule.values)
       scene     <- oneOfEnum(SceneBreakRule.values)
       hand      <- oneOfEnum(HandDropCapRule.values)
-    yield OpeningSettings(enabled, letter, raisedRow, sink, smallCaps, marker, OpeningRules(epigraph, scene, hand))
+    yield OpeningSettings(enabled, letter, sink, smallCaps, marker, OpeningRules(epigraph, scene, hand))
 
   val genStatusLineConfig: Gen[StatusLineConfig] =
     for

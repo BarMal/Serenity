@@ -154,7 +154,7 @@ object RendererFramePlanner:
         FrameCounting.planned(caches.frameCounters, framePlan, viewportSize, cellMetrics)
         Some(editorRenderPlan)
 
-    surface.flush()
+    caches.framePhases.flush(surface.flush())
     FrameCounting.flushed(caches.frameCounters, surface)
     editorRenderPlan
 

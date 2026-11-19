@@ -14,35 +14,24 @@ import com.serenity.keystroke.events.{
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun}
 import com.serenity.state.models.AppState
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.openings.{
-  HandDropCapRule,
-  LetterMode,
-  OpeningOverride,
-  OpeningRules,
-  OpeningSettings,
-  RaisedRowRule
-}
+import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningOverride, OpeningRules, OpeningSettings}
 import com.serenity.ui.theme.DropCapColour
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** A raised or hybrid letter is painted by the path a drop cap is, in `clamp` within its own rows and in `grow` into
-  * room its own row made. Every frame that changes a row it covers, or the row before it, or what the letter is, must
-  * draw what a cold frame draws.
+/** A raised or hybrid letter is painted by the path a drop cap is, into room its own row made. Every frame that changes
+  * a row it covers, or the row before it, or what the letter is, must draw what a cold frame draws.
   */
 class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHarness:
 
   private val scales = List(1.0, 2.0)
 
-  private def settings(mode: LetterMode, rule: RaisedRowRule, sink: Int = 2): OpeningSettings =
-    OpeningSettings(enabled = true, letterMode = mode, raisedRow = rule, hybridSinkLines = sink)
+  private def settings(mode: LetterMode, sink: Int = 2): OpeningSettings =
+    OpeningSettings(enabled = true, letterMode = mode, hybridSinkLines = sink)
 
   private val variants: List[(String, OpeningSettings)] = List(
-    "raised, grow"    -> settings(LetterMode.Raised, RaisedRowRule.Grow),
-    "raised, clamp"   -> settings(LetterMode.Raised, RaisedRowRule.Clamp),
-    "hybrid 2, grow"  -> settings(LetterMode.Hybrid, RaisedRowRule.Grow, 2),
-    "hybrid 3, clamp" -> settings(LetterMode.Hybrid, RaisedRowRule.Clamp, 3),
-    "hybrid 2, clamp" -> settings(LetterMode.Hybrid, RaisedRowRule.Clamp, 2)
+    "raised"   -> settings(LetterMode.Raised),
+    "hybrid 2" -> settings(LetterMode.Hybrid, 2)
   )
 
   private def words(count: Int, seed: String): String =
@@ -253,11 +242,8 @@ class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with Co
       val session = Session(withHandMadeOpenings, scale, baseConfig)
       session.change("openings on")(inOpenings(_.copy(enabled = true)))
       session.change("raised letter")(inOpenings(_.copy(letterMode = LetterMode.Raised)))
-      session.change("raised row clamps")(inOpenings(_.copy(raisedRow = RaisedRowRule.Clamp)))
-      session.change("raised row grows")(inOpenings(_.copy(raisedRow = RaisedRowRule.Grow)))
       session.change("hybrid letter")(inOpenings(_.copy(letterMode = LetterMode.Hybrid)))
       (2 to 6).foreach(sink => session.change(s"hybrid sinks $sink")(inOpenings(_.copy(hybridSinkLines = sink))))
-      session.change("hybrid row clamps")(inOpenings(_.copy(raisedRow = RaisedRowRule.Clamp)))
       (6 to 2 by -2).foreach(sink => session.change(s"hybrid sinks $sink")(inOpenings(_.copy(hybridSinkLines = sink))))
       session.change("hand drop cap yields")(
         inOpenings(settings => settings.copy(rules = OpeningRules(handDropCap = HandDropCapRule.OpeningWins)))
@@ -275,15 +261,6 @@ class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with Co
       session.change("document raises the letter")(
         overriding(OpeningOverride(enabled = Some(true), letterMode = Some(LetterMode.Raised)))
       )
-      session.change("document clamps the row")(
-        overriding(
-          OpeningOverride(
-            enabled = Some(true),
-            letterMode = Some(LetterMode.Raised),
-            raisedRow = Some(RaisedRowRule.Clamp)
-          )
-        )
-      )
       session.change("document sinks four lines")(
         overriding(OpeningOverride(letterMode = Some(LetterMode.Hybrid), hybridSinkLines = Some(4)))
       )
@@ -296,11 +273,10 @@ class RaisedLetterIncrementalFrameSpec extends AnyFlatSpec with Matchers with Co
     s"Scrolling a document whose letter style is being toggled at ${scale}x" should
       "draw what a cold frame draws at every step" in {
         val session =
-          Session(novel(9), scale, baseConfig.withOpeningsConfig(settings(LetterMode.Raised, RaisedRowRule.Clamp)))
+          Session(novel(9), scale, baseConfig.withOpeningsConfig(settings(LetterMode.Raised)))
         (1 to 6).foreach(n => session(ScrollDown(2), s"down $n"))
         session.change("hybrid")(inOpenings(_.copy(letterMode = LetterMode.Hybrid)))
         (1 to 6).foreach(n => session(ScrollUp(2), s"up $n"))
-        session.change("grow")(inOpenings(_.copy(raisedRow = RaisedRowRule.Grow)))
         (1 to 3).foreach(n => session(ScrollDown(3), s"down by three $n"))
         session.change("drop")(inOpenings(_.copy(letterMode = LetterMode.Drop)))
         session.change("raised")(inOpenings(_.copy(letterMode = LetterMode.Raised)))

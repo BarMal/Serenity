@@ -246,3 +246,49 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     PresentPoint.of("skia-raster") shouldBe "paint-end"
     PresentPoint.of("java2d") shouldBe "paint-end"
   }
+
+  it should "keep the time recorded for a stage of the frame and name it in the log line" in {
+    val (timings, _) = recorder()
+
+    timings.recordPhase(FramePhase.RenderDraw, 4 * Ms)
+    timings.recordPhase(FramePhase.RenderDraw, 6 * Ms)
+    timings.recordPhase(FramePhase.ApplyDamage, 1 * Ms)
+
+    val summary = timings.drain()
+    summary.phases(FramePhase.RenderDraw).count shouldBe 2
+    summary.phases(FramePhase.RenderDraw).maxMs shouldBe 6.0
+    summary.phases(FramePhase.ApplyDamage).p50Ms shouldBe 1.0
+    summary.logLine should (include("render-draw p50=") and include("apply-damage p50="))
+  }
+
+  it should "record nothing for a stage while timing is off" in {
+    val timings = FrameTimings()
+
+    timings.recordPhase(FramePhase.RenderFlush, 4 * Ms)
+    timings.setEnabled(true)
+
+    timings.drain().phases.get(FramePhase.RenderFlush) shouldBe None
+  }
+
+  it should "hand the time of an apply stage to the latency trace even while frame timing is off" in {
+    val clock   = ManualClock()
+    val timings = FrameTimings(() => clock.read())
+    timings.keyLatency.setEnabled(true)
+    timings.keyLatency.keyReceived(System.currentTimeMillis())
+    timings.keyLatency.keyEnqueued()
+    timings.keyLatency.keysDequeued(1)
+    timings.keyLatency.dispatchStarted()
+
+    timings.timed(FramePhase.ApplyDecode)(clock.advanceMs(3))
+    timings.keyLatency.keysApplied(1)
+    timings.keyLatency.damageEmitted()
+    timings.keyLatency.frameWoke()
+    timings.keyLatency.frameModelRead()
+    timings.keyLatency.framePublished()
+    timings.keyLatency.frameEnded()
+    timings.keyLatency.paintStarted()
+    timings.keyLatency.paintFinished()
+
+    timings.keyLatency.drain().keys.map(_.splits) shouldBe Vector(Map(LatencySplit.ApplyDecode -> 3 * Ms))
+    timings.drain().phases shouldBe empty
+  }

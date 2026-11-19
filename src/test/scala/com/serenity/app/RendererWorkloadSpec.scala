@@ -196,3 +196,29 @@ class RendererWorkloadSpec extends AnyFlatSpec with Matchers:
       case Outcome.Failed(reason) => reason should (include("typing") and include("150"))
       case other                  => fail(s"expected a failed run, got $other")
   }
+
+  it should "make every full redraw a theme toggle when the plan leaves the resize out" in {
+    val noResize = plan.copy(resize = false)
+    RendererWorkload.script(noResize).collect { case Step.FullRedraw(how) => how } shouldBe
+      Vector.fill(4)(Redraw.ThemeToggle)
+    RendererWorkload.script(noResize).size shouldBe RendererWorkload.script(plan).size
+  }
+
+  "RendererWorkload.outcome" should "carry the clock the run was measured by" in {
+    val result = Result(Samples(Vector(1.0), 0), Samples(Vector(1.0), 0), Samples(Vector(1.0), 0))
+    RendererWorkload.outcome(result, scale = 1.0, clockResolutionMs = 0.0, clock = RendererChoice.Clock.InApp) match
+      case Outcome.Measured(workload) => workload.clock shouldBe RendererChoice.Clock.InApp
+      case other                      => fail(s"expected a measurement, got $other")
+    RendererWorkload.outcome(result, scale = 1.0, clockResolutionMs = 1.5) match
+      case Outcome.Measured(workload) => workload.clock shouldBe RendererChoice.Clock.Pixel
+      case other                      => fail(s"expected a measurement, got $other")
+  }
+
+  it should "carry the number of pixels the trial's canvas had, whatever scale the JVM reported" in {
+    val result = Result(Samples(Vector(1.0), 0), Samples(Vector(1.0), 0), Samples(Vector(1.0), 0))
+    RendererWorkload.outcome(result, scale = 1.0, clockResolutionMs = 1.5, canvasPixels = 2_722_440L) match
+      case Outcome.Measured(workload) =>
+        workload.canvasPixels shouldBe 2_722_440L
+        workload.scale shouldBe 1.0
+      case other => fail(s"expected a measurement, got $other")
+  }

@@ -136,6 +136,14 @@ class RemovedConfigKeysSpec extends AnyFlatSpec with Matchers with OptionValues:
       "ui.visual_flair"               -> Json.fromString("reduced")
     )
 
+  "A config file naming the removed raised-row setting" should "load and report it once, whichever way it was set" in {
+    assertRemovedAndIgnored("openings.raised_row" -> "clamp")
+    assertRemovedAndIgnored("openings.raised_row" -> "grow")
+  }
+
+  "A session saved with the raised-row setting" should "still decode, ignoring it" in
+    assertSessionIgnores("openings.raised_row" -> Json.fromString("clamp"))
+
   "A config file naming the removed window translucency setting" should "load and report it once" in
     assertRemovedAndIgnored("window.translucent" -> "true")
 

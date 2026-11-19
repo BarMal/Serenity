@@ -8,7 +8,6 @@ import com.serenity.ui.openings.{
   LetterMode,
   OpeningRules,
   OpeningSettings,
-  RaisedRowRule,
   SceneBreakRule
 }
 
@@ -43,10 +42,6 @@ private[config] object ConfigFieldsOpenings:
       field("openings.letter")(keyed(LetterMode.fromConfigKey, _.configKey))(
         _.openingsConfig.letterMode,
         (config, value) => openings(config, _.copy(letterMode = value))
-      ),
-      field("openings.raised_row")(keyed(RaisedRowRule.fromConfigKey, _.configKey))(
-        _.openingsConfig.raisedRow,
-        (config, value) => openings(config, _.copy(raisedRow = value))
       ),
       field("openings.hybrid_sink_lines")(sinkLines)(
         _.openingsConfig.hybridSinkLines,

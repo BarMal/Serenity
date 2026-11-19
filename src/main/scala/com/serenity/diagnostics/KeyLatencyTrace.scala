@@ -22,6 +22,32 @@ enum LatencyStage(val label: String):
   case PublishToPaint extends LatencyStage("publish_to_paint")
   case Paint          extends LatencyStage("paint")
 
+/** The parts of a stage a keystroke waited through, which are inside the stages above rather than after them: what its
+  * batch spent applying (reading the input, stepping a typed key, applying another event, committing a run), and what
+  * its frame spent on layout, drawing and flushing. A keystroke waits for the whole batch and the whole frame it is in,
+  * so each carries that batch's and that frame's figures.
+  */
+enum LatencySplit(val label: String):
+  case ApplyDecode      extends LatencySplit("apply_decode")
+  case ApplyTypedStep   extends LatencySplit("apply_typed_step")
+  case ApplyEvent       extends LatencySplit("apply_event")
+  case ApplyTypedCommit extends LatencySplit("apply_typed_commit")
+  case RenderLayout     extends LatencySplit("render_layout")
+  case RenderDraw       extends LatencySplit("render_draw")
+  case RenderFlush      extends LatencySplit("render_flush")
+
+object LatencySplit:
+
+  def ofPhase(phase: FramePhase): Option[LatencySplit] = phase match
+    case FramePhase.ApplyDecode      => Some(ApplyDecode)
+    case FramePhase.ApplyTypedStep   => Some(ApplyTypedStep)
+    case FramePhase.ApplyEvent       => Some(ApplyEvent)
+    case FramePhase.ApplyTypedCommit => Some(ApplyTypedCommit)
+    case FramePhase.RenderLayout     => Some(RenderLayout)
+    case FramePhase.RenderDraw       => Some(RenderDraw)
+    case FramePhase.RenderFlush      => Some(RenderFlush)
+    case _                           => None
+
 /** A keystroke's monotonic stamps (nanoseconds) up to its damage reaching the render loop. `whenToEdtMs` is the gap
   * between the OS event time (`KeyEvent.getWhen`) and the event thread receiving it, on the wall clock that `getWhen`
   * uses, so it stays outside the monotonic total.
@@ -34,7 +60,8 @@ final case class KeyStamps(
     dequeuedAt: Option[Long] = None,
     applyStartedAt: Option[Long] = None,
     appliedAt: Option[Long] = None,
-    damagedAt: Option[Long] = None
+    damagedAt: Option[Long] = None,
+    splits: Map[LatencySplit, Long] = Map.empty
 )
 
 /** One fast frame's stamps, and the keystrokes whose damage had landed when it read the model. */
@@ -44,10 +71,18 @@ final case class FrameStamps(
     deadlineAt: Option[Long] = None,
     modelReadAt: Option[Long] = None,
     publishedAt: Option[Long] = None,
-    paintStartedAt: Option[Long] = None
+    paintStartedAt: Option[Long] = None,
+    splits: Map[LatencySplit, Long] = Map.empty
 )
 
-final case class KeyLatency(seq: Long, whenToEdtMs: Long, stageNanos: Vector[Long], totalNanos: Long):
+final case class KeyLatency(
+    seq: Long,
+    whenToEdtMs: Long,
+    stageNanos: Vector[Long],
+    totalNanos: Long,
+    splits: Map[LatencySplit, Long] = Map.empty,
+    frameWokeAt: Long = 0L
+):
 
   def stage(stage: LatencyStage): Long = stageNanos.lift(stage.ordinal).getOrElse(0L)
 
@@ -56,7 +91,11 @@ final case class KeyLatency(seq: Long, whenToEdtMs: Long, stageNanos: Vector[Lon
 
   def logLine: String =
     val stages = LatencyStage.values.toList.map(stage => s"${stage.label}=${KeyLatency.millis(this.stage(stage))}")
-    s"[LATENCY] seq=$seq when_to_edt=$whenToEdtMs ${stages.mkString(" ")} total=${KeyLatency.millis(totalNanos)} ms"
+    val parts = LatencySplit.values.toList.flatMap(split =>
+      splits.get(split).map(nanos => s" ${split.label}=${KeyLatency.millis(nanos)}")
+    )
+    s"[LATENCY] seq=$seq when_to_edt=$whenToEdtMs ${stages.mkString(" ")} total=${KeyLatency.millis(totalNanos)}" +
+      s"${parts.mkString} ms"
 
 object KeyLatency:
   private val NanosPerMs = 1_000_000.0
@@ -86,7 +125,7 @@ object KeyLatency:
         val next = end.fold(reached)(_.max(reached))
         (next, durations :+ (next - reached))
     }
-    KeyLatency(key.seq, key.whenToEdtMs, stages, stages.sum)
+    KeyLatency(key.seq, key.whenToEdtMs, stages, stages.sum, key.splits ++ frame.splits, frame.wokeAt)
 
 /** The keystrokes painted during one report window, and how many were drawn by a frame that changed nothing visible. */
 final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpainted: Int, backend: String = ""):
@@ -100,7 +139,10 @@ final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpa
         List(
           "total"         -> PhaseStats.of(keys.map(_.totalNanos)),
           "key_to_screen" -> PhaseStats.of(keys.map(_.keyToScreenNanos))
-        )
+        ) :::
+        LatencySplit.values.toList
+          .filter(split => keys.exists(_.splits.contains(split)))
+          .map(split => split.label -> PhaseStats.of(keys.map(_.splits.getOrElse(split, 0L))))
 
   def summaryLine: String =
     val window = String.format(Locale.ROOT, "%.1f", elapsedMs / 1000.0)
@@ -129,7 +171,8 @@ final case class KeyLatencyState(
     frame: Option[FrameStamps],
     presented: Vector[FrameStamps],
     completed: Vector[KeyLatency],
-    unpainted: Int
+    unpainted: Int,
+    applySplit: Map[LatencySplit, Long] = Map.empty
 ):
   import KeyLatencyState.*
 
@@ -143,12 +186,17 @@ final case class KeyLatencyState(
   def keysDequeued(count: Int, now: Long): KeyLatencyState =
     copy(keys = stampOldest(keys, count)(_.dequeuedAt.isEmpty)(_.copy(dequeuedAt = Some(now))))
 
-  def dispatchStarted(now: Long): KeyLatencyState = copy(dispatchStartedAt = Some(now))
+  def dispatchStarted(now: Long): KeyLatencyState = copy(dispatchStartedAt = Some(now), applySplit = Map.empty)
+
+  def applyStageMeasured(split: LatencySplit, nanos: Long): KeyLatencyState =
+    copy(applySplit = applySplit.updated(split, applySplit.getOrElse(split, 0L) + nanos))
 
   def keysApplied(count: Int, now: Long): KeyLatencyState =
     val startedAt = dispatchStartedAt.getOrElse(now)
     copy(keys =
-      stampOldest(keys, count)(_.appliedAt.isEmpty)(_.copy(applyStartedAt = Some(startedAt), appliedAt = Some(now)))
+      stampOldest(keys, count)(_.appliedAt.isEmpty)(
+        _.copy(applyStartedAt = Some(startedAt), appliedAt = Some(now), splits = applySplit)
+      )
     )
 
   def damageEmitted(now: Long): KeyLatencyState =
@@ -166,6 +214,19 @@ final case class KeyLatencyState(
     if frame.isEmpty then this
     else if shown.isEmpty then copy(frame = None)
     else copy(keys = waiting, frame = frame.map(_.copy(keys = shown, modelReadAt = Some(now))))
+
+  /** The frame's render stages are known once it has rendered, which can be after a keystroke it showed was painted, so
+    * they reach those already-finished keystrokes too.
+    */
+  def frameStaged(splits: Map[LatencySplit, Long]): KeyLatencyState =
+    frame.fold(this) { current =>
+      copy(
+        frame = Some(current.copy(splits = splits)),
+        completed = completed.map(key =>
+          if key.frameWokeAt == current.wokeAt then key.copy(splits = key.splits ++ splits) else key
+        )
+      )
+    }
 
   def framePublished(now: Long): KeyLatencyState =
     copy(frame = frame.map(current => current.copy(publishedAt = current.publishedAt.orElse(Some(now)))))
@@ -261,13 +322,22 @@ final class KeyLatencyTrace(
   def keysDequeued(count: Int): Unit = if enabled.get() then update(_.keysDequeued(count, _))
   def dispatchStarted(): Unit        = if enabled.get() then update(_.dispatchStarted(_))
   def keysApplied(count: Int): Unit  = if enabled.get() then update(_.keysApplied(count, _))
-  def damageEmitted(): Unit          = if enabled.get() then update(_.damageEmitted(_))
-  def frameWoke(): Unit              = if enabled.get() then update(_.frameWoke(_))
-  def frameDeadlineReached(): Unit   = if enabled.get() then update(_.frameDeadlineReached(_))
-  def frameModelRead(): Unit         = if enabled.get() then update(_.frameModelRead(_))
-  def framePublished(): Unit         = if enabled.get() then update(_.framePublished(_))
-  def frameEnded(): Unit             = if enabled.get() then update((current, _) => current.frameEnded)
-  def paintStarted(): Unit           = if enabled.get() then update(_.paintStarted(_))
+
+  /** Adds `nanos` to a stage of the dispatch under way, for the keystrokes it goes on to apply. */
+  def applyStageMeasured(split: LatencySplit, nanos: Long): Unit =
+    if enabled.get() then update((current, _) => current.applyStageMeasured(split, nanos))
+
+  /** The render stages of the frame under way, for the keystrokes it shows. */
+  def frameStaged(splits: Map[LatencySplit, Long]): Unit =
+    if enabled.get() then update((current, _) => current.frameStaged(splits))
+
+  def damageEmitted(): Unit        = if enabled.get() then update(_.damageEmitted(_))
+  def frameWoke(): Unit            = if enabled.get() then update(_.frameWoke(_))
+  def frameDeadlineReached(): Unit = if enabled.get() then update(_.frameDeadlineReached(_))
+  def frameModelRead(): Unit       = if enabled.get() then update(_.frameModelRead(_))
+  def framePublished(): Unit       = if enabled.get() then update(_.framePublished(_))
+  def frameEnded(): Unit           = if enabled.get() then update((current, _) => current.frameEnded)
+  def paintStarted(): Unit         = if enabled.get() then update(_.paintStarted(_))
 
   def paintFinished(): Unit =
     if enabled.get() then

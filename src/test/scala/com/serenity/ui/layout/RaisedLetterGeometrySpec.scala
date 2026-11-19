@@ -6,7 +6,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
 import com.serenity.testkit.TestMeasure
-import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings, RaisedRowRule}
+import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings}
 import com.serenity.ui.renderer.{DropCapRenderer, FontSpec}
 import com.serenity.ui.skia.TestBundledTypefaces
 import com.serenity.ui.theme.TextStyle
@@ -15,10 +15,8 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** A raised letter stands on the baseline of the opening's first line; a hybrid letter does the same from the baseline
-  * of the line it sinks to. Either way the letter is painted whole. With `raised_row` set to grow it rises one line
-  * above the capitals of the first line and that row grows to make room for the part that rises; set to clamp the row
-  * keeps its height and the letter is shrunk until its ink reaches no higher than the top of the row, so it never
-  * paints outside its own rows.
+  * of the line it sinks to. Either way the letter is painted whole, rises one line above the capitals of the first
+  * line, and that row grows to make room for the part that rises.
   */
 class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
@@ -37,14 +35,12 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
   /** The ink Skia itself gives `text` in `font`: the oracle for where a glyph stands, not AWT's glyph vector. */
   private def skiaInkOf(font: Font, text: String): org.jetbrains.skia.Rect =
     skiaFaces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
-  private val scales   = List("1x" -> 14.0f, "2x" -> 28.0f)
-  private val rowRules = List(RaisedRowRule.Grow, RaisedRowRule.Clamp)
+  private val scales = List("1x" -> 14.0f, "2x" -> 28.0f)
 
-  private def raised(rule: RaisedRowRule): OpeningSettings =
-    OpeningSettings(enabled = true, letterMode = LetterMode.Raised, raisedRow = rule)
+  private val raised = OpeningSettings(enabled = true, letterMode = LetterMode.Raised)
 
-  private def hybrid(rule: RaisedRowRule, sink: Int): OpeningSettings =
-    OpeningSettings(enabled = true, letterMode = LetterMode.Hybrid, raisedRow = rule, hybridSinkLines = sink)
+  private def hybrid(sink: Int): OpeningSettings =
+    OpeningSettings(enabled = true, letterMode = LetterMode.Hybrid, hybridSinkLines = sink)
 
   private val dropSettings = OpeningSettings(enabled = true)
   private val offSettings  = OpeningSettings.default
@@ -180,33 +176,29 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
   private def startX(line: TextVisualLine): Float = line.xForColumn(line.startColumn).get
 
-  for
-    (label, sizePx) <- scales
-    rule            <- rowRules
-  do
-    s"A raised letter at $label with the row to $rule" should "stand on the baseline of the opening's first line" in {
-      val s = laid(raised(rule), sizePx)
+  for (label, sizePx) <- scales do
+    s"A raised letter at $label" should "stand on the baseline of the opening's first line" in {
+      val s = laid(raised, sizePx)
 
       drawn(s).baselinePx shouldBe s.baselineOf(s.home).toFloat +- tolerancePx
     }
 
-    if rule == RaisedRowRule.Grow then
-      it should "rise one line above the capitals of the first line" in {
-        val s = laid(raised(rule), sizePx)
+    it should "rise one line above the capitals of the first line" in {
+      val s = laid(raised, sizePx)
 
-        drawn(s).inkTopPx shouldBe
-          (s.baselineOf(s.home) - s.bodyCapHeightPx - s.snapshot.lineHeightPx) +- tolerancePx
-      }
+      drawn(s).inkTopPx shouldBe
+        (s.baselineOf(s.home) - s.bodyCapHeightPx - s.snapshot.lineHeightPx) +- tolerancePx
+    }
 
-      it should "be set in the glyph size of a two-line drop cap" in {
-        val s    = laid(raised(rule), sizePx)
-        val hand = laid(offSettings, sizePx, role = ParagraphRole.dropCap(2))
+    it should "be set in the glyph size of a two-line drop cap" in {
+      val s    = laid(raised, sizePx)
+      val hand = laid(offSettings, sizePx, role = ParagraphRole.dropCap(2))
 
-        drawn(s).glyphSizePx shouldBe drawn(hand).glyphSizePx +- 0.01f
-      }
+      drawn(s).glyphSizePx shouldBe drawn(hand).glyphSizePx +- 0.01f
+    }
 
     it should "indent the first line beside the letter and no later line" in {
-      val s     = laid(raised(rule), sizePx)
+      val s     = laid(raised, sizePx)
       val shown = drawn(s)
       val home  = s.snapshot.visualLines(s.home)
 
@@ -217,7 +209,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     }
 
     it should "paint the whole letter, never cutting it to its run" in {
-      val s     = laid(raised(rule), sizePx)
+      val s     = laid(raised, sizePx)
       val shown = drawn(s)
 
       shown.clipsGlyph shouldBe false
@@ -226,39 +218,38 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
     it should "keep the gap the document sets between the letter and the text" in
       List(0.0f, 0.25f, 1.0f, 2.0f).foreach { gapEm =>
-        val s = laid(raised(rule), sizePx, gapEm = gapEm)
+        val s = laid(raised, sizePx, gapEm = gapEm)
 
         s.snapshot.visualLines(s.home).xForColumn(1).get shouldBe drawn(s).inkRightPx + gapEm * sizePx +- tolerancePx
       }
 
     for sink <- 2 to 4 do
-      s"A hybrid letter sinking $sink lines at $label with the row to $rule" should
+      s"A hybrid letter sinking $sink lines at $label" should
         s"stand on the baseline of line $sink" in {
-          val s = laid(hybrid(rule, sink), sizePx)
+          val s = laid(hybrid(sink), sizePx)
 
           drawn(s).baselinePx shouldBe s.baselineOf(s.home + sink - 1).toFloat +- tolerancePx
         }
 
-      if rule == RaisedRowRule.Grow then
-        it should "rise one line above the capitals of the first line" in {
-          val s = laid(hybrid(rule, sink), sizePx)
+      it should "rise one line above the capitals of the first line" in {
+        val s = laid(hybrid(sink), sizePx)
 
-          drawn(s).inkTopPx shouldBe
-            (s.baselineOf(s.home) - s.bodyCapHeightPx - s.snapshot.lineHeightPx) +- tolerancePx
-        }
+        drawn(s).inkTopPx shouldBe
+          (s.baselineOf(s.home) - s.bodyCapHeightPx - s.snapshot.lineHeightPx) +- tolerancePx
+      }
 
-        it should s"be one line taller than the $sink-line drop cap" in {
-          val s    = laid(hybrid(rule, sink), sizePx)
-          val hand = laid(offSettings, sizePx, role = ParagraphRole.dropCap(sink))
-          val cap  = drawn(s)
-          val ref  = drawn(hand)
+      it should s"be one line taller than the $sink-line drop cap" in {
+        val s    = laid(hybrid(sink), sizePx)
+        val hand = laid(offSettings, sizePx, role = ParagraphRole.dropCap(sink))
+        val cap  = drawn(s)
+        val ref  = drawn(hand)
 
-          (cap.baselinePx - cap.inkTopPx) shouldBe (ref.baselinePx - ref.inkTopPx + s.snapshot.lineHeightPx) +-
-            tolerancePx
-        }
+        (cap.baselinePx - cap.inkTopPx) shouldBe (ref.baselinePx - ref.inkTopPx + s.snapshot.lineHeightPx) +-
+          tolerancePx
+      }
 
       it should "start the first lines it spans at one indent and the next at the margin" in {
-        val s      = laid(hybrid(rule, sink), sizePx)
+        val s      = laid(hybrid(sink), sizePx)
         val shown  = drawn(s)
         val indent = shown.inkRightPx + 0.25f * sizePx
         val lines  = s.snapshot.visualLines
@@ -270,9 +261,9 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       }
 
   for (label, sizePx) <- scales do
-    s"With the row to grow, a raised letter at $label" should "make the first row taller by what rises above the line" in {
+    s"A raised letter at $label" should "make the first row taller by what rises above the line" in {
       val off   = laid(offSettings, sizePx)
-      val s     = laid(raised(RaisedRowRule.Grow), sizePx)
+      val s     = laid(raised, sizePx)
       val home  = s.snapshot.visualLines(s.home)
       val plain = off.snapshot.visualLines(off.home)
 
@@ -282,105 +273,25 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     }
 
     it should "keep the letter below the row above it" in {
-      val s = laid(raised(RaisedRowRule.Grow), sizePx)
+      val s = laid(raised, sizePx)
 
       drawn(s).callTopPx should be >= s.textTopOf(s.home)
       drawn(s).inkTopPx should be >= (s.textTopOf(s.home) - tolerancePx)
     }
 
     it should "paint the letter over the rows it covers and no row above" in {
-      val s = laid(raised(RaisedRowRule.Grow), sizePx)
+      val s = laid(raised, sizePx)
 
       DropCapLayout.glyphRowSpan(s.snapshot)(s.home).start shouldBe s.home
     }
 
     it should "grow the first row of a hybrid letter the same way" in {
       val off = laid(offSettings, sizePx)
-      val s   = laid(hybrid(RaisedRowRule.Grow, 3), sizePx)
+      val s   = laid(hybrid(3), sizePx)
 
       s.snapshot.visualLines(s.home).heightPx should be > off.snapshot.visualLines(off.home).heightPx
       drawn(s).callTopPx should be >= s.textTopOf(s.home)
     }
-
-    for (what, settings, sink) <- List(
-          ("a raised letter", raised(RaisedRowRule.Clamp), 1),
-          ("a hybrid letter sinking 2 lines", hybrid(RaisedRowRule.Clamp, 2), 2),
-          ("a hybrid letter sinking 3 lines", hybrid(RaisedRowRule.Clamp, 3), 3),
-          ("a hybrid letter sinking 4 lines", hybrid(RaisedRowRule.Clamp, 4), 4)
-        )
-    do
-      s"With the row to clamp, $what at $label" should "leave every row as tall as it was" in {
-        val off = laid(offSettings, sizePx)
-        val s   = laid(settings, sizePx)
-
-        val rows = s.snapshot.visualLines.length.min(off.snapshot.visualLines.length)
-
-        rows should be > s.home + sink
-        (0 until rows).foreach { row =>
-          withClue(s"row $row: ") {
-            s.snapshot.visualLines(row).heightPx shouldBe off.snapshot.visualLines(row).heightPx
-            s.snapshot.visualLines(row).ascentPx shouldBe off.snapshot.visualLines(row).ascentPx
-            s.textTopOf(row) shouldBe off.textTopOf(row)
-          }
-        }
-      }
-
-      it should "keep its baseline where the letter stood on it" in {
-        val off = laid(offSettings, sizePx)
-        val s   = laid(settings, sizePx)
-
-        s.baselineOf(s.home + sink - 1) shouldBe off.baselineOf(off.home + sink - 1)
-        drawn(s).baselinePx shouldBe off.baselineOf(off.home + sink - 1).toFloat +- tolerancePx
-      }
-
-      it should "keep the ink of the letter below the top of the first row" in
-        List("T", "H", "Q", "J", "g", "\u00C9").foreach { letter =>
-          val s = laid(settings, sizePx, letter = letter)
-
-          withClue(s"$letter: ") {
-            drawn(s, letter).inkTopPx should be >= s.textTopOf(s.home).toFloat
-            drawn(s, letter).callTopPx shouldBe s.textTopOf(s.home)
-          }
-        }
-
-      it should "be as large as the first row lets it be" in {
-        val s    = laid(settings, sizePx)
-        val grow = laid(settings.copy(raisedRow = RaisedRowRule.Grow), sizePx)
-
-        drawn(s).inkTopPx shouldBe s.textTopOf(s.home).toFloat +- (2 * tolerancePx)
-        drawn(s).glyphSizePx should be < drawn(grow).glyphSizePx
-      }
-
-      it should "never be smaller than a drop cap over the lines it sinks" in {
-        val s    = laid(settings, sizePx)
-        val hand = laid(offSettings, sizePx, role = ParagraphRole.dropCap(sink))
-
-        drawn(s).glyphSizePx should be >= (drawn(hand).glyphSizePx - 0.01f)
-      }
-
-      it should "never be smaller than the capitals of the body, whatever rises above the letter's capitals" in {
-        val s    = laid(settings, sizePx, letter = "\u00C9")
-        val hand = laid(offSettings, sizePx, letter = "\u00C9", role = ParagraphRole.dropCap(1))
-
-        drawn(s, "\u00C9").glyphSizePx should be >= (drawn(hand, "\u00C9").glyphSizePx - 0.01f)
-      }
-
-      it should "paint over its own rows and no row above" in {
-        val s = laid(settings, sizePx)
-
-        DropCapLayout.glyphRowSpan(s.snapshot)(s.home).start shouldBe s.home
-        DropCapLayout.closedOverGlyphs(Set(s.home - 1), s.snapshot) shouldBe Set(s.home - 1)
-      }
-
-      it should "leave every pixel above the first row untouched" in
-        List("T", "Q", "J", "\u00C9").foreach { letter =>
-          val (above, below) = paintedAbove(laid(settings, sizePx, letter = letter))
-
-          withClue(s"$letter: ") {
-            above shouldBe 0
-            below should be > 0
-          }
-        }
 
     s"A drop cap at $label" should "paint over the rows it spans and no row above" in {
       val s = laid(dropSettings, sizePx)
@@ -389,33 +300,27 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
     }
 
   for letter <- List("Q", "J", "g") do
-    s"A raised $letter" should "be painted whole in either mode" in
-      rowRules.foreach { rule =>
-        val s     = laid(raised(rule), 14.0f, letter = letter)
-        val shown = drawn(s, letter)
+    s"A raised $letter" should "be painted whole" in {
+      val s     = laid(raised, 14.0f, letter = letter)
+      val shown = drawn(s, letter)
 
-        withClue(s"$rule: ") {
-          shown.clipsGlyph shouldBe false
-          shown.callBottomPx.toFloat should be >= shown.inkBottomPx - tolerancePx
-          shown.inkTopPx should be >= (s.textTopOf(s.home) - tolerancePx)
-        }
-      }
-
-  "A raised letter on a short opening" should "reserve room for the whole letter below it" in
-    rowRules.foreach { rule =>
-      val s     = laid(raised(rule), 14.0f, letter = "Quiet.", copies = 0)
-      val shown = drawn(s, "Q")
-      val rows  = s.snapshot.visualLines.filter(_.bufferLine == 1)
-
-      withClue(s"$rule: ") {
-        rows should have size 1
-        val bottom = s.textTopOf(s.home) + rows.map(row => row.heightPx + row.reservedBelowPx).sum
-        shown.inkBottomPx should be <= bottom.toFloat + tolerancePx
-      }
+      shown.clipsGlyph shouldBe false
+      shown.callBottomPx.toFloat should be >= shown.inkBottomPx - tolerancePx
+      shown.inkTopPx should be >= (s.textTopOf(s.home) - tolerancePx)
     }
 
+  "A raised letter on a short opening" should "reserve room for the whole letter below it" in {
+    val s     = laid(raised, 14.0f, letter = "Quiet.", copies = 0)
+    val shown = drawn(s, "Q")
+    val rows  = s.snapshot.visualLines.filter(_.bufferLine == 1)
+
+    rows should have size 1
+    val bottom = s.textTopOf(s.home) + rows.map(row => row.heightPx + row.reservedBelowPx).sum
+    shown.inkBottomPx should be <= bottom.toFloat + tolerancePx
+  }
+
   "A hand-made drop cap on an opening" should "be kept under hand, whatever letter mode is set" in
-    List(raised(RaisedRowRule.Grow), hybrid(RaisedRowRule.Clamp, 3)).foreach { settings =>
+    List(raised, hybrid(3)).foreach { settings =>
       val s   = laid(settings, 14.0f, role = ParagraphRole.dropCap(4))
       val off = laid(offSettings, 14.0f, role = ParagraphRole.dropCap(4))
 
@@ -424,14 +329,14 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
   it should "give way to the raised letter when the opening's wins" in {
     val rules = OpeningRules(handDropCap = HandDropCapRule.OpeningWins)
-    val s     = laid(raised(RaisedRowRule.Grow).copy(rules = rules), 14.0f, role = ParagraphRole.dropCap(4))
-    val plain = laid(raised(RaisedRowRule.Grow), 14.0f)
+    val s     = laid(raised.copy(rules = rules), 14.0f, role = ParagraphRole.dropCap(4))
+    val plain = laid(raised, 14.0f)
 
     s.snapshot.visualLines shouldBe plain.snapshot.visualLines
   }
 
   "A raised or hybrid letter" should "give way to the toggle that disables drop caps" in
-    List(raised(RaisedRowRule.Grow), hybrid(RaisedRowRule.Clamp, 3)).foreach { settings =>
+    List(raised, hybrid(3)).foreach { settings =>
       val s   = laid(settings, 14.0f, dropCapsEnabled = false)
       val off = laid(offSettings, 14.0f, dropCapsEnabled = false)
 
@@ -448,7 +353,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
   }
 
   it should "still highlight the first letter on the cell grid" in
-    List(raised(RaisedRowRule.Grow), hybrid(RaisedRowRule.Clamp, 3)).foreach { settings =>
+    List(raised, hybrid(3)).foreach { settings =>
       val s       = laid(settings, 14.0f, forceCellLayout = true)
       val surface = MockRenderSurface(200, 60)
       DropCapRenderer.paintCellHomeLineIfNeeded(

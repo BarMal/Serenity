@@ -50,40 +50,49 @@ object RendererCoordinator:
   ): IO[Finished] =
     val order = RendererRunOrder.order(thorough)
     for
-      outcomes <- order.zipWithIndex.traverse { (candidate, index) =>
+      attempts <- order.zipWithIndex.traverse { (candidate, index) =>
         progress(index + 1, order.size, candidate) *> trialWithRetry(spawner, candidate, index + 1, retrying)
       }
-      retries = outcomes.flatMap(_._3)
+      outcomes = attempts.map(_.result)
+      retries  = attempts.flatMap(_.result._3)
       runs = RendererRunOrder.candidates(thorough).map { candidate =>
         CandidateRuns(candidate, outcomes.collect { case (`candidate`, outcome, _) => outcome })
       }
       recommendation = RendererTarget.annotate(RendererChoice.recommend(current, runs), runs)
-      saveError <- save(environment, runs)
+      saveError <- save(environment, runs, attempts.flatMap(_.devices).headOption)
     yield Finished(runs, recommendation, current, saveError, retries)
+
+  /** What a trial, with its retry, gave: the outcome kept for the mode, and the adapters its children's windows ran on
+    * in the order they reported them (a failed child still names its adapter).
+    */
+  final private case class Attempt(result: (Candidate, Outcome, Option[Retry]), devices: List[String])
 
   private def trialWithRetry(
     spawner: Spawner,
     candidate: Candidate,
     number: Int,
     retrying: Retrying
-  ): IO[(Candidate, Outcome, Option[Retry])] =
+  ): IO[Attempt] =
     trial(spawner, candidate).flatMap {
-      case Outcome.Failed(reason) =>
-        retrying(number, candidate, reason) *> trial(spawner, candidate).map(
-          (candidate, _, Some(Retry(number, candidate, reason)))
+      case (Outcome.Failed(reason), first) =>
+        retrying(number, candidate, reason) *> trial(spawner, candidate).map((outcome, second) =>
+          Attempt((candidate, outcome, Some(Retry(number, candidate, reason))), first.toList ::: second.toList)
         )
-      case measured => IO.pure((candidate, measured, None))
+      case (measured, device) => IO.pure(Attempt((candidate, measured, None), device.toList))
     }
 
-  private def trial(spawner: Spawner, candidate: Candidate): IO[Outcome] =
+  private def trial(spawner: Spawner, candidate: Candidate): IO[(Outcome, Option[String])] =
     spawner
       .run(candidate)
-      .map(RendererTrial.outcomeOf(_, candidate))
-      .handleError(error => Outcome.Failed(s"the trial could not be run: ${error.getMessage}"))
+      .map(output => RendererTrial.outcomeOf(output, candidate) -> RendererTrial.deviceOf(output))
+      .handleError(error => Outcome.Failed(s"the trial could not be run: ${error.getMessage}") -> None)
 
-  private def save(environment: Environment, runs: List[CandidateRuns]): IO[Option[String]] =
+  /** The key is the machine's, with the GL renderer the first trial that reported an adapter ran on: only a window can
+    * say what it drew with.
+    */
+  private def save(environment: Environment, runs: List[CandidateRuns], device: Option[String]): IO[Option[String]] =
     (for
-      key <- environment.key
+      key <- environment.key.map(machine => device.fold(machine)(name => machine.copy(glRenderer = name)))
       now <- environment.now
       _   <- RendererBenchmarkResult.save(environment.resultPath, Stored(key, now, runs))
     yield Option.empty[String]).handleError(error => Some(String.valueOf(error.getMessage)))

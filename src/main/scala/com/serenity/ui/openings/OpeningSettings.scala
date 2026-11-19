@@ -9,14 +9,6 @@ enum LetterMode(val configKey: String):
 object LetterMode:
   def fromConfigKey(key: String): Option[LetterMode] = values.find(_.configKey == key)
 
-/** What a raised letter does to the row it stands on. */
-enum RaisedRowRule(val configKey: String):
-  case Grow  extends RaisedRowRule("grow")
-  case Clamp extends RaisedRowRule("clamp")
-
-object RaisedRowRule:
-  def fromConfigKey(key: String): Option[RaisedRowRule] = values.find(_.configKey == key)
-
 /** Every setting of chapter openings, whether it is the global configuration or what one document resolves to.
   * `epigraphMarker` is read only under [[EpigraphRule.ExplicitOnly]]; `hybridSinkLines` only under
   * [[LetterMode.Hybrid]].
@@ -24,7 +16,6 @@ object RaisedRowRule:
 final case class OpeningSettings(
     enabled: Boolean = false,
     letterMode: LetterMode = LetterMode.Drop,
-    raisedRow: RaisedRowRule = RaisedRowRule.Grow,
     hybridSinkLines: Int = OpeningSettings.MinSinkLines,
     smallCapsFirstLine: Boolean = false,
     epigraphMarker: String = OpeningSettings.DefaultEpigraphMarker,
@@ -55,7 +46,6 @@ object OpeningSettings:
 final case class OpeningOverride(
     enabled: Option[Boolean] = None,
     letterMode: Option[LetterMode] = None,
-    raisedRow: Option[RaisedRowRule] = None,
     hybridSinkLines: Option[Int] = None,
     smallCapsFirstLine: Option[Boolean] = None,
     epigraph: Option[EpigraphRule] = None,
@@ -78,7 +68,6 @@ object OpeningResolver:
       OpeningSettings(
         enabled = overrides.enabled.getOrElse(settings.enabled),
         letterMode = overrides.letterMode.getOrElse(settings.letterMode),
-        raisedRow = overrides.raisedRow.getOrElse(settings.raisedRow),
         hybridSinkLines = overrides.hybridSinkLines.getOrElse(settings.hybridSinkLines),
         smallCapsFirstLine = overrides.smallCapsFirstLine.getOrElse(settings.smallCapsFirstLine),
         epigraphMarker = overrides.epigraphMarker.getOrElse(settings.epigraphMarker),

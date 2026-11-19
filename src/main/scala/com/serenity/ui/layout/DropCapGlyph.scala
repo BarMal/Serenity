@@ -14,9 +14,8 @@ import com.serenity.ui.theme.{RichTextStyling, TextStyle}
   * `baselinePx` and `heightPx` are measured down from the top of the first line. The height covers the room of the
   * lines the cap spans and anything the letter itself hangs below the last baseline, a `Q`'s tail or a `J`'s hook.
   *
-  * A rising letter whose row grows is fitted to one more line than it spans, so its capitals stand one line above those
-  * of the first line, and `growthPx` is how far its ink reaches above the top of the first line, which that line makes
-  * room for. One whose row does not grow is shrunk until its ink reaches no higher than the top of the first line.
+  * A rising letter is fitted to one more line than it spans, so its capitals stand one line above those of the first
+  * line, and `growthPx` is how far its ink reaches above the top of the first line, which that line makes room for.
   */
 final case class DropCapGlyph(
     text: String,
@@ -103,24 +102,15 @@ object DropCapGlyph:
     def styleAt(sizePx: Float): TextStyle = key.glyphTemplate.copy(fontSize = Some(sizePx))
     def fontAt(sizePx: Float): Font       = TextStyle.styledFont(key.baseFont, styleAt(sizePx))
     val sizePx = key.shape match
-      case LetterShape.Drop         => sizeFor(key.lines)
-      case LetterShape.Rising(true) => sizeFor(key.lines + 1)
-      case LetterShape.Rising(false) =>
-        shrunkToFit(
-          sizeFor(key.lines + 1),
-          sizeFor(1),
-          baselinePx,
-          size => FontSpec.fromAwt(fontAt(size)),
-          key,
-          measurer
-        )
+      case LetterShape.Drop   => sizeFor(key.lines)
+      case LetterShape.Rising => sizeFor(key.lines + 1)
     val font       = fontAt(sizePx)
     val spec       = FontSpec.fromAwt(font)
     val ink        = measurer.inkBounds(spec, key.text)
     val hangPx     = math.ceil(ink.bottom.toDouble).toInt.max(0)
     val inkRightPx = math.ceil(ink.right.toDouble).toInt.max(0)
     val growthPx =
-      if key.shape == LetterShape.Rising(growsRow = true) then riseAbove(baselinePx, spec, key.text, measurer) else 0
+      if key.shape.rises then riseAbove(baselinePx, spec, key.text, measurer) else 0
     DropCapGlyph(
       key.text,
       key.text.length,
@@ -133,34 +123,6 @@ object DropCapGlyph:
       bodyFont.getSize2D,
       growthPx
     )
-
-  /** The largest size up to `tallestPx` at which the letter's capitals, or its ink if that goes higher, reach no higher
-    * above its baseline than `roomAboveBaselinePx`, the room from the top of the first row down to the baseline; never
-    * below `shortestPx`, the size at which its capitals are as tall as the body's.
-    */
-  private def shrunkToFit(
-    tallestPx: Float,
-    shortestPx: Float,
-    roomAboveBaselinePx: Int,
-    fontAt: Float => FontSpec,
-    key: FitKey,
-    measurer: TextMeasurer
-  ): Float =
-    @annotation.tailrec
-    def fit(sizePx: Float, attemptsLeft: Int): Float =
-      val reachPx = aboveBaselinePx(fontAt(sizePx), key.text, measurer)
-      if reachPx <= roomAboveBaselinePx then sizePx
-      else
-        val scaled = (sizePx * roomAboveBaselinePx / reachPx).min(sizePx - MinShrinkPx).max(shortestPx)
-        if scaled <= shortestPx || attemptsLeft <= 0 then scaled else fit(scaled, attemptsLeft - 1)
-    fit(tallestPx, MaxFitAttempts)
-
-  /** A glyph's ink does not scale exactly with its size, so the first scaling can leave it a pixel above the row; it is
-    * scaled again, by at least this much, until it fits.
-    */
-  private val MinShrinkPx = 0.05f
-
-  private val MaxFitAttempts = 6
 
   private def aboveBaselinePx(font: FontSpec, text: String, measurer: TextMeasurer): Int =
     val inkTop = measurer.inkBounds(font, text).top

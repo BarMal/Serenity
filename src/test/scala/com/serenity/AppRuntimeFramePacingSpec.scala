@@ -7,7 +7,7 @@ import cats.effect.{IO, Ref}
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.*
 import com.serenity.config.AppConfigOps.*
-import com.serenity.diagnostics.{KeyLatencyTrace, LatencyStage}
+import com.serenity.diagnostics.{FrameTimings, LatencySplit, LatencyStage}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.ui.color.RenderColor
@@ -100,7 +100,8 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
   it should "stamp a frame's wake, pacing deadline and model read onto the latency trace" in {
     val interval = AppRuntime.fastFrameInterval(RenderFpsTarget.Fps60)
     val nanos    = new java.util.concurrent.atomic.AtomicLong(1.second.toNanos)
-    val trace    = KeyLatencyTrace(() => nanos.get())
+    val timings  = FrameTimings(() => nanos.get())
+    val trace    = timings.keyLatency
     trace.setEnabled(true)
     trace.keyReceived(System.currentTimeMillis())
     trace.keyEnqueued()
@@ -144,7 +145,7 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
           delay => IO(nanos.addAndGet(delay.toNanos)).void,
           frameClock = IO(nanos.get().nanos),
           lastFrameStart = lastStart,
-          keyLatency = trace
+          frameTimings = timings
         )
         .compile
         .drain
@@ -214,3 +215,64 @@ class AppRuntimeFramePacingSpec extends AnyFlatSpec with Matchers:
     yield PacedFrames(rendered, requested)
 
     program.unsafeRunTimed(10.seconds).getOrElse(fail("the fast render phase did not finish"))
+
+  it should "hand a frame's layout, draw and flush time to the keystrokes it shows" in {
+    val nanos   = new java.util.concurrent.atomic.AtomicLong(1.second.toNanos)
+    val timings = FrameTimings(() => nanos.get())
+    val trace   = timings.keyLatency
+    trace.setEnabled(true)
+    trace.keyReceived(System.currentTimeMillis())
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.keysApplied(1)
+    trace.damageEmitted()
+    val state = AppState.initial
+    val program = for
+      lastStart          <- Ref.of[IO, Option[FiniteDuration]](None)
+      fastModeSignal     <- fs2.concurrent.SignallingRef.of[IO, Boolean](true)
+      pendingDamage      <- Ref.of[IO, Damage](Damage.Everything)
+      pendingPaintDamage <- Ref.of[IO, Damage](Damage.Nothing)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(state)
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(com.serenity.state.manager.Model(state, com.serenity.state.undo.UndoState()))
+        def updateStateValidated(update: AppState => AppState): IO[Unit]     = IO.unit
+        def applyEvent(event: com.serenity.keystroke.events.Event): IO[Unit] = IO.unit
+      given Logger[IO] = new RecordingLogger(Ref.unsafe[IO, Vector[LogEntry]](Vector.empty))
+      _ <- AppRuntimeRenderLoops
+        .fastRenderPhase(
+          stateManager,
+          fastModeSignal,
+          pendingDamage,
+          pendingPaintDamage,
+          IO.pure(Some(state)),
+          IO.unit,
+          (
+            _: AppState,
+            _: Boolean,
+            _: Option[RenderColor],
+            _: Damage,
+            caches: com.serenity.state.manager.RenderCaches
+          ) =>
+            IO {
+              caches.framePhases.layout(())
+              caches.framePhases.draw(caches.framePhases.flush(()))
+              trace.framePublished()
+            },
+          com.serenity.state.manager.RenderCaches.create(),
+          delay => IO(nanos.addAndGet(delay.toNanos)).void,
+          frameClock = IO(nanos.get().nanos),
+          lastFrameStart = lastStart,
+          frameTimings = timings
+        )
+        .compile
+        .drain
+    yield ()
+    program.unsafeRunTimed(10.seconds).getOrElse(fail("the fast render phase did not finish"))
+    trace.paintStarted()
+    trace.paintFinished()
+
+    trace.drain().keys.flatMap(_.splits.keySet).toSet shouldBe
+      Set(LatencySplit.RenderLayout, LatencySplit.RenderDraw, LatencySplit.RenderFlush)
+  }

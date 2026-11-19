@@ -40,11 +40,15 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
     window: Window,
     resolution: IO[Double] = IO.pure(1.5),
     backend: String = "skia",
-    prepare: IO[Unit] = IO.unit
+    prepare: IO[Unit] = IO.unit,
+    inApp: Option[Window] = None,
+    workload: Plan = plan,
+    device: Option[String] = None,
+    canvasPixels: Long = 0L
   ): Setup =
     Setup(
       candidate = Candidate.LayerImage,
-      plan = plan,
+      plan = workload,
       window = window,
       clockResolutionMs = resolution,
       scale = 2.0,
@@ -52,7 +56,10 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       renderApi = IO.pure(Some("OPENGL")),
       timeout = 5.minutes,
       prepare = prepare,
-      prepareTimeout = 3.seconds
+      prepareTimeout = 3.seconds,
+      inApp = inApp.map(IO.pure),
+      device = IO.pure(device),
+      canvasPixels = IO.pure(canvasPixels)
     )
 
   private def lineOf(text: String): RendererTrial.Report =
@@ -177,4 +184,75 @@ class RendererTrialChildSpec extends AnyFlatSpec with Matchers:
       case Outcome.Failed(reason) if reason.contains("start-up") && reason.contains("3 s") =>
     }
     printed._2 shouldBe 3.seconds
+  }
+
+  private def printed(setup: Setup): String =
+    runVirtual {
+      for
+        quit <- Deferred[IO, Unit]
+        text <- IO {
+          val bytes = new ByteArrayOutputStream()
+          bytes -> new PrintStream(bytes, true, "UTF-8")
+        }
+        _ <- RendererTrialChild.run(setup, quit, text._2)
+      yield text._1.toString("UTF-8")
+    }
+
+  it should "measure again by the in-app clock, without the resize, when the screen cannot be read, and say so" in {
+    val steps         = new java.util.concurrent.ConcurrentLinkedQueue[Step]()
+    val inApp: Window = step => IO(steps.add(step)).as(Some(9.0))
+    val report = lineOf(printed(setup(_ => IO.pure(None), inApp = Some(inApp), workload = plan.copy(typedChars = 6))))
+    report.outcome match
+      case Outcome.Measured(workload) =>
+        workload.clock shouldBe RendererChoice.Clock.InApp
+        workload.typingP50Ms shouldBe 9.0
+        workload.clockResolutionMs shouldBe 0.0
+      case other => fail(s"expected an in-app measurement, got $other")
+    steps.toArray.toList.collect { case Step.FullRedraw(how) => how } should
+      contain only RendererWorkload.Redraw.ThemeToggle
+  }
+
+  it should "not use the in-app clock when the screen was read" in {
+    val inApp: Window = _ => IO.raiseError(new IllegalStateException("the in-app clock must not run"))
+    lineOf(
+      printed(setup(_ => IO.pure(Some(12.0)), inApp = Some(inApp), workload = plan.copy(typedChars = 6)))
+    ).outcome match
+      case Outcome.Measured(workload) => workload.clock shouldBe RendererChoice.Clock.Pixel
+      case other                      => fail(s"expected a pixel measurement, got $other")
+  }
+
+  it should "fail, saying neither clock saw a keystroke, when the in-app clock cannot see one either" in {
+    lineOf(
+      printed(setup(_ => IO.pure(None), inApp = Some(_ => IO.pure(None)), workload = plan.copy(typedChars = 6)))
+    ).outcome match
+      case Outcome.Failed(reason) => reason should (include("screen") and include("in-app"))
+      case other                  => fail(s"expected a failure, got $other")
+  }
+
+  it should "keep the screen's failure when there is no in-app clock to fall back to" in {
+    lineOf(printed(setup(_ => IO.pure(None), workload = plan.copy(typedChars = 6)))).outcome should matchPattern {
+      case Outcome.Failed(reason) if reason.contains("cannot be read from here") =>
+    }
+  }
+
+  it should "print the adapter the window ran on" in {
+    lineOf(printed(setup(_ => IO.pure(Some(12.0)), device = Some("llvmpipe")))).device shouldBe Some("llvmpipe")
+    lineOf(printed(setup(_ => IO.pure(Some(12.0))))).device shouldBe None
+  }
+
+  it should "report the pixels of the canvas it measured on, by either clock" in {
+    def pixels(text: String): Long = lineOf(text).outcome match
+      case Outcome.Measured(workload) => workload.canvasPixels
+      case other                      => fail(s"expected a measurement, got $other")
+    pixels(printed(setup(_ => IO.pure(Some(12.0)), canvasPixels = 2_722_440L))) shouldBe 2_722_440L
+    pixels(
+      printed(
+        setup(
+          _ => IO.pure(None),
+          inApp = Some(_ => IO.pure(Some(9.0))),
+          workload = plan.copy(typedChars = 6),
+          canvasPixels = 6_000_000L
+        )
+      )
+    ) shouldBe 6_000_000L
   }

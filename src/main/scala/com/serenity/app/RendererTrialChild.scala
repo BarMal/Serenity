@@ -5,8 +5,8 @@ import java.io.PrintStream
 import scala.concurrent.duration.*
 
 import cats.effect.{Deferred, IO}
-import com.serenity.app.RendererChoice.{Candidate, Outcome}
-import com.serenity.app.RendererWorkload.{Plan, Window}
+import com.serenity.app.RendererChoice.{Candidate, Clock, Outcome}
+import com.serenity.app.RendererWorkload.{Plan, Result, Window}
 
 /** What a `--renderer-trial=<mode>` child does (#2618): run the workload in its window, print one `RENDERER_TRIAL` line
   * with what it measured, and quit. Whatever goes wrong, it prints a line saying so: a child that printed nothing would
@@ -26,7 +26,10 @@ object RendererTrialChild:
       timeout: FiniteDuration,
       prepare: IO[Unit] = IO.unit,
       prepareTimeout: FiniteDuration = 10.seconds,
-      progress: String => IO[Unit] = _ => IO.unit
+      progress: String => IO[Unit] = _ => IO.unit,
+      inApp: Option[IO[Window]] = None,
+      device: IO[Option[String]] = IO.pure(None),
+      canvasPixels: IO[Long] = IO.pure(0L)
   )
 
   /** A ceiling above the workload's two minutes or so, so a hung window cannot hang the coordinator. */
@@ -44,6 +47,24 @@ object RendererTrialChild:
     case Candidate.LayerImage | Candidate.LayerPicture => RenderBackend.Skia
     case Candidate.SkiaRaster                          => RenderBackend.SkiaRaster
 
+  private def pixelOutcome(setup: Setup, result: Result, resolution: Double, pixels: Long): Outcome =
+    RendererWorkload.outcome(result, setup.scale, resolution, canvasPixels = pixels)
+
+  /** When the screen cannot be read, measures again by the app's own stamps if the window can, leaving the resize out.
+    */
+  private def inApp(setup: Setup, unread: Result, pixels: Long): IO[Outcome] =
+    setup.inApp.fold(IO.pure(RendererWorkload.outcome(unread, setup.scale, 0.0, canvasPixels = pixels))) { start =>
+      for
+        window <- start
+        result <- RendererWorkload.run(setup.plan.copy(resize = false), window, setup.progress)
+      yield
+        if result.unreadableScreen then
+          Outcome.Failed(
+            "the screen cannot be read from here, and the in-app clock saw no keystroke painted either"
+          )
+        else RendererWorkload.outcome(result, setup.scale, 0.0, Clock.InApp, pixels)
+    }
+
   private def prepared(setup: Setup): IO[Unit] =
     setup.prepare.timeoutTo(
       setup.prepareTimeout,
@@ -57,8 +78,12 @@ object RendererTrialChild:
       for
         _          <- prepared(setup)
         resolution <- setup.clockResolutionMs
+        pixels     <- setup.canvasPixels.handleError(_ => 0L)
         result     <- RendererWorkload.run(setup.plan, setup.window, setup.progress)
-      yield RendererWorkload.outcome(result, setup.scale, resolution)
+        outcome <-
+          if result.unreadableScreen then inApp(setup, result, pixels)
+          else IO.pure(pixelOutcome(setup, result, resolution, pixels))
+      yield outcome
     val guarded: IO[Outcome] =
       measured
         .timeoutTo(setup.timeout, IO.pure(Outcome.Failed(s"the trial timed out after ${setup.timeout.toSeconds} s")))
@@ -66,14 +91,16 @@ object RendererTrialChild:
     for
       outcome <- guarded
       api     <- setup.renderApi.handleError(_ => None)
+      device  <- setup.device.handleError(_ => None)
       report = RenderBackend.values.find(_.configKey == setup.backendKey) match
-        case Some(backend) => RendererTrial.Report(setup.candidate, backend, api, outcome)
+        case Some(backend) => RendererTrial.Report(setup.candidate, backend, api, outcome, device)
         case None =>
           RendererTrial.Report(
             setup.candidate,
             backendFor(setup.candidate),
             api,
-            Outcome.Failed(s"the window reported a backend this build does not know: ${setup.backendKey}")
+            Outcome.Failed(s"the window reported a backend this build does not know: ${setup.backendKey}"),
+            device
           )
       _ <- IO { out.println(RendererTrial.line(report)); out.flush() }
       _ <- quit.complete(()).void

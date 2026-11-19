@@ -43,7 +43,8 @@ object RendererWorkload:
       fullRedraws: Int,
       typingPace: FiniteDuration,
       settle: FiniteDuration,
-      unreadableAfter: Int = 5
+      unreadableAfter: Int = 5,
+      resize: Boolean = true
   )
 
   object Plan:
@@ -69,7 +70,7 @@ object RendererWorkload:
     Vector.tabulate(plan.typedChars)(index => Step.Type(prose(index % prose.length))) ++
       Vector.fill(plan.pageDowns)(Step.PageDown) ++
       Vector.tabulate(plan.fullRedraws)(index =>
-        Step.FullRedraw(if index % 2 == 0 then Redraw.Resize else Redraw.ThemeToggle)
+        Step.FullRedraw(if plan.resize && index % 2 == 0 then Redraw.Resize else Redraw.ThemeToggle)
       )
 
   private val ProgressEvery = 30
@@ -116,14 +117,26 @@ object RendererWorkload:
     case _: Step.Type => plan.typingPace
     case _            => plan.settle
 
-  def outcome(result: Result, scale: Double, clockResolutionMs: Double): Outcome =
+  def outcome(
+    result: Result,
+    scale: Double,
+    clockResolutionMs: Double,
+    clock: RendererChoice.Clock = RendererChoice.Clock.Pixel,
+    canvasPixels: Long = 0L
+  ): Outcome =
     if result.unreadableScreen then
       Outcome.Failed(
         s"the screen showed no change after ${result.typing.timedOut} typed characters: it cannot be read from here"
       )
-    else measured(result, scale, clockResolutionMs)
+    else measured(result, scale, clockResolutionMs, clock, canvasPixels)
 
-  private def measured(result: Result, scale: Double, clockResolutionMs: Double): Outcome =
+  private def measured(
+    result: Result,
+    scale: Double,
+    clockResolutionMs: Double,
+    clock: RendererChoice.Clock,
+    canvasPixels: Long
+  ): Outcome =
     val unanswered = List("typing" -> result.typing, "page-down" -> result.pageDown, "full-redraw" -> result.fullRedraw)
       .filter((_, samples) => samples.latenciesMs.isEmpty)
     if unanswered.nonEmpty then
@@ -139,6 +152,8 @@ object RendererWorkload:
           typingP95Ms = RendererChoice.percentile(result.typing.latenciesMs.toList, 95),
           scale = scale,
           clockResolutionMs = clockResolutionMs,
+          clock = clock,
+          canvasPixels = canvasPixels,
           fullWindowMs = Map(
             "page-down"   -> RendererChoice.median(result.pageDown.latenciesMs.toList),
             "full-redraw" -> RendererChoice.median(result.fullRedraw.latenciesMs.toList)

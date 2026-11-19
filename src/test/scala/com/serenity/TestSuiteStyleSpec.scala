@@ -68,6 +68,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
     List(
       "val window = new SwingWindow(size, metrics)",
       "SwingWindow.resource(metrics = m).use(_ => IO.unit)",
+      "SwingWindowHost\n  .resource(metrics, metrics, mode, None, timings, \"x\")",
       "PerformanceBenchmarks.withSuite(_.size)",
       "LaptopFrameBenchmarks.presentWindowResource(a, b)",
       "frame.setVisible(true)",
@@ -106,6 +107,7 @@ class TestSuiteStyleSpec extends AnyFlatSpec with Matchers:
   private val RealWindowPatterns = List(
     raw"\bnew\s+SwingWindow\s*\(",
     raw"\bSwingWindow\s*\.\s*resource\s*\(",
+    raw"\bSwingWindowHost\s*\.\s*resource\s*\(",
     raw"\.withSuite\s*\(",
     raw"\bpresentWindowResource\s*\(",
     raw"\.setVisible\s*\(\s*true\s*\)",

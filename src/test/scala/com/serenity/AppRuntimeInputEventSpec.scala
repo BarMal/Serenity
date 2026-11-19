@@ -138,6 +138,46 @@ class AppRuntimeInputEventSpec extends AnyFlatSpec with Matchers:
     summary.phases.get(com.serenity.diagnostics.FramePhase.InputApply).map(_.count) shouldBe Some(3)
   }
 
+  it should "time the damage each applied input publishes, apart from applying it" in {
+    val timings = com.serenity.diagnostics.FrameTimings()
+    timings.setEnabled(true)
+    val program = for
+      cursorVisible <- Ref.of[IO, Boolean](true)
+      router = new InputRouter[IO, Event]:
+        private val initialTranslator = new TextEntryTranslator(AppConfig.conventional)
+
+        def eventStream(infoStream: Stream[IO, KeyStrokeInfo]): Stream[IO, Event] = Stream.empty
+        def setActiveTranslator(translator: Translator[Event]): IO[Unit]          = IO.unit
+        def getActiveTranslator: IO[Translator[Event]]                            = IO.pure(initialTranslator)
+      stateManager = new com.serenity.state.manager.StateEngine:
+        def getCurrentState: IO[AppState] = IO.pure(AppState.initial(AppConfig.conventional))
+        def getModel: IO[com.serenity.state.manager.Model] =
+          IO.pure(
+            com.serenity.state.manager
+              .Model(AppState.initial(AppConfig.conventional), com.serenity.state.undo.UndoState())
+          )
+        def updateState(update: AppState => AppState): IO[Unit]          = IO.unit
+        def updateStateValidated(update: AppState => AppState): IO[Unit] = IO.unit
+        def applyEvent(event: Event): IO[Unit]                           = IO.unit
+      clipboard = SystemClipboard[IO](readText = IO.pure(None), writeText = _ => IO.unit)
+      _ <- AppRuntimeRenderLoops
+        .inputEventPhase(
+          stateManager,
+          router,
+          clipboard,
+          IO.unit,
+          cursorVisible,
+          (_: Damage) => IO.unit,
+          frameTimings = timings
+        )(Stream.emits(List(InsertChar('a'), MoveLeft, InsertChar('b'))))
+        .compile
+        .drain
+    yield timings.drain()
+
+    val summary = program.unsafeRunSync()
+    summary.phases.get(com.serenity.diagnostics.FramePhase.ApplyDamage).map(_.count) shouldBe Some(3)
+  }
+
   it should "check for a resize before applying pointer input" in {
     val program = for
       resizeChecks  <- Ref.of[IO, Int](0)

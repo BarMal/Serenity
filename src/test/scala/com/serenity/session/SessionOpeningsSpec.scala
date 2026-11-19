@@ -16,7 +16,6 @@ class SessionOpeningsSpec extends AnyFlatSpec with Matchers:
   private val everything = OpeningOverride(
     enabled = Some(true),
     letterMode = Some(LetterMode.Hybrid),
-    raisedRow = Some(RaisedRowRule.Clamp),
     hybridSinkLines = Some(4),
     smallCapsFirstLine = Some(true),
     epigraph = Some(EpigraphRule.ExplicitOnly),
@@ -73,6 +72,18 @@ class SessionOpeningsSpec extends AnyFlatSpec with Matchers:
 
     SessionBuffer.toBuffer(session).document.openings shouldBe
       OpeningOverride(enabled = Some(true), hybridSinkLines = Some(4))
+  }
+
+  it should "restore a buffer saved with a raised-row override, ignoring that one setting and keeping the rest" in {
+    val written = """{"id":1,"filePath":null,"isDirty":false,"language":null,"isNewEmpty":false,
+                    |"cursors":[{"line":0,"column":0}],
+                    |"viewport":{"leftColumn":0,"topLine":0,"visibleColumns":80,"visibleLines":24},
+                    |"openings":{"enabled":true,"letter":"raised","raisedRow":"clamp","hybridSinkLines":4}}""".stripMargin
+
+    val buffer = SessionBuffer.toBuffer(parser.decode[SessionBuffer](written).getOrElse(fail("it should decode")))
+
+    buffer.document.openings shouldBe
+      OpeningOverride(enabled = Some(true), letterMode = Some(LetterMode.Raised), hybridSinkLines = Some(4))
   }
 
   "A document reloaded from disk" should "keep the overrides the user gave it" in {

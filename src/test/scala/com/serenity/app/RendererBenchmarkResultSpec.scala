@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
 import com.serenity.app.RendererBenchmarkResult.{Key, Standing, Stored}
-import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Outcome, Workload}
+import com.serenity.app.RendererChoice.{Candidate, CandidateRuns, Clock, Outcome, Workload}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -64,7 +64,8 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
       good.replace("layer+image", "layer+nonsense"),
       good.replace("\"typingP50Ms\"", "\"typing\""),
       good.replace("\"typingP95Ms\"", "\"typingP95\""),
-      good.replace("\"scale\"", "\"zoom\""),
+      good.replace("\"jvmScale\"", "\"zoom\""),
+      good.replace("\"canvasPixels\"", "\"pixels\""),
       good.replace("\"clockResolutionMs\"", "\"resolution\""),
       good.replace("2026-11-11T17:30:00Z", "yesterday")
     ).foreach(text => withClue(text.take(40))(RendererBenchmarkResult.decode(text) shouldBe None))
@@ -75,8 +76,10 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
       .encode(stored)
       .replace("\"schema\"", "\"schemaWas\"")
     RendererBenchmarkResult.decode(old) shouldBe None
-    val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 3", "\"schema\" : 2")
-    RendererBenchmarkResult.decode(earlier) shouldBe None
+    List(2, 3, 4).foreach { version =>
+      val earlier = RendererBenchmarkResult.encode(stored).replace("\"schema\" : 5", s"\"schema\" : $version")
+      RendererBenchmarkResult.decode(earlier) shouldBe None
+    }
   }
 
   "RendererBenchmarkResult.standing" should "be absent when nothing was stored" in {
@@ -144,4 +147,39 @@ class RendererBenchmarkResultSpec extends AnyFlatSpec with Matchers:
     val path = RendererBenchmarkResult.defaultPath
     path.getFileName.toString shouldBe "render-benchmark.json"
     path.getParent.getFileName.toString shouldBe ".serenity"
+  }
+
+  it should "keep the clock a run was measured by, and read a run without one as the pixel clock's" in {
+    val inApp = Stored(
+      machine,
+      Instant.parse("2026-11-16T10:00:00Z"),
+      List(
+        CandidateRuns(
+          Candidate.LayerImage,
+          List(Outcome.Measured(Workload(20.0, 30.0, 1.0, 0.0, Map("page-down" -> 9.0), clock = Clock.InApp)))
+        )
+      )
+    )
+    val text = RendererBenchmarkResult.encode(inApp)
+    text should include("\"clock\" : \"in-app\"")
+    RendererBenchmarkResult.decode(text) shouldBe Some(inApp)
+    RendererBenchmarkResult.decode(RendererBenchmarkResult.encode(stored)) shouldBe Some(stored)
+    RendererBenchmarkResult.encode(stored) should include("\"clock\" : \"pixel\"")
+  }
+
+  it should "keep the canvas size a run drew on and the scale the JVM reported, the latter as jvmScale" in {
+    val sized = Stored(
+      machine,
+      Instant.parse("2026-11-16T10:00:00Z"),
+      List(
+        CandidateRuns(
+          Candidate.LayerImage,
+          List(Outcome.Measured(Workload(20.0, 30.0, 1.0, 0.0, Map("page-down" -> 9.0), canvasPixels = 2_722_440L)))
+        )
+      )
+    )
+    val text = RendererBenchmarkResult.encode(sized)
+    text should (include("\"jvmScale\" : 1.0") and include("\"canvasPixels\" : 2722440"))
+    text should not include "\"scale\""
+    RendererBenchmarkResult.decode(text) shouldBe Some(sized)
   }

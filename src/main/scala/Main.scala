@@ -467,7 +467,13 @@ object Main extends IOApp:
                   quit = smokeReady,
                   timeout = StartupProbe.Timeout
                 )
-              ) >> RendererTrialLaunch.firstFrame(launchOptions, host, startup.backend, smokeReady)
+              ) >> RendererTrialLaunch.firstFrame(
+                launchOptions,
+                host,
+                startup.backend,
+                smokeReady,
+                frameTimings = frameTimings
+              )
 
             val frontendRuntime = FrontendRuntime(
               inputHandler = router =>

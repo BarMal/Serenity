@@ -1,8 +1,8 @@
 package com.serenity.testkit
 
 import java.awt.{GraphicsEnvironment, Window}
-import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit}
 import javax.swing.{JFrame, SwingUtilities}
 
 import org.scalatest.flatspec.AnyFlatSpec
@@ -31,6 +31,27 @@ class DisplayExclusiveSpec extends AnyFlatSpec with Matchers:
         poll()
 
     poll()
+
+  "DisplayExclusive" should "have the event thread caught up when it lets go, so a window the body asked to close late is gone" in {
+    withDisplay()
+    val frame   = new JFrame("closing late")
+    val release = new CountDownLatch(1)
+    val timer   = Executors.newSingleThreadScheduledExecutor()
+    onSwing(frame.setVisible(true))
+    try
+      DisplayExclusive {
+        SwingUtilities.invokeLater { () =>
+          release.await()
+          frame.dispose()
+        }
+        timer.schedule((() => release.countDown()): Runnable, 200, TimeUnit.MILLISECONDS): Unit
+      }
+      frame.isShowing shouldBe false
+    finally
+      release.countDown()
+      timer.shutdownNow(): Unit
+      onSwing(frame.dispose())
+  }
 
   "DisplayExclusive.withShowingWindowsAfter" should "return the body's result" in {
     DisplayExclusive.withShowingWindowsAfter(21 * 2)._1 shouldBe 42
