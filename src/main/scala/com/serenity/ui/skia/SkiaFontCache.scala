@@ -164,13 +164,19 @@ private[skia] object SkiaTypefaces:
   def typefaceFor(key: TypefaceKey): Typeface =
     typefaceFor(key.family, key.bold, key.italic)
 
-  /** A logical family is the platform's documented family where the JDK documents one, else the font manager's best
-    * family for its generic name (fontconfig knows `sans-serif`, not `SansSerif`, and answers an unknown name with
-    * whatever covers the most scripts); any other family is looked up by its own name.
+  /** A logical family is drawn in the family the project's own resolver gives it, the one layout measures with: the
+    * platform's documented family where the JDK documents one (Windows, macOS), else what `fc-match` ranks first for
+    * its generic name. A font manager's own list for a generic name is not ranked that way (fontconfig lists
+    * IPAGothic before Inter for `sans-serif`), and one asked for a name it does not know answers with its default list.
     */
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
     physicalFamilyFor(family, System.getProperty("os.name", ""))
       .flatMap(systemTypeface(_, bold, italic))
+      .orElse(
+        Option(LogicalFontFamilies.system.resolve(family))
+          .filter(_ != family)
+          .flatMap(systemTypeface(_, bold, italic))
+      )
       .orElse(LogicalFamilies.get(family.toLowerCase).flatMap(systemTypeface(_, bold, italic)))
       .orElse(systemTypeface(family, bold, italic))
       .orElse(bundledTypeface(family, bold, italic))

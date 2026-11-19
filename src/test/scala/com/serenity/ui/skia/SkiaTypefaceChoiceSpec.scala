@@ -2,6 +2,7 @@ package com.serenity.ui.skia
 
 import java.awt.Font
 
+import com.serenity.ui.fonts.LogicalFontFamilies
 import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.{Font as SkFont, FontMgr, FontStyleSet, Typeface}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -43,19 +44,31 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
       withClue(s"chosen ${describe(chosen)}, Skia matches ${describe(oracle)}: ")(describe(chosen) shouldBe describe(oracle))
     }
 
-  private val logicalFamilies = List(
-    Font.SANS_SERIF -> "sans-serif",
-    Font.DIALOG     -> "sans-serif",
-    Font.SERIF      -> "serif",
-    Font.MONOSPACED -> "monospace"
-  )
-
-  for (logical, generic) <- logicalFamilies; (label, bold) <- List(("plain", false), ("bold", true)) do
-    s"A $label $logical font" should "be drawn in the family the font manager lists first for the generic name" in {
-      val set = FontMgr.Companion.getDefault().matchFamily(generic)
-      assume(set != null && set.count() > 0, s"$generic is not a family name of this machine's font manager")
-      val best   = Option(set.getTypeface(0)).map(_.getFamilyName)
+  for logical <- List(Font.SANS_SERIF, Font.DIALOG, Font.SERIF, Font.MONOSPACED, Font.DIALOG_INPUT);
+    (label, bold) <- List(("plain", false), ("bold", true))
+  do
+    s"A $label $logical font" should "be drawn in the family layout resolves the logical name to" in {
+      val resolved = LogicalFontFamilies.system.resolve(logical)
+      assume(resolved != logical, s"this machine's fontconfig names no installed family for $logical")
       val spec   = FontSpec.fromAwt(new Font(logical, if bold then Font.BOLD else Font.PLAIN, 14))
       val chosen = SkiaTypefaces.fontFor(spec).getTypeface.getFamilyName
-      Option(chosen) shouldBe best
+      chosen shouldBe resolved
     }
+
+  "A bundled family the system does not have" should "be drawn in its bundled face, not in what the font manager answers an unknown name with" in {
+    val resource = Option(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf"))
+    assume(resource.isDefined, "the bundled Monaspace Neon is not on the classpath")
+    val awt = resource.map(url =>
+      Font.createFont(Font.TRUETYPE_FONT, java.nio.file.Paths.get(url.toURI).toFile).deriveFont(Font.PLAIN, 14.0f)
+    )
+    val named = awt.map(_.getFamily)
+    assume(
+      named.exists(name => Option(FontMgr.Companion.getDefault().matchFamily(name)).forall(set => !listsFamily(set, name))),
+      "this machine has Monaspace Neon installed"
+    )
+    val chosen = awt.map(font => SkiaTypefaces.fontFor(FontSpec.fromAwt(font)).getTypeface.getFamilyName)
+    chosen.map(_.toLowerCase) should contain("monaspace neon")
+  }
+
+  private def listsFamily(set: FontStyleSet, family: String): Boolean =
+    (0 until set.count()).exists(index => Option(set.getTypeface(index)).exists(_.getFamilyName.equalsIgnoreCase(family)))
