@@ -2,6 +2,8 @@ package com.serenity.ui.layout
 
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
+import scala.collection.immutable.VectorMap
+
 /** An `AtomicReference[Map[K, V]]`-backed cache bounded to
   * [[com.serenity.ui.renderer.RendererFrameState.cacheCapacity]] most-recently- written entries, standing in for
   * `java.util.WeakHashMap`'s GC-driven eviction (see that constant's doc comment for why a recency bound is an
@@ -13,23 +15,19 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
   * suspended on (#1434). `AtomicReference` gives the same lock-free CAS semantics without the indirection.
   */
 final private[ui] class BoundedRefCache[K, V](capacity: AtomicInteger):
-  private case class Contents(entries: Map[K, V], order: Vector[K])
 
-  private val state: AtomicReference[Contents] = new AtomicReference(Contents(Map.empty, Vector.empty))
+  /** Oldest write first: a write moves its key to the end, and the oldest are dropped from the front. */
+  private val state: AtomicReference[VectorMap[K, V]] = new AtomicReference(VectorMap.empty)
 
-  private def bounded(contents: Contents): Contents =
-    val currentCapacity = capacity.get()
-    if contents.order.size <= currentCapacity then contents
-    else
-      val dropCount = contents.order.size - currentCapacity
-      val dropped   = contents.order.take(dropCount)
-      Contents(contents.entries -- dropped, contents.order.drop(dropCount))
+  private def bounded(entries: VectorMap[K, V]): VectorMap[K, V] =
+    val excess = entries.size - capacity.get()
+    if excess <= 0 then entries else entries -- entries.keysIterator.take(excess).toList
 
-  /** Retries `f` against the current [[Contents]] until its compare-and-set succeeds -- the plain-value equivalent of
+  /** Retries `f` against the current entries until its compare-and-set succeeds -- the plain-value equivalent of
     * `Ref.update`.
     */
   @annotation.tailrec
-  private def casUpdate(f: Contents => Contents): Unit =
+  private def casUpdate(f: VectorMap[K, V] => VectorMap[K, V]): Unit =
     val current = state.get()
     val next    = f(current)
     if !state.compareAndSet(current, next) then casUpdate(f)
@@ -38,22 +36,22 @@ final private[ui] class BoundedRefCache[K, V](capacity: AtomicInteger):
     * `Ref.modify`.
     */
   @annotation.tailrec
-  private def casModify[A](f: Contents => (Contents, A)): A =
+  private def casModify[A](f: VectorMap[K, V] => (VectorMap[K, V], A)): A =
     val current        = state.get()
     val (next, result) = f(current)
     if state.compareAndSet(current, next) then result else casModify(f)
 
   def get(key: K): Option[V] =
-    state.get().entries.get(key)
+    state.get().get(key)
 
   def snapshot: Map[K, V] =
-    state.get().entries
+    state.get()
 
   def put(key: K, value: V): Unit =
-    casUpdate(c => bounded(Contents(c.entries.updated(key, value), c.order.filterNot(_ == key) :+ key)))
+    casUpdate(entries => bounded((entries - key).updated(key, value)))
 
   def remove(key: K): Unit =
-    casUpdate(c => Contents(c.entries - key, c.order.filterNot(_ == key)))
+    casUpdate(_ - key)
 
   /** Rewrites every entry at once (e.g. folding damage into several tracked identities together) rather than one key at
     * a time.
@@ -62,11 +60,12 @@ final private[ui] class BoundedRefCache[K, V](capacity: AtomicInteger):
     modify(entries => (f(entries), ()))
 
   /** As [[casModify]], scoped to just the entries map: transforms the whole map and reports a value computed alongside
-    * that transform, atomically.
+    * that transform, atomically. The entries that stay keep their places and new ones come last.
     */
   def modify[A](f: Map[K, V] => (Map[K, V], A)): A =
-    casModify { c =>
-      val (nextEntries, result) = f(c.entries)
-      val nextOrder = c.order.filter(nextEntries.contains) ++ nextEntries.keySet.diff(c.order.toSet).toVector
-      (bounded(Contents(nextEntries, nextOrder)), result)
+    casModify { current =>
+      val (next, result) = f(current)
+      val kept           = current.iterator.collect { case (key, _) if next.contains(key) => key -> next(key) }
+      val added          = next.iterator.filterNot((key, _) => current.contains(key))
+      (bounded(VectorMap.from(kept ++ added)), result)
     }
