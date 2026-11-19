@@ -16,7 +16,7 @@ import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.testkit.TestMeasure
-import com.serenity.ui.layout.PixelRect
+import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.{MockRenderSurface, VerticalNavSupport}
 
@@ -142,7 +142,8 @@ private[perf] object DamageBenchmarks:
     */
   private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
     val font         = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics      = TestMeasure.cellMetrics(font)
+    // The canvas a mock surface clears is this many pixels; master's grid keeps the benchmark's workload what it was.
+    val metrics      = CellMetrics.fromFont(font)
     val viewport     = BenchmarkFixtures.viewportSize
     lazy val fixture = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
     lazy val before =
