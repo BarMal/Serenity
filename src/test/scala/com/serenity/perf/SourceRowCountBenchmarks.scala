@@ -4,8 +4,9 @@ import java.awt.Font
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{CellMetrics, LayoutMemos, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
+import com.serenity.ui.layout.{LayoutMemos, TextLayoutSnapshot, VisualRowCounts, WrappedLineCache}
 
 /** Counting the visual rows of every line of a 1,200-line source file in the bundled code font, from a fresh cache and
   * at a 1472 px panel (#2447 B2):
@@ -51,7 +52,7 @@ private[perf] object SourceRowCountBenchmarks:
       buffer,
       widthPx,
       font,
-      Some(CellMetrics.fromFont(font)),
+      Some(TestMeasure.cellMetrics(font)),
       false,
       WrappedLineCache.bounded(layoutMemos = memos)
     )
@@ -59,7 +60,7 @@ private[perf] object SourceRowCountBenchmarks:
 
   /** What wrapping each line on its own says, which no shortcut takes part in. */
   private def wrappedRows(font: Font): Int =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     lines.zipWithIndex.map { (text, line) =>
       TextLayoutSnapshot
         .boundedVisualLinesForText(
@@ -67,7 +68,7 @@ private[perf] object SourceRowCountBenchmarks:
           line,
           widthPx,
           font,
-          cellMetricsOverride = Some(CellMetrics.fromFont(font)),
+          cellMetricsOverride = Some(TestMeasure.cellMetrics(font)),
           wrapCache = cache
         )
         .length
@@ -80,8 +81,8 @@ private[perf] object SourceRowCountBenchmarks:
       lazy val expected = wrappedRows(font)
       // With ligatures on the certificate is built once, off the render path, so it is ready before any count; with
       // them off it is measured on the spot, and a fresh set of memos charges every count for it.
-      lazy val shared = LayoutMemos(_.run())
-      val memos       = () => if ligatures then shared else LayoutMemos(_.run())
+      lazy val shared = TestMeasure.layoutMemos(_.run())
+      val memos       = () => if ligatures then shared else TestMeasure.layoutMemos(_.run())
       lazy val certificate: Unit =
         if ligatures then
           val _ = totalRows(font, shared)

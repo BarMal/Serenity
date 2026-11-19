@@ -93,8 +93,7 @@ object PerformanceBenchmarks:
       LaptopFrameBenchmarks.floatingTypingBenchmarks() ++
       lspAndProjectBenchmarks(projectRoot) ++
       RenderBenchmarks.markdownBenchmarks() ++
-      MeasuredRowCountBenchmarks.benchmarks() ++
-      MeasuredSourceRowCountBenchmarks.benchmarks()
+      MeasuredRowCountBenchmarks.benchmarks()
 
   private[perf] def ropeBenchmarks(): List[BenchmarkRunner.Benchmark] =
     lazy val jsonText          = largeSingleLineJson(entries = 20_000)
