@@ -41,7 +41,7 @@ private[perf] object SkiaGlFrameBenchmarks:
   trait Frames:
     def render(state: AppState, damage: Damage): Unit
 
-  final private class Renderer(
+  final private[perf] class Renderer(
       metrics: CellMetrics,
       grid: ViewportSize,
       draw: (com.serenity.ui.renderer.RenderSurface => Unit) => Unit,
