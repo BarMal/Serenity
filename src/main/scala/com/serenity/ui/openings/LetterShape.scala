@@ -6,11 +6,8 @@ enum LetterShape:
   case Drop
 
   /** The letter is one line taller than a drop cap over the same lines and rises one line above the capitals of the
-    * first line. `growsRow` says whether the first row grows to make room for the part that rises or lets it reach into
-    * the room above.
+    * first line; the first row grows to make room for the part that rises.
     */
-  case Rising(growsRow: Boolean)
+  case Rising
 
-  def rises: Boolean = this match
-    case Drop      => false
-    case Rising(_) => true
+  def rises: Boolean = this == Rising

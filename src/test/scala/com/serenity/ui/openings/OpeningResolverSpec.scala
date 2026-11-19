@@ -8,7 +8,6 @@ class OpeningResolverSpec extends AnyFlatSpec with Matchers:
   private val global = OpeningSettings(
     enabled = true,
     letterMode = LetterMode.Raised,
-    raisedRow = RaisedRowRule.Clamp,
     hybridSinkLines = 4,
     smallCapsFirstLine = true,
     epigraphMarker = "epigraph",
@@ -35,7 +34,6 @@ class OpeningResolverSpec extends AnyFlatSpec with Matchers:
     val everything = OpeningOverride(
       enabled = Some(false),
       letterMode = Some(LetterMode.Drop),
-      raisedRow = Some(RaisedRowRule.Grow),
       hybridSinkLines = Some(2),
       smallCapsFirstLine = Some(false),
       epigraph = Some(EpigraphRule.ExplicitOnly),
@@ -48,7 +46,6 @@ class OpeningResolverSpec extends AnyFlatSpec with Matchers:
     OpeningResolver.resolve(global, everything) shouldBe OpeningSettings(
       enabled = false,
       letterMode = LetterMode.Drop,
-      raisedRow = RaisedRowRule.Grow,
       hybridSinkLines = 2,
       smallCapsFirstLine = false,
       epigraphMarker = "motto",
@@ -58,11 +55,10 @@ class OpeningResolverSpec extends AnyFlatSpec with Matchers:
 
   it should "change each setting on its own" in {
     val single = List(
-      OpeningOverride(enabled = Some(false))                -> global.copy(enabled = false),
-      OpeningOverride(raisedRow = Some(RaisedRowRule.Grow)) -> global.copy(raisedRow = RaisedRowRule.Grow),
-      OpeningOverride(hybridSinkLines = Some(3))            -> global.copy(hybridSinkLines = 3),
-      OpeningOverride(smallCapsFirstLine = Some(false))     -> global.copy(smallCapsFirstLine = false),
-      OpeningOverride(epigraphMarker = Some("quote"))       -> global.copy(epigraphMarker = "quote"),
+      OpeningOverride(enabled = Some(false))            -> global.copy(enabled = false),
+      OpeningOverride(hybridSinkLines = Some(3))        -> global.copy(hybridSinkLines = 3),
+      OpeningOverride(smallCapsFirstLine = Some(false)) -> global.copy(smallCapsFirstLine = false),
+      OpeningOverride(epigraphMarker = Some("quote"))   -> global.copy(epigraphMarker = "quote"),
       OpeningOverride(epigraph = Some(EpigraphRule.AutoDetect)) ->
         global.copy(rules = global.rules.copy(epigraph = EpigraphRule.AutoDetect)),
       OpeningOverride(sceneBreak = Some(SceneBreakRule.NoOpening)) ->
@@ -98,7 +94,6 @@ class OpeningResolverSpec extends AnyFlatSpec with Matchers:
 
   "A setting's config key" should "round-trip through its parser" in {
     LetterMode.values.foreach(mode => LetterMode.fromConfigKey(mode.configKey) shouldBe Some(mode))
-    RaisedRowRule.values.foreach(rule => RaisedRowRule.fromConfigKey(rule.configKey) shouldBe Some(rule))
     EpigraphRule.values.foreach(rule => EpigraphRule.fromConfigKey(rule.configKey) shouldBe Some(rule))
     SceneBreakRule.values.foreach(rule => SceneBreakRule.fromConfigKey(rule.configKey) shouldBe Some(rule))
     HandDropCapRule.values.foreach(rule => HandDropCapRule.fromConfigKey(rule.configKey) shouldBe Some(rule))

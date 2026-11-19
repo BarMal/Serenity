@@ -4,7 +4,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.openings.{LetterMode, OpeningOverride, OpeningSettings, RaisedRowRule}
+import com.serenity.ui.openings.{LetterMode, OpeningOverride, OpeningSettings}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -89,31 +89,19 @@ class OpeningsDamageSpec extends AnyFlatSpec with Matchers:
     }
   }
 
-  "With a raised or hybrid letter, an edit above an opening" should "damage the opening, as with a drop cap" in {
-    val typed =
-      document(title("One"), body("Epigraph words"), body("It was a bright cold day."), body("Second paragraph."))
+  "With a raised or hybrid letter, an edit above an opening" should
+    "damage the whole buffer, since the opening's row changes height with the letter" in {
+      val typed =
+        document(title("One"), body("Epigraph words"), body("It was a bright cold day."), body("Second paragraph."))
 
-    List(LetterMode.Raised, LetterMode.Hybrid).foreach { mode =>
-      val config =
-        AppConfig.default.withOpeningsConfig(
-          OpeningSettings(enabled = true, letterMode = mode, raisedRow = RaisedRowRule.Clamp)
-        )
-      damagedLines(stateOf(chapter, config), stateOf(typed, config)) should contain(2)
+      List(LetterMode.Raised, LetterMode.Hybrid).foreach { mode =>
+        val config = AppConfig.default.withOpeningsConfig(OpeningSettings(enabled = true, letterMode = mode))
+        everyRowDamaged(stateOf(chapter, config), stateOf(typed, config)) shouldBe true
+      }
     }
-  }
 
-  it should "damage the whole buffer instead when the row grows with the letter, since the opening's row changes height" in {
-    val typed =
-      document(title("One"), body("Epigraph words"), body("It was a bright cold day."), body("Second paragraph."))
-
-    List(LetterMode.Raised, LetterMode.Hybrid).foreach { mode =>
-      val config = AppConfig.default.withOpeningsConfig(OpeningSettings(enabled = true, letterMode = mode))
-      everyRowDamaged(stateOf(chapter, config), stateOf(typed, config)) shouldBe true
-    }
-  }
-
-  private def inMode(mode: LetterMode, rule: RaisedRowRule) =
-    AppConfig.default.withOpeningsConfig(OpeningSettings(enabled = true, letterMode = mode, raisedRow = rule))
+  private def inMode(mode: LetterMode) =
+    AppConfig.default.withOpeningsConfig(OpeningSettings(enabled = true, letterMode = mode))
 
   private def everyRowDamaged(before: AppState, after: AppState): Boolean =
     val damage = DamageProducer.forTransition(before, after)
@@ -127,7 +115,7 @@ class OpeningsDamageSpec extends AnyFlatSpec with Matchers:
       val typed   = document(title("One"), body("XIt was a bright cold day."), body("Second paragraph."))
 
       List(LetterMode.Raised, LetterMode.Hybrid).foreach { mode =>
-        val config = inMode(mode, RaisedRowRule.Grow)
+        val config = inMode(mode)
         everyRowDamaged(stateOf(opening, config), stateOf(retyped, config)) shouldBe true
         everyRowDamaged(stateOf(opening, config), stateOf(typed, config)) shouldBe true
       }
@@ -135,7 +123,7 @@ class OpeningsDamageSpec extends AnyFlatSpec with Matchers:
 
   it should "damage the whole buffer when a line is added, which may hand the opening to another paragraph" in {
     val split  = document(title("One"), body("It was a bright"), body(" cold day."), body("Second paragraph."))
-    val config = inMode(LetterMode.Raised, RaisedRowRule.Grow)
+    val config = inMode(LetterMode.Raised)
 
     everyRowDamaged(stateOf(opening, config), stateOf(split, config)) shouldBe true
   }
@@ -144,27 +132,23 @@ class OpeningsDamageSpec extends AnyFlatSpec with Matchers:
     val typed = document(title("One"), body("It was a bright cold dayx."), body("Second paragraph."))
 
     damagedLines(
-      stateOf(opening, inMode(LetterMode.Raised, RaisedRowRule.Grow)),
-      stateOf(typed, inMode(LetterMode.Raised, RaisedRowRule.Grow))
+      stateOf(opening, inMode(LetterMode.Raised)),
+      stateOf(typed, inMode(LetterMode.Raised))
     ) shouldBe
       Set(1)
   }
 
-  "With a letter that does not make its row grow, an edit to the first letter" should
+  "With a drop letter, which does not make its row grow, an edit to the first letter" should
     "damage only the paragraph" in {
       val retyped = document(title("One"), body("Xt was a bright cold day."), body("Second paragraph."))
 
-      List(
-        inMode(LetterMode.Raised, RaisedRowRule.Clamp),
-        inMode(LetterMode.Hybrid, RaisedRowRule.Clamp),
-        inMode(LetterMode.Drop, RaisedRowRule.Grow)
-      ).foreach(config => damagedLines(stateOf(opening, config), stateOf(retyped, config)) shouldBe Set(1))
+      val config = inMode(LetterMode.Drop)
+
+      damagedLines(stateOf(opening, config), stateOf(retyped, config)) shouldBe Set(1)
     }
 
-  "Changing the raised row rule or the lines a hybrid letter sinks" should "damage the whole buffer" in
+  "Changing the lines a hybrid letter sinks" should "damage the whole buffer" in
     List(
-      OpeningSettings(enabled = true, letterMode = LetterMode.Raised) ->
-        OpeningSettings(enabled = true, letterMode = LetterMode.Raised, raisedRow = RaisedRowRule.Clamp),
       OpeningSettings(enabled = true, letterMode = LetterMode.Hybrid) ->
         OpeningSettings(enabled = true, letterMode = LetterMode.Hybrid, hybridSinkLines = 4)
     ).foreach { (was, now) =>

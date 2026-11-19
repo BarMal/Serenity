@@ -43,7 +43,9 @@ object RemovedConfigKeys:
     "ui.motion",
     "ui_motion",
     "character.animation",
-    "character_animation"
+    "character_animation",
+    // A raised letter's row always grows to make room for it now; the clamp mode this chose between is gone.
+    "openings.raised_row"
   )
 
   private val prefixes: List[String] = List(

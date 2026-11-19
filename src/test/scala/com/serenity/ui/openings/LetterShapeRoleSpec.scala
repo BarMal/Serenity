@@ -27,11 +27,8 @@ class LetterShapeRoleSpec extends AnyFlatSpec with Matchers:
       ParagraphRoles(OpeningContext(true, virtual), ChapterOpenings.standard).shapeAt(document, 1)
 
     shape(on) shouldBe LetterShape.Drop
-    shape(on.copy(letterMode = LetterMode.Raised)) shouldBe LetterShape.Rising(growsRow = true)
-    shape(on.copy(letterMode = LetterMode.Raised, raisedRow = RaisedRowRule.Clamp)) shouldBe
-      LetterShape.Rising(growsRow = false)
-    shape(on.copy(letterMode = LetterMode.Hybrid, raisedRow = RaisedRowRule.Clamp)) shouldBe
-      LetterShape.Rising(growsRow = false)
+    shape(on.copy(letterMode = LetterMode.Raised)) shouldBe LetterShape.Rising
+    shape(on.copy(letterMode = LetterMode.Hybrid)) shouldBe LetterShape.Rising
   }
 
   it should "have no shape of its own where the document keeps a drop cap" in {
@@ -48,5 +45,5 @@ class LetterShapeRoleSpec extends AnyFlatSpec with Matchers:
     val roles                = ParagraphRoles(OpeningContext(true, virtual), ChapterOpenings.standard)
 
     roles.layoutRole(handMade, 1) shouldBe ParagraphRole.dropCap(1)
-    roles.shapeAt(handMade, 1) shouldBe LetterShape.Rising(growsRow = true)
+    roles.shapeAt(handMade, 1) shouldBe LetterShape.Rising
   }

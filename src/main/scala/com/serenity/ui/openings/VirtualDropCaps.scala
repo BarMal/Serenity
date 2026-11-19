@@ -46,17 +46,16 @@ object VirtualDropCaps:
     * letter, and with whether its paragraph opens a chapter at all.
     */
   def growsRows(settings: OpeningSettings): Boolean =
-    drawn(settings) && settings.letterMode != LetterMode.Drop && settings.raisedRow == RaisedRowRule.Grow
+    drawn(settings) && settings.letterMode != LetterMode.Drop
 
   /** The lines the letter's baseline is counted down to, and the shape it is set in. A raised letter stands on the
     * first line, a hybrid one on the line it sinks to.
     */
   private def placement(settings: OpeningSettings): (Int, LetterShape) =
-    val rising = LetterShape.Rising(growsRow = settings.raisedRow == RaisedRowRule.Grow)
     settings.letterMode match
       case LetterMode.Drop   => (OpeningLines, LetterShape.Drop)
-      case LetterMode.Raised => (1, rising)
-      case LetterMode.Hybrid => (settings.normalized.hybridSinkLines, rising)
+      case LetterMode.Raised => (1, LetterShape.Rising)
+      case LetterMode.Hybrid => (settings.normalized.hybridSinkLines, LetterShape.Rising)
 
   /** Where the openings of a document are found: a cache can answer for a document it has scanned before. */
   type Scan = (RichTextDocument, OpeningRules) => OpeningLines

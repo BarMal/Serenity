@@ -19,7 +19,6 @@ import com.serenity.ui.openings.{
   LetterMode,
   OpeningRules,
   OpeningSettings,
-  RaisedRowRule,
   SceneBreakRule
 }
 import com.serenity.ui.theme.{DropCapColour, HeadingColour}
@@ -253,7 +252,6 @@ class ConfigRoundTripSpec extends AnyFlatSpec with Matchers:
       OpeningSettings(
         enabled = true,
         letterMode = LetterMode.Hybrid,
-        raisedRow = RaisedRowRule.Clamp,
         hybridSinkLines = 5,
         smallCapsFirstLine = true,
         epigraphMarker = "motto",
