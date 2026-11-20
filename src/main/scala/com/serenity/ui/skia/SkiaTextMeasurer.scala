@@ -269,9 +269,8 @@ final class SkiaTextMeasurer(
     (!remembered(memos.substitutes, key)(substitutesInProbe(font)) || windowCutHolds(text, cut, font))
 
   private def substitutesInProbe(font: Font): Boolean =
-    val whole = shapeNow(SubstitutionProbeText, font, 0.toByte).glyphs
-    val alone = SubstitutionProbeText.toVector.flatMap(char => shapeNow(char.toString, font, 0.toByte).glyphs)
-    !java.util.Arrays.equals(whole, alone.toArray)
+    val nominal = font.getUTF32Glyphs(SubstitutionProbeText.toCharArray.map(_.toInt))
+    !java.util.Arrays.equals(shapeNow(SubstitutionProbeText, font, 0.toByte).glyphs, nominal)
 
   private def remembered[K <: AnyRef](memo: java.util.concurrent.ConcurrentMap[K, java.lang.Boolean], key: K)(
     decide: => Boolean
