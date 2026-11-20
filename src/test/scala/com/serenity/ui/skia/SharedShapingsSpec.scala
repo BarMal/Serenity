@@ -37,7 +37,9 @@ class SharedShapingsSpec extends AnyFlatSpec with Matchers:
     val second = measurerOver(slots)
 
     val held = first.advances(text, 0, text.length, 0, plain)
-    second.advances(text, 0, text.length, 0, plain).caretsFrom(0, text.length).toVector shouldBe held.caretsFrom(0, text.length).toVector
+    second.advances(text, 0, text.length, 0, plain).caretsFrom(0, text.length).toVector shouldBe held
+      .caretsFrom(0, text.length)
+      .toVector
     second.shaperRuns shouldBe 0L
   }
 
@@ -45,14 +47,15 @@ class SharedShapingsSpec extends AnyFlatSpec with Matchers:
     val first  = measurerOver(CacheSlots())
     val second = measurerOver(CacheSlots())
 
-    val _ = first.exactCaretXs(text, 0, plain)
+    val _  = first.exactCaretXs(text, 0, plain)
     val __ = second.exactCaretXs(text, 0, plain)
 
     second.shaperRuns should be > 0L
   }
 
   "A shared memo" should "keep the shaping with ligatures apart from the shaping without them" in {
-    val ligated   = Font(Font.SERIF, Font.PLAIN, 14).deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON))
+    val ligated =
+      Font(Font.SERIF, Font.PLAIN, 14).deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON))
     val unligated = Font(Font.SERIF, Font.PLAIN, 14)
     val on        = LineFonts(FontSpec.fromAwt(ligated), Vector.empty)
     val off       = LineFonts(FontSpec.fromAwt(unligated), Vector.empty)

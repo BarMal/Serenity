@@ -10,8 +10,8 @@ import org.jetbrains.skia.Font
 
 /** What the shaping of a text in a font comes to, kept for every owner of one set of shared slots. It is the same
   * wherever it is asked for, so a window's surfaces, its state and its next window shape a text once between them, as
-  * they resolve a typeface once ([[SharedTypefaces]]). Everything held is JVM arrays, bounded by the measurer that fills
-  * it, and the advances of a paragraph go when nothing holds them.
+  * they resolve a typeface once ([[SharedTypefaces]]). Everything held is JVM arrays, bounded by the measurer that
+  * fills it, and the advances of a paragraph go when nothing holds them.
   */
 final private[skia] class ShapingMemos:
   val shapings    = new ConcurrentHashMap[ShapingMemos.ShapedKey, ShapedGlyphs]()
@@ -23,19 +23,19 @@ final private[skia] class ShapingMemos:
 
 private[skia] object ShapingMemos:
 
-  val Key: BackendCacheKey[ShapingMemos] = BackendCacheKey(classOf[ShapingMemos])
+  val Key = BackendCacheKey(classOf[ShapingMemos])
 
   /** What a shaping reads of a font, by value: Skiko compares two fonts by value but hashes them by address, so a font
     * made by another owner for the same face would never be found. Ligatures are the font's spec, which the font does
     * not say.
     */
   final case class FontKey(
-    typeface: Int,
-    size: Float,
-    skewX: Float,
-    scaleX: Float,
-    emboldened: Boolean,
-    ligatures: Boolean
+      typeface: Int,
+      size: Float,
+      skewX: Float,
+      scaleX: Float,
+      emboldened: Boolean,
+      ligatures: Boolean
   )
 
   object FontKey:

@@ -84,6 +84,7 @@ final class SkiaFontCache(
 
   private def build(font: FontSpec): SkiaFace =
     val started = System.nanoTime()
+    AwtFontReconciliation.settle(font)
     val skia    = SkiaTypefaces.fontFor(font, typefaceOf)
     val _       = skia.measureTextWidth(WarmUpText)
     val face    = SkiaFace(skia, AwtFontReconciliation.strikethroughOf(font))
@@ -173,8 +174,8 @@ private[skia] object SkiaTypefaces:
 
   /** A logical family is drawn in the family the project's own resolver gives it, the one layout measures with: the
     * platform's documented family where the JDK documents one (Windows, macOS), else what `fc-match` ranks first for
-    * its generic name. A font manager's own list for a generic name is not ranked that way (fontconfig lists
-    * IPAGothic before Inter for `sans-serif`), and one asked for a name it does not know answers with its default list.
+    * its generic name. A font manager's own list for a generic name is not ranked that way (fontconfig lists IPAGothic
+    * before Inter for `sans-serif`), and one asked for a name it does not know answers with its default list.
     */
   private def typefaceFor(family: String, bold: Boolean, italic: Boolean): Typeface =
     physicalFamilyFor(family, System.getProperty("os.name", ""))

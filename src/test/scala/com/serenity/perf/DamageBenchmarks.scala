@@ -141,7 +141,7 @@ private[perf] object DamageBenchmarks:
     * prints the share of the canvas the published rects cover.
     */
   private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
-    val font         = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    val font = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
     // The canvas a mock surface clears is this many pixels; master's grid keeps the benchmark's workload what it was.
     val metrics      = CellMetrics.fromFont(font)
     val viewport     = BenchmarkFixtures.viewportSize

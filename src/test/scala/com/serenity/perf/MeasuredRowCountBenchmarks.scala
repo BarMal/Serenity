@@ -11,9 +11,9 @@ import com.serenity.ui.layout.{VisualRowCounts, WrappedLineCache}
   * uses (#2447 B4):
   *
   *   - `layout.row_count.measured.cold`: a fresh cache counting at a 1472 px panel, every line wrapped;
-  *   - `layout.row_count.measured.after_grow`: the same, then the panel grows 20% to 1760 px on the same cache. The lines that
-  *     were one row keep their count, so only the others are wrapped again; what the second count costs is this row
-  *     less the cold one.
+  *   - `layout.row_count.measured.after_grow`: the same, then the panel grows 20% to 1760 px on the same cache. The
+  *     lines that were one row keep their count, so only the others are wrapped again; what the second count costs is
+  *     this row less the cold one.
   *
   * Run just these, without a window: `sbt "Test/runMain com.serenity.perf.MeasuredRowCountBenchmarks"`.
   */

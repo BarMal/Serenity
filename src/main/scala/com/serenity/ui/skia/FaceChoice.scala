@@ -5,8 +5,8 @@ package com.serenity.ui.skia
   * font matching does, and a face of the wrong slant is used only when the family has none of the right one.
   *
   * The faces a font manager lists for a generic name such as `sans-serif` come from several families, best first, and a
-  * weight says nothing across families: the family of the first face of the right slant is the one drawn, and the weight
-  * is matched within it.
+  * weight says nothing across families: the family of the first face of the right slant is the one drawn, and the
+  * weight is matched within it.
   */
 private[skia] object FaceChoice:
 

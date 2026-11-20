@@ -465,16 +465,16 @@ final private class GlyphCollector extends RunHandler:
   * then.
   */
 final private[skia] case class ShapedGlyphs(
-  glyphs: Array[Short],
-  xs: Array[Float],
-  clusters: Array[Int],
-  width: Float,
-  offsets: Array[Float],
-  mixedLevels: Array[Byte],
-  level: Byte
+    glyphs: Array[Short],
+    xs: Array[Float],
+    clusters: Array[Int],
+    width: Float,
+    offsets: Array[Float],
+    mixedLevels: Array[Byte],
+    level: Byte
 ):
 
-  def yOf(glyph: Int): Float     = if offsets.isEmpty then 0.0f else offsets(glyph)
+  def yOf(glyph: Int): Float    = if offsets.isEmpty then 0.0f else offsets(glyph)
   def levelOf(glyph: Int): Byte = if mixedLevels.isEmpty then level else mixedLevels(glyph)
 
 private[skia] object ShapedGlyphs:

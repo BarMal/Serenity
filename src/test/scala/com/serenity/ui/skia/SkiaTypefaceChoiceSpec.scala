@@ -25,11 +25,19 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
 
   /** Skia hands out a new typeface object for each match, so two are the same face when they read the same. */
   private def describe(face: Typeface): (String, Int, Boolean, Float) =
-    (face.getFamilyName, SkiaFontWeight.of(face), face.isItalic, new SkFont(face, 14f).measureTextWidth("Hamburgefonstiv"))
+    (
+      face.getFamilyName,
+      SkiaFontWeight.of(face),
+      face.isItalic,
+      new SkFont(face, 14f).measureTextWidth("Hamburgefonstiv")
+    )
 
-  private val families = List("Inter", "DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono", "Liberation Serif", "Noto Sans")
+  private val families =
+    List("Inter", "DejaVu Sans", "DejaVu Serif", "DejaVu Sans Mono", "Liberation Serif", "Noto Sans")
 
-  for family <- families; (label, bold, italic) <- List(("plain", false, false), ("bold", true, false), ("italic", false, true))
+  for
+    family                <- families;
+    (label, bold, italic) <- List(("plain", false, false), ("bold", true, false), ("italic", false, true))
   do
     s"A $label $family font" should "be drawn in the face Skia's own style matching picks, where the system has the family" in {
       val set = FontMgr.Companion.getDefault().matchFamily(family)
@@ -38,13 +46,17 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
         !italic || (0 until set.count()).exists(index => Option(set.getTypeface(index)).exists(_.isItalic)),
         s"$family lists no italic face, so it is drawn upright and skewed, where fontconfig would substitute one"
       )
-      val spec   = FontSpec.fromAwt(new Font(family, (if bold then Font.BOLD else 0) | (if italic then Font.ITALIC else 0), 14))
+      val spec =
+        FontSpec.fromAwt(new Font(family, (if bold then Font.BOLD else 0) | (if italic then Font.ITALIC else 0), 14))
       val chosen = SkiaTypefaces.fontFor(spec).getTypeface
       val oracle = skiaMatch(set, if bold then 700 else 400, if italic then Italic else 0)
-      withClue(s"chosen ${describe(chosen)}, Skia matches ${describe(oracle)}: ")(describe(chosen) shouldBe describe(oracle))
+      withClue(s"chosen ${describe(chosen)}, Skia matches ${describe(oracle)}: ")(
+        describe(chosen) shouldBe describe(oracle)
+      )
     }
 
-  for logical <- List(Font.SANS_SERIF, Font.DIALOG, Font.SERIF, Font.MONOSPACED, Font.DIALOG_INPUT);
+  for
+    logical       <- List(Font.SANS_SERIF, Font.DIALOG, Font.SERIF, Font.MONOSPACED, Font.DIALOG_INPUT);
     (label, bold) <- List(("plain", false), ("bold", true))
   do
     s"A $label $logical font" should "be drawn in the family layout resolves the logical name to" in {
@@ -63,7 +75,9 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
     )
     val named = awt.map(_.getFamily)
     assume(
-      named.exists(name => Option(FontMgr.Companion.getDefault().matchFamily(name)).forall(set => !listsFamily(set, name))),
+      named.exists(name =>
+        Option(FontMgr.Companion.getDefault().matchFamily(name)).forall(set => !listsFamily(set, name))
+      ),
       "this machine has Monaspace Neon installed"
     )
     val chosen = awt.map(font => SkiaTypefaces.fontFor(FontSpec.fromAwt(font)).getTypeface.getFamilyName)
@@ -71,4 +85,6 @@ class SkiaTypefaceChoiceSpec extends AnyFlatSpec with Matchers:
   }
 
   private def listsFamily(set: FontStyleSet, family: String): Boolean =
-    (0 until set.count()).exists(index => Option(set.getTypeface(index)).exists(_.getFamilyName.equalsIgnoreCase(family)))
+    (0 until set.count()).exists(index =>
+      Option(set.getTypeface(index)).exists(_.getFamilyName.equalsIgnoreCase(family))
+    )
