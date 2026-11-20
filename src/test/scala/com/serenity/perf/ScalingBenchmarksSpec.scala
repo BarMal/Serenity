@@ -25,8 +25,9 @@ class ScalingBenchmarksSpec extends AnyFlatSpec with Matchers:
     rows.map(_.name).distinct should have size rows.size
   }
 
-  it should "all be excluded from the perf gate, so none gates a build before the owner has read its numbers" in {
-    rows.map(_.name).filterNot(PerfGateExclusions.covers) shouldBe Nil
+  it should "all be excluded from the perf gate but the two the owner moved into it on 2026-11-20" in {
+    rows.map(_.name).filterNot(PerfGateExclusions.covers).toSet shouldBe
+      Set("buffers.switch_cold_frame.open_20.prose.skia_raster", "scrollbar.four_panes.all_bars")
   }
 
   it should "verify, and then run once, without failing" in
