@@ -32,9 +32,12 @@ import com.serenity.ui.skia.GlFrameSettings
   * software rasteriser and there is no compositor.
   *
   * The window asks for the laptop benchmarks' logical size (or `-Dserenity.sdl3.window=WIDTHxHEIGHT`), but a tiling
-  * compositor gives it the tile's size. Its title is the one `bench/hyprland-float.sh` floats, so
-  * `bench/hyprland-float.sh on 1500 1000` before the run (and `off` after) keeps the size, and the header says when it
-  * did not.
+  * compositor gives it the tile's size. `-Dserenity.sdl3.window=fullscreen` asks SDL for the whole display instead,
+  * which needs no compositor rule (the call is made from the test, so the SDL binding is unchanged); the header then
+  * says what the window and the display came to. Fullscreen may take a compositor's direct path to the screen, which a
+  * windowed run does not, so set its `swap` rows beside a windowed run's with that in mind. The window's title is the
+  * one `bench/hyprland-float.sh` floats, as the other way to keep a size, and the header says when the window has other
+  * pixels than were asked for.
   */
 private[perf] object SkiaGlPresentBenchmarks:
 
@@ -42,35 +45,15 @@ private[perf] object SkiaGlPresentBenchmarks:
 
   private val codeFont = LaptopFrameBenchmarks.codeFont
 
-  /** Starts with the title `bench/hyprland-float.sh` matches, which is what lets it float the window. */
-  val WindowTitle = "Serenity render benchmark: SDL3 present"
-
-  private val SizeProperty = "serenity.sdl3.window"
-  private val SizeShape    = raw"(\d+)x(\d+)".r
-
-  /** The logical size to ask for: `-Dserenity.sdl3.window=WIDTHxHEIGHT`, or the laptop benchmarks' own. */
-  def requestedSize(properties: Map[String, String]): (Int, Int) =
-    properties
-      .get(SizeProperty)
-      .collect { case SizeShape(width, height) => (width.toInt, height.toInt) }
-      .filter((width, height) => width > 0 && height > 0)
-      .getOrElse((LaptopFrameBenchmarks.LogicalWidthPx, LaptopFrameBenchmarks.LogicalHeightPx))
-
-  /** Why the numbers are not for the size that was asked for, when the window has other pixels than it. */
-  def sizeNote(requestedLogical: (Int, Int), pixels: (Int, Int), scale: Double): Option[String] =
-    val wanted = (math.round(requestedLogical._1 * scale).toInt, math.round(requestedLogical._2 * scale).toInt)
-    Option.when((pixels._1 - wanted._1).abs > 1 || (pixels._2 - wanted._2).abs > 1)(
-      s"size_mismatch: window is ${pixels._1}x${pixels._2}px, ${wanted._1}x${wanted._2}px was asked for; " +
-        s"float it with `bench/hyprland-float.sh on ${requestedLogical._1} ${requestedLogical._2}` before the run"
-    )
-
-  private val WarmupFrames   = 20
-  private val TypedFrames    = 60
-  private val ColdFrames     = 30
-  private val SettleAttempts = 100
-  private val SettlePauseMs  = 20L
-  private val SwapIntervals  = List(1, 0)
-  private val FinishSettings = List(false, true)
+  private val WarmupFrames       = 20
+  private val TypedFrames        = 60
+  private val ColdFrames         = 30
+  private val SettleAttempts     = 100
+  private val SettlePauseMs      = 20L
+  private val SettleSteady       = 10
+  private val FullscreenAttempts = 250
+  private val SwapIntervals      = List(1, 0)
+  private val FinishSettings     = List(false, true)
 
   /** `glFinish`, found through SDL on the SDL thread and called on it. */
   private def glFinish(window: SdlGlWindow): IO[Option[() => Unit]] =
@@ -142,28 +125,75 @@ private[perf] object SkiaGlPresentBenchmarks:
         }
     }
 
+  /** The size the window is expected to come to once it has been asked for, what to say if it did not, and what was
+    * found out on the way.
+    */
+  final private case class Expectation(logical: (Int, Int), fix: String, notes: List[String])
+
+  private def arrange(window: SdlGlWindow, request: WindowRequest): IO[Expectation] =
+    request match
+      case WindowRequest.Logical(width, height) =>
+        IO.pure(
+          Expectation(
+            (width, height),
+            s"float it with `bench/hyprland-float.sh on $width $height` before the run, or ask for fullscreen",
+            Nil
+          )
+        )
+      case WindowRequest.Fullscreen => fullscreen(window)
+
+  private def fullscreen(window: SdlGlWindow): IO[Expectation] =
+    val fallback = (WindowRequest.default.width, WindowRequest.default.height)
+    SdlPresentWindow.FullscreenCalls.load(sys.props.toMap) match
+      case Left(reason) =>
+        IO.pure(Expectation(fallback, "fullscreen was not available", List(s"fullscreen_unavailable: $reason")))
+      case Right(calls) =>
+        for
+          before  <- window.pixelSize
+          entered <- window.onSdlThread(_ => calls.enter(window.handle))
+          pixels <- SdlPresentWindow.settledPixels(
+            window,
+            SettleSteady,
+            FullscreenAttempts,
+            SettlePauseMs.millis,
+            awayFrom = Some(before)
+          )
+          display <- window.onSdlThread(_ => calls.displaySize(window.handle))
+          scale   <- window.deviceScale
+        yield
+          val logical = display.fold(fallback)(shown => (shown.logicalWidth, shown.logicalHeight))
+          val refused = Option.unless(entered)("fullscreen_refused: SDL_SetWindowFullscreen returned false")
+          val shown =
+            s"fullscreen: window ${pixels._1}x${pixels._2}px, display ${logical._1}x${logical._2} logical at scale $scale"
+          Expectation(
+            logical,
+            "fullscreen did not give the whole display (a bar or reserved area, or the compositor kept it windowed)",
+            refused.toList :+ shown
+          )
+
   def main(args: Array[String]): Unit =
     BenchmarkMain.run:
       import cats.effect.unsafe.implicits.global
       val sdl = Sdl.load(sys.props.toMap, java.nio.file.Files.exists(_)) match
         case Right(loaded) => loaded
         case Left(error)   => sys.error(s"libSDL3 did not load: ${error.describe}")
-      val driver    = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
-      val requested = requestedSize(sys.props.toMap)
+      val driver  = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
+      val request = WindowRequest.parse(sys.props.toMap)
+      val asked = request match
+        case WindowRequest.Logical(width, height) => (width, height)
+        case WindowRequest.Fullscreen             => (WindowRequest.default.width, WindowRequest.default.height)
       val lines = SdlGlWindow
-        .open(
-          sdl,
-          SdlGlWindow.Settings(WindowTitle, requested._1, requested._2, Some(driver))
-        )
+        .open(sdl, SdlGlWindow.Settings(SdlPresentWindow.Title, asked._1, asked._2, Some(driver)))
         .use {
           case Left(error)   => IO.raiseError(new IllegalStateException(s"no GL window: ${error.describe}"))
-          case Right(window) => report(window, driver, requested)
+          case Right(window) => report(window, driver, request)
         }
         .unsafeRunSync()
       lines.foreach(println)
 
-  private def report(window: SdlGlWindow, driver: String, requested: (Int, Int))(using IORuntime): IO[List[String]] =
+  private def report(window: SdlGlWindow, driver: String, request: WindowRequest)(using IORuntime): IO[List[String]] =
     for
+      expected   <- arrange(window, request)
       size       <- settledLogicalSize(window)
       renderer   <- window.renderer
       pixels     <- window.pixelSize
@@ -186,7 +216,8 @@ private[perf] object SkiaGlPresentBenchmarks:
       header = List(
         s"skia_gl_present: driver=$driver renderer=$renderer window=${pixels._1}x${pixels._2}px scale=$scale " +
           s"vsync_at_open=${window.vsync} glFinish=${finishCall.isDefined}"
-      ) ++ sizeNote(requested, pixels, scale).toList
+      ) ++ expected.notes ++
+        SdlPresentWindow.sizeNote(expected.logical, pixels, scale, expected.fix).toList
       rows <- FinishSettings.flatTraverse { finish =>
         if finish && finishCall.isEmpty then IO.pure(List("finish=true skipped: glFinish not found"))
         else runFinishSetting(window, Option.when(finish)(finishCall).flatten, settings, metrics, grid, before, after)
