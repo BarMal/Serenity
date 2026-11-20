@@ -556,6 +556,9 @@ object AppRuntime:
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
 
+  private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
+    awaitQuit >> whenQuit
+
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],
     dispatcher: Dispatcher[IO]
