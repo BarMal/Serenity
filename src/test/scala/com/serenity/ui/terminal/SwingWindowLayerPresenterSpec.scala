@@ -174,6 +174,39 @@ class SwingWindowLayerPresenterSpec extends AnyFlatSpec with Matchers:
     }
   }
 
+  private def paintCanvas(window: SwingWindow): Unit =
+    val image    = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_RGB)
+    val graphics = image.createGraphics()
+    try SwingUtilities.invokeAndWait(() => window.canvas.paint(graphics))
+    finally graphics.dispose()
+
+  it should "stamp a canvas paint under an attached layer as one that shows no frame" in {
+    val timings = com.serenity.diagnostics.FrameTimings(() => System.nanoTime(), backend = "skia")
+    withTimedWindow(timings) { window =>
+      window.attachLayerPresenter(new FakePresenter(hasBase = true, reportsDrawEnd = true))
+      SwingUtilities.invokeAndWait(() => ())
+      timings.setEnabled(true)
+      paintCanvas(window)
+      val summary = timings.drain()
+      summary.paints.keySet should contain(com.serenity.diagnostics.PaintSource.CanvasUnderLayer)
+      summary.paints.get(com.serenity.diagnostics.PaintSource.Canvas) shouldBe None
+      summary.phases.get(com.serenity.diagnostics.FramePhase.Paint) shouldBe None
+    }
+  }
+
+  it should "stamp a canvas paint as the canvas's own while no layer is attached" in {
+    val timings = com.serenity.diagnostics.FrameTimings(() => System.nanoTime(), backend = "")
+    withTimedWindow(timings) { window =>
+      SwingUtilities.invokeAndWait(() => ())
+      timings.setEnabled(true)
+      paintCanvas(window)
+      val summary = timings.drain()
+      summary.paints.keySet should contain(com.serenity.diagnostics.PaintSource.Canvas)
+      summary.paints.get(com.serenity.diagnostics.PaintSource.CanvasUnderLayer) shouldBe None
+      summary.phases.get(com.serenity.diagnostics.FramePhase.Paint) should not be empty
+    }
+  }
+
   it should "expose the attached presenter" in
     withWindow { window =>
       window.layerPresenter shouldBe None

@@ -164,17 +164,21 @@ final case class FrameTimingState(
       .fold(this)(start => record(FramePhase.Render, now - start))
       .copy(renderStartedAt = None, frames = frames.updated(kind, frames.getOrElse(kind, 0) + 1))
 
-  def paintStarted(now: Long): FrameTimingState =
-    publishedAt
-      .fold(this)(published => record(FramePhase.PaintWait, now - published))
-      .copy(publishedAt = None, painting = painting.orElse(awaitingPaint), awaitingPaint = None)
+  def paintStarted(now: Long, source: PaintSource): FrameTimingState =
+    if !source.shows then this
+    else
+      publishedAt
+        .fold(this)(published => record(FramePhase.PaintWait, now - published))
+        .copy(publishedAt = None, painting = painting.orElse(awaitingPaint), awaitingPaint = None)
 
   def paintFinished(startedAt: Long, source: PaintSource, now: Long): FrameTimingState =
-    val painted =
-      record(FramePhase.Paint, now - startedAt).copy(paints = paints.updated(source, paints.getOrElse(source, 0) + 1))
-    painting
-      .fold(painted)(arrival => painted.record(FramePhase.InputToPaint, now - arrival))
-      .copy(painting = None)
+    val counted = copy(paints = paints.updated(source, paints.getOrElse(source, 0) + 1))
+    if !source.shows then counted
+    else
+      val painted = counted.record(FramePhase.Paint, now - startedAt)
+      painting
+        .fold(painted)(arrival => painted.record(FramePhase.InputToPaint, now - arrival))
+        .copy(painting = None)
 
   def summary(now: Long): FrameTimingSummary =
     FrameTimingSummary(
@@ -238,11 +242,11 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
   def renderFinished(kind: FrameKind): Unit = update(_.renderFinished(kind, _))
 
   /** Returns the paint's start, to hand back to [[paintFinished]]. */
-  def paintStarted(): Long =
+  def paintStarted(source: PaintSource = PaintSource.Canvas): Long =
     val now = clock()
     if enabled.get() then
-      val _ = state.updateAndGet(_.paintStarted(now))
-    keyLatency.paintStarted()
+      val _ = state.updateAndGet(_.paintStarted(now, source))
+    keyLatency.paintStarted(source)
     now
 
   def paintFinished(startedAt: Long, source: PaintSource = PaintSource.Canvas): Unit =

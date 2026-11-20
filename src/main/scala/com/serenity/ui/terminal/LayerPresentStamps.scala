@@ -22,7 +22,7 @@ final class LayerPresentStamps(timings: FrameTimings):
 
   /** A start whose end never comes would otherwise leave every later end paired with a draw that long gone. */
   def drawStarted(): Unit =
-    val _ = waiting.add(timings.paintStarted())
+    val _ = waiting.add(timings.paintStarted(PaintSource.Layer))
     if waiting.size > MaxWaitingStarts then waiting.poll(): Unit
 
   def drawFinished(): Unit =

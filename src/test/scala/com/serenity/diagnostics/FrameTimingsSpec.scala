@@ -104,6 +104,33 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     timings.drain().paints shouldBe empty
   }
 
+  it should "not take a canvas paint under a layer for the paint that shows a frame" in {
+    val (timings, clock) = recorder()
+
+    timings.inputArrived()
+    timings.inputApplyStarted()
+    timings.inputApplyFinished()
+    timings.renderStarted()
+    timings.framePublished()
+    timings.renderFinished(FrameKind.Full)
+    clock.advanceMs(2)
+    val under = timings.paintStarted(PaintSource.CanvasUnderLayer)
+    clock.advanceMs(1)
+    timings.paintFinished(under, PaintSource.CanvasUnderLayer)
+    clock.advanceMs(3)
+    val drawn = timings.paintStarted(PaintSource.Layer)
+    clock.advanceMs(4)
+    timings.paintFinished(drawn, PaintSource.Layer)
+
+    val summary = timings.drain()
+    summary.phases(FramePhase.Paint).count shouldBe 1
+    summary.phases(FramePhase.Paint).p50Ms shouldBe 4.0
+    summary.phases(FramePhase.PaintWait).p50Ms shouldBe 6.0
+    summary.phases(FramePhase.InputToPaint).p50Ms shouldBe 10.0
+    summary.paints shouldBe Map(PaintSource.CanvasUnderLayer -> 1, PaintSource.Layer -> 1)
+    summary.logLine should include("paints layer=1 canvas-under-layer=1")
+  }
+
   it should "leave the paint counts out of the log line when nothing painted" in {
     val (timings, _) = recorder()
 
