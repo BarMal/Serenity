@@ -16,7 +16,7 @@ object WindowTitle:
   private def name(buffer: Buffer): String =
     buffer.document.filePath
       .flatMap(path => Option(path.getFileName))
-      .fold(s"Buffer ${buffer.id.value}")(_.toString)
+      .fold("Untitled")(_.toString)
 
   private def dirtyMarker(buffer: Buffer): String =
     if buffer.document.isDirty then "*" else ""
