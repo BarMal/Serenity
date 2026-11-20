@@ -85,9 +85,9 @@ final class SkiaFontCache(
   private def build(font: FontSpec): SkiaFace =
     val started = System.nanoTime()
     AwtFontReconciliation.settle(font)
-    val skia    = SkiaTypefaces.fontFor(font, typefaceOf)
-    val _       = skia.measureTextWidth(WarmUpText)
-    val face    = SkiaFace(skia, AwtFontReconciliation.strikethroughOf(font))
+    val skia = SkiaTypefaces.fontFor(font, typefaceOf)
+    val _    = skia.measureTextWidth(WarmUpText)
+    val face = SkiaFace(skia, AwtFontReconciliation.strikethroughOf(font))
     warmup.faceBuilt(System.nanoTime() - started)
     face
 
