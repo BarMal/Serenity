@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
-import com.serenity.diagnostics.{FrameTimings, PaintSource}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
@@ -119,9 +119,7 @@ class SwingWindow(
           publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
-      val source =
-        if layerPresenterRef.get().isDefined then PaintSource.CanvasUnderLayer else PaintSource.Canvas
-      val paintStart = frameTimings.paintStarted(source)
+      val paint = frameTimings.canvasPaintStarted(layerPresenterRef.get().isDefined)
       paintProbe.painted()
       // Read before the lease: an image published in between is then counted as not yet shown, never as shown early.
       val shownAtPaint = baseImagesPublished.get()
@@ -132,7 +130,7 @@ class SwingWindow(
       finally
         baseImagePool.releaseLease()
         g2.dispose()
-        frameTimings.paintFinished(paintStart, source)
+        paint.finished()
         baseImagesShown.set(shownAtPaint)
         framePresentedRef.get().foreach(_.apply())
 

@@ -131,6 +131,15 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     summary.logLine should include("paints layer=1 canvas-under-layer=1")
   }
 
+  it should "stamp a canvas paint as the canvas's own, or as one under the layer while a layer is attached" in {
+    val (timings, _) = recorder()
+
+    timings.canvasPaintStarted(layerAttached = false).finished()
+    timings.canvasPaintStarted(layerAttached = true).finished()
+
+    timings.drain().paints shouldBe Map(PaintSource.Canvas -> 1, PaintSource.CanvasUnderLayer -> 1)
+  }
+
   it should "leave the paint counts out of the log line when nothing painted" in {
     val (timings, _) = recorder()
 

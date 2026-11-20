@@ -249,6 +249,14 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
     keyLatency.paintStarted(source)
     now
 
+  /** A canvas paint counts as one under the layer while a layer is attached: it shows none of the layer's frames. */
+  def canvasPaintStarted(layerAttached: Boolean): CanvasPaint =
+    val source = if layerAttached then PaintSource.CanvasUnderLayer else PaintSource.Canvas
+    CanvasPaint(paintStarted(source), source)
+
+  final case class CanvasPaint(startedAt: Long, source: PaintSource):
+    def finished(): Unit = paintFinished(startedAt, source)
+
   def paintFinished(startedAt: Long, source: PaintSource = PaintSource.Canvas): Unit =
     update(_.paintFinished(startedAt, source, _))
     keyLatency.paintFinished(source)
