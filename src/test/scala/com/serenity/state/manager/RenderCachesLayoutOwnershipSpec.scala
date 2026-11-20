@@ -28,7 +28,6 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
     val (a, b) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
 
     (a.styledFonts `ne` b.styledFonts) shouldBe true
-    (a.labelSprites `ne` b.labelSprites) shouldBe true
     (a.measuredAdvances `ne` b.measuredAdvances) shouldBe true
   }
 
@@ -59,5 +58,4 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
     val owner = TestMeasure.renderCaches()
 
     (owner.surfaceText.styledFonts eq owner.styledFonts) shouldBe true
-    (owner.surfaceText.labelSprites eq owner.labelSprites) shouldBe true
   }

@@ -3,12 +3,9 @@ package com.serenity.ui.renderer
 /** The caches a pixel surface paints text through. Their owner shares one set across every frame and layer it draws, so
   * what one frame shaped, derived or rasterised the next finds; a surface built without an owner gets its own.
   */
-final case class SurfaceTextCaches(
-    labelSprites: LabelSprites,
-    styledFonts: StyledFontCache
-)
+final case class SurfaceTextCaches(styledFonts: StyledFontCache)
 
 object SurfaceTextCaches:
 
   def fresh(): SurfaceTextCaches =
-    SurfaceTextCaches(LabelSprites(LabelSprites.DefaultCapacity), StyledFontCache())
+    SurfaceTextCaches(StyledFontCache())

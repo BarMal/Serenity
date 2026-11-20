@@ -97,7 +97,6 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
 
     cold.styledFonts should be theSameInstanceAs shared.styledFonts
     cold.wrappedLines should not be theSameInstanceAs(shared.wrappedLines)
-    cold.labelSprites should not be theSameInstanceAs(shared.labelSprites)
     cold.authoritativeScene should not be theSameInstanceAs(shared.authoritativeScene)
   }
 

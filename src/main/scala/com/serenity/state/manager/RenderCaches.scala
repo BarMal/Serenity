@@ -16,7 +16,6 @@ import com.serenity.ui.renderer.{
   BackendCaches,
   CacheSlots,
   GraphemeSegmentationCache,
-  LabelSprites,
   MeasuredTextAdvances,
   RendererFrameState,
   StyledFontCache,
@@ -31,8 +30,8 @@ import com.serenity.ui.theme.ThemeHighlightCache
   * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches, and [[WrappedLineCache]]'s wrapped
   * lines, which the scene and the state-update path (through the scene it is handed) both read, together with the
   * per-buffer visual-row indexes it keeps for scrolling and jumps, the [[FrameCounters]] the renderer counts what each
-  * frame drew into, and the renderer's text caches: [[StyledFontCache]]'s derived fonts, [[LabelSprites]]' rendered
-  * labels and [[MeasuredTextAdvances]]' overlay advances.
+  * frame drew into, and the renderer's text caches: [[StyledFontCache]]'s derived fonts and [[MeasuredTextAdvances]]'
+  * overlay advances.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and
@@ -50,7 +49,6 @@ final class RenderCaches private (
     val wrappedLines: WrappedLineCache,
     val frameCounters: FrameCounters,
     val styledFonts: StyledFontCache,
-    val labelSprites: LabelSprites,
     val measuredAdvances: MeasuredTextAdvances,
     val tabBarMeasures: TabBarMeasures,
     val compositionRevisions: CompositionRevisions,
@@ -74,7 +72,7 @@ final class RenderCaches private (
     measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
 
   /** What a surface drawing for this owner paints text through. */
-  def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts)
+  def surfaceText: SurfaceTextCaches = SurfaceTextCaches(styledFonts)
 
 object RenderCaches:
 
@@ -103,7 +101,6 @@ object RenderCaches:
       wrappedLines,
       FrameCounters(),
       styledFonts,
-      LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, wrappedLines.layoutMemos),
       new TabBarMeasures(measurerSource),
       new CompositionRevisions,

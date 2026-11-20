@@ -29,3 +29,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   "Main" should "hold no AWT shaping stack: no shaped-text cache, shaped stretch, glyph-advance table or font probes" in {
     filesMentioning("""\b(ShapedTextCache|ShapedStretch|GlyphAdvance|FontProbes)\b""") shouldBe Nil
   }
+
+  it should "hold no label-sprite cache, which rasterised text through AWT and which nothing asked" in {
+    filesMentioning("""\bLabelSprites\b""") shouldBe Nil
+  }
