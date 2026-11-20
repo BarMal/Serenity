@@ -18,7 +18,6 @@ import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{CaretCanvases, CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
 import com.serenity.ui.theme.Theme
@@ -33,7 +32,7 @@ class SwingWindow(
     env: Map[String, String] = sys.env,
     windowTitle: String = SwingWindow.WindowTitle
 ) extends RenderTarget
-    with WindowControl:
+    with WindowTitling:
 
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
@@ -100,15 +99,6 @@ class SwingWindow(
 
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
-
-  override def setTitle(title: String): Unit =
-    SwingUtilities.invokeLater { () =>
-      frame.setTitle(title)
-      titleLabelRef.get().foreach { label =>
-        label.setText(title)
-        SwingWindow.setAccessibleNameIfAvailable(label, title)
-      }
-    }
 
   private val paintProbe = new PaintProbe()
 
@@ -344,6 +334,7 @@ class SwingWindow(
     f
 
   def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
+  override protected def applyTitle(title: String): Unit = chromeTitleBar.showTitle(title)
 
   /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
     * canvas keeps its size: before the window is shown by packing, afterwards by growing the frame. A bar already

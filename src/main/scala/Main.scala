@@ -41,7 +41,7 @@ import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.host.{InputSettings, WindowTitleSync}
+import com.serenity.ui.host.{InputSettings, WindowTitle}
 import com.serenity.ui.renderer.{CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
@@ -444,13 +444,11 @@ object Main extends IOApp:
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
-              IO {
-                host.control.updateChromeTheme(state.persisted.theme)
-              }
+              IO(host.control.updateChromeTheme(state.persisted.theme)) >>
+                IO(host.control.setTitle(WindowTitle.from(state)))
             }
 
-          (AccessibilitySync.empty, WindowTitleSync.create(title => IO(host.control.setTitle(title)))).flatMapN {
-            (accessibilitySync, windowTitleSync) =>
+          AccessibilitySync.empty.flatMap { accessibilitySync =>
             def syncAccessibility(state: com.serenity.state.models.AppState): IO[Unit] =
               Trace.timed("render.syncAccessibility") {
                 accessibilitySync
@@ -490,7 +488,7 @@ object Main extends IOApp:
                 ),
               renderFull = (state, vis, cc, damage, caches) =>
                 frameTimings.timedFrame(FrameKind.Full, paintEc)(
-                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> windowTitleSync.sync(state),
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     GuiFramePainting.paintFullFrame(
                       CompositionPreview.displayed(state, caches.compositionRevisions),
@@ -506,7 +504,7 @@ object Main extends IOApp:
                 ),
               renderCursorOnly = (state, vis, cc, damage, caches) =>
                 frameTimings.timedFrame(FrameKind.CursorOnly, paintEc)(
-                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state) >> windowTitleSync.sync(state),
+                  syncDisplayMetrics() >> syncChromeTheme(state) >> syncAccessibility(state),
                   IO(
                     GuiFramePainting.paintCursorFrame(
                       CompositionPreview.displayed(state, caches.compositionRevisions),
