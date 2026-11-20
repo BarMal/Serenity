@@ -15,6 +15,9 @@ enum NoticeTopic:
   case FileSave(bufferId: BufferId)
   case SessionSave
 
+  /** A key that did nothing, and why. */
+  case KeyDidNothing
+
   /** What reloading the config file after an outside edit had to say. */
   case ConfigFile
 

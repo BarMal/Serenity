@@ -91,6 +91,9 @@ enum ImeEffect:
 
 enum AppEffect:
   case CompleteQuit
+
+  /** A corner notice that never takes focus: what a reducer says when a key does nothing. */
+  case ShowNotice(notice: com.serenity.state.models.Notice)
   case ExecuteCommand(command: Command)
 
   /** Runs `command` as [[ExecuteCommand]] does, but leaves it out of the recently-used ranking: for commands the user

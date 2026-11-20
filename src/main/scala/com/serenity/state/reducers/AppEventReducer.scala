@@ -1,6 +1,6 @@
 package com.serenity.state.reducers
 
-import com.serenity.command.{CommandKeyBindings, CommandPicker, CommandRegistry, CommandRunner, FileFinderCommands}
+import com.serenity.command.{CommandAvailability, CommandPicker, CommandRegistry, CommandRunner, FileFinderCommands}
 import com.serenity.input.{CursorPeekDetector, CursorPeekState}
 import com.serenity.keystroke.Modifier
 import com.serenity.keystroke.events.*
@@ -22,7 +22,7 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.CompleteQuit)
 
       case ToggleCommandRunner =>
-        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        if state.startPageSurface.isDefined then startPageHasNo(state, "The command palette")
         else
           val abandoned = SettingsPreviewReducer.revert(state)
           ReducerResult(toggleCommandRunner(abandoned.state, registry), abandoned.effects)
@@ -31,19 +31,19 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.Settings(SettingsEffect.ReapplyConfig))
 
       case ToggleContextualToolbar =>
-        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        if state.startPageSurface.isDefined then startPageHasNo(state, "The toolbar")
         else ReducerResult.noEffects(toggleContextualToolbar(state))
 
       case ToggleShortcutsHelp =>
-        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        if state.startPageSurface.isDefined then startPageHasNo(state, "Shortcut help")
         else ReducerResult.noEffects(toggleShortcutsHelp(state))
 
       case ToggleTabList =>
-        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        if state.startPageSurface.isDefined then startPageHasNo(state, "The tab list")
         else ReducerResult.noEffects(toggleTabList(state))
 
       case ToggleRecentFilesInMode =>
-        if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
+        if state.startPageSurface.isDefined then startPageHasNo(state, "Recent files in the editor")
         else ReducerResult.noEffects(toggleRecentFilesInMode(state))
 
       case NewTab =>
@@ -95,8 +95,14 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.ExecuteCommand(FileFinderCommands.goToFile))
 
       case RunCommand(commandId) =>
-        val command = CommandKeyBindings.runnable(registry, commandId, state.commandRunnerContext)
-        ReducerResult(state, command.map(AppEffect.ExecuteCommand(_)).toList)
+        val context = state.commandRunnerContext
+        val effect =
+          registry.findCommand(commandId) match
+            case None => AppEffect.ShowNotice(KeyNotices.unknownCommand(commandId))
+            case Some(command) if CommandAvailability.of(command, context).isRunnable =>
+              AppEffect.ExecuteCommand(command)
+            case Some(command) => AppEffect.ShowNotice(KeyNotices.commandUnavailable(command, context))
+        ReducerResult.withEffect(state, effect)
 
       case ActivateBuffer(bufferId) =>
         ReducerResult.noEffects(
@@ -136,6 +142,9 @@ object AppEventReducer:
       case TogglePanel(id) =>
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(togglePanel(state, panelRegistry, id))
+
+  private def startPageHasNo(state: AppState, surface: String): ReducerResult =
+    ReducerResult.withEffect(state, AppEffect.ShowNotice(KeyNotices.startPageHasNo(surface)))
 
   private def summoned(state: AppState, change: ChromeSummons => ChromeSummons): AppState =
     state.copy(runtime = state.runtime.copy(summons = change(state.runtime.summons)))
