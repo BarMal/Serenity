@@ -103,7 +103,7 @@ class SwingWindow(
 
   private val onCloseRequestedRef = new AtomicReference[Option[() => Unit]](None)
 
-  def setOnCloseRequested(cb: () => Unit): Unit = onCloseRequestedRef.set(Some(cb))
+  override def setOnCloseRequested(cb: () => Unit): Unit = onCloseRequestedRef.set(Some(cb))
 
   private def requestClose(): Unit = SwingWindow.routeClose(onCloseRequestedRef.get(), closeLatch)
 
