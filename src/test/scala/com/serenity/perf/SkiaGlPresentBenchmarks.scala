@@ -27,14 +27,42 @@ import com.serenity.ui.skia.GlFrameSettings
   * interval of 0 the two interval columns match, and the header says which interval was accepted.
   *
   * Not part of the perf gate. Run it with
-  * `sbt -Dserenity.sdl3.library.path=<directory holding libSDL3.so.0> -Dserenity.sdl3.driver=wayland "Test / runMain com.serenity.perf.SkiaGlPresentBenchmarks"`;
-  * the default driver is SDL's `offscreen`, where GL is Mesa's software rasteriser and there is no compositor.
+  * `sbt "set app / Test / run / javaOptions ++= Seq(\"-Dserenity.sdl3.library.path=<directory holding libSDL3.so.0>\", \"-Dserenity.sdl3.driver=wayland\")" "app/Test/runMain com.serenity.perf.SkiaGlPresentBenchmarks"`
+  * (a `-D` on sbt itself does not reach the forked JVM); the default driver is SDL's `offscreen`, where GL is Mesa's
+  * software rasteriser and there is no compositor.
+  *
+  * The window asks for the laptop benchmarks' logical size (or `-Dserenity.sdl3.window=WIDTHxHEIGHT`), but a tiling
+  * compositor gives it the tile's size. Its title is the one `bench/hyprland-float.sh` floats, so
+  * `bench/hyprland-float.sh on 1500 1000` before the run (and `off` after) keeps the size, and the header says when it
+  * did not.
   */
 private[perf] object SkiaGlPresentBenchmarks:
 
   given Balance = Balance.default
 
   private val codeFont = LaptopFrameBenchmarks.codeFont
+
+  /** Starts with the title `bench/hyprland-float.sh` matches, which is what lets it float the window. */
+  val WindowTitle = "Serenity render benchmark: SDL3 present"
+
+  private val SizeProperty = "serenity.sdl3.window"
+  private val SizeShape    = raw"(\d+)x(\d+)".r
+
+  /** The logical size to ask for: `-Dserenity.sdl3.window=WIDTHxHEIGHT`, or the laptop benchmarks' own. */
+  def requestedSize(properties: Map[String, String]): (Int, Int) =
+    properties
+      .get(SizeProperty)
+      .collect { case SizeShape(width, height) => (width.toInt, height.toInt) }
+      .filter((width, height) => width > 0 && height > 0)
+      .getOrElse((LaptopFrameBenchmarks.LogicalWidthPx, LaptopFrameBenchmarks.LogicalHeightPx))
+
+  /** Why the numbers are not for the size that was asked for, when the window has other pixels than it. */
+  def sizeNote(requestedLogical: (Int, Int), pixels: (Int, Int), scale: Double): Option[String] =
+    val wanted = (math.round(requestedLogical._1 * scale).toInt, math.round(requestedLogical._2 * scale).toInt)
+    Option.when((pixels._1 - wanted._1).abs > 1 || (pixels._2 - wanted._2).abs > 1)(
+      s"size_mismatch: window is ${pixels._1}x${pixels._2}px, ${wanted._1}x${wanted._2}px was asked for; " +
+        s"float it with `bench/hyprland-float.sh on ${requestedLogical._1} ${requestedLogical._2}` before the run"
+    )
 
   private val WarmupFrames   = 20
   private val TypedFrames    = 60
@@ -120,25 +148,21 @@ private[perf] object SkiaGlPresentBenchmarks:
       val sdl = Sdl.load(sys.props.toMap, java.nio.file.Files.exists(_)) match
         case Right(loaded) => loaded
         case Left(error)   => sys.error(s"libSDL3 did not load: ${error.describe}")
-      val driver = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
+      val driver    = sys.props.getOrElse("serenity.sdl3.driver", "offscreen")
+      val requested = requestedSize(sys.props.toMap)
       val lines = SdlGlWindow
         .open(
           sdl,
-          SdlGlWindow.Settings(
-            "skia gl present benchmarks",
-            LaptopFrameBenchmarks.LogicalWidthPx,
-            LaptopFrameBenchmarks.LogicalHeightPx,
-            Some(driver)
-          )
+          SdlGlWindow.Settings(WindowTitle, requested._1, requested._2, Some(driver))
         )
         .use {
           case Left(error)   => IO.raiseError(new IllegalStateException(s"no GL window: ${error.describe}"))
-          case Right(window) => report(window, driver)
+          case Right(window) => report(window, driver, requested)
         }
         .unsafeRunSync()
       lines.foreach(println)
 
-  private def report(window: SdlGlWindow, driver: String)(using IORuntime): IO[List[String]] =
+  private def report(window: SdlGlWindow, driver: String, requested: (Int, Int))(using IORuntime): IO[List[String]] =
     for
       size       <- settledLogicalSize(window)
       renderer   <- window.renderer
@@ -162,7 +186,7 @@ private[perf] object SkiaGlPresentBenchmarks:
       header = List(
         s"skia_gl_present: driver=$driver renderer=$renderer window=${pixels._1}x${pixels._2}px scale=$scale " +
           s"vsync_at_open=${window.vsync} glFinish=${finishCall.isDefined}"
-      )
+      ) ++ sizeNote(requested, pixels, scale).toList
       rows <- FinishSettings.flatTraverse { finish =>
         if finish && finishCall.isEmpty then IO.pure(List("finish=true skipped: glFinish not found"))
         else runFinishSetting(window, Option.when(finish)(finishCall).flatten, settings, metrics, grid, before, after)
