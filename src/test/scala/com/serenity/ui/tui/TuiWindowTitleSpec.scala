@@ -44,10 +44,10 @@ class TuiWindowTitleSpec extends AnyFlatSpec with Matchers:
     WindowTitle.from(stateShowing(document("alpha", dirty = true))) shouldBe "notes.md* — Serenity"
   }
 
-  it should "name an untitled buffer by its display name" in {
-    WindowTitle.from(stateShowing(document("alpha", fileName = None))) shouldBe "Buffer 7 — Serenity"
+  it should "call an untitled buffer Untitled, whatever its buffer id" in {
+    WindowTitle.from(stateShowing(document("alpha", fileName = None))) shouldBe "Untitled — Serenity"
     WindowTitle.from(stateShowing(document("alpha", fileName = None, dirty = true))) shouldBe
-      "Buffer 7* — Serenity"
+      "Untitled* — Serenity"
   }
 
   it should "fall back to the application name when no buffer is active" in {
