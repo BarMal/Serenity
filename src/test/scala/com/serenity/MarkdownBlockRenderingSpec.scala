@@ -5,7 +5,6 @@ import java.awt.Font
 import com.serenity.config.{AppConfig, MarkdownViewMode}
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
@@ -55,7 +54,7 @@ class MarkdownBlockRenderingSpec extends AnyFlatSpec with Matchers:
       textFont = FontSpec.fromAwt(textFont),
       cellMetrics = TestMeasure.cellMetrics(codeFont),
       cursorColor = None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface
 

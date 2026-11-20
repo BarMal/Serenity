@@ -385,7 +385,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
     val snapshot = TextLayoutSnapshot.fromBuffer(
       currentState.persisted.buffers(bufferId),
       panelWidthPx,
-      font
+      font,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx = snapshot.xPxForCursor(CursorPosition(0, 4)).getOrElse(fail("missing caret x"))
     val expectedCol  = snapshot.visualLines(2).nearestColumnForXPx(preferredXPx)
@@ -591,7 +592,8 @@ class EditorBehaviorSpec extends AnyFlatSpec with Matchers with Eventually:
 
     val stateManager: StateManager =
       StateManager
-        .apply(logger, dictionaryCache = SharedDictionary.default)(using
+        .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+          using
           com.serenity.rope.Balance.default,
           LoggerFactory[IO]
         )

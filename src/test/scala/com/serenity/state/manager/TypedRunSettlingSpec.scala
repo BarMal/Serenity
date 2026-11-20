@@ -11,8 +11,8 @@ import com.serenity.keystroke.events.{DeleteBackward, Enter, Event, InsertChar, 
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
-import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
+import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -41,7 +41,8 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("typed-run")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       bufferId <- stateManager.createBuffer(proseDocument, None)
@@ -140,7 +141,7 @@ class TypedRunSettlingSpec extends AnyFlatSpec with Matchers:
     val uncentred = states.zipWithIndex.collect {
       case (state, index) if state.persisted.buffers.get(bufferId).exists { buffer =>
             buffer.editing.cursorPositions.headOption.exists(cursor =>
-              CursorViewport.adjustForCursor(buffer, state, cursor, WrappedLineCache.Uncached) != buffer.viewport
+              CursorViewport.adjustForCursor(buffer, state, cursor, TestMeasure.wrapCache()) != buffer.viewport
             )
           } =>
         index

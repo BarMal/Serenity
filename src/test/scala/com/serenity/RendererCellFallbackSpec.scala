@@ -72,7 +72,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -93,7 +93,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -114,7 +114,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -139,7 +139,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls shouldBe empty
@@ -163,7 +163,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls should not be empty
@@ -183,7 +183,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val titledRows = (0 until viewportSize.height).map(surface.getRow)
@@ -204,7 +204,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val rows = (0 until viewportSize.height).map(surface.getRow)

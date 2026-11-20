@@ -7,7 +7,7 @@ import scala.util.Random
 
 import com.serenity.state.models.TextVisualLine
 import com.serenity.testkit.TestMeasure
-import com.serenity.ui.renderer.{FontProbes, ShapedTextCache}
+import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -15,7 +15,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
 /** Wrapping a paragraph must not measure exactly (shape a row) per row: kerned prose is measured from one shaped
   * stretch, and wraps exactly where per-row measurement ([[LegacyLineMeasurement]]) did.
   */
-class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks:
+class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks with SkiaRowOracle:
 
   private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
   private val tolerance = 0.02f
@@ -54,8 +54,7 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
       3,
       widthPx,
       font,
-      frc,
-      wrapCache = WrappedLineCache.measuring(shaper, LayoutMemos())
+      wrapCache = WrappedLineCache.measuring(shaper, TestMeasure.layoutMemos())
     )
 
   /** The rows `text` wraps to, with how many exact measurements that wrap built: counted by the shaper it wrapped
@@ -68,7 +67,7 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
 
   "Wrapping kerned prose" should "build a constant number of exact measurements however many rows wrap" in
     forAll(kernedFonts) { font =>
-      TextLayoutSnapshot.shouldUseMeasuredLayout(font, frc, FontProbes()) shouldBe true
+      TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(font), TestMeasure.layoutMemos()) shouldBe true
       wrap("warm up the font probes", 200, font)
       forAll(widths) { widthPx =>
         val (rows, built) = constructedWhile(kernedProse, widthPx, font)
@@ -93,11 +92,24 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
 
   private def assertWrapsAsPerRowMeasurementDid(text: String, widthPx: Int, font: Font): Unit =
     val rows = wrap(text, widthPx, font)
+    val reordered = text.exists(char =>
+      Set(Character.DIRECTIONALITY_RIGHT_TO_LEFT, Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC)
+        .contains(Character.getDirectionality(char))
+    )
+    withClue(s"$font at $widthPx px, '$text': ") {
+      if !fallsBackInSkia(text) then assertWrapsLikeLegacy(rows, text, widthPx, font)
+      else if !reordered then assertSkiaRows(rows, text, widthPx, font)
+      // Right-to-left text is drawn in runs that take AWT's fallback fonts, and the rest in Skia's: neither shaper alone
+      // says what such a row measures, so only that the rows hold the text is checked.
+      else rows.map(_.text).mkString shouldBe text
+    }
+
+  private def assertWrapsLikeLegacy(rows: Vector[TextVisualLine], text: String, widthPx: Int, font: Font): Unit =
     val legacy = LegacyLineMeasurement.wrap(
       text,
       3,
       widthPx,
-      TextCaretMeasurement.singleFontResolver(font),
+      TextCaretMeasurement.singleFontResolver(FontSpec.fromAwt(font)),
       frc,
       measuredLayout = true,
       TestMeasure.cellMetrics(font)

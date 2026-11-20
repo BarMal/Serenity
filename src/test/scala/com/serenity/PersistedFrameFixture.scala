@@ -105,7 +105,7 @@ trait PersistedFrameFixture:
     frames.surfaceOver(frame, cellMetrics, codeFont, logicalW, logicalH, scale, persists, caches)
 
   final protected class Session(scale: Double = 2.0):
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val token  = ScreenIdentity(new javax.swing.JPanel)
     caches.frameCounters.setEnabled(true)
 
@@ -155,7 +155,7 @@ trait PersistedFrameFixture:
 
   protected def cold(state: AppState, scale: Double = 2.0): FramePixels =
     val image  = frames.newFrame(deviceSize(logicalW, scale), deviceSize(logicalH, scale))
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val _ = RendererFramePlanner.renderFrame(
       state,
       cursorVisible = false,

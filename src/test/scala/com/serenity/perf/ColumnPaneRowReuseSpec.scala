@@ -8,7 +8,7 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, InsertChar}
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
@@ -47,7 +47,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
 
   final private class PersistingImage:
     private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
@@ -101,7 +101,7 @@ class ColumnPaneRowReuseSpec extends AnyFlatSpec with Matchers:
 
   "The fixture" should "lay the pane out in more than one column" in {
     val (before, _) = typingTransition()
-    val scene       = RenderCaches.create().authoritativeScene.forState(before, viewport, codeFont, textFont)
+    val scene       = TestMeasure.renderCaches().authoritativeScene.forState(before, viewport, codeFont, textFont)
     val paneId      = before.persisted.layout.editorPanes.keys.head
 
     scene.columnSnapshotsFor(paneId).size should be > 1

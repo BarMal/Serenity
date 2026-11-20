@@ -3,8 +3,9 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.state.models.IndentationSettings
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextCaretMeasurement.singleFontResolver
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -22,7 +23,7 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
 
   private def caretXs(text: String, tabSize: Int, cells: CellMetrics): List[Float] =
     TextCaretMeasurement
-      .caretXs(text, 0, singleFontResolver(font, tabSize), frc, measuredLayout = false, cells, ShapedTextCache())
+      .caretXs(text, 0, singleFontResolver(FontSpec.fromAwt(font), tabSize), None, cells)
       .toList
 
   "Grid caret stops" should "advance a tab to the next stop at the configured size" in {
@@ -77,10 +78,10 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
         0,
         12,
         font,
-        frc,
         cellMetricsOverride = Some(oneCell),
         forceCellLayout = true,
-        richText = RichTextContext.plain.copy(tabSize = tabSize)
+        richText = RichTextContext.plain.copy(tabSize = tabSize),
+        wrapCache = TestMeasure.wrapCache()
       )
     List(2, 4, 8).foreach { tabSize =>
       val rows = rowsAt(tabSize)
@@ -96,10 +97,10 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
       0,
       10,
       font,
-      frc,
       cellMetricsOverride = Some(oneCell),
       forceCellLayout = true,
-      richText = RichTextContext.plain.copy(tabSize = 4)
+      richText = RichTextContext.plain.copy(tabSize = 4),
+      wrapCache = TestMeasure.wrapCache()
     )
     rows.map(_.text) shouldBe Vector("abcdefgh", "\tij")
     rows.last.caretStops.map(_.xPx) shouldBe Vector(0f, 4f, 5f, 6f)
@@ -112,11 +113,10 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
         10,
         10,
         font,
-        ShapedTextCache(),
-        frc,
         cellMetricsOverride = Some(oneCell),
         forceCellLayout = true,
-        tabSize = tabSize
+        tabSize = tabSize,
+        wrapCache = TestMeasure.wrapCache()
       )
     leftColumn(2) shouldBe 2
     leftColumn(4) shouldBe 3
@@ -128,10 +128,9 @@ class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
       12,
       10,
       font,
-      ShapedTextCache(),
-      frc,
       cellMetricsOverride = Some(oneCell),
-      forceCellLayout = true
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
     ) shouldBe 3
   }
 

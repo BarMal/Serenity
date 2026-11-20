@@ -8,7 +8,6 @@ import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +28,7 @@ class BoldTextCellGridPaintSpec extends AnyFlatSpec with Matchers:
   private val heart   = String(Array(0x2764, 0xfe0f), 0, 2)
 
   private val fallback = Some(
-    CellFallback(primary, FontFallback(Vector.empty, FontLoader.emojiFontFamily), WrappedLineCache.bounded())
+    CellFallback(primary, FontFallback(Vector.empty, FontLoader.emojiFontFamily), TestMeasure.wrapCache())
   )
 
   private def painted(text: String, style: TextStyle): BufferedImage =

@@ -4,7 +4,6 @@ import java.nio.file.Path
 
 import com.serenity.config.AppConfig
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
 import com.serenity.testkit.TestMeasure
@@ -75,7 +74,7 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
     val widthPx  = columns * metrics.charWidth
     val heightPx = rows * metrics.lineHeight
     val frame    = frames.newFrame(widthPx, heightPx)
-    val caches   = RenderCaches.create()
+    val caches   = TestMeasure.renderCaches()
     val surface  = frames.surfaceOver(frame, metrics, codeFont, widthPx, heightPx, 1.0, persists = false, caches)
     RendererEntryPoints.render(
       CompositionPreview.displayed(state, new CompositionRevisions),
@@ -92,7 +91,7 @@ abstract class TabSeparatorRenderBehaviour extends AnyFlatSpec with Matchers:
     )
     surface.flush()
     val strip = LayoutEngine.calculateLayout(state, ViewportSize(columns, rows)).tabBarRect.getOrElse(fail("no strip"))
-    val settings = TabBarLayoutSettings.of(state)
+    val settings = TabBarLayoutSettings.of(state, measures = caches.tabBarMeasures)
     val composition = state.tabBarSurface.map(_.content) match
       case Some(SurfaceContent.TabBar(entries, active)) =>
         TabBarSurfaceComposition.forTabBar(entries, active, strip, settings)

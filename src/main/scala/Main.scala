@@ -42,7 +42,7 @@ import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
 import com.serenity.ui.host.InputSettings
-import com.serenity.ui.renderer.{FrameSurfaceFactory, PaintExecutionContext}
+import com.serenity.ui.renderer.{CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
 import com.serenity.ui.tui.{TerminalShell, TuiRuntime}
@@ -85,6 +85,7 @@ object Main extends IOApp:
                 _,
                 java.nio.file.Path.of("."),
                 System.out,
+                SkiaTextMeasurer.forLayout,
                 startup =
                   s"toolkit ${graphics.toolkit.choice} (${graphics.toolkit.reason}); ${graphics.backend.logLine}"
               )
@@ -396,8 +397,9 @@ object Main extends IOApp:
   ): IO[Unit] =
     given ShutdownLedger = watchdog.ledger
     for
-      smokeReady   <- Deferred[IO, Unit]
-      displayState <- RuntimeDisplayState.create(appConfig.editorConfig.fontConfig)
+      smokeReady <- Deferred[IO, Unit]
+      sharedSlots = new CacheSlots
+      displayState <- RuntimeDisplayState.createSharing(appConfig.editorConfig.fontConfig, sharedSlots)
       initialDisplay = displayState.snapshot
       frameTimings   = FrameTimings(backend = startup.backend)
       _ <- (
@@ -561,7 +563,8 @@ object Main extends IOApp:
                   onPreferredWindowSizeChanged = size => IO.blocking(host.control.resizeToPreferred(size)),
                   fileDialog = Some(fileDialog),
                   scrollCounting = scrollCounting,
-                  layoutMeasurerFor = owner => Some(SkiaTextMeasurer.of(owner))
+                  layoutMeasurerFor = SkiaTextMeasurer.forLayout,
+                  sharedBackendCaches = sharedSlots
                 )
               ),
               awaitExternalQuit =

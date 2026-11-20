@@ -3,9 +3,10 @@ package com.serenity
 import java.awt.Font
 
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{LayoutMemos, TextLayoutSnapshot}
-import com.serenity.ui.renderer.{CharacterRenderer, ShapedTextCache}
+import com.serenity.ui.layout.TextLayoutSnapshot
+import com.serenity.ui.renderer.CharacterRenderer
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -106,10 +107,16 @@ class CharacterRendererProportionalSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render an RTL measured line whose logical endpoints share the right edge" in {
-    val text       = "אבג"
-    val font       = Font("SansSerif", Font.PLAIN, 12)
-    val visualLine = TextLayoutSnapshot.visualLineForText(text, bufferLine = 0, font, ShapedTextCache(), LayoutMemos())
-    val surface    = new MockRenderSurface(200, 24)
+    val text = "אבג"
+    val font = Font("SansSerif", Font.PLAIN, 12)
+    val visualLine = TextLayoutSnapshot.visualLineForText(
+      text,
+      bufferLine = 0,
+      font,
+      TestMeasure.layoutMemos(),
+      wrapCache = TestMeasure.wrapCache()
+    )
+    val surface = new MockRenderSurface(200, 24)
 
     visualLine.caretStops.head.xPx shouldBe visualLine.caretStops.last.xPx +- 0.001f
 

@@ -5,9 +5,9 @@ import java.awt.image.BufferedImage
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.{PageDown, ScrollDown}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, Damage}
-import com.serenity.testkit.MacOsSeamQuarantine
+import com.serenity.testkit.{MacOsSeamQuarantine, TestMeasure}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -114,7 +114,7 @@ class PaneEdgeDamagedFrameSpec extends AnyFlatSpec with Matchers:
       val drawn  = frames.render(after, damage)
       val cold = LaptopFrameBenchmarks.renderedFrame(
         after,
-        RenderCaches.create(),
+        TestMeasure.renderCaches(),
         LaptopFrameBenchmarks.frameImage(),
         cursorVisible = false
       )

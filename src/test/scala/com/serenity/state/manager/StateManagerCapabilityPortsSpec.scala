@@ -7,6 +7,7 @@ import cats.effect.{Deferred, IO, Ref}
 import com.serenity.config.PreferredWindowSize
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.presets.UiPresetStore
 import com.serenity.ui.theme.config.AppThemeManager
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,7 +41,7 @@ class StateManagerCapabilityPortsSpec extends AnyFlatSpec with Matchers:
     val uiPresetStore = UiPresetStore(Paths.get(System.getProperty("java.io.tmpdir"), "capability-ports-spec.json"))
     val windowSizeProvider    = IO.pure(Option.empty[PreferredWindowSize])
     val markdownPreviewWindow = com.serenity.frontend.MarkdownPreviewWindowAvailability.Unavailable
-    val renderCaches          = RenderCaches.create()
+    val renderCaches          = TestMeasure.renderCaches()
 
   private def path(name: String): Path = Paths.get(name)
 

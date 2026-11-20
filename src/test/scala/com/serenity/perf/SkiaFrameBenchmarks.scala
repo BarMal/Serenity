@@ -8,7 +8,7 @@ import cats.effect.unsafe.IORuntime
 import com.serenity.diagnostics.FrameCounts
 import com.serenity.keystroke.events.{InsertChar, ScrollDown}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
@@ -41,7 +41,7 @@ private[perf] object SkiaFrameBenchmarks:
     */
   final private[perf] class Frames(backend: FrameBackend, codeFont: Font, metrics: CellMetrics, grid: ViewportSize):
     private val frame     = backend.newFrame(deviceSize(LogicalWidthPx), deviceSize(LogicalHeightPx))
-    private val caches    = RenderCaches.create()
+    private val caches    = TestMeasure.renderCaches()
     private val screen    = ScreenIdentity(this)
     private val uiMetrics = TestMeasure.cellMetrics(uiFont)
 

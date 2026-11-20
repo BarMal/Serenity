@@ -234,7 +234,7 @@ object RendererPaneSetup:
     val bufferFont           = if hasFontRenderContext then context.fontForBuffer(buffer) else context.codeFont
     val panelWidthPx         = contentRect.width * context.cellMetrics.charWidth
     val panelHeightPx        = contentRect.height * context.cellMetrics.lineHeight
-    val bufferMetrics        = CellMetrics.fromFont(bufferFont)
+    val bufferMetrics        = TextLayoutSnapshot.cellMetricsOf(bufferFont, context.caches.wrappedLines.layoutMemos)
     val surfaceConfig        = state.persisted.config.surfaceConfig
     // Column-based document layout (issue #1338): narrows the viewport (and so `baseViewport.visibleColumns`) to one
     // column's width whenever column mode and word wrap are both on -- otherwise this is exactly the three-argument
@@ -251,8 +251,6 @@ object RendererPaneSetup:
         ProseColumn.wrapCells(state)
       )
     val columnModeActive = surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled
-    val fontRenderContext =
-      context.surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
     val visibleColumns =
       // Column mode's `baseViewport.visibleColumns` is already the authoritative column width in cells (the same
       // value `CursorViewport.adjustForCursorColumnMode`'s snapping assumes) -- the measured-font overscan estimate
@@ -263,15 +261,18 @@ object RendererPaneSetup:
       else
         visibleColumnsFor(
           bufferFont,
-          fontRenderContext,
-          context.caches.shapedText,
+          context.caches.wrappedLines.layoutMemos,
           panelWidthPx,
           baseViewport.visibleColumns
         )
     val visibleLines = ScrollLimits.rowsThatFit(panelHeightPx, bufferMetrics.lineHeight)
     context.caches.scrollRows.report(
       buffer.id,
-      ScrollRowCounts(baseViewport.visibleLines, CursorViewport.rowsThatFit(buffer, state), visibleLines)
+      ScrollRowCounts(
+        baseViewport.visibleLines,
+        CursorViewport.rowsThatFit(buffer, state, context.caches.wrappedLines.layoutMemos),
+        visibleLines
+      )
     )
     val sizedViewport = baseViewport.copy(
       visibleColumns = visibleColumns,
@@ -311,7 +312,6 @@ object RendererPaneSetup:
           renderBuffer,
           columnTextWidthPx,
           bufferFont,
-          fontRenderContext,
           cellMetricsOverride = cellMetricsForSnapshot,
           forceCellLayout = !hasFontRenderContext,
           proseScale = proseScale,
@@ -328,7 +328,6 @@ object RendererPaneSetup:
           renderBuffer,
           panelWidthPx,
           bufferFont,
-          fontRenderContext,
           wordWrapEnabled = surfaceConfig.wordWrapEnabled,
           cellMetricsOverride = cellMetricsForSnapshot,
           // #1215: forces the cell path during construction (not just the flag below) -- otherwise a "monospaced"
@@ -348,16 +347,9 @@ object RendererPaneSetup:
         )
     if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
-  private def visibleColumnsFor(
-    font: Font,
-    fontRenderContext: java.awt.font.FontRenderContext,
-    shapedText: ShapedTextCache,
-    panelWidthPx: Int,
-    gridVisibleColumns: Int
-  ): Int =
-    val sample = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-    val measuredAdvance =
-      TextLayoutSnapshot.caretXsForText(sample, font, shapedText, fontRenderContext).lastOption.getOrElse(0.0f)
+  private def visibleColumnsFor(font: Font, memos: LayoutMemos, panelWidthPx: Int, gridVisibleColumns: Int): Int =
+    val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val measuredAdvance = TextLayoutSnapshot.caretXsForText(sample, font, memos).lastOption.getOrElse(0.0f)
     val averageAdvance  = math.max(1.0f, measuredAdvance / sample.length.toFloat)
     val measuredColumns = math.ceil(panelWidthPx.toDouble / averageAdvance.toDouble).toInt + 32
     val gridOverscan    = gridVisibleColumns + 64

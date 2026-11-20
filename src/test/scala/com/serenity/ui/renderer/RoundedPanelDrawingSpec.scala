@@ -2,7 +2,7 @@ package com.serenity.ui.renderer
 
 import java.awt.{Color, Font}
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, RoundedCorners}
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
@@ -42,8 +42,9 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   private def rgb(color: Color): Int = color.getRGB & 0xffffff
 
   private def drawPanel(corners: RoundedCorners, radiusPx: Int): FramePixels =
-    val image    = frames.newFrame(width, height)
-    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     surface.setForegroundColor(RenderColor.fromAwt(border))
@@ -126,8 +127,9 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   }
 
   private def fillPanel(corners: RoundedCorners, radiusPx: Int): (FramePixels, Boolean) =
-    val image    = frames.newFrame(width, height)
-    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     val drew =
@@ -168,8 +170,9 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   }
 
   it should "meet a stroke drawn over it with no gap: the pixel just inside the border is the panel" in {
-    val image    = frames.newFrame(width, height)
-    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     outlines.fillRoundRect(cellX, cellY, cellsWide, cellsHigh, RoundedCorners.All, radius, RenderColor.fromAwt(panel))
@@ -190,8 +193,9 @@ abstract class RoundedPanelDrawingBehaviour extends AnyFlatSpec with Matchers:
   }
 
   "The rounded clip" should "leave drawing after its block unclipped" in {
-    val image    = frames.newFrame(width, height)
-    val surface  = frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, RenderCaches.create())
+    val image = frames.newFrame(width, height)
+    val surface =
+      frames.surfaceOver(image, metrics, font, width, height, 1.0, persists = false, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(RenderColor.fromAwt(page))
     surface.setBackgroundColor(RenderColor.fromAwt(panel))

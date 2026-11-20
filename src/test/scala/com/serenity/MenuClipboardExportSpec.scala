@@ -12,7 +12,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.Damage
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -34,7 +34,11 @@ class MenuClipboardExportSpec extends AnyFlatSpec with Matchers:
 
   private def inEditor(batches: List[List[PendingInput]]): IO[(Vector[String], String)] =
     for
-      stateManager    <- StateManager(logger, dictionaryCache = SharedDictionary.default)
+      stateManager <- StateManager(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
       bufferId        <- stateManager.createNewEmptyBuffer
       state           <- stateManager.getCurrentState
       _               <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)

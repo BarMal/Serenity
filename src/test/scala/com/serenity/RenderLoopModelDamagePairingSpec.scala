@@ -13,7 +13,7 @@ import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.manager.{DamageProducer, Model, RenderCaches, StateEngine}
 import com.serenity.state.models.*
 import com.serenity.state.undo.UndoState
-import com.serenity.testkit.EditingStateFixtures
+import com.serenity.testkit.{EditingStateFixtures, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import fs2.concurrent.SignallingRef
 import org.scalatest.flatspec.AnyFlatSpec
@@ -91,7 +91,7 @@ class RenderLoopModelDamagePairingSpec extends AnyFlatSpec with Matchers:
         IO.unit,
         (_: AppState, _: Boolean, _: Option[RenderColor], damage: Damage, _: RenderCaches) =>
           frames.update(_ :+ damage),
-        RenderCaches.create(),
+        TestMeasure.renderCaches(),
         sleep = _ => IO.unit,
         lastDrawnState = lastDrawn,
         damagePublishedFor = coveredRef,

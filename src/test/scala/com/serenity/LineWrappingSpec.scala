@@ -5,6 +5,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.traverse.*
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
+import com.serenity.state.manager.CursorViewport
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.testkit.{ActivePane, TestMeasure}
@@ -252,7 +253,13 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     // Cursor should be visible within viewport
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be <
+      (viewport.topLine + CursorViewport.rowsThatFit(
+        finalBuffer,
+        finalState,
+        com.serenity.testkit.TestMeasure.layoutMemos()
+      ))
   }
 
   it should "dynamically update viewport dimensions based on terminal size" in {
@@ -409,9 +416,11 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       startBuffer.copy(viewport =
         startBuffer.viewport.copy(leftColumn = 0, topLine = 0, topVisualLine = 0, visibleLines = paragraph.length)
       ),
-      TextLayoutSnapshot.gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig),
+      TextLayoutSnapshot
+        .gridWrapWidthPx(panelWidth, startState.persisted.config.editorConfig.fontConfig, TestMeasure.layoutMemos()),
       font,
-      wordWrapEnabled = true
+      wordWrapEnabled = true,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx = snapshot.xPxForCursor(startCursor).getOrElse(fail("missing caret x"))
     val expectedDown =
@@ -481,7 +490,8 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
       beforeBuffer.copy(viewport = beforeBuffer.viewport.copy(leftColumn = 0, topVisualLine = 0)),
       panelWidth * TestMeasure.cellMetrics(font).charWidth,
       font,
-      wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled
+      wordWrapEnabled = beforeNavState.persisted.config.surfaceConfig.wordWrapEnabled,
+      wrapCache = TestMeasure.wrapCache()
     )
     val preferredXPx    = snapshot.xPxForCursor(beforeCursor).getOrElse(fail("missing caret x"))
     val fallbackAfterUp = beforeCursor.copy(column = beforeCursor.column % panelWidth)
@@ -645,7 +655,7 @@ class LineWrappingSpec extends AnyFlatSpec with Matchers:
 
     val stateAfterTyping = stateManager.getCurrentState.unsafeRunSync()
     val geometry = com.serenity.state.manager.EditorGeometryProducer
-      .forPane(stateAfterTyping, paneId)
+      .forPane(stateAfterTyping, paneId, wrapCache = com.serenity.testkit.TestMeasure.wrapCache())
       .getOrElse(fail("expected geometry for pane"))
     geometry.navigation.visualLines.size should be >= 3
     val middleRow = geometry.navigation.visualLines(1)

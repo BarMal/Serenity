@@ -2,9 +2,9 @@ package com.serenity.ui.renderer
 
 import com.serenity.MockRenderSurface
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{CompositionPreview, CompositionRevisions}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{Layout, ViewportSize}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -51,7 +51,7 @@ class CompositionRenderSpec extends AnyFlatSpec with Matchers:
 
   private def rendered(state: AppState): MockRenderSurface =
     val surface = new MockRenderSurface(viewport.width, viewport.height)
-    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, RenderCaches.create())
+    RendererEntryPoints.render(state, cursorVisible = false, surface, viewport, TestMeasure.renderCaches())
     surface
 
   private def textRows(surface: MockRenderSurface): List[String] =

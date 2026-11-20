@@ -26,6 +26,7 @@ class TypewriterCentringSpec extends AnyFlatSpec with Matchers:
       persisted = fixture.persisted.copy(config = config(fixture.persisted.config.withColumnMode(false))),
       runtime = fixture.runtime.copy(
         viewportSize = Some(paneSize),
+        anchorWraps = com.serenity.testkit.TestMeasure.anchorWraps(),
         capabilities = if terminal then FrontendCapabilities.tui() else fixture.runtime.capabilities
       )
     )
@@ -38,7 +39,7 @@ class TypewriterCentringSpec extends AnyFlatSpec with Matchers:
         state.persisted.buffers + (bufferId -> buffer.copy(editing = EditingState(List(cursor))))
       )
     )
-    CursorViewport.ensureVisibleCursors(state, moved)
+    CursorViewport.ensureVisibleCursors(state, moved, com.serenity.testkit.TestMeasure.wrapCache())
 
   /** The cell row the caret is painted on, and the pane's content rect, as popups and the painter see them. */
   private def painted(state: AppState, cursor: CursorPosition): (Option[Int], Int, Int) =
@@ -60,7 +61,7 @@ class TypewriterCentringSpec extends AnyFlatSpec with Matchers:
     */
   private def bestDistance(state: AppState, cursor: CursorPosition, middle: Int): Int =
     val buffer = state.persisted.buffers(bufferId)
-    val counts = CursorViewport.visualRowsFor(buffer, state, com.serenity.ui.layout.WrappedLineCache.Uncached)
+    val counts = CursorViewport.visualRowsFor(buffer, state, com.serenity.testkit.TestMeasure.wrapCache())
     val tops = for
       line <- math.max(0, cursor.line - 20) to cursor.line
       row  <- 0 until counts.rowsIn(line)

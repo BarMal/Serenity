@@ -42,15 +42,15 @@ private[perf] object RenderBenchmarks:
   private val frameHeightPx    = viewportSize.height * cellMetrics.lineHeight
 
   // Shared across the frame and markdown benchmarks, mirroring StateManager's cache reuse across renders (#1677).
-  private val renderCaches = RenderCaches.create()
+  private val renderCaches = TestMeasure.renderCaches()
 
   private lazy val longMeasuredLine =
     TextLayoutSnapshot.visualLineForText(
       "Wi" * 8_000,
       bufferLine = 0,
       textFont,
-      renderCaches.shapedText,
-      renderCaches.wrappedLines.layoutMemos
+      renderCaches.wrappedLines.layoutMemos,
+      wrapCache = TestMeasure.wrapCache()
     )
 
   def frameBenchmarks(cursorWindow: => SwingWindow): List[BenchmarkRunner.Benchmark] =
@@ -177,7 +177,13 @@ private[perf] object RenderBenchmarks:
     state.persisted.buffers
       .get(BufferId(1))
       .map(buffer =>
-        TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = frameWidthPx, monoFont, wordWrapEnabled = false)
+        TextLayoutSnapshot.fromBuffer(
+          buffer,
+          panelWidthPx = frameWidthPx,
+          monoFont,
+          wordWrapEnabled = false,
+          wrapCache = TestMeasure.wrapCache()
+        )
       )
 
   def markdownBenchmarks(): List[BenchmarkRunner.Benchmark] =

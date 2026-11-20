@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import scala.annotation.tailrec
 
@@ -10,6 +9,7 @@ import com.serenity.rope.ChangeSet
 import com.serenity.state.models.{Buffer, BufferId, IndentationSettings}
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.theme.HeadingSettings
 
 /** How many visual rows the logical lines of one buffer's content wrap into under one wrap setting -- the counts
@@ -67,7 +67,6 @@ final private[layout] case class VisualRowKey(
     bufferId: BufferId,
     panelWidthPx: Int,
     font: Font,
-    frc: FontRenderContext,
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
     dropCapsEnabled: Boolean,
@@ -109,7 +108,6 @@ object VisualRowCounts:
     fallback: FontFallback = FontFallback.Default
   ): VisualRowCounts =
     val content = buffer.document.content
-    val frc     = TextLayoutSnapshot.defaultFontRenderContext()
     val richText =
       RichTextContext.forBuffer(
         buffer,
@@ -118,21 +116,20 @@ object VisualRowCounts:
         markdownViewMode,
         forceCellLayout,
         wrapCache,
-        frc,
         tabSize,
         headings,
         openings,
         dropCapGapEm,
         fallback
       )
-    val certificateKey = NominalAdvances.Key(font, frc)
+    val certificateKey = NominalAdvances.Key(FontSpec.fromAwt(font))
     val certificates   = wrapCache.layoutMemos.rowCertificates
     // A plain line set on its own fractional advances is one row when those advances say so; the wrap decides the rest.
     lazy val certified: Option[NominalAdvances] =
       Option
         .when(
           richText.document.isEmpty && !richText.markdown.isActive && richText.virtualDropCaps.isEmpty &&
-            LineLayout.measuredLayoutFor(font, frc, forceCellLayout, richText, wrapCache.shapedText.probes)
+            LineLayout.measuredLayoutFor(font, forceCellLayout, richText, wrapCache.layoutMemos)
         )(certificates.of(certificateKey))
         .flatten
     def callsOneRow(table: NominalAdvances, line: Int): Boolean =
@@ -156,7 +153,6 @@ object VisualRowCounts:
             line,
             panelWidthPx,
             font,
-            frc,
             cellMetricsOverride = cellMetricsOverride,
             forceCellLayout = forceCellLayout,
             wrapCache = wrapCache,
@@ -165,7 +161,7 @@ object VisualRowCounts:
           .length
           .max(1)
     val key =
-      VisualRowKey(buffer.id, panelWidthPx, font, frc, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
+      VisualRowKey(buffer.id, panelWidthPx, font, cellMetricsOverride, forceCellLayout, dropCapsEnabled, fallback)
     if contradicted then wrapCache.dropVisualRowCounts(key)
     val revision = ContentRevision(buffer.document.contentVersion, buffer.document.changesSince)
     wrapCache.visualRowCounts(key, content, measure, VisualLineIndexStore.stampOf(richText), Some(revision))

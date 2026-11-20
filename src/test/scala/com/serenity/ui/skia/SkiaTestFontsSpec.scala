@@ -4,6 +4,7 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -21,11 +22,11 @@ class SkiaTestFontsSpec extends AnyFlatSpec with Matchers:
     SkiaTextCaches.of(owner.backendCaches).fonts.faceFor(FontSpec.fromAwt(awt)).font.getTypeface.getFamilyName
 
   "A fixture font the system does not hold" should "not be what Skia draws its family with by default" in {
-    familyDrawn(RenderCaches.create(), fixture) should not equal fixture.getFamily
+    familyDrawn(TestMeasure.renderCaches(), fixture) should not equal fixture.getFamily
   }
 
   it should "be what an owner draws its family with once the font is installed for that owner" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     SkiaTestFonts.install(owner.backendCaches, resource) shouldBe Right(fixture.getFamily)
 
@@ -33,21 +34,21 @@ class SkiaTestFontsSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "stay the fixture's own to the owner it was installed for" in {
-    val (installed, other) = (RenderCaches.create(), RenderCaches.create())
+    val (installed, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
     val _                  = SkiaTestFonts.install(installed.backendCaches, resource)
 
     familyDrawn(other, fixture) should not equal fixture.getFamily
   }
 
   it should "leave the families the system does hold as they were" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
     val _     = SkiaTestFonts.install(owner.backendCaches, resource)
     val plain = new Font(Font.MONOSPACED, Font.PLAIN, 12)
 
-    familyDrawn(owner, plain) shouldBe familyDrawn(RenderCaches.create(), plain)
+    familyDrawn(owner, plain) shouldBe familyDrawn(TestMeasure.renderCaches(), plain)
   }
 
   "Installing a font that is not on the classpath" should "say so instead of installing anything" in {
-    SkiaTestFonts.install(RenderCaches.create().backendCaches, "/fonts/NoSuchFont.ttf") shouldBe
+    SkiaTestFonts.install(TestMeasure.renderCaches().backendCaches, "/fonts/NoSuchFont.ttf") shouldBe
       Left("no font resource /fonts/NoSuchFont.ttf")
   }

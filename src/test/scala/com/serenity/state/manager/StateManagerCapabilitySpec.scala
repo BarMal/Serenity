@@ -38,7 +38,7 @@ class StateManagerCapabilitySpec extends AnyFlatSpec with Matchers:
     val statePort = new EventStatePort:
       val logger              = currentLogger
       val mouseTargetCacheRef = currentCacheRef
-      val authoritativeScene  = AuthoritativeUiScene()
+      val authoritativeScene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
     val effectPort = EventEffectPort(
       interpretEffect = runEffect,
       interpretCommand = (_, _) => IO.unit

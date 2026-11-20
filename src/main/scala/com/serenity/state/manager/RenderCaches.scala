@@ -3,9 +3,18 @@ package com.serenity.state.manager
 import com.serenity.diagnostics.{FrameCounters, FramePhaseClock}
 import com.serenity.markdown.MarkdownPreviewCache
 import com.serenity.state.reducers.CompositionRevisions
-import com.serenity.ui.layout.{LayoutMemos, ScrollRowsReporter, TabBarMeasures, TextMeasurer, WrappedLineCache}
+import com.serenity.ui.layout.{
+  AnchorWrapCache,
+  CellMetrics,
+  LayoutMemos,
+  ScrollRowsReporter,
+  TabBarMeasures,
+  TextMeasurer,
+  WrappedLineCache
+}
 import com.serenity.ui.renderer.{
   BackendCaches,
+  CacheSlots,
   GraphemeSegmentationCache,
   LabelSprites,
   MeasuredTextAdvances,
@@ -63,6 +72,13 @@ final class RenderCaches private (
     */
   def measurer: Option[TextMeasurer] = measurerSource()
 
+  /** The wraps measured while locating a caret, on the measurer this owner draws and lays out with. */
+  def anchorWraps: AnchorWrapCache = AnchorWrapCache()(() => measurer)
+
+  /** The grid of `font` that layout measures on: the owner's measurer's, and AWT's where the owner has none. */
+  def cellMetricsOf(font: java.awt.Font): CellMetrics =
+    measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
+
   /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
 
@@ -76,9 +92,10 @@ object RenderCaches:
     rendererFrameStateCacheCapacity: Int = 64,
     scrollCounting: ScrollCounting = ScrollCounting.Inline,
     styledFonts: StyledFontCache = StyledFontCache(),
-    measurerFor: BackendCaches => Option[TextMeasurer] = _ => None
+    measurerFor: BackendCaches => Option[TextMeasurer] = _ => None,
+    sharedBackendCaches: CacheSlots = new CacheSlots
   ): RenderCaches =
-    val backend        = new BackendCaches
+    val backend        = new BackendCaches(sharedBackendCaches)
     lazy val measurer  = measurerFor(backend)
     val measurerSource = () => measurer
     val shapedText     = ShapedTextCache()
@@ -95,8 +112,8 @@ object RenderCaches:
       shapedText,
       styledFonts,
       LabelSprites(LabelSprites.DefaultCapacity),
-      MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, shapedText),
-      new TabBarMeasures,
+      MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, wrappedLines.layoutMemos),
+      new TabBarMeasures(measurerSource),
       new CompositionRevisions,
       backend,
       new FramePhaseClock(),

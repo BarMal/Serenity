@@ -41,7 +41,13 @@ class VisibleBufferLinesSpec extends AnyFlatSpec with Matchers:
 
   private def shownLines(buffer: Buffer, wordWrapEnabled: Boolean): Vector[Int] =
     TextLayoutSnapshot
-      .fromBuffer(buffer, panelWidthPx = charWidthPx * 10, font, wordWrapEnabled = wordWrapEnabled)
+      .fromBuffer(
+        buffer,
+        panelWidthPx = charWidthPx * 10,
+        font,
+        wordWrapEnabled = wordWrapEnabled,
+        wrapCache = TestMeasure.wrapCache()
+      )
       .visualLines
       .map(_.bufferLine)
       .distinct
@@ -100,24 +106,28 @@ class VisibleBufferLinesSpec extends AnyFlatSpec with Matchers:
     VisibleBufferLines.range(0, 10, 1) shouldBe LineRange(0, 0)
   }
 
+  private def lineHeightsIn(state: AppState): TypographyRole => Int =
+    val fontConfig = state.persisted.config.editorConfig.fontConfig
+    role => TestMeasure.cellMetrics(FontLoader.previewFontForRole(fontConfig, role)).lineHeight
+
   "VisibleBufferLines.of" should "count the rows the viewport says on a cell grid" in {
     val state =
       AppState.initial.copy(runtime = AppState.initial.runtime.copy(capabilities = FrontendCapabilities.tui()))
     val buffer = bufferOf(shortLines, viewport(topLine = 10, visibleLines = 8))
 
-    VisibleBufferLines.of(buffer, state) shouldBe LineRange(10, 17)
+    VisibleBufferLines.of(buffer, state, lineHeightsIn(state)) shouldBe LineRange(10, 17)
   }
 
   it should "count the rows the viewport says for a buffer drawn in the code font" in {
     val plain  = bufferOf(shortLines, viewport(topLine = 10, visibleLines = 8))
     val buffer = plain.copy(document = plain.document.copy(language = Some(LanguageId.Scala)))
 
-    VisibleBufferLines.of(buffer, AppState.initial) shouldBe LineRange(10, 17)
+    VisibleBufferLines.of(buffer, AppState.initial, lineHeightsIn(AppState.initial)) shouldBe LineRange(10, 17)
   }
 
   it should "reach the end of the document in column mode, where several screens sit side by side" in {
     val state  = withSurface(_.copy(wordWrapEnabled = true, columnModeEnabled = true))
     val buffer = bufferOf(shortLines, viewport(topLine = 10, visibleLines = 8))
 
-    VisibleBufferLines.of(buffer, state) shouldBe LineRange(10, 99)
+    VisibleBufferLines.of(buffer, state, lineHeightsIn(state)) shouldBe LineRange(10, 99)
   }

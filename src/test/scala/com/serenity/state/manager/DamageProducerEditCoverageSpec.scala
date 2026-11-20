@@ -5,6 +5,7 @@ import com.serenity.config.{RenderDamageGranularity, StatusLinePlacement, Status
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.{Balance, Rope}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.DirtyLineDiff
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -388,10 +389,13 @@ class DamageProducerEditCoverageSpec extends AnyFlatSpec with Matchers:
 
     val font = com.serenity.ui.fonts.FontLoader.previewTextFont(after.persisted.config.editorConfig.fontConfig)
     val wrapPx =
-      com.serenity.ui.layout.TextLayoutSnapshot.gridWrapWidthPx(80, after.persisted.config.editorConfig.fontConfig)
-    val beforeSnapshot = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
-    val afterSnapshot  = com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(edited, wrapPx, font)
-    val dirty          = DirtyLineDiff.dirtyRows(Some(beforeSnapshot), afterSnapshot)
+      com.serenity.ui.layout.TextLayoutSnapshot
+        .gridWrapWidthPx(80, after.persisted.config.editorConfig.fontConfig, TestMeasure.layoutMemos())
+    val beforeSnapshot =
+      com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
+    val afterSnapshot =
+      com.serenity.ui.layout.TextLayoutSnapshot.fromBuffer(edited, wrapPx, font, wrapCache = TestMeasure.wrapCache())
+    val dirty = DirtyLineDiff.dirtyRows(Some(beforeSnapshot), afterSnapshot)
 
     val damage = DamageProducer.forTransition(before, after)
     dirty.subsetOf(Damage.coarsenToRows(bufferId, damage)) shouldBe true

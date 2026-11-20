@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.state.models.{MeasuredRow, TextCaretStop}
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -17,7 +18,7 @@ class MeasuredRowCaretArraysSpec extends AnyFlatSpec with Matchers:
 
   private def wrapped(text: String, baseColumn: Int): Vector[MeasuredRow] =
     TextLayoutSnapshot
-      .boundedVisualLinesForText(text, 0, 120, font, baseColumn = baseColumn, wrapCache = WrappedLineCache.bounded())
+      .boundedVisualLinesForText(text, 0, 120, font, baseColumn = baseColumn, wrapCache = TestMeasure.wrapCache())
       .map(_.row)
 
   "A measured row" should "hold one x and one start-relative offset per grapheme boundary" in {

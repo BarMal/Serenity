@@ -3,7 +3,7 @@ package com.serenity.perf
 import java.util.concurrent.atomic.AtomicReference
 
 import cats.effect.unsafe.IORuntime
-import com.serenity.SkiaFrames
+import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.{Event, PageDown, ScrollDown}
 import com.serenity.rope.Balance
@@ -15,6 +15,7 @@ import com.serenity.ui.layout.{BundledInterFont, ViewportSize}
 import com.serenity.ui.renderer.{FrameOutput, RendererFramePlanner, ScreenIdentity}
 import com.serenity.ui.skia.SkiaTestFonts
 import com.serenity.ui.tui.TuiFrameCountScenario
+import com.serenity.{ChromeOn, SkiaFrames}
 
 /** The fixed interactions whose frame counts the ratchet pins: what the planner decided for each, measured on Skia CPU
   * raster so no window or GPU is involved, plus one typing frame on the terminal surface.
@@ -35,6 +36,23 @@ private[perf] object FrameCountScenarios:
   private val cellMetrics = TestMeasure.cellMetrics(codeFont)
   private val uiMetrics   = TestMeasure.cellMetrics(uiFont)
   private val viewport = ViewportSize(LogicalWidthPx / cellMetrics.charWidth, LogicalHeightPx / cellMetrics.lineHeight)
+
+  /** The state manager lays out, scrolls and reports damage with the fonts its configuration names, so it names the
+    * bundled Inter as well: with the logical `SansSerif` a machine's fonts decide the rows a scroll moves, and so the
+    * counts.
+    */
+  private val pinnedConfig: AppConfig =
+    val _ = BundledInterFont.registered
+    ChromeOn.config.withFontConfig(
+      ChromeOn.config.editorConfig.fontConfig.copy(
+        codeFontFamily = "Inter",
+        textFontFamily = "Inter",
+        uiFontFamily = "Inter",
+        fontSize = 12f,
+        textFontSize = 14f,
+        uiFontSize = 12f
+      )
+    )
 
   /** Reported for every surface scenario; the terminal frame also reports [[FrameCounter.TuiBytes]]. */
   val SurfaceCounters: List[FrameCounter] = List(
@@ -133,12 +151,12 @@ private[perf] object FrameCountScenarios:
 
   /** The family Skia is given for the pinned Inter, or why it could not be installed. */
   private[perf] def pinnedInterFamily: Either[String, String] =
-    SkiaTestFonts.install(RenderCaches.create().backendCaches, PinnedInterResource)
+    SkiaTestFonts.install(TestMeasure.renderCaches().backendCaches, PinnedInterResource)
 
   /** Caches whose Skia draws the pinned Inter from its bundled bytes, not from whichever Inter (or fallback) the
     * machine has: the font is loaded into AWT only, and runs split by the typeface's widths.
     */
-  private[perf] def pinnedInterCaches(caches: RenderCaches = RenderCaches.create()): RenderCaches =
+  private[perf] def pinnedInterCaches(caches: RenderCaches = TestMeasure.renderCaches()): RenderCaches =
     val installed = SkiaTestFonts.install(caches.backendCaches, PinnedInterResource)
     require(installed.isRight, installed.left.getOrElse(""))
     caches
@@ -149,7 +167,7 @@ private[perf] object FrameCountScenarios:
     * what the app reports for those events.
     */
   private def transition(events: Event*)(using IORuntime): (AppState, AppState) =
-    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(grid = viewport)
+    val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager(config = pinnedConfig, grid = viewport)
     val before            = stateManager.getCurrentState.unsafeRunSync()
     events.foreach(event => stateManager.applyEvent(event).unsafeRunSync())
     (before, stateManager.getCurrentState.unsafeRunSync())
@@ -163,9 +181,10 @@ private[perf] object FrameCountScenarios:
     counted(scenario, frames.render(after, DamageProducer.forTransition(before, after)))
 
   private def typingFrame(scale: Double)(using IORuntime): Counted =
-    val (before, after) = TypingTransition.of(LaptopFrameBenchmarks.proseStateManager(grid = viewport)._1)
-    val frames          = CountedFrames(scale)
-    val _               = frames.render(before, Damage.Everything)
+    val (before, after) =
+      TypingTransition.of(LaptopFrameBenchmarks.proseStateManager(config = pinnedConfig, grid = viewport)._1)
+    val frames = CountedFrames(scale)
+    val _      = frames.render(before, Damage.Everything)
     counted("type_one_char", frames.render(after, DamageProducer.forTransition(before, after)))
 
   private def firstFrame(scale: Double)(using IORuntime): Counted =

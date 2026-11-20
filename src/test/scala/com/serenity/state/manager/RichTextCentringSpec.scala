@@ -4,6 +4,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph, RichTextRun, RichTextStyle}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{
   LayoutEngine,
@@ -11,8 +12,7 @@ import com.serenity.ui.layout.{
   VisualRowCounts,
   WorkspaceNode,
   WorkspaceNodeId,
-  WorkspaceTree,
-  WrappedLineCache
+  WorkspaceTree
 }
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -75,7 +75,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
         ),
         focus = Focus.EditorPane(paneId)
       ),
-      runtime = base.runtime.copy(viewportSize = Some(ViewportSize(columns + 10, 30)))
+      runtime =
+        base.runtime.copy(viewportSize = Some(ViewportSize(columns + 10, 30)), anchorWraps = TestMeasure.anchorWraps())
     )
 
   private def withFonts(config: AppConfig, fonts: FontLoader.FontConfig): AppConfig =
@@ -90,7 +91,8 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val rect   = LayoutEngine.calculateEditorPaneLayouts(state, layout)(paneId).contentRect
     val sized  = buffer(state).copy(viewport = LayoutEngine.updateBufferViewportDimensions(buffer(state), rect, true))
     val sizedState = state.copy(persisted = state.persisted.copy(buffers = Map(bufferId -> sized)))
-    val viewport   = CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head)
+    val viewport =
+      CursorViewport.adjustForCursor(sized, sizedState, sized.editing.cursorPositions.head, TestMeasure.wrapCache())
     sizedState.copy(persisted = sizedState.persisted.copy(buffers = Map(bufferId -> sized.copy(viewport = viewport))))
 
   /** The cell row `cursor` is painted on, and the pane's middle row, as the painter and popups place them. */
@@ -104,7 +106,7 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     * how near that can be.
     */
   private def nearestToMiddle(state: AppState, cursor: CursorPosition, middle: Int): Int =
-    val counts = CursorViewport.visualRowsFor(buffer(state), state, WrappedLineCache.Uncached)
+    val counts = CursorViewport.visualRowsFor(buffer(state), state, TestMeasure.wrapCache())
     val tops = for
       line <- math.max(0, cursor.line - 20) to cursor.line
       row  <- 0 until counts.rowsIn(line)
@@ -142,7 +144,7 @@ class RichTextCentringSpec extends AnyFlatSpec with Matchers:
     val plain  = RichTextDocument(List.fill(8)(RichTextParagraph.plain(sentence)))
     val styled = RichTextDocument(List.fill(8)(RichTextParagraph(List(RichTextRun(sentence, large)))))
     val base   = buffer(stateWith(plain, CursorPosition(0, 0), 60))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val font   = FontLoader.previewCodeFont(AppState.initial.persisted.config.editorConfig.fontConfig)
     def rows(document: RichTextDocument): Int =
       val b = base.copy(richText = base.richText.withSyncedDocument(Some(document), 0L))

@@ -20,7 +20,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
 
   private val paneId             = PaneId(0)
   private val bufferId           = BufferId(1)
-  private val authoritativeScene = AuthoritativeUiScene()
+  private val authoritativeScene = AuthoritativeUiScene(TestMeasure.wrapCache())
 
   private def stateWith(buffer: Buffer, config: AppConfig = AppConfig.default): AppState =
     AppState.initial.copy(persisted =
@@ -77,7 +77,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state    = stateWith(Buffer.fromString(bufferId, "alpha"), floating)
     val typing   = state.copy(runtime = state.runtime.observeTyping(1L))
     val quiet    = typing.copy(runtime = typing.runtime.copy(typingActivity = TypingActivity.idle))
-    val scene    = AuthoritativeUiScene()
+    val scene    = AuthoritativeUiScene(TestMeasure.wrapCache())
 
     quiet.floatingStatusLineSurface should not be empty
     scene.layoutKeyFor(typing, ViewportSize(80, 24)).derivedStatusLineSurface shouldBe empty
@@ -135,7 +135,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(text),
       TestMeasure.cellMetrics(mono),
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val cache    = MouseTargetCache.fromState(state, size, authoritativeScene)
@@ -187,10 +187,10 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     val state = stateWith(Buffer.fromString(bufferId, "alpha beta"))
     val size  = ViewportSize(80, 24)
     // Sharing this owner's caches between the render call and both assertions below is the point of the test
-    // (#1677): a throwaway `RenderCaches.create()` passed only to `render` would leave its `authoritativeScene`
+    // (#1677): a throwaway `TestMeasure.renderCaches()` passed only to `render` would leave its `authoritativeScene`
     // disconnected from the one this test checks against, so the assertion would hold regardless of whether
     // rendering actually reused mouse targeting's prepared scene.
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     val scene  = MouseTargetCache.fromState(state, size, caches.authoritativeScene).scene
     val codeFont =
       com.serenity.ui.fonts.FontLoader
@@ -229,7 +229,7 @@ class MouseTargetCacheSpec extends AnyFlatSpec with Matchers:
     // Sharing this owner's caches with the assertions below is the point of the test (#1677): rendering and mouse
     // targeting only ever share a prepared scene when they go through the *same* owner's `RenderCaches`, not because
     // some JVM-wide cache happens to be shared behind the scenes.
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       state,

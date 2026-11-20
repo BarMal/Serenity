@@ -5,7 +5,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.testkit.ConfigGenerators
+import com.serenity.testkit.{ConfigGenerators, TestMeasure}
 import com.serenity.ui.layout.{Layout, UiSceneSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import com.serenity.ui.theme.DropCapColour
 import org.scalacheck.Gen
@@ -78,10 +78,10 @@ class ConfigLayoutKeySpec extends AnyFlatSpec with Matchers:
     )
 
   private def assertWarmMatchesFresh(original: AppState, changed: AppState): Unit =
-    val warm      = AuthoritativeUiScene()
+    val warm      = AuthoritativeUiScene(TestMeasure.wrapCache())
     val before    = MouseTargetCache.fromState(original, viewport, warm)
     val after     = MouseTargetCache.fromState(changed, viewport, warm)
-    val fresh     = AuthoritativeUiScene().forState(changed, viewport)
+    val fresh     = AuthoritativeUiScene(TestMeasure.wrapCache()).forState(changed, viewport)
     val unchanged = geometry(before.scene) == geometry(fresh)
 
     withClue("the change must alter the layout for this test to mean anything: ")(unchanged shouldBe false)
@@ -119,7 +119,7 @@ class ConfigLayoutKeySpec extends AnyFlatSpec with Matchers:
   "A drop cap colour change" should "leave the layout key and the scene as they were, since it only repaints" in {
     val original = proseState(lineNumbered.withDropCapColour(DropCapColour.Accent))
     val changed  = withConfig(original, original.persisted.config.withDropCapColour(DropCapColour.Text))
-    val warm     = AuthoritativeUiScene()
+    val warm     = AuthoritativeUiScene(TestMeasure.wrapCache())
 
     val before = MouseTargetCache.fromState(original, viewport, warm)
     val after  = MouseTargetCache.fromState(changed, viewport, warm)
@@ -151,9 +151,11 @@ class ConfigLayoutKeySpec extends AnyFlatSpec with Matchers:
       other            <- otherConfigs
       changed = withConfig(original, field.set(original.persisted.config, field.get(other)))
       if changed.persisted.config != original.persisted.config
-      warm = AuthoritativeUiScene()
+      warm = AuthoritativeUiScene(TestMeasure.wrapCache())
       _    = warm.forState(original, viewport)
-      if geometry(warm.forState(changed, viewport)) != geometry(AuthoritativeUiScene().forState(changed, viewport))
+      if geometry(warm.forState(changed, viewport)) != geometry(
+        AuthoritativeUiScene(TestMeasure.wrapCache()).forState(changed, viewport)
+      )
     yield s"${field.key} on $name"
 
     stale.distinct shouldBe empty

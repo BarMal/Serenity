@@ -9,7 +9,7 @@ import com.serenity.ReferenceFrames
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.layout.{TextLayoutSnapshot, WrappedLineCache}
+import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.theme.{StyledText, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -56,7 +56,7 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
       Theme.light,
       syntaxHighlightingEnabled = false,
       styledSegments = Some(List(StyledText(text, style, black, white))),
-      fallback = Some(CellFallback(primary, fallback, WrappedLineCache.bounded()))
+      fallback = Some(CellFallback(primary, fallback, TestMeasure.wrapCache()))
     )
     reference.image
 
@@ -73,8 +73,8 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
         0,
         10_000,
         primary,
-        TextLayoutSnapshot.defaultFontRenderContext(),
-        forceCellLayout = true
+        forceCellLayout = true,
+        wrapCache = TestMeasure.wrapCache()
       )
       .head
     CharacterRenderer.renderCellRange(
@@ -87,7 +87,7 @@ class GuiCellGridEmojiLigatureSpec extends AnyFlatSpec with Matchers:
       leftCell = 0,
       rightCell = 40,
       cellPx = cell,
-      fallback = Some(CellFallback(primary, fallback, WrappedLineCache.bounded()))
+      fallback = Some(CellFallback(primary, fallback, TestMeasure.wrapCache()))
     )
     reference.image
 

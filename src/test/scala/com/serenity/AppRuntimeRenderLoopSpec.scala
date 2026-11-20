@@ -11,6 +11,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.{Model, RenderCaches, StateEngine}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.color.RenderColor
 import fs2.concurrent.SignallingRef
@@ -79,7 +80,7 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
       IO.unit,
       (_: AppState, _: Boolean, _: Option[RenderColor], damage: Damage, _: RenderCaches) =>
         IO.monotonic.flatMap(now => rig.fullFrames.update(_ :+ (now -> damage))) >> onFrame,
-      RenderCaches.create(),
+      TestMeasure.renderCaches(),
       lastFrameStart = lastStart
     )
 
@@ -96,7 +97,7 @@ class AppRuntimeRenderLoopSpec extends AnyFlatSpec with Matchers:
         (_: AppState, _: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) => rig.cursorFrames.update(_ + 1),
       requestFastRender = rig.emitDamage(Damage.Everything),
       cursorIdleInterval = cursorIdleInterval,
-      renderCaches = RenderCaches.create()
+      renderCaches = TestMeasure.renderCaches()
     )
 
   private def loop(rig: Rig, cursorIdleInterval: AppConfig => Option[FiniteDuration]) =

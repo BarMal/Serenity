@@ -21,7 +21,14 @@ class ClusterCellLayoutSpec extends AnyFlatSpec with Matchers:
   private val cellPx = TestMeasure.cellMetrics(font).charWidth
 
   private def rows(text: String, widthPx: Int = 10_000) =
-    TextLayoutSnapshot.boundedVisualLinesForText(text, 0, widthPx, font, frc, forceCellLayout = true)
+    TextLayoutSnapshot.boundedVisualLinesForText(
+      text,
+      0,
+      widthPx,
+      font,
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   "The terminal-grid carets" should "put the caret after a variation-selector-16 emoji two cells on" in {
     TextCaretMeasurement.displayWidthCaretXs("a" + heart + "b", 1.0f, 4).toVector shouldBe

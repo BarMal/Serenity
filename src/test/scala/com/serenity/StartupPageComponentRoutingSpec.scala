@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.StartupPageComponent
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -26,8 +26,12 @@ class StartupPageComponentRoutingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
       theme        = Theme.default
       viewportSize = ViewportSize(80, 24)
 

@@ -196,7 +196,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupp
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val (cx, cy) = cursorScreenPos(state)
@@ -213,7 +213,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupp
       surface,
       ViewportSize(80, 24),
       cursorColor = Some(overrideColor),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val (cx, cy) = cursorScreenPos(state)
@@ -230,7 +230,7 @@ class CursorModeSpec extends AnyFlatSpec with Matchers with StateManagerTestSupp
       surface,
       ViewportSize(80, 24),
       cursorColor = Some(overrideColor),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val (cx, cy) = cursorScreenPos(state)

@@ -74,7 +74,7 @@ object ScrollBoundary:
         val viewport = buffer.viewport
         val limit = ScrollLimits.last(
           CursorViewport.visualRowsFor(buffer, state, wrapCache),
-          CursorViewport.rowsThatFit(buffer, state)
+          CursorViewport.rowsThatFit(buffer, state, wrapCache.layoutMemos)
         )
         val (line, row) = limit.clamp(viewport.topLine, viewport.topVisualLine)
         if line == viewport.topLine && row == viewport.topVisualLine then state

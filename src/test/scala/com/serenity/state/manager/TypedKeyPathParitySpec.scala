@@ -15,7 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.{HistoryEntry, HistoryStacks, HistoryStep, UndoState}
-import com.serenity.testkit.{SharedDictionary, SteppedClock}
+import com.serenity.testkit.{SharedDictionary, SteppedClock, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -80,7 +80,8 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("parity")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = scenario.config)))
       bufferId <- stateManager.createBuffer(document, None)
@@ -107,7 +108,7 @@ class TypedKeyPathParitySpec extends AnyFlatSpec with Matchers:
     def placedEdit(edit: HistoryEntry.BufferEdit): HistoryEntry.BufferEdit =
       edit
         .restore(model.app)
-        .map((restored, _) => ViewportResolution.resolve(restored))
+        .map((restored, _) => ViewportResolution.resolve(restored, TestMeasure.wrapCache()))
         .flatMap(_.persisted.buffers.get(edit.bufferId))
         .fold(edit)(buffer => edit.copy(snapshot = edit.snapshot.copy(viewport = buffer.viewport)))
     def placed(step: HistoryStep): HistoryStep = step.entry match

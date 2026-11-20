@@ -18,11 +18,12 @@ object SkiaTextCaches:
 
   private val Key = BackendCacheKey(classOf[SkiaTextCaches])
 
-  def fresh(): SkiaTextCaches =
+  def fresh(typefaces: SharedTypefaces = new SharedTypefaces()): SkiaTextCaches =
     val warmup = new WarmupStats()
+    val fonts  = new SkiaFontCache(warmup = warmup, resolveTypeface = typefaces.typefaceFor)
     SkiaTextCaches(
-      new SkiaFontCache(warmup = warmup),
-      new SkiaShapedTextCache(warmup = warmup),
+      fonts,
+      new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
       new SkiaImageCache(),
       warmup = warmup
     )
@@ -32,17 +33,26 @@ object SkiaTextCaches:
     */
   private[skia] def withTypefaces(owner: BackendCaches, resolve: SkiaTypefaces.TypefaceKey => Typeface): Unit =
     val warmup = new WarmupStats()
+    val fonts  = new SkiaFontCache(warmup = warmup, resolveTypeface = resolve)
     val _ = owner.getOrCreate(Key)(
       SkiaTextCaches(
-        new SkiaFontCache(warmup = warmup, resolveTypeface = resolve),
-        new SkiaShapedTextCache(warmup = warmup),
+        fonts,
+        new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
         new SkiaImageCache(),
         warmup = warmup
       )
     )
 
   /** The set `owner` draws with, made the first time it is asked for. */
-  def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh())
+  def of(owner: BackendCaches): SkiaTextCaches = owner.getOrCreate(Key)(fresh(typefacesOf(owner)))
+
+  /** The typefaces every owner built over `owner`'s shared slots resolves through. */
+  def typefacesOf(owner: BackendCaches): SharedTypefaces =
+    owner.shared.getOrCreate(SharedTypefaces.Key)(new SharedTypefaces())
+
+  /** What shaping has come to, for every owner built over `owner`'s shared slots. */
+  private[skia] def shapingsOf(owner: BackendCaches): ShapingMemos =
+    owner.shared.getOrCreate(ShapingMemos.Key)(new ShapingMemos())
 
   def heldBy(owner: BackendCaches): Boolean = owner.holds(Key)
 
@@ -52,8 +62,14 @@ object SkiaTextCaches:
   def keepingFonts(from: BackendCaches, into: BackendCaches): Unit =
     if heldBy(from) then
       val warmup = new WarmupStats()
+      val fonts  = of(from).fonts
       val _ = into.getOrCreate(Key)(
-        SkiaTextCaches(of(from).fonts, new SkiaShapedTextCache(warmup = warmup), new SkiaImageCache(), warmup = warmup)
+        SkiaTextCaches(
+          fonts,
+          new SkiaShapedTextCache(warmup = warmup, ligaturesOf = fonts.ligaturesOf),
+          new SkiaImageCache(),
+          warmup = warmup
+        )
       )
 
   /** What first use has cost `owner`'s Skia text caches so far, if it has any. */

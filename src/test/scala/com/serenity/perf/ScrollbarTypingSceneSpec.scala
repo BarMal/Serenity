@@ -4,7 +4,6 @@ import java.awt.Font
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.InsertChar
-import com.serenity.state.manager.RenderCaches
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{ViewportSize, WrappedLineCache}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -24,7 +23,7 @@ class ScrollbarTypingSceneSpec extends AnyFlatSpec with Matchers:
 
   "The scene built after a keystroke" should "wrap only the lines the keystroke reached" in {
     val (stateManager, _) = LaptopFrameBenchmarks.proseStateManager()
-    val caches            = RenderCaches.create()
+    val caches            = TestMeasure.renderCaches()
     val wraps = caches.wrappedLines match
       case bounded: WrappedLineCache.Bounded => bounded
       case other                             => fail(s"expected a bounded cache, got $other")

@@ -66,7 +66,7 @@ class RendererCursorHardwareSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
   "A surface with a hardware cursor" should "show the terminal cursor on a visible frame" in {

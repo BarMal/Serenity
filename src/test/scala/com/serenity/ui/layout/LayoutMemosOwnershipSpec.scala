@@ -2,7 +2,8 @@ package com.serenity.ui.layout
 
 import java.awt.Font
 
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -15,35 +16,40 @@ class LayoutMemosOwnershipSpec extends AnyFlatSpec with Matchers:
   private val font = new Font(Font.SERIF, Font.BOLD, 47)
 
   "A wrap cache's line extents" should "be probed once per owner" in {
-    val (owner, other) = (WrappedLineCache.bounded(), WrappedLineCache.bounded())
+    val (owner, other) = (TestMeasure.wrapCache(), TestMeasure.wrapCache())
 
-    Vector.fill(10)(owner.layoutMemos.lineExtents.of(font, frc))
+    Vector.fill(10)(owner.layoutMemos.lineExtents.of(FontSpec.fromAwt(font)))
 
     owner.layoutMemos.lineExtents.measurements shouldBe 1L
     other.layoutMemos.lineExtents.measurements shouldBe 0L
   }
 
   "A wrap cache's drop cap glyph widths" should "be measured once per owner" in {
-    val (owner, other) = (WrappedLineCache.bounded(), WrappedLineCache.bounded())
+    val (owner, other) = (TestMeasure.wrapCache(), TestMeasure.wrapCache())
 
-    Vector.fill(10)(owner.layoutMemos.dropCapWidths(font, frc, "W"))
+    Vector.fill(10)(owner.layoutMemos.dropCapWidths(FontSpec.fromAwt(font), "W"))
 
     owner.layoutMemos.dropCapWidths.measurements shouldBe 1L
     other.layoutMemos.dropCapWidths.measurements shouldBe 0L
   }
 
   "A wrap cache that is not remembering" should "keep nothing between asks" in {
-    WrappedLineCache.Uncached.layoutMemos.lineExtents.of(font, frc)
+    WrappedLineCache.Uncached.layoutMemos.lineExtents.of(FontSpec.fromAwt(font))
 
     WrappedLineCache.Uncached.layoutMemos.lineExtents.measurements shouldBe 0L
   }
 
-  "Exact measurements" should "be counted by the shaped-text cache they were built through, not by the thread" in {
+  "Exact measurements" should "be counted by the layout memos they were measured for, not by the thread" in {
     val kerned = new Font(Font.SERIF, Font.PLAIN, 15)
       .deriveFont(java.util.Map.of(java.awt.font.TextAttribute.KERNING, java.awt.font.TextAttribute.KERNING_ON))
-    val (owner, other) = (ShapedTextCache(), ShapedTextCache())
+    val (owner, other) = (TestMeasure.layoutMemos(), TestMeasure.layoutMemos())
 
-    ExactCaretXs.layoutCaretXs("Tales of AVAST waves", 0, TextCaretMeasurement.singleFontResolver(kerned), frc, owner)
+    ExactCaretXs.layoutCaretXs(
+      "Tales of AVAST waves",
+      0,
+      TextCaretMeasurement.singleFontResolver(FontSpec.fromAwt(kerned)),
+      MeasuredBy(TestMeasure.measurer, owner)
+    )
 
     owner.exactMeasurements shouldBe 1L
     other.exactMeasurements shouldBe 0L

@@ -2,7 +2,7 @@ package com.serenity.ui.skia
 
 import java.awt.{Color, Font}
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.RenderSurface
@@ -33,7 +33,7 @@ class SkiaKeptOffPerDrawSpec extends AnyFlatSpec with Matchers:
   private def drawn(keptRects: List[PixelRect])(paint: RenderSurface => Unit): FramePixels =
     val image = SkiaFrames.newFrame(width, height)
     val surface =
-      SkiaFrames.surfaceOver(image, metrics, font, width, height, 1.0, persists = true, RenderCaches.create())
+      SkiaFrames.surfaceOver(image, metrics, font, width, height, 1.0, persists = true, TestMeasure.renderCaches())
     val outlines = surface.panelOutlines.getOrElse(fail("expected panel outlines"))
     surface.clearViewport(page)
     surface.pixels.fillPixelRect(kept.xPx, kept.yPx, kept.widthPx, kept.heightPx, sentinel)

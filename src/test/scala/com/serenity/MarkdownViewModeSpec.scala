@@ -281,7 +281,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
       textFont = FontSpec.fromAwt(font),
       cellMetrics = TestMeasure.cellMetrics(font),
       cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val rows = surfaceRows(surface)
@@ -347,7 +347,7 @@ class MarkdownViewModeSpec extends AnyFlatSpec with Matchers with StateManagerTe
       textFont = FontSpec.fromAwt(previewFont),
       cellMetrics = TestMeasure.cellMetrics(previewFont),
       cursorColor = None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
   private def previewContentRect(state: AppState): LayoutRect =

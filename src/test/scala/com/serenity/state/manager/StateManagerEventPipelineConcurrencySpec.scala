@@ -47,7 +47,7 @@ class StateManagerEventPipelineConcurrencySpec extends AnyFlatSpec with Matchers
       statePort = new EventStatePort:
         val logger              = pipelineLogger
         val mouseTargetCacheRef = cacheRef
-        val authoritativeScene  = AuthoritativeUiScene()
+        val authoritativeScene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
       effectPort = EventEffectPort(
         interpretEffect = effect => onEffect(operations, effect),
         interpretCommand = (_, _) => IO.unit

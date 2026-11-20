@@ -4,6 +4,7 @@ import java.awt.{Color, Font}
 
 import com.serenity.SkiaFrames
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.TextStyle
@@ -32,7 +33,7 @@ class SkiaStyledFontCacheSpec extends AnyFlatSpec with Matchers:
     SkiaFrames.surfaceOver(SkiaFrames.newFrame(210, 130), metrics, base, 210, 130, 1.0, persists = false, caches)
 
   "Painting the same styled runs on a second frame" should "derive no new font" in {
-    val caches    = RenderCaches.create()
+    val caches    = TestMeasure.renderCaches()
     val cache     = caches.styledFonts
     val runStyles = TextStyle.normal :: styles
 
@@ -56,7 +57,7 @@ class SkiaStyledFontCacheSpec extends AnyFlatSpec with Matchers:
   }
 
   "Painting normal-style runs" should "derive no font at all" in {
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val surface = surfaceOver(caches)
 
     (0 until 5).foreach { row =>

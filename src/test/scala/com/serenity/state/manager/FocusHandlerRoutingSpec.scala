@@ -5,6 +5,7 @@ import java.nio.file.Path
 import com.serenity.command.CommandRunner
 import com.serenity.document.RenderedComment
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.theme.DefaultThemes
 import com.serenity.ui.theme.config.ThemeCreatorState
@@ -13,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
 
 class FocusHandlerRoutingSpec extends AnyFlatSpec with Matchers:
 
-  private val routing = new FocusHandlerRouting(WrappedLineCache.bounded())
+  private val routing = new FocusHandlerRouting(TestMeasure.wrapCache())
 
   private val quickInfo: SurfaceContent        = SurfaceContent.QuickInfo("info")
   private val filePreview: SurfaceContent      = SurfaceContent.FilePreview(Path.of("a.txt"), "content")

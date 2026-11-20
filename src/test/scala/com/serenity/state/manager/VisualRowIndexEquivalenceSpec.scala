@@ -6,12 +6,13 @@ import com.serenity.rope.Balance
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent, ModalComponent}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{ModalStateReducer, ReducerResult}
-import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** Scrolling, page moves, typewriter centring and jumps read visual-row counts through a cache's per-buffer index.
-  * Every placement must match the one walking each line produces (`WrappedLineCache.Uncached` keeps no index), even as
+  * Every placement must match the one walking each line produces (`TestMeasure.wrapCache()` keeps no index), even as
   * one cache carries its index across edits, wrap widths and fonts.
   */
 class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
@@ -73,7 +74,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       case _                                     => None
 
   "CursorViewport.adjustForCursor" should "centre and bottom-align identically through the index, typewriter or not" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       typewriter <- List(false, true)
       cursor     <- cursors ++ cursors.reverse
@@ -81,12 +82,12 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor, typewriter)
       withClue(s"cursor $cursor, typewriter $typewriter: ") {
         CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-          CursorViewport.adjustForCursor(buffer(state), state, cursor)
+          CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
       }
   }
 
   it should "keep matching once the index has to follow edits to the document" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val edits = List(
       (150, 10, "inserted words that wrap the paragraph onto another row " * 3),
       (20, 0, "\n\nnew lines above\n"),
@@ -102,7 +103,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
           val state = stateWith(cursor, text = next)
           withClue(s"after inserting at $line:$column, cursor $cursor: ") {
             CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-              CursorViewport.adjustForCursor(buffer(state), state, cursor)
+              CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
           }
         }
         next
@@ -110,7 +111,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "start a fresh index when the wrap width or the font changes" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       (columns, fontSize) <- List((60, 12.0f), (41, 12.0f), (60, 16.0f), (60, 12.0f))
       cursor              <- cursors
@@ -118,17 +119,17 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor, columns = columns, fontSize = fontSize)
       withClue(s"$columns columns at ${fontSize}pt, cursor $cursor: ") {
         CursorViewport.adjustForCursor(buffer(state), state, cursor, cache) shouldBe
-          CursorViewport.adjustForCursor(buffer(state), state, cursor)
+          CursorViewport.adjustForCursor(buffer(state), state, cursor, TestMeasure.measuringWrap())
       }
   }
 
   "CursorViewport.adjustForCursorColumnMode" should "anchor column pages identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.foldLeft(stateWith(CursorPosition(0, 0), columnMode = true)) { (previous, cursor) =>
       val state = previous.copy(persisted =
         previous.persisted.copy(buffers = Map(bufferId -> buffer(previous).copy(editing = EditingState(List(cursor)))))
       )
-      val placed = CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor)
+      val placed = CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor, TestMeasure.measuringWrap())
       withClue(s"cursor $cursor: ") {
         CursorViewport.adjustForCursorColumnMode(buffer(state), state, cursor, cache) shouldBe placed
       }
@@ -137,7 +138,7 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
   }
 
   "Page Down and Page Up" should "move the cursor and the viewport identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       event  <- List[TextEntryEvent](PageDown, PageUp, ExtendSelectionPageDown, ExtendSelectionPageUp, ScrollDown(3))
       cursor <- cursors
@@ -145,12 +146,12 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor)
       withClue(s"$event from $cursor: ") {
         reduced(new EditorPaneComponent(paneId, cache).processEvent(event, state)) shouldBe
-          reduced(new EditorPaneComponent(paneId).processEvent(event, state))
+          reduced(new EditorPaneComponent(paneId, TestMeasure.measuringWrap()).processEvent(event, state))
       }
   }
 
   "EditorGeometryProducer.forPane" should "build the same navigation window through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       rowsAbove <- List(4, 20, 60)
       cursor    <- cursors
@@ -158,23 +159,23 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val state = stateWith(cursor)
       withClue(s"$rowsAbove rows above $cursor: ") {
         EditorGeometryProducer.forPane(state, paneId, rowsAbove, cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId, rowsAbove)
+          EditorGeometryProducer.forPane(state, paneId, rowsAbove, TestMeasure.measuringWrap())
       }
   }
 
   "A typewriter keystroke" should "re-centre identically through the index" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.foreach { cursor =>
       val state = stateWith(cursor, typewriter = true)
       withClue(s"typing at $cursor: ") {
         reduced(new EditorPaneComponent(paneId, cache).processEvent(InsertChar('x'), state)) shouldBe
-          reduced(new EditorPaneComponent(paneId).processEvent(InsertChar('x'), state))
+          reduced(new EditorPaneComponent(paneId, TestMeasure.measuringWrap()).processEvent(InsertChar('x'), state))
       }
     }
   }
 
   "Go to Line" should "land on the same viewport through the index, by prompt or by command" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       from   <- List(CursorPosition(5, 0), CursorPosition(390, 40))
       target <- List(1, 152, 300, 400)
@@ -183,8 +184,12 @@ class VisualRowIndexEquivalenceSpec extends AnyFlatSpec with Matchers:
       val prompt = ModalStateReducer.show(Modal.TextPrompt(TextPrompt.gotoLine(target.toString)), state).state
       withClue(s"from $from to line $target: ") {
         reduced(ModalComponent(ModalType.TextPrompt, cache).processEvent(ModalSubmit, prompt)) shouldBe
-          reduced(ModalComponent(ModalType.TextPrompt).processEvent(ModalSubmit, prompt))
+          reduced(ModalComponent(ModalType.TextPrompt, TestMeasure.measuringWrap()).processEvent(ModalSubmit, prompt))
         val goTo = NavigationIntent.GoToBufferLine(bufferId, target - 1)
-        NavigationTransitions.navigation(goTo, state, cache) shouldBe NavigationTransitions.navigation(goTo, state)
+        NavigationTransitions.navigation(goTo, state, cache) shouldBe NavigationTransitions.navigation(
+          goTo,
+          state,
+          TestMeasure.measuringWrap()
+        )
       }
   }

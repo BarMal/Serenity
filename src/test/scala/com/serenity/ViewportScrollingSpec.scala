@@ -5,8 +5,8 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.keystroke.events.*
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.manager.{CursorViewport, StateManager}
 import com.serenity.state.models.*
 import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
@@ -28,7 +28,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -84,7 +85,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -138,7 +140,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -171,7 +174,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Viewport should have scrolled to keep cursor visible
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be < (viewport.topLine + CursorViewport.rowsThatFit(
+      buffer,
+      finalState,
+      TestMeasure.layoutMemos()
+    ))
 
     // Viewport top line should be > 0 since we scrolled
     viewport.topLine should be > 0
@@ -181,7 +189,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -227,7 +236,12 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
 
     // Viewport should have scrolled to keep the cursor visible
     cursor.line should be >= viewport.topLine
-    cursor.line should be < (viewport.topLine + viewport.visibleLines)
+    // The rows the pane draws of the buffer's own font, which are shorter than the code grid's.
+    cursor.line should be < (viewport.topLine + CursorViewport.rowsThatFit(
+      buffer,
+      finalState,
+      TestMeasure.layoutMemos()
+    ))
 
     // Viewport top line should be > 0 since we scrolled
     viewport.topLine should be > 0
@@ -237,7 +251,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -259,9 +274,10 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        finalState.persisted.config.editorConfig.fontConfig
+        finalState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
@@ -278,7 +294,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -307,7 +324,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -335,9 +353,10 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val font       = FontLoader.previewTextFont(finalState.persisted.config.editorConfig.fontConfig)
     val wrapPx = TextLayoutSnapshot.gridWrapWidthPx(
       buffer.viewport.visibleColumns,
-      finalState.persisted.config.editorConfig.fontConfig
+      finalState.persisted.config.editorConfig.fontConfig,
+      TestMeasure.layoutMemos()
     )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
     val cursorShown = snapshot.visualLines.exists(line =>
       line.bufferLine == cursor.line && cursor.column >= line.startColumn && cursor.column <= line.endColumn
     )
@@ -356,7 +375,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -383,7 +403,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     val buffer     = finalState.persisted.buffers(bufferId)
     val fontConfig = finalState.persisted.config.editorConfig.fontConfig
     val font       = FontLoader.previewTextFont(fontConfig)
-    val wrapPx     = TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig)
+    val wrapPx =
+      TextLayoutSnapshot.gridWrapWidthPx(buffer.viewport.visibleColumns, fontConfig, TestMeasure.layoutMemos())
 
     // `buffer.viewport.visibleLines` is a code-grid row count (`LayoutEngine.updateViewportDimensions` sets it from
     // the pane's grid rows) and is never itself resized for this buffer's own (proportional, Prose-role) font --
@@ -402,7 +423,7 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
       math.max(1, panelHeightPx / math.max(1, TestMeasure.cellMetrics(font).lineHeight))
     val renderBuffer = buffer.copy(viewport = buffer.viewport.copy(visibleLines = renderedVisibleLines))
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(renderBuffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 
     // How many "word" tokens fit per wrapped row -- and so how many total visual rows the six paragraphs produce --
     // is font-metric-dependent (word wrap is measured against the real, platform-resolved `previewTextFont`, not a
@@ -417,7 +438,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
         renderBuffer.viewport.copy(topLine = 0, topVisualLine = 0, visibleLines = Int.MaxValue - 1)
       ),
       wrapPx,
-      font
+      font,
+      wrapCache = TestMeasure.wrapCache()
     )
     val expectedVisibleCount    = math.min(renderedVisibleLines, fullDocumentSnapshot.visualLines.length)
     val expectedTailVisualLines = fullDocumentSnapshot.visualLines.takeRight(expectedVisibleCount)
@@ -440,7 +462,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )
@@ -478,7 +501,8 @@ class ViewportScrollingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
     val stateManager = StateManager
-      .apply(logger, dictionaryCache = SharedDictionary.default)(using
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)(
+        using
         com.serenity.rope.Balance.default,
         LoggerFactory[IO]
       )

@@ -11,7 +11,7 @@ import com.serenity.ui.theme.Theme
 object RendererStartPage:
 
   def renderEmptyPane(rect: LayoutRect, theme: Theme, context: RenderContext): Unit =
-    val textMetrics  = CellMetrics.fromFont(context.textFont)
+    val textMetrics  = context.caches.cellMetricsOf(context.textFont)
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val yPx          = centeredBlockTopPx(rect, context.cellMetrics, 1, lineHeightPx)
     context.surface.text.setFont(FontSpec.fromAwt(context.textFont))
@@ -43,7 +43,7 @@ object RendererStartPage:
   ): Unit =
     val lines = welcomeLines(config.inputConfig.hotkeyConfig, osName)
 
-    val textMetrics  = CellMetrics.fromFont(context.textFont)
+    val textMetrics  = context.caches.cellMetricsOf(context.textFont)
     val lineHeightPx = math.max(context.cellMetrics.lineHeight, textMetrics.lineHeight)
     val startYPx     = centeredBlockTopPx(rect, context.cellMetrics, lines.length, lineHeightPx)
 

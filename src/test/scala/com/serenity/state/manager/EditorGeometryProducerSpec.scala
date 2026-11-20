@@ -5,6 +5,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{LayoutEngine, ProseColumn, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -67,7 +68,9 @@ class EditorGeometryProducerSpec extends AnyFlatSpec with Matchers:
       .editorPanelRect
       .width
 
-    val geometry = EditorGeometryProducer.forPane(guiState, paneId).getOrElse(fail("expected geometry for pane"))
+    val geometry = EditorGeometryProducer
+      .forPane(guiState, paneId, wrapCache = TestMeasure.wrapCache())
+      .getOrElse(fail("expected geometry for pane"))
     val firstRow = geometry.navigation.visualLines.headOption.getOrElse(fail("expected at least one visual line"))
 
     (firstRow.endColumn - firstRow.startColumn) should be > panelWidthColumns

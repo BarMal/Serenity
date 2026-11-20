@@ -73,7 +73,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val highlightedRuns = surface.drawRunPxCalls.filter(_.background == diagnosticBackground).map(_.s)
@@ -100,7 +100,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val highlightedCells = for
@@ -129,7 +129,7 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     diagnosticBackground should not be state.persisted.theme.highlighted.background

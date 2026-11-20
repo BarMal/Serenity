@@ -55,7 +55,7 @@ class SummonedChromeKeySpec extends AnyFlatSpec with Matchers:
       val hidden = withSecondBuffer(stateWith(Buffer.fromString(bufferId, "alpha\nbeta")))
       val held   = withSummons(hidden, hidden.runtime.summons.pressed(element))
       val size   = ViewportSize(80, 24)
-      val scene  = AuthoritativeUiScene()
+      val scene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
 
       val before = MouseTargetCache.fromState(hidden, size, scene)
       val after  = MouseTargetCache.fromState(held, size, scene)
@@ -69,7 +69,7 @@ class SummonedChromeKeySpec extends AnyFlatSpec with Matchers:
       val hidden = withSecondBuffer(stateWith(Buffer.fromString(bufferId, "alpha\nbeta")))
       val locked = withSummons(hidden, ChromeSummons(locked = Set(element)))
       val size   = ViewportSize(80, 24)
-      val scene  = AuthoritativeUiScene()
+      val scene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
 
       scene.layoutKeyFor(hidden, size)
 

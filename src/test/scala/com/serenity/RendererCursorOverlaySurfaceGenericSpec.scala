@@ -73,7 +73,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(codeFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.fillPixelRectCalls shouldBe empty
 
@@ -88,7 +88,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     rendered shouldBe true
@@ -109,7 +109,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     rendered shouldBe false
@@ -129,7 +129,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     rendered shouldBe true
@@ -150,7 +150,7 @@ class RendererCursorOverlaySurfaceGenericSpec extends AnyFlatSpec with Matchers:
       cellMetrics,
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     rendered shouldBe true

@@ -10,6 +10,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, TypographyRole}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -54,8 +55,8 @@ class RowCountCertificateTimingSpec extends AnyFlatSpec with Matchers:
     builder: Executor,
     plantedScale: Option[Float] = None
   ): Vector[Int] =
-    val cache = WrappedLineCache.bounded(layoutMemos = LayoutMemos(builder))
-    val key   = NominalAdvances.Key(font, frc)
+    val cache = WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos(builder))
+    val key   = NominalAdvances.Key(FontSpec.fromAwt(font))
     // The first ask starts the build, which the inline executor finishes before the next ask.
     cache.layoutMemos.rowCertificates.of(key)
     plantedScale.foreach { scale =>
@@ -93,16 +94,16 @@ class RowCountCertificateTimingSpec extends AnyFlatSpec with Matchers:
   }
 
   "The certificate of the prose font" should "not appear between one ask and the next" in {
-    val certificates = LayoutMemos(inline).rowCertificates
-    val key          = NominalAdvances.Key(prose, frc)
+    val certificates = TestMeasure.layoutMemos(inline).rowCertificates
+    val key          = NominalAdvances.Key(FontSpec.fromAwt(prose))
     val first        = certificates.of(key).isDefined
     val later        = List.fill(3)(certificates.of(key).isDefined)
     withClue(s"first ask $first, later asks $later: ")(later.forall(_ == first) shouldBe true)
   }
 
   "The certificate of a font set with ligatures" should "be built once asked for, so the comparisons above set a table against a wrap" in {
-    val certificates = LayoutMemos(inline).rowCertificates
-    val key          = NominalAdvances.Key(ligated, frc)
+    val certificates = TestMeasure.layoutMemos(inline).rowCertificates
+    val key          = NominalAdvances.Key(FontSpec.fromAwt(ligated))
     certificates.of(key)
     certificates.of(key) shouldBe defined
   }

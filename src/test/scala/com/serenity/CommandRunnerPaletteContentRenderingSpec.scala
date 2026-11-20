@@ -11,7 +11,7 @@ import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
 import com.serenity.ui.presets.UiPreset
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -99,7 +99,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       FontSpec.fromAwt(Font(Font.SANS_SERIF, Font.PLAIN, 12)),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val commandLine =
@@ -127,7 +127,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
 
     val searchCursorXPx = cellMetrics.toPixelX(commandContentRect.x) +
       math.round(
-        TextLayoutSnapshot.caretXsForText(searchText, uiFont, ShapedTextCache(), surface.fontRenderContext.get).last
+        TextLayoutSnapshot.caretXsForText(searchText, uiFont, TestMeasure.layoutMemos()).last
       )
     val searchCursorYPx = cellMetrics.toPixelY(commandContentRect.y)
     surface.fillPixelRectCalls.exists(call =>
@@ -154,7 +154,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     paneLayout.contentRect.x shouldBe ActivePane.textRect(state, layout).x
@@ -273,7 +273,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val headerLine =
@@ -308,7 +308,7 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = false,
       surface,
       ViewportSize(55, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val resultLine =
@@ -366,14 +366,14 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       visibleSurface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       hiddenSurface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val visibleCursors = visibleSurface.fillPixelRectCalls.filter(_.color == state.persisted.theme.cursor)
@@ -427,14 +427,14 @@ class CommandRunnerPaletteContentRenderingSpec extends AnyFlatSpec with Matchers
       cursorVisible = true,
       visibleSurface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     RendererEntryPoints.render(
       state,
       cursorVisible = false,
       hiddenSurface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 30))

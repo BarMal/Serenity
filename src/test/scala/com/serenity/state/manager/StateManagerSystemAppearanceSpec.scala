@@ -8,6 +8,7 @@ import com.serenity.command.{Command, CommandIntent, ThemeIntent}
 import com.serenity.config.{AppConfig, AppearanceSlot, ThemeFollowConfig}
 import com.serenity.rope.Balance
 import com.serenity.testkit.AwaitCondition.awaitValue
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -43,7 +44,8 @@ class StateManagerSystemAppearanceSpec extends AnyFlatSpec with Matchers:
             highContrastTheme = dark
           )
         ),
-        appearanceDetector = detector
+        appearanceDetector = detector,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
     }
 

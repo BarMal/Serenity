@@ -59,7 +59,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls should not be empty
@@ -78,7 +78,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.exists(_.s.contains("val x = 1")) shouldBe true
@@ -101,7 +101,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       ligatureMetric,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.exists(_.s.contains("->")) shouldBe true
@@ -119,7 +119,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val expectedAscent = com.serenity.ui.layout.TextLayoutSnapshot
@@ -127,7 +127,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
         state.persisted.buffers(BufferId(1)),
         panelWidthPx = 400,
         propFont,
-        surface.fontRenderContext.getOrElse(fail("Expected mock render surface font context"))
+        wrapCache = TestMeasure.wrapCache()
       )
       .ascentPx
 
@@ -170,7 +170,7 @@ class RendererProportionalRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(propFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.drawRunPxCalls.exists(call =>

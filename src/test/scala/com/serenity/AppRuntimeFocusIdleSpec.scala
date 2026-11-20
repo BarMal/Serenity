@@ -14,8 +14,8 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Damage}
-import com.serenity.testkit.SharedDictionary
 import com.serenity.testkit.VirtualTime.runVirtual
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -269,7 +269,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
           cursorIdleInterval = GuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
+          renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
         )
         .compile
         .drain
@@ -318,7 +318,7 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
           ) => renderCalls.update(_ + 1),
           requestFastRender = IO.unit,
           cursorIdleInterval = tuiFrontend.cursorIdleInterval,
-          renderCaches = com.serenity.state.manager.RenderCaches.create()
+          renderCaches = com.serenity.testkit.TestMeasure.renderCaches()
         )
         .compile
         .drain
@@ -342,7 +342,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
         LoggerFactory[IO].getLogger(using LoggerName("AppRuntimeFocusWiringSpec")),
         policy = SessionManager.SessionPolicy(saveOnAppClose = false),
         initialConfig = fastConfig,
-        dictionaryCache = SharedDictionary.cacheFor(fastConfig)
+        dictionaryCache = SharedDictionary.cacheFor(fastConfig),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       idleRenderCalls <- Ref.of[IO, Int](0)
       closeRequested  <- Deferred[IO, Unit]
@@ -425,7 +426,8 @@ class AppRuntimeFocusIdleSpec extends AnyFlatSpec with Matchers:
               StateManager.apply(
                 logger,
                 policy = SessionManager.SessionPolicy(saveOnAppClose = false),
-                dictionaryCache = SharedDictionary.default
+                dictionaryCache = SharedDictionary.default,
+                layoutMeasurerFor = TestMeasure.layoutMeasurerFor
               )
             ),
             awaitExternalQuit = IO.never,

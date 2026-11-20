@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import javax.swing.JPanel
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.display.DisplayScale.DeviceScale
 import com.serenity.ui.layout.CellMetrics
@@ -47,7 +48,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
   ):
     val canvas = new JPanel
     canvas.setSize(100, 60)
-    val caches   = RenderCaches.create()
+    val caches   = TestMeasure.renderCaches()
     val shown    = new AtomicReference(List.empty[BufferedImage])
     val attached = new AtomicReference(List.empty[LayerPresenter])
     val factory  = new LayerSurfaceFactory(buildHost, fallback, frames)
@@ -91,7 +92,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
 
     /** The same frames drawn by the raster arm, which is what a layer's image frames must look like. */
     def rasterPixels(frames: List[((Int, Int, Int, Int), RenderColor)]): Array[Int] =
-      val rasterCaches = RenderCaches.create()
+      val rasterCaches = TestMeasure.renderCaches()
       val image        = new BufferedImage(100, 60, BufferedImage.TYPE_INT_RGB)
       frames.foreach {
         case ((x, y, w, h), color) =>
@@ -143,7 +144,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val harness = new Harness(_ =>
       builds.incrementAndGet(); host
     )
-    List.fill(5)(RenderCaches.create()).foreach(harness.frameWith)
+    List.fill(5)(TestMeasure.renderCaches()).foreach(harness.frameWith)
     builds.get shouldBe 1
     harness.attached.get should have size 1
     host.published.get shouldBe 5
@@ -154,7 +155,7 @@ class SkiaLayerSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val harness = new Harness(_ =>
       builds.incrementAndGet(); throw new IllegalStateException("no GL context")
     )
-    List.fill(3)(RenderCaches.create()).foreach(harness.frameWith)
+    List.fill(3)(TestMeasure.renderCaches()).foreach(harness.frameWith)
     builds.get shouldBe 1
     harness.shown.get should have size 3
   }

@@ -14,6 +14,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,7 +47,7 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 40)
       )
-    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc)
+    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, wrapCache = TestMeasure.wrapCache())
 
   for
     (scale, frc) <- frcs
@@ -73,7 +74,7 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = 40)
       )
-    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc)
+    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, wrapCache = TestMeasure.wrapCache())
 
   private val fixedWidths = List(230, 262, 300, 333, 377, 411, 480)
 
@@ -119,7 +120,7 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 40, visibleLines = visibleLines)
       )
-    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc, wrapCache = cache)
+    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, wrapCache = cache)
 
   private def capped(text: String, lines: Int, firstRunLength: Int): RichTextParagraph =
     RichTextParagraph(
@@ -137,13 +138,13 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
   do
     s"typing into a $lines-line drop cap paragraph at $scale (first run $firstRun chars)" should
       "equal an uncached wrap after every keystroke" in {
-        val cache = WrappedLineCache.bounded()
+        val cache = TestMeasure.wrapCache()
         (0 to 60).foldLeft(prose) { (text, step) =>
           val edited    = if step == 0 then text else text.patch(2 + step % 40, "x", 0)
           val paragraph = capped(edited, lines, firstRun)
           withClue(s"step $step: ") {
             richSnapshot(paragraph, 300, frc, cache).visualLines shouldBe
-              richSnapshot(paragraph, 300, frc, WrappedLineCache.Uncached).visualLines
+              richSnapshot(paragraph, 300, frc, TestMeasure.wrapCache()).visualLines
           }
           edited
         }
@@ -152,8 +153,8 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
     s"a $lines-line drop cap paragraph at $scale (first run $firstRun chars) scrolled to few visible lines" should
       "give the same rows as the full wrap" in {
         val paragraph = capped(prose, lines, firstRun)
-        val full      = richSnapshot(paragraph, 300, frc, WrappedLineCache.Uncached).visualLines
+        val full      = richSnapshot(paragraph, 300, frc, TestMeasure.wrapCache()).visualLines
         (1 to full.length).foreach { visible =>
-          richSnapshot(paragraph, 300, frc, WrappedLineCache.bounded(), visible).visualLines shouldBe full.take(visible)
+          richSnapshot(paragraph, 300, frc, TestMeasure.wrapCache(), visible).visualLines shouldBe full.take(visible)
         }
       }

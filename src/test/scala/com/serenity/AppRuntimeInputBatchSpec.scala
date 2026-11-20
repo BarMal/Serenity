@@ -16,7 +16,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, Damage, Focus}
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -33,10 +33,15 @@ class AppRuntimeInputBatchSpec extends AnyFlatSpec with Matchers:
 
   private def editorWithEmptyBuffer(config: AppConfig = AppConfig.default): IO[StateManager] =
     for
-      stateManager <- StateManager(logger, initialConfig = config, dictionaryCache = SharedDictionary.cacheFor(config))
-      bufferId     <- stateManager.createNewEmptyBuffer
-      state        <- stateManager.getCurrentState
-      _            <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
+      stateManager <- StateManager(
+        logger,
+        initialConfig = config,
+        dictionaryCache = SharedDictionary.cacheFor(config),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      bufferId <- stateManager.createNewEmptyBuffer
+      state    <- stateManager.getCurrentState
+      _        <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
     yield stateManager
 
   private def focusedText(state: AppState): Option[String] =

@@ -1,21 +1,22 @@
 package com.serenity.ui.layout
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
   private val font = BundledInterFont.plain(14.0f)
 
   private def glyphOf(text: String, lines: Int, proseScale: Float = 1.0f): Option[DropCapGlyph] =
     val document = RichTextDocument(List(RichTextParagraph.plain(text, role = ParagraphRole.dropCap(lines))))
-    DropCapGlyph.forParagraph(font, frc, Some(document), 0, ParagraphRole.dropCap(lines), proseScale, memos)
+    DropCapGlyph.forParagraph(font, Some(document), 0, ParagraphRole.dropCap(lines), proseScale, memos)
 
-  private val memos = LayoutMemos()
+  private val memos = TestMeasure.layoutMemos()
 
-  private def extent = memos.lineExtents.of(font, frc)
+  private def extent = memos.lineExtents.of(FontSpec.fromAwt(font))
 
   "DropCapGlyph.forParagraph" should "single out the paragraph's first character" in {
     val glyph = glyphOf("Quiet morning", 2).getOrElse(fail("expected a glyph"))
@@ -35,9 +36,9 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
   it should "find no glyph for a paragraph that is not a drop cap, has no text, or has no document" in {
     val body = RichTextDocument(List(RichTextParagraph.plain("Quiet")))
 
-    DropCapGlyph.forParagraph(font, frc, Some(body), 0, ParagraphRole.Body, 1.0f, memos) shouldBe None
+    DropCapGlyph.forParagraph(font, Some(body), 0, ParagraphRole.Body, 1.0f, memos) shouldBe None
     glyphOf("", 2) shouldBe None
-    DropCapGlyph.forParagraph(font, frc, None, 0, ParagraphRole.dropCap(2), 1.0f, memos) shouldBe None
+    DropCapGlyph.forParagraph(font, None, 0, ParagraphRole.dropCap(2), 1.0f, memos) shouldBe None
   }
 
   it should "put the baseline on the last spanned line's, whatever the letter" in
@@ -60,13 +61,13 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
   it should "reserve the room a descender hangs into below the last line" in {
     val glyph = glyphOf("Quiet", 2).getOrElse(fail("expected a glyph"))
-    val tail  = glyph.font.createGlyphVector(frc, "Q").getVisualBounds.getMaxY
+    val tail  = TestMeasure.skiaInk(glyph.font, "Q").getBottom.toDouble
 
     glyph.heightPx.toDouble should be >= glyph.baselinePx + tail
   }
 
   private def inkRightOf(glyph: DropCapGlyph): Double =
-    math.ceil(glyph.font.createGlyphVector(frc, glyph.text).getVisualBounds.getMaxX)
+    math.ceil(TestMeasure.skiaInk(glyph.font, glyph.text).getRight)
 
   it should "keep the indent at the glyph's ink right edge plus the gap in em of the body font" in
     List("I", "W", "T", "Q", "J").foreach { letter =>
@@ -80,9 +81,9 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
 
   it should "clear the ink of a letter that reaches left of the draw origin" in {
     val glyph = glyphOf("J", 3).getOrElse(fail("expected a glyph"))
-    val ink   = glyph.font.createGlyphVector(frc, "J").getVisualBounds
+    val ink   = TestMeasure.skiaInk(glyph.font, "J")
 
-    glyph.indentPx(0.0f).toDouble should be >= ink.getMaxX
+    glyph.indentPx(0.0f).toDouble should be >= ink.getRight.toDouble
   }
 
   "DropCapLayout.reserve" should "be the glyph's ink edge plus the gap and its height for a drop cap, and nothing otherwise" in {
@@ -90,10 +91,10 @@ class DropCapGlyphSpec extends AnyFlatSpec with Matchers:
     val glyph    = glyphOf("Tale", 2).getOrElse(fail("expected a glyph"))
 
     val reserved =
-      DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.dropCap(2), 1.0f, gapEm = 1.0f, memos = memos)
+      DropCapLayout.reserve(font, Some(document), 0, ParagraphRole.dropCap(2), 1.0f, gapEm = 1.0f, memos = memos)
 
     reserved.indentPx shouldBe (inkRightOf(glyph).toFloat + 14.0f) +- 0.01f
     reserved.heightPx shouldBe glyph.heightPx
-    DropCapLayout.reserve(font, frc, Some(document), 0, ParagraphRole.Body, 1.0f, gapEm = 1.0f, memos = memos) shouldBe
+    DropCapLayout.reserve(font, Some(document), 0, ParagraphRole.Body, 1.0f, gapEm = 1.0f, memos = memos) shouldBe
       DropCapLayout.Reserve.none
   }

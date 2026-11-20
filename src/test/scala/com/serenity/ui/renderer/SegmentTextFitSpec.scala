@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.config.AppConfig
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{SegmentTitleFit, TextLayoutSnapshot}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -22,12 +23,12 @@ class SegmentTextFitSpec extends AnyFlatSpec with Matchers:
   private def cut(title: String, advances: Option[MeasuredTextAdvances]): String =
     SegmentTextFit.fit(title, fit, font, Some(context), cellWidthPx, insetPx, advances)
 
-  private def newAdvances() = new MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, new ShapedTextCache())
+  private def newAdvances() = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
-  "SegmentTextFit" should "cut a title where it is cut without remembered advances" in {
+  "SegmentTextFit" should "cut a title where a fresh measure of it, remembering nothing, cuts it" in {
     val advances = newAdvances()
 
-    titles.map(cut(_, Some(advances))) shouldBe titles.map(cut(_, None))
+    titles.map(cut(_, Some(advances))) shouldBe titles.map(title => cut(title, Some(newAdvances())))
   }
 
   it should "measure nothing a second time for the same titles" in {

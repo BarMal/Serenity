@@ -42,7 +42,14 @@ class LateScrollbarFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHar
     val state    = longDocument
     val executor = new ByHand
     val frames =
-      Pooled(1.0, persists = true, RenderCaches.create(scrollCounting = ScrollCounting.deferred(executor, _ => ())))
+      Pooled(
+        1.0,
+        persists = true,
+        RenderCaches.create(
+          scrollCounting = ScrollCounting.deferred(executor, _ => ()),
+          measurerFor = com.serenity.testkit.TestMeasure.layoutMeasurerFor
+        )
+      )
 
     val first = frames.render(state, Damage.Everything)
 
@@ -55,7 +62,14 @@ class LateScrollbarFrameSpec extends AnyFlatSpec with Matchers with ColdFrameHar
     val paneId   = state.persisted.layout.editorPanes.keys.head
     val executor = new ByHand
     val frames =
-      Pooled(1.0, persists = true, RenderCaches.create(scrollCounting = ScrollCounting.deferred(executor, _ => ())))
+      Pooled(
+        1.0,
+        persists = true,
+        RenderCaches.create(
+          scrollCounting = ScrollCounting.deferred(executor, _ => ()),
+          measurerFor = com.serenity.testkit.TestMeasure.layoutMeasurerFor
+        )
+      )
     frames.render(state, Damage.Everything)
 
     executor.runAll()

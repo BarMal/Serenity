@@ -1,14 +1,12 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import scala.annotation.tailrec
 
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.ui.openings.LetterShape
-import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.DropCapGap
 
 /** Pure geometry for a multi-line drop cap paragraph: which of a paragraph's visual lines the glyph spans, and the left
@@ -60,19 +58,12 @@ object DropCapLayout:
     text: String,
     baseColumn: Int,
     resolver: TextCaretMeasurement.LineFontResolver,
-    frc: FontRenderContext,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): Float =
     if text.isEmpty then 0.0f
     else
       val carets =
-        ExactCaretXs.layoutCaretXs(
-          text.take(Character.charCount(text.codePointAt(0))),
-          baseColumn,
-          resolver,
-          frc,
-          shapedText
-        )
+        ExactCaretXs.layoutCaretXs(text.take(Character.charCount(text.codePointAt(0))), baseColumn, resolver, measuring)
       carets(carets.length - 1)
 
   /** A cached row read onto `bufferLine`. The drop cap indent is the only offset the row carries until alignment. The
@@ -118,7 +109,6 @@ object DropCapLayout:
     */
   def reserve(
     baseFont: Font,
-    frc: FontRenderContext,
     richDocument: Option[RichTextDocument],
     lineIndex: Int,
     effectiveRole: ParagraphRole,
@@ -128,7 +118,7 @@ object DropCapLayout:
     shape: LetterShape = LetterShape.Drop
   ): Reserve =
     DropCapGlyph
-      .forParagraph(baseFont, frc, richDocument, lineIndex, effectiveRole, proseScale, memos, shape)
+      .forParagraph(baseFont, richDocument, lineIndex, effectiveRole, proseScale, memos, shape)
       .fold(Reserve.none)(glyph => Reserve(glyph.indentPx(gapEm), glyph.heightPx + glyph.growthPx, glyph.growthPx))
 
   /** The left margin, in pixels, every line a drop cap spans starts at: the glyph's ink edge and the gap, the same on

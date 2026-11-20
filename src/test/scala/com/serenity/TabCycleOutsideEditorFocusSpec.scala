@@ -11,7 +11,7 @@ import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PopupSurfaceReducer
 import com.serenity.testkit.AwaitCondition.awaitValue
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.{DirectoryTreeData, PanelPosition, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -31,7 +31,9 @@ class TabCycleOutsideEditorFocusSpec extends AnyFlatSpec with Matchers:
   /** A state manager with four buffers in order and the third shown in the only pane. */
   private def fourBuffers(): (StateManager, Vector[BufferId]) =
     val logger = LoggerFactory[IO].getLogger(using LoggerName("TabCycleOutsideEditorFocusSpec"))
-    val sm     = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
     (1 to 3).foreach(index => sm.createBuffer(s"buffer $index", None).unsafeRunSync())
     val order = sm.getCurrentState.unsafeRunSync().persisted.bufferOrder.toVector
     order should have size 4

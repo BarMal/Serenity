@@ -6,8 +6,10 @@ import com.serenity.config.AppConfig
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -29,7 +31,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
 
   private val codeFont       = FontLoader.previewFontForRole(config.editorConfig.fontConfig, TypographyRole.Code)
   private val textFont       = FontLoader.previewFontForRole(config.editorConfig.fontConfig, TypographyRole.Prose)
-  private val certificateKey = NominalAdvances.Key(codeFont, frc)
+  private val certificateKey = NominalAdvances.Key(FontSpec.fromAwt(codeFont))
 
   // Far wider than the pane, so each wraps to several rows, yet a twentieth of that width fits it in one.
   private val lines = Vector.tabulate(120)(line => f"line $line%03d " + "ab -> cd " * 60)
@@ -62,10 +64,10 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
       .extent
       .totalRows
 
-  private val wrapOnly: Int = totalRows(WrappedLineCache.bounded(layoutMemos = LayoutMemos(never)))
+  private val wrapOnly: Int = totalRows(WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos(never)))
 
   "A certificate that undercounts what the layout paints" should "be revoked by the scene that paints the lines" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     val honest = memos.rowCertificates.of(certificateKey).value
     memos.rowCertificates.plant(certificateKey, honest.scaled(0.05f))
@@ -76,7 +78,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   it should "leave the pane's scroll extent as the wrap counts it, off-screen lines included" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     memos.rowCertificates.plant(certificateKey, memos.rowCertificates.of(certificateKey).value.scaled(0.05f))
 
@@ -85,7 +87,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
   }
 
   "A certificate that agrees with what the layout paints" should "survive the scene and give the wrap's extent" in {
-    val memos = LayoutMemos(inline)
+    val memos = TestMeasure.layoutMemos(inline)
     memos.rowCertificates.of(certificateKey)
     memos.rowCertificates.of(certificateKey) shouldBe defined
 

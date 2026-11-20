@@ -38,7 +38,8 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
           workspaceTree = Some(TestWorkspaceTrees.linear(paneId))
         ),
         focus = Focus.EditorPane(paneId)
-      )
+      ),
+      runtime = initial.runtime.copy(anchorWraps = com.serenity.testkit.TestMeasure.anchorWraps())
     )
 
   "LayoutEngine.calculateLayout" should "place a peek overlay above the anchored cursor when space is available" in {
@@ -137,7 +138,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = ActivePane.textColumn(state, layout, paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 8
+    rect.y shouldBe contentRect.y + 7
     // Horizontally centered on screen, not cursor-anchored (bug fix): the palette's width and content bear no
     // relationship to the cursor's column, so its x position is derived from `contentRect`, independent of the
     // cursor's column (18) used to place this surface.
@@ -181,7 +182,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val paneRect    = ActivePane.textColumn(state, layout, paneId)
     val contentRect = CursorLayout.contentRectForPane(paneRect)
 
-    rect.y shouldBe contentRect.y + 7
+    rect.y shouldBe contentRect.y + 6
   }
 
   it should "use the explicit command runner cursor gap instead of the interface gap" in {
@@ -213,7 +214,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val contentRect = LayoutEngine.calculateEditorWorkspaceLayout(state, layout).activeContentRect(state).get
     val rect        = layout.belowCursorOverlayRect.getOrElse(fail("Expected command runner overlay"))
 
-    rect.y shouldBe contentRect.y + 10
+    rect.y shouldBe contentRect.y + 9
   }
 
   it should "place command runner overlays immediately below a top-row cursor" in {
@@ -450,7 +451,7 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
     val toolbarRect = stack.getOrElse(SurfaceId("contextual-toolbar"), fail("Expected toolbar overlay"))
     val runnerRect  = stack.getOrElse(SurfaceId("command-runner"), fail("Expected command runner overlay"))
 
-    toolbarRect.y shouldBe contentRect.y + cursor.line + 3
+    toolbarRect.y shouldBe contentRect.y + cursor.line + 2
     runnerRect.y shouldBe toolbarRect.bottom + 2
   }
 
@@ -484,10 +485,12 @@ class CursorOverlayLayoutSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 24))
+    // Below the cursor now that prose rows are shorter than the grid's leave room under it, and tall enough a window
+    // that the runner's half row is not clamped away at the bottom: the offsets point down, not up.
+    val layout = LayoutEngine.calculateLayout(state, ViewportSize(100, 40))
 
-    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe -0.25
-    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe -0.5
+    layout.floatingOverlayOffsetRows(SurfaceId("contextual-toolbar")) shouldBe 0.25
+    layout.floatingOverlayOffsetRows(SurfaceId("command-runner")) shouldBe 0.5
   }
 
   it should "size a find overlay to fit its header, query row, result, and footer" in {

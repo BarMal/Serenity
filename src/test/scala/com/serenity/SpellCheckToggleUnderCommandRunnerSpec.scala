@@ -10,7 +10,7 @@ import com.serenity.config.{AppConfig, SpellCheckConfig}
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.{FixedFontCatalog, TestMeasure}
 import com.serenity.ui.fonts.FontLoader
@@ -109,7 +109,7 @@ class SpellCheckToggleUnderCommandRunnerSpec extends AnyFlatSpec with Matchers:
   private val referenceFrames: FrameBackend = SkiaFrames
 
   final private class Frames:
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(new Object)
     private val pool   = Vector.fill(2)(referenceFrames.newFrame(widthPx, heightPx))
     private val drawn  = new AtomicInteger(0)

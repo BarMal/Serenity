@@ -14,6 +14,7 @@ import com.serenity.keystroke.events.Event
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{RenderCaches, ScrollCounting, StateManager}
 import com.serenity.state.models.{AppState, Damage}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.appearance.{OsAppearance, OsAppearanceDetector}
@@ -59,7 +60,8 @@ class AppRuntimeFirstFrameThemeSpec extends AnyFlatSpec with Matchers:
               logger,
               sessionRootOverride = Some(root),
               initialConfig = config,
-              appearanceDetector = counting(appearance, reads)
+              appearanceDetector = counting(appearance, reads),
+              layoutMeasurerFor = TestMeasure.layoutMeasurerFor
             )
           }
         AppRuntime.run(

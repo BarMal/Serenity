@@ -2,6 +2,7 @@ package com.serenity.perf
 
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.testkit.TestMeasure
 
 /** Heap per open buffer (#2478): the state of one buffer or of twenty, with every one of them drawn once into shared
   * render caches, which is what a session that has visited its tabs keeps resident. The figure per buffer is the
@@ -25,7 +26,7 @@ private[perf] object ScalingFootprint:
 
   def build(kind: Kind, shown: Int, size: MultiBufferFixture.Size): Resident =
     val state  = MultiBufferFixture.state(kind, shown, size)
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val image  = LaptopFrameBenchmarks.frameImage()
     (1 to shown).foreach { index =>
       val _ = LaptopFrameBenchmarks.renderedFrame(MultiBufferFixture.switchTo(state, BufferId(index)), caches, image)

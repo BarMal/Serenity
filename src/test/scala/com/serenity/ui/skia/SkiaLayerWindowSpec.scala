@@ -120,10 +120,10 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       List("prose" -> proseLines, "code" -> codeLines).foreach {
         case (name, lines) =>
           val state = stateOf(lines.mkString("\n"), CursorPosition(2, 3))
-          render(window, state, RenderCaches.create(), SkiaRasterSurfaceFactory)
+          render(window, state, TestMeasure.renderCaches(), SkiaRasterSurfaceFactory)
           val raster = canvasImage(window)
           // The layer is added over the canvas by the first layer frame, so the raster frame is taken first.
-          render(window, state, RenderCaches.create(), SkiaLayerSurfaceFactory)
+          render(window, state, TestMeasure.renderCaches(), SkiaLayerSurfaceFactory)
           val layerHost = window.canvas.getComponents.length
           layerHost should be >= 1
           val left = inkMap(raster)
@@ -227,7 +227,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
       steps
         .foldLeft(Vector.empty[(String, BufferedImage)]) {
           case (done, (name, state, _)) =>
-            present(window, state, Damage.Everything, RenderCaches.create())
+            present(window, state, Damage.Everything, TestMeasure.renderCaches())
             val shot = withClue(s"scratch frame after $name: ")(
               settledScreen(window, done.lastOption.map(_._2), None, System.nanoTime() + 15_000_000_000L)
             )
@@ -236,7 +236,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
         }
     }
     withWindow { window =>
-      val caches = RenderCaches.create()
+      val caches = TestMeasure.renderCaches()
       steps.zip(scratch).foreach {
         case ((name, state, damage), (_, expected)) =>
           present(window, state, damage, caches)
@@ -253,7 +253,7 @@ class SkiaLayerWindowSpec extends AnyFlatSpec with Matchers with PersistedFrameF
   it should "draw the caret over the retained frame, and decline the caret-only path only until a frame exists" in
     withWindow { window =>
       val state  = stateOf(proseLines.mkString("\n"), CursorPosition(2, 3))
-      val caches = RenderCaches.create()
+      val caches = TestMeasure.renderCaches()
       RendererCursorOverlay.renderCursorOnly(
         state,
         cursorVisible = true,

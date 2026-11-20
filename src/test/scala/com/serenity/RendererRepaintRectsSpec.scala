@@ -148,7 +148,7 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
   final private class PresentedScreen:
     private val canvas     = new javax.swing.JPanel
     private val token      = ScreenIdentity(canvas)
-    private val caches     = RenderCaches.create()
+    private val caches     = TestMeasure.renderCaches()
     private val pool       = Vector.fill(2)(referenceFrames.newFrame(widthPx, heightPx))
     private val frames     = new AtomicInteger(0)
     val shown: FramePixels = referenceFrames.newFrame(widthPx, heightPx)
@@ -177,7 +177,7 @@ class RendererRepaintRectsSpec extends AnyFlatSpec with Matchers:
   private def cold(state: AppState): FramePixels =
     val image = referenceFrames.newFrame(widthPx, heightPx)
     val _ =
-      render(state, image, persists = false, None, Damage.Everything, RenderCaches.create(), ScreenIdentity(image))
+      render(state, image, persists = false, None, Damage.Everything, TestMeasure.renderCaches(), ScreenIdentity(image))
     image
 
   private def stalePixels(shown: FramePixels, expected: FramePixels): Int =

@@ -69,7 +69,7 @@ class PanelAndModalDirectPaintSpec extends AnyFlatSpec with Matchers:
   "RendererEntryPoints.render" should "paint the modal straight onto the frame" in {
     val surface = new MockRenderSurface(80, 24)
     val state   = stateWith("alpha\nbeta\ngamma", Focus.Modal, Nil, List(modalDialog))
-    val caches  = com.serenity.state.manager.RenderCaches.create()
+    val caches  = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       state,
@@ -87,7 +87,7 @@ class PanelAndModalDirectPaintSpec extends AnyFlatSpec with Matchers:
   it should "paint a floating panel straight onto the frame, and again after the editor content changes" in {
     val surface  = new MockRenderSurface(120, 40)
     val before   = stateWith("alpha\nbeta\ngamma", Focus.EditorPane(paneId), List(floatingPanel), Nil)
-    val caches   = com.serenity.state.manager.RenderCaches.create()
+    val caches   = com.serenity.testkit.TestMeasure.renderCaches()
     val viewport = ViewportSize(120, 40)
 
     RendererEntryPoints.render(before, cursorVisible = false, surface, viewport, None, Damage.Everything, caches)

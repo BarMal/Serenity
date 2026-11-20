@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import scala.annotation.tailrec
 
@@ -132,16 +131,13 @@ object PaneRowBands:
     wordWrapEnabled: Boolean,
     richText: RichTextContext,
     wrapCache: WrappedLineCache,
-    fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
     readAhead: ReadAhead = ReadAhead.None
   ): PaneRowBands =
-    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout =
-      LineLayout.measuredLayoutFor(font, fontRenderContext, forceCellLayout, richText, wrapCache.shapedText.probes)
-    val lineHeightPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
-      else math.max(1, cellMetrics.lineHeight)
-    val content = buffer.document.content
+    val memos             = wrapCache.layoutMemos
+    val cellMetrics       = cellMetricsOverride.getOrElse(TextLayoutSnapshot.cellMetricsOf(font, memos))
+    val measuredLayout    = LineLayout.measuredLayoutFor(font, forceCellLayout, richText, memos)
+    val (lineHeightPx, _) = TextLayoutSnapshot.snapshotLineMetrics(font, measuredLayout, cellMetrics, memos)
+    val content           = buffer.document.content
     lazy val held: Vector[String] =
       content
         .linesIteratorFrom(readAhead.first)
@@ -158,7 +154,6 @@ object PaneRowBands:
           text,
           math.max(1, wrapWidthPx),
           font,
-          fontRenderContext,
           measuredLayout,
           cellMetrics,
           Int.MaxValue,
@@ -172,7 +167,6 @@ object PaneRowBands:
           buffer.viewport,
           math.max(1, wrapWidthPx),
           font,
-          fontRenderContext,
           measuredLayout,
           cellMetrics,
           richText,

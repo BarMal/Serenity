@@ -4,8 +4,8 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
-import com.serenity.ui.renderer.ShapedTextCache
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -46,9 +46,9 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
       0,
       10_000,
       font,
-      frc,
       forceCellLayout = false,
-      richText = context(chain)
+      richText = context(chain),
+      wrapCache = TestMeasure.wrapCache()
     )
     rows should have size 1
     rows.head
@@ -91,14 +91,12 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
     val inputs =
       LineLayout.lineLayoutInputs(
         codeFont,
-        frc,
         measuredLayout = true,
         context(),
         0,
         5,
         "hello",
-        ShapedTextCache(),
-        LayoutMemos()
+        wrapCache = TestMeasure.wrapCache()
       )
     inputs.resolver.runs shouldBe empty
   }
@@ -112,7 +110,14 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
   it should "measure exactly as it did without a fallback chain" in {
     val plain = rowOf("hello world", proseFont, FontFallback.Default)
     plain.row shouldBe TextLayoutSnapshot
-      .boundedVisualLinesForText("hello world", 0, 10_000, proseFont, frc, richText = RichTextContext.plain)
+      .boundedVisualLinesForText(
+        "hello world",
+        0,
+        10_000,
+        proseFont,
+        richText = RichTextContext.plain,
+        wrapCache = TestMeasure.wrapCache()
+      )
       .head
       .row
   }
@@ -151,7 +156,7 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "lay out a line of fallback symbols on the cell grid when it holds no wide character" in {
     val inputs =
-      LineLayout.lineLayoutInputs(codeFont, frc, true, context(), 0, 3, "a★b", ShapedTextCache(), LayoutMemos())
+      LineLayout.lineLayoutInputs(codeFont, true, context(), 0, 3, "a★b", wrapCache = TestMeasure.wrapCache())
     inputs.resolver.wideCellPx should be > 0.0f
   }
 
@@ -183,43 +188,37 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
       0,
       math.round(5 * cell),
       codeFont,
-      frc,
-      richText = context()
+      richText = context(),
+      wrapCache = TestMeasure.wrapCache()
     )
     rows.map(_.text) shouldBe Vector("中文", "中文")
   }
 
   "The fallback itemisation on the hot path" should "not be consulted for a line of plain ASCII" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val _ = LineLayout.lineLayoutInputs(
       codeFont,
-      frc,
       true,
       context(),
       0,
       12,
       "hello, world",
-      cache.shapedText,
-      cache.layoutMemos,
       wrapCache = cache
     )
     cache.fallbackCoverageLookups shouldBe 0L
   }
 
   it should "be done once for a line that needs it, however often the line is laid out" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     (1 to 5).foreach { _ =>
       val _ =
         LineLayout.lineLayoutInputs(
           codeFont,
-          frc,
           true,
           context(),
           0,
           3,
           "a中b",
-          cache.shapedText,
-          cache.layoutMemos,
           wrapCache = cache
         )
     }
@@ -227,19 +226,16 @@ class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "scan a repeated plain ASCII line once, however often the line is laid out" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val text  = "hello, world " * 20
     (1 to 5).foreach { _ =>
       val _ = LineLayout.lineLayoutInputs(
         codeFont,
-        frc,
         true,
         context(),
         0,
         text.length,
         text,
-        cache.shapedText,
-        cache.layoutMemos,
         wrapCache = cache
       )
     }

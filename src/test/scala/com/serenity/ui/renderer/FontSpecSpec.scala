@@ -104,3 +104,15 @@ final class FontSpecSpec extends AnyFlatSpec with Matchers:
     awt.getAttributes.get(TextAttribute.STRIKETHROUGH) shouldBe TextAttribute.STRIKETHROUGH_ON
     FontSpec.fromAwt(awt) shouldBe read
   }
+
+  it should "give the spec it already read for the same font instance, and read another instance afresh" in {
+    val font  = new Font(Font.SERIF, Font.PLAIN, 14)
+    val first = FontSpec.fromAwt(font)
+    (FontSpec.fromAwt(font) eq first) shouldBe true
+
+    val other = new Font(Font.SERIF, Font.PLAIN, 14)
+    val read  = FontSpec.fromAwt(other)
+    (read eq first) shouldBe false
+    read shouldBe first
+    read.awtOrigin.exists(_ eq other) shouldBe true
+  }

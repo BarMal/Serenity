@@ -10,7 +10,7 @@ import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.InsertChar
 import com.serenity.lsp.config.LanguageId
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.testkit.{FrameDiff, TestMeasure}
@@ -73,7 +73,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
 
   final private class PersistingImage:
     private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
     caches.frameCounters.setEnabled(true)
 
@@ -108,7 +108,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
       (frame.toImage, caches.frameCounters.lastFrame)
 
   private def differing(drawn: BufferedImage, state: AppState): Seq[(Int, Int)] =
-    val cold = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
+    val cold = LaptopColdFrames.of(SkiaFrames, state, TestMeasure.renderCaches(), cursorVisible = false).toImage
     FrameDiff.differing(drawn, cold)
 
   private def summary(differences: Seq[(Int, Int)]): String =
@@ -135,7 +135,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
 
   "The fixture" should "show the ghost on the blank lines under the empty chapter" in {
     val (before, _) = typing
-    val scene       = RenderCaches.create().authoritativeScene.forState(before, viewport, codeFont, textFont)
+    val scene       = TestMeasure.renderCaches().authoritativeScene.forState(before, viewport, codeFont, textFont)
 
     scene.textSnapshot(paneId).map(_.visualLines.map(_.bufferLine).take(4)) shouldBe Some(Vector(0, 1, 2, 3))
     before.persisted.buffers(manuscriptId).annotations.notes.keySet shouldBe Set(storm)
@@ -193,7 +193,7 @@ class ChapterGhostRowReuseSpec extends AnyFlatSpec with Matchers:
 
   "The fixture with spaced headings" should "keep the ghost on the blank lines under the heading, below its space" in {
     val (before, _) = spaced(typing)
-    val scene       = RenderCaches.create().authoritativeScene.forState(before, viewport, codeFont, textFont)
+    val scene       = TestMeasure.renderCaches().authoritativeScene.forState(before, viewport, codeFont, textFont)
     val rows        = scene.textSnapshot(paneId).map(_.visualLines).getOrElse(fail("expected a snapshot"))
 
     rows.map(_.bufferLine).take(4) shouldBe Vector(0, 1, 2, 3)

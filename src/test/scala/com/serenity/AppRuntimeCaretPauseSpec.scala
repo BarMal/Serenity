@@ -13,6 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.{Model, RenderCaches, StateEngine}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.state.undo.UndoState
+import com.serenity.testkit.TestMeasure
 import com.serenity.testkit.VirtualTime.runVirtual
 import com.serenity.ui.color.RenderColor
 import fs2.Stream
@@ -83,7 +84,7 @@ class AppRuntimeCaretPauseSpec extends AnyFlatSpec with Matchers:
         IO.monotonic.flatMap(now => rig.painted.update(_ :+ (now -> visible))) >> IO.sleep(renderCost),
       requestFastRender = IO.unit,
       cursorIdleInterval = frontend.cursorIdleInterval,
-      renderCaches = RenderCaches.create(),
+      renderCaches = TestMeasure.renderCaches(),
       lastInput = rig.lastInput
     )
 
@@ -290,7 +291,7 @@ class AppRuntimeCaretPauseSpec extends AnyFlatSpec with Matchers:
             IO.unit,
             (_: AppState, cursorVisible: Boolean, _: Option[RenderColor], _: Damage, _: RenderCaches) =>
               drawn.set(Some(cursorVisible)),
-            RenderCaches.create(),
+            TestMeasure.renderCaches(),
             cursorVisible = IO.pure(visible)
           )
           .compile

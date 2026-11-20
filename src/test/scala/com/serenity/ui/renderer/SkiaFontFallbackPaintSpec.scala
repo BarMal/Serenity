@@ -5,8 +5,8 @@ import java.awt.{Font, GraphicsEnvironment}
 import java.nio.file.Paths
 
 import com.serenity.SkiaFrames
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.TextVisualLine
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot}
@@ -48,13 +48,13 @@ class SkiaFontFallbackPaintSpec extends AnyFlatSpec with Matchers:
         0,
         10_000,
         font,
-        frc,
-        richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = fallback)
+        richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = fallback),
+        wrapCache = TestMeasure.wrapCache()
       )
       .head
 
   private def paint(line: TextVisualLine, font: Font): BufferedImage =
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     require(SkiaTestFonts.install(caches.backendCaches, "/fonts/SerenityFallbackTest.ttf").isRight)
     val frame   = SkiaFrames.newFrame(200, 60)
     val metrics = CellMetrics(charWidth = 8, lineHeight = line.heightPx, ascent = line.ascentPx)

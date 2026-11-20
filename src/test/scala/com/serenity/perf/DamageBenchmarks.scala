@@ -12,7 +12,7 @@ import com.serenity.perf.BenchmarkFixtures.{
   withCursorsOnConsecutiveLines
 }
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.{AppState, BufferId, Damage, PaneId}
 import com.serenity.state.reducers.EditorEventReducer
 import com.serenity.testkit.TestMeasure
@@ -141,8 +141,9 @@ private[perf] object DamageBenchmarks:
     * prints the share of the canvas the published rects cover.
     */
   private def caretMoveRepaint(name: String, placement: StatusLinePlacement): BenchmarkRunner.Benchmark =
-    val font         = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
-    val metrics      = TestMeasure.cellMetrics(font)
+    val font = java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12)
+    // The canvas a mock surface clears is this many pixels; master's grid keeps the benchmark's workload what it was.
+    val metrics      = TestMeasure.awtCellMetrics(font)
     val viewport     = BenchmarkFixtures.viewportSize
     lazy val fixture = editorState(largeMultilineDocument(lines = 200), Some(LanguageId.Scala))
     lazy val before =
@@ -153,7 +154,7 @@ private[perf] object DamageBenchmarks:
     lazy val damage = DamageProducer.forTransition(before, after)
     def repaintAfterCaretMove(): Option[List[PixelRect]] =
       val surface = MockRenderSurface(viewport.width, viewport.height, persistentContent = true)
-      val caches  = RenderCaches.create()
+      val caches  = TestMeasure.renderCaches()
       def frame(state: AppState, frameDamage: Damage) =
         RendererEntryPoints.renderWithRepaintRects(
           state,

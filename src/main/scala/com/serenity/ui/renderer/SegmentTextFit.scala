@@ -19,7 +19,7 @@ private[renderer] object SegmentTextFit:
     advances: Option[MeasuredTextAdvances]
   ): Double =
     if text.isEmpty then 0.0
-    else advances.fold(TextLayout(text, font, context).getAdvance.toDouble)(_.advanceOf(text, font, context).toDouble)
+    else advances.fold(TextLayout(text, font, context).getAdvance.toDouble)(_.advanceOf(text, font).toDouble)
 
   def fit(
     text: String,

@@ -57,7 +57,11 @@ final class ColumnPagingFixture(
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = base.runtime.copy(capabilities = FrontendCapabilities.gui, viewportSize = Some(viewportSize))
+      runtime = base.runtime.copy(
+        capabilities = FrontendCapabilities.gui,
+        viewportSize = Some(viewportSize),
+        anchorWraps = TestMeasure.anchorWraps()
+      )
     )
     val synced = LayoutEngine.syncViewportDimensions(unsynced, viewportSize)
     val sized  = synced.persisted.buffers(bufferId)
@@ -74,7 +78,7 @@ final class ColumnPagingFixture(
   /** The cells one column wraps its text in, as `CursorViewport` and the painter both derive them. */
   val textColumns: Int = math.max(1, buffer.viewport.visibleColumns - LayoutEngine.perColumnGutterWidth(state))
 
-  val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig)
+  val widthPx: Int = TextLayoutSnapshot.gridWrapWidthPx(textColumns, fontConfig, TestMeasure.layoutMemos())
 
   /** The rows one column draws, sized the way the renderer sizes the pane it paints. */
   val rowsPerColumn: Int =
@@ -86,7 +90,7 @@ final class ColumnPagingFixture(
   val columnHeightPx: Int = rowsPerColumn * TestMeasure.cellMetrics(FontLoader.previewTextFont(fontConfig)).lineHeight
 
   /** Kept across layouts as the running editor keeps its own, so a walk over a document measures each line once. */
-  val wrapCache: WrappedLineCache = WrappedLineCache.bounded()
+  val wrapCache: WrappedLineCache = TestMeasure.wrapCache()
 
   /** The columns of the page `viewport` anchors, laid out as the painter lays them out. */
   def columnsAt(viewport: Viewport, count: Int = columnCount, rows: Int = rowsPerColumn): Vector[TextLayoutSnapshot] =
@@ -167,7 +171,14 @@ object ColumnPagingFixture:
       // Every chapter's headings are kept with the paragraph after them, which can leave all of them at a column's top;
       // this one follows the short last column of the document, so a heading with room above it is always drawn.
       paragraph("Coda", ParagraphRole.Heading(2)),
-      paragraph("The end.")
+      paragraph("The end."),
+      // Short sections after it, so some heading has body text above it in its column whatever a row measures.
+      paragraph("Notes", ParagraphRole.Heading(2)),
+      paragraph("One note."),
+      paragraph("More notes", ParagraphRole.Heading(2)),
+      paragraph("Another note."),
+      paragraph("Last notes", ParagraphRole.Heading(2)),
+      paragraph("A final note.")
     )
   )
 

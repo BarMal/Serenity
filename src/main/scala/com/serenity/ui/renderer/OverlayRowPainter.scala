@@ -355,8 +355,7 @@ private[renderer] object OverlayRowPainter:
   ): Unit =
     val visibleText = text.take(width)
     if visibleText.nonEmpty then
-      val frc        = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-      val advancePx  = advances.advanceOf(visibleText, font, frc)
+      val advancePx  = advances.advanceOf(visibleText, font)
       val textXPx    = cellMetrics.toPixelX(x).toFloat
       val maxWidthPx = math.max(1.0f, maxRightXPx.toFloat - textXPx)
       val widthPx    = advancePx.max(1.0f).min(maxWidthPx)
@@ -374,8 +373,7 @@ private[renderer] object OverlayRowPainter:
     minXPx: Int,
     maxRightXPx: Int
   ): Unit =
-    val frc          = surface.text.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
-    val advancePx    = advances.advanceOf(textBeforeCursor, font, frc)
+    val advancePx    = advances.advanceOf(textBeforeCursor, font)
     val rawWidthPx   = math.max(2, math.round(cellMetrics.charWidth * 0.12f))
     val caretWidthPx = math.min(rawWidthPx, math.max(1, maxRightXPx - minXPx))
     val unclampedXPx = cellMetrics.toPixelX(x) + math.round(advancePx)

@@ -5,8 +5,8 @@ import java.util.concurrent.atomic.AtomicReference
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.RendererEntryPoints
@@ -66,7 +66,7 @@ class SquiggleDrawCallsSpec extends AnyFlatSpec with Matchers:
 
   private def render(state: AppState): BatchRecordingSurface =
     val surface = new BatchRecordingSurface
-    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30), RenderCaches.create())
+    RendererEntryPoints.render(state, cursorVisible = false, surface, ViewportSize(100, 30), TestMeasure.renderCaches())
     surface
 
   "A misspelled word" should "be drawn as one batch of rects in the theme's error colour" in {

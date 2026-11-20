@@ -91,16 +91,17 @@ object EditorGeometryProducer:
     * the viewport use, and carries where each of those columns starts.
     */
   private def columnGeometry(state: AppState, buffer: Buffer, wrapCache: WrappedLineCache): EditorGeometry =
-    val fontConfig        = state.persisted.config.editorConfig.fontConfig
-    val font              = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
-    val isTui             = state.runtime.capabilities.isCellGrid
-    val metrics           = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
+    val fontConfig = state.persisted.config.editorConfig.fontConfig
+    val font       = FontLoader.previewFontForRole(fontConfig, buffer.typographyRole)
+    val isTui      = state.runtime.capabilities.isCellGrid
+    val metrics = if isTui then CellMetrics.cellUnit else TextLayoutSnapshot.cellMetricsOf(font, wrapCache.layoutMemos)
     val panelWidthColumns = effectivePanelWidth(state, buffer)
     val panelWidthPx =
       if isTui then panelWidthColumns * CellMetrics.cellUnit.charWidth
-      else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, fontConfig)
+      else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, fontConfig, wrapCache.layoutMemos)
     val cellMetricsOverride = if isTui then Some(CellMetrics.cellUnit) else None
-    val visibleLines        = math.max(1, CursorViewport.rowsDrawnPerScreen(buffer.viewport, fontConfig, font, isTui))
+    val visibleLines =
+      math.max(1, CursorViewport.rowsDrawnPerScreen(buffer.viewport, fontConfig, font, isTui, wrapCache.layoutMemos))
     val pager = CursorViewport
       .columnPagerFor(buffer, state, panelWidthPx, font, visibleLines, cellMetricsOverride, isTui, wrapCache)
     val cursor = buffer.editing.cursorPositions.headOption.getOrElse(CursorPosition(0, 0))
@@ -130,14 +131,19 @@ object EditorGeometryProducer:
   ): EditorGeometry =
     val font    = FontLoader.previewFontForRole(state.persisted.config.editorConfig.fontConfig, buffer.typographyRole)
     val isTui   = state.runtime.capabilities.isCellGrid
-    val metrics = if isTui then CellMetrics.cellUnit else CellMetrics.fromFont(font)
+    val metrics = if isTui then CellMetrics.cellUnit else TextLayoutSnapshot.cellMetricsOf(font, wrapCache.layoutMemos)
     val panelWidthColumns = effectivePanelWidth(state, buffer)
     // TUI mode's terminal cell is 1px wide by definition, not `font`'s measured pixel width -- `font` is never
     // actually rendered with in TUI mode (`TuiRuntime.CellFont`'s doc comment), so wrapping geometry for it here must
     // agree with `TerminalAnsiDiff`'s cell grid, not a pixel measurement of an inert AWT font.
     val panelWidthPx =
       if isTui then panelWidthColumns * CellMetrics.cellUnit.charWidth
-      else TextLayoutSnapshot.gridWrapWidthPx(panelWidthColumns, state.persisted.config.editorConfig.fontConfig)
+      else
+        TextLayoutSnapshot.gridWrapWidthPx(
+          panelWidthColumns,
+          state.persisted.config.editorConfig.fontConfig,
+          wrapCache.layoutMemos
+        )
     // Build the geometry over a window centred on the cursor rather than pinned to the viewport's top line. Pinning to
     // the top let a single heavily-wrapped line there fill the whole visual-row budget, so the cursor's own line fell
     // out of the geometry entirely -- `moveVertical`/`visualLineFor` then found nothing and vertical navigation dropped

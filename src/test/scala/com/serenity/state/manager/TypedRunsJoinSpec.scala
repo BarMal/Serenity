@@ -15,7 +15,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, updateState}
 import com.serenity.state.models.*
 import com.serenity.state.undo.HistoryEntry
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,7 +49,8 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
       stateManager <- StateManager(
         NoOpLogger[IO],
         sessionRootOverride = Some(TestTemp.directory("typed-run-join")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _        <- stateManager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))
       bufferId <- stateManager.createBuffer(proseDocument, None)
@@ -89,7 +90,9 @@ class TypedRunsJoinSpec extends AnyFlatSpec with Matchers:
   private def centred(state: AppState, bufferId: BufferId): Option[Boolean] =
     state.persisted.buffers.get(bufferId).flatMap { buffer =>
       buffer.editing.cursorPositions.headOption.map(cursor =>
-        CursorViewport.adjustForCursor(buffer, state, cursor).copy(placement = ViewportPlacement.Placed) ==
+        CursorViewport
+          .adjustForCursor(buffer, state, cursor, TestMeasure.wrapCache())
+          .copy(placement = ViewportPlacement.Placed) ==
           buffer.viewport
       )
     }

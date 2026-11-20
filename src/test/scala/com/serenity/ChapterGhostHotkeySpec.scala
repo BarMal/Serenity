@@ -9,7 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
 import com.serenity.state.reducers.AppEventReducer
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -47,7 +47,9 @@ class ChapterGhostHotkeySpec extends AnyFlatSpec with Matchers:
   it should "flip the ghost flag through the whole event pipeline, and back" in {
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
     val logger              = LoggerFactory[IO].getLogger(using LoggerName("Test"))
-    val sm: StateManager    = StateManager.apply(logger, dictionaryCache = SharedDictionary.default).unsafeRunSync()
+    val sm: StateManager = StateManager
+      .apply(logger, dictionaryCache = SharedDictionary.default, layoutMeasurerFor = TestMeasure.layoutMeasurerFor)
+      .unsafeRunSync()
 
     sm.applyEvent(ToggleChapterGhosts).unsafeRunSync()
     sm.getCurrentState.unsafeRunSync().runtime.chapterGhostsVisible shouldBe false

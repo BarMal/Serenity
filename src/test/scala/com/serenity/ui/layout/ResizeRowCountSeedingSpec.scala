@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState}
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -68,14 +69,14 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
     Vector.tabulate(buffer.document.content.lineCount)(rows.rowsIn)
 
   private def cold(buffer: Buffer, widthPx: Int, font: Font): Vector[Int] =
-    counts(buffer, widthPx, font, WrappedLineCache.Uncached)
+    counts(buffer, widthPx, font, TestMeasure.wrapCache())
 
   private def wraps(cache: WrappedLineCache.Bounded): Long =
     cache.wrapStats.coldWraps + cache.wrapStats.incrementalWraps
 
   /** What counting the plain buffer from nothing costs in wraps, which a font's row-count certificate may reduce. */
   private def coldWraps(widthPx: Int, font: Font): Long =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     counts(plainBuffer, widthPx, font, cache)
     wraps(cache)
 
@@ -88,7 +89,7 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
   do
     s"The $documentName counts in a $fontName font after a grow" should "equal a cold count at the new width, line by line" in
       growths.foreach { (narrow, wide) =>
-        val cache = WrappedLineCache.bounded()
+        val cache = TestMeasure.wrapCache()
         counts(buffer, narrow, font, cache)
 
         withClue(s"$narrow px to $wide px: ")(counts(buffer, wide, font, cache) shouldBe cold(buffer, wide, font))
@@ -105,7 +106,7 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
       }
 
   "Growing the panel" should "wrap only the lines that were not one row" in {
-    val cache    = WrappedLineCache.bounded()
+    val cache    = TestMeasure.wrapCache()
     val atNarrow = counts(plainBuffer, 333, serif, cache)
     val before   = wraps(cache)
 
@@ -116,7 +117,7 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
 
   it should "wrap no line at all when every line was one row" in {
     val shortLines = Buffer.fromString(bufferId, Vector.fill(40)("a short line").mkString("\n"))
-    val cache      = WrappedLineCache.bounded()
+    val cache      = TestMeasure.wrapCache()
     counts(shortLines, 333, serif, cache)
     val before = wraps(cache)
 
@@ -126,7 +127,7 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
   }
 
   "Shrinking the panel" should "cost as many wraps as a cold count at the new width" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     counts(plainBuffer, 400, serif, cache)
     val before = wraps(cache)
 
@@ -136,7 +137,7 @@ class ResizeRowCountSeedingSpec extends AnyFlatSpec with Matchers:
   }
 
   "Growing the panel and changing the font" should "cost as many wraps as a cold count" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     counts(plainBuffer, 333, serif, cache)
     val before = wraps(cache)
     val other  = Font(Font.SERIF, Font.PLAIN, 15)

@@ -19,9 +19,10 @@ class ScrollbarMouseEventSpec extends AnyFlatSpec with Matchers with StateManage
   private val viewportSize = ViewportSize(100, 30)
 
   final private case class Rig(stateManager: StateManager, bufferId: BufferId):
-    def state: AppState          = stateManager.getCurrentState.unsafeRunSync()
-    def buffer: Buffer           = state.persisted.buffers(bufferId)
-    def scene: UiSceneSnapshot   = AuthoritativeUiScene().forState(state, viewportSize)
+    def state: AppState = stateManager.getCurrentState.unsafeRunSync()
+    def buffer: Buffer  = state.persisted.buffers(bufferId)
+    def scene: UiSceneSnapshot =
+      AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()).forState(state, viewportSize)
     def send(event: Event): Unit = stateManager.applyEvent(event).unsafeRunSync()
 
     private def metrics: CellMetrics =

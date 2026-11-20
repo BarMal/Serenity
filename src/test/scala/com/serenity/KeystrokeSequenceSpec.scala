@@ -8,7 +8,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.typelevel.log4cats.slf4j.Slf4jFactory
@@ -24,8 +24,12 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Empty buffer ready for input
       bufferId     <- stateManager.createBuffer("", None)
@@ -96,8 +100,12 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Buffer with some text
       bufferId     <- stateManager.createBuffer("The quik brown fox", None)
@@ -136,8 +144,12 @@ class KeystrokeSequenceSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Multiline buffer
       initialText = """Line 1
@@ -207,8 +219,12 @@ Final line""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Text with multiple words
       bufferId     <- stateManager.createBuffer("Hello world this is a test", None)
@@ -258,8 +274,12 @@ Final line""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Empty buffer
       bufferId     <- stateManager.createBuffer("", None)
@@ -313,8 +333,12 @@ Final line""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Single line of text
       bufferId     <- stateManager.createBuffer("Single line", None)
@@ -375,8 +399,12 @@ Third""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Small text
       bufferId     <- stateManager.createBuffer("AB\nCD", None)
@@ -428,8 +456,12 @@ Third""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Multiline text
       bufferId     <- stateManager.createBuffer("First\nSecond\nThird", None)
@@ -461,8 +493,12 @@ Third""".replace("\r\n", "\n")
     given LoggerFactory[IO] = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
 
       // Given: Buffer with content
       bufferId     <- stateManager.createBuffer("Initial state", None)

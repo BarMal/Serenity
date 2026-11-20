@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import com.serenity.text.fallback.{FallbackRun, FontSlot}
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, LineFontResolver}
+import com.serenity.ui.renderer.FontSpec
 
 /** Cuts a line's [[LineFontResolver]] where its own fonts have no glyph, so the missing glyphs are measured, and by the
   * same runs painted, in the fallback fonts: fallback becomes more [[ColumnFontRun]]s, each in the font its column
@@ -48,6 +49,7 @@ private[layout] object FallbackResolution:
       val slot     = slotAt(from)
       if slot == FontSlot.Primary then original.map(_.copy(startColumn = from, endColumn = until))
       else
-        val styled = original.map(_.font).getOrElse(resolver.baseFont)
-        Some(ColumnFontRun(from, until, fallback.fontFor(slot, styled), original.exists(_.hidden), slot))
+        val styled  = original.map(_.font).getOrElse(resolver.baseFont)
+        val drawnIn = FontSpec.fromAwt(fallback.fontFor(slot, styled.toAwt))
+        Some(ColumnFontRun(from, until, drawnIn, original.exists(_.hidden), slot))
     }

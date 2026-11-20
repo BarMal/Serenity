@@ -2,7 +2,6 @@ package com.serenity.perf
 
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, AppMode, DockedCornerStyle}
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.AppState
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{RichTextContext, TextLayoutSnapshot, ViewportSize}
@@ -56,7 +55,7 @@ private[perf] object CellGridBenchmarks:
   /** A full frame of `state` at 1x, in the cell layout, drawn the way the laptop frame benchmarks draw one. */
   private def frameOf(state: AppState): () => FramePixels =
     val frame   = SkiaFrames.newFrame(width, height)
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val surface = SkiaFrames.surfaceOver(frame, cells, codeFont, width, height, 1.0, persists = false, caches)
     () =>
       RendererEntryPoints.render(
@@ -88,9 +87,9 @@ private[perf] object CellGridBenchmarks:
               0,
               width,
               codeFont,
-              frc,
               forceCellLayout = true,
-              richText = RichTextContext.plain
+              richText = RichTextContext.plain,
+              wrapCache = TestMeasure.wrapCache()
             )
             .size
         )

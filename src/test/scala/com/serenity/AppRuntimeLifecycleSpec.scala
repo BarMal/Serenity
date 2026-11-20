@@ -17,7 +17,7 @@ import com.serenity.rope.Balance
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, BufferId, CursorPosition, Damage, EditingState}
-import com.serenity.testkit.{HangBound, SharedDictionary}
+import com.serenity.testkit.{HangBound, SharedDictionary, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.ViewportSize
 import fs2.Stream
@@ -233,7 +233,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
             logger,
             policy = SessionManager.SessionPolicy(saveOnAppClose = true),
             sessionRootOverride = Some(fileRoot),
-            dictionaryCache = SharedDictionary.default
+            dictionaryCache = SharedDictionary.default,
+            layoutMeasurerFor = TestMeasure.layoutMeasurerFor
           )
         }
       ),
@@ -276,7 +277,8 @@ class AppRuntimeLifecycleSpec extends AnyFlatSpec with Matchers:
           logger,
           policy = SessionManager.SessionPolicy(saveOnAppClose = true),
           sessionRootOverride = Some(sessionRoot),
-          dictionaryCache = SharedDictionary.default
+          dictionaryCache = SharedDictionary.default,
+          layoutMeasurerFor = TestMeasure.layoutMeasurerFor
         )
       ),
       awaitExternalQuit = IO.never,

@@ -1,18 +1,15 @@
 package com.serenity.ui.layout
 
-import java.awt.Font
-import java.awt.font.FontRenderContext
+import com.serenity.ui.layout.TextMeasurer.FontRun
+import com.serenity.ui.renderer.FontSpec
 
-import com.serenity.ui.renderer.ShapedTextCache
-
-/** The [[NominalAdvances]] of a font set with ligatures, which shaping may give other glyphs. A row count depends on a
-  * run's width and baseline and not on which glyph is drawn, and in a monospaced ligature font no substitution changes
-  * either; but that is a property of the font, not a guarantee of the platform, so it is checked rather than assumed.
-  * The certificate is granted only if
+/** The [[NominalAdvances]] of a font set with ligatures, which shaping gives other glyphs, so its characters are not
+  * context-free. A row count depends on a run's width and not on which glyph is drawn, and in a monospaced ligature
+  * font no substitution changes the width; but that is a property of the font, not a guarantee of the platform, so it
+  * is checked rather than assumed. The certificate is granted only if
   *
-  *   - the font advances every glyph alike and its layout advance is the sum of its glyphs';
   *   - shaping every pair of printable ASCII, and every triple of symbols and space (where operator ligatures live),
-  *     leaves each run at the sum of its characters' advances and on the baseline;
+  *     leaves each run at the sum of its characters' advances;
   *   - a battery of code-like lines counted by the table agrees with wrapping them, at widths either side of each
   *     line's own.
   *
@@ -22,63 +19,57 @@ import com.serenity.ui.renderer.ShapedTextCache
   */
 private[layout] object LigatureCertificate:
 
+  /** How wide `text` is shaped as layout shapes it, and whether any glyph of it is set off the baseline. */
   final case class ShapedRun(width: Float, offBaseline: Boolean)
 
-  /** Shapes `chars` as the layout does for a font asking for ligatures; must not keep the array. */
-  type Shaper = (Font, FontRenderContext, Array[Char]) => ShapedRun
+  /** Shapes `text` as the layout does for a font asking for ligatures; it must not keep the text. */
+  type Shaper = String => ShapedRun
 
   /** The rows a wrap gives `text` at a width of the given pixels. */
   type RowsOf = (String, Int) => Int
 
   private val WidthTolerancePerCharPx = 0.01f
-  private val BaselineTolerancePx     = 0.001
+  private val BaselineTolerancePx     = 0.001f
 
-  val javaShaper: Shaper = (font, frc, chars) =>
-    val glyphs = font.layoutGlyphVector(frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
-    val count  = glyphs.getNumGlyphs
-    ShapedRun(
-      glyphs.getGlyphPosition(count).getX.toFloat,
-      (0 to count).exists(index => math.abs(glyphs.getGlyphPosition(index).getY) > BaselineTolerancePx)
-    )
+  /** The width the measurer shapes `text` to in `font`, ligatures and all, and whether it sets a glyph off the
+    * baseline.
+    */
+  def measuredShaper(font: FontSpec, measurer: TextMeasurer): Shaper = text =>
+    val run = measurer.shape(text, 0, FontRun(0, text.length, font), 0.toByte)
+    ShapedRun(run.advancePx, run.ys.exists(y => math.abs(y) > BaselineTolerancePx))
 
-  def of(font: Font, frc: FontRenderContext): Option[NominalAdvances] = of(font, frc, javaShaper)
+  def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
+    of(font, measurer, measuredShaper(font, measurer), wrapRows(font, measurer))
 
-  def of(font: Font, frc: FontRenderContext, shaper: Shaper): Option[NominalAdvances] =
-    of(font, frc, shaper, wrapRows(font, frc))
-
-  def of(font: Font, frc: FontRenderContext, shaper: Shaper, rowsOf: RowsOf): Option[NominalAdvances] =
-    val shapedText = ShapedTextCache()
+  def of(font: FontSpec, measurer: TextMeasurer, shaper: Shaper, rowsOf: RowsOf): Option[NominalAdvances] =
     NominalAdvances
-      .ofLayoutAdvances(font, frc, shapedText)
-      .filter(_ => GlyphAdvances.advancesAreUniform(font, frc, shapedText.probes))
-      .filter(keepsWidth(_, font, frc, shaper))
+      .table(font, measurer)
+      .filter(keepsWidth(_, shaper))
       .filter(agreesWithWrap(_, rowsOf))
 
   private val Printable    = (0x20 to 0x7e).map(_.toChar).toArray
   private val SymbolsSpace = Printable.filterNot(char => char.isLetterOrDigit)
 
-  private def keepsWidth(table: NominalAdvances, font: Font, frc: FontRenderContext, shaper: Shaper): Boolean =
-    runsOf(Printable, 2).forall(faithful(_, table, font, frc, shaper)) &&
-      runsOf(SymbolsSpace, 3).forall(faithful(_, table, font, frc, shaper))
+  private def keepsWidth(table: NominalAdvances, shaper: Shaper): Boolean =
+    runsOf(Printable, 2).forall(faithful(_, table, shaper)) &&
+      runsOf(SymbolsSpace, 3).forall(faithful(_, table, shaper))
 
-  private def runsOf(alphabet: Array[Char], length: Int): Iterator[Array[Char]] =
+  private def runsOf(alphabet: Array[Char], length: Int): Iterator[String] =
     val total = math.pow(alphabet.length.toDouble, length.toDouble).toInt
     Iterator.range(0, total).map { index =>
-      Array.tabulate(length)(position =>
-        alphabet((index / math.pow(alphabet.length.toDouble, (length - 1 - position).toDouble).toInt) % alphabet.length)
+      String(
+        Array.tabulate(length)(position =>
+          alphabet(
+            (index / math.pow(alphabet.length.toDouble, (length - 1 - position).toDouble).toInt) % alphabet.length
+          )
+        )
       )
     }
 
-  private def faithful(
-    chars: Array[Char],
-    table: NominalAdvances,
-    font: Font,
-    frc: FontRenderContext,
-    shaper: Shaper
-  ): Boolean =
-    val run = shaper(font, frc, chars)
-    val sum = chars.foldLeft(0.0f)((width, char) => width + table.advanceOf(char))
-    !run.offBaseline && math.abs(run.width - sum) <= WidthTolerancePerCharPx * chars.length
+  private def faithful(run: String, table: NominalAdvances, shaper: Shaper): Boolean =
+    val sum    = run.foldLeft(0.0f)((width, char) => width + table.advanceOf(char))
+    val shaped = shaper(run)
+    !shaped.offBaseline && math.abs(shaped.width - sum) <= WidthTolerancePerCharPx * run.length
 
   private def agreesWithWrap(table: NominalAdvances, rowsOf: RowsOf): Boolean =
     batteryLines.forall { text =>
@@ -91,12 +82,13 @@ private[layout] object LigatureCertificate:
       .map(math.max(1, _))
       .distinct
 
-  private def wrapRows(font: Font, frc: FontRenderContext): RowsOf =
-    val cache   = WrappedLineCache.bounded()
-    val metrics = CellMetrics.fromFont(font)
+  private def wrapRows(font: FontSpec, measurer: TextMeasurer): RowsOf =
+    val cache   = WrappedLineCache.bounded(layoutMemos = LayoutMemos(measurerSource = () => Some(measurer)))
+    val awt     = font.toAwt
+    val metrics = measurer.cellMetrics(font)
     (text, widthPx) =>
       TextLayoutSnapshot
-        .boundedVisualLinesForText(text, 0, widthPx, font, frc, cellMetricsOverride = Some(metrics), wrapCache = cache)
+        .boundedVisualLinesForText(text, 0, widthPx, awt, cellMetricsOverride = Some(metrics), wrapCache = cache)
         .length
         .max(1)
 

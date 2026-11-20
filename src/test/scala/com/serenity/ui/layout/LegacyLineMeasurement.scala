@@ -1,24 +1,26 @@
 package com.serenity.ui.layout
 
-import java.awt.font.{FontRenderContext, TextAttribute, TextHitInfo, TextLayout}
-import java.text.{AttributedString, StringCharacterIterator}
+import java.awt.font.FontRenderContext
+import java.text.StringCharacterIterator
 import java.util.Locale
 
 import com.ibm.icu.text.BreakIterator
 import com.serenity.richtext.ParagraphRole
 import com.serenity.state.models.{TextCaretStop, TextVisualLine}
+import com.serenity.testkit.TestMeasure
 import com.serenity.text.TextEditing
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
+import com.serenity.ui.layout.TextMeasurer.LineFonts
+import com.serenity.ui.renderer.FontSpec
 
 /** The wrap-and-measure algorithm as it stood before per-paragraph measurement: every row fitted by laying out a
-  * candidate prefix with `TextLayout`, and every row's carets read back from a `TextLayout` of that row alone. Kept as
-  * the reference the production path is checked against. Its display-width paths step by grapheme cluster, as the
-  * production cell paths do since #2365: an emoji cluster takes two cells and a row never ends inside a cluster.
+  * candidate prefix whole, and every row's carets read back from a shaping of that row alone. Kept as the reference the
+  * production path is checked against. Its display-width paths step by grapheme cluster, as the production cell paths
+  * do since #2365: an emoji cluster takes two cells and a row never ends inside a cluster.
   */
 object LegacyLineMeasurement:
 
-  private val lineExtents = FontLineExtents()
+  private val lineExtents = FontLineExtents(TestMeasure.measurer.cellMetrics)
 
   def wrap(
     text: String,
@@ -109,7 +111,7 @@ object LegacyLineMeasurement:
       then caretStops
       else caretStops.sortBy(_.xPx)
     val (heightPx, ascentPx) =
-      if measuredLayout then resolver.lineMetrics(frc, lineExtents, startColumn, endColumn) else (0, 0)
+      if measuredLayout then resolver.lineMetrics(lineExtents, startColumn, endColumn) else (0, 0)
     TextVisualLine(
       bufferLine = bufferLine,
       startColumn = startColumn,
@@ -182,6 +184,9 @@ object LegacyLineMeasurement:
         )
       )
 
+  /** Each row is shaped whole, one font run at a time, by the measurer layout measures with (#2660 item 2, step D2):
+    * the per-row measurement the paragraph-wide arrays must reproduce.
+    */
   private def unsnappedEdges(
     text: String,
     absoluteStartColumn: Int,
@@ -190,110 +195,29 @@ object LegacyLineMeasurement:
   ): RowEdges =
     if text.isEmpty then RowEdges(Vector(0.0f), Some(Vector(0.0f)))
     else
-      val fonts = (0 until text.length).map(index => resolver.fontAt(absoluteStartColumn + index)).distinct
-      val bidi  = java.text.Bidi.requiresBidi(text.toCharArray, 0, text.length)
-      if !fonts.forall(GlyphAdvances.layoutAdvanceMatchesSum(_, frc, FontProbes())) || (bidi && fonts.length > 1) then
-        RowEdges(textLayoutCaretXs(text, absoluteStartColumn, resolver, frc), None)
-      else glyphEdges(text, absoluteStartColumn, resolver, frc, bidi)
-
-  final private case class PlacedGlyph(char: Int, x: Float, advance: Float, rightToLeft: Boolean)
-
-  private def glyphEdges(
-    text: String,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext,
-    bidi: Boolean
-  ): RowEdges =
-    @annotation.tailrec
-    def runsFrom(index: Int, acc: Vector[(Int, Int, java.awt.Font)]): Vector[(Int, Int, java.awt.Font)] =
-      if index >= text.length then acc
-      else
-        val runFont = resolver.fontAt(absoluteStartColumn + index)
-        @annotation.tailrec
-        def runEnd(cursor: Int): Int =
-          if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
-          else cursor
-        val end = runEnd(index + 1)
-        runsFrom(end, acc :+ ((index, end, runFont)))
-    def shapeRun(start: Int, end: Int, runFont: java.awt.Font, rightToLeft: Boolean): (Vector[PlacedGlyph], Float) =
-      FontFirstUse.settle(runFont, frc)
-      val chars  = text.substring(start, end).toCharArray
-      val flag   = if rightToLeft then java.awt.Font.LAYOUT_RIGHT_TO_LEFT else java.awt.Font.LAYOUT_LEFT_TO_RIGHT
-      val glyphs = runFont.layoutGlyphVector(frc, chars, 0, chars.length, flag)
-      val count  = glyphs.getNumGlyphs
-      val starts = glyphs.getGlyphCharIndices(0, count, new Array[Int](count))
-      val xs     = glyphs.getGlyphPositions(0, count + 1, new Array[Float](2 * (count + 1)))
-      val placed = Vector.tabulate(count) { glyph =>
-        PlacedGlyph(start + starts(glyph), xs(2 * glyph), glyphs.getGlyphMetrics(glyph).getAdvance, rightToLeft)
-      }
-      (placed, xs(2 * count))
-    val (placed, advance) =
-      if bidi then
-        val paragraph = java.text.Bidi(text, java.text.Bidi.DIRECTION_DEFAULT_LEFT_TO_RIGHT)
-        val count     = paragraph.getRunCount
-        val levels    = Array.tabulate(count)(run => paragraph.getRunLevel(run).toByte)
-        val order     = Array.tabulate[AnyRef](count)(run => Integer.valueOf(run))
-        java.text.Bidi.reorderVisually(levels, 0, order, 0, count)
-        val runFont = resolver.fontAt(absoluteStartColumn)
-        order.toVector.foldLeft((Vector.empty[PlacedGlyph], 0.0f)) {
-          case ((acc, offset), boxed) =>
-            val run = boxed.asInstanceOf[Integer].intValue
-            val (glyphs, runAdvance) =
-              shapeRun(
-                paragraph.getRunStart(run),
-                paragraph.getRunLimit(run),
-                runFont,
-                paragraph.getRunLevel(run) % 2 == 1
-              )
-            (acc ++ glyphs.map(glyph => glyph.copy(x = glyph.x + offset)), offset + runAdvance)
+      @annotation.tailrec
+      def runsFrom(index: Int, acc: Vector[(Int, Int, FontSpec)]): Vector[(Int, Int, FontSpec)] =
+        if index >= text.length then acc
+        else
+          val runFont = resolver.fontAt(absoluteStartColumn + index)
+          @annotation.tailrec
+          def runEnd(cursor: Int): Int =
+            if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
+            else cursor
+          val end = runEnd(index + 1)
+          runsFrom(end, acc :+ ((index, end, runFont)))
+      val (carets, edges, advance) =
+        runsFrom(0, Vector.empty).foldLeft((Vector.empty[Float], Vector.empty[Float], 0.0f)) {
+          case ((carets, edges, offset), (start, end, runFont)) =>
+            val (runCarets, runEdges) =
+              TestMeasure.measurer.exactCaretsAndEdges(text.substring(start, end), 0, LineFonts(runFont, Vector.empty))
+            (
+              carets ++ (0 until end - start).map(index => offset + runCarets(index)),
+              edges ++ (0 until end - start).map(index => offset + runEdges(index)),
+              offset + runCarets(end - start)
+            )
         }
-      else
-        runsFrom(0, Vector.empty).foldLeft((Vector.empty[PlacedGlyph], 0.0f)) {
-          case ((acc, offset), (start, end, runFont)) =>
-            val (glyphs, runAdvance) = shapeRun(start, end, runFont, rightToLeft = false)
-            (acc ++ glyphs.map(glyph => glyph.copy(x = glyph.x + offset)), offset + runAdvance)
-        }
-    val own = text.indices.map { char =>
-      val at = placed.filter(_.char == char)
-      if at.isEmpty then None
-      else if at.head.rightToLeft then Some(at.map(glyph => glyph.x + glyph.advance).max)
-      else Some(at.map(_.x).min)
-    }
-    val stops = own.indices.map(char => own(char).orElse(own.drop(char + 1).flatten.headOption).getOrElse(advance))
-    val trailing = Option.unless(bidi) {
-      val pulls = text.indices.map { char =>
-        val glyph     = placed.indexWhere(_.char == char)
-        val spanStart = runsFrom(0, Vector.empty).exists(_._1 == char)
-        if glyph <= 0 || spanStart || placed(glyph).advance == 0.0f then 0.0f
-        else placed(glyph).x - placed.take(glyph).map(before => before.x + before.advance).max
-      }
-      (stops.indices.map(char => stops(char) - pulls(char)) :+ advance).toVector
-    }
-    RowEdges((stops :+ advance).toVector, trailing)
-
-  private def textLayoutCaretXs(
-    text: String,
-    absoluteStartColumn: Int,
-    resolver: LineFontResolver,
-    frc: FontRenderContext
-  ): Vector[Float] =
-    val attributed = AttributedString(text)
-    @annotation.tailrec
-    def applyRuns(index: Int): Unit =
-      if index < text.length then
-        val runFont = resolver.fontAt(absoluteStartColumn + index)
-        @annotation.tailrec
-        def runEnd(cursor: Int): Int =
-          if cursor < text.length && resolver.fontAt(absoluteStartColumn + cursor) == runFont then runEnd(cursor + 1)
-          else cursor
-        val end = runEnd(index + 1)
-        attributed.addAttribute(TextAttribute.FONT, runFont, index, end)
-        applyRuns(end)
-    applyRuns(0)
-    val layout = TextLayout(attributed.getIterator, frc)
-    (0 until text.length).toVector.map(index => layout.getCaretInfo(TextHitInfo.leading(index))(0)) :+
-      layout.getAdvance
+      RowEdges(carets :+ advance, Some(edges :+ advance))
 
   private def fittingLength(
     line: String,

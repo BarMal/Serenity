@@ -2,7 +2,7 @@ package com.serenity.ui.skia
 
 import java.awt.{Color, Font, Rectangle}
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.{FramePixels, SkiaFrames}
@@ -26,7 +26,7 @@ class PaintLogSpec extends AnyFlatSpec with Matchers:
       height,
       1.0,
       persists = true,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface.clearViewport(RenderColor.fromAwt(Color.BLACK))
     surface.setForegroundColor(RenderColor.fromAwt(Color.WHITE))

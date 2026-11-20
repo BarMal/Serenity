@@ -9,6 +9,7 @@ import scala.collection.mutable
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.benchmark.BenchmarkCaches
 import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.skia.SkiaTextCaches
@@ -41,9 +42,16 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   private def hasBar(caches: RenderCaches, state: AppState): Boolean =
     caches.authoritativeScene.forState(state, viewport, codeFont, textFont).paneScrolls.nonEmpty
 
+  "The benchmark's caches" should "measure with the measurer they are given, as the app's do, not lay text on the cell grid" in {
+    val bench = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
+
+    bench.shared().measurer shouldBe defined
+    bench.cold(bench.shared()).measurer shouldBe defined
+  }
+
   "The shared caches" should "leave a long document's scrollbar out of the first scene, as the app does" in {
     val state = longDocument
-    val bench = new BenchmarkCaches(new ByHand)
+    val bench = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
 
     hasBar(bench.shared(), state) shouldBe false
   }
@@ -51,7 +59,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   it should "show the bar once the rows have been counted" in {
     val state    = longDocument
     val executor = new ByHand
-    val caches   = new BenchmarkCaches(executor).shared()
+    val caches   = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, executor).shared()
     hasBar(caches, state) shouldBe false
 
     executor.runAll()
@@ -61,7 +69,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
 
   "A cold frame's caches" should "count rows late too" in {
     val state = longDocument
-    val bench = new BenchmarkCaches(new ByHand)
+    val bench = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
 
     hasBar(bench.cold(bench.shared()), state) shouldBe false
   }
@@ -69,7 +77,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   it should "let a newer cold frame's count replace an older one, as a newer scene does in the app" in {
     val state    = longDocument
     val executor = new ByHand
-    val bench    = new BenchmarkCaches(executor)
+    val bench    = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, executor)
     val shared   = bench.shared()
     val first    = bench.cold(shared)
     val second   = bench.cold(shared)
@@ -83,7 +91,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   }
 
   it should "keep the Java2D font cache and start everything else empty" in {
-    val bench  = new BenchmarkCaches(new ByHand)
+    val bench  = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
     val shared = bench.shared()
     val cold   = bench.cold(shared)
 
@@ -95,7 +103,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   }
 
   it should "keep Skia's fonts and start its shaped text and images empty" in {
-    val bench      = new BenchmarkCaches(new ByHand)
+    val bench      = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
     val shared     = bench.shared()
     val sharedSkia = SkiaTextCaches.of(shared.backendCaches)
     val coldSkia   = SkiaTextCaches.of(bench.cold(shared).backendCaches)
@@ -106,7 +114,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   }
 
   it should "shape text again, with the faces it already has" in {
-    val bench      = new BenchmarkCaches(new ByHand)
+    val bench      = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
     val shared     = bench.shared()
     val sharedSkia = SkiaTextCaches.of(shared.backendCaches)
     val face       = sharedSkia.fonts.faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 14))).font
@@ -121,7 +129,7 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   }
 
   it should "report no faces built, since they were made before the cold frame" in {
-    val bench      = new BenchmarkCaches(new ByHand)
+    val bench      = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
     val shared     = bench.shared()
     val sharedSkia = SkiaTextCaches.of(shared.backendCaches)
     val _          = sharedSkia.fonts.faceFor(FontSpec.fromAwt(new Font(Font.SERIF, Font.PLAIN, 14)))
@@ -133,13 +141,13 @@ class BenchmarkCachesSpec extends AnyFlatSpec with Matchers with ColdFrameHarnes
   }
 
   it should "carry no Skia caches from a set that never drew with Skia" in {
-    val bench = new BenchmarkCaches(new ByHand)
+    val bench = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
 
     SkiaTextCaches.heldBy(bench.cold(bench.shared()).backendCaches) shouldBe false
   }
 
   "Both kinds of caches" should "count what each frame drew, so a scenario can report its shapings" in {
-    val bench  = new BenchmarkCaches(new ByHand)
+    val bench  = new BenchmarkCaches(TestMeasure.layoutMeasurerFor, new ByHand)
     val shared = bench.shared()
 
     shared.frameCounters.isEnabled shouldBe true

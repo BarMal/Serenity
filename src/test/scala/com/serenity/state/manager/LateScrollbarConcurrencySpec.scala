@@ -59,7 +59,10 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
       thread
     }
     val counts = new Semaphore(0)
-    val scene  = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => counts.release())
+    )
     val first  = stateOf(text(0))
     val states = (1 to 25).scanLeft(first)((before, round) => replaced(before, text(round)))
 
@@ -69,7 +72,10 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
     barLands(scene, last, counts, deadline = System.nanoTime + 120.seconds.toNanos) shouldBe true
     executor.shutdown()
     scene.forState(last, viewportSize).paneScrolls(paneId).extent shouldBe
-      AuthoritativeUiScene().forState(last, viewportSize).paneScrolls(paneId).extent
+      AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        .forState(last, viewportSize)
+        .paneScrolls(paneId)
+        .extent
   }
 
   it should "wait for the last text's bar however many earlier texts were announced first" in {
@@ -80,8 +86,11 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
     }
     val executor = new HoldableExecutor(inner)
     val counts   = new Semaphore(0)
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => counts.release()))
-    val states   = (1 to 25).scanLeft(stateOf(text(0)))((before, round) => replaced(before, text(round)))
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => counts.release())
+    )
+    val states = (1 to 25).scanLeft(stateOf(text(0)))((before, round) => replaced(before, text(round)))
 
     states.init.zipWithIndex.foreach { (state, announced) =>
       scene.forState(state, viewportSize)
@@ -97,7 +106,10 @@ class LateScrollbarConcurrencySpec extends AnyFlatSpec with Matchers:
     barLands(scene, last, counts, deadline = System.nanoTime + 120.seconds.toNanos) shouldBe true
     inner.shutdown()
     scene.forState(last, viewportSize).paneScrolls(paneId).extent shouldBe
-      AuthoritativeUiScene().forState(last, viewportSize).paneScrolls(paneId).extent
+      AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        .forState(last, viewportSize)
+        .paneScrolls(paneId)
+        .extent
   }
 
   /** A notice says some text's count ended, not that the last text's did, so a notice is only a reason to look again:

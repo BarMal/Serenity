@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 import java.util.concurrent.ConcurrentHashMap
 
 import com.serenity.markdown.MarkdownBlockLens.TableRow
@@ -14,7 +13,6 @@ import com.serenity.ui.layout.TextCaretMeasurement.{
   normalizeCollapsedCarets,
   rawMeasuredCaretXs
 }
-import com.serenity.ui.renderer.ShapedTextCache
 import com.serenity.ui.theme.HeadingSettings
 
 /** Measures the cells of Markdown pipe tables so their pipes can be lined up: the width of each column is the widest of
@@ -26,16 +24,15 @@ private[layout] object MarkdownTableMetrics:
   def columnsFor(
     content: Rope,
     font: Font,
-    frc: FontRenderContext,
     baseIsMonospaced: Boolean,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): TableColumns =
     val measured = new ConcurrentHashMap[Int, Columns]
     table =>
       Some(
         measured.computeIfAbsent(
           table.start,
-          _ => columnsOfTable(content, table, font, frc, baseIsMonospaced, shapedText)
+          _ => columnsOfTable(content, table, font, baseIsMonospaced, measuring)
         )
       )
 
@@ -43,23 +40,21 @@ private[layout] object MarkdownTableMetrics:
     content: Rope,
     table: Range.Inclusive,
     font: Font,
-    frc: FontRenderContext,
     baseIsMonospaced: Boolean,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): Columns =
-    columnsOf(table.map(line => content.getLine(line).getOrElse("")).toVector, font, frc, baseIsMonospaced, shapedText)
+    columnsOf(table.map(line => content.getLine(line).getOrElse("")).toVector, font, baseIsMonospaced, measuring)
 
   private def columnsOf(
     rows: Vector[String],
     font: Font,
-    frc: FontRenderContext,
     mono: Boolean,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): Columns =
     val measured = rows.zipWithIndex.collect {
       case (row, index) if index != 1 =>
         val resolver = hiddenMarkerResolver(row, if index == 0 then TableRow.Header else TableRow.Body, font, mono)
-        cellWidths(row, resolver, frc, shapedText)
+        cellWidths(row, resolver, measuring)
     }
     val count = measured.map(_.length).maxOption.getOrElse(0)
     Columns(
@@ -81,12 +76,11 @@ private[layout] object MarkdownTableMetrics:
   def cellWidths(
     line: String,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): Vector[Float] =
     if line.isEmpty then Vector.empty
     else
-      val carets = normalizeCollapsedCarets(rawMeasuredCaretXs(line, 0, resolver, frc, shapedText), resolver, 0)
+      val carets = normalizeCollapsedCarets(rawMeasuredCaretXs(line, 0, resolver, measuring), resolver, 0)
       MarkdownTableColumns.cells(line).map(cell => carets(cell.end) - carets(cell.start))
 
   /** `resolver`, the font resolver of a table row, with each cell padded out to its column. */
@@ -94,13 +88,12 @@ private[layout] object MarkdownTableMetrics:
     line: String,
     resolver: LineFontResolver,
     columns: Columns,
-    frc: FontRenderContext,
-    shapedText: ShapedTextCache
+    measuring: MeasuredBy
   ): LineFontResolver =
     val extra =
       MarkdownTableColumns.extraAdvances(
         line,
-        cellWidths(line, resolver, frc, shapedText),
+        cellWidths(line, resolver, measuring),
         columns,
         resolver.isHidden
       )

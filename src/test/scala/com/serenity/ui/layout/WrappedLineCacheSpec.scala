@@ -1,8 +1,8 @@
 package com.serenity.ui.layout
 
-import java.awt.font.FontRenderContext
+import java.awt.Font
+import java.awt.font.{FontRenderContext, TextAttribute}
 import java.awt.geom.AffineTransform
-import java.awt.{Font, RenderingHints}
 
 import com.serenity.richtext.{
   InlineMark,
@@ -14,6 +14,7 @@ import com.serenity.richtext.{
 }
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -45,7 +46,6 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       bufferLine,
       widthPx,
       font,
-      fontRenderContext,
       maxVisualLines = maxVisualLines,
       cellMetricsOverride = cellMetrics,
       forceCellLayout = forceCellLayout,
@@ -71,11 +71,11 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     )
 
   private def snapshot(buffer: Buffer, cache: WrappedLineCache, widthPx: Int = 200): TextLayoutSnapshot =
-    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, frc, wrapCache = cache)
+    TextLayoutSnapshot.fromBuffer(buffer, widthPx, serif, wrapCache = cache)
 
   "WrappedLineCache" should "serve a plain line identical to an uncached wrap" in {
-    val cache    = WrappedLineCache.bounded()
-    val uncached = wrap(prose, WrappedLineCache.Uncached)
+    val cache    = TestMeasure.wrapCache()
+    val uncached = wrap(prose, TestMeasure.wrapCache())
     wrap(prose, cache) shouldBe uncached
     wrap(prose, cache) shouldBe uncached
     cache.size shouldBe 1
@@ -90,25 +90,18 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
         boldTail(prose, 1, ParagraphRole.dropCap(lines = 2))
       )
     )
-    val cache    = WrappedLineCache.bounded()
-    val uncached = snapshot(buffer, WrappedLineCache.Uncached)
+    val cache    = TestMeasure.wrapCache()
+    val uncached = snapshot(buffer, TestMeasure.wrapCache())
     snapshot(buffer, cache) shouldBe uncached
     snapshot(buffer, cache) shouldBe uncached
     cache.size shouldBe 3
   }
 
   it should "miss whenever any ingredient of the wrap changes" in {
-    val cache = WrappedLineCache.bounded()
-    val plainFractional = FontRenderContext(
-      AffineTransform(),
-      RenderingHints.VALUE_TEXT_ANTIALIAS_OFF,
-      RenderingHints.VALUE_FRACTIONALMETRICS_ON
-    )
-    val noFractional = FontRenderContext(
-      AffineTransform(),
-      RenderingHints.VALUE_TEXT_ANTIALIAS_ON,
-      RenderingHints.VALUE_FRACTIONALMETRICS_OFF
-    )
+    val cache = TestMeasure.wrapCache()
+    // Layout reads the font's own ingredients, not a render context (Skia has none): ligatures and slant are two.
+    val withLigatures = sans.deriveFont(java.util.Map.of(TextAttribute.LIGATURES, TextAttribute.LIGATURES_ON))
+    val italic        = sans.deriveFont(Font.ITALIC)
     val variants: List[() => Vector[TextVisualLine]] = List(
       () => wrap(prose, cache),
       () => wrap(prose + "!", cache),
@@ -116,8 +109,8 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       () => wrap(prose, cache, font = serif),
       () => wrap(prose, cache, font = sans.deriveFont(14.0f)),
       () => wrap(prose, cache, font = sans.deriveFont(Font.BOLD)),
-      () => wrap(prose, cache, fontRenderContext = plainFractional),
-      () => wrap(prose, cache, fontRenderContext = noFractional),
+      () => wrap(prose, cache, font = withLigatures),
+      () => wrap(prose, cache, font = italic),
       () => wrap(prose, cache, font = mono, forceCellLayout = true),
       () => wrap(prose, cache, font = mono, cellMetrics = Some(CellMetrics(1, 1, 0)), forceCellLayout = true),
       () => wrap(prose, cache, font = mono, cellMetrics = Some(CellMetrics(1, 1, 0, true)), forceCellLayout = true)
@@ -137,29 +130,30 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     )
     val before = cache.size
     richVariants.zipWithIndex.foreach { (buffer, index) =>
-      snapshot(buffer, cache) shouldBe snapshot(buffer, WrappedLineCache.Uncached)
+      snapshot(buffer, cache) shouldBe snapshot(buffer, TestMeasure.wrapCache())
       withClue(s"rich variant $index should have missed: ")(cache.size shouldBe before + index + 1)
     }
   }
 
   it should "evict the least recently used lines beyond its line bound" in {
-    val cache = WrappedLineCache.bounded(maxLines = 3)
+    val cache = WrappedLineCache.bounded(maxLines = 3, layoutMemos = TestMeasure.layoutMemos())
     (0 until 10).foreach(index => wrap(s"line $index $prose", cache))
     cache.size shouldBe 3
     wrap("line 7 " + prose, cache)
     cache.size shouldBe 3
-    wrap("line 9 " + prose, cache) shouldBe wrap("line 9 " + prose, WrappedLineCache.Uncached)
+    wrap("line 9 " + prose, cache) shouldBe wrap("line 9 " + prose, TestMeasure.wrapCache())
   }
 
   it should "evict by retained characters as well as by line count" in {
-    val cache = WrappedLineCache.bounded(maxChars = prose.length.toLong * 2 + 10)
+    val cache =
+      WrappedLineCache.bounded(maxChars = prose.length.toLong * 2 + 10, layoutMemos = TestMeasure.layoutMemos())
     (0 until 6).foreach(index => wrap(s"$index$prose", cache))
     cache.size shouldBe 2
     cache.retainedChars should be <= (prose.length.toLong * 2 + 10)
   }
 
   it should "keep the default character bound small enough that edit leftovers cannot pin tens of megabytes" in {
-    val cache      = WrappedLineCache.bounded()
+    val cache      = TestMeasure.wrapCache()
     val paragraphs = (0 until 3000).map(index => s"$index $prose $prose $prose")
     paragraphs.foreach(paragraph => wrap(paragraph, cache))
     cache.retainedChars should be <= WrappedLineCache.DefaultMaxChars
@@ -170,21 +164,21 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   it should "rebase cached rows onto a line's new buffer line after a line is inserted above it" in {
     val text   = s"$prose\n\n$prose tail"
     val buffer = Buffer.fromString(BufferId(3), text).copy(viewport = Viewport(0, 0, 40, 40))
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     snapshot(buffer, cache)
     val populated = cache.size
 
     val inserted = Buffer.fromString(BufferId(3), "inserted\n" + text).copy(viewport = Viewport(0, 0, 40, 40))
     val cached   = snapshot(inserted, cache)
-    cached shouldBe snapshot(inserted, WrappedLineCache.Uncached)
+    cached shouldBe snapshot(inserted, TestMeasure.wrapCache())
     cached.visualLines.map(_.bufferLine).distinct shouldBe Vector(0, 1, 2, 3)
     cache.size shouldBe populated + 1
   }
 
   it should "answer a longer request after caching a row-limited wrap, and a shorter one after a full wrap" in {
-    val cache    = WrappedLineCache.bounded()
-    val full     = wrap(prose, WrappedLineCache.Uncached)
-    val firstTwo = wrap(prose, WrappedLineCache.Uncached, maxVisualLines = 2)
+    val cache    = TestMeasure.wrapCache()
+    val full     = wrap(prose, TestMeasure.wrapCache())
+    val firstTwo = wrap(prose, TestMeasure.wrapCache(), maxVisualLines = 2)
     wrap(prose, cache, maxVisualLines = 2) shouldBe firstTwo
     wrap(prose, cache) shouldBe full
     wrap(prose, cache, maxVisualLines = 2) shouldBe firstTwo
@@ -192,7 +186,7 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   }
 
   it should "keep serving the very rows a row-limited wrap handed out once a full wrap replaces it" in {
-    val cache    = WrappedLineCache.bounded()
+    val cache    = TestMeasure.wrapCache()
     val limited  = wrap(prose, cache, maxVisualLines = 2)
     val full     = wrap(prose, cache)
     val rowsKept = limited.zip(full).map((before, after) => before.row eq after.row)
@@ -226,12 +220,12 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   )
 
   it should "wrap varied lines identically with and without the cache" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     forAll(layouts) { (font, widthPx, cellMetrics, forceCell) =>
       forAll(variedLines) { line =>
         def run(c: WrappedLineCache, limit: Int) =
           wrap(line, c, widthPx, font, cellMetrics = cellMetrics, forceCellLayout = forceCell, maxVisualLines = limit)
-        val expected = run(WrappedLineCache.Uncached, Int.MaxValue)
+        val expected = run(TestMeasure.wrapCache(), Int.MaxValue)
         run(cache, 2) shouldBe expected.take(2)
         run(cache, Int.MaxValue) shouldBe expected
         run(cache, Int.MaxValue) shouldBe expected
@@ -246,8 +240,8 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       else RichTextParagraph(List(RichTextRun(line, RichTextStyle.empty.withFontSize(18.0f))))
     }
     val buffer   = richBuffer(paragraphs).copy(viewport = Viewport(0, 0, 40, 400))
-    val cache    = WrappedLineCache.bounded()
-    val expected = snapshot(buffer, WrappedLineCache.Uncached, widthPx = 150)
+    val cache    = TestMeasure.wrapCache()
+    val expected = snapshot(buffer, TestMeasure.wrapCache(), widthPx = 150)
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
   }
@@ -258,16 +252,16 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
       frc.getAntiAliasingHint,
       frc.getFractionalMetricsHint
     )
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val state = wrap(prose, cache)
     wrap(prose, cache, fontRenderContext = scaled) shouldBe state
     cache.size shouldBe 1
-    wrap(prose, WrappedLineCache.Uncached, fontRenderContext = scaled) shouldBe
-      wrap(prose, WrappedLineCache.Uncached)
+    wrap(prose, TestMeasure.wrapCache(), fontRenderContext = scaled) shouldBe
+      wrap(prose, TestMeasure.wrapCache())
   }
 
   it should "serve a line moved to another buffer line from the same cached rows, relabelling none of them" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     val above = wrap(prose, cache, bufferLine = 3)
     val moved = wrap(prose, cache, bufferLine = 4)
     moved.map(_.bufferLine).distinct shouldBe Vector(4)

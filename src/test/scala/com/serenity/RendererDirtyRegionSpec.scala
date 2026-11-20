@@ -76,7 +76,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       Damage.Nothing,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
@@ -88,7 +88,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // Shared across both render calls below (issue #1677): a real `StateManager` reuses one `RenderCaches` across
     // every frame it renders, and the previous-frame memory these dirty-region assertions depend on
     // (`RenderCaches.frameState`) lives on that one instance, not a JVM-wide singleton.
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       state,
@@ -124,7 +124,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // One shared owner paints both surfaces, exactly as one `StateManager` can render more than one window: frame
     // state is keyed per surface (`persistentContentKey`) within this single `RenderCaches`, so this is the real
     // test of that per-surface isolation -- not a workaround for it.
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       state,
@@ -164,7 +164,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -174,7 +174,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
@@ -206,7 +206,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         )
       )
 
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     RendererEntryPoints.render(
       before,
       cursorVisible = false,
@@ -243,7 +243,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         )
       )
     )
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       before,
@@ -287,7 +287,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     RendererEntryPoints.render(
       before,
       cursorVisible = false,
@@ -321,7 +321,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -331,7 +331,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(before, after),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     lines.foreach(line => drew(surface, line) shouldBe true)
@@ -346,7 +346,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       viewport,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface.clear()
     RendererEntryPoints.render(
@@ -356,7 +356,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
       viewport,
       None,
       DamageProducer.forTransition(state, state),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     drawnText(surface).mkString should include("Line 1, Col 1")
@@ -387,7 +387,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
     // config are all identical), so the transition damage is scoped narrowly to that one surface.
     val damage = DamageProducer.forTransition(before, after)
     damage shouldBe Damage.Surface(surfaceId)
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(
       before,
@@ -447,9 +447,9 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
           buffer,
           panelWidthPx,
           font,
-          TextLayoutSnapshot.defaultFontRenderContext(),
           wordWrapEnabled = true,
-          cellMetricsOverride = Some(cellMetrics)
+          cellMetricsOverride = Some(cellMetrics),
+          wrapCache = TestMeasure.wrapCache()
         )
         snapshot.visualLines.count(_.bufferLine == 0)
 
@@ -493,7 +493,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         viewport,
         None,
         Damage.Everything,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
       surface.clear()
       RendererEntryPoints.render(
@@ -503,7 +503,7 @@ class RendererDirtyRegionSpec extends AnyFlatSpec with Matchers:
         viewport,
         None,
         damage,
-        com.serenity.state.manager.RenderCaches.create()
+        com.serenity.testkit.TestMeasure.renderCaches()
       )
 
       // MARKERLINE's own buffer line, cursor, selection and content are all unchanged -- only paragraph 0's extra

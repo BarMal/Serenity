@@ -18,7 +18,7 @@ import com.serenity.state.undo.UndoState
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.TextMeasurer
 import com.serenity.ui.presets.UiPresetStore
-import com.serenity.ui.renderer.BackendCaches
+import com.serenity.ui.renderer.{BackendCaches, CacheSlots}
 import com.serenity.ui.theme.appearance.OsAppearanceDetector
 import com.serenity.ui.theme.config.AppThemeManager
 import fs2.Stream
@@ -229,14 +229,16 @@ object StateManager:
     dictionaryCache: DictionaryCache = DictionaryCache(),
     appearanceDetector: OsAppearanceDetector = OsAppearanceDetector.system,
     scrollCounting: ScrollCounting = ScrollCounting.Inline,
-    layoutMeasurerFor: BackendCaches => Option[TextMeasurer] = _ => None
+    layoutMeasurerFor: BackendCaches => Option[TextMeasurer] = _ => None,
+    sharedBackendCaches: CacheSlots = new CacheSlots
   )(using Balance, LoggerFactory[IO]): IO[StateManager] =
     val themeManager = AppThemeManager.create
     val renderCaches =
       RenderCaches.create(
         initialConfig.surfaceConfig.rendererFrameStateCacheCapacity,
         scrollCounting,
-        measurerFor = layoutMeasurerFor
+        measurerFor = layoutMeasurerFor,
+        sharedBackendCaches = sharedBackendCaches
       )
     for
       resolvedSessionRootOverride <- resolveSessionRootOverride(sessionRootOverride)
@@ -246,7 +248,10 @@ object StateManager:
         Model(
           app = initialState.copy(runtime =
             initialState.runtime
-              .copy(themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames))
+              .copy(
+                themeDiscovery = initialState.runtime.themeDiscovery.copy(availableThemeNames = themeNames),
+                anchorWraps = renderCaches.anchorWraps
+              )
           ),
           undo = UndoState(maxUndoDepth = policy.maxUndoDepth)
         )

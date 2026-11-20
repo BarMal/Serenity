@@ -5,8 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger
 import cats.effect.unsafe.IORuntime
 import com.serenity.keystroke.events.{PageDown, ScrollDown}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor}
+import com.serenity.state.manager.ScrollCountExecutor
 import com.serenity.state.models.{AppState, BufferId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.LayoutEngine
 
 /** Rows for how performance scales with many open buffers and with split panes (#2478), each with a hypothesis it can
@@ -48,7 +49,7 @@ private[perf] object ScalingBenchmarks:
       if open == 1 then Vector(base)
       else (2 to open).map(index => MultiBufferFixture.switchTo(base, BufferId(index))).toVector
     val next                       = new AtomicInteger(0)
-    def coldFrame(state: AppState) = LaptopFrameBenchmarks.renderedFrame(state, RenderCaches.create(), image)
+    def coldFrame(state: AppState) = LaptopFrameBenchmarks.renderedFrame(state, TestMeasure.renderCaches(), image)
     BenchmarkRunner.Benchmark.building(shown)(
       BenchmarkRunner.Benchmark(
         s"buffers.switch_cold_frame.open_$open.${kind.label}.skia_raster",

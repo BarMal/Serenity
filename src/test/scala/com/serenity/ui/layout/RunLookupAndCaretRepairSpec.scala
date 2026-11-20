@@ -3,6 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.ui.layout.TextCaretMeasurement.{ColumnFontRun, FontSpan, LineFontResolver}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.matchers.{MatchResult, Matcher}
@@ -14,13 +15,15 @@ class RunLookupAndCaretRepairSpec extends AnyFlatSpec with Matchers:
 
   /** Every third column is a gap, so lookups hit runs, run edges and uncovered columns alike. */
   private def manyRuns(count: Int): Vector[ColumnFontRun] =
-    Vector.tabulate(count)(i => ColumnFontRun(i * 3, i * 3 + 2, fonts(i % fonts.size), hidden = i % 7 == 0))
+    Vector.tabulate(count)(i =>
+      ColumnFontRun(i * 3, i * 3 + 2, FontSpec.fromAwt(fonts(i % fonts.size)), hidden = i % 7 == 0)
+    )
 
   private def linearRunAt(runs: Vector[ColumnFontRun], column: Int): Option[ColumnFontRun] =
     runs.find(run => column >= run.startColumn && column < run.endColumn)
 
-  private def linearFontAt(runs: Vector[ColumnFontRun], column: Int): Font =
-    linearRunAt(runs, column).map(_.font).getOrElse(base)
+  private def linearFontAt(runs: Vector[ColumnFontRun], column: Int): FontSpec =
+    linearRunAt(runs, column).map(_.font).getOrElse(FontSpec.fromAwt(base))
 
   private def linearFontRuns(runs: Vector[ColumnFontRun], start: Int, end: Int): Vector[FontSpan] =
     val cuts = (runs
@@ -51,7 +54,7 @@ class RunLookupAndCaretRepairSpec extends AnyFlatSpec with Matchers:
 
   "LineFontResolver.fontAt" should "match a linear scan on every column of a many-run line" in {
     val runs     = manyRuns(1500)
-    val resolver = LineFontResolver(base, runs)
+    val resolver = LineFontResolver(FontSpec.fromAwt(base), runs)
     (-2 to 4510).foreach { column =>
       withClue(s"column $column: ")(resolver.fontAt(column) shouldBe linearFontAt(runs, column))
       withClue(s"column $column: ")(resolver.isHidden(column) shouldBe linearRunAt(runs, column).exists(_.hidden))
@@ -60,24 +63,24 @@ class RunLookupAndCaretRepairSpec extends AnyFlatSpec with Matchers:
 
   it should "match a linear scan when runs overlap, as the first listed run wins" in {
     val runs = Vector(
-      ColumnFontRun(0, 10, fonts(0)),
-      ColumnFontRun(4, 6, fonts(1)),
-      ColumnFontRun(8, 20, fonts(2)),
-      ColumnFontRun(2, 3, fonts(3))
+      ColumnFontRun(0, 10, FontSpec.fromAwt(fonts(0))),
+      ColumnFontRun(4, 6, FontSpec.fromAwt(fonts(1))),
+      ColumnFontRun(8, 20, FontSpec.fromAwt(fonts(2))),
+      ColumnFontRun(2, 3, FontSpec.fromAwt(fonts(3)))
     )
-    val resolver = LineFontResolver(base, runs)
+    val resolver = LineFontResolver(FontSpec.fromAwt(base), runs)
     (-1 to 22).foreach(column => resolver.fontAt(column) shouldBe linearFontAt(runs, column))
   }
 
   it should "match a linear scan when runs are listed out of order" in {
     val runs     = manyRuns(40).reverse
-    val resolver = LineFontResolver(base, runs)
+    val resolver = LineFontResolver(FontSpec.fromAwt(base), runs)
     (-1 to 125).foreach(column => resolver.fontAt(column) shouldBe linearFontAt(runs, column))
   }
 
   "LineFontResolver.fontRuns" should "match the linear cut-and-merge over windows of a many-run line" in {
     val runs     = manyRuns(300)
-    val resolver = LineFontResolver(base, runs)
+    val resolver = LineFontResolver(FontSpec.fromAwt(base), runs)
     val windows = for start <- Vector(0, 1, 2, 3, 100, 451); end <- Vector(0, 1, 5, 6, 200, 899, 1000)
     yield (start, end)
     windows.foreach { (start, end) =>

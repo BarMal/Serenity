@@ -1,9 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
-
-import com.serenity.ui.renderer.{FontFirstUse, ShapedTextCache}
 
 /** Stable keyboard-focus identity for an interactive surface primitive. */
 final case class SurfaceFocusId(value: String)
@@ -20,29 +17,20 @@ enum SurfaceAction:
 /** Device-independent intrinsic size produced by the pure surface layout pass. */
 final case class SurfaceIntrinsicSize(width: Double, height: Double)
 
-/** Immutable text metrics used to resolve proportional surface content in logical pixels. */
-final case class SurfaceCompositionMetrics(
-    font: Font,
-    fontRenderContext: FontRenderContext,
-    lineHeightPx: Double,
-    shapedText: ShapedTextCache
-):
+/** Immutable text metrics used to resolve proportional surface content in logical pixels, measured by the owner of
+  * `memos`.
+  */
+final private[serenity] case class SurfaceCompositionMetrics(font: Font, lineHeightPx: Double, memos: LayoutMemos):
 
   /** Measure text with the same proportional shaping helper used by editor and overlay rendering. */
   def textWidth(text: String): Double =
-    TextLayoutSnapshot.caretXsForText(text, font, shapedText, fontRenderContext).lastOption.getOrElse(0.0f).toDouble
+    TextLayoutSnapshot.caretXsForText(text, font, memos).lastOption.getOrElse(0.0f).toDouble
 
-object SurfaceCompositionMetrics:
+private[serenity] object SurfaceCompositionMetrics:
 
-  /** Build immutable composition metrics from a UI font and render context. */
-  def fromFont(
-    font: Font,
-    fontRenderContext: FontRenderContext,
-    shapedText: ShapedTextCache
-  ): SurfaceCompositionMetrics =
-    FontFirstUse.settle(font, fontRenderContext)
-    val lineHeight = math.max(1.0, font.getLineMetrics("Mg", fontRenderContext).getHeight.toDouble)
-    SurfaceCompositionMetrics(font, fontRenderContext, lineHeight, shapedText)
+  /** Build immutable composition metrics from a UI font, its line box as the owner of `memos` measures it. */
+  def fromFont(font: Font, memos: LayoutMemos): SurfaceCompositionMetrics =
+    SurfaceCompositionMetrics(font, TextLayoutSnapshot.cellMetricsOf(font, memos).lineHeight.max(1).toDouble, memos)
 
 /** Paint operation emitted by the declarative surface layout. */
 enum SurfacePaintKind:

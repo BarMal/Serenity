@@ -107,7 +107,13 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
       .getOrElse(fail("Expected the lens overlay rect"))
 
     val (result, claimed) =
-      run(opened)(CommentLensMouseHitTesting.click(MouseClick(frame.x, frame.y), opened, AuthoritativeUiScene()))
+      run(opened)(
+        CommentLensMouseHitTesting.click(
+          MouseClick(frame.x, frame.y),
+          opened,
+          AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        )
+      )
 
     claimed shouldBe true
     result.effects shouldBe Nil
@@ -137,7 +143,13 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
       .getOrElse(fail("Expected the lens overlay rect"))
 
     val (result, claimed) =
-      run(opened)(CommentLensMouseHitTesting.click(MouseClick(frame.x, frame.y), opened, AuthoritativeUiScene()))
+      run(opened)(
+        CommentLensMouseHitTesting.click(
+          MouseClick(frame.x, frame.y),
+          opened,
+          AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        )
+      )
 
     claimed shouldBe true
     result.state.commentLensSurface.map(_.content) should matchPattern {
@@ -148,14 +160,20 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   it should "decline a click when no lens is open" in {
     val state = editorState("hello world")
 
-    run(state)(CommentLensMouseHitTesting.click(MouseClick(1, 1), state, AuthoritativeUiScene()))._2 shouldBe false
+    run(state)(
+      CommentLensMouseHitTesting.click(
+        MouseClick(1, 1),
+        state,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
+    )._2 shouldBe false
   }
 
   it should "address the lens and a peek stacked above it as separate targets" in {
     val stacked = AboveCursorStackFixtures.lensAndPeek(20, CommentLensMode.ReadOnly)
     val lens    = surfaceFrame(stacked, AboveCursorStackFixtures.lensId(stacked))
     val peek    = surfaceFrame(stacked, AboveCursorStackFixtures.peekId(stacked))
-    val scene   = AuthoritativeUiScene()
+    val scene   = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
 
     val (_, peekClaimed) =
       run(stacked)(CommentLensMouseHitTesting.click(MouseClick(peek.x, peek.y), stacked, scene))
@@ -277,7 +295,13 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val point = toolbarItemPoint(state, itemId = "italic")
 
     val (result, claimed) =
-      run(state)(ContextualToolbarHitTesting.click(MouseClick(point.x, point.y), state, AuthoritativeUiScene()))
+      run(state)(
+        ContextualToolbarHitTesting.click(
+          MouseClick(point.x, point.y),
+          state,
+          AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        )
+      )
 
     claimed shouldBe true
     result.state.persisted.focus shouldBe Focus.EditorPane(PaneId(0))
@@ -287,7 +311,10 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
   it should "decline a click with no toolbar open" in {
     val state = editorState("alpha beta")
 
-    run(state)(ContextualToolbarHitTesting.click(MouseClick(1, 1), state, AuthoritativeUiScene())) shouldBe ((
+    run(state)(
+      ContextualToolbarHitTesting
+        .click(MouseClick(1, 1), state, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
+    ) shouldBe ((
       ReducerResult(state, Nil),
       false
     ))
@@ -322,7 +349,11 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
 
     val (result, claimed) =
       run(state)(
-        CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state, AuthoritativeUiScene())
+        CommandRunnerMouseHitTesting.hover(
+          MouseMove(row.rect.x.toInt, row.rect.y.toInt),
+          state,
+          AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+        )
       )
 
     claimed shouldBe true
@@ -334,11 +365,21 @@ class OverlayMouseTransitionSpec extends AnyFlatSpec with Matchers with Contextu
     val state = openCommandRunner
     val row   = commandRunnerRow(state, 2)
     val hovered = run(state)(
-      CommandRunnerMouseHitTesting.hover(MouseMove(row.rect.x.toInt, row.rect.y.toInt), state, AuthoritativeUiScene())
+      CommandRunnerMouseHitTesting.hover(
+        MouseMove(row.rect.x.toInt, row.rect.y.toInt),
+        state,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
     )
     val enterOnHovered = CommandRunnerReducer.reduce(RunnerSubmit, hovered._1.state, CommandRegistry.withToggleUI)
 
-    val (result, claimed) = run(state)(CommandRunnerMouseHitTesting.click(clickAt(row), state, AuthoritativeUiScene()))
+    val (result, claimed) = run(state)(
+      CommandRunnerMouseHitTesting.click(
+        clickAt(row),
+        state,
+        AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
+      )
+    )
 
     claimed shouldBe true
     runnerFrom(result.state).activeSettingsSurface.map(_.current.groupId) shouldBe

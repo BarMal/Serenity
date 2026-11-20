@@ -9,8 +9,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.state.manager.RenderCaches
-import com.serenity.testkit.SdlNativeTest
+import com.serenity.testkit.{SdlNativeTest, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.renderer.{BackendCaches, FontSpec, RenderSurface, ScreenIdentity}
@@ -43,7 +42,7 @@ class SkiaGlPresenterNativeSpec extends AnyFlatSpec with Matchers with SkiaGlWin
       Width,
       Height,
       1.0,
-      RenderCaches.create().surfaceText,
+      TestMeasure.renderCaches().surfaceText,
       new BackendCaches,
       ScreenIdentity(new Object)
     )

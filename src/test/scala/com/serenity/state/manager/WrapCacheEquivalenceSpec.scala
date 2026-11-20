@@ -2,7 +2,8 @@ package com.serenity.state.manager
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -51,14 +52,14 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
       List(CursorPosition(58, 200), CursorPosition(59, 0))
 
   "CursorViewport.adjustForCursor" should "place the viewport identically with and without a wrap cache" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     for
       typewriter <- List(false, true)
       cursor     <- cursors
     do
       val state  = stateWith(cursor, typewriter)
       val buffer = state.persisted.buffers(bufferId)
-      val placed = CursorViewport.adjustForCursor(buffer, state, cursor)
+      val placed = CursorViewport.adjustForCursor(buffer, state, cursor, TestMeasure.measuringWrap())
       withClue(s"cursor $cursor, typewriter $typewriter: ") {
         CursorViewport.adjustForCursor(buffer, state, cursor, cache) shouldBe placed
         CursorViewport.adjustForCursor(buffer, state, cursor, cache) shouldBe placed
@@ -68,33 +69,38 @@ class WrapCacheEquivalenceSpec extends AnyFlatSpec with Matchers:
   it should "still bottom-align a cursor on the document's last screen" in {
     val state  = stateWith(CursorPosition(59, 0))
     val buffer = state.persisted.buffers(bufferId)
-    val placed = CursorViewport.adjustForCursor(buffer, state, CursorPosition(59, 0), WrappedLineCache.bounded())
+    val placed = CursorViewport.adjustForCursor(buffer, state, CursorPosition(59, 0), TestMeasure.wrapCache())
     val centred =
-      CursorViewport.adjustForCursor(buffer, stateWith(CursorPosition(59, 0), typewriter = true), CursorPosition(59, 0))
+      CursorViewport.adjustForCursor(
+        buffer,
+        stateWith(CursorPosition(59, 0), typewriter = true),
+        CursorPosition(59, 0),
+        TestMeasure.wrapCache()
+      )
     (placed.topLine, placed.topVisualLine) should not be ((centred.topLine, centred.topVisualLine))
   }
 
   "CursorViewport.ensureVisibleCursors" should "produce the same state with and without a wrap cache" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.sliding(2).foreach {
       case List(from, to) =>
         val before = stateWith(from)
         val after  = stateWith(to)
         CursorViewport.ensureVisibleCursors(before, after, cache) shouldBe
-          CursorViewport.ensureVisibleCursors(before, after)
+          CursorViewport.ensureVisibleCursors(before, after, TestMeasure.measuringWrap())
       case _ => ()
     }
   }
 
   "EditorGeometryProducer.forPane" should "build the same navigation geometry with and without a wrap cache" in {
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     cursors.foreach { cursor =>
       val state = stateWith(cursor)
       withClue(s"cursor $cursor: ") {
         EditorGeometryProducer.forPane(state, paneId, wrapCache = cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId)
+          EditorGeometryProducer.forPane(state, paneId, wrapCache = TestMeasure.measuringWrap())
         EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20, wrapCache = cache) shouldBe
-          EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20)
+          EditorGeometryProducer.forPane(state, paneId, rowsAbove = 20, wrapCache = TestMeasure.measuringWrap())
       }
     }
   }

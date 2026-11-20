@@ -89,7 +89,7 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val highlightedRun = surface.drawRunPxCalls.find(_.s == "beta").getOrElse(fail("Expected \"beta\" to be drawn"))
@@ -138,7 +138,7 @@ class DiagnosticHighlightThemeSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val highlightedRun = surface.drawRunPxCalls.find(_.s == "beta").getOrElse(fail("Expected \"beta\" to be drawn"))

@@ -5,7 +5,8 @@ import scala.util.Random
 import cats.syntax.all.*
 import com.serenity.config.AppConfig
 import com.serenity.state.models.AppState
-import com.serenity.ui.layout.{ColumnPaging, ScrollLimits, ViewportSize, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{ColumnPaging, ScrollLimits, ViewportSize}
 import com.serenity.ui.tui.{TuiEnvironment, TuiKey, TuiKeys, TuiScreen, TuiScript, TuiSpec}
 
 /** The invariant #2570 items 2-5 broke in different ways: after every step a shown buffer's viewport is a place it may
@@ -46,11 +47,11 @@ class ViewportInvariantTuiSpec extends TuiSpec:
       resting <-
         val surface = current.persisted.config.surfaceConfig
         if surface.columnModeEnabled && surface.wordWrapEnabled then
-          Some(CursorViewport.ColumnPages.of(buffer, current, WrappedLineCache.Uncached).pageHolding(top))
+          Some(CursorViewport.ColumnPages.of(buffer, current, TestMeasure.wrapCache()).pageHolding(top))
         else
           val limit = ScrollLimits.last(
-            CursorViewport.visualRowsFor(buffer, current, WrappedLineCache.Uncached),
-            CursorViewport.rowsThatFit(buffer, current)
+            CursorViewport.visualRowsFor(buffer, current, TestMeasure.wrapCache()),
+            CursorViewport.rowsThatFit(buffer, current, TestMeasure.layoutMemos())
           )
           val (line, row) = limit.clamp(top.line, top.row)
           Some(ColumnPaging.ColumnStart(line, row))

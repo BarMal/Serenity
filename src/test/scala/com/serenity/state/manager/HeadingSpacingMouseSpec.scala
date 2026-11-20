@@ -63,7 +63,7 @@ class HeadingSpacingMouseSpec extends AnyFlatSpec with Matchers:
     )
 
   private def cacheOf(state: AppState): MouseTargetCache =
-    MouseTargetCache.fromState(state, viewportSize, AuthoritativeUiScene())
+    MouseTargetCache.fromState(state, viewportSize, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
 
   /** Where the text of each visual row starts and ends, stacked from the pane's top by its own measured heights and
     * space -- worked out here from the rows, not from the metrics under test.

@@ -47,7 +47,8 @@ private[perf] object ScrollbarTiming:
         val _ = stamps.put(paneId, System.nanoTime() - started.get)
         arrived.release()
     )
-    val caches = RenderCaches.create(scrollCounting = counting)
+    val caches =
+      RenderCaches.create(scrollCounting = counting, measurerFor = com.serenity.testkit.TestMeasure.layoutMeasurerFor)
     started.set(System.nanoTime())
     val _        = LaptopFrameBenchmarks.renderedFrame(state, caches, LaptopFrameBenchmarks.frameImage())
     val expected = lateBars(state)

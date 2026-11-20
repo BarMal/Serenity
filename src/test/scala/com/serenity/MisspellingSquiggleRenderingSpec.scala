@@ -57,7 +57,7 @@ class MisspellingSquiggleRenderingSpec extends AnyFlatSpec with Matchers:
       cursorVisible = false,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
     surface
 

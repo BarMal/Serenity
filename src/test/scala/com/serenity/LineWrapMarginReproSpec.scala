@@ -11,7 +11,7 @@ import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.*
-import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints, ShapedTextCache}
+import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -79,7 +79,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       cellMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val contentRuns =
@@ -90,7 +90,10 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
 
   private def rowWidthPx(runs: List[MockRenderSurface#DrawRunPxCall], usesTextFont: Boolean): Float =
     val measureFont = if usesTextFont then textFont else codeFont
-    TextLayoutSnapshot.caretXsForText(runs.map(_.s).mkString, measureFont, ShapedTextCache()).lastOption.getOrElse(0.0f)
+    TextLayoutSnapshot
+      .caretXsForText(runs.map(_.s).mkString, measureFont, TestMeasure.layoutMemos())
+      .lastOption
+      .getOrElse(0.0f)
 
   "RendererEntryPoints.render with a large horizontal margin (text font)" should
     "keep every wrapped row within the margin-adjusted content width" in {
@@ -142,7 +145,7 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
     val config    = AppConfig.default.editorConfig.fontConfig
     val columns   = 40
     val codeWidth = TestMeasure.cellMetrics(FontLoader.previewFontForRole(config, TypographyRole.Code)).charWidth
-    TextLayoutSnapshot.gridWrapWidthPx(columns, config) shouldBe columns * codeWidth
+    TextLayoutSnapshot.gridWrapWidthPx(columns, config, TestMeasure.layoutMemos()) shouldBe columns * codeWidth
   }
 
   // The scroll bug: CursorViewport.adjustForCursor decided which visual row holds the cursor (and hence
@@ -192,12 +195,19 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       val gridWrapWidthPx =
         TextLayoutSnapshot.gridWrapWidthPx(
           syncedBuffer.viewport.visibleColumns,
-          state.persisted.config.editorConfig.fontConfig
+          state.persisted.config.editorConfig.fontConfig,
+          TestMeasure.layoutMemos()
         )
       val trueVisualRow =
-        TextLayoutSnapshot.visualLineIndexForCursor(content, cursor.column, gridWrapWidthPx, proseFont)
+        TextLayoutSnapshot.visualLineIndexForCursor(
+          content,
+          cursor.column,
+          gridWrapWidthPx,
+          proseFont,
+          wrapCache = TestMeasure.wrapCache()
+        )
 
-      val adjusted = CursorViewport.adjustForCursor(syncedBuffer, state, cursor)
+      val adjusted = CursorViewport.adjustForCursor(syncedBuffer, state, cursor, TestMeasure.wrapCache())
 
       info(s"gridWrapWidthPx=$gridWrapWidthPx trueVisualRow=$trueVisualRow topVisualLine=${adjusted.topVisualLine}")
 
@@ -206,7 +216,9 @@ class LineWrapMarginReproSpec extends AnyFlatSpec with Matchers:
       // here the whole wrapped line is short enough to fit the viewport outright, so the clamp pins it to 0).
       // Measuring the caret's row at the buffer font's wider width (the bug this spec is named for) would instead
       // yield a different, too-small row.
-      val totalVisualRows  = TextLayoutSnapshot.boundedVisualLinesForText(content, 0, gridWrapWidthPx, proseFont).length
+      val totalVisualRows = TextLayoutSnapshot
+        .boundedVisualLinesForText(content, 0, gridWrapWidthPx, proseFont, wrapCache = TestMeasure.wrapCache())
+        .length
       val maxTopVisualLine = math.max(0, totalVisualRows - syncedBuffer.viewport.visibleLines)
       val expectedTopVisualLine =
         math.min(maxTopVisualLine, math.max(0, trueVisualRow - syncedBuffer.viewport.visibleLines / 2))

@@ -5,6 +5,7 @@ import com.serenity.frontend.FrontendCapabilities
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{TextLayoutSnapshot, ViewportSize, WorkspaceNode, WorkspaceNodeId, WorkspaceTree}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -130,7 +131,8 @@ class HeadingSpacingColumnPagingSpec extends AnyFlatSpec with Matchers:
       columnWidthPx = 260,
       font = font,
       columnCount = 3,
-      headings = state.persisted.config.headingSettings
+      headings = state.persisted.config.headingSettings,
+      wrapCache = TestMeasure.wrapCache()
     )
 
     columns.size shouldBe 3

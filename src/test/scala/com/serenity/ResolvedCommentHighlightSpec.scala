@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
 import com.serenity.ui.renderer.{RendererEntryPoints, RendererHighlights}
 import com.serenity.ui.theme.Theme
@@ -57,19 +58,19 @@ class ResolvedCommentHighlightSpec extends AnyFlatSpec with Matchers:
   private val resolved = open.resolve
 
   "An unresolved comment" should "be highlighted" in {
-    highlightedCells(stateWith(open, showResolved = false), RenderCaches.create()) shouldBe 4
+    highlightedCells(stateWith(open, showResolved = false), TestMeasure.renderCaches()) shouldBe 4
   }
 
   "A resolved comment" should "not be highlighted while resolved comments are hidden" in {
-    highlightedCells(stateWith(resolved, showResolved = false), RenderCaches.create()) shouldBe 0
+    highlightedCells(stateWith(resolved, showResolved = false), TestMeasure.renderCaches()) shouldBe 0
   }
 
   it should "be highlighted while resolved comments are shown" in {
-    highlightedCells(stateWith(resolved, showResolved = true), RenderCaches.create()) shouldBe 4
+    highlightedCells(stateWith(resolved, showResolved = true), TestMeasure.renderCaches()) shouldBe 4
   }
 
   it should "come and go with the toggle even when the frame caches are reused" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
 
     highlightedCells(stateWith(resolved, showResolved = false), caches) shouldBe 0
     highlightedCells(stateWith(resolved, showResolved = true), caches) shouldBe 4

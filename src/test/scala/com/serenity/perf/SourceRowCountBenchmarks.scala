@@ -60,7 +60,7 @@ private[perf] object SourceRowCountBenchmarks:
 
   /** What wrapping each line on its own says, which no shortcut takes part in. */
   private def wrappedRows(font: Font): Int =
-    val cache = WrappedLineCache.bounded()
+    val cache = TestMeasure.wrapCache()
     lines.zipWithIndex.map { (text, line) =>
       TextLayoutSnapshot
         .boundedVisualLinesForText(
@@ -81,8 +81,8 @@ private[perf] object SourceRowCountBenchmarks:
       lazy val expected = wrappedRows(font)
       // With ligatures on the certificate is built once, off the render path, so it is ready before any count; with
       // them off it is measured on the spot, and a fresh set of memos charges every count for it.
-      lazy val shared = LayoutMemos(_.run())
-      val memos       = () => if ligatures then shared else LayoutMemos(_.run())
+      lazy val shared = TestMeasure.layoutMemos(_.run())
+      val memos       = () => if ligatures then shared else TestMeasure.layoutMemos(_.run())
       lazy val certificate: Unit =
         if ligatures then
           val _ = totalRows(font, shared)

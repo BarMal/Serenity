@@ -75,7 +75,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val surface      = new MockRenderSurface(100, 30, persistentContent = true)
     val viewportSize = ViewportSize(100, 30)
 
-    val caches = com.serenity.state.manager.RenderCaches.create()
+    val caches = com.serenity.testkit.TestMeasure.renderCaches()
     RendererEntryPoints.render(state, cursorVisible = false, surface, viewportSize, caches)
 
     val layout  = LayoutEngine.calculateLayout(state, viewportSize)
@@ -98,7 +98,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
   it should "paint every surface stacked above the cursor, not just one of them" in {
     val state   = AboveCursorStackFixtures.lensAndPeek(20)
     val surface = new MockRenderSurface(100, 30, persistentContent = true)
-    val caches  = com.serenity.state.manager.RenderCaches.create()
+    val caches  = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(state, cursorVisible = false, surface, AboveCursorStackFixtures.StackViewport, caches)
 
@@ -124,7 +124,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
       cursorVisible = true,
       surface,
       ViewportSize(100, 30),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.rectClipCalls shouldBe empty
@@ -147,7 +147,7 @@ class RendererFloatingPanelsSpec extends AnyFlatSpec with Matchers:
     val withoutPeek  = baseState()
     val surface      = new MockRenderSurface(100, 30, persistentContent = true)
     val viewportSize = ViewportSize(100, 30)
-    val caches       = com.serenity.state.manager.RenderCaches.create()
+    val caches       = com.serenity.testkit.TestMeasure.renderCaches()
 
     RendererEntryPoints.render(withPeek, cursorVisible = false, surface, viewportSize, caches)
     RendererEntryPoints.render(withoutPeek, cursorVisible = false, surface, viewportSize, caches)

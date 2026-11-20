@@ -12,7 +12,7 @@ import com.serenity.keystroke.events.{Enter, InsertChar}
 import com.serenity.session.SessionManager
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.AppState
-import com.serenity.testkit.{AwaitCondition, SharedDictionary}
+import com.serenity.testkit.{AwaitCondition, SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.ui.theme.config.AppThemeManager
@@ -33,7 +33,8 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
         testLogger("EditIdleSessionSaveSpec"),
         policy,
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- AppStartup.initializeState(
         editor,
@@ -59,7 +60,8 @@ class EditIdleSessionSaveSpec extends AnyFlatSpec with Matchers with StateManage
     StateManager(
       testLogger("EditIdleSessionSaveSpec-restart"),
       sessionRootOverride = Some(sessionRoot),
-      dictionaryCache = SharedDictionary.default
+      dictionaryCache = SharedDictionary.default,
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
     )
       .flatMap(_.sessionService.loadSession)
       .map(bufferTexts)

@@ -73,7 +73,7 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
               .document
               .copy(content =
                 com.serenity.rope.Rope(
-                  "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu\nnu xi omicron pi rho sigma tau"
+                  "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu\nnu xi omicron pi rho sigma tau\nupsilon phi chi psi omega alpha beta gamma delta"
                 )
               )
           )
@@ -89,7 +89,8 @@ class ContextualToolbarPlacementSpec extends AnyFlatSpec with Matchers with Cont
     val movedHorizontally = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
     movedHorizontally.x should be > initialRect.x
 
-    stateManager.setCursorPosition(PaneId(0), 1, 12).unsafeRunSync()
+    // Two lines down, so the cursor's row moves on the grid whether the text's rows are shorter than the grid's or not.
+    stateManager.setCursorPosition(PaneId(0), 2, 12).unsafeRunSync()
 
     val movedVertically = toolbarRect(stateManager.getCurrentState.unsafeRunSync())
     movedVertically.y should be > movedHorizontally.y

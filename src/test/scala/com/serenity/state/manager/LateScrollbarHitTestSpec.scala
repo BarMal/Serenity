@@ -61,9 +61,12 @@ class LateScrollbarHitTestSpec extends AnyFlatSpec with Matchers:
   "A press on the strip of a pane whose rows are not counted" should "reach the text, and take hold of the bar once they are" in {
     val state    = stateOf(300)
     val executor = new ByHand
-    val scene    = AuthoritativeUiScene(scrollCounting = ScrollCounting.deferred(executor, _ => ()))
-    val waiting  = scene.forState(state, viewportSize)
-    val press    = onStrip(state, waiting)
+    val scene = AuthoritativeUiScene(
+      wrappedLines = com.serenity.testkit.TestMeasure.wrapCache(),
+      scrollCounting = ScrollCounting.deferred(executor, _ => ())
+    )
+    val waiting = scene.forState(state, viewportSize)
+    val press   = onStrip(state, waiting)
 
     ScrollbarHitTesting.barAt(press, state, waiting) shouldBe None
     MouseTransition.run(state)(ScrollbarHitTesting.press(press, state, waiting))._2 shouldBe false

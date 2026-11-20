@@ -13,7 +13,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader.FontConfig
 import com.serenity.ui.layout.*
@@ -99,7 +99,7 @@ final class UiScenarioDriver private (
     state.map { current =>
       val logicalWidth  = environment.viewport.width * environment.cellMetrics.charWidth
       val logicalHeight = environment.viewport.height * environment.cellMetrics.lineHeight
-      val caches        = com.serenity.state.manager.RenderCaches.create()
+      val caches        = com.serenity.testkit.TestMeasure.renderCaches()
       val frame0 = SkiaFrames.newFrame(
         math.ceil(logicalWidth * environment.deviceScale).toInt,
         math.ceil(logicalHeight * environment.deviceScale).toInt
@@ -372,7 +372,8 @@ object UiScenarioDriver:
         sessionRootOverride = Some(configuredSessionRoot),
         initialConfig = configuredInitialConfig,
         uiPresetStore = uiPresetStore.getOrElse(UiPresetStore.default),
-        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig)
+        dictionaryCache = SharedDictionary.cacheFor(configuredInitialConfig),
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       driver <- over(manager, environment, artifactDirectory)
     yield driver

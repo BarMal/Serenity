@@ -9,7 +9,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
 import com.serenity.state.reducers.PinnedPanelContentReducer
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.PanelPosition
 import com.serenity.ui.widget.Loadable
 import org.scalatest.flatspec.AnyFlatSpec
@@ -40,7 +40,8 @@ class GoToFileSpec extends AnyFlatSpec with Matchers:
       StateManager(
         logger,
         sessionRootOverride = Some(TestTemp.directory("go-to-file-session")),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       ).unsafeRunSync()
     stateManager
       .updateState(PinnedPanelContentReducer.pinExplorerRoot(PanelPosition.Left, root, 30, _).state)

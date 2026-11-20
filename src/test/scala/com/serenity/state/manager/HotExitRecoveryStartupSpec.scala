@@ -12,7 +12,7 @@ import com.serenity.command.{Command, CommandCategory, CommandIntent, SessionInt
 import com.serenity.keystroke.events.{Direction, InsertChar, ModalNavigate, ModalSubmit}
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import com.serenity.{StateManagerTestSupport, TestTemp}
@@ -36,7 +36,8 @@ class HotExitRecoveryStartupSpec extends AnyFlatSpec with Matchers with StateMan
       editor <- StateManager(
         testLogger("HotExitRecoveryStartupSpec"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
       _ <- editor.fileOpener.openFile(file)
@@ -52,7 +53,8 @@ class HotExitRecoveryStartupSpec extends AnyFlatSpec with Matchers with StateMan
       editor <- StateManager(
         testLogger("HotExitRecoveryStartupSpec-restart"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- AppStartup.initializeState(editor, editor.sessionStartupInfo, Theme.default, ViewportSize(80, 24))
       _ <- editor.executeCommand(resume)

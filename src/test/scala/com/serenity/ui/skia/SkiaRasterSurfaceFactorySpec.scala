@@ -5,7 +5,7 @@ import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 import javax.swing.JPanel
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FrameSurfaceRequest, RenderSurface}
@@ -30,7 +30,7 @@ class SkiaRasterSurfaceFactorySpec extends AnyFlatSpec with Matchers:
     val canvas = new JPanel
     canvas.setSize(widthPx, heightPx)
     val pool                                          = new ReusableImagePool()
-    val caches                                        = RenderCaches.create()
+    val caches                                        = TestMeasure.renderCaches()
     val changed                                       = new AtomicReference[Option[List[PixelRect]]](None)
     val shown: AtomicReference[Option[BufferedImage]] = new AtomicReference(None)
 

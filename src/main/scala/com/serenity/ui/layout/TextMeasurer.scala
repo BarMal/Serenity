@@ -59,7 +59,18 @@ trait TextMeasurer:
     * stops themselves.
     */
   def exactEdges(text: String, startColumn: Int, fonts: TextMeasurer.LineFonts): IArray[Float] =
-    TextCaretMeasurement.normalizeCollapsedCarets(exactCaretXs(text, startColumn, fonts))
+    TextCaretMeasurement.normalizeCollapsedCarets(exactCaretsAndEdges(text, startColumn, fonts)._2)
+
+  /** [[exactCaretXs]] and, from the same shaping, where each prefix of `text` ends as [[exactEdges]] has it, before
+    * collapsed carets are spread apart.
+    */
+  def exactCaretsAndEdges(
+    text: String,
+    startColumn: Int,
+    fonts: TextMeasurer.LineFonts
+  ): (IArray[Float], IArray[Float]) =
+    val carets = exactCaretXs(text, startColumn, fonts)
+    (carets, carets)
 
   /** Each character's caret plus the trailing edge as wrapping places it: the fixed cell grid when `measuredLayout` is
     * false, otherwise [[rawCaretXs]] with collapsed carets spread apart.
@@ -108,6 +119,10 @@ trait TextMeasurer:
 
   /** The largest cut at or before `limit` that shaping in `font` does not read across, or 0. */
   def shapingCutAtOrBefore(text: String, limit: Int, font: FontSpec): Int
+
+  /** Whether shaping `text` in `font` reads nothing across `cut`. */
+  def isShapingCut(text: String, cut: Int, font: FontSpec): Boolean =
+    cut > 0 && cut < text.length && shapingCutAtOrAfter(text, cut, font) == cut
 
   /** False when some character of `text` is shaped from its neighbours whatever the font, so [[advances]] cannot stand
     * in for laying the text out.

@@ -5,8 +5,8 @@ import java.io.StringWriter
 
 import com.serenity.config.{AppConfig, StatusLineColors, StatusLinePlacement}
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, Focus, PaneId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{
   CellMetrics,
@@ -56,7 +56,7 @@ class TerminalEditorChromeBackdropSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(font),
       CellMetrics.cellUnit,
       None,
-      RenderCaches.create()
+      TestMeasure.renderCaches()
     )
     surface.flush()
     TerminalEmulator.blank(viewport.width, viewport.height).consume(writer.toString)

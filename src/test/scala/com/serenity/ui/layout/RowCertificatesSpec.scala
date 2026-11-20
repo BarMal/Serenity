@@ -4,7 +4,9 @@ import java.util.concurrent.Executor
 
 import scala.collection.mutable.ArrayBuffer
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -27,11 +29,13 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
       queued.foreach(_.run())
 
   private def keyFor(ligatures: Boolean, sizePt: Float = 12.0f): NominalAdvances.Key =
-    NominalAdvances.Key(FontLoader.previewCodeFont(config.copy(fontSize = sizePt, enableLigatures = ligatures)), frc)
+    NominalAdvances.Key(
+      FontSpec.fromAwt(FontLoader.previewCodeFont(config.copy(fontSize = sizePt, enableLigatures = ligatures)))
+    )
 
   "A font set without ligatures" should "have its certificate at once, asking no builder" in {
     val builder      = QueuedExecutor()
-    val certificates = RowCertificates(builder)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
 
     certificates.of(keyFor(ligatures = false)) shouldBe defined
     builder.tasks shouldBe empty
@@ -39,7 +43,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A font set with ligatures" should "have no certificate until the builder has run, then have one" in {
     val builder      = QueuedExecutor()
-    val certificates = RowCertificates(builder)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = true)
 
     certificates.of(key) shouldBe None
@@ -50,7 +54,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   it should "ask the builder once, however often the certificate is asked for before it is ready" in {
     val builder      = QueuedExecutor()
-    val certificates = RowCertificates(builder)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = true)
 
     (1 to 5).foreach(_ => certificates.of(key))
@@ -66,7 +70,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
       )
       thread.start()
       thread.join()
-    val certificates = RowCertificates(builder)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = true)
 
     certificates.of(key)
@@ -77,8 +81,8 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   it should "keep a refusal: a font that cannot be certified is built once and never certified" in {
     val builder      = QueuedExecutor()
-    val certificates = RowCertificates(builder)
-    val proportional = NominalAdvances.Key(FontLoader.previewTextFont(config), frc)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
+    val proportional = NominalAdvances.Key(FontSpec.fromAwt(FontLoader.previewTextFont(config)))
 
     certificates.of(proportional) shouldBe None
     builder.runAll()
@@ -88,7 +92,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
   "A revoked certificate" should "stay gone for a font set with ligatures" in {
     val builder      = QueuedExecutor()
-    val certificates = RowCertificates(builder)
+    val certificates = RowCertificates(builder, () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = true)
     certificates.of(key)
     builder.runAll()
@@ -102,7 +106,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "stay gone for a font set without ligatures" in {
-    val certificates = RowCertificates(QueuedExecutor())
+    val certificates = RowCertificates(QueuedExecutor(), () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = false)
     certificates.of(key) shouldBe defined
 
@@ -112,7 +116,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "leave another font's certificate alone" in {
-    val certificates = RowCertificates(QueuedExecutor())
+    val certificates = RowCertificates(QueuedExecutor(), () => Some(TestMeasure.measurer))
     val twelve       = keyFor(ligatures = false, sizePt = 12.0f)
     val fourteen     = keyFor(ligatures = false, sizePt = 14.0f)
 
@@ -122,7 +126,7 @@ class RowCertificatesSpec extends AnyFlatSpec with Matchers with OptionValues:
   }
 
   it should "report whether it was revoked by this call, so a miscount is logged once" in {
-    val certificates = RowCertificates(QueuedExecutor())
+    val certificates = RowCertificates(QueuedExecutor(), () => Some(TestMeasure.measurer))
     val key          = keyFor(ligatures = false)
 
     certificates.revoke(key) shouldBe true

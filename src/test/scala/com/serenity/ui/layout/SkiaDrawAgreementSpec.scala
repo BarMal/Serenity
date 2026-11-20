@@ -16,7 +16,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaDrawAgreementSpec extends AnyFlatSpec with Matchers:
 
   private val faces     = TestBundledTypefaces.cacheWithInter()
-  private val stretches = new SkiaShapedTextCache()
+  private val stretches = new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf)
   private val measurer  = new SkiaTextMeasurer(faces, stretches)
 
   private val Height       = 48

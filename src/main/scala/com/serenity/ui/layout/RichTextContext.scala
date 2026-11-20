@@ -1,10 +1,9 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.config.MarkdownViewMode
-import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode}
+import com.serenity.markdown.{MarkdownBlockSpans, MarkdownInlineView, MarkerMode, TableColumns}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.state.models.{Buffer, Cursor, IndentationSettings}
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
@@ -65,7 +64,6 @@ object RichTextContext:
     markdownViewMode: MarkdownViewMode = MarkdownViewMode.Source,
     cellGrid: Boolean = false,
     wrapCache: WrappedLineCache = WrappedLineCache.Uncached,
-    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext(),
     tabSize: Int = IndentationSettings.DefaultTabSize,
     headings: HeadingSettings = HeadingSettings.default,
     openings: OpeningSettings = OpeningSettings.default,
@@ -78,7 +76,7 @@ object RichTextContext:
       document,
       RichTextStyling.proseZoom(font.getSize2D),
       dropCapsEnabled,
-      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font, frc),
+      markdownViewFor(buffer, markdownViewMode, cellGrid, wrapCache, font),
       tabSize,
       headings,
       document.flatMap(wrapCache.virtualDropCaps(_, openings)),
@@ -94,10 +92,9 @@ object RichTextContext:
     viewMode: MarkdownViewMode,
     cellGrid: Boolean,
     wrapCache: WrappedLineCache,
-    font: Font,
-    frc: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
+    font: Font
   ): MarkdownInlineView =
-    val mode = MarkerMode.of(viewMode, buffer.document.language, cellGrid)
+    val mode = MarkerMode.of(viewMode, buffer.document.language, cellGrid || wrapCache.layoutMemos.measurer.isEmpty)
     if mode == MarkerMode.Off || buffer.richText.richTextDocument.isDefined then MarkdownInlineView.Off
     else
       val content = buffer.document.content
@@ -107,9 +104,12 @@ object RichTextContext:
         Some(ContentRevision(buffer.document.contentVersion, buffer.document.changesSince))
       )
       val mono = FontLoader.isMonospacedFont(font)
-      val columns =
-        wrapCache.tableColumns(buffer.id, content, font, frc)(
-          MarkdownTableMetrics.columnsFor(content, font, frc, mono, wrapCache.shapedText)
+      val columns = wrapCache.layoutMemos
+        .measuring(measured = true)
+        .fold(TableColumns.None)(measuring =>
+          wrapCache.tableColumns(buffer.id, content, font)(
+            MarkdownTableMetrics.columnsFor(content, font, mono, measuring)
+          )
         )
       MarkdownInlineView(
         mode,

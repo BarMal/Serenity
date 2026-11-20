@@ -45,7 +45,7 @@ class OverlayClipShapeSpec extends AnyFlatSpec with Matchers:
   private val font    = Font(Font.MONOSPACED, Font.PLAIN, 12)
   private val metrics = TestMeasure.cellMetrics(font)
   private val config = AppConfig.conventional.withUiCornerRadiusPx(12).withDockedCornerStyle(DockedCornerStyle.Floating)
-  private val shaped = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+  private val shaped = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private def paint(surfaceId: Option[com.serenity.state.models.SurfaceId]): CountingSurface =
     val surface = new CountingSurface

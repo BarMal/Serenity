@@ -1,17 +1,17 @@
 package com.serenity.ui.layout
 
-import java.awt.Font
-import java.awt.font.FontRenderContext
-
 import scala.annotation.tailrec
 
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.ui.layout.TextMeasurer.LineFonts
+import com.serenity.ui.renderer.FontSpec
 
-/** The advance of each printable ASCII character in a font that nothing can set otherwise: no ligatures or kerning are
-  * asked for, the font's own tables substitute no glyph, and the layout's advance is the sum of the glyphs'. A line
-  * written in such characters then measures to the sum of these advances, to the float, which is what the wrap reads
-  * for it (`GlyphAdvances.measureRun`), so whether it fits a row can be read off them without wrapping the line. They
-  * are fractional and need not agree with the integer cell grid.
+/** The advance of each printable ASCII character in a font whose shaping sets none of them otherwise: the measurer
+  * finds every character of every pair of them, and of every triple of symbols and space (where operator ligatures
+  * live), context-free, so no kerning pair, ligature or contextual substitution moves one. A line written in such
+  * characters then measures to the sum of these advances, to the float, which is what the wrap reads for it
+  * ([[GlyphAdvances.measure]]), so whether it fits a row can be read off them without wrapping the line. They are
+  * fractional and need not agree with the integer cell grid. Runs longer than three characters are not enumerated, so
+  * the table is evidence, not proof; `UiSceneBuilder` checks it against the rows actually painted.
   */
 final private[serenity] class NominalAdvances private (advances: Array[Float]):
 
@@ -39,34 +39,47 @@ final private[serenity] class NominalAdvances private (advances: Array[Float]):
 
 private[serenity] object NominalAdvances:
 
-  /** What a font and rendering context are measured under; both compare structurally. */
-  final case class Key(font: Font, frc: FontRenderContext)
+  /** The font a table is measured for; the owner's measurer is the rest of what it depends on. */
+  final case class Key(font: FontSpec)
 
   private val FirstPrintable = 0x20
   private val LastPrintable  = 0x7e
   private val NotPrintable   = -1.0f
 
-  /** The table for `font`, or `None` when something may set a character at an advance other than its own. */
-  def of(font: Font, frc: FontRenderContext): Option[NominalAdvances] =
-    val shapedText = ShapedTextCache()
-    if GlyphAdvances.shapingMaySubstitute(font, frc, shapedText.probes) then None
-    else ofLayoutAdvances(font, frc, shapedText)
+  private val Printable    = (FirstPrintable to LastPrintable).map(_.toChar).toVector
+  private val SymbolsSpace = Printable.filterNot(_.isLetterOrDigit)
 
-  /** The table of a font whose layout advance is the sum of its glyphs', whatever shaping may do to a run. The caller
-    * answers for that: see [[LigatureCertificate]].
+  /** Every pair of printable characters and every triple of symbols and space, in runs of whole pairs and triples. A
+    * run is shaped with float positions, which past about 130,000 px cannot tell the hundredth of a pixel that
+    * [[GlyphAdvances.ShapingTolerancePx]] allows, so the battery is not one run; each run is short enough to hold the
+    * measurer's lock only briefly.
     */
-  private[layout] def ofLayoutAdvances(
-    font: Font,
-    frc: FontRenderContext,
-    shapedText: ShapedTextCache
-  ): Option[NominalAdvances] =
-    if GlyphAdvances.layoutAdvanceMatchesSum(font, frc, shapedText.probes) then measured(font, frc, shapedText)
-    else None
+  private lazy val Battery: Vector[String] =
+    val pairs   = for first <- Printable; second <- Printable yield s"$first$second"
+    val triples = for a <- SymbolsSpace; b <- SymbolsSpace; c <- SymbolsSpace yield s"$a$b$c"
+    (pairs ++ triples).grouped(ElementsPerRun).map(_.mkString).toVector
 
-  private def measured(font: Font, frc: FontRenderContext, shapedText: ShapedTextCache): Option[NominalAdvances] =
-    val resolver = TextCaretMeasurement.singleFontResolver(font)
-    val each = (FirstPrintable to LastPrintable).map { code =>
-      GlyphAdvances.measure(code.toChar.toString, 0, 1, 0, resolver, frc, shapedText)
-    }
-    val advances = each.map(_.caretsFrom(0, 1)(1)).toArray
-    Option.when(each.forall(_.isContextFree(0, 1)) && advances.forall(_ > 0.0f))(new NominalAdvances(advances))
+  private val ElementsPerRun = 333
+
+  /** The table for `font`, or `None` when the measurer may set some character at an advance other than its own: always
+    * for a font set with ligatures, whose certificate is [[LigatureCertificate]]'s.
+    */
+  def of(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
+    Option
+      .unless(font.ligatures)(font)
+      .flatMap(table(_, measurer))
+      .filter(_ =>
+        Battery.forall(run =>
+          measurer.mayMeasureByAdvances(run) &&
+            measurer.advances(run, 0, run.length, 0, LineFonts(font, Vector.empty)).isContextFree(0, run.length)
+        )
+      )
+
+  /** Each printable character's own advance in `font`, whatever shaping may do to a run of them. The caller answers for
+    * that: see [[LigatureCertificate]].
+    */
+  private[layout] def table(font: FontSpec, measurer: TextMeasurer): Option[NominalAdvances] =
+    val alphabet = Printable.mkString
+    val each     = measurer.advances(alphabet, 0, alphabet.length, 0, LineFonts(font, Vector.empty))
+    val advances = Array.tabulate(alphabet.length)(index => each.caretsFrom(index, 1)(1))
+    Option.when(advances.forall(_ > 0.0f))(new NominalAdvances(advances))

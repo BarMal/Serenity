@@ -5,6 +5,7 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{FontLineExtents, TextLayoutSnapshot}
 import com.serenity.ui.theme.{HeadingSettings, HeadingStyle, TextStyle, Theme}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -38,7 +39,7 @@ class HeadingPaintAgreementSpec extends AnyFlatSpec with Matchers:
     HeadingSettings(styles = HeadingStyle.defaults.updated(0, HeadingStyle.default(1).copy(sizeScale = scale)))
 
   private def snapshotWith(headings: HeadingSettings): TextLayoutSnapshot =
-    TextLayoutSnapshot.fromBuffer(buffer, 600, font, headings = headings)
+    TextLayoutSnapshot.fromBuffer(buffer, 600, font, headings = headings, wrapCache = TestMeasure.wrapCache())
 
   private def paintedTitle(snapshot: TextLayoutSnapshot): TextStyle =
     val row = snapshot.visualLines.headOption.getOrElse(fail("expected a title row"))
@@ -62,7 +63,7 @@ class HeadingPaintAgreementSpec extends AnyFlatSpec with Matchers:
 
     painted.fontSize shouldBe Some(3.0f * 12.0f * snapshot.proseScale)
     val paintedFont = TextStyle.styledFont(font, painted)
-    row.heightPx shouldBe FontLineExtents().of(paintedFont, frc).heightPx
+    row.heightPx shouldBe FontLineExtents(TestMeasure.measurer.cellMetrics).of(FontSpec.fromAwt(paintedFont)).heightPx
   }
 
   it should "still use today's 22pt at the default settings" in {

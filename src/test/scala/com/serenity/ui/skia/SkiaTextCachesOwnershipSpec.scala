@@ -25,20 +25,20 @@ class SkiaTextCachesOwnershipSpec extends AnyFlatSpec with Matchers:
     surface.text.drawShapedRunPx(0.0f, 0, widthPx.toFloat, metrics.lineHeight, metrics.ascent, line, 0, line.length)
 
   "Two RenderCaches" should "own distinct Skia text caches" in {
-    val (a, b) = (RenderCaches.create(), RenderCaches.create())
+    val (a, b) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
 
     (SkiaTextCaches.of(a.backendCaches) `ne` SkiaTextCaches.of(b.backendCaches)) shouldBe true
     (SkiaTextCaches.of(a.backendCaches).shapedText `ne` SkiaTextCaches.of(b.backendCaches).shapedText) shouldBe true
   }
 
   "One RenderCaches" should "give every ask the same Skia text caches" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     (SkiaTextCaches.of(owner.backendCaches) eq SkiaTextCaches.of(owner.backendCaches)) shouldBe true
   }
 
   "Drawing a row through an owned surface" should "shape it in that owner's cache and no other's" in {
-    val (owner, other) = (RenderCaches.create(), RenderCaches.create())
+    val (owner, other) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
 
     drawn(owner)
 

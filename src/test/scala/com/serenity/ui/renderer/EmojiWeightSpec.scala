@@ -6,6 +6,7 @@ import java.nio.file.Paths
 
 import com.serenity.ReferenceFrames
 import com.serenity.state.models.TextVisualLine
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.{CellMetrics, RichTextContext, TextLayoutSnapshot}
@@ -45,8 +46,8 @@ class EmojiWeightSpec extends AnyFlatSpec with Matchers:
         0,
         10_000,
         fontOf(style),
-        frc,
-        richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = fallback)
+        richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, fallback = fallback),
+        wrapCache = TestMeasure.wrapCache()
       )
       .head
 

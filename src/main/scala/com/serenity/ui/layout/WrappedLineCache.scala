@@ -1,7 +1,6 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{ArrayDeque, HashMap, LinkedHashMap}
 
@@ -18,10 +17,10 @@ import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
 import com.serenity.ui.renderer.ShapedTextCache
 
-/** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the AWT `TextLayout` work that otherwise
-  * dominates every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for
-  * the same lines. One instance lives on [[com.serenity.state.manager.RenderCaches]] so both paths share it. Results
-  * are identical with or without a cache.
+/** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the shaping work that otherwise dominates
+  * every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for the same
+  * lines. One instance lives on [[com.serenity.state.manager.RenderCaches]] so both paths share it. Results are
+  * identical with or without a cache.
   *
   * It also owns each buffer's [[VisualLineIndex]] of the row counts those wraps produce, which shares its keys' notion
   * of what a wrap depends on and so belongs with it.
@@ -77,9 +76,7 @@ sealed abstract class WrappedLineCache:
   /** The column geometry of `content`'s pipe tables at `font`, which `compute` measures; a cache keeps it for as long
     * as the content is the same rope and the font the same.
     */
-  def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-    compute: => TableColumns
-  ): TableColumns
+  def tableColumns(bufferId: BufferId, content: Rope, font: Font)(compute: => TableColumns): TableColumns
 
   /** The openings of `document` that `settings` set as drop caps. Finding them reads the whole document, so a cache
     * keeps the openings of the documents it was last asked about: a layout asks about one document many times over
@@ -102,13 +99,12 @@ sealed abstract class WrappedLineCache:
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
   * carries the base font and the per-column rich-text run fonts (style, size and prose zoom are all baked into those
-  * fonts).
+  * fonts). What measures them is the measurer of the cache's owner, the same for every key the cache holds.
   */
 final private[layout] case class WrappedLineKey(
     text: String,
     panelWidthPx: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     baseColumn: Int,
@@ -119,13 +115,12 @@ final private[layout] case class WrappedLineKey(
   override lazy val hashCode: Int = scala.util.hashing.MurmurHash3.caseClassHash(this)
 
   def shape: WrapShape =
-    WrapShape(panelWidthPx, resolver, frc, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapIndentPx)
+    WrapShape(panelWidthPx, resolver, measuredLayout, cellMetrics, baseColumn, paragraphRole, dropCapIndentPx)
 
 /** [[WrappedLineKey]] without its text: lines that share a shape wrap alike wherever their text agrees. */
 final private[layout] case class WrapShape(
     panelWidthPx: Int,
     resolver: LineFontResolver,
-    frc: FontRenderContext,
     measuredLayout: Boolean,
     cellMetrics: CellMetrics,
     baseColumn: Int,
@@ -208,9 +203,8 @@ object WrappedLineCache:
     def fenceIndex(bufferId: BufferId, content: Rope, revision: Option[ContentRevision]): BlockIndex =
       LazyBlockIndex.of(content)
 
-    def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-      compute: => TableColumns
-    ): TableColumns = compute
+    def tableColumns(bufferId: BufferId, content: Rope, font: Font)(compute: => TableColumns): TableColumns =
+      compute
 
     def virtualDropCaps(document: RichTextDocument, settings: OpeningSettings): Option[VirtualDropCaps] =
       VirtualDropCaps.of(settings, document)
@@ -246,12 +240,7 @@ object WrappedLineCache:
   def sharing(shapedText: ShapedTextCache, layoutMemos: LayoutMemos = LayoutMemos()): Bounded =
     new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText, layoutMemos)
 
-  final private case class TableColumnsEntry(
-      content: Rope,
-      font: Font,
-      frc: FontRenderContext,
-      columns: TableColumns
-  )
+  final private case class TableColumnsEntry(content: Rope, font: Font, columns: TableColumns)
 
   final private case class FenceEntry(content: Rope, version: Option[Long], index: LazyBlockIndex)
 
@@ -325,13 +314,11 @@ object WrappedLineCache:
     /** How many times a layout has asked this cache for a fallback coverage. */
     def fallbackCoverageLookups: Long = coverages.lookups
 
-    def tableColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext)(
-      compute: => TableColumns
-    ): TableColumns =
-      cachedColumns(bufferId, content, font, frc).getOrElse {
+    def tableColumns(bufferId: BufferId, content: Rope, font: Font)(compute: => TableColumns): TableColumns =
+      cachedColumns(bufferId, content, font).getOrElse {
         val found = compute
         synchronized {
-          val _ = columns.put(bufferId, TableColumnsEntry(content, font, frc, found))
+          val _ = columns.put(bufferId, TableColumnsEntry(content, font, found))
           if columns.size() > MaxFenceIndexes then
             val eldest = columns.keySet().iterator()
             val _      = eldest.next()
@@ -340,9 +327,9 @@ object WrappedLineCache:
         found
       }
 
-    private def cachedColumns(bufferId: BufferId, content: Rope, font: Font, frc: FontRenderContext) = synchronized {
+    private def cachedColumns(bufferId: BufferId, content: Rope, font: Font) = synchronized {
       Option(columns.get(bufferId)).collect {
-        case entry if sameRope(entry.content, content) && entry.font == font && entry.frc == frc => entry.columns
+        case entry if sameRope(entry.content, content) && entry.font == font => entry.columns
       }
     }
 

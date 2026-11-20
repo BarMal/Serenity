@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters.*
 import cats.effect.ExitCode
 import cats.effect.unsafe.implicits.global
 import com.serenity.TestTemp
-import com.serenity.testkit.DisplayExclusive
+import com.serenity.testkit.{DisplayExclusive, TestMeasure}
 import io.circe.parser.parse
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -23,7 +23,9 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     val directory = TestTemp.directory("render-benchmark")
     val captured  = new ByteArrayOutputStream()
     val code = DisplayExclusive(
-      RenderBenchmark.run(small, directory, new PrintStream(captured, true), startup = "X11 (test)").unsafeRunSync()
+      RenderBenchmark
+        .run(small, directory, new PrintStream(captured, true), TestMeasure.layoutMeasurerFor, startup = "X11 (test)")
+        .unsafeRunSync()
     )
     code shouldBe ExitCode.Success
     val printed = captured.toString
@@ -43,7 +45,12 @@ class RenderBenchmarkSpec extends AnyFlatSpec with Matchers:
     assume(GraphicsEnvironment.isHeadless, "only meaningful without a display")
     val captured = new ByteArrayOutputStream()
     RenderBenchmark
-      .run(small, TestTemp.directory("render-benchmark"), new PrintStream(captured, true))
+      .run(
+        small,
+        TestTemp.directory("render-benchmark"),
+        new PrintStream(captured, true),
+        TestMeasure.layoutMeasurerFor
+      )
       .unsafeRunSync() shouldBe ExitCode.Error
     captured.toString should include("display")
   }

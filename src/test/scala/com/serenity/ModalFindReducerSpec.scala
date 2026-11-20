@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.{Leaf, Rope}
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, ModalEventReducer, WorkflowEffect}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.layout.{SurfaceAction, TextLayoutSnapshot}
 import com.serenity.ui.widget.TextField
@@ -375,9 +376,10 @@ class ModalFindReducerSpec extends AnyFlatSpec with Matchers with FindModalFixtu
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        updatedState.persisted.config.editorConfig.fontConfig
+        updatedState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 
     buffer.viewport.topLine shouldBe 0
     buffer.viewport.topVisualLine should be > 0

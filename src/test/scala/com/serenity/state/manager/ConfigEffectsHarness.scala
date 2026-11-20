@@ -79,7 +79,7 @@ trait ConfigEffectsHarness:
         fontConfig => fonts.update(_ :+ fontConfig),
         IO.pure(deviceTextScale),
         editor,
-        com.serenity.state.manager.RenderCaches.create(),
+        com.serenity.testkit.TestMeasure.renderCaches(),
         showNotice = notice => notices.update(_ :+ notice),
         configOnDisk = configOnDisk,
         loadConfig = loadConfig

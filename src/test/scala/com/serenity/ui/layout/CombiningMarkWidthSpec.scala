@@ -20,8 +20,16 @@ class CombiningMarkWidthSpec extends AnyFlatSpec with Matchers:
   private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
   private val font   = Font(Font.MONOSPACED, Font.PLAIN, 14)
   private val cellPx = TestMeasure.cellMetrics(font).charWidth
+
   private def rows(text: String, widthPx: Int = 10_000) =
-    TextLayoutSnapshot.boundedVisualLinesForText(text, 0, widthPx, font, frc, forceCellLayout = true)
+    TextLayoutSnapshot.boundedVisualLinesForText(
+      text,
+      0,
+      widthPx,
+      font,
+      forceCellLayout = true,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   "CharWidth.of" should "give a combining mark no cells, whichever kind of mark it is" in {
     CharWidth.of(0x0301) shouldBe 0

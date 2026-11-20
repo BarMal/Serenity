@@ -79,7 +79,7 @@ final case class Runtime(
     // Never persisted: the last chrome layouts, which one keystroke's scene, hit-testing and accessibility paths share.
     chromeLayouts: ChromeLayoutMemo = ChromeLayoutMemo(),
     // Never persisted: the wraps measured while locating a caret, which are a function of the state alone.
-    anchorWraps: AnchorWrapCache = AnchorWrapCache(),
+    anchorWraps: AnchorWrapCache = AnchorWrapCache()(),
     // Never persisted: the prose font's measured widths, which only a font change alters.
     proseGlyphWidths: ProseGlyphWidths = ProseGlyphWidths(),
     // Never persisted: the notes pane's source headings as of its last retarget (#1848). See `NotesPaneSync`.

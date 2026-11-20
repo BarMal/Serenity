@@ -8,7 +8,7 @@ import com.serenity.markdown.MarkdownBlockLens.FenceRangeIndex
 import com.serenity.markdown.{MarkdownInlineView, MarkerMode}
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
-import com.serenity.ui.renderer.ShapedTextCache
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.theme.{HeadingScale, HeadingSettings, HeadingStyle, TextStyle}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -32,7 +32,7 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
     )
 
   private def advance(text: String, font: Font): Float =
-    TextLayoutSnapshot.caretXsForText(text, font, ShapedTextCache(), frc).last
+    TextLayoutSnapshot.caretXsForText(text, font, TestMeasure.layoutMemos()).last
 
   private def view(
     mode: MarkerMode,
@@ -51,8 +51,8 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
       bufferLine,
       4000,
       serif,
-      frc,
-      richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, markdown = inline, headings = headings)
+      richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, markdown = inline, headings = headings),
+      wrapCache = TestMeasure.wrapCache()
     )
 
   private def read(text: String, headings: HeadingSettings = HeadingSettings.default): TextVisualLine =
@@ -119,7 +119,7 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
 
   "A Markdown heading's rows" should "not be served from a cache that holds them under other heading settings" in {
     val title  = "# A heading long enough to wrap once it grows larger than the body"
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val big    = HeadingsConfig().withLevel(1)(_.copy(size = Some(4.0f))).settings(12.0f)
     val inline = view(MarkerMode.Read)
 
@@ -130,20 +130,19 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
           0,
           260,
           serif,
-          frc,
           wrapCache = wrapCache,
           richText = RichTextContext(None, 1.0f, dropCapsEnabled = true, markdown = inline, headings = headings)
         )
         .map(row => (row.text, row.widthPx, row.heightPx))
 
     val first = wrapped(HeadingSettings.default, cache)
-    wrapped(big, cache) shouldBe wrapped(big, WrappedLineCache.Uncached)
+    wrapped(big, cache) shouldBe wrapped(big, TestMeasure.wrapCache())
     wrapped(big, cache) should not be first
     wrapped(HeadingSettings.default, cache) shouldBe first
   }
 
   it should "be counted again once the heading settings change" in {
-    val cache  = WrappedLineCache.bounded()
+    val cache  = TestMeasure.wrapCache()
     val base   = Buffer.fromString(BufferId(1), "# A heading long enough to wrap once it grows larger than the body")
     val buffer = base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
     val big    = HeadingsConfig().withLevel(1)(_.copy(size = Some(4.0f))).settings(12.0f)
@@ -196,7 +195,14 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
   ) =
     val base   = Buffer.fromString(BufferId(1), text)
     val buffer = base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
-    TextLayoutSnapshot.fromBuffer(buffer, 4000, serif, frc, markdownViewMode = mode, headings = headings)
+    TextLayoutSnapshot.fromBuffer(
+      buffer,
+      4000,
+      serif,
+      markdownViewMode = mode,
+      headings = headings,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   private def xOf(line: TextVisualLine, column: Int): Float = line.xForColumn(column).getOrElse(-1.0f)
 
@@ -255,9 +261,15 @@ class MarkdownBlockLayoutSpec extends AnyFlatSpec with Matchers:
   }
 
   "A heading line in a buffer" should "make its row taller than the body line under it" in {
-    val base     = Buffer.fromString(BufferId(1), "# Title\nbody")
-    val buffer   = base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, 4000, serif, frc, markdownViewMode = MarkdownViewMode.Read)
+    val base   = Buffer.fromString(BufferId(1), "# Title\nbody")
+    val buffer = base.copy(document = base.document.copy(language = Some(LanguageId.Markdown)))
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      buffer,
+      4000,
+      serif,
+      markdownViewMode = MarkdownViewMode.Read,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
     snapshot.visualLines(0).heightPx should be > snapshot.visualLines(1).heightPx
   }

@@ -180,19 +180,16 @@ object PinnedPanelRenderer:
     measure: Option[PanelTextMeasure]
   ): Unit =
     surface.setForegroundColor(foreground)
-    val measured = for
-      m   <- measure
-      frc <- surface.text.fontRenderContext
-    yield (m, frc)
-    measured match
-      case Some((m, frc)) =>
+    // A surface with no font render context is a terminal, which draws cells, not measured runs.
+    measure.filter(_ => surface.text.fontRenderContext.nonEmpty) match
+      case Some(m) =>
         val availablePx = (widthCells * cellMetrics.charWidth - math.round(textInsetPx).toInt).max(1)
-        val fitted      = fitting(text.stripTrailing(), availablePx, m, frc)
+        val fitted      = fitting(text.stripTrailing(), availablePx, m)
         if fitted.nonEmpty then
           surface.text.drawRunPx(
             cellMetrics.toPixelX(x).toFloat,
             cellMetrics.toPixelY(y),
-            m.advances.advanceOf(fitted, m.font, frc).max(1.0f),
+            m.advances.advanceOf(fitted, m.font).max(1.0f),
             cellMetrics.lineHeight,
             cellMetrics.ascent,
             fitted
@@ -204,10 +201,9 @@ object PinnedPanelRenderer:
   private def fitting(
     text: String,
     availablePx: Int,
-    measure: PanelTextMeasure,
-    frc: java.awt.font.FontRenderContext
+    measure: PanelTextMeasure
   ): String =
-    def width(length: Int): Float = measure.advances.advanceOf(text.take(length), measure.font, frc)
+    def width(length: Int): Float = measure.advances.advanceOf(text.take(length), measure.font)
     if width(text.length) <= availablePx then text
     else
       @annotation.tailrec

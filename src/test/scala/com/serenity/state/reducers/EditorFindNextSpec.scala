@@ -4,6 +4,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.rope.Balance
 import com.serenity.state.manager.CursorViewport
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextLayoutSnapshot
 import com.serenity.ui.widget.TextField
 import org.scalatest.flatspec.AnyFlatSpec
@@ -258,9 +259,10 @@ class EditorFindNextSpec extends AnyFlatSpec with Matchers:
     val wrapPx =
       TextLayoutSnapshot.gridWrapWidthPx(
         buffer.viewport.visibleColumns,
-        updatedState.persisted.config.editorConfig.fontConfig
+        updatedState.persisted.config.editorConfig.fontConfig,
+        TestMeasure.layoutMemos()
       )
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, wrapPx, font, wrapCache = TestMeasure.wrapCache())
 
     cursor shouldBe CursorPosition(0, needleColumn)
     buffer.viewport.topLine shouldBe 0

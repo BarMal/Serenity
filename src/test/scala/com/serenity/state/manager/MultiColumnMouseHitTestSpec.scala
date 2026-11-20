@@ -53,7 +53,7 @@ class MultiColumnMouseHitTestSpec extends AnyFlatSpec with Matchers:
       runtime = base.runtime.copy(capabilities = FrontendCapabilities.tui(), viewportSize = Some(viewportSize))
     )
 
-  private val authoritativeScene = AuthoritativeUiScene()
+  private val authoritativeScene = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
 
   private def targeting(state: AppState): EditorMouseTargeting =
     val cacheRef = Ref.unsafe[IO, Option[MouseTargetCache]](None)

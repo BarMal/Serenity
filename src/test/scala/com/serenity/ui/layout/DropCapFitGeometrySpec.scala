@@ -7,6 +7,7 @@ import com.serenity.config.AppConfig
 import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.DropCapRenderer
 import com.serenity.ui.theme.TextStyle
 import org.scalatest.flatspec.AnyFlatSpec
@@ -49,7 +50,8 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
       panelWidthPx = (sizePx * 40).toInt,
       font,
       proseScale = sizePx / 14.0f,
-      dropCapGapEm = gapEm
+      dropCapGapEm = gapEm,
+      wrapCache = TestMeasure.wrapCache()
     )
     Sample(snapshot, font, lines)
 
@@ -78,23 +80,23 @@ class DropCapFitGeometrySpec extends AnyFlatSpec with Matchers:
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = 0,
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get
     val glyphFont  = TextStyle.styledFont(sample.font, glyphStyle)
-    val ink        = glyphFont.createGlyphVector(frc, letter).getVisualBounds
+    val ink        = TestMeasure.skiaInk(glyphFont, letter)
     val baseline   = (call.yPx + call.ascentPx).toFloat
     Drawn(
       baseline,
-      baseline + ink.getMinY.toFloat,
-      baseline + ink.getMaxY.toFloat,
-      math.ceil(ink.getMaxX).toFloat,
+      baseline + ink.getTop,
+      baseline + ink.getBottom,
+      math.ceil(ink.getRight.toDouble).toFloat,
       drawLine
     )
 
   private def capHeightOf(font: Font): Float =
-    -font.createGlyphVector(frc, "H").getVisualBounds.getMinY.toFloat
+    -TestMeasure.skiaInk(font, "H").getTop
 
   private def topOfRow(snapshot: TextLayoutSnapshot, row: Int): Int = snapshot.rowHeightsPx.take(row).sum
 

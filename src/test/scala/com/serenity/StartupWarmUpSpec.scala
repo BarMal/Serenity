@@ -18,7 +18,7 @@ import com.serenity.rope.Balance
 import com.serenity.spellcheck.DictionaryCache
 import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, AppStateValidation, Damage, Focus}
-import com.serenity.testkit.{HangBound, SharedDictionary}
+import com.serenity.testkit.{HangBound, SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -177,7 +177,8 @@ class StartupWarmUpSpec extends AnyFlatSpec with Matchers:
       user <- StateManager.apply(
         NoOpLogger[IO],
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- user.applyEvent(ResizeEvent(viewport))
       _ <- "draft".toList.traverse_(char => user.applyEvent(InsertChar(char)))

@@ -14,7 +14,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.{AppState, Focus}
-import com.serenity.testkit.{HangBound, SharedDictionary}
+import com.serenity.testkit.{HangBound, SharedDictionary, TestMeasure}
 import fs2.{Chunk, Stream}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -33,10 +33,14 @@ class ClipboardPasteReadSpec extends AnyFlatSpec with Matchers:
 
   private def editorWithEmptyBuffer: IO[StateManager] =
     for
-      stateManager <- StateManager(logger, dictionaryCache = SharedDictionary.default)
-      bufferId     <- stateManager.createNewEmptyBuffer
-      state        <- stateManager.getCurrentState
-      _            <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
+      stateManager <- StateManager(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      bufferId <- stateManager.createNewEmptyBuffer
+      state    <- stateManager.getCurrentState
+      _        <- stateManager.setBufferForPane(state.persisted.layout.editorPanes.keys.head, bufferId)
     yield stateManager
 
   private def focusedText(state: AppState): Option[String] =

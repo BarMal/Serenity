@@ -1,6 +1,5 @@
 package com.serenity.ui.layout
 
-import java.awt.Font
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 
@@ -8,22 +7,26 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextMeasureCorpus.{Line, PinnedFont}
-import com.serenity.ui.renderer.{FontFirstUse, FontProbes}
+import com.serenity.ui.layout.TextMeasurer.FontRun
+import com.serenity.ui.renderer.FontSpec
 
-/** What AWT measures for the bundled fonts and the corpus lines, as data: cell metrics, whether a font takes the
-  * measured layout, whether a ligature font's certificate holds, and for each line its caret x positions on one row and
-  * its rows, their end columns, widths and heights when wrapped to two pane widths. These are the numbers the Skia text
-  * measurer has to reproduce or the owner has to accept differing (#2660 item 2). Integers must match exactly; a float
-  * may differ by [[FloatTolerance]] so one host's rounding does not fail another's.
+/** What layout measures for the bundled fonts and the corpus lines, as data: cell metrics, whether a font takes the
+  * measured layout, whether a ligature font's certificate holds, and for each line how the font alone shapes it, its
+  * caret x positions on one row and its rows, their end columns, widths and heights when wrapped to two pane widths.
+  * Layout measures with the Skia measurer since #2660 item 2, step D2, so these are Skia's numbers through
+  * [[TextLayoutSnapshot]]; what AWT measured before is kept apart as `text-measure/awt-reference.tsv`, which only the
+  * parity report reads. Integers must match exactly; a float may differ by [[FloatTolerance]] so one host's rounding
+  * does not fail another's.
   *
-  * The checked-in file is the reference environment's (CI's Linux runner), not a portable truth: a host whose AWT
-  * measures differently fails the spec here as it does for `frame-counts.tsv`.
+  * The checked-in file is the reference environment's (CI's Linux runner), not a portable truth: a host whose fonts
+  * measure differently fails the spec here as it does for `frame-counts.tsv`.
   */
 object TextMeasureBaseline:
 
   given Balance = Balance.default
 
   val Resource          = "/text-measure/baseline.tsv"
+  val AwtReference      = "/text-measure/awt-reference.tsv"
   val RegenerateCommand = "sbt writeTextMeasureBaseline"
   val FloatTolerance    = 0.01
 
@@ -33,7 +36,8 @@ object TextMeasureBaseline:
   private val FloatKinds = Set("carets", "widths")
 
   private val Header =
-    s"""# Text measurement pinned by TextMeasureBaselineSpec: font.line.kind, comma-separated values.
+    s"""# Text measurement pinned by TextMeasureBaselineSpec: font.line.kind, comma-separated values. Skia's layout since
+       |# #2660 item 2 step D2; AWT's numbers before it are in awt-reference.tsv, which only the parity report reads.
        |# Integers are exact; carets and widths (pixels) may differ by $FloatTolerance. If a change is intended, run
        |# `$RegenerateCommand` and commit this file with a line in the PR saying why the numbers moved.
        |""".stripMargin
@@ -53,10 +57,9 @@ object TextMeasureBaseline:
   def entries(): Vector[Entry] = TextMeasureCorpus.fonts.flatMap(measureFont)
 
   private def measureFont(pinned: PinnedFont): Vector[Entry] =
-    val frc         = TextLayoutSnapshot.defaultFontRenderContext()
-    val metrics     = TestMeasure.cellMetrics(pinned.font)
-    val measured    = TextLayoutSnapshot.shouldUseMeasuredLayout(pinned.font, frc, FontProbes())
-    val certificate = LigatureCertificate.of(pinned.font, frc).isDefined
+    val metrics  = TestMeasure.cellMetrics(pinned.font)
+    val measured = TextLayoutSnapshot.shouldUseMeasuredLayout(FontSpec.fromAwt(pinned.font), TestMeasure.layoutMemos())
+    val certificate = LigatureCertificate.of(FontSpec.fromAwt(pinned.font), TestMeasure.measurer).isDefined
     val perFont = Vector(
       ints(s"${pinned.label}.cell", Seq(metrics.charWidth, metrics.lineHeight, metrics.ascent)),
       ints(s"${pinned.label}.measured", Seq(if measured then 1 else 0)),
@@ -70,22 +73,17 @@ object TextMeasureBaseline:
       panelWidthPx = widthPx,
       pinned.font,
       wordWrapEnabled = widthPx != Unwrapped,
-      fallback = pinned.fallback
+      fallback = pinned.fallback,
+      wrapCache = TestMeasure.wrapCache()
     )
 
-  /** How many glyphs AWT shapes the line to in the font alone, and the character each starts at: what shaping did,
-    * before layout snaps cells or draws a fallback font. Read straight from `layoutGlyphVector`, left to right.
+  /** How many glyphs the measurer shapes the line to in the font alone, and the character each starts at: what shaping
+    * did, before layout snaps cells or draws a fallback font. One left-to-right run, in the order the glyphs are drawn.
     */
   private def glyphEntries(pinned: PinnedFont, line: Line, prefix: String): Vector[Entry] =
-    val frc = TextLayoutSnapshot.defaultFontRenderContext()
-    FontFirstUse.settle(pinned.font, frc)
-    val chars  = line.text.toCharArray
-    val shaped = pinned.font.layoutGlyphVector(frc, chars, 0, chars.length, Font.LAYOUT_LEFT_TO_RIGHT)
-    val count  = shaped.getNumGlyphs
-    Vector(
-      ints(s"$prefix.glyphs", Seq(count)),
-      ints(s"$prefix.clusters", shaped.getGlyphCharIndices(0, count, new Array[Int](count)).toSeq)
-    )
+    val run    = FontRun(0, line.text.length, FontSpec.fromAwt(pinned.font))
+    val shaped = TestMeasure.measurer.shape(line.text, 0, run, 0.toByte)
+    Vector(ints(s"$prefix.glyphs", Seq(shaped.glyphs.length)), ints(s"$prefix.clusters", shaped.clusters.toSeq))
 
   private def measureLine(pinned: PinnedFont, line: Line): Vector[Entry] =
     val prefix = s"${pinned.label}.${line.id}"
@@ -123,9 +121,16 @@ object TextMeasureBaseline:
         }
       }
 
-  def load(): Either[String, Vector[Entry]] =
-    Option(getClass.getResourceAsStream(Resource)) match
-      case None => Left(s"no $Resource on the test classpath")
+  def load(): Either[String, Vector[Entry]] = load(Resource)
+
+  /** What AWT measured for the corpus before layout moved to the Skia measurer, frozen: the reference the parity report
+    * compares the measurer with.
+    */
+  def loadAwtReference(): Either[String, Vector[Entry]] = load(AwtReference)
+
+  private def load(resource: String): Either[String, Vector[Entry]] =
+    Option(getClass.getResourceAsStream(resource)) match
+      case None => Left(s"no $resource on the test classpath")
       case Some(stream) =>
         val text =
           try new String(stream.readAllBytes(), StandardCharsets.UTF_8)

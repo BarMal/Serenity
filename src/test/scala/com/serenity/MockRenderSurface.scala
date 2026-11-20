@@ -46,6 +46,9 @@ class MockRenderSurface(
     with Effects
     with PanelOutlineDrawing:
 
+  /** A run at column n sits at n advances up to float rounding, which must not tip it into the cell before. */
+  private val AdvanceSlack = 0.001
+
   def text: TextDrawing                                   = this
   def pixels: PixelDrawing                                = this
   override def effects: Option[Effects]                   = Some(this)
@@ -184,14 +187,11 @@ class MockRenderSurface(
       currentStyle.get(),
       currentPixelTranslation.get().xPx
     )
-    val metrics =
-      currentFont
-        .get()
-        .map(TestMeasure.cellMetrics)
-        .getOrElse(TestMeasure.cellMetrics(new Font(Font.MONOSPACED, Font.PLAIN, 12)))
-    val startX = math.floor(xPx / metrics.charWidth.toDouble).toInt
-    val endX   = math.max(startX + s.length, startX + 1)
-    val row    = math.floor(yPx / metrics.lineHeight.toDouble).toInt
+    val font    = currentFont.get().getOrElse(new Font(Font.MONOSPACED, Font.PLAIN, 12))
+    val metrics = TestMeasure.cellMetrics(font)
+    val startX  = math.floor(xPx / TestMeasure.glyphAdvancePx(font).toDouble + AdvanceSlack).toInt
+    val endX    = math.max(startX + s.length, startX + 1)
+    val row     = math.floor(yPx / metrics.lineHeight.toDouble).toInt
 
     if row >= 0 && row < height then
       (startX until endX).foreach { x => if x >= 0 && x < width then bgs(row)(x) = currentBg.get().argb }

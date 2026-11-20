@@ -8,7 +8,7 @@ import scala.util.Random
 import com.serenity.state.models.{MeasuredRow, TextVisualLine}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.FontProbes
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.Assertions
 
 /** Layouts, prose and edits for checking [[IncrementalWrap]] against the cold wrap. */
@@ -61,12 +61,14 @@ object WrapFixtures extends Assertions:
   /** The key the cache wraps `text` under in `layout` at `widthPx`. */
   def keyFor(text: String, layout: Layout, widthPx: Int, baseColumn: Int = 0): WrappedLineKey =
     val cellMetrics = layout.cellMetrics.getOrElse(TestMeasure.cellMetrics(layout.font))
-    val measured = !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(layout.font, frc, FontProbes())
+    val measured = !layout.forceCellLayout && TextLayoutSnapshot.shouldUseMeasuredLayout(
+      FontSpec.fromAwt(layout.font),
+      TestMeasure.layoutMemos()
+    )
     WrappedLineKey(
       text,
       widthPx,
-      TextCaretMeasurement.singleFontResolver(layout.font),
-      frc,
+      TextCaretMeasurement.singleFontResolver(FontSpec.fromAwt(layout.font)),
       measured,
       cellMetrics,
       baseColumn,
@@ -88,7 +90,6 @@ object WrapFixtures extends Assertions:
       bufferLine,
       widthPx,
       layout.font,
-      frc,
       baseColumn = baseColumn,
       maxVisualLines = maxVisualLines,
       cellMetricsOverride = layout.cellMetrics,
@@ -124,7 +125,7 @@ object WrapFixtures extends Assertions:
     bufferLine: Int = 0,
     baseColumn: Int = 0
   ): Unit =
-    val cold = wrap(text, WrappedLineCache.Uncached, layout, widthPx, bufferLine, baseColumn)
+    val cold = wrap(text, TestMeasure.wrapCache(), layout, widthPx, bufferLine, baseColumn)
     if bitwise(actual) != bitwise(cold) then
       val firstDifferent = actual.zip(cold).indexWhere((a, c) => bitwise(Vector(a)) != bitwise(Vector(c)))
       fail(
@@ -261,7 +262,7 @@ object WrapFixtures extends Assertions:
     @annotation.tailrec
     def attempt(charsPerRow: Double, tries: Int): String =
       val text   = paragraph(rnd, (charsPerRow * rows).toInt.max(1), exotic)
-      val actual = wrap(text, WrappedLineCache.Uncached, layout, widthPx).length
+      val actual = wrap(text, TestMeasure.wrapCache(), layout, widthPx).length
       if actual >= rows || tries == 0 then text
       else attempt(charsPerRow * (rows.toDouble / actual.max(1)).min(3.0) * 1.1, tries - 1)
     attempt((widthPx / layout.charWidthPx.toDouble * 0.9).max(3.0), 4)

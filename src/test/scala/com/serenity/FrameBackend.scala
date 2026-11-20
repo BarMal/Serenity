@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 import scala.annotation.unused
 
 import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, PixelRect}
 import com.serenity.ui.renderer.{FontSpec, RenderSurface, ScreenIdentity}
 import com.serenity.ui.skia.{PaintLog, SkiaRenderSurface, SkiaTextCaches}
@@ -104,7 +105,7 @@ object ReferenceFrames:
         logicalHeightPx,
         scale,
         persists = false,
-        RenderCaches.create()
+        TestMeasure.renderCaches()
       )
     )
 
@@ -121,8 +122,11 @@ object SkiaPixels:
         ColorSpace.Companion.getSRGB()
       )
     val whole = Bitmap()
-    require(whole.allocPixels(info) && surface.readPixels(whole, 0, 0), "cannot read the surface")
-    val bytes  = whole.readPixels(info, surface.getWidth * 4, 0, 0)
+    val bytes =
+      try
+        require(whole.allocPixels(info) && surface.readPixels(whole, 0, 0), "cannot read the surface")
+        whole.readPixels(info, surface.getWidth * 4, 0, 0)
+      finally whole.close()
     val pixels = new Array[Int](surface.getWidth * surface.getHeight)
     java.nio.ByteBuffer.wrap(bytes).order(java.nio.ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(pixels)
     pixels

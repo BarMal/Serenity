@@ -170,7 +170,7 @@ object RendererEntryPoints:
       textFont,
       FontSpec.fromAwt(defaultUiFont),
       cellMetrics,
-      CellMetrics.fromFont(defaultUiFont),
+      caches.cellMetricsOf(defaultUiFont),
       cursorColor,
       damage,
       caches
@@ -401,7 +401,7 @@ object RendererEntryPoints:
       viewportSize,
       FontSpec.fromAwt(defaultFont),
       FontSpec.fromAwt(defaultFont),
-      CellMetrics.fromFont(defaultFont),
+      caches.cellMetricsOf(defaultFont),
       cursorColor,
       damage,
       caches

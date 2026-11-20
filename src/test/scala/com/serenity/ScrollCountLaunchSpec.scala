@@ -15,7 +15,7 @@ import com.serenity.keystroke.{KeyStrokeInfo, KeyboardFidelityTier}
 import com.serenity.rope.Balance
 import com.serenity.state.manager.{RenderCaches, ScrollCountExecutor, StateManager}
 import com.serenity.state.models.*
-import com.serenity.testkit.{HangBound, SharedDictionary}
+import com.serenity.testkit.{HangBound, SharedDictionary, TestMeasure}
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.*
 import fs2.Stream
@@ -109,7 +109,8 @@ class ScrollCountLaunchSpec extends AnyFlatSpec with Matchers:
                     logger,
                     initialConfig = AppConfig.conventional,
                     dictionaryCache = SharedDictionary.default,
-                    scrollCounting = scrollCounting
+                    scrollCounting = scrollCounting,
+                    layoutMeasurerFor = TestMeasure.layoutMeasurerFor
                   )
                 ),
                 awaitExternalQuit = HangBound.within(repainted.get, 5.seconds).attempt.void,

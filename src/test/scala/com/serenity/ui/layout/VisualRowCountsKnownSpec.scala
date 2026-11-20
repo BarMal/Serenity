@@ -4,6 +4,7 @@ import java.awt.Font
 
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -16,7 +17,7 @@ class VisualRowCountsKnownSpec extends AnyFlatSpec with Matchers:
   private val buffer = Buffer.fromString(BufferId(1), "one\ntwo\nthree")
 
   private def counts(known: Int => Option[Int]): VisualRowCounts =
-    VisualRowCounts.forBuffer(buffer, 400, font, None, false, WrappedLineCache.Uncached, known = known)
+    VisualRowCounts.forBuffer(buffer, 400, font, None, false, TestMeasure.wrapCache(), known = known)
 
   "A line the caller knows the rows of" should "count as the caller says, without being wrapped" in {
     counts(Map(1 -> 7).get).rowsIn(1) shouldBe 7

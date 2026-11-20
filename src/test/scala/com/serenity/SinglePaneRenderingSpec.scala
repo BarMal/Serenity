@@ -3,7 +3,7 @@ package com.serenity
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import com.serenity.state.manager.StateManager
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -19,9 +19,13 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val program = for
-      logger       <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
-      state        <- stateManager.getCurrentState
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
+      state <- stateManager.getCurrentState
     yield
       // Verify we start with 1 pane
       state.persisted.layout.editorPanes.should(have).size(1)
@@ -52,8 +56,12 @@ class SinglePaneRenderingSpec extends AnyFlatSpec with Matchers:
     given LoggerFactory[IO]         = Slf4jFactory.create[IO]
 
     val program = for
-      logger           <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
-      stateManager     <- StateManager.apply(logger, dictionaryCache = SharedDictionary.default)
+      logger <- IO.pure(LoggerFactory[IO].getLogger(using LoggerName("Test")))
+      stateManager <- StateManager.apply(
+        logger,
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
+      )
       initialState     <- stateManager.getCurrentState
       _                <- stateManager.applyEvent(com.serenity.keystroke.events.NewTab)
       stateAfterNewTab <- stateManager.getCurrentState

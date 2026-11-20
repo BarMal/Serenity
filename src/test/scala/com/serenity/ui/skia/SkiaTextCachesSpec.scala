@@ -5,7 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 
-import com.serenity.state.manager.RenderCaches
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
 class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
 
   "The Skia text caches of an owner" should "be created when Skia first asks for them and not before" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     SkiaTextCaches.heldBy(owner.backendCaches) shouldBe false
 
@@ -23,7 +23,7 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "be the same set for every surface the owner draws" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     val first  = SkiaTextCaches.of(owner.backendCaches)
     val second = SkiaTextCaches.of(owner.backendCaches)
@@ -35,8 +35,8 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "not be shared with another owner" in {
-    val one = SkiaTextCaches.of(RenderCaches.create().backendCaches)
-    val two = SkiaTextCaches.of(RenderCaches.create().backendCaches)
+    val one = SkiaTextCaches.of(TestMeasure.renderCaches().backendCaches)
+    val two = SkiaTextCaches.of(TestMeasure.renderCaches().backendCaches)
 
     one should not be theSameInstanceAs(two)
     one.fonts should not be theSameInstanceAs(two.fonts)
@@ -45,7 +45,7 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
   }
 
   "The warm-up stats of an owner" should "be absent until its Skia text caches exist" in {
-    val owner = RenderCaches.create()
+    val owner = TestMeasure.renderCaches()
 
     SkiaTextCaches.warmupOf(owner.backendCaches) shouldBe None
 
@@ -55,7 +55,7 @@ class SkiaTextCachesSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "count the shaper, each face built once and each text shaped once" in {
-    val owner  = RenderCaches.create()
+    val owner  = TestMeasure.renderCaches()
     val caches = SkiaTextCaches.of(owner.backendCaches)
     caches.warmup.snapshot.shapers shouldBe 1
     caches.warmup.snapshot.shaperNanos should be > 0L

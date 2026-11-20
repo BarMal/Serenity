@@ -63,7 +63,7 @@ class MarkdownLensMouseHitTestSpec extends AnyFlatSpec with Matchers:
     )
 
   private def cacheOf(state: AppState): MouseTargetCache =
-    MouseTargetCache.fromState(state, viewportSize, AuthoritativeUiScene())
+    MouseTargetCache.fromState(state, viewportSize, AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache()))
 
   /** Pixel centre of the glyph at buffer position `at`, found only from the painted rows' heights and caret stops. */
   private def pointOn(state: AppState, at: CursorPosition): (Int, Int) =

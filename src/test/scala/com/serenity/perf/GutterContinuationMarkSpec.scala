@@ -1,7 +1,6 @@
 package com.serenity.perf
 
-import com.serenity.state.manager.RenderCaches
-import com.serenity.testkit.ActivePane
+import com.serenity.testkit.{ActivePane, TestMeasure}
 import com.serenity.ui.layout.LayoutEngine
 import com.serenity.{FrameBackend, FramePixels, SkiaFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -44,7 +43,7 @@ class GutterContinuationMarkSpec extends AnyFlatSpec with Matchers:
 
   backends.foreach { (name, backend) =>
     s"A wrapped row's mark in the line-number column on $name" should "be shorter than its row, so no two rows' marks join" in {
-      val frame = LaptopColdFrames.of(backend, state, RenderCaches.create(), cursorVisible = false)
+      val frame = LaptopColdFrames.of(backend, state, TestMeasure.renderCaches(), cursorVisible = false)
 
       val tallest = tallestInkRun(frame)
 

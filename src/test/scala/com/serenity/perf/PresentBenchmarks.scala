@@ -14,7 +14,7 @@ import com.serenity.config.AppConfig
 import com.serenity.diagnostics.{FrameCounter, FrameCounts}
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.Balance
-import com.serenity.state.manager.{DamageProducer, RenderCaches, StateManager}
+import com.serenity.state.manager.{DamageProducer, StateManager}
 import com.serenity.state.models.{AppState, Damage}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
@@ -80,7 +80,7 @@ private[perf] object PresentBenchmarks:
 
     canvas.setSize(widthPx, heightPx)
     private val pool   = new ReusableImagePool()
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     caches.frameCounters.setEnabled(true)
     private val screen    = ScreenIdentity(canvas)
     private val published = new AtomicReference[BufferedImage]()

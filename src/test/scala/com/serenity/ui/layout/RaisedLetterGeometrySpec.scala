@@ -7,7 +7,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{AppState, Buffer, BufferId, RichTextState, TextVisualLine, Viewport}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.openings.{HandDropCapRule, LetterMode, OpeningRules, OpeningSettings}
-import com.serenity.ui.renderer.DropCapRenderer
+import com.serenity.ui.renderer.{DropCapRenderer, FontSpec}
+import com.serenity.ui.skia.TestBundledTypefaces
 import com.serenity.ui.theme.TextStyle
 import com.serenity.{MockRenderSurface, ReferenceFrames}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -28,7 +29,13 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       "slow beneath the old stone bridge, and nobody on the road says a word about the weather. "
 
   private val tolerancePx = 1.0f
-  private val scales      = List("1x" -> 14.0f, "2x" -> 28.0f)
+
+  private val skiaFaces = TestBundledTypefaces.cacheWithInter()
+
+  /** The ink Skia itself gives `text` in `font`: the oracle for where a glyph stands, not AWT's glyph vector. */
+  private def skiaInkOf(font: Font, text: String): org.jetbrains.skia.Rect =
+    skiaFaces.faceFor(FontSpec.fromAwt(font)).font.measureText(text, null)
+  private val scales = List("1x" -> 14.0f, "2x" -> 28.0f)
 
   private val raised = OpeningSettings(enabled = true, letterMode = LetterMode.Raised)
 
@@ -51,7 +58,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
     def baselineOf(row: Int): Int = textTopOf(row) + snapshot.visualLines(row).ascentPx
 
-    def bodyCapHeightPx: Float = -font.createGlyphVector(frc, "H").getVisualBounds.getMinY.toFloat
+    def bodyCapHeightPx: Float = -skiaInkOf(font, "H").getTop
 
   final private case class Drawn(
       callTopPx: Int,
@@ -98,7 +105,8 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       dropCapsEnabled = dropCapsEnabled,
       openings = settings,
       dropCapGapEm = gapEm,
-      forceCellLayout = forceCellLayout
+      forceCellLayout = forceCellLayout,
+      wrapCache = TestMeasure.wrapCache()
     )
     Laid(snapshot, font, sizePx, document)
 
@@ -118,20 +126,20 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = originPx + laid.textTopOf(laid.home),
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
     val call       = surface.drawRunPxCalls.head
     val glyphStyle = surface.styleCalls.collectFirst { case surface.StyleCall("enable", style) => style }.get
     val glyphFont  = TextStyle.styledFont(laid.font, glyphStyle)
-    val ink        = glyphFont.createGlyphVector(frc, letter).getVisualBounds
+    val ink        = skiaInkOf(glyphFont, letter)
     val baseline   = (call.yPx + call.ascentPx).toFloat - originPx
     Drawn(
       call.yPx - originPx,
       call.yPx + call.lineHeightPx - originPx,
       baseline,
-      baseline + ink.getMinY.toFloat,
-      baseline + ink.getMaxY.toFloat,
-      math.ceil(ink.getMaxX).toFloat,
+      baseline + ink.getTop,
+      baseline + ink.getBottom,
+      math.ceil(ink.getRight).toFloat,
       glyphFont.getSize2D,
       call.clipGlyphToRun
     )
@@ -159,7 +167,7 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
       lineTopPx = topPx,
-      memos = LayoutMemos()
+      memos = TestMeasure.layoutMemos()
     )
     surface.flush()
     val image           = reference.image

@@ -11,7 +11,7 @@ import com.serenity.keystroke.events.*
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
 import com.serenity.state.models.*
-import com.serenity.testkit.SharedDictionary
+import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
 import com.serenity.ui.theme.Theme
 import org.scalatest.flatspec.AnyFlatSpec
@@ -96,7 +96,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       firstManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-empty-session-first"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       firstInitial <- AppStartup.initializeState(
         firstManager,
@@ -119,7 +120,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       secondManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-empty-session-second"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,
@@ -163,7 +165,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       firstManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-open-recent-first"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       _ <- AppStartup.initializeState(
         firstManager,
@@ -189,7 +192,8 @@ class StartupPageIntegrationSpec extends AnyFlatSpec with Matchers with StateMan
       secondManager <- StateManager.apply(
         testLogger("StartupPageIntegrationSpec-open-recent-second"),
         sessionRootOverride = Some(sessionRoot),
-        dictionaryCache = SharedDictionary.default
+        dictionaryCache = SharedDictionary.default,
+        layoutMeasurerFor = TestMeasure.layoutMeasurerFor
       )
       secondInitial <- AppStartup.initializeState(
         secondManager,

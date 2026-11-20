@@ -1,13 +1,13 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.richtext.RichTextDocument
 import com.serenity.state.models.{Buffer, IndentationSettings, TextVisualLine}
 import com.serenity.ui.fonts.{FontFallback, FontLoader}
 import com.serenity.ui.layout.ColumnPaging.{ColumnStart, Frame}
 import com.serenity.ui.openings.OpeningSettings
+import com.serenity.ui.renderer.FontSpec
 import com.serenity.ui.theme.HeadingSettings
 
 /** Column-based document layout (issue #1338, Phase 1): the two entry points column-mode rendering needs on top of
@@ -18,7 +18,11 @@ import com.serenity.ui.theme.HeadingSettings
   */
 object TextLayoutSnapshotColumnMode:
 
-  import TextLayoutSnapshot.{defaultFontRenderContext, shouldUseMeasuredLayout}
+  import TextLayoutSnapshot.{cellMetricsOf, shouldUseMeasuredLayout, snapshotLineMetrics}
+
+  /** Whether the columns of `font` are measured: as the whole buffer is, never without the owner's measurer. */
+  private def measuredColumns(font: Font, forceCellLayout: Boolean, wrapCache: WrappedLineCache): Boolean =
+    !forceCellLayout && shouldUseMeasuredLayout(FontSpec.fromAwt(font), wrapCache.layoutMemos)
 
   private def columnContext(
     document: Option[RichTextDocument],
@@ -51,7 +55,6 @@ object TextLayoutSnapshotColumnMode:
     columnWidthPx: Int,
     font: Font,
     visibleLines: Int,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
@@ -63,14 +66,11 @@ object TextLayoutSnapshotColumnMode:
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
     fallback: FontFallback = FontFallback.Default
   ): ColumnPager =
-    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout =
-      !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext, wrapCache.shapedText.probes)
-    val lineHeightPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
-      else math.max(1, cellMetrics.lineHeight)
-    val width   = math.max(1, columnWidthPx)
-    val content = buffer.document.content
+    val cellMetrics       = cellMetricsOverride.getOrElse(cellMetricsOf(font, wrapCache.layoutMemos))
+    val measuredLayout    = measuredColumns(font, forceCellLayout, wrapCache)
+    val (lineHeightPx, _) = snapshotLineMetrics(font, measuredLayout, cellMetrics, wrapCache.layoutMemos)
+    val width             = math.max(1, columnWidthPx)
+    val content           = buffer.document.content
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(content.lineCount, content.weight))
     val richText =
@@ -90,7 +90,6 @@ object TextLayoutSnapshotColumnMode:
         buffer.id,
         width,
         font,
-        fontRenderContext,
         cellMetricsOverride,
         forceCellLayout,
         dropCapsEnabled,
@@ -110,7 +109,6 @@ object TextLayoutSnapshotColumnMode:
           content.getLine(line).getOrElse(""),
           width,
           font,
-          fontRenderContext,
           measuredLayout,
           cellMetrics,
           maxRows,
@@ -128,7 +126,6 @@ object TextLayoutSnapshotColumnMode:
     buffer: Buffer,
     columnWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
@@ -147,7 +144,6 @@ object TextLayoutSnapshotColumnMode:
       columnWidthPx,
       font,
       buffer.viewport.visibleLines,
-      fontRenderContext,
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
@@ -172,7 +168,6 @@ object TextLayoutSnapshotColumnMode:
     buffer: Buffer,
     columnWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
@@ -188,7 +183,6 @@ object TextLayoutSnapshotColumnMode:
       buffer,
       columnWidthPx,
       font,
-      fontRenderContext,
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
@@ -204,7 +198,6 @@ object TextLayoutSnapshotColumnMode:
       emptyColumnSnapshot(
         columnWidthPx,
         font,
-        fontRenderContext,
         cellMetricsOverride,
         forceCellLayout,
         proseScale,
@@ -225,7 +218,6 @@ object TextLayoutSnapshotColumnMode:
     buffer: Buffer,
     columnWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext = defaultFontRenderContext(),
     cellMetricsOverride: Option[CellMetrics] = None,
     forceCellLayout: Boolean = false,
     proseScale: Float = 1.0f,
@@ -238,16 +230,10 @@ object TextLayoutSnapshotColumnMode:
     dropCapGapEm: Float = DropCapLayout.DefaultGapEm,
     fallback: FontFallback = FontFallback.Default
   ): Vector[TextLayoutSnapshot] =
-    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout =
-      !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext, wrapCache.shapedText.probes)
-    val lineHeightPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
-      else math.max(1, cellMetrics.lineHeight)
-    val ascentPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).ascentPx)
-      else math.max(0, cellMetrics.ascent)
-    val totalLines = buffer.document.content.lineCount
+    val cellMetrics              = cellMetricsOverride.getOrElse(cellMetricsOf(font, wrapCache.layoutMemos))
+    val measuredLayout           = measuredColumns(font, forceCellLayout, wrapCache)
+    val (lineHeightPx, ascentPx) = snapshotLineMetrics(font, measuredLayout, cellMetrics, wrapCache.layoutMemos)
+    val totalLines               = buffer.document.content.lineCount
     val richDocument =
       buffer.richText.richTextDocument.filter(_.matchesPlainTextShape(totalLines, buffer.document.content.weight))
     val laidOutWith =
@@ -267,7 +253,6 @@ object TextLayoutSnapshotColumnMode:
       buffer,
       columnWidthPx,
       font,
-      fontRenderContext,
       cellMetricsOverride,
       forceCellLayout,
       proseScale,
@@ -301,22 +286,15 @@ object TextLayoutSnapshotColumnMode:
   private def emptyColumnSnapshot(
     columnWidthPx: Int,
     font: Font,
-    fontRenderContext: FontRenderContext,
     cellMetricsOverride: Option[CellMetrics],
     forceCellLayout: Boolean,
     proseScale: Float,
     headings: HeadingSettings,
     wrapCache: WrappedLineCache
   ): TextLayoutSnapshot =
-    val cellMetrics = cellMetricsOverride.getOrElse(CellMetrics.fromFont(font))
-    val measuredLayout =
-      !forceCellLayout && shouldUseMeasuredLayout(font, fontRenderContext, wrapCache.shapedText.probes)
-    val lineHeightPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).heightPx)
-      else math.max(1, cellMetrics.lineHeight)
-    val ascentPx =
-      if measuredLayout then math.max(1, wrapCache.layoutMemos.lineExtents.of(font, fontRenderContext).ascentPx)
-      else math.max(0, cellMetrics.ascent)
+    val cellMetrics              = cellMetricsOverride.getOrElse(cellMetricsOf(font, wrapCache.layoutMemos))
+    val measuredLayout           = measuredColumns(font, forceCellLayout, wrapCache)
+    val (lineHeightPx, ascentPx) = snapshotLineMetrics(font, measuredLayout, cellMetrics, wrapCache.layoutMemos)
     TextLayoutSnapshot(
       visualLines = Vector.empty,
       panelWidthPx = math.max(1, columnWidthPx),

@@ -13,8 +13,8 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, FrameSurfaceFactory, RendererCursorOverlay}
+import com.serenity.ui.layout.{CellMetrics, TextMeasurer}
+import com.serenity.ui.renderer.{BackendCaches, FontSpec, FrameSurfaceFactory, RendererCursorOverlay}
 import com.serenity.ui.skia.{
   FallbackAgreement,
   SkiaLayerHost,
@@ -77,6 +77,7 @@ object RenderBenchmarkRunner:
 
   def run(
     options: RenderBenchmarkOptions,
+    measurerFor: BackendCaches => Option[TextMeasurer],
     skiaFactory: FrameSurfaceFactory = SynchronousSkiaLayerSurfaceFactory,
     skiaProbe: Either[String, Unit] = Right(()),
     startup: String = "",
@@ -85,12 +86,12 @@ object RenderBenchmarkRunner:
     given Balance = Balance.default
     val fonts     = loadFonts()
     val refresh   = RefreshRate.current
-    val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts, refresh))
+    val skia      = skiaProbe.map(_ => measure(options, "Skia layer", skiaFactory, fonts, refresh, measurerFor))
     val raster = rasterFactory.fold("no raster arm was asked for".asLeft[Measured]) { factory =>
       skiaProbe.left
         .map(cause => s"Skia is not available: $cause")
         .flatMap(_ =>
-          Try(measure(options, "Skia raster", factory, fonts, refresh)).toEither.left
+          Try(measure(options, "Skia raster", factory, fonts, refresh, measurerFor)).toEither.left
             .map(failure => s"the raster arm failed: ${Option(failure.getMessage).getOrElse(failure.toString)}")
         )
     }
@@ -143,20 +144,17 @@ object RenderBenchmarkRunner:
     val code   = FontLoader.previewCodeFont(config)
     val text   = FontLoader.previewTextFont(config)
     val ui     = FontLoader.previewUiFont(config)
-    Fonts(
-      FontSpec.fromAwt(code),
-      FontSpec.fromAwt(text),
-      FontSpec.fromAwt(ui),
-      CellMetrics.fromFont(code),
-      CellMetrics.fromFont(ui)
-    )
+    val spec   = (FontSpec.fromAwt(code), FontSpec.fromAwt(text), FontSpec.fromAwt(ui))
+    val grid   = SkiaTextCaches.fresh().fonts
+    Fonts(spec._1, spec._2, spec._3, grid.cellMetrics(spec._1), grid.cellMetrics(spec._3))
 
   private def measure(
     options: RenderBenchmarkOptions,
     name: String,
     factory: FrameSurfaceFactory,
     fonts: Fonts,
-    refresh: RefreshRate
+    refresh: RefreshRate,
+    measurerFor: BackendCaches => Option[TextMeasurer]
   )(using Balance): Measured =
     val window = new SwingWindow(
       new Dimension(options.widthPx, options.heightPx),
@@ -174,11 +172,22 @@ object RenderBenchmarkRunner:
       // reports before then can still be the one it was made with.
       val (results, drawn) = Scenario.values.toList match
         case first :: rest =>
-          val firstResult = timeScenario(window, fonts, factory, first, options, viewportLines, asked, refresh)
-          val kept        = currentSize(window)
+          val firstResult =
+            timeScenario(window, fonts, factory, first, options, viewportLines, asked, refresh, measurerFor)
+          val kept = currentSize(window)
           (
             (first -> firstResult) :: rest.map(scenario =>
-              scenario -> timeScenario(window, fonts, factory, scenario, options, viewportLines, kept, refresh)
+              scenario -> timeScenario(
+                window,
+                fonts,
+                factory,
+                scenario,
+                options,
+                viewportLines,
+                kept,
+                refresh,
+                measurerFor
+              )
             ),
             kept
           )
@@ -212,10 +221,11 @@ object RenderBenchmarkRunner:
     options: RenderBenchmarkOptions,
     viewportLines: Int,
     startSize: WindowPx,
-    refresh: RefreshRate
+    refresh: RefreshRate,
+    measurerFor: BackendCaches => Option[TextMeasurer]
   )(using Balance): Either[String, Timed] =
     probeResize(window, scenario, startSize).map(_ =>
-      timeFrames(window, fonts, factory, scenario, options, viewportLines, startSize, refresh)
+      timeFrames(window, fonts, factory, scenario, options, viewportLines, startSize, refresh, measurerFor)
     )
 
   private def canvasPixels(window: SwingWindow): WindowPx =
@@ -246,10 +256,11 @@ object RenderBenchmarkRunner:
     options: RenderBenchmarkOptions,
     viewportLines: Int,
     startSize: WindowPx,
-    refresh: RefreshRate
+    refresh: RefreshRate,
+    measurerFor: BackendCaches => Option[TextMeasurer]
   )(using Balance): Timed =
     val steps  = BenchmarkScript.steps(scenario, options.warmup + options.frames, viewportLines, startSize)
-    val bench  = new BenchmarkCaches()
+    val bench  = new BenchmarkCaches(measurerFor)
     val shared = bench.shared()
     def cachesFor(step: BenchmarkScript.Step) =
       if step.frame == BenchmarkScript.FrameKind.ColdFull then bench.cold(shared) else shared

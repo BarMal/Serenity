@@ -6,7 +6,6 @@ import com.serenity.config.{AppConfig, WrapColumn}
 import com.serenity.lsp.model.{Diagnostic, DiagnosticSeverity, LspPosition, LspRange}
 import com.serenity.rope.Balance
 import com.serenity.spellcheck.SpellChecker
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.*
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
@@ -74,7 +73,7 @@ class RendererColumnAnnotationsSpec extends AnyFlatSpec with Matchers:
     )
 
   private def planFor(state: AppState): (EditorPaneRenderPlan, UiSceneSnapshot) =
-    val caches  = RenderCaches.create()
+    val caches  = TestMeasure.renderCaches()
     val surface = new MockRenderSurface(viewportSize.width, viewportSize.height)
     val context = RenderContext(
       surface = surface,

@@ -10,6 +10,7 @@ import com.serenity.richtext.{ParagraphRole, RichTextDocument, RichTextParagraph
 import com.serenity.rope.Balance
 import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.{AppState, Buffer, BufferId, EditorPane, Focus, PaneId, RichTextState}
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
 import com.serenity.ui.layout.{CellMetrics, Layout, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererEntryPoints}
@@ -40,7 +41,7 @@ class HeadingColourTuiSpec extends AnyFlatSpec with Matchers:
   private val theme =
     themed(SyntaxElement.Heading, teal).andThen(themed(SyntaxElement.HeadingMarker, purple))(Theme.dark)
 
-  private def render(state: AppState, caches: RenderCaches = RenderCaches.create()): TerminalEmulator =
+  private def render(state: AppState, caches: RenderCaches = TestMeasure.renderCaches()): TerminalEmulator =
     val writer  = new StringWriter()
     val surface = new TerminalRenderSurface(viewport.width, viewport.height, writer, CellMetrics.cellUnit)
     RendererEntryPoints.render(
@@ -134,7 +135,7 @@ class HeadingColourTuiSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "show a colour changed between frames that share their render caches" in {
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val orangeConfig =
       withHeadings(HeadingsConfig().withLevel(1)(_.copy(colour = Some(HeadingColour.Fixed(orange)))))
     val plain = rgb(theme.foreground.toAwt)

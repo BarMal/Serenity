@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicReference
 import cats.effect.unsafe.implicits.global
 import com.serenity.config.{AppConfig, DockedCornerStyle}
 import com.serenity.keystroke.events.{Event, InsertChar, ScrollDown}
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, TestMeasure}
 import com.serenity.ui.layout.ViewportSize
@@ -34,7 +34,7 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
 
   final private class PersistingImage:
     private val frame  = SkiaFrames.newFrame(LaptopColdFrames.DeviceWidthPx, LaptopColdFrames.DeviceHeightPx)
-    private val caches = RenderCaches.create()
+    private val caches = TestMeasure.renderCaches()
     private val screen = ScreenIdentity(this)
 
     val lastPlan = new AtomicReference[Option[EditorPaneRenderPlan]](None)
@@ -76,7 +76,7 @@ class LaptopFramesMatchColdSpec extends AnyFlatSpec with Matchers:
     state: AppState,
     plan: Option[EditorPaneRenderPlan]
   ): Seq[(Int, Int)] =
-    val cold  = LaptopColdFrames.of(SkiaFrames, state, RenderCaches.create(), cursorVisible = false).toImage
+    val cold  = LaptopColdFrames.of(SkiaFrames, state, TestMeasure.renderCaches(), cursorVisible = false).toImage
     val diffs = FrameDiff.differing(drawn, cold)
     if diffs.nonEmpty then
       println(

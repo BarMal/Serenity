@@ -36,7 +36,7 @@ private[manager] object CommandRunnerOpeningRig:
       statePort = new EventStatePort:
         val logger              = quiet
         val mouseTargetCacheRef = cacheRef
-        val authoritativeScene  = AuthoritativeUiScene()
+        val authoritativeScene  = AuthoritativeUiScene(com.serenity.testkit.TestMeasure.wrapCache())
       effectPort = EventEffectPort(interpretEffect = _ => IO.unit, interpretCommand = (_, _) => IO.unit)
       workflowPort = new EventWorkflowPort:
         def beginCloseAction(scope: CloseScope, state: AppState): IO[Unit] = IO.unit

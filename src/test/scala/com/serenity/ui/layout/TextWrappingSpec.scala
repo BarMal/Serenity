@@ -3,13 +3,13 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.testkit.TestMeasure
-import com.serenity.ui.renderer.{MeasuredTextAdvances, ShapedTextCache}
+import com.serenity.ui.renderer.MeasuredTextAdvances
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class TextWrappingSpec extends AnyFlatSpec with Matchers:
 
-  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, ShapedTextCache())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private val sentence =
     "Using the layout removes these settings from your config file, so they follow the layout from then on."
@@ -98,11 +98,10 @@ class TextWrappingSpec extends AnyFlatSpec with Matchers:
     val font = Font(Font.SANS_SERIF, Font.PLAIN, 14)
     TextMeasure.Pixels(
       font,
-      TextLayoutSnapshot.defaultFontRenderContext(),
       TestMeasure.cellMetrics(Font(Font.MONOSPACED, Font.PLAIN, 14)).charWidth,
       insetPx,
       advances
     )
 
   private def advancePx(row: String, measure: TextMeasure.Pixels): Float =
-    measure.advances.advanceOf(row, measure.font, measure.fontRenderContext)
+    measure.advances.advanceOf(row, measure.font)

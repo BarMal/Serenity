@@ -23,7 +23,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers with StateManagerTe
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
   }
 
@@ -42,7 +42,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers with StateManagerTe
       cursorVisible = false,
       surface,
       ViewportSize(80, 24),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
   }
 
@@ -62,7 +62,7 @@ class RenderCursorOnlySpec extends AnyFlatSpec with Matchers with StateManagerTe
       cursorVisible = true,
       surface,
       ViewportSize(80, 24),
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     (0 until surface.height).map(surface.getRow).mkString("\n") should include("Hello, World!")

@@ -4,8 +4,10 @@ import com.serenity.TestWorkspaceTrees
 import com.serenity.config.{AppConfig, AppMode, Gutter, TextAreaInsets, WrapColumn}
 import com.serenity.frontend.FrontendCapabilities
 import com.serenity.rope.Balance
-import com.serenity.state.models.{AppState, EditorPane, Focus, PaneId}
-import com.serenity.testkit.ActivePane
+import com.serenity.state.models.{AppState, EditorPane, Focus, PaneId, TypographyRole}
+import com.serenity.testkit.{ActivePane, TestMeasure}
+import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -44,6 +46,18 @@ class ProseColumnSpec extends AnyFlatSpec with Matchers:
     val state = terminalState(AppConfig.default.withAppMode(AppMode.Code).withWrapColumn(WrapColumn.Ch(60)))
 
     textColumnWidth(state, 100) shouldBe 60
+  }
+
+  it should "size a GUI ch and its grid cell by the owner's measurer when the state has one" in {
+    val config  = AppConfig.default.withWrapColumn(WrapColumn.Ch(60))
+    val initial = AppState.initial(config)
+    val state   = initial.copy(runtime = initial.runtime.copy(anchorWraps = TestMeasure.anchorWraps()))
+    val fonts   = config.editorConfig.fontConfig
+    val chPx    = TestMeasure.measurer.glyphWidthPx(FontSpec.fromAwt(FontLoader.previewTextFont(fonts)), "0").toDouble
+    val gridPx  = TestMeasure.cellMetrics(FontLoader.previewFontForRole(fonts, TypographyRole.Code)).charWidth
+
+    ProseColumn.wrapCells(state) shouldBe Some(ProseColumn.cells(60, chPx, gridPx))
+    ProseColumn.chInCells(state) shouldBe chPx / gridPx +- 1e-9
   }
 
   it should "count cells as cells and, in a terminal, ch as cells too" in {

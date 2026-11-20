@@ -6,15 +6,16 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 import com.serenity.config.AppConfig
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.renderer.FontSpec
 
 /** What the tab strip's layout measures, remembered across frames: the code font's cell width, once per font settings,
   * and each title's advance in the UI font, for as many distinct titles as [[TabBarMeasures.TitleCapacity]].
   *
-  * The cell width builds an image and a graphics context and a title's advance builds a `TextLayout`, which a frame
-  * that lays the strip out every time cannot afford. One instance belongs to each render owner (`RenderCaches`); a
+  * Both are measured by the owner's `measurer`, which a frame that lays the strip out every time would otherwise ask
+  * again; an owner with none measures them as AWT does. One instance belongs to each render owner (`RenderCaches`); a
   * caller with none gets a fresh one and measures every time, to the same widths.
   */
-final class TabBarMeasures:
+final class TabBarMeasures(measurer: () => Option[TextMeasurer] = () => None):
 
   private val remembered = new AtomicReference[Option[(FontConfig, Double)]](None)
   private val measured   = AtomicLong(0)
@@ -30,10 +31,11 @@ final class TabBarMeasures:
   def titleAdvancePx(label: String, fontConfig: FontConfig): Double =
     val key = (label, fontConfig)
     titles.get(key).getOrElse {
-      val _       = titlesMeasured.incrementAndGet()
-      val font    = FontLoader.previewUiFont(fontConfig)
-      val context = TextLayoutSnapshot.defaultFontRenderContext()
-      val advance = TextLayout(label, font, context).getAdvance.toDouble
+      val _    = titlesMeasured.incrementAndGet()
+      val font = FontLoader.previewUiFont(fontConfig)
+      val advance = measurer().fold(
+        TextLayout(label, font, TextLayoutSnapshot.defaultFontRenderContext()).getAdvance.toDouble
+      )(_.glyphWidthPx(FontSpec.fromAwt(font), label).toDouble)
       titles.put(key, advance)
       advance
     }
@@ -46,8 +48,10 @@ final class TabBarMeasures:
     remembered.get() match
       case Some((rememberedConfig, width)) if rememberedConfig == fontConfig => width
       case _ =>
-        val _     = measured.incrementAndGet()
-        val width = CellMetrics.fromFont(FontLoader.previewCodeFont(fontConfig)).charWidth.toDouble
+        val _    = measured.incrementAndGet()
+        val font = FontLoader.previewCodeFont(fontConfig)
+        val width =
+          measurer().fold(CellMetrics.fromFont(font))(_.cellMetrics(FontSpec.fromAwt(font))).charWidth.toDouble
         remembered.set(Some(fontConfig -> width))
         width
 

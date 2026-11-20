@@ -1,10 +1,5 @@
 package com.serenity.ui.layout
 
-import java.awt.Font
-import java.awt.font.FontRenderContext
-
-import com.serenity.ui.renderer.FontFirstUse
-
 /** The cell rule of a code line. A grapheme cluster the terminal counts as two cells ([[CharWidth.ofCluster]]: a wide
   * character, an emoji sequence) takes exactly two cells of the primary font's float advance, whichever font draws its
   * glyph, and a one-cell cluster that a fallback font draws takes exactly one, so what follows either stays on the
@@ -26,11 +21,6 @@ private[layout] object WideCells:
       val end = CharWidth.clusterEnd(text, from)
       CharWidth.isEmojiCluster(text, from, end) || hasEmojiCluster(text, end)
     }
-
-  /** One cell: the advance of `0` in `font`, as a float so a row of cells does not drift from the integer charWidth. */
-  def cellAdvancePx(font: Font, frc: FontRenderContext): Float =
-    FontFirstUse.settle(font, frc)
-    font.createGlyphVector(frc, "0").getGlyphMetrics(0).getAdvance
 
   /** The cells the code line sets the cluster `text[from, until)` on, or 0 when it keeps its own advance: a wide
     * cluster, or a one-cell cluster drawn in a fallback font, which would otherwise keep its glyph's own advance and

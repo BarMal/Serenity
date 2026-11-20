@@ -9,6 +9,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.{createBuffer, switchToPane, updateState}
 import com.serenity.state.models.{AppState, BufferId, PaneId}
+import com.serenity.testkit.TestMeasure
 import com.serenity.{TestTemp, setBufferForPane, setCursorPosition, splitPaneHorizontal, splitPaneVertical}
 import org.typelevel.log4cats.LoggerFactory
 import org.typelevel.log4cats.noop.{NoOpFactory, NoOpLogger}
@@ -42,7 +43,8 @@ object MultiPaneSession:
     val manager = StateManager(
       NoOpLogger[IO],
       sessionRootOverride = Some(TestTemp.directory("serenity-scaling-benchmarks")),
-      dictionaryCache = WarmDictionary.cacheFor(config)
+      dictionaryCache = WarmDictionary.cacheFor(config),
+      layoutMeasurerFor = TestMeasure.layoutMeasurerFor
     ).unsafeRunSync()
     val opened = (for
       _ <- manager.updateState(state => state.copy(persisted = state.persisted.copy(config = config)))

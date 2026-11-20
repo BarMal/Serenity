@@ -55,7 +55,7 @@ trait ColdFrameHarness:
 
   final protected class Pooled(scale: Double, persists: Boolean, frames: FrameImages, caches: RenderCaches):
 
-    def this(scale: Double, persists: Boolean = true, caches: RenderCaches = RenderCaches.create()) =
+    def this(scale: Double, persists: Boolean = true, caches: RenderCaches = TestMeasure.renderCaches()) =
       this(
         scale,
         persists,
@@ -138,7 +138,9 @@ trait ColdFrameHarness:
   protected def coldFramePixelsWith[A](state: AppState, scale: Double)(use: Array[Int] => A): A =
     oracleImages.lend(deviceWidthPx(scale), deviceHeightPx(scale), imagePoolSize(persists = false)) { frames =>
       use(
-        Pooled(scale, persists = false, frames, RenderCaches.create()).renderFrame(state, Damage.Everything).rgbPixels
+        Pooled(scale, persists = false, frames, TestMeasure.renderCaches())
+          .renderFrame(state, Damage.Everything)
+          .rgbPixels
       )
     }
 

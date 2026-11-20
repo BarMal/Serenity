@@ -6,9 +6,10 @@ import cats.effect.unsafe.implicits.global
 import com.serenity.config.AppConfig
 import com.serenity.keystroke.events.ScrollDown
 import com.serenity.rope.{Balance, Leaf}
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.manager.StateManagerTestFacade.updateState
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -48,7 +49,7 @@ class ScrollPathReadBoundSpec extends AnyFlatSpec with Matchers:
         }))
       )
       .unsafeRunSync()
-    val caches            = RenderCaches.create()
+    val caches            = TestMeasure.renderCaches()
     val image             = LaptopFrameBenchmarks.frameImage()
     def current: AppState = stateManager.getCurrentState.unsafeRunSync()
     def scrollOne(): Unit = stateManager.applyEvent(ScrollDown(1)).unsafeRunSync()

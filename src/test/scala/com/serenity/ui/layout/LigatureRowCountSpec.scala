@@ -7,6 +7,7 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -27,8 +28,8 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
     FontLoader.previewCodeFont(config.copy(fontSize = sizePt, enableLigatures = true))
 
   private def cacheWithCertificate(font: Font): WrappedLineCache.Bounded =
-    val cache = WrappedLineCache.bounded(layoutMemos = LayoutMemos(inline))
-    val key   = NominalAdvances.Key(font, frc)
+    val cache = WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos(inline))
+    val key   = NominalAdvances.Key(FontSpec.fromAwt(font))
     cache.layoutMemos.rowCertificates.of(key)
     cache.layoutMemos.rowCertificates.of(key) shouldBe defined
     cache
@@ -47,7 +48,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
         widthPx,
         font,
         cellMetricsOverride = Some(TestMeasure.cellMetrics(font)),
-        wrapCache = WrappedLineCache.bounded()
+        wrapCache = TestMeasure.wrapCache()
       )
       .length
       .max(1)
@@ -102,7 +103,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
   it should "wrap every line while the certificate is not yet built" in {
     val font   = ligatureFont()
     val buffer = Buffer.fromString(bufferId, source.mkString("\n"))
-    val cache  = WrappedLineCache.bounded(layoutMemos = LayoutMemos((_: Runnable) => ()))
+    val cache  = WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos((_: Runnable) => ()))
 
     counted(buffer, 1472, font, cache) shouldBe source.map(wrapped(_, 1472, font))
 
@@ -124,7 +125,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
     val font   = ligatureFont()
     val buffer = Buffer.fromString(bufferId, source.mkString("\n"))
     val cache  = cacheWithCertificate(font)
-    val key    = NominalAdvances.Key(font, frc)
+    val key    = NominalAdvances.Key(FontSpec.fromAwt(font))
 
     val rows = counted(buffer, 1472, font, cache, painted = Map(3 -> 2))
 
@@ -141,7 +142,7 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
 
     counted(buffer, 1472, font, cache, painted = Map(3 -> 1, 4 -> 1))
 
-    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(font, frc)) shouldBe defined
+    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(FontSpec.fromAwt(font))) shouldBe defined
   }
 
   it should "not count a line the certificate did not call one row as a miscount" in {
@@ -151,17 +152,17 @@ class LigatureRowCountSpec extends AnyFlatSpec with Matchers:
 
     counted(buffer, 1472, font, cache, painted = Map(0 -> 3))
 
-    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(font, frc)) shouldBe defined
+    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(FontSpec.fromAwt(font))) shouldBe defined
   }
 
   it should "also revoke the certificate of a font set without ligatures" in {
     val font   = FontLoader.previewCodeFont(config.copy(enableLigatures = false))
     val buffer = Buffer.fromString(bufferId, source.mkString("\n"))
-    val cache  = WrappedLineCache.bounded(layoutMemos = LayoutMemos(inline))
+    val cache  = WrappedLineCache.bounded(layoutMemos = TestMeasure.layoutMemos(inline))
 
     counted(buffer, 1472, font, cache, painted = Map(3 -> 2))
 
-    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(font, frc)) shouldBe None
+    cache.layoutMemos.rowCertificates.of(NominalAdvances.Key(FontSpec.fromAwt(font))) shouldBe None
   }
 
   it should "drop the row counts already kept, so lines counted by the old certificate are counted again" in {

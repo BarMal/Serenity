@@ -11,7 +11,6 @@ import com.serenity.ui.layout.{
   CellMetrics,
   DropCapGlyph,
   DropCapLayout,
-  LayoutMemos,
   LayoutRect,
   TextLayoutSnapshot,
   TextRowMetrics
@@ -40,10 +39,22 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
       val metrics = TestMeasure.cellMetrics(font)
       val frc     = TextLayoutSnapshot.defaultFontRenderContext()
 
-      val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 14, font)
+      val snapshot = TextLayoutSnapshot.fromBuffer(
+        buffer,
+        panelWidthPx = metrics.charWidth * 14,
+        font,
+        wrapCache = TestMeasure.wrapCache()
+      )
 
       val glyph = DropCapGlyph
-        .forParagraph(font, frc, Some(document), 0, ParagraphRole.DropCap(2), proseScale = 1.0f, memos = LayoutMemos())
+        .forParagraph(
+          font,
+          Some(document),
+          0,
+          ParagraphRole.DropCap(2),
+          proseScale = 1.0f,
+          memos = TestMeasure.layoutMemos()
+        )
         .getOrElse(fail("expected a drop cap glyph"))
       val inkRightPx       = math.ceil(glyph.font.createGlyphVector(frc, glyph.text).getVisualBounds.getMaxX).toFloat
       val expectedIndentPx = inkRightPx + DropCapLayout.DefaultGapEm * font.getSize2D
@@ -83,7 +94,12 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
     val metrics = TestMeasure.cellMetrics(font)
 
-    val snapshot = TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = metrics.charWidth * 14, font)
+    val snapshot = TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = metrics.charWidth * 14,
+      font,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
     snapshot.visualLines.foreach(_.xOffsetPx shouldBe 0.0f)
   }
@@ -106,8 +122,20 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
       .copy(richText = RichTextState(richTextDocument = Some(bodyDocument)), viewport = viewport)
 
     val toggledOffSnapshot =
-      TextLayoutSnapshot.fromBuffer(dropCapBuffer, panelWidthPx, font, dropCapsEnabled = false)
-    val plainBodySnapshot = TextLayoutSnapshot.fromBuffer(bodyBuffer, panelWidthPx, font, dropCapsEnabled = true)
+      TextLayoutSnapshot.fromBuffer(
+        dropCapBuffer,
+        panelWidthPx,
+        font,
+        dropCapsEnabled = false,
+        wrapCache = TestMeasure.wrapCache()
+      )
+    val plainBodySnapshot = TextLayoutSnapshot.fromBuffer(
+      bodyBuffer,
+      panelWidthPx,
+      font,
+      dropCapsEnabled = true,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
     toggledOffSnapshot.visualLines.map(_.text) shouldBe plainBodySnapshot.visualLines.map(_.text)
     toggledOffSnapshot.visualLines.map(_.xOffsetPx) shouldBe plainBodySnapshot.visualLines.map(_.xOffsetPx)
@@ -126,7 +154,13 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
         richText = RichTextState(richTextDocument = Some(document)),
         viewport = Viewport(topLine = 0, leftColumn = 0, visibleColumns = 80, visibleLines = 12)
       )
-    TextLayoutSnapshot.fromBuffer(buffer, panelWidthPx = 600, font, forceCellLayout = forceCellLayout)
+    TextLayoutSnapshot.fromBuffer(
+      buffer,
+      panelWidthPx = 600,
+      font,
+      forceCellLayout = forceCellLayout,
+      wrapCache = TestMeasure.wrapCache()
+    )
 
   private def topsOf(snapshot: TextLayoutSnapshot): Vector[Int] = snapshot.rowHeightsPx.scanLeft(0)(_ + _)
 

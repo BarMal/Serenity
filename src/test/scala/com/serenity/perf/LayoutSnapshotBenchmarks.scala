@@ -5,7 +5,8 @@ import java.awt.Font
 import com.serenity.richtext.{ParagraphAlignment, ParagraphRole, RichTextDocument, RichTextParagraph}
 import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, Viewport}
-import com.serenity.ui.layout.{LayoutMemos, TextLayoutSnapshot, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.{TextLayoutSnapshot, WrappedLineCache}
 import com.serenity.ui.renderer.ShapedTextCache
 
 /** Snapshot builds over a warm wrap cache: the per-frame and per-navigation cost of laying out prose whose wraps are
@@ -45,7 +46,7 @@ private[perf] object LayoutSnapshotBenchmarks:
     })
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
-    lazy val cache = WrappedLineCache.bounded()
+    lazy val cache = TestMeasure.wrapCache()
     lazy val plain = buffer(document(paragraphs = 40, leadingBlankLines = 0))
     lazy val moved = buffer(document(paragraphs = 40, leadingBlankLines = 1))
     def build(source: Buffer): TextLayoutSnapshot =
@@ -53,7 +54,7 @@ private[perf] object LayoutSnapshotBenchmarks:
     lazy val expectedRows = build(plain).visualLines.size
     lazy val headings     = buffer(headingDocument(paragraphs = 60))
     // Every wrap is measured afresh; what the owner has read off the font stays, as a process-wide cache once kept it.
-    lazy val measuring = WrappedLineCache.measuring(ShapedTextCache(), LayoutMemos())
+    lazy val measuring = WrappedLineCache.measuring(ShapedTextCache(), TestMeasure.layoutMemos())
     def buildUncached(source: Buffer): TextLayoutSnapshot =
       TextLayoutSnapshot.fromBuffer(source, panelWidth, proseFont, wrapCache = measuring)
 

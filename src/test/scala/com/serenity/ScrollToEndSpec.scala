@@ -3,6 +3,7 @@ package com.serenity
 import com.serenity.keystroke.events.{ScrollDown, ScrollUp}
 import com.serenity.state.components.{ComponentResult, EditorPaneComponent}
 import com.serenity.state.models.*
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.TextRowMetrics
 import com.serenity.ui.renderer.EditorPaneRenderPlan
 import org.scalatest.flatspec.AnyFlatSpec
@@ -46,7 +47,7 @@ class ScrollToEndSpec extends AnyFlatSpec with Matchers with PersistedFrameFixtu
     )
 
   private def scrolled(state: AppState, event: com.serenity.keystroke.events.TextEntryEvent): AppState =
-    new EditorPaneComponent(paneId).processEvent(event, state) match
+    new EditorPaneComponent(paneId, TestMeasure.wrapCache()).processEvent(event, state) match
       case ComponentResult.ReducerUpdate(result) => result.state
       case other                                 => fail(s"expected a reduction, got $other")
 

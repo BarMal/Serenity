@@ -50,7 +50,11 @@ class CursorViewportColumnPagingSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = base.runtime.copy(capabilities = FrontendCapabilities.gui, viewportSize = Some(viewportSize))
+      runtime = base.runtime.copy(
+        capabilities = FrontendCapabilities.gui,
+        viewportSize = Some(viewportSize),
+        anchorWraps = TestMeasure.anchorWraps()
+      )
     )
 
   /** The rows one column draws, computed the way the renderer sizes the pane it paints. */
@@ -63,7 +67,7 @@ class CursorViewportColumnPagingSpec extends AnyFlatSpec with Matchers:
     val cursor = CursorPosition(line, 0)
     from.copy(
       editing = EditingState(List(cursor)),
-      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor)
+      viewport = CursorViewport.adjustForCursorColumnMode(from, state, cursor, TestMeasure.wrapCache())
     )
 
   "the test setup" should "draw fewer rows per column than the code grid counts" in {

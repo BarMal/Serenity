@@ -22,7 +22,8 @@ import com.serenity.perf.BenchmarkFixtures.{
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
-import com.serenity.ui.layout.{LayoutMemos, WrappedLineCache}
+import com.serenity.testkit.TestMeasure
+import com.serenity.ui.layout.WrappedLineCache
 import com.serenity.ui.renderer.ShapedTextCache
 
 /** Reducer benchmarks, so the per-family coverage #993 depends on is visible in one place. Builds its fixtures without
@@ -65,7 +66,7 @@ private[perf] object ReducerBenchmarks:
     // One shaper and one set of font memos across iterations, and no wrap remembered: every wrap is measured, as when no
     // cache is given, while the measurements underneath stay warm, as they were when they were process-wide.
     lazy val moveDownShaping     = ShapedTextCache()
-    lazy val moveDownMemos       = LayoutMemos()
+    lazy val moveDownMemos       = TestMeasure.layoutMemos()
     lazy val multiInsertResult   = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
     lazy val multiMoveResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
     lazy val multiMoveDownResult = com.serenity.VerticalNavSupport.dispatch(MoveDown, PaneId(0), multiCursorWrapState)

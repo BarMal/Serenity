@@ -17,8 +17,8 @@ import com.serenity.richtext.{
   RichTextStyle,
   RtfDocumentCodec
 }
+import com.serenity.state.manager.DamageProducer
 import com.serenity.state.manager.StateManagerTestFacade.updateState
-import com.serenity.state.manager.{DamageProducer, RenderCaches}
 import com.serenity.state.models.*
 import com.serenity.testkit.{FrameDiff, FrameMismatchDump, PresentAreas, TestMeasure}
 import com.serenity.ui.layout.{PixelRect, ViewportSize}
@@ -84,7 +84,7 @@ abstract class SkiaPageDownRichDocumentFramesSplit(part: Int, parts: Int) extend
 
     private val images      = frames.drawn
     private val screenImage = frames.screen
-    private val caches      = RenderCaches.create()
+    private val caches      = TestMeasure.renderCaches()
     private val screen      = ScreenIdentity(this)
     private val drawn       = AtomicInteger(0)
     private val lastPlan    = new AtomicReference[Option[com.serenity.ui.renderer.EditorPaneRenderPlan]](None)

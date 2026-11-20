@@ -167,7 +167,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
@@ -194,7 +194,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.bold))
@@ -225,7 +225,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should contain(surface.StyleCall("enable", TextStyle.italic))
@@ -249,7 +249,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should not contain surface.StyleCall("enable", TextStyle.bold)
@@ -286,7 +286,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should contain(
@@ -319,7 +319,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     surface.styleCalls should contain(
@@ -352,7 +352,7 @@ class RichTextEditorRenderingSpec extends AnyFlatSpec with Matchers:
       FontSpec.fromAwt(textFont),
       monoMetrics,
       None,
-      com.serenity.state.manager.RenderCaches.create()
+      com.serenity.testkit.TestMeasure.renderCaches()
     )
 
     val drawCall = surface.drawRunPxCalls.find(_.s == "Centered").getOrElse(fail("expected centered rich text draw"))

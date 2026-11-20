@@ -2,8 +2,8 @@ package com.serenity.perf
 
 import com.serenity.SkiaFrames
 import com.serenity.rope.Balance
-import com.serenity.state.manager.RenderCaches
 import com.serenity.state.models.BufferId
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.skia.{SkiaShapedTextCache, SkiaTextCaches}
 
 /** How the bounded Skia shape cache (two generations of 2048 stretches) serves many open buffers (#2478): the buffers
@@ -62,7 +62,7 @@ private[perf] object ScalingShapeCacheBenchmarks:
     shaped: Boolean = false
   ): (Vector[Vector[FrameTraffic]], FrameTraffic) =
     val state  = MultiBufferFixture.state(kind, buffers, size, shaped)
-    val caches = RenderCaches.create()
+    val caches = TestMeasure.renderCaches()
     val cache  = SkiaTextCaches.of(caches.backendCaches).shapedText
     val traffic = Vector.tabulate(passes) { _ =>
       Vector.tabulate(buffers) { index =>
