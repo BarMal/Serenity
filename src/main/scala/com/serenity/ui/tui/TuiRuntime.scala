@@ -26,6 +26,7 @@ import com.serenity.state.manager.StateManager
 import com.serenity.state.models.{AppState, Buffer, BufferId, Damage, RestartMode}
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync, TuiAccessibilityBridge}
 import com.serenity.ui.color.RenderColor
+import com.serenity.ui.host.WindowTitle
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{FontSpec, RendererCursorOverlay, RendererEntryPoints}
 import fs2.Stream
@@ -342,7 +343,7 @@ object TuiRuntime:
       .sync(state)(previous => IO(AccessibilitySnapshot.from(state, size, previous)))
       .flatMap(snapshot =>
         IO {
-          accessibilityBridge.publishTitle(TuiWindowTitle.from(state))
+          accessibilityBridge.publishTitle(WindowTitle.from(state))
           accessibilityBridge.publish(snapshot)
         }
       )

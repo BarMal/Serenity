@@ -1,12 +1,12 @@
-package com.serenity.ui.tui
+package com.serenity.ui.host
 
 import com.serenity.state.models.{AppState, Buffer}
 
-/** The terminal window title: the active buffer's name, a `*` while it has unsaved changes, and the application name.
-  * It is read off the document's identity only -- never its text -- because the title is handed to the terminal
-  * emulator, which may show, log or announce it.
+/** The window title, in the GUI and the terminal alike: the active buffer's name, a `*` while it has unsaved changes,
+  * and the application name. It is read off the document's identity only -- never its text -- because the title is handed to the window
+  * system or terminal emulator, which may show, log or announce it.
   */
-object TuiWindowTitle:
+object WindowTitle:
 
   private val ApplicationName = "Serenity"
 
