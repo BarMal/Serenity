@@ -161,6 +161,8 @@ final class TerminalRenderSurface(
   // text with a FontRenderContext this surface does not have.
   override def fontRenderContext: Option[FontRenderContext] = None
 
+  override def measuresText: Boolean = false
+
   // Pixel-precise proportional text has no meaning on a fixed-cell surface -- real text drawing goes through
   // putString/fillRect, which every RenderSurface (including this one) implements for real. #1105 is what keeps
   // callers from reaching this method on a surface reporting fontRenderContext = None; not this issue's job.

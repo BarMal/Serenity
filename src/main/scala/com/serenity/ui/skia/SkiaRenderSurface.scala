@@ -142,6 +142,8 @@ final class SkiaRenderSurface(
 
   override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
+  override def measuresText: Boolean = true
+
   def setForegroundColor(color: RenderColor): Unit = fgRef.set(awtColor(color, fgRef.get()))
   def setBackgroundColor(color: RenderColor): Unit = bgRef.set(awtColor(color, bgRef.get()))
   def getBackgroundColor: RenderColor              = RenderColor.fromAwt(bgRef.get())

@@ -277,6 +277,7 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
   private val textDrawing: TextDrawing = new TextDrawing:
     def setFont(font: FontSpec): Unit                = delegate.text.setFont(font)
     def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
+    def measuresText: Boolean                        = delegate.text.measuresText
 
     def drawRunPx(
       xPx: Float,

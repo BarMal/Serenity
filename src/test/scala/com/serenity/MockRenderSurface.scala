@@ -79,6 +79,7 @@ class MockRenderSurface(
     setFontCallsBuffer += font.toAwt
 
   override def fontRenderContext: Option[FontRenderContext] = fontRenderContextOverride
+  override def measuresText: Boolean                        = fontRenderContextOverride.isDefined
 
   def setFontCalls: List[Font] = setFontCallsBuffer.toList
 

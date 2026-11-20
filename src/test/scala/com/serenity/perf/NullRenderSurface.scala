@@ -53,6 +53,7 @@ final class NullRenderSurface(
   override def devicePixelScaleX: Double                            = deviceScale
   override def devicePixelScaleY: Double                            = deviceScale
   override def fontRenderContext: Option[FontRenderContext]         = renderContext
+  override def measuresText: Boolean                                = renderContext.isDefined
 
   def setForegroundColor(color: RenderColor): Unit = foreground.set(color)
   def setBackgroundColor(color: RenderColor): Unit = background.set(color)

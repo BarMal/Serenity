@@ -256,7 +256,7 @@ object RendererEntryPoints:
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
-    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     val _ = withSceneIfNeeded(
       state,
       caches.authoritativeScene
@@ -330,7 +330,7 @@ object RendererEntryPoints:
   ): List[PixelRect] =
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
     // surface with no real FontRenderContext.
-    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     withSceneIfNeeded(
       state,
       caches.authoritativeScene

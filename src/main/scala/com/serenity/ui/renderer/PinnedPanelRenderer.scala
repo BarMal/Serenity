@@ -181,7 +181,7 @@ object PinnedPanelRenderer:
   ): Unit =
     surface.setForegroundColor(foreground)
     // A surface with no font render context is a terminal, which draws cells, not measured runs.
-    measure.filter(_ => surface.text.fontRenderContext.nonEmpty) match
+    measure.filter(_ => surface.text.measuresText) match
       case Some(m) =>
         val availablePx = (widthCells * cellMetrics.charWidth - math.round(textInsetPx).toInt).max(1)
         val fitted      = fitting(text.stripTrailing(), availablePx, m)

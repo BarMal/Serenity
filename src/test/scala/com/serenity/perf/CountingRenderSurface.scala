@@ -69,6 +69,7 @@ final class CountingRenderSurface(inner: RenderSurface, counts: DrawCounts)
   override def activity: SurfaceActivity                            = inner.activity
   override def hardwareCursor: Option[HardwareCursor]               = inner.hardwareCursor
   override def fontRenderContext: Option[FontRenderContext]         = inner.text.fontRenderContext
+  override def measuresText: Boolean                                = inner.text.measuresText
   def viewportWidth: Int                                            = inner.viewportWidth
   def viewportHeight: Int                                           = inner.viewportHeight
 

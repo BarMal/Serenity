@@ -218,7 +218,7 @@ object RendererPaneSetup:
     * additionally require the surface's own capability -- #1105.
     */
   def usesMeasuredDrawing(snapshot: TextLayoutSnapshot, context: RenderContext): Boolean =
-    snapshot.usesMeasuredLayout && context.surface.text.fontRenderContext.nonEmpty
+    snapshot.usesMeasuredLayout && context.surface.text.measuresText
 
   def snapshotForBuffer(
     buffer: Buffer,
@@ -230,7 +230,7 @@ object RendererPaneSetup:
     // is a no-op there -- so a buffer that would otherwise pick a proportional text/ui font is forced onto the code
     // font instead, and the resulting snapshot is forced onto the cell path below, regardless of what the font itself
     // would have decided (ligatures, non-monospace advances, ...).
-    val hasFontRenderContext = context.surface.text.fontRenderContext.nonEmpty
+    val hasFontRenderContext = context.surface.text.measuresText
     val bufferFont           = if hasFontRenderContext then context.fontForBuffer(buffer) else context.codeFont
     val panelWidthPx         = contentRect.width * context.cellMetrics.charWidth
     val panelHeightPx        = contentRect.height * context.cellMetrics.lineHeight

@@ -120,6 +120,7 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     val surface =
       SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0, caches, styledFonts)
 
+    surface.text.measuresText shouldBe true
     val context = surface.text.fontRenderContext.getOrElse(fail("expected a font render context"))
     context.getTransform.getScaleX shouldBe 2.0
     context.getTransform.getScaleY shouldBe 2.0

@@ -242,7 +242,7 @@ object RendererGutter:
         .flatMap(_.bufferId)
         .flatMap(state.persisted.buffers.get)
         .exists(useMeasuredLineNumberFont(_, context)) &&
-        context.surface.text.fontRenderContext.isDefined && RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
+        context.surface.text.measuresText && RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     val bands =
       if measured then RendererPaneSetup.paneRowRects(lineRect, context, snapshot)
       else cellRowBands(context, snapshot, lineRect)

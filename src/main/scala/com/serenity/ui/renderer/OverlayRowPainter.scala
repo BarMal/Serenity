@@ -340,7 +340,7 @@ private[renderer] object OverlayRowPainter:
   // cell-only one, where they were exactly the bug: they could force the measured (dropped) path even with no
   // FontRenderContext to measure against.
   private def shouldUseMeasuredCursor(surface: RenderSurface): Boolean =
-    surface.text.fontRenderContext.nonEmpty
+    surface.text.measuresText
 
   private def renderMeasuredPlainRow(
     surface: RenderSurface,
