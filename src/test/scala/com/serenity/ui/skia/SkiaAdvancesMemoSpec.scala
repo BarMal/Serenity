@@ -51,9 +51,7 @@ class SkiaAdvancesMemoSpec extends AnyFlatSpec with Matchers:
       System.gc()
       if released.get == null then true
       else if rounds == 0 then false
-      else
-        Thread.sleep(20)
-        collected(rounds - 1)
+      else collected(rounds - 1)
 
-    collected(50) shouldBe true
+    collected(200) shouldBe true
   }

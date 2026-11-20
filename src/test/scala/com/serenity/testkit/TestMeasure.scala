@@ -25,6 +25,9 @@ object TestMeasure:
 
   def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
 
+  /** The grid AWT's metrics make of a font, for a fixture that must keep the size master gave it. */
+  def awtCellMetrics(font: Font): CellMetrics = CellMetrics.fromFont(font)
+
   /** The ink Skia itself gives `text` in `font`, independent of the measurer under test: the oracle for where a glyph
     * stands, in place of AWT's glyph vector.
     */
