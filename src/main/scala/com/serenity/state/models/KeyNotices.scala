@@ -1,6 +1,6 @@
 package com.serenity.state.models
 
-import com.serenity.command.{Availability, Command, CommandAvailability, CommandRunnerContext}
+import com.serenity.command.{Availability, Command, CommandAvailability, CommandRunnerContext, scope}
 
 /** What a key says when it did nothing, so a press is never met with silence. Every notice shares one topic: a second
   * dead key replaces the first rather than stacking beside it.
