@@ -101,6 +101,12 @@ class SwingWindow(
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
 
+  private val onCloseRequestedRef = new AtomicReference[Option[() => Unit]](None)
+
+  def setOnCloseRequested(cb: () => Unit): Unit = onCloseRequestedRef.set(Some(cb))
+
+  private def requestClose(): Unit = SwingWindow.routeClose(onCloseRequestedRef.get(), closeLatch)
+
   private val paintProbe = new PaintProbe()
 
   val canvas: JPanel = new JPanel with ImeRequestsHost:
@@ -264,7 +270,7 @@ class SwingWindow(
       case SwingWindow.ChromeControlKind.Maximize | SwingWindow.ChromeControlKind.Restore =>
         toggleMaximize()
       case SwingWindow.ChromeControlKind.Close =>
-        closeLatch.countDown()
+        requestClose()
 
   private val chromeTitleBar: ChromeTitleBar = new ChromeTitleBar(
     chromePaletteRef,
@@ -295,7 +301,7 @@ class SwingWindow(
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
-        override def windowClosing(e: WindowEvent): Unit = closeLatch.countDown()
+        override def windowClosing(e: WindowEvent): Unit = requestClose()
     )
     f.addWindowFocusListener(
       new WindowFocusListener:
@@ -562,6 +568,13 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     * `await()` that can never reach a cancellation boundary -- the app would exit only via the chrome close control,
     * hanging on the in-app Quit option (thread parked here, `main` parked in `IOApp`).
     */
+  /** A close request goes to the runtime's callback, which asks the quit workflow and may be answered Cancel, so
+    * another request can follow; only with no callback (smoke test, startup probe) does it end the run through the
+    * latch.
+    */
+  private[serenity] def routeClose(onCloseRequested: Option[() => Unit], latch: CountDownLatch): Unit =
+    onCloseRequested.fold(latch.countDown())(_.apply())
+
   private[serenity] def awaitCloseLatch(latch: CountDownLatch): IO[Unit] =
     IO.interruptible(latch.await())
 

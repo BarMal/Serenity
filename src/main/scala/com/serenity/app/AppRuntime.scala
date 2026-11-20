@@ -6,7 +6,7 @@ import java.util.concurrent.Executor
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.{Dispatcher, Supervisor}
+import cats.effect.std.{Dispatcher, Semaphore, Supervisor}
 import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
@@ -169,6 +169,7 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
+    registerCloseCallback: (() => Unit) => Unit = _ => (),
     registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
@@ -256,6 +257,12 @@ object AppRuntime:
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
+        closeGate     <- Semaphore[IO](1)
+        _ <- IO(
+          registerCloseCallback(
+            closeRequestBridge(stateManager.runtimeLifecycle.requestQuit, closeGate, resizeCallbackDispatcher)
+          )
+        )
         cursorVisible <- Ref.of[IO, Boolean](true)
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         startedAt     <- IO.monotonic
@@ -551,6 +558,17 @@ object AppRuntime:
     awaitQuit: IO[Unit]
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
+
+  /** What closing the window does: ask the quit workflow Ctrl+Q asks, so unsaved buffers are asked about. A request
+    * made while an earlier one is still waiting for its answer is dropped, so a second click does not stack a second
+    * prompt; once it is answered (Cancel included) the next one is heard.
+    */
+  private[serenity] def closeRequestBridge(
+    requestQuit: IO[QuitOutcome],
+    inFlight: Semaphore[IO],
+    dispatcher: Dispatcher[IO]
+  ): () => Unit =
+    () => dispatchIfRunning(dispatcher)(inFlight.tryPermit.use(acquired => requestQuit.void.whenA(acquired)))
 
   private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
     awaitQuit >> whenQuit

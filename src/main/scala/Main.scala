@@ -574,6 +574,10 @@ object Main extends IOApp:
               hideWindow = IO(host.control.hide()),
               registerResizeCallback = cb => host.control.setOnResize(cb),
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),
+              registerCloseCallback =
+                if launchOptions.smokeTest || launchOptions.startupProbe || launchOptions.rendererTrial.isDefined then
+                  _ => ()
+                else cb => host.control.setOnCloseRequested(cb),
               openPath = launchOptions.openPath,
               frontend = GuiFrontend,
               forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(host.control.bringToFront())),

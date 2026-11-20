@@ -19,6 +19,12 @@ trait WindowControl:
   /** Completes once the user has asked to close the window. */
   def awaitClose: IO[Unit]
 
+  /** Hands each later request to close the window to `cb` instead of ending the run through [[awaitClose]]: the quit
+    * it asks for may be cancelled, after which the window must be closable again. A window without this keeps
+    * `awaitClose`.
+    */
+  def setOnCloseRequested(cb: () => Unit): Unit = ()
+
   def setOnResize(cb: () => Unit): Unit
 
   /** Registers a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
