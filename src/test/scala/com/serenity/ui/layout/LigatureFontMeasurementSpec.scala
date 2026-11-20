@@ -141,7 +141,9 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   it should "shape a line once, however many windows measure it" in {
     val measurer = new SkiaTextMeasurer(TestBundledTypefaces.cacheWithInter())
-    val line     = codeLines(1)
+    // Printable ASCII is measured from the font's table without shaping the line (SkiaAsciiAdvancesSpec); a character
+    // outside it leaves the line to the shaper, whose memo this is about.
+    val line = codeLines(1) + " \u00e9"
 
     val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, measurer)
     val _ = GlyphAdvances.measure(line, 0, line.length, 0, resolver, measurer)

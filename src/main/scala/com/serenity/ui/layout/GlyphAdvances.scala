@@ -107,7 +107,14 @@ private[ui] object GlyphAdvances:
     measurable: Array[Boolean]
   ): GlyphAdvances =
     def countBefore(flags: Array[Boolean]): Array[Int] =
-      flags.scanLeft(0)((count, flag) => if flag then count + 1 else count)
+      val counts = new Array[Int](flags.length + 1)
+      @annotation.tailrec
+      def fill(index: Int): Unit =
+        if index < flags.length then
+          counts(index + 1) = if flags(index) then counts(index) + 1 else counts(index)
+          fill(index + 1)
+      fill(0)
+      counts
     new GlyphAdvances(advances, countBefore(contextFree), kernAfter, countBefore(measurable))
 
   /** Whether the characters `[from, until)` of `chars` need more than one glyph per character to be laid out. */

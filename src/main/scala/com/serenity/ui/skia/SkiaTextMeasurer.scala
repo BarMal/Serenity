@@ -26,14 +26,26 @@ final class SkiaTextMeasurer(
   def this(faces: SkiaFontCache) = this(faces, new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf))
 
   import SkiaTextMeasurer.*
-  import ShapingMemos.{AdvancesKey, CutKey, PairKey, ShapedKey}
+  import ShapingMemos.{AdvancesKey, CutKey, PairKey, ShapedKey, SpaceCutKey}
 
-  private val shaperLock = new Object
-  private val shapingN   = new java.util.concurrent.atomic.AtomicLong(0)
-  private val inkPaint   = new Paint()
-  private val shaper     = Shaper.Companion.make()
+  private val shapingN = new java.util.concurrent.atomic.AtomicLong(0)
+  private val inkPaint = new Paint()
 
-  /** How many times the shaper has run for this measurer. */
+  /** A shaper keeps state while it shapes, so a thread has one to itself; shapers rest here between shapings, one for
+    * each thread that has shaped at once. One shared behind a lock made the threads of a pool take turns, and counting
+    * four panes at once cost more than counting them one after another.
+    */
+  private val restingShapers = new java.util.concurrent.ConcurrentLinkedQueue[Shaper]()
+
+  private def withShaper[A](use: Shaper => A): A =
+    val shaper = Option(restingShapers.poll()).getOrElse(Shaper.Companion.make())
+    try use(shaper)
+    finally
+      val _ = restingShapers.offer(shaper)
+
+  /** How many times the shaper has run for a text this measurer was asked about; reading a font's ASCII table is not
+    * one.
+    */
   private[ui] def shaperRuns: Long = shapingN.get
 
   def metricsKey: MetricsKey = MetricsKey("skia", Vector.empty)
@@ -177,6 +189,9 @@ final class SkiaTextMeasurer(
       surrogateFreeStretches(chars).foreach((from, until) =>
         measureRun(chars.substring(from, until), font, offset + from, advances, kernAfter, measurable)
       )
+    else if chars.length >= AsciiAdvanceTable.SmallestStretch && AsciiAdvanceTable.isPrintableAscii(chars) &&
+        asciiTableOf(font).measure(chars, offset, advances, kernAfter, measurable)
+    then ()
     else
       StretchAdvances.measure(
         chars,
@@ -188,6 +203,13 @@ final class SkiaTextMeasurer(
         shaped(_, _, 0.toByte),
         pairKerning(_, _, _)
       )
+
+  private def asciiTableOf(font: Font): AsciiAdvanceTable =
+    val key = faces.shapingKeyOf(font)
+    Option(memos.asciiTables.get(key)).getOrElse {
+      val table = AsciiAdvanceTable.read(font, shapeNow(_, _, 0.toByte, counted = false), pairKerning(_, _, _))
+      Option(memos.asciiTables.putIfAbsent(key, table)).getOrElse(table)
+    }
 
   private def surrogateFreeStretches(chars: String): Vector[(Int, Int)] =
     val bounds = chars.indices.filter(index => Character.isSurrogate(chars(index)))
@@ -234,16 +256,38 @@ final class SkiaTextMeasurer(
         CharWidth.isCombiningMark(text.codePointAt(cut)) || Character.getType(text(cut)) == Character.FORMAT ||
         Character.getType(text(cut - 1)) == Character.FORMAT
     !splitsCluster && {
-      if text.length > MaxCachedCutChars then shapingCutHolds(text, cut, font)
-      else
-        val key = CutKey(text, cut, faces.shapingKeyOf(font))
-        Option(memos.cuts.get(key)).map(_.booleanValue).getOrElse {
-          val decision = shapingCutHolds(text, cut, font)
-          if memos.cuts.size >= MaxCachedCuts then memos.cuts.clear()
-          val _ = memos.cuts.put(key, java.lang.Boolean.valueOf(decision))
-          decision
-        }
+      if text(cut - 1) == ' ' && SkiaShapedTextCache.shapedByLatinRuns(text) then latinSpaceCutHolds(text, cut, font)
+      else windowCutHolds(text, cut, font)
     }
+
+  /** A cut after a space in Latin text reads, in a font whose tables substitute nothing in the probe text, only the
+    * character after the space: what the pair decides is remembered for the font, where the windows around the cuts of
+    * a document are all different and would each be shaped. A font that does substitute may do so by rules reaching
+    * past the pair, so its cuts are decided in their window.
+    */
+  private def latinSpaceCutHolds(text: String, cut: Int, font: Font): Boolean =
+    val key = faces.shapingKeyOf(font)
+    remembered(memos.spaceCuts, SpaceCutKey(key, text(cut)))(shapingCutHolds(s" ${text(cut)}", 1, font)) &&
+    (!remembered(memos.substitutes, key)(substitutesInProbe(font)) || windowCutHolds(text, cut, font))
+
+  private def substitutesInProbe(font: Font): Boolean =
+    val whole = shapeNow(SubstitutionProbeText, font, 0.toByte).glyphs
+    val alone = SubstitutionProbeText.toVector.flatMap(char => shapeNow(char.toString, font, 0.toByte).glyphs)
+    !java.util.Arrays.equals(whole, alone.toArray)
+
+  private def remembered[K <: AnyRef](memo: java.util.concurrent.ConcurrentMap[K, java.lang.Boolean], key: K)(
+    decide: => Boolean
+  ): Boolean =
+    Option(memo.get(key)).map(_.booleanValue).getOrElse {
+      val decision = decide
+      if memo.size >= MaxCachedCuts then memo.clear()
+      val _ = memo.put(key, java.lang.Boolean.valueOf(decision))
+      decision
+    }
+
+  private def windowCutHolds(text: String, cut: Int, font: Font): Boolean =
+    if text.length > MaxCachedCutChars then shapingCutHolds(text, cut, font)
+    else remembered(memos.cuts, CutKey(text, cut, faces.shapingKeyOf(font)))(shapingCutHolds(text, cut, font))
 
   /** What was decided for a text, a cut in it and a font: the text around a cut is a few characters, and the same few
     * recur across a document, so the three shapings a decision costs are made once and, being of no use to anything
@@ -435,7 +479,7 @@ final class SkiaTextMeasurer(
         collector
       }
 
-  private def shapeNow(text: String, font: Font, level: Byte): ShapedGlyphs =
+  private def shapeNow(text: String, font: Font, level: Byte, counted: Boolean = true): ShapedGlyphs =
     val collector = new GlyphCollector()
     // One run in the one font, as the draw path shapes Latin text (`shapeLatin`). The overload that finds the runs
     // itself builds ICU and font fallback iterators on every call, milliseconds however short the text, and resolves a
@@ -443,8 +487,8 @@ final class SkiaTextMeasurer(
     // fallback fonts itself. The native copy of the text is freed here for the same reason.
     val end    = text.length
     val asBidi = level == 0 && BidiShaping.shapesAsRuns(text)
-    val _      = shapingN.incrementAndGet()
-    shaperLock.synchronized {
+    if counted then shapingN.incrementAndGet(): Unit
+    withShaper { shaper =>
       val managed = new ManagedString(text)
       try
         val _ = shaper.shape(
@@ -482,6 +526,8 @@ object SkiaTextMeasurer:
 
   /** Texts longer than a cut's few characters of context are decided afresh. */
   private val MaxCachedCutChars = 64
+
+  private val SubstitutionProbeText = "-> => ->> =>> ffl fi fl "
 
   private val MaxCachedCuts = 65536
 

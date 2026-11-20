@@ -428,6 +428,13 @@ final private class GlyphCollector extends RunHandler:
   private val glyphCluster = scala.collection.mutable.ArrayBuilder.ofInt()
   private val penX         = new Array[Float](1)
 
+  /** Whether any glyph sat off the baseline, and the bidi level of the first glyph with whether another differed: what
+    * decides, as the glyphs come, whether the shaping needs an offset or a level per glyph.
+    */
+  private val offBaseline  = new Array[Boolean](1)
+  private val firstLevel   = Array(-1)
+  private val levelsDiffer = new Array[Boolean](1)
+
   /** The advance of everything committed so far. */
   def width: Float = penX(0)
 
@@ -442,7 +449,18 @@ final private class GlyphCollector extends RunHandler:
   /** What the shaping came to, without the builders that gathered it: a builder keeps the over-sized buffer it grew
     * into, so a collector held in a memo holds every glyph twice.
     */
-  def frozen: ShapedGlyphs = ShapedGlyphs.of(glyphs, xs, ys, levels, clusters, width)
+  def frozen: ShapedGlyphs =
+    ShapedGlyphs.of(
+      glyphs,
+      xs,
+      ys,
+      levels,
+      clusters,
+      width,
+      offBaseline(0),
+      levelsDiffer(0),
+      math.max(firstLevel(0), 0).toByte
+    )
 
   def beginLine(): Unit               = ()
   def runInfo(info: RunInfo): Unit    = ()
@@ -455,9 +473,13 @@ final private class GlyphCollector extends RunHandler:
     positions.foreach { position =>
       glyphXs.addOne(position.getX)
       glyphYs.addOne(position.getY)
+      if position.getY != 0.0f then offBaseline(0) = true
     }
     glyphCluster.addAll(runClusters)
-    runGlyphs.foreach(_ => glyphLevels.addOne(info.getBidiLevel.toByte))
+    val level = info.getBidiLevel
+    if runGlyphs.nonEmpty then
+      if firstLevel(0) < 0 then firstLevel(0) = level else if firstLevel(0) != level then levelsDiffer(0) = true
+    runGlyphs.foreach(_ => glyphLevels.addOne(level.toByte))
     penX(0) += info.getAdvanceX
 
 /** One shaping's glyphs, their x positions and source clusters, and its advance. A y offset or bidi level that is the
@@ -488,15 +510,17 @@ private[skia] object ShapedGlyphs:
     ys: Array[Float],
     levels: Array[Byte],
     clusters: Array[Int],
-    width: Float
+    width: Float,
+    offBaseline: Boolean,
+    levelsDiffer: Boolean,
+    level: Byte
   ): ShapedGlyphs =
-    val level = levels.headOption.getOrElse(0.toByte)
     ShapedGlyphs(
       glyphs,
       xs,
       clusters,
       width,
-      if ys.forall(_ == 0.0f) then NoOffsets else ys,
-      if levels.forall(_ == level) then NoLevels else levels,
+      if offBaseline then ys else NoOffsets,
+      if levelsDiffer then levels else NoLevels,
       level
     )

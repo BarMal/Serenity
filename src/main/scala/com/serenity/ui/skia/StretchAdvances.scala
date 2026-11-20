@@ -30,7 +30,8 @@ private[skia] object StretchAdvances:
     kernAfter: Array[Float],
     measurable: Array[Boolean],
     shapeOf: (String, Font) => ShapedGlyphs,
-    pairKerning: (Font, Char, Char) => Float
+    pairKerning: (Font, Char, Char) => Float,
+    skipRuns: Boolean = false
   ): Unit =
     if chars.nonEmpty then
       val length = chars.length
@@ -86,16 +87,17 @@ private[skia] object StretchAdvances:
                 kernAfter(offset + character) = pair
           measureFrom(character + 1)
       measureFrom(0)
-      measurableRuns(
-        array,
-        nominal,
-        (character: Int) => plainAlone(character) && nominal(character) >= GlyphAdvances.SmallestDistinctAdvancePx,
-        (glyph: Int) => xAt(glyph),
-        firstGlyphOf,
-        shapedStretch.width,
-        offset,
-        measurable
-      )
+      if !skipRuns then
+        measurableRuns(
+          array,
+          nominal,
+          (character: Int) => plainAlone(character) && nominal(character) >= GlyphAdvances.SmallestDistinctAdvancePx,
+          (glyph: Int) => xAt(glyph),
+          firstGlyphOf,
+          shapedStretch.width,
+          offset,
+          measurable
+        )
 
   /** Short runs of characters with equal advances that shaping sets exactly where their advances put them end to end,
     * though not each at its own: a ligature such as `=>` in a monospaced code font, or glyphs a contextual alternate

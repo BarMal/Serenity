@@ -19,6 +19,9 @@ final private[skia] class ShapingMemos:
   val drawn       = new ConcurrentHashMap[ShapingMemos.ShapedKey, (Array[Float], Float)]()
   val pairs       = new ConcurrentHashMap[ShapingMemos.PairKey, java.lang.Float]()
   val cuts        = new ConcurrentHashMap[ShapingMemos.CutKey, java.lang.Boolean]()
+  val spaceCuts   = new ConcurrentHashMap[ShapingMemos.SpaceCutKey, java.lang.Boolean]()
+  val substitutes = new ConcurrentHashMap[ShapingMemos.FontKey, java.lang.Boolean]()
+  val asciiTables = new ConcurrentHashMap[ShapingMemos.FontKey, AsciiAdvanceTable]()
   val advances    = new WeakMemo[ShapingMemos.AdvancesKey, GlyphAdvances]()
 
 private[skia] object ShapingMemos:
@@ -47,5 +50,7 @@ private[skia] object ShapingMemos:
   final case class PairKey(font: FontKey, first: Char, second: Char)
 
   final case class CutKey(text: String, cut: Int, font: FontKey)
+
+  final case class SpaceCutKey(font: FontKey, next: Char)
 
   final case class AdvancesKey(text: String, runs: Vector[FontRun])

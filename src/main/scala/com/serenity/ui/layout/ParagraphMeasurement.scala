@@ -117,7 +117,20 @@ private[layout] object ParagraphMeasurement:
   def graphemeBoundaryOffsets(text: String, breaks: BoundaryScratch): IArray[Int] =
     IArray.unsafeFromArray(boundariesOf(text, 0, text.length, breaks))
 
+  /** ASCII text with no carriage return has a grapheme boundary before every character: the only ASCII sequence the
+    * boundary rules join is a carriage return and a line feed.
+    */
+  private def isGraphemePerChar(text: String, from: Int, until: Int): Boolean =
+    @annotation.tailrec
+    def scan(index: Int): Boolean =
+      index >= until || (text.charAt(index) < '\u0080' && text.charAt(index) != '\r' && scan(index + 1))
+    scan(from)
+
   private def boundariesOf(text: String, from: Int, until: Int, scratch: BoundaryScratch): Array[Int] =
+    if isGraphemePerChar(text, from, until) then Array.range(from, until + 1)
+    else icuBoundariesOf(text, from, until, scratch)
+
+  private def icuBoundariesOf(text: String, from: Int, until: Int, scratch: BoundaryScratch): Array[Int] =
     val breaks = scratch.characterBreaks
     breaks.setText(StringCharacterIterator(text, from, until, from))
     val found = new Array[Int](until - from + 1)
