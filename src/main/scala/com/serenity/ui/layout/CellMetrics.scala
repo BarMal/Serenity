@@ -1,7 +1,5 @@
 package com.serenity.ui.layout
 
-import com.serenity.ui.renderer.FontFirstUse
-
 /** Font-derived cell dimensions. Constant with respect to window size — resizing changes the cell count, not the cell
   * size. Derived from FontMetrics at startup and font changes only.
   *
@@ -36,8 +34,7 @@ object CellMetrics:
     * `TerminalRenderSurface`) always measures/positions text this way -- never from a real font's pixel metrics, since
     * a terminal cell has no font to measure. Any geometry consumer that must agree with what a terminal actually
     * wrapped and drew (mouse hit-testing, vertical/Home/End cursor movement) needs this exact unit when
-    * `state.runtime.capabilities.isCellGrid` holds, instead of `CellMetrics.fromFont` on some AWT font TUI mode never
-    * renders with.
+    * `state.runtime.capabilities.isCellGrid` holds, and what layout falls back to for an owner with no measurer.
     */
   val cellUnit: CellMetrics = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0, displayWidthAware = true)
 
@@ -48,21 +45,3 @@ object CellMetrics:
       lineHeight = nonEmpty.map(_.lineHeight).maxOption.getOrElse(1),
       ascent = nonEmpty.map(_.ascent).maxOption.getOrElse(1)
     )
-
-  /** Derive cell metrics from a java.awt.Font. Uses M-width as the nominal charWidth (consistent across monospaced and
-    * variable-width fonts).
-    */
-  def fromFont(font: java.awt.Font): CellMetrics =
-    val image = new java.awt.image.BufferedImage(1, 1, java.awt.image.BufferedImage.TYPE_INT_RGB)
-    val g     = image.createGraphics()
-    g.setFont(font)
-    FontFirstUse.settle(font, g.getFontRenderContext)
-    val fm = g.getFontMetrics
-    val result = CellMetrics(
-      math.max(1, fm.charWidth('M')),
-      math.max(1, fm.getHeight),
-      math.max(1, fm.getAscent),
-      displayWidthAware = true
-    )
-    g.dispose()
-    result

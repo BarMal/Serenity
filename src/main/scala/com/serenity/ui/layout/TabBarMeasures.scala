@@ -1,6 +1,5 @@
 package com.serenity.ui.layout
 
-import java.awt.font.TextLayout
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong, AtomicReference}
 
 import com.serenity.config.AppConfig
@@ -33,9 +32,8 @@ final class TabBarMeasures(measurer: () => Option[TextMeasurer] = () => None):
     titles.get(key).getOrElse {
       val _    = titlesMeasured.incrementAndGet()
       val font = FontLoader.previewUiFont(fontConfig)
-      val advance = measurer().fold(
-        TextLayout(label, font, TextLayoutSnapshot.defaultFontRenderContext()).getAdvance.toDouble
-      )(_.glyphWidthPx(FontSpec.fromAwt(font), label).toDouble)
+      val advance =
+        measurer().fold(CharWidth.ofText(label).toDouble)(_.glyphWidthPx(FontSpec.fromAwt(font), label).toDouble)
       titles.put(key, advance)
       advance
     }
@@ -51,7 +49,7 @@ final class TabBarMeasures(measurer: () => Option[TextMeasurer] = () => None):
         val _    = measured.incrementAndGet()
         val font = FontLoader.previewCodeFont(fontConfig)
         val width =
-          measurer().fold(CellMetrics.fromFont(font))(_.cellMetrics(FontSpec.fromAwt(font))).charWidth.toDouble
+          measurer().fold(CellMetrics.cellUnit)(_.cellMetrics(FontSpec.fromAwt(font))).charWidth.toDouble
         remembered.set(Some(fontConfig -> width))
         width
 

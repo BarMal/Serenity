@@ -67,9 +67,11 @@ final class RenderCaches private (
   /** The wraps measured while locating a caret, on the measurer this owner draws and lays out with. */
   def anchorWraps: AnchorWrapCache = AnchorWrapCache()(() => measurer)
 
-  /** The grid of `font` that layout measures on: the owner's measurer's, and AWT's where the owner has none. */
+  /** The grid of `font` that layout measures on: the owner's measurer's, and the terminal's cell where the owner has
+    * none.
+    */
   def cellMetricsOf(font: java.awt.Font): CellMetrics =
-    measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
+    measurer.fold(CellMetrics.cellUnit)(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
 
   /** What a surface drawing for this owner paints text through. */
   def surfaceText: SurfaceTextCaches = SurfaceTextCaches(styledFonts)

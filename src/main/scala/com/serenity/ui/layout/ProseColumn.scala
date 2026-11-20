@@ -1,12 +1,11 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.image.BufferedImage
 
 import com.serenity.config.WrapColumn
 import com.serenity.state.models.{AppState, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.{FontFirstUse, FontSpec}
+import com.serenity.ui.renderer.FontSpec
 
 /** The wrap column as a width on the editor grid, whose cells are the code font's whatever font a buffer draws in. */
 object ProseColumn:
@@ -68,13 +67,6 @@ object ProseColumn:
     )
 
   private def chAdvancePx(font: Font, memos: LayoutMemos): Double =
-    memos.measurer.fold(awtChAdvancePx(font))(_.glyphWidthPx(FontSpec.fromAwt(font), "0").toDouble.max(1.0))
-
-  /** Measured the way [[CellMetrics.fromFont]] measures the grid cell, so the two widths share a rendering context. */
-  private def awtChAdvancePx(font: Font): Double =
-    val graphics = BufferedImage(1, 1, BufferedImage.TYPE_INT_RGB).createGraphics()
-    graphics.setFont(font)
-    FontFirstUse.settle(font, graphics.getFontRenderContext)
-    val advance = font.getStringBounds("0", graphics.getFontRenderContext).getWidth
-    graphics.dispose()
-    advance.max(1.0)
+    memos.measurer.fold(CellMetrics.cellUnit.charWidth.toDouble)(
+      _.glyphWidthPx(FontSpec.fromAwt(font), "0").toDouble.max(1.0)
+    )

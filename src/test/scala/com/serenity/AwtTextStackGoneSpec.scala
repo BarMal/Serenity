@@ -33,3 +33,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   it should "hold no label-sprite cache, which rasterised text through AWT and which nothing asked" in {
     filesMentioning("""\bLabelSprites\b""") shouldBe Nil
   }
+
+  it should "ask AWT for no cell metrics: an owner with no measurer is on the cell grid" in {
+    filesMentioning("""CellMetrics\.fromFont|def fromFont\(font: java\.awt\.Font\)|awtChAdvancePx""") shouldBe Nil
+  }

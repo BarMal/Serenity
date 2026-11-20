@@ -5,7 +5,6 @@ import java.awt.{Font, GraphicsEnvironment}
 
 import cats.effect.IO
 import com.serenity.state.models.TypographyRole
-import com.serenity.ui.layout.CellMetrics
 import com.serenity.ui.theme.HeadingScale
 import org.typelevel.log4cats.Logger
 
@@ -265,8 +264,15 @@ object FontLoader:
     try
       val font = Font(family, Font.PLAIN, 12)
       font.canDisplayUpTo("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789") == -1
-      && CellMetrics.fromFont(font.deriveFont(12.0f)).isValid
+      && hasUsableMetrics(font.deriveFont(12.0f))
     catch case _: Exception => false
+
+  private def hasUsableMetrics(font: Font): Boolean =
+    val graphics = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB).createGraphics()
+    try
+      val metrics = graphics.getFontMetrics(font)
+      metrics.charWidth('M') > 0 && metrics.getHeight > 0 && metrics.getAscent > 0
+    finally graphics.dispose()
 
   private def isMonospaced(font: Font): Boolean =
     try

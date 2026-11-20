@@ -297,7 +297,7 @@ object RendererPaneSetup:
     // always. A surface with none (a terminal, #1105) has no real font metrics to derive from at all -- its own
     // declared `context.cellMetrics` (TUI's CellMetricsOne, 1 pixel == 1 terminal cell) is the only legitimate scale,
     // so this is what must reach the cell-based layout path instead of `TextLayoutSnapshot` re-deriving
-    // `CellMetrics.fromFont(bufferFont)` (a real AWT measurement of a font this surface never actually draws) (#1215).
+    // an AWT measurement of a font this surface never actually draws (#1215).
     val snapshot =
       if columnModeActive then
         // Column-based document layout (issue #1338, Phase 1 rendering): wraps at the (narrower) column's own width

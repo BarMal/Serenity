@@ -497,10 +497,10 @@ object TextLayoutSnapshot:
     memos.measurer.exists(_.measuresProportionally(font))
 
   /** The cell grid `font` is laid out on when no caller says otherwise: the measurer's cell for it, or, for an owner
-    * with no measurer, the cell the font's own metrics give.
+    * with no measurer, the terminal's own cell.
     */
   private[serenity] def cellMetricsOf(font: Font, memos: LayoutMemos): CellMetrics =
-    memos.measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(FontSpec.fromAwt(font)))
+    memos.measurer.fold(CellMetrics.cellUnit)(_.cellMetrics(FontSpec.fromAwt(font)))
 
   /** The line height and ascent of a snapshot of rows in `font`: the measured line box of the font, or the cell's. */
   private[layout] def snapshotLineMetrics(
