@@ -1,9 +1,8 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
-import com.serenity.ui.renderer.FontFirstUse
+import com.serenity.ui.renderer.FontSpec
 
 enum TextHorizontalAlignment:
   case Left
@@ -27,13 +26,9 @@ final case class AlignedTextPlacement(
 
 object TextAlignment:
 
-  def measureTextWidth(
-    text: String,
-    font: Font,
-    fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
-  ): Float =
-    FontFirstUse.settle(font, fontRenderContext)
-    font.getStringBounds(text, fontRenderContext).getWidth.toFloat
+  /** How far `text` advances in `font`, as the owner's measurer measures what the surface draws. */
+  def measureTextWidth(text: String, font: Font, measurer: TextMeasurer): Float =
+    measurer.glyphWidthPx(FontSpec.fromAwt(font), text)
 
   def placeLine(
     text: String,
@@ -43,11 +38,11 @@ object TextAlignment:
     ascentPx: Int,
     horizontal: TextHorizontalAlignment,
     vertical: TextVerticalAlignment,
-    fontRenderContext: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
+    measurer: TextMeasurer
   ): AlignedTextPlacement =
     val safeLineHeight = math.max(1, lineHeightPx)
     val safeAscent     = math.max(1, ascentPx)
-    val textWidth      = measureTextWidth(text, font, fontRenderContext)
+    val textWidth      = measureTextWidth(text, font, measurer)
 
     val alignedX = horizontal match
       case TextHorizontalAlignment.Left =>

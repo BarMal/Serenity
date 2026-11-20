@@ -116,7 +116,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       cellMetrics.ascent,
       TextHorizontalAlignment.Center,
       TextVerticalAlignment.Top,
-      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      com.serenity.testkit.TestMeasure.measurer
     )
     val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
 
@@ -185,7 +185,7 @@ class EditorSelectionRenderingSpec extends AnyFlatSpec with Matchers:
       cellMetrics.ascent,
       TextHorizontalAlignment.Center,
       TextVerticalAlignment.Top,
-      surface.fontRenderContext.getOrElse(TextLayoutSnapshot.defaultFontRenderContext())
+      com.serenity.testkit.TestMeasure.measurer
     )
     val titleDraw = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("Expected measured title draw call"))
 

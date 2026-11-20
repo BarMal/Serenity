@@ -35,6 +35,12 @@ final case class RenderContext(
       .orElse(state.runtime.viewportSize)
       .getOrElse(ViewportSize(surface.viewportWidth, surface.viewportHeight))
 
+  /** What the text a measuring surface draws is measured with: the owner's measurer. None on a surface that measures
+    * nothing (a terminal is on the cell grid), or an owner that has none.
+    */
+  def textMeasurer: Option[com.serenity.ui.layout.TextMeasurer] =
+    if surface.text.measuresText then caches.measurer else None
+
   def fontForRole(role: TypographyRole): java.awt.Font =
     role match
       case TypographyRole.Code            => codeFont

@@ -46,7 +46,8 @@ object RendererEntryPoints:
       state.persisted.theme,
       uiFont.toAwt,
       cellMetrics,
-      uiMetrics
+      uiMetrics,
+      Option.when(surface.text.measuresText)(caches.measurer).flatten
     )
     surface.flush()
 

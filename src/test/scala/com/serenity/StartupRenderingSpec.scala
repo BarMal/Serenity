@@ -169,7 +169,9 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       val title    = state.startPageSurface.get.content.asInstanceOf[SurfaceContent.StartPage].page.title
       val titleRun = surface.drawRunPxCalls.find(_.s == title).getOrElse(fail("expected measured title draw call"))
       val textWidth =
-        uiFont.getStringBounds(title, surface.fontRenderContext.getOrElse(fail("missing font render context"))).getWidth
+        com.serenity.testkit.TestMeasure.measurer
+          .glyphWidthPx(com.serenity.ui.renderer.FontSpec.fromAwt(uiFont), title)
+          .toDouble
       val expectedX = ((100 * codeMetrics.charWidth) - textWidth) / 2.0
 
       titleRun.xPx.toDouble shouldBe expectedX +- 1.0
@@ -326,7 +328,7 @@ class StartupRenderingSpec extends AnyFlatSpec with Matchers:
       textMetrics.ascent,
       com.serenity.ui.layout.TextHorizontalAlignment.Center,
       com.serenity.ui.layout.TextVerticalAlignment.Top,
-      surface.fontRenderContext.get
+      com.serenity.testkit.TestMeasure.measurer
     )
 
     val call = surface.drawRunPxCalls

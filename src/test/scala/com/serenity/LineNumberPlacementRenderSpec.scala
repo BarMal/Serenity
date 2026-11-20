@@ -142,8 +142,8 @@ class LineNumberPlacementRenderSpec extends AnyFlatSpec with Matchers:
   private def digitSpanPx(call: MockRenderSurface#DrawRunPxCall): (Float, Float) =
     val font      = call.font.getOrElse(fail("expected the line number to be drawn in a measured font"))
     val screenXPx = call.xPx + call.translationXPx.toFloat
-    val startPx   = screenXPx + TextAlignment.measureTextWidth(call.s.takeWhile(_ == ' '), font)
-    (startPx, startPx + TextAlignment.measureTextWidth(call.s.trim, font))
+    val startPx   = screenXPx + TextAlignment.measureTextWidth(call.s.takeWhile(_ == ' '), font, TestMeasure.measurer)
+    (startPx, startPx + TextAlignment.measureTextWidth(call.s.trim, font, TestMeasure.measurer))
 
   "A left counter on a buffer of 100+ lines" should "draw every three-digit number whole, clear of its divider" in {
     val state = proseStateWith(LineNumberSide.Left, lineCount = 150, topLine = 99)

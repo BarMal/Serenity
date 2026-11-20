@@ -3,7 +3,7 @@ package com.serenity.ui.renderer
 import com.serenity.config.AppConfig
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.layout.{SegmentTitleFit, TextLayoutSnapshot}
+import com.serenity.ui.layout.SegmentTitleFit
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -13,7 +13,6 @@ import org.scalatest.matchers.should.Matchers
 class SegmentTextFitSpec extends AnyFlatSpec with Matchers:
 
   private val font        = FontLoader.previewUiFont(AppConfig.conventional.editorConfig.fontConfig)
-  private val context     = TextLayoutSnapshot.defaultFontRenderContext()
   private val cellWidthPx = 9
   private val insetPx     = 4.0
   private val fit         = SegmentTitleFit(1, 6, "…")
@@ -21,7 +20,7 @@ class SegmentTextFitSpec extends AnyFlatSpec with Matchers:
     List("README.md", "Makefile", "MMMMMMMM", "wwwwww", "Buffer 1", "a title that cannot possibly fit")
 
   private def cut(title: String, advances: Option[MeasuredTextAdvances]): String =
-    SegmentTextFit.fit(title, fit, font, Some(context), cellWidthPx, insetPx, advances)
+    SegmentTextFit.fit(title, fit, font, advances, cellWidthPx, insetPx)
 
   private def newAdvances() = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 

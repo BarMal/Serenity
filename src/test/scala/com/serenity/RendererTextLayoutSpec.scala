@@ -181,7 +181,7 @@ class RendererTextLayoutSpec extends AnyFlatSpec with Matchers:
           cellMetrics.ascent,
           TextHorizontalAlignment.Center,
           TextVerticalAlignment.Top,
-          surface.fontRenderContext.get
+          com.serenity.testkit.TestMeasure.measurer
         )
         .xPx
 

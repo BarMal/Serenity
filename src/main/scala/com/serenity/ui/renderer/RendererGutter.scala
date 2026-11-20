@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.state.models.*
 import com.serenity.ui.color.RenderColor
@@ -429,8 +428,8 @@ object RendererGutter:
   private def useMeasuredLineNumberFont(buffer: Buffer, context: RenderContext): Boolean =
     buffer.typographyRole != TypographyRole.Code && context.fontForBuffer(buffer) != context.codeFont
 
-  final private case class MeasuredLineNumberFont(font: Font, fontRenderContext: FontRenderContext):
-    def widthPx(text: String): Float = TextAlignment.measureTextWidth(text, font, fontRenderContext)
+  final private case class MeasuredLineNumberFont(font: Font, measurer: TextMeasurer):
+    def widthPx(text: String): Float = TextAlignment.measureTextWidth(text, font, measurer)
 
   final private case class MeasuredLineNumberRun(xPx: Float, widthPx: Float, text: String)
 
@@ -445,11 +444,11 @@ object RendererGutter:
     lineRect: LayoutRect
   ): Option[MeasuredLineNumberFont] =
     for
-      measuredBuffer    <- buffer.filter(useMeasuredLineNumberFont(_, context))
-      fontRenderContext <- context.surface.text.fontRenderContext
+      measuredBuffer <- buffer.filter(useMeasuredLineNumberFont(_, context))
+      measurer       <- context.textMeasurer
       if RendererPaneSetup.usesMeasuredDrawing(snapshot, context)
     yield
-      val bufferFont  = MeasuredLineNumberFont(context.fontForBuffer(measuredBuffer), fontRenderContext)
+      val bufferFont  = MeasuredLineNumberFont(context.fontForBuffer(measuredBuffer), measurer)
       val widestPx    = snapshot.visualLines.map(line => bufferFont.widthPx((line.bufferLine + 1).toString)).maxOption
       val digitAreaPx = math.max(1, lineRect.width - 1) * context.cellMetrics.charWidth.toFloat
       widestPx.filter(_ > digitAreaPx) match
@@ -562,8 +561,8 @@ object RendererGutter:
     rect: LayoutRect,
     text: String
   ): Unit =
-    surface.text.fontRenderContext match
-      case Some(frc) =>
+    context.textMeasurer match
+      case Some(measurer) =>
         val rowHeightPx  = math.max(1, rect.height * context.cellMetrics.lineHeight)
         val lineHeightPx = math.max(1, math.min(context.uiMetrics.lineHeight, rowHeightPx - 2))
         val ascentPx     = math.max(1, math.min(context.uiMetrics.ascent, lineHeightPx))
@@ -580,7 +579,7 @@ object RendererGutter:
           ascentPx = ascentPx,
           horizontal = TextHorizontalAlignment.Left,
           vertical = TextVerticalAlignment.Middle,
-          fontRenderContext = frc
+          measurer = measurer
         )
 
         surface.text.drawRunPx(

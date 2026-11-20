@@ -148,7 +148,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       val state                  = AppState.empty
       val surface                = MockRenderSurface(200, 40)
       val font                   = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-      val frc                    = TextLayoutSnapshot.defaultFontRenderContext()
 
       val (drawLine, drawSegments) = DropCapRenderer.adjustHomeLineDraw(
         snapshot = snapshot,
@@ -157,7 +156,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
         measured = true,
         surface = surface,
         baseFont = font,
-        frc = Some(frc),
         theme = state.persisted.theme,
         glyphColour = state.persisted.theme.highlighted.foreground,
         xOriginPx = 0.0f,
@@ -177,7 +175,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val state                  = AppState.empty
     val surface                = MockRenderSurface(200, 40)
     val font                   = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val frc                    = TextLayoutSnapshot.defaultFontRenderContext()
     val segments = Some(
       List(
         com.serenity.ui.theme.StyledText("Hello", TextStyle.normal, RenderColor.fromRgba(255, 0, 0), RenderColor.Black),
@@ -192,7 +189,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = font,
-      frc = Some(frc),
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
@@ -211,7 +207,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val state                  = AppState.empty
     val surface                = MockRenderSurface(200, 40)
     val font                   = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val frc                    = TextLayoutSnapshot.defaultFontRenderContext()
     val chosen                 = RenderColor.fromRgba(200, 80, 30)
 
     DropCapRenderer.adjustHomeLineDraw(
@@ -221,7 +216,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = font,
-      frc = Some(frc),
       theme = state.persisted.theme,
       glyphColour = chosen,
       xOriginPx = 0.0f,
@@ -246,7 +240,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       measured = false,
       surface = surface,
       baseFont = font,
-      frc = None,
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
@@ -266,7 +259,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
     val state                     = AppState.empty
     val surface                   = MockRenderSurface(200, 40)
     val font                      = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-    val frc                       = TextLayoutSnapshot.defaultFontRenderContext()
 
     val (drawLine, _) = DropCapRenderer.adjustHomeLineDraw(
       snapshot = snapshot,
@@ -275,7 +267,6 @@ class DropCapRendererSpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = font,
-      frc = Some(frc),
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,

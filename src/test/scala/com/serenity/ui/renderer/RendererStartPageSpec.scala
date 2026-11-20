@@ -131,7 +131,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val page         = simplePage(selectedIndex = 1) // "Two" is selected
     val viewportSize = ViewportSize(80, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val bounds = page
       .actionBounds(viewportSize, cellMetrics, cellMetrics)
@@ -159,7 +159,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
     val viewportSize = ViewportSize(width, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val drawn = (0 until 24).map(row => surface.getRow(row).trim).filter(_.nonEmpty)
     drawn.mkString(" ") should include(longNotice)
@@ -171,7 +171,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
     val viewportSize = ViewportSize(width, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val bounds = page.actionBounds(viewportSize, cellMetrics, cellMetrics)
     bounds.map(_.index) shouldBe List(0, 1)
@@ -185,7 +185,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val page         = simplePage(selectedIndex = 1) // "One" (line 3) is an unselected option
     val viewportSize = ViewportSize(80, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     // Mirrors renderStartPage's own vertical centering so each render-line index maps to the row it actually lands
     // on: the content (7 lines) is shorter than the 24-row viewport, so startYPx is not 0.
@@ -211,7 +211,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     val page         = simplePage(selectedIndex = 0)
     val viewportSize = ViewportSize(80, 3)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     surface.getRow(0).trim shouldBe "Serenity" // line 0 (title): inside the viewport, must be drawn
     surface.getRow(3).trim shouldBe ""         // line 3 ("One"): at the viewport's height, must be skipped

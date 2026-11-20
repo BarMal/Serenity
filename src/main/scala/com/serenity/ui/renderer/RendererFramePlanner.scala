@@ -66,7 +66,8 @@ object RendererFramePlanner:
           state.persisted.theme,
           uiFont,
           cellMetrics,
-          uiMetrics
+          uiMetrics,
+          Option.when(surface.text.measuresText)(caches.measurer).flatten
         )
         val floatContext =
           RenderContext(

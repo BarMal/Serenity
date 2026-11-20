@@ -22,8 +22,6 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
-
   private val prose =
     "he quick brown fox jumps over the lazy dog while the afternoon sun settles over the hills and the river runs " +
       "slow beneath the old stone bridge, and nobody on the road says a word about the weather. "
@@ -121,7 +119,6 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = laid.font,
-      frc = Some(frc),
       theme = theme,
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,
@@ -162,7 +159,6 @@ class RaisedLetterGeometrySpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = laid.font,
-      frc = Some(frc),
       theme = theme,
       glyphColour = theme.highlighted.foreground,
       xOriginPx = 0.0f,

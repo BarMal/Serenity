@@ -16,9 +16,7 @@ import org.scalatest.matchers.should.Matchers
 /** Pins what a drop cap paragraph does to layout, paint and dirty tracking with the drop-caps toggle on and off. */
 class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
 
-  given Balance = Balance.default
-
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+  given Balance    = Balance.default
   private val font = Font(Font.SANS_SERIF, Font.PLAIN, 13)
   private val prose =
     "The quick brown fox jumps over the lazy dog, again and again, until the row finally has to wrap somewhere. " * 3
@@ -131,7 +129,6 @@ class ParagraphRoleCharacterisationSpec extends AnyFlatSpec with Matchers:
       measured = true,
       surface = surface,
       baseFont = font,
-      frc = Some(frc),
       theme = state.persisted.theme,
       glyphColour = state.persisted.theme.highlighted.foreground,
       xOriginPx = 0.0f,
