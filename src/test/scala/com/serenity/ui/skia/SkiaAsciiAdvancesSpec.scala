@@ -24,7 +24,7 @@ class SkiaAsciiAdvancesSpec extends AnyFlatSpec with Matchers:
     marked.mkString(" ").capitalize + "."
 
   private def measurerOver(ligatures: Boolean): (SkiaTextMeasurer, String => LineFonts) =
-    val faces     = new SkiaFontCache()
+    val faces     = TestBundledTypefaces.cacheWithInter()
     val stretches = new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf)
     val measurer  = new SkiaTextMeasurer(faces, stretches, memos = new ShapingMemos())
     (

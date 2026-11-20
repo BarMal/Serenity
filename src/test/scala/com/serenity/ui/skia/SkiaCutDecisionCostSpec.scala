@@ -23,7 +23,7 @@ class SkiaCutDecisionCostSpec extends AnyFlatSpec with Matchers:
     }
 
   private def runsToDecide(fontName: String, ligatures: Boolean): (Long, Int) =
-    val faces     = new SkiaFontCache()
+    val faces     = TestBundledTypefaces.cacheWithInter()
     val stretches = new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf)
     val measurer  = new SkiaTextMeasurer(faces, stretches, memos = new ShapingMemos())
     val spec      = FontSpec.fromAwt(Font(fontName, Font.PLAIN, 14)).copy(ligatures = ligatures)(None)
@@ -43,3 +43,15 @@ class SkiaCutDecisionCostSpec extends AnyFlatSpec with Matchers:
 
     runs should be <= (4L * distinctNext + 16L)
   }
+
+  "The first cut decision in a font" should "shape a handful of times, not once for each character of a probe" in
+    Vector("Inter", "DejaVu Sans").foreach { family =>
+      val faces     = TestBundledTypefaces.cacheWithInter()
+      val stretches = new SkiaShapedTextCache(ligaturesOf = faces.ligaturesOf)
+      val measurer  = new SkiaTextMeasurer(faces, stretches, memos = new ShapingMemos())
+      val spec      = FontSpec.fromAwt(Font(family, Font.PLAIN, 14)).copy(ligatures = false)(None)
+
+      val _ = measurer.isShapingCut("first cut here", 6, spec)
+
+      withClue(s"$family: ")(measurer.shaperRuns should be <= 8L)
+    }
