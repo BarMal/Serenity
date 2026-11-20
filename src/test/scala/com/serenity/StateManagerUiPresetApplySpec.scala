@@ -301,8 +301,13 @@ class StateManagerUiPresetApplySpec extends AnyFlatSpec with Matchers:
     config.languageToolsConfig.spellCheck.enabled shouldBe true
     config.surfaceConfig.typewriterScrollingEnabled shouldBe true
     config.surfaceConfig.focusedTextBodyEnabled shouldBe true
-    config.surfaceConfig.wrapColumn shouldBe WrapColumn.Edge
-    config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets()
+    config.surfaceConfig.wrapColumn shouldBe WrapColumn.Ch(66)
+    config.surfaceConfig.textAreaInsets shouldBe TextAreaInsets(
+      left = Gutter.Cells(2),
+      right = Gutter.Cells(2),
+      top = Gutter.Percent(0.04),
+      bottom = Gutter.Percent(0.04)
+    )
     config.statusLine.segments should contain(StatusSegment.WordGoal)
     config.editorConfig.fontConfig.textFontFamily shouldBe Font.SERIF
   }
