@@ -1,8 +1,6 @@
 package com.serenity.ui.layout
 
-import java.awt.font.FontRenderContext
-import java.awt.image.BufferedImage
-import java.awt.{Font, RenderingHints}
+import java.awt.Font
 import java.text.StringCharacterIterator
 
 import com.serenity.config.MarkdownViewMode
@@ -222,9 +220,9 @@ object TextLayoutSnapshot:
 
   /** `forceCellLayout` bypasses the font-driven measured-vs-cell auto-detection (`shouldUseMeasuredLayout`) entirely,
     * always taking the cell path, as a wrap cache whose owner has no measurer always does. A caller whose surface
-    * cannot draw a measured run at all -- a terminal surface reporting no `FontRenderContext` (#1105) -- needs this
-    * even when its owner can measure, or the measured path would discard the caller's `cellMetrics` override, which it
-    * never consults (#1215).
+    * cannot draw a measured run at all -- a terminal surface that measures no text (#1105) -- needs this even when its
+    * owner can measure, or the measured path would discard the caller's `cellMetrics` override, which it never consults
+    * (#1215).
     */
   def fromBuffer(
     buffer: Buffer,
@@ -513,15 +511,3 @@ object TextLayoutSnapshot:
       val extent = memos.lineExtents.of(FontSpec.fromAwt(font))
       (math.max(1, extent.heightPx), math.max(1, extent.ascentPx))
     else (math.max(1, cellMetrics.lineHeight), math.max(0, cellMetrics.ascent))
-
-  def defaultFontRenderContext(): FontRenderContext = sharedDefaultFontRenderContext
-
-  // `FontRenderContext` is immutable, so one instance serves every caller instead of a scratch image per call.
-  private lazy val sharedDefaultFontRenderContext: FontRenderContext =
-    val image = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB)
-    val g     = image.createGraphics()
-    try
-      g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON)
-      g.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON)
-      g.getFontRenderContext
-    finally g.dispose()

@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val config    = FontLoader.FontConfig()
   private val printable = (0x20 to 0x7e).map(_.toChar)
 

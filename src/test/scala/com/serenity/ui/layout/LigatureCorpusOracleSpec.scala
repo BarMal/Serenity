@@ -21,7 +21,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class LigatureCorpusOracleSpec extends AnyFlatSpec with Matchers with OptionValues:
 
-  private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc    = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val config = FontLoader.FontConfig()
 
   private def ligatureFont(sizePt: Float): Font =

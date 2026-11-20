@@ -43,10 +43,10 @@ import org.typelevel.log4cats.{Logger, LoggerFactory}
   */
 object TuiRuntime:
 
-  /** A monospaced default font: `TerminalRenderSurface.fontRenderContext` is always `None` (#1105's cell-fallback
-    * trigger), so no glyph is ever measured or drawn from this font's metrics -- it exists only to satisfy the renderer
-    * entry points' signatures, which is also why code/text/UI all share the one instance rather than resolving the
-    * user's configured (and, in TUI mode, inert) font family/size.
+  /** A monospaced default font: `TerminalRenderSurface.measuresText` is always false (#1105's cell-fallback trigger),
+    * so no glyph is ever measured or drawn from this font's metrics -- it exists only to satisfy the renderer entry
+    * points' signatures, which is also why code/text/UI all share the one instance rather than resolving the user's
+    * configured (and, in TUI mode, inert) font family/size.
     */
   private val CellFont: FontSpec = FontSpec.fromAwt(new Font(Font.MONOSPACED, Font.PLAIN, 12))
 

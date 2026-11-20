@@ -17,7 +17,7 @@ class FontFallbackThreadingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc    = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val sizePx = 14.0f
 
   private def registered(resource: String): Font =

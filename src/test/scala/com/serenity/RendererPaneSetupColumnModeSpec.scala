@@ -34,7 +34,8 @@ class RendererPaneSetupColumnModeSpec extends AnyFlatSpec with Matchers:
       textFont = monoFont,
       uiFont = monoFont,
       cellMetrics = cellMetrics,
-      uiMetrics = cellMetrics
+      uiMetrics = cellMetrics,
+      caches = TestMeasure.renderCaches()
     )
 
   private def stateWithBuffer(buffer: Buffer, config: AppConfig): AppState =

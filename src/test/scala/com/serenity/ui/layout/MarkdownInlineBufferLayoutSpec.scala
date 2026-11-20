@@ -18,7 +18,7 @@ class MarkdownInlineBufferLayoutSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val serif     = Font(Font.SERIF, Font.PLAIN, 16)
   private val boldSerif = serif.deriveFont(Font.BOLD)
 

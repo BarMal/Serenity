@@ -61,7 +61,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   "Renderer" should "render a Markdown buffer (proportional textFont) via putString when the surface has no FontRenderContext" in {
     val state = buildState("hello markdown", language = Some(LanguageId.Markdown))
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,
@@ -82,7 +82,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "render a plain-text buffer (Prose typography role) via putString when the surface has no FontRenderContext" in {
     val state = buildState("hello prose", language = None)
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,
@@ -103,7 +103,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "still render a code buffer via putString when the surface has no FontRenderContext" in {
     val state = buildState("val x = 1")
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,
@@ -128,7 +128,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
       selection = Some(Selection(CursorPosition(0, 0), CursorPosition(0, 5)))
     )
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,
@@ -172,7 +172,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "render the active pane's header title via putString when the surface has no FontRenderContext" in {
     val state = buildState("hello markdown", language = Some(LanguageId.Markdown))
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,
@@ -193,7 +193,7 @@ class RendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   it should "render the gutter/status bar text via putString when the surface has no FontRenderContext" in {
     val state = buildState("val x = 1")
     val surface =
-      new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+      new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,

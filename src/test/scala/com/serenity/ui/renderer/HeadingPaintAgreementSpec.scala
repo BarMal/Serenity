@@ -18,7 +18,7 @@ class HeadingPaintAgreementSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val font = Font(Font.SERIF, Font.PLAIN, 14)
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc  = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private val document = RichTextDocument(
     List(

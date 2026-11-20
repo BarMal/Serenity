@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class HiddenColumnLayoutSpec extends AnyFlatSpec with Matchers:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val serif     = Font(Font.SERIF, Font.PLAIN, 16)
   private val boldSerif = serif.deriveFont(Font.BOLD)
   private val tolerance = 0.05f

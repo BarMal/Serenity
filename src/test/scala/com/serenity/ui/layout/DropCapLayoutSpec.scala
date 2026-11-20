@@ -43,7 +43,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
 
   "DropCapWidths" should "measure a font's advance width for the glyph text" in {
     val font  = Font(Font.SERIF, Font.BOLD, 36)
-    val frc   = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc   = com.serenity.testkit.TestMeasure.awtFontRenderContext
     val width = DropCapWidths(TestMeasure.measurer.glyphWidthPx)(FontSpec.fromAwt(font), "C")
 
     width should be > 0.0f
@@ -51,7 +51,7 @@ class DropCapLayoutSpec extends AnyFlatSpec with Matchers:
 
   it should "measure zero width for empty glyph text" in {
     val font = Font(Font.SERIF, Font.BOLD, 36)
-    val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc  = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
     DropCapWidths(TestMeasure.measurer.glyphWidthPx)(FontSpec.fromAwt(font), "") shouldBe 0.0f
   }

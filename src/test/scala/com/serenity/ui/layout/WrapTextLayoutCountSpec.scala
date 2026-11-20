@@ -17,7 +17,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
   */
 class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks with SkiaRowOracle:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val tolerance = 0.02f
 
   private def withAttribute(font: Font, attribute: TextAttribute, value: AnyRef): Font =

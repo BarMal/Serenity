@@ -25,6 +25,12 @@ object TestMeasure:
 
   def cellMetrics(font: Font): CellMetrics = measurer.cellMetrics(FontSpec.fromAwt(font))
 
+  /** The AWT context the specs that keep an AWT measurement as an oracle measure with: unscaled, anti-aliased,
+    * fractional metrics.
+    */
+  val awtFontRenderContext: java.awt.font.FontRenderContext =
+    java.awt.font.FontRenderContext(java.awt.geom.AffineTransform(), true, true)
+
   /** The ink Skia itself gives `text` in `font`, independent of the measurer under test: the oracle for where a glyph
     * stands, in place of AWT's glyph vector.
     */

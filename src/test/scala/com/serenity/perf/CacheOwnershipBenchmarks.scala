@@ -121,7 +121,7 @@ private[perf] object CacheOwnershipBenchmarks:
     sane: A => Boolean
   ): BenchmarkRunner.Benchmark =
     val fonts = FreshFonts(base)
-    val frc   = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc   = com.serenity.testkit.TestMeasure.awtFontRenderContext
     BenchmarkRunner.Benchmark(
       name,
       Warmups,

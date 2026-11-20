@@ -45,3 +45,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   it should "hold no first-use settling of AWT fonts: nothing measures an AWT font" in {
     filesMentioning("""\bFontFirstUse\b""") shouldBe Nil
   }
+
+  it should "name no FontRenderContext: nothing measures text through AWT's context" in {
+    filesMentioning("""\bFontRenderContext\b|defaultFontRenderContext|fontRenderContext""") shouldBe Nil
+  }

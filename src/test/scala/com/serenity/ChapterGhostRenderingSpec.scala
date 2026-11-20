@@ -69,7 +69,7 @@ class ChapterGhostRenderingSpec extends AnyFlatSpec with Matchers:
     surface
 
   private def cellSurface() =
-    new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+    new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
   private def measuredSurface() = new MockRenderSurface(viewportSize.width, viewportSize.height)
 

@@ -14,7 +14,7 @@ import org.scalatest.Assertions
 /** Layouts, prose and edits for checking [[IncrementalWrap]] against the cold wrap. */
 object WrapFixtures extends Assertions:
 
-  val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   /** How many random cases each property runs; the default keeps `sbt test` quick. */
   val Cases: Int = sys.env.get("INCREMENTAL_WRAP_CASES").flatMap(_.toIntOption).getOrElse(2000)

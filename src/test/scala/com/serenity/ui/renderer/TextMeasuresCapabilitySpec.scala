@@ -23,5 +23,5 @@ class TextMeasuresCapabilitySpec extends AnyFlatSpec with Matchers:
 
   "A pixel surface" should "state that it measures text, and a mock of a terminal that it does not" in {
     new MockRenderSurface(40, 4).text.measuresText shouldBe true
-    new MockRenderSurface(40, 4, fontRenderContextOverride = None).text.measuresText shouldBe false
+    new MockRenderSurface(40, 4, measuresText = false).text.measuresText shouldBe false
   }

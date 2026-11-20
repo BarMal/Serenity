@@ -94,7 +94,7 @@ object RendererEntryPoints:
       )
     )
     val viewportSize = target.viewportSize
-    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext to measure against, so this scene keeps its
+    // A GUI surface (Swing, AWT fonts) always measures text, so this scene keeps its
     // long-standing behaviour of deriving cell metrics from `codeFont` and letting `TextLayoutSnapshot` auto-detect
     // measured vs. cell layout per buffer font -- no override needed (#1215's cellMetrics override is for a surface
     // with no real font rendering at all, i.e. TUI's `TerminalRenderSurface`, reached only through the
@@ -256,7 +256,7 @@ object RendererEntryPoints:
     val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
-    // surface with no real FontRenderContext.
+    // surface that measures no text.
     val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     val _ = withSceneIfNeeded(
       state,
@@ -330,7 +330,7 @@ object RendererEntryPoints:
     caches: RenderCaches = RenderCaches.create()
   ): List[PixelRect] =
     // #1105/#1215: see the surface-generic renderCursorOnly in RendererCursorOverlay for why this is scoped to a
-    // surface with no real FontRenderContext.
+    // surface that measures no text.
     val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     withSceneIfNeeded(
       state,

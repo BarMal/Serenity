@@ -333,12 +333,12 @@ private[renderer] object OverlayRowPainter:
         useMeasuredCursor
       )
 
-  // #1105: drawRunPx is a no-op on a surface with no FontRenderContext (a terminal), so the measured path can never be
+  // #1105: drawRunPx is a no-op on a surface that measures no text (a terminal), so the measured path can never be
   // taken there regardless of what the font alone would call for (ligatures, proportional advances, ...). Every real
-  // (GUI) surface reports a FontRenderContext unconditionally, so this was already the de facto behaviour for GUI mode
+  // (GUI) surface measures text unconditionally, so this was already the de facto behaviour for GUI mode
   // -- the font-only checks previously OR'd in here never had the chance to matter on a real surface, only on a
   // cell-only one, where they were exactly the bug: they could force the measured (dropped) path even with no
-  // FontRenderContext to measure against.
+  // text to measure.
   private def shouldUseMeasuredCursor(surface: RenderSurface): Boolean =
     surface.text.measuresText
 

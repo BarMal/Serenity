@@ -523,7 +523,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
             if label.isEmpty then 0.0
             else
               java.awt.font
-                .TextLayout(label, font, com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext())
+                .TextLayout(label, font, com.serenity.testkit.TestMeasure.awtFontRenderContext)
                 .getAdvance
                 .toDouble
           ,

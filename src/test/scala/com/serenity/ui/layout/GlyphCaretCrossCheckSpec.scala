@@ -14,7 +14,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class GlyphCaretCrossCheckSpec extends AnyFlatSpec with Matchers:
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private def kerned(face: Font): Font =
     face.deriveFont(java.util.Map.of(TextAttribute.KERNING, TextAttribute.KERNING_ON))

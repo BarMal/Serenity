@@ -1,8 +1,7 @@
 package com.serenity.ui.layout
 
 import java.awt.Font
-import java.awt.font.{FontRenderContext, TextAttribute}
-import java.awt.geom.AffineTransform
+import java.awt.font.TextAttribute
 
 import com.serenity.richtext.{
   InlineMark,
@@ -26,7 +25,6 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
   private val sans  = Font(Font.SANS_SERIF, Font.PLAIN, 13)
   private val serif = Font(Font.SERIF, Font.PLAIN, 14)
   private val mono  = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val frc   = TextLayoutSnapshot.defaultFontRenderContext()
   private val prose =
     "The quick brown fox jumps over the lazy dog while the wrap width keeps folding this sentence onto new rows."
 
@@ -35,7 +33,6 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     cache: WrappedLineCache,
     widthPx: Int = 180,
     font: Font = sans,
-    fontRenderContext: FontRenderContext = frc,
     bufferLine: Int = 0,
     maxVisualLines: Int = Int.MaxValue,
     cellMetrics: Option[CellMetrics] = None,
@@ -244,20 +241,6 @@ class WrappedLineCacheSpec extends AnyFlatSpec with Matchers with TableDrivenPro
     val expected = snapshot(buffer, TestMeasure.wrapCache(), widthPx = 150)
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
     snapshot(buffer, cache, widthPx = 150) shouldBe expected
-  }
-
-  it should "share one entry between the state path's context and a 2x surface context" in {
-    val scaled = FontRenderContext(
-      AffineTransform.getScaleInstance(2.0, 2.0),
-      frc.getAntiAliasingHint,
-      frc.getFractionalMetricsHint
-    )
-    val cache = TestMeasure.wrapCache()
-    val state = wrap(prose, cache)
-    wrap(prose, cache, fontRenderContext = scaled) shouldBe state
-    cache.size shouldBe 1
-    wrap(prose, TestMeasure.wrapCache(), fontRenderContext = scaled) shouldBe
-      wrap(prose, TestMeasure.wrapCache())
   }
 
   it should "serve a line moved to another buffer line from the same cached rows, relabelling none of them" in {

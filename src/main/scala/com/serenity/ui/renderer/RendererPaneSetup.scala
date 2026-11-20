@@ -214,8 +214,8 @@ object RendererPaneSetup:
     * `snapshot.usesMeasuredLayout` is a font-only judgement (proportional advances, ligatures, ...) computed once when
     * the pane's [[TextLayoutSnapshot]] is built -- including by [[com.serenity.state.manager.AuthoritativeUiScene]],
     * which has no surface to ask and always uses it as a scene-wide, surface-agnostic cache shared with mouse
-    * targeting. `drawRunPx` is a no-op on a surface reporting no `FontRenderContext` (a terminal), so painting must
-    * additionally require the surface's own capability -- #1105.
+    * targeting. `drawRunPx` is a no-op on a surface that measures no text (a terminal), so painting must additionally
+    * require the surface's own capability -- #1105.
     */
   def usesMeasuredDrawing(snapshot: TextLayoutSnapshot, context: RenderContext): Boolean =
     snapshot.usesMeasuredLayout && context.surface.text.measuresText
@@ -226,16 +226,16 @@ object RendererPaneSetup:
     state: AppState,
     context: RenderContext
   ): TextLayoutSnapshot =
-    // #1105: a surface reporting no FontRenderContext (a terminal) can't draw a measured pixel run at all -- drawRunPx
+    // #1105: a surface that measures no text (a terminal) can't draw a measured pixel run at all -- drawRunPx
     // is a no-op there -- so a buffer that would otherwise pick a proportional text/ui font is forced onto the code
     // font instead, and the resulting snapshot is forced onto the cell path below, regardless of what the font itself
     // would have decided (ligatures, non-monospace advances, ...).
-    val hasFontRenderContext = context.surface.text.measuresText
-    val bufferFont           = if hasFontRenderContext then context.fontForBuffer(buffer) else context.codeFont
-    val panelWidthPx         = contentRect.width * context.cellMetrics.charWidth
-    val panelHeightPx        = contentRect.height * context.cellMetrics.lineHeight
-    val bufferMetrics        = TextLayoutSnapshot.cellMetricsOf(bufferFont, context.caches.wrappedLines.layoutMemos)
-    val surfaceConfig        = state.persisted.config.surfaceConfig
+    val measuresText  = context.surface.text.measuresText
+    val bufferFont    = if measuresText then context.fontForBuffer(buffer) else context.codeFont
+    val panelWidthPx  = contentRect.width * context.cellMetrics.charWidth
+    val panelHeightPx = contentRect.height * context.cellMetrics.lineHeight
+    val bufferMetrics = TextLayoutSnapshot.cellMetricsOf(bufferFont, context.caches.wrappedLines.layoutMemos)
+    val surfaceConfig = state.persisted.config.surfaceConfig
     // Column-based document layout (issue #1338): narrows the viewport (and so `baseViewport.visibleColumns`) to one
     // column's width whenever column mode and word wrap are both on -- otherwise this is exactly the three-argument
     // overload every pane used before, so off-path rendering is unaffected. Slice 4: the column width comes from the
@@ -291,9 +291,9 @@ object RendererPaneSetup:
       viewport = renderedViewport
     )
     context.surface.text.setFont(FontSpec.fromAwt(bufferFont))
-    val cellMetricsForSnapshot = if hasFontRenderContext then Some(bufferMetrics) else Some(context.cellMetrics)
+    val cellMetricsForSnapshot = if measuresText then Some(bufferMetrics) else Some(context.cellMetrics)
     val proseScale             = com.serenity.ui.theme.RichTextStyling.proseZoom(bufferFont.getSize2D)
-    // A surface with a real FontRenderContext keeps deriving cell-based advances from the buffer's own font, same as
+    // A surface that measures text keeps deriving cell-based advances from the buffer's own font, same as
     // always. A surface with none (a terminal, #1105) has no real font metrics to derive from at all -- its own
     // declared `context.cellMetrics` (TUI's CellMetricsOne, 1 pixel == 1 terminal cell) is the only legitimate scale,
     // so this is what must reach the cell-based layout path instead of `TextLayoutSnapshot` re-deriving
@@ -313,7 +313,7 @@ object RendererPaneSetup:
           columnTextWidthPx,
           bufferFont,
           cellMetricsOverride = cellMetricsForSnapshot,
-          forceCellLayout = !hasFontRenderContext,
+          forceCellLayout = !measuresText,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
           wrapCache = context.caches.wrappedLines,
@@ -334,7 +334,7 @@ object RendererPaneSetup:
           // font whose measured-vs-cell auto-detection trips on this environment's own font-rendering quirks would
           // still bake real (and here, meaningless -- #1105) measured advances into the snapshot, discarding
           // `context.cellMetrics`.
-          forceCellLayout = !hasFontRenderContext,
+          forceCellLayout = !measuresText,
           proseScale = proseScale,
           dropCapsEnabled = state.persisted.config.documentConfig.dropCapsEnabled,
           wrapCache = context.caches.wrappedLines,
@@ -345,7 +345,7 @@ object RendererPaneSetup:
           dropCapGapEm = state.persisted.config.documentConfig.dropCapGapEm,
           fallback = state.persisted.config.editorConfig.fontConfig.fallback
         )
-    if hasFontRenderContext then snapshot else snapshot.copy(usesMeasuredLayout = false)
+    if measuresText then snapshot else snapshot.copy(usesMeasuredLayout = false)
 
   private def visibleColumnsFor(font: Font, memos: LayoutMemos, panelWidthPx: Int, gridVisibleColumns: Int): Int =
     val sample          = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

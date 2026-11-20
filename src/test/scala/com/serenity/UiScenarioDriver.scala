@@ -1,7 +1,6 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.nio.file.{Files, Path}
 import java.util.concurrent.atomic.AtomicReference
@@ -275,9 +274,8 @@ final private class ScenarioRecordingSurface(delegate: RenderSurface, metrics: C
     * `render` un-adjusted instead of forwarding to the real surface.
     */
   private val textDrawing: TextDrawing = new TextDrawing:
-    def setFont(font: FontSpec): Unit                = delegate.text.setFont(font)
-    def fontRenderContext: Option[FontRenderContext] = delegate.text.fontRenderContext
-    def measuresText: Boolean                        = delegate.text.measuresText
+    def setFont(font: FontSpec): Unit = delegate.text.setFont(font)
+    def measuresText: Boolean         = delegate.text.measuresText
 
     def drawRunPx(
       xPx: Float,

@@ -1,8 +1,6 @@
 package com.serenity.ui.skia
 
 import java.awt.Color
-import java.awt.font.FontRenderContext
-import java.awt.geom.AffineTransform
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
@@ -107,9 +105,6 @@ final class SkiaRenderSurface(
   private val baseSaveCount = canvas.save()
   val _                     = canvas.scale(deviceScaleX.toFloat, deviceScaleY.toFloat)
 
-  private val renderContext =
-    FontRenderContext(AffineTransform.getScaleInstance(deviceScaleX, deviceScaleY), true, true)
-
   private val fill   = Paint()
   private val glyphs = Paint()
   private val stroke = Paint()
@@ -139,8 +134,6 @@ final class SkiaRenderSurface(
   override def setFont(newFont: FontSpec): Unit =
     baseFontRef.set(newFont)
     currentFontRef.set(newFont)
-
-  override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
 
   override def measuresText: Boolean = true
 

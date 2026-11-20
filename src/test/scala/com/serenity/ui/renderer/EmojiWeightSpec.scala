@@ -20,7 +20,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class EmojiWeightSpec extends AnyFlatSpec with Matchers:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val sizePx    = 28.0f
   private val white     = RenderColor.fromRgba(255, 255, 255)
   private val black     = RenderColor.fromRgba(0, 0, 0)

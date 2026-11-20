@@ -30,7 +30,7 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
 
   given Balance = Balance.default
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val tolerance = 0.02f
 
   private def withAttribute(font: Font, attribute: TextAttribute, value: AnyRef): Font =
@@ -415,13 +415,8 @@ class ParagraphMeasurementSpec extends AnyFlatSpec with Matchers with TableDrive
         .graphemeBoundaryOffsets(line)
     }
 
-  "The default font render context" should "be built once and shared" in {
-    TextLayoutSnapshot.defaultFontRenderContext() should be theSameInstanceAs TextLayoutSnapshot
-      .defaultFontRenderContext()
-  }
-
-  it should "keep antialiased fractional metrics" in {
-    val context: FontRenderContext = TextLayoutSnapshot.defaultFontRenderContext()
+  "The test font render context" should "keep antialiased fractional metrics" in {
+    val context: FontRenderContext = com.serenity.testkit.TestMeasure.awtFontRenderContext
     context.isAntiAliased shouldBe true
     context.usesFractionalMetrics shouldBe true
   }

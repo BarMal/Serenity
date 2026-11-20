@@ -11,7 +11,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class CaretStopsTuiSpec extends AnyFlatSpec with Matchers:
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val kernedInter =
     BundledInterFont.plain(14f).deriveFont(java.util.Map.of(TextAttribute.KERNING, TextAttribute.KERNING_ON))
 

@@ -22,7 +22,7 @@ class FastRowCountSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc      = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val config   = FontLoader.FontConfig()
   private val bufferId = BufferId(1)
 

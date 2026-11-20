@@ -1,13 +1,12 @@
 package com.serenity
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{PixelRect, TextLayoutSnapshot}
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.renderer.{
   Effects,
   FontSpec,
@@ -27,9 +26,8 @@ import com.serenity.ui.theme.TextStyle
   * `persistentContent` models a surface whose pixels survive between frames, which is what lets a test drive the
   * renderer's dirty-region path. It is off by default so that a plain mock behaves like a fresh image every frame.
   *
-  * `fontRenderContextOverride` defaults to `Some(defaultFontRenderContext())` so existing specs keep exercising the
-  * measured pixel-run path unchanged; pass `None` to model a cell-only surface (e.g. a terminal) for #1105's
-  * cell-fallback specs.
+  * `measuresText` defaults to true so existing specs keep exercising the measured pixel-run path unchanged; pass false
+  * to model a cell-only surface (e.g. a terminal) for #1105's cell-fallback specs.
   *
   * Implements every capability trait so renderer tests exercise the full drawing surface rather than silently no-op'ing
   * on operations a real surface supports -- see #1012.
@@ -38,7 +36,7 @@ class MockRenderSurface(
     val width: Int,
     val height: Int,
     persistentContent: Boolean = false,
-    fontRenderContextOverride: Option[FontRenderContext] = Some(TextLayoutSnapshot.defaultFontRenderContext()),
+    override val measuresText: Boolean = true,
     hardwareCursorOverride: Option[HardwareCursor] = None
 ) extends RenderSurface
     with TextDrawing
@@ -77,9 +75,6 @@ class MockRenderSurface(
   override def setFont(font: FontSpec): Unit =
     currentFont.set(Some(font.toAwt))
     setFontCallsBuffer += font.toAwt
-
-  override def fontRenderContext: Option[FontRenderContext] = fontRenderContextOverride
-  override def measuresText: Boolean                        = fontRenderContextOverride.isDefined
 
   def setFontCalls: List[Font] = setFontCallsBuffer.toList
 

@@ -112,9 +112,8 @@ class TerminalRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     rs.viewportHeight shouldBe 3
   }
 
-  "fontRenderContext" should "always be None" in {
+  "measuresText" should "be false" in {
     val (rs, _) = surface()
-    rs.text.fontRenderContext shouldBe None
     rs.text.measuresText shouldBe false
   }
 

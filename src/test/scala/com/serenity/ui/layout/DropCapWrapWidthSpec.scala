@@ -31,11 +31,11 @@ class DropCapWrapWidthSpec extends AnyFlatSpec with Matchers:
       "rapping at my chamber door."
 
   private val frcs = List(
-    "1x" -> TextLayoutSnapshot.defaultFontRenderContext(),
+    "1x" -> com.serenity.testkit.TestMeasure.awtFontRenderContext,
     "2x" -> FontRenderContext(
       AffineTransform.getScaleInstance(2.0, 2.0),
-      TextLayoutSnapshot.defaultFontRenderContext().getAntiAliasingHint,
-      TextLayoutSnapshot.defaultFontRenderContext().getFractionalMetricsHint
+      com.serenity.testkit.TestMeasure.awtFontRenderContext.getAntiAliasingHint,
+      com.serenity.testkit.TestMeasure.awtFontRenderContext.getFractionalMetricsHint
     )
   )
 

@@ -21,7 +21,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class SkiaFontFallbackPaintSpec extends AnyFlatSpec with Matchers:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val sizePx    = 14.0f
   private val originX   = 4.0f
   private val white     = RenderColor.fromRgba(255, 255, 255)

@@ -16,7 +16,7 @@ class ClusterCellLayoutSpec extends AnyFlatSpec with Matchers:
   private val heart  = s(0x2764, 0xfe0f)
   private val family = s(0x1f468, 0x200d, 0x1f469, 0x200d, 0x1f467)
 
-  private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc    = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val font   = Font(Font.MONOSPACED, Font.PLAIN, 14)
   private val cellPx = TestMeasure.cellMetrics(font).charWidth
 

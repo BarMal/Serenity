@@ -1,11 +1,10 @@
 package com.serenity.perf
 
-import java.awt.font.FontRenderContext
 import java.awt.image.BufferedImage
 import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.color.RenderColor
-import com.serenity.ui.layout.{PixelRect, TextLayoutSnapshot}
+import com.serenity.ui.layout.PixelRect
 import com.serenity.ui.renderer.{
   Effects,
   FontSpec,
@@ -38,7 +37,6 @@ final class NullRenderSurface(
 
   private val contentIdentity = SurfaceContentIdentity(new Object)
   private val screen          = ScreenIdentity(new Object)
-  private val renderContext   = Some(TextLayoutSnapshot.defaultFontRenderContext())
   private val foreground      = new AtomicReference(RenderColor.White)
   private val background      = new AtomicReference(RenderColor.Black)
 
@@ -52,8 +50,7 @@ final class NullRenderSurface(
   override def addressesPixels: Boolean                             = true
   override def devicePixelScaleX: Double                            = deviceScale
   override def devicePixelScaleY: Double                            = deviceScale
-  override def fontRenderContext: Option[FontRenderContext]         = renderContext
-  override def measuresText: Boolean                                = renderContext.isDefined
+  override def measuresText: Boolean                                = true
 
   def setForegroundColor(color: RenderColor): Unit = foreground.set(color)
   def setBackgroundColor(color: RenderColor): Unit = background.set(color)
