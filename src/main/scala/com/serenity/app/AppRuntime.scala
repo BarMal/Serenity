@@ -568,7 +568,7 @@ object AppRuntime:
     inFlight: Semaphore[IO],
     dispatcher: Dispatcher[IO]
   ): () => Unit =
-    () => dispatchIfRunning(dispatcher)(inFlight.tryPermit.use(acquired => requestQuit.void.whenA(acquired)))
+    () => dispatchIfRunning(dispatcher)(inFlight.tryPermit.use(acquired => IO.whenA(acquired)(requestQuit.void)))
 
   private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
     awaitQuit >> whenQuit
