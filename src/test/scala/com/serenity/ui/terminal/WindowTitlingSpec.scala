@@ -23,20 +23,20 @@ class WindowTitlingSpec extends AnyFlatSpec with Matchers:
       onThread += "ran"
       run.run()
 
-    def awaitClose: IO[Unit]                                                    = IO.never
-    def setOnResize(cb: () => Unit): Unit                                       = ()
-    def setOnFocusChange(cb: Boolean => Unit): Unit                             = ()
-    def doResizeIfNecessary(): Option[ViewportSize]                             = None
-    def hide(): Unit                                                            = ()
-    def bringToFront(): Unit                                                    = ()
-    def currentPreferredWindowSize: PreferredWindowSize                         = PreferredWindowSize.Default
-    def resizeToPreferred(size: PreferredWindowSize): Unit                      = ()
-    def updateMetrics(codeMetrics: CellMetrics, uiMetrics: CellMetrics): Unit   = ()
-    def updateChromeTheme(theme: Theme): Unit                                   = ()
-    def updatePointerShape(shape: PointerShape): Unit                           = ()
-    def updateAccessibility(snapshot: AccessibilitySnapshot): Unit              = ()
-    def endInputMethodComposition(): Unit                                       = ()
-    def detectedDeviceTextScale: Double                                         = 1.0
+    def awaitClose: IO[Unit]                                                  = IO.never
+    def setOnResize(cb: () => Unit): Unit                                     = ()
+    def setOnFocusChange(cb: Boolean => Unit): Unit                           = ()
+    def doResizeIfNecessary(): Option[ViewportSize]                           = None
+    def hide(): Unit                                                          = ()
+    def bringToFront(): Unit                                                  = ()
+    def currentPreferredWindowSize: PreferredWindowSize                       = PreferredWindowSize.Default
+    def resizeToPreferred(size: PreferredWindowSize): Unit                    = ()
+    def updateMetrics(codeMetrics: CellMetrics, uiMetrics: CellMetrics): Unit = ()
+    def updateChromeTheme(theme: Theme): Unit                                 = ()
+    def updatePointerShape(shape: PointerShape): Unit                         = ()
+    def updateAccessibility(snapshot: AccessibilitySnapshot): Unit            = ()
+    def endInputMethodComposition(): Unit                                     = ()
+    def detectedDeviceTextScale: Double                                       = 1.0
 
   "A titled window" should "apply a title once however often it is offered, and again when it changes" in {
     val window = new Probe

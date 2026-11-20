@@ -333,7 +333,7 @@ class SwingWindow(
     f.setLocationRelativeTo(null)
     f
 
-  def awaitClose: IO[Unit] = SwingWindow.awaitCloseLatch(closeLatch)
+  def awaitClose: IO[Unit]                               = SwingWindow.awaitCloseLatch(closeLatch)
   override protected def applyTitle(title: String): Unit = chromeTitleBar.showTitle(title)
 
   /** Puts `bar` where [[SwingWindow.menuBarPlacement]] says, on the event-dispatch thread, and makes room for it so the
