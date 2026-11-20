@@ -5,8 +5,8 @@ import java.util.concurrent.{Callable, Executors}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** AWT's first use of a font is not safe across threads (`FontFirstUse`), so a baseline taken once could be one of
-  * several. Measuring again in the same JVM, and from two threads at once, must give the numbers the first time did.
+/** A font's first use is not safe across threads, so a baseline taken once could be one of several. Measuring again in
+  * the same JVM, and from two threads at once, must give the numbers the first time did.
   */
 class TextMeasureStabilitySpec extends AnyFlatSpec with Matchers:
 

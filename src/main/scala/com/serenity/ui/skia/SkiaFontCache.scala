@@ -22,8 +22,8 @@ final case class SkiaFace(font: Font, underline: TextRule, strikethrough: Option
   * linear, the same fractional advances AWT reports, so a run starting at a layout-given x ends where layout says.
   *
   * A face is built once per distinct font spec, under one lock, and warmed before it is handed out: the first use of a
-  * typeface (table loading, the glyph cache) is where `FontFirstUse` found AWT disagreeing with itself across threads,
-  * and Skia's font manager is not documented as safe for two threads' first lookups.
+  * typeface (table loading, the glyph cache) is where AWT was found disagreeing with itself across threads, and Skia's
+  * font manager is not documented as safe for two threads' first lookups.
   */
 final class SkiaFontCache(
     maxFaces: Int = SkiaFontCache.DefaultMaxFaces,
