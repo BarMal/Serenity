@@ -81,7 +81,8 @@ final case class KeyLatency(
     stageNanos: Vector[Long],
     totalNanos: Long,
     splits: Map[LatencySplit, Long] = Map.empty,
-    frameWokeAt: Long = 0L
+    frameWokeAt: Long = 0L,
+    paintedBy: Option[PaintSource] = None
 ):
 
   def stage(stage: LatencyStage): Long = stageNanos.lift(stage.ordinal).getOrElse(0L)
@@ -106,7 +107,7 @@ object KeyLatency:
     * it), so each stage runs from the furthest point reached so far: a stage the keystroke overtook, or never passed
     * through, counts as zero, and the stages always add up to the total.
     */
-  def of(key: KeyStamps, frame: FrameStamps, paintFinishedAt: Long): KeyLatency =
+  def of(key: KeyStamps, frame: FrameStamps, paintFinishedAt: Long, paintedBy: Option[PaintSource] = None): KeyLatency =
     val stageEnds = Vector(
       key.enqueuedAt,
       key.dequeuedAt,
@@ -125,7 +126,7 @@ object KeyLatency:
         val next = end.fold(reached)(_.max(reached))
         (next, durations :+ (next - reached))
     }
-    KeyLatency(key.seq, key.whenToEdtMs, stages, stages.sum, key.splits ++ frame.splits, frame.wokeAt)
+    KeyLatency(key.seq, key.whenToEdtMs, stages, stages.sum, key.splits ++ frame.splits, frame.wokeAt, paintedBy)
 
 /** The keystrokes painted during one report window, and how many were drawn by a frame that changed nothing visible. */
 final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpainted: Int, backend: String = ""):
@@ -151,7 +152,11 @@ final case class LatencyWindow(elapsedMs: Double, keys: Vector[KeyLatency], unpa
         String.format(Locale.ROOT, "%s p50=%.2f p95=%.2f", label, stats.p50Ms, stats.p95Ms)
     }
     val body = if parts.isEmpty then "no keystrokes" else s"${parts.mkString(" | ")} ms"
-    s"[LATENCY] summary${PresentPoint.tag(backend)} window=${window}s keys=${keys.size} unpainted=$unpainted | $body"
+    val paintedBy =
+      Option(PaintSource.describe(keys.flatMap(_.paintedBy).groupMapReduce(identity)(_ => 1)(_ + _)))
+        .filter(_.nonEmpty)
+        .fold("")(described => s" painted_by $described")
+    s"[LATENCY] summary${PresentPoint.tag(backend)} window=${window}s keys=${keys.size} unpainted=$unpainted$paintedBy | $body"
 
   def logLines: Vector[String] = keys.map(_.logLine) :+ summaryLine
 
@@ -249,10 +254,11 @@ final case class KeyLatencyState(
       frame = frame.map(current => if current.publishedAt.isDefined then mark(current) else current)
     )
 
-  def paintFinished(now: Long): KeyLatencyState =
+  def paintFinished(now: Long, source: PaintSource): KeyLatencyState =
     val (painted, waiting) = presented.partition(_.paintStartedAt.isDefined)
     val paintedCurrent     = frame.filter(_.paintStartedAt.isDefined)
-    val finished           = (painted ++ paintedCurrent).flatMap(shown => shown.keys.map(KeyLatency.of(_, shown, now)))
+    val finished =
+      (painted ++ paintedCurrent).flatMap(shown => shown.keys.map(KeyLatency.of(_, shown, now, Some(source))))
     copy(
       presented = waiting,
       frame =
@@ -337,12 +343,13 @@ final class KeyLatencyTrace(
   def frameModelRead(): Unit       = if enabled.get() then update(_.frameModelRead(_))
   def framePublished(): Unit       = if enabled.get() then update(_.framePublished(_))
   def frameEnded(): Unit           = if enabled.get() then update((current, _) => current.frameEnded)
-  def paintStarted(): Unit         = if enabled.get() then update(_.paintStarted(_))
+  def paintStarted(source: PaintSource = PaintSource.Canvas): Unit =
+    if enabled.get() && source.shows then update(_.paintStarted(_))
 
-  def paintFinished(): Unit =
-    if enabled.get() then
+  def paintFinished(source: PaintSource = PaintSource.Canvas): Unit =
+    if enabled.get() && source.shows then
       val now = clock()
-      if state.updateAndGet(_.paintFinished(now)).completed.nonEmpty then firstKeyPainted.complete(()): Unit
+      if state.updateAndGet(_.paintFinished(now, source)).completed.nonEmpty then firstKeyPainted.complete(()): Unit
 
   private[serenity] def pendingKeys: Vector[KeyStamps] = state.get().keys
 

@@ -119,7 +119,7 @@ class SwingWindow(
           publishCanvasResize(getSize())
     )
     override def paintComponent(g: java.awt.Graphics): Unit =
-      val paintStart = frameTimings.paintStarted()
+      val paint = frameTimings.canvasPaintStarted(layerPresenterRef.get().isDefined)
       paintProbe.painted()
       // Read before the lease: an image published in between is then counted as not yet shown, never as shown early.
       val shownAtPaint = baseImagesPublished.get()
@@ -130,7 +130,7 @@ class SwingWindow(
       finally
         baseImagePool.releaseLease()
         g2.dispose()
-        frameTimings.paintFinished(paintStart)
+        paint.finished()
         baseImagesShown.set(shownAtPaint)
         framePresentedRef.get().foreach(_.apply())
 
