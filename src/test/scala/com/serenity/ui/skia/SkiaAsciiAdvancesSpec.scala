@@ -34,11 +34,11 @@ class SkiaAsciiAdvancesSpec extends AnyFlatSpec with Matchers:
     )
 
   Families.foreach { family =>
-    s"A paragraph of printable ASCII in $family" should "be measured without shaping it, once the font has been read" in {
+    s"A paragraph of printable ASCII in $family" should "be measured without shaping it, once the font has measured a document" in {
       val (measurer, fontsOf) = measurerOver(ligatures = false)
       val fonts               = fontsOf(family)
-      val _                   = measurer.advances(paragraph(0L), 0, paragraph(0L).length, 0, fonts)
-      val before              = measurer.shaperRuns
+      (1000L to 1060L).foreach(seed => measurer.advances(paragraph(seed), 0, paragraph(seed).length, 0, fonts))
+      val before = measurer.shaperRuns
 
       (1L to Paragraphs).foreach(seed => measurer.advances(paragraph(seed), 0, paragraph(seed).length, 0, fonts))
 

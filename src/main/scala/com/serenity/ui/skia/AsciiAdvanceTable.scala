@@ -56,10 +56,27 @@ private[skia] object AsciiAdvanceTable:
   private val Last  = '~'.toInt
   private val Span  = Last - First + 1
 
-  /** Below this a stretch is shaped as it is: reading the table of a font nobody has measured yet costs more than a
-    * short text.
-    */
+  /** Below this a stretch is measured as it is: shaping a short text costs less than reading anything for it. */
   val SmallestStretch = 24
+
+  /** The characters of ASCII a font measures before its table is read: a table costs a few milliseconds, which a
+    * document of a few dozen paragraphs repays and a text laid out once does not.
+    */
+  val WorthReadingAfter = 16384L
+
+  /** The font's table, once the font has measured enough ASCII for reading it to pay: a text laid out once in a font
+    * costs less to measure as it is than to read the table of its font for.
+    */
+  def measuredBy(memos: ShapingMemos, font: ShapingMemos.FontKey, length: Int)(
+    read: => AsciiAdvanceTable
+  ): Option[AsciiAdvanceTable] =
+    Option(memos.asciiTables.get(font)).orElse {
+      val seen = memos.asciiChars.computeIfAbsent(font, _ => new java.util.concurrent.atomic.AtomicLong(0L))
+      Option.when(seen.addAndGet(length.toLong) >= WorthReadingAfter) {
+        val table = read
+        Option(memos.asciiTables.putIfAbsent(font, table)).getOrElse(table)
+      }
+    }
 
   def isPrintableAscii(chars: String): Boolean =
     @annotation.tailrec

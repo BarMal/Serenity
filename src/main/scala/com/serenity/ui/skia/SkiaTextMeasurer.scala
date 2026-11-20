@@ -190,7 +190,7 @@ final class SkiaTextMeasurer(
         measureRun(chars.substring(from, until), font, offset + from, advances, kernAfter, measurable)
       )
     else if chars.length >= AsciiAdvanceTable.SmallestStretch && AsciiAdvanceTable.isPrintableAscii(chars) &&
-        asciiTableOf(font).measure(chars, offset, advances, kernAfter, measurable)
+        asciiTableOf(font, chars.length).exists(_.measure(chars, offset, advances, kernAfter, measurable))
     then ()
     else
       StretchAdvances.measure(
@@ -204,11 +204,9 @@ final class SkiaTextMeasurer(
         pairKerning(_, _, _)
       )
 
-  private def asciiTableOf(font: Font): AsciiAdvanceTable =
-    val key = faces.shapingKeyOf(font)
-    Option(memos.asciiTables.get(key)).getOrElse {
-      val table = AsciiAdvanceTable.read(font, shapeNow(_, _, 0.toByte, counted = false), pairKerning(_, _, _))
-      Option(memos.asciiTables.putIfAbsent(key, table)).getOrElse(table)
+  private def asciiTableOf(font: Font, length: Int): Option[AsciiAdvanceTable] =
+    AsciiAdvanceTable.measuredBy(memos, faces.shapingKeyOf(font), length) {
+      AsciiAdvanceTable.read(font, shapeNow(_, _, 0.toByte, counted = false), pairKerning(_, _, _))
     }
 
   private def surrogateFreeStretches(chars: String): Vector[(Int, Int)] =

@@ -22,6 +22,7 @@ final private[skia] class ShapingMemos:
   val spaceCuts   = new ConcurrentHashMap[ShapingMemos.SpaceCutKey, java.lang.Boolean]()
   val substitutes = new ConcurrentHashMap[ShapingMemos.FontKey, java.lang.Boolean]()
   val asciiTables = new ConcurrentHashMap[ShapingMemos.FontKey, AsciiAdvanceTable]()
+  val asciiChars  = new ConcurrentHashMap[ShapingMemos.FontKey, AtomicLong]()
   val advances    = new WeakMemo[ShapingMemos.AdvancesKey, GlyphAdvances]()
 
 private[skia] object ShapingMemos:
