@@ -5,12 +5,12 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.duration.*
 
-import cats.effect.std.{Dispatcher, Semaphore}
+import cats.effect.std.Dispatcher
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO}
-import com.serenity.app.AppRuntime
+import com.serenity.app.CallbackBridges
 import com.serenity.state.manager.QuitOutcome
-import com.serenity.ui.terminal.SwingWindow
+import com.serenity.ui.terminal.CloseRequestRouting
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -19,12 +19,12 @@ import org.scalatest.matchers.should.Matchers
   */
 class WindowCloseRequestSpec extends AnyFlatSpec with Matchers:
 
-  "SwingWindow.routeClose" should "hand the request to the registered callback and leave the latch alone" in {
+  "CloseRequestRouting.route" should "hand the request to the registered callback and leave the latch alone" in {
     val latch    = new CountDownLatch(1)
     val requests = new AtomicInteger(0)
 
-    SwingWindow.routeClose(Some(() => requests.incrementAndGet()), latch)
-    SwingWindow.routeClose(Some(() => requests.incrementAndGet()), latch)
+    CloseRequestRouting.route(Some(() => requests.incrementAndGet()), latch)
+    CloseRequestRouting.route(Some(() => requests.incrementAndGet()), latch)
 
     requests.get shouldBe 2
     latch.getCount shouldBe 1L
@@ -33,19 +33,18 @@ class WindowCloseRequestSpec extends AnyFlatSpec with Matchers:
   it should "count the latch down when nothing is listening, as the forced-quit paths expect" in {
     val latch = new CountDownLatch(1)
 
-    SwingWindow.routeClose(None, latch)
+    CloseRequestRouting.route(None, latch)
 
     latch.getCount shouldBe 0L
   }
 
-  "AppRuntime.closeRequestBridge" should "ask the orderly quit once while an answer is pending, and again afterwards" in {
+  "CallbackBridges.closeRequest" should "ask the orderly quit once while an answer is pending, and again afterwards" in {
     val program = Dispatcher.parallel[IO].use { dispatcher =>
       for
-        gate     <- Semaphore[IO](1)
         asked    <- IO.ref(0)
         answered <- Deferred[IO, Unit]
         quit = asked.update(_ + 1) >> answered.get.as(QuitOutcome.Abandoned)
-        callback = AppRuntime.closeRequestBridge(quit, gate, dispatcher)
+        callback <- CallbackBridges.closeRequest(quit, dispatcher)
         _         <- IO(callback())
         _         <- IO.sleep(100.millis)
         _         <- IO(callback())

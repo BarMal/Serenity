@@ -6,11 +6,12 @@ import java.util.concurrent.Executor
 import scala.concurrent.duration.*
 
 import cats.effect.*
-import cats.effect.std.{Dispatcher, Semaphore, Supervisor}
+import cats.effect.std.{Dispatcher, Supervisor}
 import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
+import com.serenity.app.CallbackBridges.{closeRequest, dispatchIfRunning}
 import com.serenity.config.{AppConfig, RenderFpsTarget}
 import com.serenity.diagnostics.{
   EdtLagTrace,
@@ -257,12 +258,8 @@ object AppRuntime:
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
-        closeGate     <- Semaphore[IO](1)
-        _ <- IO(
-          registerCloseCallback(
-            closeRequestBridge(stateManager.runtimeLifecycle.requestQuit, closeGate, resizeCallbackDispatcher)
-          )
-        )
+        closeCallback <- closeRequest(stateManager.runtimeLifecycle.requestQuit, resizeCallbackDispatcher)
+        _             <- IO(registerCloseCallback(closeCallback))
         cursorVisible <- Ref.of[IO, Boolean](true)
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         startedAt     <- IO.monotonic
@@ -558,32 +555,6 @@ object AppRuntime:
     awaitQuit: IO[Unit]
   ): IO[Unit] =
     IO.race(awaitExternalQuit >> forceQuit, awaitQuit).void
-
-  /** What closing the window does: ask the quit workflow Ctrl+Q asks, so unsaved buffers are asked about. A request
-    * made while an earlier one is still waiting for its answer is dropped, so a second click does not stack a second
-    * prompt; once it is answered (Cancel included) the next one is heard.
-    */
-  private[serenity] def closeRequestBridge(
-    requestQuit: IO[QuitOutcome],
-    inFlight: Semaphore[IO],
-    dispatcher: Dispatcher[IO]
-  ): () => Unit =
-    () => dispatchIfRunning(dispatcher)(inFlight.tryPermit.use(acquired => IO.whenA(acquired)(requestQuit.void)))
-
-  private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
-    awaitQuit >> whenQuit
-
-  /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
-    *
-    * On quit the runtime's `Dispatcher` closes while native callbacks (WINCH resize, window focus-lost) can still fire.
-    * `unsafeRunAndForget` then throws `IllegalStateException: Dispatcher already closed` synchronously -- before the
-    * effect's own error handler can run -- onto the AWT/pump thread, where `CrashReporter` logs it as a crash. A
-    * callback arriving after shutdown has nothing left to do, so swallow only that specific closed-dispatcher state and
-    * let every other failure propagate.
-    */
-  private def dispatchIfRunning(dispatcher: Dispatcher[IO])(effect: IO[Unit]): Unit =
-    try dispatcher.unsafeRunAndForget(effect)
-    catch case _: IllegalStateException => ()
 
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],

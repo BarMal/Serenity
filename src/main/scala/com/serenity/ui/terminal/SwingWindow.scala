@@ -18,7 +18,6 @@ import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.host.WindowControl
 import com.serenity.ui.layout.{CellMetrics, ViewportSize}
 import com.serenity.ui.renderer.{CaretCanvases, CaretPaint, PresentationSite, RenderTarget, SurfaceGeometry}
 import com.serenity.ui.theme.Theme
@@ -33,7 +32,7 @@ class SwingWindow(
     env: Map[String, String] = sys.env,
     windowTitle: String = SwingWindow.WindowTitle
 ) extends RenderTarget
-    with WindowControl:
+    with CloseRequestRouting:
 
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
@@ -66,7 +65,6 @@ class SwingWindow(
   private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
   private val attachedBarRef           = new AtomicReference[Option[SwingWindow.AttachedBar]](None)
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
-  private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
   private val publishedCaretsRef       = new AtomicReference[scala.List[CaretPaint]](Nil)
   // Kept through the caret's blink-off phases, so the input method's candidate window has somewhere to be.
@@ -100,12 +98,6 @@ class SwingWindow(
 
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
-
-  private val onCloseRequestedRef = new AtomicReference[Option[() => Unit]](None)
-
-  override def setOnCloseRequested(cb: () => Unit): Unit = onCloseRequestedRef.set(Some(cb))
-
-  private def requestClose(): Unit = SwingWindow.routeClose(onCloseRequestedRef.get(), closeLatch)
 
   private val paintProbe = new PaintProbe()
 
@@ -568,13 +560,6 @@ object SwingWindow extends SwingWindowChromeSupport with SwingWindowImageSupport
     * `await()` that can never reach a cancellation boundary -- the app would exit only via the chrome close control,
     * hanging on the in-app Quit option (thread parked here, `main` parked in `IOApp`).
     */
-  /** A close request goes to the runtime's callback, which asks the quit workflow and may be answered Cancel, so
-    * another request can follow; only with no callback (smoke test, startup probe) does it end the run through the
-    * latch.
-    */
-  private[serenity] def routeClose(onCloseRequested: Option[() => Unit], latch: CountDownLatch): Unit =
-    onCloseRequested.fold(latch.countDown())(_.apply())
-
   private[serenity] def awaitCloseLatch(latch: CountDownLatch): IO[Unit] =
     IO.interruptible(latch.await())
 
