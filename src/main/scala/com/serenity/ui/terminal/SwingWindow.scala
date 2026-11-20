@@ -101,6 +101,15 @@ class SwingWindow(
   /** Register a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
   def setOnFocusChange(cb: Boolean => Unit): Unit = onFocusCallbackRef.set(Some(cb))
 
+  override def setTitle(title: String): Unit =
+    SwingUtilities.invokeLater { () =>
+      frame.setTitle(title)
+      titleLabelRef.get().foreach { label =>
+        label.setText(title)
+        SwingWindow.setAccessibleNameIfAvailable(label, title)
+      }
+    }
+
   private val paintProbe = new PaintProbe()
 
   val canvas: JPanel = new JPanel with ImeRequestsHost:

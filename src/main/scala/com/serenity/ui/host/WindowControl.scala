@@ -19,6 +19,11 @@ trait WindowControl:
   /** Completes once the user has asked to close the window. */
   def awaitClose: IO[Unit]
 
+  /** Shows `title` as the window's title, in the title bar the window draws or the one the system draws. A window
+    * with no title of its own keeps the one it was opened with.
+    */
+  def setTitle(title: String): Unit = ()
+
   def setOnResize(cb: () => Unit): Unit
 
   /** Registers a callback fired with `true` when the window gains keyboard focus and `false` when it loses it. */
