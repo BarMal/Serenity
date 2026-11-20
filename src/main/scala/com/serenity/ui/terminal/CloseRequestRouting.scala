@@ -5,9 +5,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 import com.serenity.ui.host.WindowControl
 
-/** Where a request to close the window goes: to the runtime's callback, which asks the quit workflow and may be answered
-  * Cancel, so another request can follow. Only with no callback (smoke test, startup probe) does it end the run through
-  * the latch.
+/** Where a request to close the window goes: to the runtime's callback, which asks the quit workflow and may be
+  * answered Cancel, so another request can follow. Only with no callback (smoke test, startup probe) does it end the
+  * run through the latch.
   */
 trait CloseRequestRouting extends WindowControl:
 
