@@ -24,7 +24,6 @@ import com.serenity.state.models.*
 import com.serenity.state.reducers.{EditorEventReducer, ReducerResult}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.WrappedLineCache
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Reducer benchmarks, so the per-family coverage #993 depends on is visible in one place. Builds its fixtures without
   * a Swing window, which lets a headless spec run exactly what the benchmark runner measures.
@@ -63,9 +62,8 @@ private[perf] object ReducerBenchmarks:
     lazy val multiCursorWrapState = multiCursorState.copy(persisted =
       multiCursorState.persisted.copy(config = multiCursorState.persisted.config.withWordWrap(true))
     )
-    // One shaper and one set of font memos across iterations, and no wrap remembered: every wrap is measured, as when no
-    // cache is given, while the measurements underneath stay warm, as they were when they were process-wide.
-    lazy val moveDownShaping     = ShapedTextCache()
+    // One set of font memos across iterations, and no wrap remembered: every wrap is measured, as when no cache is
+    // given, while the measurements underneath stay warm, as they were when they were process-wide.
     lazy val moveDownMemos       = TestMeasure.layoutMemos()
     lazy val multiInsertResult   = EditorEventReducer.reduce(InsertChar('x'), PaneId(0), multiCursorState)
     lazy val multiMoveResult     = EditorEventReducer.reduce(MoveRight, PaneId(0), multiCursorState)
@@ -100,7 +98,6 @@ private[perf] object ReducerBenchmarks:
         extendRightResult,
         multiCursorState,
         multiCursorWrapState,
-        moveDownShaping,
         moveDownMemos,
         multiInsertResult,
         multiMoveResult,
@@ -182,7 +179,7 @@ private[perf] object ReducerBenchmarks:
                 MoveDown,
                 PaneId(0),
                 multiCursorWrapState,
-                WrappedLineCache.measuring(moveDownShaping, moveDownMemos)
+                WrappedLineCache.measuring(moveDownMemos)
               )
         ),
         BenchmarkRunner.Benchmark(

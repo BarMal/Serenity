@@ -7,7 +7,7 @@ import scala.util.Random
 
 import com.serenity.state.models.TextVisualLine
 import com.serenity.testkit.TestMeasure
-import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -47,23 +47,23 @@ class WrapTextLayoutCountSpec extends AnyFlatSpec with Matchers with TableDriven
     text: String,
     widthPx: Int,
     font: Font,
-    shaper: ShapedTextCache = ShapedTextCache()
+    memos: LayoutMemos = TestMeasure.layoutMemos()
   ): Vector[TextVisualLine] =
     TextLayoutSnapshot.boundedVisualLinesForText(
       text,
       3,
       widthPx,
       font,
-      wrapCache = WrappedLineCache.measuring(shaper, TestMeasure.layoutMemos())
+      wrapCache = WrappedLineCache.measuring(memos)
     )
 
-  /** The rows `text` wraps to, with how many exact measurements that wrap built: counted by the shaper it wrapped
+  /** The rows `text` wraps to, with how many exact measurements that wrap built: counted by the font memos it wrapped
     * through, so specs running side by side do not see each other's.
     */
   private def constructedWhile(text: String, widthPx: Int, font: Font): (Vector[TextVisualLine], Long) =
-    val shaper = ShapedTextCache()
-    val rows   = wrap(text, widthPx, font, shaper)
-    (rows, shaper.exactMeasurements)
+    val memos = TestMeasure.layoutMemos()
+    val rows  = wrap(text, widthPx, font, memos)
+    (rows, memos.exactMeasurements)
 
   "Wrapping kerned prose" should "build a constant number of exact measurements however many rows wrap" in
     forAll(kernedFonts) { font =>

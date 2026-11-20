@@ -5,11 +5,10 @@ package com.serenity.ui.renderer
   */
 final case class SurfaceTextCaches(
     labelSprites: LabelSprites,
-    styledFonts: StyledFontCache,
-    shapedText: ShapedTextCache
+    styledFonts: StyledFontCache
 )
 
 object SurfaceTextCaches:
 
   def fresh(): SurfaceTextCaches =
-    SurfaceTextCaches(LabelSprites(LabelSprites.DefaultCapacity), StyledFontCache(), ShapedTextCache())
+    SurfaceTextCaches(LabelSprites(LabelSprites.DefaultCapacity), StyledFontCache())

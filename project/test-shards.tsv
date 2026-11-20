@@ -165,7 +165,6 @@ com.serenity.ui.renderer.CurrentRoomBelowRowsSpec	1	0.4
 com.serenity.ui.openings.RichTextOpeningsSpec	1	0.392
 com.serenity.PinnedPanelMouseSpec	1	0.382
 com.serenity.ui.layout.WrappedLineCacheSpec	1	0.38
-com.serenity.ui.renderer.GlyphAdvanceSpec	1	0.375
 com.serenity.EditorBehaviorSpec	1	0.371
 com.serenity.StateManagerReducerRoutingSpec	1	0.37
 com.serenity.StartupOptionsEndToEndSpec	1	0.359
@@ -279,7 +278,6 @@ com.serenity.CommandRunnerSettingsGroupsSpec	1	0.09
 com.serenity.ui.theme.appearance.OsAppearanceDetectorSpec	1	0.088
 com.serenity.command.CommandRunnerSearchStateSpec	1	0.086
 com.serenity.lsp.LspResolutionCacheSpec	1	0.086
-com.serenity.ui.layout.FontFirstUseSpec	1	0.085
 com.serenity.ui.layout.SlantedFontMeasurementSpec	1	0.083
 com.serenity.PanelEscapeSettingsSpec	1	0.082
 com.serenity.app.LayoutOverrideReviewSpec	1	0.082
@@ -542,7 +540,6 @@ com.serenity.state.models.AppStateBufferIndexesSpec	1	0.011
 com.serenity.state.reducers.DirectionalFocusSpec	1	0.011
 com.serenity.ui.layout.DropCapGlyphSpec	1	0.011
 com.serenity.ui.layout.GlyphCaretCrossCheckSpec	1	0.011
-com.serenity.ui.renderer.ShapedTextPromotionsSpec	1	0.011
 com.serenity.ui.tui.TerminalNoticePromptSpec	1	0.011
 com.serenity.ModalReplaceWorkflowReducerSpec	1	0.01
 com.serenity.RendererCellFallbackSpec	1	0.01
@@ -1089,7 +1086,6 @@ com.serenity.config.SummonConfigFileSpec	2	0.048
 com.serenity.markdown.MarkdownPreviewCacheIsolationSpec	2	0.048
 com.serenity.state.manager.DamageProducerChangeSetSpec	2	0.048
 com.serenity.IntervalSaveStreamSpec	2	0.047
-com.serenity.ui.layout.FontProbesOwnershipSpec	2	0.047
 com.serenity.HeadingThemeColourSpec	2	0.046
 com.serenity.session.SessionRecentFoldersCodecSpec	2	0.046
 com.serenity.CommandRunnerModalFocusSpec	2	0.045
@@ -1134,7 +1130,6 @@ com.serenity.state.manager.HeadingSpacingMouseSpec	2	0.035
 com.serenity.ui.layout.ClusterMeasuredCodeLayoutSpec	2	0.035
 com.serenity.ClipboardPasteReadSpec	2	0.034
 com.serenity.ResizeAndEOFFixSpec	2	0.034
-com.serenity.ui.renderer.FontFirstUseSpec	2	0.034
 com.serenity.EditorSelectionRenderingSpec	2	0.033
 com.serenity.ScrollReadBoundSpec	2	0.033
 com.serenity.diagnostics.LogbackLocationSpec	2	0.033
