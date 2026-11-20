@@ -37,3 +37,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   it should "ask AWT for no cell metrics: an owner with no measurer is on the cell grid" in {
     filesMentioning("""CellMetrics\.fromFont|def fromFont\(font: java\.awt\.Font\)|awtChAdvancePx""") shouldBe Nil
   }
+
+  it should "read no AWT line metrics: the rules drawn with text come from the font's Skia metrics" in {
+    filesMentioning("""getLineMetrics|AwtFontReconciliation""") shouldBe Nil
+  }

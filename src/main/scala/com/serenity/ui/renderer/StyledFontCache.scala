@@ -1,7 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.font.{FontRenderContext, LineMetrics}
-import java.awt.geom.AffineTransform
 import java.awt.{Font, Graphics2D}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -19,9 +17,8 @@ import com.serenity.ui.theme.TextStyle
 final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 128):
   import StyledFontCache.*
 
-  private val fonts      = new ConcurrentHashMap[Font, ConcurrentHashMap[TextStyle, Font]]()
-  private val underlines = new ConcurrentHashMap[Font, Underline]()
-  private val derived    = new AtomicLong(0)
+  private val fonts   = new ConcurrentHashMap[Font, ConcurrentHashMap[TextStyle, Font]]()
+  private val derived = new AtomicLong(0)
 
   /** How many fonts were derived, as opposed to served from the cache or taken as the base itself. */
   def derivations: Long = derived.get()
@@ -74,25 +71,7 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
     try draw
     finally g.setFont(styled)
 
-  def underlineOf(font: Font): Underline =
-    if underlines.size >= maxBaseFonts * maxStylesPerBaseFont then underlines.clear()
-    underlines.computeIfAbsent(
-      font,
-      _ =>
-        FontFirstUse.settle(font, MeasuringContext)
-        Underline.of(font.getLineMetrics("", MeasuringContext))
-    )
-
 object StyledFontCache:
-
-  /** An underline's offset and thickness belong to the font, not to the surface that paints it. */
-  private val MeasuringContext = FontRenderContext(AffineTransform(), true, true)
-
-  /** Distance below the baseline to the underline's top, and its thickness, in logical pixels. */
-  final case class Underline(offsetPx: Float, thicknessPx: Float)
-
-  object Underline:
-    def of(metrics: LineMetrics): Underline = Underline(metrics.getUnderlineOffset, metrics.getUnderlineThickness)
 
   private val Normal = TextStyle.normal
 

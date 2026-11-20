@@ -5,9 +5,8 @@ import java.nio.file.{Files, Paths}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** The Skia measurer and the face cache take a `FontSpec` and name no AWT: what AWT still gives Skia (a strikethrough
-  * rule's geometry) comes through `AwtFontReconciliation`, the one place to delete. No Skia file asks AWT for a font's
-  * advance any more: a face is chosen by weight.
+/** The Skia measurer and the face cache take a `FontSpec` and name no AWT. No Skia file asks AWT for a font's advance
+  * or for its rules' geometry any more: a face is chosen by weight and its rules are its Skia metrics'.
   */
 final class SkiaMeasurementPathNamesNoAwtSpec extends AnyFlatSpec with Matchers:
 

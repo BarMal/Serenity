@@ -7,13 +7,13 @@ import scala.util.Try
 
 import com.serenity.ui.fonts.LogicalFontFamilies
 import com.serenity.ui.layout.CellMetrics
-import com.serenity.ui.renderer.{FontSpec, StyledFontCache}
+import com.serenity.ui.renderer.FontSpec
 import org.jetbrains.skia.{Data, Font, FontEdging, FontHinting, FontMgr, FontStyleSet, FontVariation, Typeface}
 
 /** What painting with one AWT font needs from Skia: the Skia font, and the strikethrough the AWT font asks for, which
   * Skia draws as a rule rather than a font attribute.
   */
-final case class SkiaFace(font: Font, strikethrough: Option[StyledFontCache.Underline])
+final case class SkiaFace(font: Font, underline: TextRule, strikethrough: Option[TextRule])
 
 /** The Skia font that stands in for each font spec layout measures with.
   *
@@ -84,10 +84,10 @@ final class SkiaFontCache(
 
   private def build(font: FontSpec): SkiaFace =
     val started = System.nanoTime()
-    AwtFontReconciliation.settle(font)
-    val skia = SkiaTypefaces.fontFor(font, typefaceOf)
-    val _    = skia.measureTextWidth(WarmUpText)
-    val face = SkiaFace(skia, AwtFontReconciliation.strikethroughOf(font))
+    val skia    = SkiaTypefaces.fontFor(font, typefaceOf)
+    val _       = skia.measureTextWidth(WarmUpText)
+    val face =
+      SkiaFace(skia, TextRules.underlineOf(skia), Option.when(font.strikethrough)(TextRules.strikethroughOf(skia)))
     warmup.faceBuilt(System.nanoTime() - started)
     face
 
@@ -270,6 +270,15 @@ private[skia] object SkiaVerticalMetrics:
     ).toOption
 
   def available: Boolean = MetricsOf.isDefined
+
+  /** The metrics as Skiko hands them out: top, ascent, descent, bottom, leading, average and widest character width, x
+    * minimum and maximum, x-height, cap height, then the rules' four optional values (read by [[TextRules]]).
+    */
+  def raw(font: Font): Option[Array[Float]] =
+    MetricsOf.flatMap { handle =>
+      val answer: Object = handle.invoke(font)
+      Option(answer).collect { case metrics: Array[Float] => metrics }
+    }
 
   /** Ascent (negative above the baseline), descent and leading; without the Skiko accessor, the proportions of a
     * typical face, which the measurer's spec catches before anyone measures with them.

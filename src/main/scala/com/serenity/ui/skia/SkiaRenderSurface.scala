@@ -335,10 +335,11 @@ final class SkiaRenderSurface(
   private def drawRules(leftPx: Int, widthPx: Int, baselinePx: Int): Unit =
     if widthPx > 0 then
       val current = currentFontRef.get()
-      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, styledFonts.underlineOf(current.toAwt))
-      fonts.faceFor(current).strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
+      val face    = fonts.faceFor(current)
+      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, face.underline)
+      face.strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
 
-  private def drawRule(leftPx: Int, widthPx: Int, baselinePx: Int, rule: StyledFontCache.Underline): Unit =
+  private def drawRule(leftPx: Int, widthPx: Int, baselinePx: Int, rule: TextRule): Unit =
     val thickness = rule.thicknessPx.max((1.0 / deviceScaleY).toFloat)
     paintRect(rect(leftPx.toFloat, baselinePx + rule.offsetPx, widthPx.toFloat, thickness), filled(fgRef.get()))
 
