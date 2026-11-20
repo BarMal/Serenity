@@ -91,6 +91,25 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     summary.phases.get(FramePhase.PaintWait) shouldBe None
   }
 
+  it should "count the paints each source stamped, and put the counts in the log line" in {
+    val (timings, _) = recorder()
+
+    timings.paintFinished(timings.paintStarted(), PaintSource.Canvas)
+    timings.paintFinished(timings.paintStarted(), PaintSource.Canvas)
+    timings.paintFinished(timings.paintStarted(), PaintSource.Layer)
+
+    val summary = timings.drain()
+    summary.paints shouldBe Map(PaintSource.Canvas -> 2, PaintSource.Layer -> 1)
+    summary.logLine should include("paints canvas=2 layer=1")
+    timings.drain().paints shouldBe empty
+  }
+
+  it should "leave the paint counts out of the log line when nothing painted" in {
+    val (timings, _) = recorder()
+
+    timings.drain().logLine should not include "paints"
+  }
+
   it should "time a block of work against a phase" in {
     val (timings, clock) = recorder()
 

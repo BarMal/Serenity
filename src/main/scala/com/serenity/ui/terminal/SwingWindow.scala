@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
 import com.serenity.config.{PreferredWindowSize, WindowChromeMode}
-import com.serenity.diagnostics.FrameTimings
+import com.serenity.diagnostics.{FrameTimings, PaintSource}
 import com.serenity.input.{FileDropHandler, ImeRequestsHost}
 import com.serenity.state.models.PointerShape
 import com.serenity.ui.accessibility.{AccessibilityPublishGate, AccessibilitySnapshot, SwingAccessibilityBridge}
@@ -130,7 +130,7 @@ class SwingWindow(
       finally
         baseImagePool.releaseLease()
         g2.dispose()
-        frameTimings.paintFinished(paintStart)
+        frameTimings.paintFinished(paintStart, PaintSource.Canvas)
         baseImagesShown.set(shownAtPaint)
         framePresentedRef.get().foreach(_.apply())
 

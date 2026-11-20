@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.util.concurrent.atomic.AtomicLong
 
-import com.serenity.diagnostics.FrameTimings
+import com.serenity.diagnostics.{FrameTimings, PaintSource}
 
 /** Gives the Skia layer's draws the marks a canvas paint leaves in [[FrameTimings]], so `[FRAME] input-to-paint` and
   * `[LATENCY]` complete for keystrokes the layer shows. A frame is published when the layer is handed its picture; a
@@ -19,4 +19,4 @@ final class LayerPresentStamps(timings: FrameTimings):
 
   def drawStarted(): Unit = startedAt.set(timings.paintStarted())
 
-  def drawFinished(): Unit = timings.paintFinished(startedAt.get())
+  def drawFinished(): Unit = timings.paintFinished(startedAt.get(), PaintSource.Layer)

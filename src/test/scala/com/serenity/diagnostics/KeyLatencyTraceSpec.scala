@@ -507,3 +507,27 @@ class KeyLatencyTraceSpec extends AnyFlatSpec with Matchers:
     LatencySplit.ofPhase(FramePhase.ApplyDamage) shouldBe None
     LatencySplit.ofPhase(FramePhase.Paint) shouldBe None
   }
+
+  "KeyLatencyTrace" should "say which paint source completed each keystroke" in {
+    val (trace, clock) = recorder()
+
+    trace.keyReceived(WallClockMs)
+    trace.keyEnqueued()
+    trace.keysDequeued(1)
+    trace.dispatchStarted()
+    trace.keysApplied(1)
+    trace.damageEmitted()
+    trace.frameWoke()
+    trace.frameDeadlineReached()
+    trace.frameModelRead()
+    trace.framePublished()
+    trace.frameEnded()
+    clock.advanceMs(1)
+    trace.paintStarted()
+    clock.advanceMs(1)
+    trace.paintFinished(PaintSource.Layer)
+
+    val window = trace.drain()
+    window.keys.map(_.paintedBy) shouldBe Vector(Some(PaintSource.Layer))
+    window.summaryLine should include("keys=1 unpainted=0 painted_by layer=1 |")
+  }
