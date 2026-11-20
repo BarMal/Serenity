@@ -87,7 +87,7 @@ class KeyDidNothingNoticeSpec extends AnyFlatSpec with Matchers:
 
       result.state shouldBe state
       val shown = notices(result)
-      withClue(s"$event: ") { shown should have size 1 }
+      withClue(s"$event: ")(shown should have size 1)
       shown.head.message should include("start page")
     }
   }
