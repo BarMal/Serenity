@@ -264,7 +264,7 @@ private[perf] object SdlKeyToSwapBenchmark:
       ).tupled
         .use { _ =>
           inject(window, total, options) >> awaitArrivals(arrivals, total, options) >>
-            collectPainted(IO(frameTimings.keyLatency.drain()), total, PaintGrace, 10.millis)
+            collectPainted(IO(frameTimings.keyLatency.drain()), total + 1, PaintGrace, 10.millis, flush(window))
         }
       seen      <- arrivals.get
       allFrames <- IO(frames.takeStamps())
@@ -277,10 +277,10 @@ private[perf] object SdlKeyToSwapBenchmark:
       Outcome(
         swapInterval = interval,
         renderFpsTarget = initial.persisted.config.surfaceConfig.renderFpsTarget.framesPerSecond.toString,
-        sent = (seen.size - options.warmupKeys).max(0),
-        keys = stamps.drop(options.warmupKeys),
+        sent = measuredKeys(seen, options.warmupKeys, options.keys).size,
+        keys = measuredKeys(stamps, options.warmupKeys, options.keys),
         frames = allFrames.filter(frame => lastWarmup.forall(frame.requested > _)),
-        stages = latency.copy(keys = painted.drop(options.warmupKeys)).stats,
+        stages = latency.copy(keys = measuredKeys(painted, options.warmupKeys, options.keys)).stats,
         unpainted = latency.unpainted
       )
 
@@ -341,6 +341,17 @@ private[perf] object SdlKeyToSwapBenchmark:
             IO.sleep(options.spacing)
         }
 
+  /** The keys a run reports: after the warm-up, no more than `keys`, so the flush key is left out. */
+  private[perf] def measuredKeys[A](all: Vector[A], warmup: Int, keys: Int): Vector[A] =
+    all.slice(warmup, warmup + keys)
+
+  /** One more key, pushed in process after the run. The trace credits a key whose damage lands while a frame is being
+    * made to the next frame, and for the last key of a run no other key follows to wake one; without this it would be
+    * counted as sent and never as shown.
+    */
+  private def flush(window: SdlGlWindow): IO[Unit] =
+    window.onSdlThread(_.pushText("x")).flatMap(orRaise)
+
   /** Until `expected` keys have arrived, or `options` says to stop waiting. */
   private def awaitArrivals(arrivals: Ref[IO, Vector[KeyArrival]], expected: Int, options: Options): IO[Unit] =
     val within = options.injector match
@@ -349,15 +360,17 @@ private[perf] object SdlKeyToSwapBenchmark:
     def poll: IO[Unit] = arrivals.get.map(_.size >= expected).ifM(IO.unit, IO.sleep(10.millis) >> poll)
     poll.timeoutTo(within, IO.unit)
 
-  /** Drains the key-latency trace until `expected` keys are accounted for, each painted or counted unpainted, or
-    * `within` has passed, and reports what it has. A key a frame has taken is no longer pending but is not painted
-    * until that frame's paint finishes, so "nothing pending" is not the end: only a drain shows what has been painted.
+  /** Runs `flush` once, then drains the key-latency trace until `expected` keys are accounted for, each painted or
+    * counted unpainted, or `within` has passed, and reports what it has. A key a frame has taken is no longer pending
+    * but is not painted until that frame's paint finishes, so "nothing pending" is not the end: only a drain shows what
+    * has been painted.
     */
   private[perf] def collectPainted(
     drain: IO[LatencyWindow],
     expected: Int,
     within: FiniteDuration,
-    pause: FiniteDuration
+    pause: FiniteDuration,
+    flush: IO[Unit]
   ): IO[LatencyWindow] =
     def gather(collected: LatencyWindow, deadline: FiniteDuration): IO[LatencyWindow] =
       drain.flatMap { window =>
@@ -372,7 +385,7 @@ private[perf] object SdlKeyToSwapBenchmark:
             if now >= deadline then IO.pure(total) else IO.sleep(pause) >> gather(total, deadline)
           }
       }
-    IO.monotonic.flatMap(start => gather(LatencyWindow(0.0, Vector.empty, 0), start + within))
+    flush >> IO.monotonic.flatMap(start => gather(LatencyWindow(0.0, Vector.empty, 0), start + within))
 
   def main(args: Array[String]): Unit =
     BenchmarkMain.run:
