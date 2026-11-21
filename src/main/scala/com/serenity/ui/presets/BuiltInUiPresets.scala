@@ -37,6 +37,15 @@ private[presets] object BuiltInUiPresets:
         .withSpellCheck(AppConfig.conventional.languageToolsConfig.spellCheck.copy(enabled = true))
         .withTypewriterScrolling(true)
         .withFocusedTextBody(true)
+        .withWrapColumn(WrapColumn.Ch(66))
+        .withTextAreaInsets(
+          TextAreaInsets(
+            left = Gutter.Cells(2),
+            right = Gutter.Cells(2),
+            top = Gutter.Percent(0.04),
+            bottom = Gutter.Percent(0.04)
+          )
+        )
         .withFontConfig(
           AppConfig.conventional.editorConfig.fontConfig.copy(
             textFontFamily = Font.SERIF,

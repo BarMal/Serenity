@@ -91,6 +91,61 @@ class FrameTimingsSpec extends AnyFlatSpec with Matchers:
     summary.phases.get(FramePhase.PaintWait) shouldBe None
   }
 
+  it should "count the paints each source stamped, and put the counts in the log line" in {
+    val (timings, _) = recorder()
+
+    timings.paintFinished(timings.paintStarted(), PaintSource.Canvas)
+    timings.paintFinished(timings.paintStarted(), PaintSource.Canvas)
+    timings.paintFinished(timings.paintStarted(), PaintSource.Layer)
+
+    val summary = timings.drain()
+    summary.paints shouldBe Map(PaintSource.Canvas -> 2, PaintSource.Layer -> 1)
+    summary.logLine should include("paints canvas=2 layer=1")
+    timings.drain().paints shouldBe empty
+  }
+
+  it should "not take a canvas paint under a layer for the paint that shows a frame" in {
+    val (timings, clock) = recorder()
+
+    timings.inputArrived()
+    timings.inputApplyStarted()
+    timings.inputApplyFinished()
+    timings.renderStarted()
+    timings.framePublished()
+    timings.renderFinished(FrameKind.Full)
+    clock.advanceMs(2)
+    val under = timings.paintStarted(PaintSource.CanvasUnderLayer)
+    clock.advanceMs(1)
+    timings.paintFinished(under, PaintSource.CanvasUnderLayer)
+    clock.advanceMs(3)
+    val drawn = timings.paintStarted(PaintSource.Layer)
+    clock.advanceMs(4)
+    timings.paintFinished(drawn, PaintSource.Layer)
+
+    val summary = timings.drain()
+    summary.phases(FramePhase.Paint).count shouldBe 1
+    summary.phases(FramePhase.Paint).p50Ms shouldBe 4.0
+    summary.phases(FramePhase.PaintWait).p50Ms shouldBe 6.0
+    summary.phases(FramePhase.InputToPaint).p50Ms shouldBe 10.0
+    summary.paints shouldBe Map(PaintSource.CanvasUnderLayer -> 1, PaintSource.Layer -> 1)
+    summary.logLine should include("paints layer=1 canvas-under-layer=1")
+  }
+
+  it should "stamp a canvas paint as the canvas's own, or as one under the layer while a layer is attached" in {
+    val (timings, _) = recorder()
+
+    timings.canvasPaintStarted(layerAttached = false).finished()
+    timings.canvasPaintStarted(layerAttached = true).finished()
+
+    timings.drain().paints shouldBe Map(PaintSource.Canvas -> 1, PaintSource.CanvasUnderLayer -> 1)
+  }
+
+  it should "leave the paint counts out of the log line when nothing painted" in {
+    val (timings, _) = recorder()
+
+    timings.drain().logLine should not include "paints"
+  }
+
   it should "time a block of work against a phase" in {
     val (timings, clock) = recorder()
 

@@ -61,7 +61,8 @@ final case class FrameTimingSummary(
     phases: Map[FramePhase, PhaseStats],
     counters: FrameCounterStats = FrameCounterStats.empty,
     backend: String = "",
-    edtLag: Option[PhaseStats] = None
+    edtLag: Option[PhaseStats] = None,
+    paints: Map[PaintSource, Int] = Map.empty
 ):
 
   def withCounters(counted: FrameCounterStats): FrameTimingSummary = copy(counters = counted)
@@ -99,7 +100,8 @@ final case class FrameTimingSummary(
         stats.count
       )
     }
-    val parts = phaseParts ++ lagPart.toList ++ counters.logParts
+    val paintsPart = Option(PaintSource.describe(paints)).filter(_.nonEmpty).map(described => s"paints $described")
+    val parts      = phaseParts ++ lagPart.toList ++ counters.logParts ++ paintsPart.toList
     s"[FRAME]${PresentPoint.tag(backend)} window=${window}s ${frameRates.mkString(" ")} | ${if parts.isEmpty then "no samples" else parts.mkString(" | ")}"
 
 /** The timings gathered since the last summary, plus the in-flight marks that tie one input to the frame showing it.
@@ -118,7 +120,8 @@ final case class FrameTimingState(
     rendering: Option[Long],
     awaitingPaint: Option[Long],
     publishedAt: Option[Long],
-    painting: Option[Long]
+    painting: Option[Long],
+    paints: Map[PaintSource, Int] = Map.empty
 ):
   import FrameTimingState.MaxSamplesPerPhase
 
@@ -161,25 +164,32 @@ final case class FrameTimingState(
       .fold(this)(start => record(FramePhase.Render, now - start))
       .copy(renderStartedAt = None, frames = frames.updated(kind, frames.getOrElse(kind, 0) + 1))
 
-  def paintStarted(now: Long): FrameTimingState =
-    publishedAt
-      .fold(this)(published => record(FramePhase.PaintWait, now - published))
-      .copy(publishedAt = None, painting = painting.orElse(awaitingPaint), awaitingPaint = None)
+  def paintStarted(now: Long, source: PaintSource): FrameTimingState =
+    if !source.shows then this
+    else
+      publishedAt
+        .fold(this)(published => record(FramePhase.PaintWait, now - published))
+        .copy(publishedAt = None, painting = painting.orElse(awaitingPaint), awaitingPaint = None)
 
-  def paintFinished(startedAt: Long, now: Long): FrameTimingState =
-    val painted = record(FramePhase.Paint, now - startedAt)
-    painting
-      .fold(painted)(arrival => painted.record(FramePhase.InputToPaint, now - arrival))
-      .copy(painting = None)
+  def paintFinished(startedAt: Long, source: PaintSource, now: Long): FrameTimingState =
+    val counted = copy(paints = paints.updated(source, paints.getOrElse(source, 0) + 1))
+    if !source.shows then counted
+    else
+      val painted = counted.record(FramePhase.Paint, now - startedAt)
+      painting
+        .fold(painted)(arrival => painted.record(FramePhase.InputToPaint, now - arrival))
+        .copy(painting = None)
 
   def summary(now: Long): FrameTimingSummary =
     FrameTimingSummary(
       (now - windowStartNanos) / 1_000_000.0,
       frames,
-      samples.collect { case (phase, durations) if durations.nonEmpty => phase -> PhaseStats.of(durations) }
+      samples.collect { case (phase, durations) if durations.nonEmpty => phase -> PhaseStats.of(durations) },
+      paints = paints
     )
 
-  def nextWindow(now: Long): FrameTimingState = copy(windowStartNanos = now, samples = Map.empty, frames = Map.empty)
+  def nextWindow(now: Long): FrameTimingState =
+    copy(windowStartNanos = now, samples = Map.empty, frames = Map.empty, paints = Map.empty)
 
 object FrameTimingState:
   /** Several minutes of samples at 60fps, so a summary interval never truncates in practice. */
@@ -232,16 +242,24 @@ final class FrameTimings(clock: () => Long = () => System.nanoTime(), backend: S
   def renderFinished(kind: FrameKind): Unit = update(_.renderFinished(kind, _))
 
   /** Returns the paint's start, to hand back to [[paintFinished]]. */
-  def paintStarted(): Long =
+  def paintStarted(source: PaintSource = PaintSource.Canvas): Long =
     val now = clock()
     if enabled.get() then
-      val _ = state.updateAndGet(_.paintStarted(now))
-    keyLatency.paintStarted()
+      val _ = state.updateAndGet(_.paintStarted(now, source))
+    keyLatency.paintStarted(source)
     now
 
-  def paintFinished(startedAt: Long): Unit =
-    update(_.paintFinished(startedAt, _))
-    keyLatency.paintFinished()
+  /** A canvas paint counts as one under the layer while a layer is attached: it shows none of the layer's frames. */
+  def canvasPaintStarted(layerAttached: Boolean): CanvasPaint =
+    val source = if layerAttached then PaintSource.CanvasUnderLayer else PaintSource.Canvas
+    CanvasPaint(paintStarted(source), source)
+
+  final case class CanvasPaint(startedAt: Long, source: PaintSource):
+    def finished(): Unit = paintFinished(startedAt, source)
+
+  def paintFinished(startedAt: Long, source: PaintSource = PaintSource.Canvas): Unit =
+    update(_.paintFinished(startedAt, source, _))
+    keyLatency.paintFinished(source)
 
   def timed[A](phase: FramePhase)(work: => A): A =
     if measuring then

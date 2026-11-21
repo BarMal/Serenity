@@ -19,9 +19,9 @@ object FileEventReducer:
     event match
       case SaveFile =>
         bufferLookup(state) match
-          case Some(buffer) if buffer.document.filePath.isDefined =>
+          case Some(buffer) =>
             ReducerResult.withEffect(state, AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
-          case _ =>
+          case None =>
             ReducerResult.noEffects(state)
 
       case SaveFileAs(path) =>

@@ -27,12 +27,12 @@ skia
 
 # ---- #2478 scaling rows: record-only until the owner has read the numbers (#2478), NOT covered by the nightly ABBA ----
 # A new row has no baseline, so it is measured and printed here and gated only once the owner has read its numbers.
-# Delete a line to start gating that row. `scrollbar.four_panes.all_bars` is meant to stay: the late count runs on
-# another thread.
+# Delete a line to start gating that row. `scrollbar.four_panes.all_bars` and
+# `buffers.switch_cold_frame.open_20.prose.skia_raster` were moved into the gate on 2026-11-20 (owner ruling): both had
+# been 20x and 2x slower than master since D2 (#2786), a real cost the exclusion had hidden; fixed there.
 buffers.switch_cold_frame.open_1.code
 buffers.switch_cold_frame.open_1.prose
 buffers.switch_cold_frame.open_20.code
-buffers.switch_cold_frame.open_20.prose
 panes.split1.typing_frame
 panes.split1.scroll_line_frame
 panes.split1.page_down_frame
@@ -42,7 +42,6 @@ panes.split2.page_down_frame
 panes.split4.typing_frame
 panes.split4.scroll_line_frame
 panes.split4.page_down_frame
-scrollbar.four_panes.all_bars
 footprint.buffers_1_shown.code
 footprint.buffers_1_shown.prose
 footprint.buffers_20_shown.code

@@ -71,7 +71,7 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     result.effects shouldBe List(AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
   }
 
-  it should "emit no save effect when the buffer has no file path" in {
+  it should "emit a save-buffer effect when the buffer has no file path, so saving opens Save As" in {
     val buffer0 = Buffer.fromString(BufferId(3), "scratch")
     val buffer  = buffer0.copy(document = buffer0.document.copy(isDirty = true))
     val state   = stateWithPaneBuffer(buffer)
@@ -79,6 +79,12 @@ class FileEventReducerSpec extends AnyFlatSpec with Matchers:
     val result = FileEventReducer.reduce(SaveFile, state)
 
     result.state shouldBe state
+    result.effects shouldBe List(AppEffect.File(FileEffect.SaveBuffer(buffer.id)))
+  }
+
+  it should "emit no save effect when no buffer has focus" in {
+    val result = FileEventReducer.reduce(SaveFile, AppState.empty)
+
     result.effects shouldBe Nil
   }
 
