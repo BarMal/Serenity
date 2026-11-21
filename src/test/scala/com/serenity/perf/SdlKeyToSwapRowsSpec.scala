@@ -99,7 +99,7 @@ class SdlKeyToSwapRowsSpec extends AnyFlatSpec with Matchers:
       "[sdl3-key] swap_interval=1 keys sent=1 shown=1 unpainted=0 frames=0 render_fps_target=60"
   }
 
-  "The header notes" should "say the flush key is left out of the rows and what it does to the last key, for either injector" in {
+  "The header notes" should "say the flush key is left out of the rows and what it does to the last key, for either injector" in
     SdlKeyToSwapBenchmark.Injector.values.toList.foreach { injector =>
       val options = SdlKeyToSwapBenchmark.Options.default.copy(injector = injector)
       val notes   = SdlKeyToSwapBenchmark.headerNotes(options).mkString("\n")
@@ -108,7 +108,6 @@ class SdlKeyToSwapRowsSpec extends AnyFlatSpec with Matchers:
       notes should include("left out of the rows")
       notes should include("last measured key")
     }
-  }
 
   it should "say the pump's wait is not the compositor's hop only for in-process keys" in {
     val inProcess  = SdlKeyToSwapBenchmark.Options.default.copy(injector = SdlKeyToSwapBenchmark.Injector.InProcess)

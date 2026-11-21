@@ -135,6 +135,7 @@ private[perf] object SdlKeyToSwapBenchmark:
       swapInterval: Int,
       renderFpsTarget: String,
       sent: Int,
+      arrived: Int,
       keys: Vector[KeySwapStamps],
       frames: Vector[FrameStamps],
       stages: List[(String, PhaseStats)],
@@ -278,6 +279,7 @@ private[perf] object SdlKeyToSwapBenchmark:
         swapInterval = interval,
         renderFpsTarget = initial.persisted.config.surfaceConfig.renderFpsTarget.framesPerSecond.toString,
         sent = measuredKeys(seen, options.warmupKeys, options.keys).size,
+        arrived = seen.size,
         keys = measuredKeys(stamps, options.warmupKeys, options.keys),
         frames = allFrames.filter(frame => lastWarmup.forall(frame.requested > _)),
         stages = latency.copy(keys = measuredKeys(painted, options.warmupKeys, options.keys)).stats,
@@ -409,6 +411,21 @@ private[perf] object SdlKeyToSwapBenchmark:
         .unsafeRunSync()
       lines.foreach(println)
 
+  /** What a reader of the rows needs to know about how the keys were made and counted. */
+  private[perf] def headerNotes(options: Options): List[String] =
+    List(
+      "[sdl3-key] note: render_layout, render_draw and render_flush are not reported; this path draws through the " +
+        "frame planner, which does not feed the render-phase clock they come from"
+    ) ++ Option
+      .when(options.injector == Injector.InProcess)(
+        "[sdl3-key] note: inprocess keys are stamped on the SDL thread, so event_pickup leaves out the compositor hop"
+      )
+      .toList ++ List(
+      "[sdl3-key] note: one more key is pushed in process after the last, to flush it, and is left out of the rows; " +
+        "the trace credits a key whose damage lands mid-frame to the next frame, so the last measured key always has " +
+        "a follower and its key_to_swap can read one frame longer than it would without (only the max is likely to show it)"
+    )
+
   private def report(window: SdlGlWindow, driver: String, request: WindowRequest, options: Options)(using
     IORuntime
   ): IO[List[String]] =
@@ -422,14 +439,7 @@ private[perf] object SdlKeyToSwapBenchmark:
         s"[sdl3-key] header driver=$driver renderer=$renderer window=${pixels._1}x${pixels._2}px scale=${size._3} " +
           s"injector=${options.injector.label} keys=${options.keys} warmup=${options.warmupKeys} " +
           s"spacing_ms=${options.spacing.toMillis} vsync_at_open=${window.vsync}"
-      ) ++ List(
-        "[sdl3-key] note: render_layout, render_draw and render_flush are not reported; this path draws through the " +
-          "frame planner, which does not feed the render-phase clock they come from"
-      ) ++ Option
-        .when(options.injector == Injector.InProcess)(
-          "[sdl3-key] note: inprocess keys are stamped on the SDL thread, so event_pickup leaves out the compositor hop"
-        )
-        .toList ++ expected.notes.map(note => s"[sdl3-key] $note") ++
+      ) ++ headerNotes(options) ++ expected.notes.map(note => s"[sdl3-key] $note") ++
         SdlPresentWindow
           .sizeNote(expected.logical, pixels, size._3, expected.fix)
           .toList
