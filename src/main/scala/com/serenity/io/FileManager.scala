@@ -293,7 +293,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     revision: Option[DocumentRevision]
   ): Buffer =
     val lineEndings = decoded.lineEndings
-    val language    = languageFromPath(path)
+    val language    = languageFor(path, decoded.content)
     Buffer(
       id = bufferId,
       document = com.serenity.state.models.Document(
@@ -345,7 +345,7 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
       document = base.document.copy(
         filePath = Some(path),
         isDirty = false,
-        language = languageFromPath(path),
+        language = languageFor(path, base.document.content),
         revision = revision,
         mixedLineEndings = None,
         mixedNoticePending = false
@@ -473,6 +473,10 @@ class FileManager(storage: DocumentStorageProvider)(using balance: Balance):
     if marks.contains(com.serenity.richtext.InlineMark.Underline) then s"<u>$marked</u>" else marked
 
   private val MarkdownHardBreak = "\\\n"
+
+  /** The language the file's extension names, else the one its first line does. */
+  private def languageFor(path: Path, content: com.serenity.rope.Rope): Option[LanguageId] =
+    languageFromPath(path).orElse(content.getLine(0).flatMap(com.serenity.document.ShebangLanguage.of))
 
   private def languageFromPath(path: Path): Option[LanguageId] =
     Option(path.getFileName)
