@@ -4,6 +4,7 @@ import com.serenity.app.AppStartup
 import com.serenity.command.CommandRegistry
 import com.serenity.config.{AppConfig, AppMode}
 import com.serenity.keystroke.events.*
+import com.serenity.project.ProjectPresence
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
 import com.serenity.state.reducers.{AppEffect, AppEventReducer}
@@ -37,26 +38,39 @@ class KeyDidNothingNoticeSpec extends AnyFlatSpec with Matchers:
   private def notices(result: com.serenity.state.reducers.ReducerResult): List[Notice] =
     result.effects.collect { case AppEffect.ShowNotice(notice) => notice }
 
-  "A bound key whose command is hidden by the mode" should "show a notice naming the command and the mode it needs" in {
-    val result = AppEventReducer.reduce(RunCommand("cut-to-darlings"), editorIn(AppMode.Code), registry)
+  private def messageFor(event: GlobalAppEvent, state: AppState): String =
+    val shown = notices(AppEventReducer.reduce(event, state, registry))
+    withClue(s"$event: ")(shown should have size 1)
+    shown.head.level shouldBe NoticeLevel.Info
+    shown.head.message.length should be <= 56
+    shown.head.message
+
+  "A bound key whose command the mode hides" should "say which mode the command works in" in {
+    messageFor(RunCommand("cut-to-darlings"), editorIn(AppMode.Code)) shouldBe "Cut to Darlings works in prose mode only."
+    messageFor(RunCommand("bold"), editorIn(AppMode.Code)) shouldBe "Bold works in prose mode only."
+    messageFor(RunCommand("lsp-hover"), editorIn(AppMode.Prose)) shouldBe "LSP Hover works in code mode only."
+  }
+
+  it should "run nothing" in {
+    val result = AppEventReducer.reduce(RunCommand("bold"), editorIn(AppMode.Code), registry)
 
     result.effects.collect { case AppEffect.ExecuteCommand(_) => 1 } shouldBe Nil
-    val shown = notices(result)
-    shown should have size 1
-    shown.head.level shouldBe NoticeLevel.Info
-    shown.head.message should (include("Cut to Darlings") and include("prose mode"))
   }
 
-  "A bound key whose command is disabled" should "show a notice with the reason" in {
-    val result = AppEventReducer.reduce(RunCommand("cut-to-darlings"), editorIn(AppMode.Prose), registry)
-
-    notices(result).map(_.message).mkString should include("Needs a text selection.")
+  "A bound key whose command needs a selection" should "ask for one, action first" in {
+    messageFor(RunCommand("cut-to-darlings"), editorIn(AppMode.Prose)) shouldBe "Select text to use Cut to Darlings."
   }
 
-  "A bound key naming no command" should "show a notice naming the id" in {
-    val result = AppEventReducer.reduce(RunCommand("no-such-command"), editorIn(AppMode.Prose), registry)
+  "A bound key whose command needs a project" should "ask for a project folder" in {
+    val noProject = editorIn(AppMode.Code)
+      .copy(runtime = editorIn(AppMode.Code).runtime.copy(projectPresence = ProjectPresence.NotDetected))
+    val label = registry.findCommand("project-build").map(_.label).getOrElse(fail("no project-build"))
 
-    notices(result).map(_.message).mkString should include("no-such-command")
+    messageFor(RunCommand("project-build"), noProject) shouldBe s"Open a project folder to use $label."
+  }
+
+  "A bound key naming no command" should "name the id" in {
+    messageFor(RunCommand("no-such-command"), editorIn(AppMode.Prose)) shouldBe "No command named \"no-such-command\"."
   }
 
   "A bound key whose command can run" should "run it and show no notice" in {
@@ -72,22 +86,18 @@ class KeyDidNothingNoticeSpec extends AnyFlatSpec with Matchers:
     notices(result).flatMap(_.topic) shouldBe List(NoticeTopic.KeyDidNothing)
   }
 
-  "The start page's toggle keys" should "each say the start page has no such surface" in {
-    val events = List(
-      ToggleCommandRunner,
-      ToggleContextualToolbar,
-      ToggleShortcutsHelp,
-      ToggleTabList,
-      ToggleRecentFilesInMode
+  "The start page's toggle keys" should "each say what to do first, in one short sentence" in {
+    val expected = List(
+      ToggleCommandRunner     -> "Open or create a document to use the command palette.",
+      ToggleContextualToolbar -> "Open or create a document to use the toolbar.",
+      ToggleShortcutsHelp     -> "Open or create a document to see shortcut help.",
+      ToggleTabList           -> "Open or create a document to use the tab list.",
+      ToggleRecentFilesInMode -> "Open or create a document to show recent files."
     )
 
-    events.foreach { event =>
-      val state  = startPage
-      val result = AppEventReducer.reduce(event, state, registry)
-
-      result.state shouldBe state
-      val shown = notices(result)
-      withClue(s"$event: ")(shown should have size 1)
-      shown.head.message should include("start page")
+    expected.foreach { (event, message) =>
+      val state = startPage
+      AppEventReducer.reduce(event, state, registry).state shouldBe state
+      messageFor(event, state) shouldBe message
     }
   }
