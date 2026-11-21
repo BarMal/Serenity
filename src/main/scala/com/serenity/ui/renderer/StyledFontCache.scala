@@ -1,14 +1,13 @@
 package com.serenity.ui.renderer
 
-import java.awt.{Font, Graphics2D}
+import java.awt.Font
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.theme.TextStyle
 
-/** The AWT font each `(base font, style)` pair paints with, derived once and handed back by identity afterwards, and
-  * the geometry of the underline a style asks for.
+/** The AWT font each `(base font, style)` pair paints with, derived once and handed back by identity afterwards.
   *
   * Deriving per run rebuilt the same handful of fonts every frame. Keys are values (`Font` and `TextStyle` compare
   * structurally), so a changed base font simply misses and nothing here goes stale; the size bounds only stop a long
@@ -61,15 +60,6 @@ final class StyledFontCache(maxBaseFonts: Int = 16, maxStylesPerBaseFont: Int = 
       (styled, family, ligaturesOn),
       _ => FontFallback.matching(styled, Font(family, styled.getStyle, 1), ligaturesOn = ligaturesOn)
     )
-
-  /** Runs the draw on the graphics with its font swapped for the family at the current font's style, size and ligature
-    * setting, or with ligatures on when `ligaturesOn`.
-    */
-  def drawingIn(g: Graphics2D, family: String, ligaturesOn: Boolean = false)(draw: => Unit): Unit =
-    val styled = g.getFont
-    g.setFont(fallbackFontFor(styled, family, ligaturesOn))
-    try draw
-    finally g.setFont(styled)
 
 object StyledFontCache:
 
