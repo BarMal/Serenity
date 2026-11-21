@@ -240,6 +240,22 @@ final class Sdl private (
       checked(PushEvent)(handle(PushEvent).invokeExact(event): Boolean)
     }
 
+  /** Queues committed text as an input method would. SDL keeps the address of a string it did not allocate itself
+    * instead of copying it, so the text is placed in the binding's arena and stays there until [[close]]; a scratch
+    * area would be freed before the event is polled.
+    */
+  def pushText(text: String): Either[SdlError, Unit] =
+    scratch { area =>
+      val event = area.allocate(SdlLayouts.EventSize, 8)
+      event.set(
+        ValueLayout.JAVA_INT,
+        SdlLayouts.offset("SDL_CommonEvent.type"),
+        SdlLayouts.eventType("SDL_EVENT_TEXT_INPUT")
+      )
+      event.set(ValueLayout.ADDRESS_UNALIGNED, SdlLayouts.offset("SDL_TextInputEvent.text"), arena.allocateFrom(text))
+      checked(PushEvent)(handle(PushEvent).invokeExact(event): Boolean)
+    }
+
   // ---- text input and cursors ----
 
   def startTextInput(window: SdlWindow): Either[SdlError, Unit] =
