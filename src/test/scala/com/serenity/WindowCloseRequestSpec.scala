@@ -44,17 +44,17 @@ class WindowCloseRequestSpec extends AnyFlatSpec with Matchers:
         asked    <- IO.ref(0)
         answered <- Deferred[IO, Unit]
         quit = asked.update(_ + 1) >> answered.get.as(QuitOutcome.Abandoned)
-        callback <- CallbackBridges.closeRequest(quit, dispatcher)
-        _         <- IO(callback())
-        _         <- IO.sleep(100.millis)
-        _         <- IO(callback())
-        _         <- IO.sleep(100.millis)
+        callback     <- CallbackBridges.closeRequest(quit, dispatcher)
+        _            <- IO(callback())
+        _            <- IO.sleep(100.millis)
+        _            <- IO(callback())
+        _            <- IO.sleep(100.millis)
         whilePending <- asked.get
-        _         <- answered.complete(())
-        _         <- IO.sleep(100.millis)
-        _         <- IO(callback())
-        _         <- IO.sleep(100.millis)
-        afterwards <- asked.get
+        _            <- answered.complete(())
+        _            <- IO.sleep(100.millis)
+        _            <- IO(callback())
+        _            <- IO.sleep(100.millis)
+        afterwards   <- asked.get
       yield (whilePending, afterwards)
     }
 
