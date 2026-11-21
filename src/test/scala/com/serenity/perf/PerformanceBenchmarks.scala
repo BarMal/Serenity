@@ -64,7 +64,7 @@ object PerformanceBenchmarks:
   ): List[BenchmarkRunner.Benchmark] =
     val all = benchmarks(window, projectRoot) ++ LaptopFrameBenchmarks.benchmarks(presentWindow) ++
       CacheOwnershipBenchmarks.benchmarks ++ RichDocumentOpenBenchmarks.benchmarks ++ ScalingBenchmarks.benchmarks() ++
-      IndexWalkBenchmarks.benchmarks() ++ SkiaFrameBenchmarks.benchmarks
+      IndexWalkBenchmarks.benchmarks() ++ SkiaFrameBenchmarks.benchmarks ++ LayoutSnapshotBenchmarks.warmSnapshots()
     val unknown = BenchmarkIterationCounts.JitSettled -- all.map(_.name)
     require(unknown.isEmpty, s"JitSettled names no benchmark: ${unknown.mkString(", ")}")
     val unlisted = AllThreadsRows.unknownIn(all.map(_.name))
