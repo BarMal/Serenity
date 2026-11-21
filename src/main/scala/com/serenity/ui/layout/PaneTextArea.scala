@@ -62,7 +62,7 @@ object PaneTextArea:
       insets,
       leftBlock,
       rightBlock,
-      ProseColumn.widthCells(state),
+      ProseColumn.widthCellsFor(state, paneId),
       ProseColumn.chInCells(state)
     )
     val leftSpacer = Span(paneX, textArea.leftSpacer)

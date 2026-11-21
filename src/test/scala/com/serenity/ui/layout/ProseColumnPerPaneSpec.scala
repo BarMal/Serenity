@@ -13,6 +13,7 @@ class ProseColumnPerPaneSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   private val proseBuffer = Buffer.fromString(BufferId(0), "Once upon a time, in a land far away.")
+
   private val codeBuffer =
     val plain = Buffer.fromString(BufferId(1), "val answer = 42")
     plain.copy(document = plain.document.copy(language = Some(LanguageId.Scala)))
