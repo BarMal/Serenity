@@ -28,7 +28,9 @@ class SdlKeyToSwapCollectSpec extends AnyFlatSpec with Matchers:
     }
 
   private def collect(windows: List[LatencyWindow], expected: Int, within: FiniteDuration = 5.seconds) =
-    drainOf(windows).flatMap(SdlKeyToSwapBenchmark.collectPainted(_, expected, within, 1.milli)).unsafeRunSync()
+    drainOf(windows)
+      .flatMap(SdlKeyToSwapBenchmark.collectPainted(_, expected, within, 1.milli, flush = IO.unit))
+      .unsafeRunSync()
 
   "collectPainted" should "keep draining until every expected key is painted" in {
     val collected = collect(List(window(1L to 19L), window(Nil), window(List(20L))), expected = 20)
@@ -48,6 +50,17 @@ class SdlKeyToSwapCollectSpec extends AnyFlatSpec with Matchers:
 
     collected.keys should have size 19
   }
+  "collectPainted" should "flush once, because the last key waits for a frame that only another key wakes" in {
+    val collected = (for
+      flushed <- Ref.of[IO, Boolean](false)
+      // The trace credits a key whose damage lands mid-frame to the next frame; with no key after it, none comes.
+      drain = flushed.get.map(wasFlushed => if wasFlushed then window(List(20L)) else window(1L to 19L))
+      result <- SdlKeyToSwapBenchmark.collectPainted(drain, 20, 5.seconds, 1.milli, flush = flushed.set(true))
+    yield result).unsafeRunSync()
+
+    collected.keys.map(_.seq) should contain(20L)
+  }
+
   "measuredKeys" should "leave out the warm-up keys and the flush key that follows the run" in {
     val allKeys = (1L to 26L).toVector
 
