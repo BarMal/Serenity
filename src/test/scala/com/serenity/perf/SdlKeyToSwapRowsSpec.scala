@@ -107,6 +107,8 @@ class SdlKeyToSwapRowsSpec extends AnyFlatSpec with Matchers:
       notes should include("flush")
       notes should include("left out of the rows")
       notes should include("last measured key")
+      notes should include("hides")
+      notes should include("#2818")
     }
 
   it should "say the pump's wait is not the compositor's hop only for in-process keys" in {
