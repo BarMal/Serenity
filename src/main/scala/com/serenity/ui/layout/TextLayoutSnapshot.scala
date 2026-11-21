@@ -321,46 +321,43 @@ object TextLayoutSnapshot:
     wordWrapEnabled: Boolean,
     wrapCache: WrappedLineCache
   ): Vector[TextVisualLine] =
+    // The lines come from the rope as the walk asks for them: a viewport the first long paragraph fills never reads the
+    // text of the rest.
     @annotation.tailrec
-    def loop(lines: Vector[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
-      if acc.length >= visualLineLimit then acc
+    def loop(lines: Iterator[(Int, String)], acc: Vector[TextVisualLine]): Vector[TextVisualLine] =
+      if acc.length >= visualLineLimit || !lines.hasNext then acc
       else
-        lines match
-          case (lineIndex, rawLine) +: rest =>
-            val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
-            val spaced =
-              if wordWrapEnabled then
-                LineLayout.placedWrappedLine(
-                  lineIndex,
-                  rawLine,
-                  panelWidthPx,
-                  font,
-                  measuredLayout,
-                  cellMetrics,
-                  remainingVisualLines,
-                  richText,
-                  wrapCache
-                )
-              else
-                LineLayout.unwrappedLine(
-                  lineIndex,
-                  rawLine,
-                  buffer.viewport,
-                  panelWidthPx,
-                  font,
-                  measuredLayout,
-                  cellMetrics,
-                  richText,
-                  wrapCache
-                )
-            loop(rest, acc ++ spaced)
-          case _ => acc
+        val (lineIndex, rawLine) = lines.next()
+        val remainingVisualLines = math.max(0, visualLineLimit - acc.length)
+        val spaced =
+          if wordWrapEnabled then
+            LineLayout.placedWrappedLine(
+              lineIndex,
+              rawLine,
+              panelWidthPx,
+              font,
+              measuredLayout,
+              cellMetrics,
+              remainingVisualLines,
+              richText,
+              wrapCache
+            )
+          else
+            LineLayout.unwrappedLine(
+              lineIndex,
+              rawLine,
+              buffer.viewport,
+              panelWidthPx,
+              font,
+              measuredLayout,
+              cellMetrics,
+              richText,
+              wrapCache
+            )
+        loop(lines, acc ++ spaced)
 
     val maxLogicalLines = math.min(math.max(0, totalLines - buffer.viewport.topLine), math.max(1, visualLineLimit))
-    loop(
-      buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines).toVector,
-      Vector.empty
-    )
+    loop(buffer.document.content.linesIteratorFrom(buffer.viewport.topLine).take(maxLogicalLines), Vector.empty)
 
   private[layout] def wrapLogicalLine(
     line: String,
