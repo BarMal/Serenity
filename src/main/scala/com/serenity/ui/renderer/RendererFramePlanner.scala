@@ -335,13 +335,12 @@ object RendererFramePlanner:
           dirtyRowsByPane,
           geometryChanged
         )
-        val keptRows = panes.toList.flatMap {
-          case (paneId, record) =>
-            val dirty = dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
-            record.rowRects.indices
-              .filterNot(dirty.contains)
-              .map(record.rowRects)
-              .map(RendererChromePlan.withBleed(context))
+        val keptRows = panes.toList.flatMap { (paneId, record) =>
+          RendererChromePlan.keptRowBands(
+            context,
+            record,
+            dirtyRowsByPane.getOrElse(paneId, record.rowRects.indices.toSet)
+          )
         }
         val preserved = keptRows ++ RendererChromePlan.preservedRects(state, context, renderPlan, panes, chrome)
         val keptBands = keptRows ++ RendererChromePlan.guardedGutterBands(state, context, renderPlan, panes, chrome)
