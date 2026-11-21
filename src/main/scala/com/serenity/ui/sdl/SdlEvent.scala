@@ -23,6 +23,9 @@ enum SdlEvent:
 
 object SdlEvent:
 
+  /** An event with the time SDL gave it: `SDL_CommonEvent.timestamp`, in nanoseconds on `SDL_GetTicksNS`'s clock. */
+  final case class Stamped(event: SdlEvent, timestampNanos: Long)
+
   enum WindowKind:
     case Shown, Resized, PixelSizeChanged, MouseEnter, MouseLeave, FocusGained, FocusLost, CloseRequested,
       DisplayScaleChanged
@@ -99,6 +102,10 @@ object SdlEvent:
       windowKinds
         .get(eventType)
         .fold(Unknown(eventType))(kind => Window(kind, int("SDL_WindowEvent.data1"), int("SDL_WindowEvent.data2")))
+
+  /** [[decode]] together with the event's own timestamp, which [[decode]] leaves out. */
+  def decodeStamped(event: MemorySegment): Stamped =
+    Stamped(decode(event), event.get(ValueLayout.JAVA_LONG_UNALIGNED, offset("SDL_CommonEvent.timestamp")))
 
   /** The UTF-8 string a `const char *` field points at; empty for a null pointer. */
   private[sdl] def cString(pointer: MemorySegment): String =

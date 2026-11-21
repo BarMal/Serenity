@@ -206,9 +206,11 @@ final class Sdl private (
 
   // ---- events ----
 
-  def pollEvent(): Either[SdlError, Option[SdlEvent]] =
+  def pollEvent(): Either[SdlError, Option[SdlEvent]] = pollStamped().map(_.map(_.event))
+
+  def pollStamped(): Either[SdlError, Option[SdlEvent.Stamped]] =
     val any = handle(PollEvent).invokeExact(eventBuffer): Boolean
-    Right(Option.when(any)(SdlEvent.decode(eventBuffer)))
+    Right(Option.when(any)(SdlEvent.decodeStamped(eventBuffer)))
 
   /** Waits up to `timeoutMillis` for an event. */
   def waitEvent(timeoutMillis: Int): Either[SdlError, Option[SdlEvent]] =
@@ -223,10 +225,27 @@ final class Sdl private (
       checked(PushEvent)(handle(PushEvent).invokeExact(event): Boolean)
     }
 
+  /** SDL's clock, the one every event's timestamp is on. */
+  def ticksNanos: Long = handle(GetTicksNS).invokeExact(): Long
+
+  /** Queues a key press or release as the keyboard would; SDL stamps it when it is queued. */
+  def pushKey(down: Boolean, key: Int, modifiers: Int): Either[SdlError, Unit] =
+    scratch { area =>
+      val event = area.allocate(SdlLayouts.EventSize, 8)
+      val kind  = if down then "SDL_EVENT_KEY_DOWN" else "SDL_EVENT_KEY_UP"
+      event.set(ValueLayout.JAVA_INT, SdlLayouts.offset("SDL_CommonEvent.type"), SdlLayouts.eventType(kind))
+      event.set(ValueLayout.JAVA_INT_UNALIGNED, SdlLayouts.offset("SDL_KeyboardEvent.key"), key)
+      event.set(ValueLayout.JAVA_SHORT_UNALIGNED, SdlLayouts.offset("SDL_KeyboardEvent.mod"), modifiers.toShort)
+      event.set(ValueLayout.JAVA_BYTE, SdlLayouts.offset("SDL_KeyboardEvent.down"), if down then 1.toByte else 0.toByte)
+      checked(PushEvent)(handle(PushEvent).invokeExact(event): Boolean)
+    }
+
   // ---- text input and cursors ----
 
   def startTextInput(window: SdlWindow): Either[SdlError, Unit] =
     checked(StartTextInput)(handle(StartTextInput).invokeExact(window.handle): Boolean)
+
+  def textInputActive(window: SdlWindow): Boolean = handle(TextInputActive).invokeExact(window.handle): Boolean
 
   def stopTextInput(window: SdlWindow): Either[SdlError, Unit] =
     checked(StopTextInput)(handle(StopTextInput).invokeExact(window.handle): Boolean)
