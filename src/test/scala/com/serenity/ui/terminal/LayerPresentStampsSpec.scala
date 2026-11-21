@@ -2,7 +2,7 @@ package com.serenity.ui.terminal
 
 import java.util.concurrent.atomic.AtomicLong
 
-import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings}
+import com.serenity.diagnostics.{FrameKind, FramePhase, FrameTimings, PaintSource}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -93,6 +93,61 @@ class LayerPresentStampsSpec extends AnyFlatSpec with Matchers:
 
     timings.drain().phases.get(FramePhase.InputToPaint) shouldBe None
     timings.keyLatency.drain().keys shouldBe empty
+  }
+
+  it should "end each draw against its own start when the next draw starts before the first one's end arrives" in {
+    val (timings, clock) = recorder()
+    val stamps           = new LayerPresentStamps(timings)
+
+    stamps.drawStarted()
+    clock.advanceMs(5)
+    stamps.drawStarted()
+    clock.advanceMs(1)
+    stamps.drawFinished()
+    clock.advanceMs(4)
+    stamps.drawFinished()
+
+    val paint = timings.drain().phases(FramePhase.Paint)
+    paint.count shouldBe 2
+    paint.maxMs shouldBe 6.0
+    paint.p50Ms shouldBe 5.0
+  }
+
+  it should "leave out a draw cycle's end when it saw no start of its own" in {
+    val (timings, clock) = recorder()
+    val stamps           = new LayerPresentStamps(timings)
+
+    clock.advanceMs(2)
+    stamps.drawFinished()
+
+    val summary = timings.drain()
+    summary.phases.get(FramePhase.Paint) shouldBe None
+    summary.paints shouldBe empty
+  }
+
+  it should "count each draw it ends as a paint of the layer" in {
+    val (timings, clock) = recorder()
+    val stamps           = new LayerPresentStamps(timings)
+
+    stamps.drawStarted()
+    clock.advanceMs(1)
+    stamps.drawFinished()
+
+    timings.drain().paints shouldBe Map(PaintSource.Layer -> 1)
+  }
+
+  it should "forget the oldest starts whose ends never come, so a lost end cannot hold the queue for ever" in {
+    val (timings, clock) = recorder()
+    val stamps           = new LayerPresentStamps(timings)
+
+    (1 to 20).foreach { _ =>
+      stamps.drawStarted()
+      clock.advanceMs(1)
+    }
+    stamps.drawFinished()
+
+    // 20 starts, the 16 newest kept: the end pairs with the 5th, which began 16 ms before the clock now reads.
+    timings.drain().phases(FramePhase.Paint).maxMs shouldBe 16.0
   }
 
   it should "record nothing while timing is off" in {

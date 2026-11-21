@@ -41,7 +41,7 @@ import com.serenity.state.reducers.CompositionPreview
 import com.serenity.ui.accessibility.{AccessibilitySnapshot, AccessibilitySync}
 import com.serenity.ui.benchmark.RenderBenchmark
 import com.serenity.ui.display.DisplayScale
-import com.serenity.ui.host.InputSettings
+import com.serenity.ui.host.{InputSettings, WindowTitle}
 import com.serenity.ui.renderer.{CacheSlots, FrameSurfaceFactory, PaintExecutionContext}
 import com.serenity.ui.skia.SkiaTextMeasurer
 import com.serenity.ui.terminal.{SwingFailureDialog, SwingWindowHost}
@@ -444,9 +444,8 @@ object Main extends IOApp:
 
           def syncChromeTheme(state: com.serenity.state.models.AppState): IO[Unit] =
             Trace.timed("render.syncChromeTheme") {
-              IO {
-                host.control.updateChromeTheme(state.persisted.theme)
-              }
+              IO(host.control.updateChromeTheme(state.persisted.theme)) >>
+                IO(host.control.setTitle(WindowTitle.from(state)))
             }
 
           AccessibilitySync.empty.flatMap { accessibilitySync =>

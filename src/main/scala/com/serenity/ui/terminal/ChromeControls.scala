@@ -126,6 +126,12 @@ final private[terminal] class ChromeTitleBar(
   titleLabel.setForeground(chromePaletteRef.get().titleForeground)
   titleLabel.setFont(controlFont())
 
+  /** Shows `text` as the window's title: in the frame, for the system to draw, and in the label custom chrome draws. */
+  def showTitle(text: String): Unit =
+    frame().setTitle(text)
+    titleLabel.setText(text)
+    SwingWindow.setAccessibleNameIfAvailable(titleLabel, text)
+
   private val dragAdapter = new MouseAdapter:
     final private case class DragAnchor(x: Int, y: Int)
     private val anchorRef = new AtomicReference(DragAnchor(0, 0))
