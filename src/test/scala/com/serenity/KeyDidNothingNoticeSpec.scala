@@ -46,7 +46,10 @@ class KeyDidNothingNoticeSpec extends AnyFlatSpec with Matchers:
     shown.head.message
 
   "A bound key whose command the mode hides" should "say which mode the command works in" in {
-    messageFor(RunCommand("cut-to-darlings"), editorIn(AppMode.Code)) shouldBe "Cut to Darlings works in prose mode only."
+    messageFor(
+      RunCommand("cut-to-darlings"),
+      editorIn(AppMode.Code)
+    ) shouldBe "Cut to Darlings works in prose mode only."
     messageFor(RunCommand("bold"), editorIn(AppMode.Code)) shouldBe "Bold works in prose mode only."
     messageFor(RunCommand("lsp-hover"), editorIn(AppMode.Prose)) shouldBe "LSP Hover works in code mode only."
   }
