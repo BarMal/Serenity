@@ -12,6 +12,7 @@ final private[manager] class CommandEffectInterpreter(
   def interpret(effect: AppEffect): IO[Unit] =
     effect match
       case AppEffect.CompleteQuit                    => dependencies.lifecycle
+      case AppEffect.ShowNotice(notice)              => dependencies.showNotice(notice)
       case AppEffect.ExecuteCommand(value)           => dependencies.command(value)
       case AppEffect.ExecuteCommandUnrecorded(value) => dependencies.unrecordedCommand(value)
       case AppEffect.Theme(value)                    => dependencies.theme(value)
@@ -42,5 +43,6 @@ private[manager] object CommandEffectInterpreter:
       lspQueue: LspQueueEffect => IO[Unit],
       scheduleCommandRunnerBindingExpiry: Long => IO[Unit],
       settings: SettingsEffect => IO[Unit] = _ => IO.unit,
-      ime: ImeEffect => IO[Unit] = _ => IO.unit
+      ime: ImeEffect => IO[Unit] = _ => IO.unit,
+      showNotice: com.serenity.state.models.Notice => IO[Unit] = _ => IO.unit
   )

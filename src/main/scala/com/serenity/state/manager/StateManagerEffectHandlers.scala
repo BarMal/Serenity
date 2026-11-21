@@ -197,7 +197,8 @@ final private[manager] class StateManagerEffectHandlers(
       interpretLspQueueEffect,
       scheduleCommandRunnerBindingExpiry,
       { case SettingsEffect.ReapplyConfig => configEffects.reapplyConfig },
-      { case ImeEffect.Refused => showNotice(ImeNotices.refused) >> endInputMethodComposition }
+      { case ImeEffect.Refused => showNotice(ImeNotices.refused) >> endInputMethodComposition },
+      showNotice
     )
   )
 
