@@ -138,7 +138,7 @@ object WrapFixtures extends Assertions:
 
   private val lower    = "abcdefghijklmnopqrstuvwxyz"
   private val upper    = lower.toUpperCase
-  private val accented = "éèêëàâäîïôöùûüçñáíóúøåæœ"
+  private val accented = "éèêëàâäîïôöùûüçñáíóúøåæþ"
   private val kernable =
     Vector("AV", "To", "Ty", "fi", "fl", "ffi", "WA", "Yo", "Te", "VA", "LT", "P.", "r,", "ff", "ft")
   private val closers = Vector(",", ".", ";", ":", "!", "?", ")", "]", "\"", "'", "”", "’", "...", "),", ".\"")
