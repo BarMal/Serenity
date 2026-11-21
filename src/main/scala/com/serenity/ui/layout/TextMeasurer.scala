@@ -1,6 +1,8 @@
 package com.serenity.ui.layout
 
 import com.serenity.state.models.IndentationSettings
+import com.serenity.text.fallback.GlyphCoverage
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.renderer.FontSpec
 
 /** The text measurement wrapping, caret placement and viewport centring take from a rendering backend. A backend must
@@ -20,6 +22,11 @@ trait TextMeasurer:
   def measuresProportionally(font: FontSpec): Boolean
 
   def cellMetrics(font: FontSpec): CellMetrics
+
+  /** Which slots of the chain `fallback` describes at `primary` have a glyph for a codepoint, answered from the fonts
+    * this measurer shapes and paints with, so the runs layout cuts are the runs painted.
+    */
+  def glyphCoverage(primary: FontSpec, fallback: FontFallback): GlyphCoverage
 
   /** `text[from, until)` cut into maximal runs of the one font each column is measured and painted in. */
   def itemise(

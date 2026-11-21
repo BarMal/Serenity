@@ -3,8 +3,10 @@ package com.serenity.ui.fonts
 import java.awt.Font
 import java.nio.file.Paths
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.text.fallback.{FallbackItemiser, FallbackRun, FontSlot}
 import com.serenity.ui.fonts.FontLoader.FontConfig
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -24,7 +26,7 @@ class FontFallbackEmojiSpec extends AnyFlatSpec with Matchers:
       .createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource("/fonts/MonaspaceNeon-Regular.otf").toURI).toFile)
       .deriveFont(Font.PLAIN, 14.0f)
 
-  private def coverage(chain: FontFallback) = AwtGlyphCoverage.of(codeFont, chain)
+  private def coverage(chain: FontFallback) = TestMeasure.measurer.glyphCoverage(FontSpec.fromAwt(codeFont), chain)
 
   "A chain with an emoji family" should "order its slots as configured families, the emoji face, then Dialog" in {
     val chain = FontFallback(Vector("Configured"), Some(emoji))
@@ -50,7 +52,7 @@ class FontFallbackEmojiSpec extends AnyFlatSpec with Matchers:
     val slot  = coverage(chain).emojiSlot.getOrElse(fail("no emoji slot"))
     slot shouldBe FontSlot(1)
     coverage(chain).covers(slot, 0x1f600) shouldBe true
-    coverage(chain).fontFor(slot).map(_.getFamily) shouldBe FontLoader.emojiFontFamily
+    chain.fontFor(slot, codeFont).getFamily shouldBe FontLoader.emojiFontFamily.getOrElse(fail("no emoji family"))
   }
 
   it should "send an emoji cluster the primary lacks to the emoji slot" in {

@@ -20,3 +20,11 @@ trait GlyphCoverage:
   def emojiSlot: Option[FontSlot]
 
   def covers(slot: FontSlot, codePoint: Int): Boolean
+
+object GlyphCoverage:
+
+  /** The chain of an owner with no measurer, which is on the cell grid: every codepoint is in the primary. */
+  val PrimaryOnly: GlyphCoverage = new GlyphCoverage:
+    def slotCount: Int                                  = 1
+    def emojiSlot: Option[FontSlot]                     = None
+    def covers(slot: FontSlot, codePoint: Int): Boolean = slot == FontSlot.Primary

@@ -11,10 +11,11 @@ import com.serenity.markdown.{LazyBlockIndex, TableColumns}
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
 import com.serenity.rope.{Balance, Rope, RopeDiff}
 import com.serenity.state.models.{BufferId, MeasuredRow}
-import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
-import com.serenity.ui.fonts.{AwtGlyphCoverage, FallbackCoverages, FallbackItemisations, FontFallback}
+import com.serenity.text.fallback.{FallbackItemiser, FallbackRun, GlyphCoverage}
+import com.serenity.ui.fonts.{FallbackCoverages, FallbackItemisations, FontFallback}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
+import com.serenity.ui.renderer.FontSpec
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the shaping work that otherwise dominates
   * every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for the same
@@ -87,7 +88,13 @@ sealed abstract class WrappedLineCache:
     * behind it, for the next layout of the same line; without one every call itemises afresh.
     */
   def fallbackRuns(primary: Font, fallback: FontFallback, text: String, stickyNeutrals: Boolean): Vector[FallbackRun] =
-    FallbackItemiser.itemise(text, 0, text.length, AwtGlyphCoverage.of(primary, fallback), stickyNeutrals)
+    FallbackItemiser.itemise(
+      text,
+      0,
+      text.length,
+      WrappedLineCache.coverageOf(layoutMemos)(primary, fallback),
+      stickyNeutrals
+    )
 
 /** Everything a line's wrap and caret measurement depends on. The rows it yields are position-independent -- no buffer
   * line, alignment or inset -- so a line keeps its entry when lines are inserted or deleted above it. `resolver`
@@ -146,6 +153,12 @@ final private[layout] case class ScannedOpenings(document: IdentityKey, rules: O
 final case class WrapStats(coldWraps: Long, incrementalWraps: Long, rowsComputed: Long, charsMeasured: Long)
 
 object WrappedLineCache:
+
+  /** The coverage of a chain as the owner of `memos` shapes it: an owner with no measurer is on the cell grid, where
+    * every codepoint is in the primary.
+    */
+  private[layout] def coverageOf(memos: LayoutMemos)(primary: Font, fallback: FontFallback): GlyphCoverage =
+    memos.measurer.fold(GlyphCoverage.PrimaryOnly)(_.glyphCoverage(FontSpec.fromAwt(primary), fallback))
 
   val DefaultMaxLines = 4096
 
@@ -279,7 +292,7 @@ object WrappedLineCache:
     private val fences    = new LinkedHashMap[BufferId, FenceEntry](16, 0.75f, true)
     private val columns   = new LinkedHashMap[BufferId, TableColumnsEntry](16, 0.75f, true)
     private val openings  = new LinkedHashMap[ScannedOpenings, OpeningLines](16, 0.75f, true)
-    private val coverages = FallbackCoverages(FallbackCoverages.DefaultCapacity)
+    private val coverages = FallbackCoverages(FallbackCoverages.DefaultCapacity, coverageOf(layoutMemos))
 
     private val itemisations = FallbackItemisations(coverages, FallbackItemisations.DefaultEntries)
 
