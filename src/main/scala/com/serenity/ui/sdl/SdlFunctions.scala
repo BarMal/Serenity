@@ -57,6 +57,8 @@ private[sdl] enum SdlFunction(val symbol: String, val descriptor: FunctionDescri
   case PollEvent             extends SdlFunction("SDL_PollEvent", FunctionDescriptor.of(Bool, Pointer))
   case WaitEventTimeout      extends SdlFunction("SDL_WaitEventTimeout", FunctionDescriptor.of(Bool, Pointer, Int32))
   case PushEvent             extends SdlFunction("SDL_PushEvent", FunctionDescriptor.of(Bool, Pointer))
+  case GetTicksNS            extends SdlFunction("SDL_GetTicksNS", FunctionDescriptor.of(Int64))
+  case TextInputActive       extends SdlFunction("SDL_TextInputActive", FunctionDescriptor.of(Bool, Pointer))
   case StartTextInput        extends SdlFunction("SDL_StartTextInput", FunctionDescriptor.of(Bool, Pointer))
   case StopTextInput         extends SdlFunction("SDL_StopTextInput", FunctionDescriptor.of(Bool, Pointer))
   case SetTextInputArea

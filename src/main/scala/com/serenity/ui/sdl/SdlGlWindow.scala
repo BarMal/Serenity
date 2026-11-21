@@ -5,8 +5,9 @@ import java.util.concurrent.Executors
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.*
 
-import cats.effect.{Deferred, IO, Ref, Resource}
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
+import fs2.Stream
 
 /** A window whose frames are drawn with GL: SDL makes the window and an EGL context for it, and every SDL and GL call
   * runs on one dedicated thread, the one the context is current on (#2380). Nothing is drawn with a renderer yet; the
@@ -21,8 +22,7 @@ final class SdlGlWindow private (
     val handle: SdlWindow,
     calls: GlCalls,
     executor: ExecutionContext,
-    state: Ref[IO, GlWindowState],
-    closed: Deferred[IO, Unit],
+    private[sdl] val hub: SdlEventHub,
     val vsync: Boolean
 ):
 
@@ -41,15 +41,20 @@ final class SdlGlWindow private (
     }
 
   /** Completes once the window has been asked to close. */
-  def awaitClose: IO[Unit] = closed.get
+  def awaitClose: IO[Unit] = hub.awaitClose
 
-  def pixelSize: IO[(Int, Int)] = state.get.map(current => (current.pixelWidth, current.pixelHeight))
+  def pixelSize: IO[(Int, Int)] = hub.state.map(current => (current.pixelWidth, current.pixelHeight))
 
   /** The scale the display asked for (1.5 stays 1.5). */
-  def deviceScale: IO[Double] = state.get.map(_.scale)
+  def deviceScale: IO[Double] = hub.state.map(_.scale)
 
   /** The pixel size to lay out for after a resize or a scale change, once, until the next one. */
-  def takeResize: IO[Option[(Int, Int)]] = state.modify(_.takeResize)
+  def takeResize: IO[Option[(Int, Int)]] = hub.takeResize
+
+  /** Every event SDL reports for this window, in order, each with its own timestamp. For one reader; see
+    * [[SdlEventHub]] for what a reader that falls behind loses.
+    */
+  def events: Stream[IO, SdlEvent.Stamped] = hub.events
 
   /** What GL says it is drawing with: a GPU, or Mesa's llvmpipe. */
   def renderer: IO[String] = onSdlThread(_ => calls.renderer)
@@ -61,12 +66,6 @@ final class SdlGlWindow private (
 
   def clearAndSwap(red: Float, green: Float, blue: Float): IO[Either[SdlError, Unit]] =
     clear(red, green, blue) *> swap
-
-  /** Folds one of SDL's events into the window's state; `scale` is the display scale read when the event arrived. */
-  private[sdl] def applyEvent(event: SdlEvent, scale: Double): IO[Unit] =
-    state
-      .updateAndGet(_.after(event, scale))
-      .flatMap(current => closed.complete(()).void.whenA(current.closeRequested))
 
 object SdlGlWindow:
 
@@ -145,6 +144,7 @@ object SdlGlWindow:
   private def makeCurrent(sdl: Sdl, window: SdlWindow, context: SdlGlContext): Either[SdlError, Native] =
     for
       _      <- sdl.glMakeCurrent(window, context)
+      _      <- sdl.startTextInput(window)
       calls  <- GlCalls.load(sdl)
       pixels <- sdl.windowSizeInPixels(window)
       vsync = sdl.glSetSwapInterval(1).isRight
@@ -156,23 +156,18 @@ object SdlGlWindow:
     sdl.quit()
 
   private def assemble(sdl: Sdl, executor: ExecutionContext, native: Native): IO[SdlGlWindow] =
-    (Ref.of[IO, GlWindowState](native.start), Deferred[IO, Unit]).mapN { (state, closed) =>
-      new SdlGlWindow(sdl, native.window, native.calls, executor, state, closed, native.vsync)
+    SdlEventHub.create(native.start).map { hub =>
+      new SdlGlWindow(sdl, native.window, native.calls, executor, hub, native.vsync)
     }
 
   /** Feeds SDL's events to the window's state until the resource is released. */
   private def pump(sdl: Sdl, executor: ExecutionContext, window: SdlGlWindow): Resource[IO, Unit] =
-    pumpOnce(sdl, executor, window).productR(IO.sleep(PumpInterval)).foreverM.background.void
+    SdlEventHub.pump(IO(drain(sdl, window.handle)).evalOn(executor), window.hub, PumpInterval).background.void
 
-  private def pumpOnce(sdl: Sdl, executor: ExecutionContext, window: SdlGlWindow): IO[Unit] =
-    IO(drain(sdl, window.handle)).evalOn(executor).flatMap { (events, scale) =>
-      events.traverse_(event => window.applyEvent(event, scale))
-    }
-
-  private def drain(sdl: Sdl, handle: SdlWindow): (List[SdlEvent], Double) =
-    val events = Iterator.continually(sdl.pollEvent()).map(_.toOption.flatten).takeWhile(_.isDefined).flatten.toList
+  private def drain(sdl: Sdl, handle: SdlWindow): (List[SdlEvent.Stamped], Double) =
+    val events = Iterator.continually(sdl.pollStamped()).map(_.toOption.flatten).takeWhile(_.isDefined).flatten.toList
     val rescaled = events.exists {
-      case SdlEvent.Window(SdlEvent.WindowKind.DisplayScaleChanged, _, _) => true
-      case _                                                              => false
+      case SdlEvent.Stamped(SdlEvent.Window(SdlEvent.WindowKind.DisplayScaleChanged, _, _), _) => true
+      case _                                                                                   => false
     }
     (events, if rescaled then sdl.displayScale(handle).toDouble else 0.0)
