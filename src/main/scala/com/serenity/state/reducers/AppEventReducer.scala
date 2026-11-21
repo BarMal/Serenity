@@ -22,7 +22,7 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.CompleteQuit)
 
       case ToggleCommandRunner =>
-        if state.startPageSurface.isDefined then startPageHasNo(state, "The command palette")
+        if state.startPageSurface.isDefined then openDocumentTo(state, "use the command palette")
         else
           val abandoned = SettingsPreviewReducer.revert(state)
           ReducerResult(toggleCommandRunner(abandoned.state, registry), abandoned.effects)
@@ -31,19 +31,19 @@ object AppEventReducer:
         ReducerResult.withEffect(state, AppEffect.Settings(SettingsEffect.ReapplyConfig))
 
       case ToggleContextualToolbar =>
-        if state.startPageSurface.isDefined then startPageHasNo(state, "The toolbar")
+        if state.startPageSurface.isDefined then openDocumentTo(state, "use the toolbar")
         else ReducerResult.noEffects(toggleContextualToolbar(state))
 
       case ToggleShortcutsHelp =>
-        if state.startPageSurface.isDefined then startPageHasNo(state, "Shortcut help")
+        if state.startPageSurface.isDefined then openDocumentTo(state, "see shortcut help")
         else ReducerResult.noEffects(toggleShortcutsHelp(state))
 
       case ToggleTabList =>
-        if state.startPageSurface.isDefined then startPageHasNo(state, "The tab list")
+        if state.startPageSurface.isDefined then openDocumentTo(state, "use the tab list")
         else ReducerResult.noEffects(toggleTabList(state))
 
       case ToggleRecentFilesInMode =>
-        if state.startPageSurface.isDefined then startPageHasNo(state, "Recent files in the editor")
+        if state.startPageSurface.isDefined then openDocumentTo(state, "show recent files")
         else ReducerResult.noEffects(toggleRecentFilesInMode(state))
 
       case NewTab =>
@@ -143,8 +143,8 @@ object AppEventReducer:
         if state.startPageSurface.isDefined then ReducerResult.noEffects(state)
         else ReducerResult.noEffects(togglePanel(state, panelRegistry, id))
 
-  private def startPageHasNo(state: AppState, surface: String): ReducerResult =
-    ReducerResult.withEffect(state, AppEffect.ShowNotice(KeyNotices.startPageHasNo(surface)))
+  private def openDocumentTo(state: AppState, action: String): ReducerResult =
+    ReducerResult.withEffect(state, AppEffect.ShowNotice(KeyNotices.openDocumentTo(action)))
 
   private def summoned(state: AppState, change: ChromeSummons => ChromeSummons): AppState =
     state.copy(runtime = state.runtime.copy(summons = change(state.runtime.summons)))

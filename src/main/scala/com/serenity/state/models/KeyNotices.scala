@@ -1,9 +1,17 @@
 package com.serenity.state.models
 
-import com.serenity.command.{Availability, Command, CommandAvailability, CommandRunnerContext, scope}
+import com.serenity.command.{
+  Availability,
+  Command,
+  CommandAvailability,
+  CommandPrerequisites,
+  CommandRunnerContext,
+  scope
+}
 
-/** What a key says when it did nothing, so a press is never met with silence. Every notice shares one topic: a second
-  * dead key replaces the first rather than stacking beside it.
+/** What a key says when it did nothing, so a press is never met with silence: one short sentence, the action first
+  * where there is one. Every notice shares one topic: a second dead key replaces the first rather than stacking beside
+  * it.
   */
 object KeyNotices:
 
@@ -11,16 +19,20 @@ object KeyNotices:
     Notice(NoticeLevel.Info, message, topic = Some(NoticeTopic.KeyDidNothing))
 
   def unknownCommand(commandId: String): Notice =
-    info(s"This key is bound to \"$commandId\", which is not a command.")
+    info(s"No command named \"$commandId\".")
 
-  /** Why `command` will not run here: the reason it is disabled, or the mode it is not part of. */
+  /** Why `command` will not run here: what to do about it when it is disabled, or the mode it works in. */
   def commandUnavailable(command: Command, context: CommandRunnerContext): Notice =
-    val reason =
-      CommandAvailability.of(command, context) match
-        case Availability.Disabled(why) => why
-        case _ =>
-          context.editingContext.flatMap(command.scope.unavailableReason).getOrElse("It is not available here.")
-    info(s"${command.label}: $reason")
+    CommandAvailability.of(command, context) match
+      case Availability.Disabled(CommandAvailability.NeedsSelection) =>
+        info(s"Select text to use ${command.label}.")
+      case Availability.Disabled(CommandPrerequisites.NoProjectDetected) =>
+        info(s"Open a project folder to use ${command.label}.")
+      case Availability.Disabled(reason) =>
+        info(s"${command.label}: $reason")
+      case _ =>
+        val modes = command.scope.family.modes.map(_.configKey).toList.sorted.mkString(" or ")
+        info(s"${command.label} works in $modes mode only.")
 
-  def startPageHasNo(surface: String): Notice =
-    info(s"$surface is not available on the start page. Open or create a document first.")
+  def openDocumentTo(action: String): Notice =
+    info(s"Open or create a document to $action.")
