@@ -123,6 +123,19 @@ class SdlGlWindowSpec extends AnyFlatSpec with Matchers:
     stamped.timestampNanos should be <= clockAfter
   }
 
+  it should "publish pushed text as a text event with SDL's timestamp, and keep its characters" taggedAs SdlNativeTest in {
+    val stamped = onOffscreen { window =>
+      window.onSdlThread(_.pushText("aé中")) *>
+        window.events
+          .collectFirst { case text @ SdlEvent.Stamped(_: SdlEvent.TextInput, _) => text }
+          .compile
+          .lastOrError
+          .timeout(5.seconds)
+    }
+    stamped.event shouldBe SdlEvent.TextInput("aé中")
+    stamped.timestampNanos should be > 0L
+  }
+
   "An SDL GL window on a Wayland compositor" should "draw and swap on the compositor's surface" taggedAs SdlNativeTest in {
     assume(sys.env.contains("WAYLAND_DISPLAY"), "no Wayland compositor to open a window on")
     val (driver, pixel, swapped) = SdlGlWindow
