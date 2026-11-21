@@ -25,6 +25,7 @@ private[manager] object StartPageTransitions:
           sessionExists = true,
           recentFiles = readableRecentFiles,
           resumeIdentifier = Some(StartupPageContent.sessionResumeIdentifier(saved)),
+          resumeUnsaved = StartupPageContent.sessionUnsavedCount(saved),
           fileOrFolderOpen = live.runtime.capabilities.opensFileOrFolder,
           recentFolders = readableRecentFolders
         )

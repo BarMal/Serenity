@@ -58,10 +58,15 @@ final case class StartupAction(
     val suffix = detail.fold("")(value => s"  $value")
     s"$prefix$label$suffix"
 
-/** The "quick resume last session" affordance: a keyboard hint (Tab) pinned to the bottom of the startup page, showing
-  * the previous session's identifier (its main file/dir name) so the user can recognise what they'd be resuming.
+/** The "resume last session" affordance: a keyboard hint (Tab) pinned to the bottom of the startup page, showing the
+  * previous session's identifier (its main file/dir name) so the user can recognise what they'd be resuming, and how
+  * many of its documents hold text that is not on disk.
   */
-final case class StartupResumeHint(identifier: String, command: Command)
+final case class StartupResumeHint(identifier: String, command: Command, unsavedCount: Int = 0):
+
+  def line: String =
+    val unsaved = if unsavedCount > 0 then s" ($unsavedCount unsaved)" else ""
+    s"Resume last session — $identifier$unsaved"
 
 /** Pixel-space click target for an action rendered on the startup page. */
 final case class StartupActionBounds(index: Int, xPx: Int, yPx: Int, widthPx: Int, heightPx: Int):
