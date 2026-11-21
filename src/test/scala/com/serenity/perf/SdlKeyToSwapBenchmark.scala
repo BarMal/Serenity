@@ -423,7 +423,10 @@ private[perf] object SdlKeyToSwapBenchmark:
       .toList ++ List(
       "[sdl3-key] note: one more key is pushed in process after the last, to flush it, and is left out of the rows; " +
         "the trace credits a key whose damage lands mid-frame to the next frame, so the last measured key always has " +
-        "a follower and its key_to_swap can read one frame longer than it would without (only the max is likely to show it)"
+        "a follower and its key_to_swap can read one frame longer than it would without (only the max is likely to show it)",
+      "[sdl3-key] note: the flush hides a lost wake-up in the production fast render phase (#2818): a key whose " +
+        "damage lands just after the frame's model read is not drawn until a later event, and without the flush the " +
+        "last key of a run can be that key"
     )
 
   private def report(window: SdlGlWindow, driver: String, request: WindowRequest, options: Options)(using
