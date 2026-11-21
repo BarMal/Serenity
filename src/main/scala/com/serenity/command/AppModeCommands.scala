@@ -14,7 +14,18 @@ object AppModeCommands:
       label = s"Switch to $name Mode"
     )
 
-  val switchCommands: List[Command] = List(AppMode.Prose, AppMode.Code).map(switchTo)
+  /** What someone looks for when they want the other mode: a toggle, which no mode-specific command can be named for.
+    */
+  val toggle: Command =
+    Command.typed(
+      "toggle-app-mode",
+      "Switch between Prose and Code mode.",
+      CommandIntent.View(ViewIntent.ToggleAppMode),
+      CommandCategory.View,
+      label = "Toggle Prose/Code Mode"
+    )
+
+  val switchCommands: List[Command] = toggle :: List(AppMode.Prose, AppMode.Code).map(switchTo)
 
   /** The command the project-task prompt runs when the writer agrees to leave code mode. */
   def switchStoppingProjectTask(mode: AppMode): Command =
