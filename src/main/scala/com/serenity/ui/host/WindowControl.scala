@@ -19,6 +19,12 @@ trait WindowControl:
   /** Completes once the user has asked to close the window. */
   def awaitClose: IO[Unit]
 
+  /** Hands each later request to close the window to `cb` instead of ending the run through [[awaitClose]]: the quit it
+    * asks for may be cancelled, after which the window must be closable again. A window without this keeps
+    * `awaitClose`.
+    */
+  def setOnCloseRequested(cb: () => Unit): Unit = ()
+
   /** Shows `title` as the window's title, in the title bar the window draws or the one the system draws. A window with
     * no title of its own keeps the one it was opened with.
     */

@@ -32,7 +32,8 @@ class SwingWindow(
     env: Map[String, String] = sys.env,
     windowTitle: String = SwingWindow.WindowTitle
 ) extends RenderTarget
-    with WindowTitling:
+    with WindowTitling
+    with CloseRequestRouting:
 
   private val usesCustomChrome =
     SwingWindow.shouldUseCustomChrome(
@@ -65,7 +66,6 @@ class SwingWindow(
   private val menuBarPaletteRef        = new AtomicReference[Option[MenuBarPalette]](None)
   private val attachedBarRef           = new AtomicReference[Option[SwingWindow.AttachedBar]](None)
   private val pendingResize            = new AtomicReference[Option[ViewportSize]](None)
-  private val closeLatch               = new CountDownLatch(1)
   private val baseImageRef             = new AtomicReference[Option[BufferedImage]](None)
   private val publishedCaretsRef       = new AtomicReference[scala.List[CaretPaint]](Nil)
   // Kept through the caret's blink-off phases, so the input method's candidate window has somewhere to be.
@@ -263,7 +263,7 @@ class SwingWindow(
       case SwingWindow.ChromeControlKind.Maximize | SwingWindow.ChromeControlKind.Restore =>
         toggleMaximize()
       case SwingWindow.ChromeControlKind.Close =>
-        closeLatch.countDown()
+        requestClose()
 
   private val chromeTitleBar: ChromeTitleBar = new ChromeTitleBar(
     chromePaletteRef,
@@ -294,7 +294,7 @@ class SwingWindow(
     f.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE)
     f.addWindowListener(
       new WindowAdapter:
-        override def windowClosing(e: WindowEvent): Unit = closeLatch.countDown()
+        override def windowClosing(e: WindowEvent): Unit = requestClose()
     )
     f.addWindowFocusListener(
       new WindowFocusListener:

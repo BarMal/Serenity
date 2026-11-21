@@ -11,6 +11,7 @@ import cats.syntax.apply.*
 import cats.syntax.foldable.*
 import cats.syntax.parallel.*
 import cats.syntax.semigroup.*
+import com.serenity.app.CallbackBridges.{closeRequest, dispatchIfRunning}
 import com.serenity.config.{AppConfig, RenderFpsTarget}
 import com.serenity.diagnostics.{
   EdtLagTrace,
@@ -169,6 +170,7 @@ object AppRuntime:
     awaitExternalQuit: IO[Unit] = IO.never,
     registerResizeCallback: (() => Unit) => Unit = _ => (),
     registerFocusCallback: (Boolean => Unit) => Unit = _ => (),
+    registerCloseCallback: (() => Unit) => Unit = _ => (),
     registerMarkdownPreviewCloseCallback: (() => Unit) => Unit = _ => (),
     openPath: Option[Path] = None,
     systemClipboard: SystemClipboard[IO] = SystemClipboard.awt[IO],
@@ -256,6 +258,8 @@ object AppRuntime:
           wakeOnCommit(before, after) >> observeTransition(before, after)
         )
         _             <- IO(registerResizeCallback(resizeCallbackBridge(requestFastRender, resizeCallbackDispatcher)))
+        closeCallback <- closeRequest(stateManager.runtimeLifecycle.requestQuit, resizeCallbackDispatcher)
+        _             <- IO(registerCloseCallback(closeCallback))
         cursorVisible <- Ref.of[IO, Boolean](true)
         windowFocused <- SignallingRef.of[IO, Boolean](true)
         startedAt     <- IO.monotonic
@@ -554,18 +558,6 @@ object AppRuntime:
 
   private[serenity] def afterQuitConfirmed(awaitQuit: IO[Unit], whenQuit: IO[Unit]): IO[Unit] =
     awaitQuit >> whenQuit
-
-  /** Dispatches an AWT/JLine callback's effect onto the runtime, tolerating the dispatcher having already shut down.
-    *
-    * On quit the runtime's `Dispatcher` closes while native callbacks (WINCH resize, window focus-lost) can still fire.
-    * `unsafeRunAndForget` then throws `IllegalStateException: Dispatcher already closed` synchronously -- before the
-    * effect's own error handler can run -- onto the AWT/pump thread, where `CrashReporter` logs it as a crash. A
-    * callback arriving after shutdown has nothing left to do, so swallow only that specific closed-dispatcher state and
-    * let every other failure propagate.
-    */
-  private def dispatchIfRunning(dispatcher: Dispatcher[IO])(effect: IO[Unit]): Unit =
-    try dispatcher.unsafeRunAndForget(effect)
-    catch case _: IllegalStateException => ()
 
   private[serenity] def resizeCallbackBridge(
     signalResize: IO[Unit],

@@ -567,12 +567,12 @@ object Main extends IOApp:
                 )
               ),
               awaitExternalQuit =
-                if launchOptions.smokeTest || launchOptions.startupProbe || launchOptions.rendererTrial.isDefined then
-                  IO.race(host.control.awaitClose, smokeReady.get).void
+                if launchOptions.endsItself then IO.race(host.control.awaitClose, smokeReady.get).void
                 else host.control.awaitClose,
               hideWindow = IO(host.control.hide()),
               registerResizeCallback = cb => host.control.setOnResize(cb),
               registerFocusCallback = cb => host.control.setOnFocusChange(cb),
+              registerCloseCallback = cb => if !launchOptions.endsItself then host.control.setOnCloseRequested(cb),
               openPath = launchOptions.openPath,
               frontend = GuiFrontend,
               forwardedOpens = session.forwardedOpens.merge(drops.opened).evalTap(_ => IO(host.control.bringToFront())),

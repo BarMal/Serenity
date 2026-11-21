@@ -66,6 +66,9 @@ final case class LaunchOptions(
   def openPath: Option[Path]     = openPaths.headOption
   def extraOpenPaths: List[Path] = openPaths.drop(1)
 
+  /** Runs that quit themselves, so closing their window ends the run outright rather than asking about unsaved work. */
+  def endsItself: Boolean = smokeTest || startupProbe || rendererTrial.isDefined
+
 object LaunchOptions:
 
   /** Taken out of the arguments before decline sees them, so it is in no help or usage text. */
