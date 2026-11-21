@@ -115,3 +115,55 @@ class SdlEventDecodeSpec extends AnyFlatSpec with Matchers:
 
   it should "pass an event it does not model through with its type" in
     withEvent("SDL_EVENT_USER")((_, _) => ())(_ shouldBe SdlEvent.Unknown(SdlGolden("SDL_EVENT_USER").toInt))
+
+  private def decodeStamped(eventType: String, nanos: Long)(fill: (MemorySegment, Arena) => Unit): SdlEvent.Stamped =
+    val arena = Arena.ofConfined()
+    try
+      val event = arena.allocate(SdlGolden("sizeof(SDL_Event)"))
+      event.set(ValueLayout.JAVA_INT, SdlGolden("SDL_CommonEvent.type"), SdlGolden(eventType).toInt)
+      event.set(ValueLayout.JAVA_LONG_UNALIGNED, SdlGolden("SDL_CommonEvent.timestamp"), nanos)
+      fill(event, arena)
+      SdlEvent.decodeStamped(event)
+    finally arena.close()
+
+  "SdlEvent.decodeStamped" should "carry a key event's own timestamp in nanoseconds" in {
+    val stamped = decodeStamped("SDL_EVENT_KEY_DOWN", 5000000123L) { (event, _) =>
+      int(event, "SDL_KeyboardEvent.key", 0x61)
+      bool(event, "SDL_KeyboardEvent.down", true)
+    }
+
+    stamped shouldBe SdlEvent.Stamped(
+      SdlEvent.Key(down = true, repeat = false, scancode = 0, key = 0x61, modifiers = 0),
+      5000000123L
+    )
+  }
+
+  it should "read a timestamp that does not fit in an Int" in {
+    val nanos = (1L << 40) + 7L
+    decodeStamped("SDL_EVENT_QUIT", nanos)((_, _) => ()) shouldBe SdlEvent.Stamped(SdlEvent.Quit, nanos)
+  }
+
+  it should "stamp committed text and mouse events" in {
+    decodeStamped("SDL_EVENT_TEXT_INPUT", 42L)((event, arena) =>
+      text(event, arena, "SDL_TextInputEvent.text", "é")
+    ) shouldBe
+      SdlEvent.Stamped(SdlEvent.TextInput("é"), 42L)
+    decodeStamped("SDL_EVENT_MOUSE_MOTION", 43L) { (event, _) =>
+      float(event, "SDL_MouseMotionEvent.x", 1f)
+      float(event, "SDL_MouseMotionEvent.y", 2f)
+    } shouldBe SdlEvent.Stamped(SdlEvent.MouseMotion(1f, 2f, 0f, 0f), 43L)
+  }
+
+  it should "keep the timestamp of an event it does not model" in {
+    decodeStamped("SDL_EVENT_USER", 99L)((_, _) => ()) shouldBe
+      SdlEvent.Stamped(SdlEvent.Unknown(SdlGolden("SDL_EVENT_USER").toInt), 99L)
+  }
+
+  it should "decode the same event as SdlEvent.decode" in {
+    val stamped = decodeStamped("SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED", 7L) { (event, _) =>
+      int(event, "SDL_WindowEvent.data1", 640)
+      int(event, "SDL_WindowEvent.data2", 480)
+    }
+
+    stamped.event shouldBe SdlEvent.Window(SdlEvent.WindowKind.PixelSizeChanged, 640, 480)
+  }

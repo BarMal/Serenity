@@ -102,6 +102,27 @@ class SdlGlWindowSpec extends AnyFlatSpec with Matchers:
     second shouldBe None
   }
 
+  it should "have text input active once it is open" taggedAs SdlNativeTest in {
+    onOffscreen(window => window.onSdlThread(_.textInputActive(window.handle))) shouldBe true
+  }
+
+  it should "publish a pushed key event with a timestamp no later than SDL's clock" taggedAs SdlNativeTest in {
+    val (stamped, clockAfter) = onOffscreen { window =>
+      for
+        _ <- window.onSdlThread(_.pushKey(down = true, key = 0x61, modifiers = 0))
+        stamped <- window.events
+          .collectFirst { case key @ SdlEvent.Stamped(_: SdlEvent.Key, _) => key }
+          .compile
+          .lastOrError
+          .timeout(5.seconds)
+        clockAfter <- window.onSdlThread(_.ticksNanos)
+      yield (stamped, clockAfter)
+    }
+    stamped.event shouldBe SdlEvent.Key(down = true, repeat = false, scancode = 0, key = 0x61, modifiers = 0)
+    stamped.timestampNanos should be > 0L
+    stamped.timestampNanos should be <= clockAfter
+  }
+
   "An SDL GL window on a Wayland compositor" should "draw and swap on the compositor's surface" taggedAs SdlNativeTest in {
     assume(sys.env.contains("WAYLAND_DISPLAY"), "no Wayland compositor to open a window on")
     val (driver, pixel, swapped) = SdlGlWindow
