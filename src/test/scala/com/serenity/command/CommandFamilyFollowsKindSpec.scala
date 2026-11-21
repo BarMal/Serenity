@@ -22,11 +22,10 @@ class CommandFamilyFollowsKindSpec extends AnyFlatSpec with Matchers:
 
   private val scala = Some(BufferKind.Code(LanguageId.Scala))
 
-  "A prose command" should "be offered for a prose document even in a code workspace" in {
+  "A prose command" should "be offered for a prose document even in a code workspace" in
     List(BufferKind.Markdown, BufferKind.PlainText, BufferKind.RichText).foreach { kind =>
       withClue(s"$kind: ")(availability("bold", AppMode.Code, Some(kind)).isOffered shouldBe true)
     }
-  }
 
   it should "be hidden for a code document even in a prose workspace" in {
     availability("bold", AppMode.Prose, scala) shouldBe Availability.Hidden

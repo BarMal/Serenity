@@ -32,11 +32,21 @@ final case class CommandScope(family: CommandFamily, frontend: FrontendSupport):
     family.modes.contains(mode) && frontend.shells.contains(shell)
 
   def admits(context: EditingContext): Boolean =
-    admits(context.mode, context.shell)
+    admitsFamily(context) && frontend.shells.contains(context.shell)
+
+  /** Prose commands follow the focused document: offered for any document that is not code, whatever the workspace's
+    * mode, and with nothing open for a prose workspace. Every other family, code tooling included, follows the
+    * workspace's mode.
+    */
+  private def admitsFamily(context: EditingContext): Boolean =
+    family match
+      case CommandFamily.Prose => context.buffer.fold(context.mode == AppMode.Prose)(_.isProse)
+      case other               => other.modes.contains(context.mode)
 
   def unavailableReason(context: EditingContext): Option[String] =
-    if !family.modes.contains(context.mode) then
-      Some(s"Only available in ${family.modes.map(_.configKey).toList.sorted.mkString(" or ")} mode.")
+    if !admitsFamily(context) then
+      if family == CommandFamily.Prose && context.buffer.isDefined then Some("Only available in prose documents.")
+      else Some(s"Only available in ${family.modes.map(_.configKey).toList.sorted.mkString(" or ")} mode.")
     else if !frontend.shells.contains(context.shell) then Some("Only available in the graphical app.")
     else None
 

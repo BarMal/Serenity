@@ -4,6 +4,7 @@ import com.serenity.command.{
   Availability,
   Command,
   CommandAvailability,
+  CommandFamily,
   CommandPrerequisites,
   CommandRunnerContext,
   scope
@@ -32,7 +33,11 @@ object KeyNotices:
         info(s"${command.label}: $reason")
       case _ =>
         val modes = command.scope.family.modes.map(_.configKey).toList.sorted.mkString(" or ")
-        info(s"${command.label} works in $modes mode only.")
+        val where =
+          if command.scope.family == CommandFamily.Prose && context.editingContext.exists(_.buffer.isDefined) then
+            "prose documents"
+          else s"$modes mode"
+        info(s"${command.label} works in $where only.")
 
   def openDocumentTo(action: String): Notice =
     info(s"Open or create a document to $action.")
