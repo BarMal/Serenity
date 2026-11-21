@@ -49,3 +49,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   it should "name no FontRenderContext: nothing measures text through AWT's context" in {
     filesMentioning("""\bFontRenderContext\b|defaultFontRenderContext|fontRenderContext""") shouldBe Nil
   }
+
+  it should "hold no Java2D code nothing calls: a Graphics2D font helper, a Path2D rounded outline, an AffineTransform label anchor" in {
+    filesMentioning("""\bRoundedPath\b|\bdrawingIn\b|transform: AffineTransform""") shouldBe Nil
+  }
