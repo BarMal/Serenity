@@ -64,19 +64,32 @@ class DisplayExclusiveSpec extends AnyFlatSpec with Matchers:
   it should "keep a spec's own window out of sight of one listing the windows under the lock" in {
     withDisplay()
     val holding = new CountDownLatch(1)
+    val release = new CountDownLatch(1)
     val listed  = new AtomicReference[List[Window]](Nil)
+    val failure = new AtomicReference[Option[Throwable]](None)
     val holder = new Thread(
       new Runnable:
         def run(): Unit =
           listed.set(DisplayExclusive.withShowingWindowsAfter {
             holding.countDown()
-            Thread.sleep(500)
+            release.await()
           }._2)
+    )
+    val scenario = new Thread(
+      new Runnable:
+        def run(): Unit =
+          try windowClosedLateByTheBody()
+          catch case failed: Throwable => failure.set(Some(failed))
     )
     holder.start()
     holding.await()
-    try windowClosedLateByTheBody()
-    finally holder.join()
+    scenario.start()
+    val waiting = awaitBlocked(scenario)
+    release.countDown()
+    holder.join()
+    scenario.join()
+    withClue("the scenario must wait on the lock the other spec holds: ")(waiting shouldBe true)
+    failure.get() shouldBe None
     listed.get() shouldBe empty
   }
 
