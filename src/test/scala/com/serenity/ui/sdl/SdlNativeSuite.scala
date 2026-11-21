@@ -17,5 +17,6 @@ class SdlNativeSuite
       new com.serenity.ui.skia.SkiaGlPresenterNativeSpec,
       new com.serenity.ui.skia.SkiaGlParityNativeSpec,
       new com.serenity.perf.SdlPresentedFramesNativeSpec,
-      new com.serenity.perf.SdlPresentWindowNativeSpec
+      new com.serenity.perf.SdlPresentWindowNativeSpec,
+      new com.serenity.perf.SdlKeyToSwapNativeSpec
     )
