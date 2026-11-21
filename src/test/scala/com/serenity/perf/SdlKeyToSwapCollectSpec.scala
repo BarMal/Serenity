@@ -48,4 +48,14 @@ class SdlKeyToSwapCollectSpec extends AnyFlatSpec with Matchers:
 
     collected.keys should have size 19
   }
+  "measuredKeys" should "leave out the warm-up keys and the flush key that follows the run" in {
+    val allKeys = (1L to 26L).toVector
+
+    SdlKeyToSwapBenchmark.measuredKeys(allKeys, warmup = 5, keys = 20) shouldBe (6L to 25L).toVector
+  }
+
+  it should "give what there is when the run ended short" in {
+    SdlKeyToSwapBenchmark.measuredKeys((1L to 12L).toVector, warmup = 5, keys = 20) shouldBe (6L to 12L).toVector
+    SdlKeyToSwapBenchmark.measuredKeys((1L to 3L).toVector, warmup = 5, keys = 20) shouldBe Vector.empty
+  }
 end SdlKeyToSwapCollectSpec
