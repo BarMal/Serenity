@@ -127,7 +127,10 @@ class CommandAvailabilitySpec extends AnyFlatSpec with Matchers:
     def effects(state: AppState): List[AppEffect] =
       AppEventReducer.reduce(RunCommand("cut-to-darlings"), state, registry).effects
 
-    effects(proseState(selection = None)) shouldBe Nil
+    val withoutSelection = effects(proseState(selection = None))
+    withoutSelection.collect { case AppEffect.ExecuteCommand(_) => 1 } shouldBe Nil
+    withoutSelection.collect { case AppEffect.ShowNotice(notice) => notice.message } shouldBe
+      List("Select text to use Cut to Darlings.")
     effects(proseState(selectingAlpha)) shouldBe List(AppEffect.ExecuteCommand(registered("cut-to-darlings")))
   }
 

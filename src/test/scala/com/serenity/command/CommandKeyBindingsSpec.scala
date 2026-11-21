@@ -54,14 +54,22 @@ class CommandKeyBindingsSpec extends AnyFlatSpec with Matchers:
     effectsOf(lineNumbers, AppState.initial(config)) shouldBe List(AppEffect.ExecuteCommand(registered(lineNumbers)))
   }
 
-  it should "not run a command outside its scope, as the palette would not offer it" in {
-    effectsOf("bold", AppState.initial(linux.withAppMode(AppMode.Code))) shouldBe Nil
+  private def noticeTexts(effects: List[AppEffect]): List[String] =
+    effects.collect { case AppEffect.ShowNotice(notice) => notice.message }
+
+  it should "not run a command outside its scope, as the palette would not offer it, and say why" in {
+    val outside = effectsOf("bold", AppState.initial(linux.withAppMode(AppMode.Code)))
+    outside.collect { case AppEffect.ExecuteCommand(_) => 1 } shouldBe Nil
+    noticeTexts(outside) shouldBe List("Bold works in prose mode only.")
     effectsOf("bold", AppState.initial(linux.withAppMode(AppMode.Prose))) shouldBe
       List(AppEffect.ExecuteCommand(registered("bold")))
   }
 
-  it should "do nothing for an id no command has" in {
-    effectsOf("no-such-command", AppState.initial(linux)) shouldBe Nil
+  it should "run nothing, and say so, for an id no command has" in {
+    val effects = effectsOf("no-such-command", AppState.initial(linux))
+
+    effects.collect { case AppEffect.ExecuteCommand(_) => 1 } shouldBe Nil
+    noticeTexts(effects) shouldBe List("No command named \"no-such-command\".")
   }
 
   "The palette" should "show the key of a command bound by id" in {
