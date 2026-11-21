@@ -9,8 +9,8 @@ import org.jetbrains.skia.Surface
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** B1 of #2447 on the Skia cache: the same two-generation rule as [[com.serenity.ui.renderer.ShapedTextCache]], so the
-  * same hand-followed sequences give the same figures, and a surface reports them in the frame's counters.
+/** B1 of #2447 on the Skia cache: a two-generation cache: a lookup found in the older generation is a promotion, not a
+  * shaping, by figures that can be followed by hand, and a surface reports them in the frame's counters.
   */
 class SkiaShapedTextPromotionsSpec extends AnyFlatSpec with Matchers:
 

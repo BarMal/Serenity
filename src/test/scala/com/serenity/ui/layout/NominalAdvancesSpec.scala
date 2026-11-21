@@ -4,7 +4,7 @@ import java.awt.Font
 
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.fonts.FontLoader
-import com.serenity.ui.renderer.{FontSpec, ShapedTextCache}
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.OptionValues
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val config    = FontLoader.FontConfig()
   private val printable = (0x20 to 0x7e).map(_.toChar)
 
@@ -31,8 +31,7 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
       )
     }
 
-  it should "list, for each printable character, the advance the measured path gives it" in {
-    val shapedText = ShapedTextCache()
+  it should "list, for each printable character, the advance the measured path gives it" in
     sizes.foreach { size =>
       val font     = codeFont(size, ligatures = false)
       val resolver = TextCaretMeasurement.singleFontResolver(FontSpec.fromAwt(font))
@@ -42,7 +41,6 @@ class NominalAdvancesSpec extends AnyFlatSpec with Matchers with OptionValues:
         withClue(s"$size pt, '$char': ")(table.advanceOf(char) shouldBe measured)
       }
     }
-  }
 
   "A code font set with ligatures" should "have no table, since shaping may change what a character advances" in
     sizes.foreach { size =>

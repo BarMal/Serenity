@@ -4,7 +4,7 @@ import com.serenity.keystroke.KeyboardFidelityTier
 
 /** Which grid a frontend lays text out on: a real terminal's fixed character cell, or pixels measured from an actual
   * font. Replaces the binary "is this TUI" question everywhere a reducer/model/manager only ever needed this one fact
-  * -- whether to wrap/scroll/hit-test on `CellMetrics.cellUnit` or on `CellMetrics.fromFont` for whatever font a
+  * -- whether to wrap/scroll/hit-test on `CellMetrics.cellUnit` or on the owner's measured cell for whatever font a
   * buffer's typography role resolves to. Every real call site still measures its own `CellMetrics` for the font/role it
   * actually cares about (`EditorGeometryProducer`, `CursorViewport`, `MouseTargetCache`) -- this carries no cell-
   * metrics payload of its own, deliberately: a single "the" measurement here could not represent code/prose/UI font

@@ -10,7 +10,7 @@ import org.scalatest.matchers.should.Matchers
 class MeasuredTextAdvancesSpec extends AnyFlatSpec with Matchers:
 
   private val font = new Font(Font.SANS_SERIF, Font.PLAIN, 14)
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc  = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   "MeasuredTextAdvances.advanceOf" should "match the last caret stop of the text" in {
     val advances = MeasuredTextAdvances(16, TestMeasure.layoutMemos())

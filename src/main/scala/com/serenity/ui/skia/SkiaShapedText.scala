@@ -12,9 +12,9 @@ import org.jetbrains.skia.shaper.{BidiRun, FontRun, LanguageRun, RunHandler, Run
 import org.jetbrains.skia.{Canvas, Font, Paint, Point, TextBlob, TextBlobBuilder, TextLine}
 
 /** Text shaped once in one Skia font, from which any range of it can be drawn without shaping it again. The Skia
-  * counterpart of [[ShapedStretch]]: a range keeps the glyphs of its characters where whole-text shaping put them, so a
-  * range drawn at its own left edge continues the glyphs beside it, and a ligature belongs to the range holding its
-  * first character.
+  * stretch of shaped text: a range keeps the glyphs of its characters where whole-text shaping put them, so a range
+  * drawn at its own left edge continues the glyphs beside it, and a ligature belongs to the range holding its first
+  * character.
   */
 sealed trait SkiaShapedStretch:
 
@@ -203,7 +203,8 @@ private object RunsStretch:
     builder.appendRunPosH(font, glyphs, xs, 0f, null)
 
 /** Shapes stretches and remembers them, found by text and font. Two generations stand in for an eviction order, as in
-  * [[ShapedTextCache]]. Shaping runs under one lock because a Skia `Shaper` holds state between calls.
+  * the shaping a surface draws and layout measures. Shaping runs under one lock because a Skia `Shaper` holds state
+  * between calls.
   */
 final class SkiaShapedTextCache(
     capacityPerGeneration: Int = SkiaShapedTextCache.DefaultCapacity,

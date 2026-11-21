@@ -13,7 +13,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class GuiCellGridDisplayWidthSpec extends AnyFlatSpec with Matchers:
 
-  private val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc      = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val font     = Font(Font.MONOSPACED, Font.PLAIN, 14)
   private val cellPx   = TestMeasure.cellMetrics(font).charWidth
   private val cellGrid = true

@@ -1,7 +1,6 @@
 package com.serenity.ui.renderer
 
 import java.awt.Font
-import java.awt.font.FontRenderContext
 
 import com.serenity.lsp.model.SemanticToken
 import com.serenity.richtext.{ParagraphRole, RichTextDocument}
@@ -210,9 +209,9 @@ object DropCapRenderer:
   /** `RendererPaneContent`'s one hook for the ordinary body-text draw call: on a drop cap paragraph's home line, when
     * painting through the measured (GUI) path (`measured`), this also paints the glyph itself (see
     * [[paintMeasuredHomeLine]]) and returns the split visual line/segments to draw instead. Every other case (cell/TUI
-    * path, no drop cap, config toggle off, wrong line, no `FontRenderContext`) returns `(visualLine, styledSegments)`
-    * unchanged -- the cell path's own glyph overlay is the separate, later [[paintCellHomeLineIfNeeded]] hook, since it
-    * paints on top of the ordinary text instead of replacing it.
+    * path, no drop cap, config toggle off, wrong line) returns `(visualLine, styledSegments)` unchanged -- the cell
+    * path's own glyph overlay is the separate, later [[paintCellHomeLineIfNeeded]] hook, since it paints on top of the
+    * ordinary text instead of replacing it.
     */
   def adjustHomeLineDraw(
     snapshot: TextLayoutSnapshot,
@@ -221,7 +220,6 @@ object DropCapRenderer:
     measured: Boolean,
     surface: RenderSurface,
     baseFont: Font,
-    frc: Option[FontRenderContext],
     theme: Theme,
     glyphColour: RenderColor,
     xOriginPx: Float,
@@ -233,7 +231,6 @@ object DropCapRenderer:
       _        <- Option.when(measured)(())
       document <- snapshot.richTextDocument
       dropCap  <- homeLineRoleFor(snapshot, visualLine)
-      _        <- frc
     yield paintMeasuredHomeLine(
       surface,
       document,
@@ -275,10 +272,9 @@ object DropCapRenderer:
       snapshot,
       visualLine,
       styledSegments,
-      true,
+      context.surface.text.measuresText,
       context.surface,
       context.fontForBuffer(buffer),
-      context.surface.text.fontRenderContext,
       theme,
       glyphColourOf(state),
       xOriginPx,

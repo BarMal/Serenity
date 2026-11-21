@@ -1,6 +1,7 @@
 package com.serenity.ui.renderer
 
 import com.serenity.diagnostics.{FrameCounter, FrameCounters}
+import com.serenity.ui.skia.{SkiaFontCache, SkiaShapedTextCache}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -39,13 +40,14 @@ class ShapePromotionsCounterSpec extends AnyFlatSpec with Matchers:
 
   "Counting a body's cache traffic" should "report only what happened while the body ran" in {
     val activity = SurfaceActivity()
-    val cache    = ShapedTextCache(capacityPerGeneration = 1)
-    val font     = new java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 14)
-    val frc      = com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext()
-    val _        = cache.stretchOf("a", font, frc)
-    val _        = cache.stretchOf("b", font, frc)
+    val cache    = new SkiaShapedTextCache(capacityPerGeneration = 1)
+    val font = new SkiaFontCache()
+      .faceFor(FontSpec.fromAwt(new java.awt.Font(java.awt.Font.SERIF, java.awt.Font.PLAIN, 14)))
+      .font
+    val _ = cache.stretchOf("a", font)
+    val _ = cache.stretchOf("b", font)
 
-    val _        = activity.counting(cache)(cache.stretchOf("a", font, frc))
+    val _        = activity.counting(cache)(cache.stretchOf("a", font))
     val counters = FrameCounters()
     counters.setEnabled(true)
     activity.drainInto(counters)

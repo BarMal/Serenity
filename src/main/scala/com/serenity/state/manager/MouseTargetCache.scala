@@ -333,13 +333,13 @@ final private[serenity] class AuthoritativeUiScene(
   /** `cellMetrics` is the "pixel" unit this scene's cell-based (non-measured) `TextLayoutSnapshot`s are built in --
     * `None` (every caller but the render entry points below) keeps this scene's long-standing behaviour of re-deriving
     * it from `codeFont`/each buffer's own font. A caller with its own notion of what a pixel means here -- `Renderer`,
-    * rendering for a surface with no real `FontRenderContext` to measure against (TUI's `TerminalRenderSurface`, where
-    * a pixel is defined to be exactly one terminal cell) -- passes that explicitly instead, so the snapshot this scene
-    * hands back for painting (and for mouse hit-testing, which shares it) is expressed in the same unit the caller's
-    * cursor-positioning math actually uses. `Some` here also forces `TextLayoutSnapshot`'s cell (non-measured) layout
-    * path unconditionally: such a caller has no font rendering to measure with at all (#1105), so the font's own
-    * measured-vs-cell auto-detection -- which can trip on a "monospaced" font's own rendering-stack quirks, independent
-    * of whether the caller can draw a measured run -- must not override it (#1215).
+    * rendering for a surface that measures no text (TUI's `TerminalRenderSurface`, where a pixel is defined to be
+    * exactly one terminal cell) -- passes that explicitly instead, so the snapshot this scene hands back for painting
+    * (and for mouse hit-testing, which shares it) is expressed in the same unit the caller's cursor-positioning math
+    * actually uses. `Some` here also forces `TextLayoutSnapshot`'s cell (non-measured) layout path unconditionally:
+    * such a caller has no font rendering to measure with at all (#1105), so the font's own measured-vs-cell
+    * auto-detection -- which can trip on a "monospaced" font's own rendering-stack quirks, independent of whether the
+    * caller can draw a measured run -- must not override it (#1215).
     */
   def forState(
     state: AppState,

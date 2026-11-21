@@ -9,9 +9,10 @@ import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 /** The Skia measurer is handed to the state manager at the one place the owner approved (step D0, #2660 item 2), and
-  * since step D2 layout reads it, through the `LayoutMemos` its wrap cache carries and nowhere else. A new file that
-  * names it, or a file outside layout that reads a measurer, fails here, so that spreading it is a decision and not a
-  * side effect.
+  * since step D2 layout reads it, through the `LayoutMemos` its wrap cache carries. Since D3 the renderer hands it to
+  * the text it aligns and fits, from the three places that build a frame's `RenderContext`. A new file that names it,
+  * or a file other than those that reads a measurer outside layout, fails here, so that spreading it is a decision and
+  * not a side effect.
   */
 class SkiaTextMeasurerUnwiredSpec extends AnyFlatSpec with Matchers:
 
@@ -36,6 +37,10 @@ class SkiaTextMeasurerUnwiredSpec extends AnyFlatSpec with Matchers:
     )
   }
 
-  "Only layout" should "read a measurer" in {
-    mainSourcesContaining(".measurer").filterNot(_.startsWith("scala/com/serenity/ui/layout/")) shouldBe Nil
+  "Only layout and the three frame entry points" should "read a measurer" in {
+    mainSourcesContaining(".measurer").filterNot(_.startsWith("scala/com/serenity/ui/layout/")) shouldBe List(
+      "scala/com/serenity/ui/renderer/RenderContext.scala",
+      "scala/com/serenity/ui/renderer/RendererEntryPoints.scala",
+      "scala/com/serenity/ui/renderer/RendererFramePlanner.scala"
+    )
   }

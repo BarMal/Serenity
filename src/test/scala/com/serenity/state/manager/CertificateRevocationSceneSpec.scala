@@ -24,7 +24,7 @@ class CertificateRevocationSceneSpec extends AnyFlatSpec with Matchers with Opti
 
   private val viewportSize     = ViewportSize(100, 30)
   private val paneId           = PaneId(0)
-  private val frc              = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc              = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val config           = AppConfig.conventional
   private val inline: Executor = _.run()
   private val never: Executor  = _ => ()

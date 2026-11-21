@@ -17,7 +17,7 @@ class CombiningMarkWidthSpec extends AnyFlatSpec with Matchers:
   private val devanagariAa    = 0x093e
   private val enclosingCircle = 0x20dd
 
-  private val frc    = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc    = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val font   = Font(Font.MONOSPACED, Font.PLAIN, 14)
   private val cellPx = TestMeasure.cellMetrics(font).charWidth
 

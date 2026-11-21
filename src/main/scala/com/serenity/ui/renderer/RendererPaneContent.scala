@@ -292,7 +292,7 @@ object RendererPaneContent:
 
     // A terminal has no fonts to fall back between; the GUI cell grid draws what the buffer's font lacks in the chain.
     val cellFallback =
-      Option.when(context.surface.text.fontRenderContext.isDefined)(
+      Option.when(context.surface.text.measuresText)(
         CellFallback(
           context.fontForBuffer(buffer),
           state.persisted.config.editorConfig.fontConfig.fallback,

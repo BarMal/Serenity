@@ -15,7 +15,6 @@ import com.serenity.text.fallback.{FallbackItemiser, FallbackRun}
 import com.serenity.ui.fonts.{AwtGlyphCoverage, FallbackCoverages, FallbackItemisations, FontFallback}
 import com.serenity.ui.layout.TextCaretMeasurement.LineFontResolver
 import com.serenity.ui.openings.{OpeningLines, OpeningRules, OpeningSettings, VirtualDropCaps}
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Memoises [[TextLayoutSnapshot]]'s wrap-and-measure of one logical line -- the shaping work that otherwise dominates
   * every keystroke on word-wrapped prose, and that the state-update path and the render path each repeat for the same
@@ -26,12 +25,6 @@ import com.serenity.ui.renderer.ShapedTextCache
   * of what a wrap depends on and so belongs with it.
   */
 sealed abstract class WrappedLineCache:
-
-  /** The cache a wrap measures its glyphs through. A wrap shapes the runs it measures so that painting the row finds
-    * them shaped; the painter and this cache must therefore be handed the same instance, which is why it lives here,
-    * with the layout state the renderer's owner already threads to every wrap.
-    */
-  private[serenity] def shapedText: ShapedTextCache
 
   /** The font-keyed measurements wraps and painting share, kept for as long as this cache is. */
   private[serenity] def layoutMemos: LayoutMemos
@@ -214,31 +207,25 @@ object WrappedLineCache:
     */
   object Uncached extends Unremembering:
 
-    private[serenity] def shapedText: ShapedTextCache = ShapedTextCache()
-
     private[serenity] def layoutMemos: LayoutMemos = LayoutMemos()
 
-  /** Measures every wrap afresh over a shaper and font memos that outlive it, as when no wrap is remembered but the
-    * measurements underneath are.
+  /** Measures every wrap afresh over font memos that outlive it, as when no wrap is remembered but the measurements
+    * underneath are.
     */
-  final class Measuring private[WrappedLineCache] (
-      private[serenity] val shapedText: ShapedTextCache,
-      private[serenity] val layoutMemos: LayoutMemos
-  ) extends Unremembering
+  final class Measuring private[WrappedLineCache] (private[serenity] val layoutMemos: LayoutMemos) extends Unremembering
 
-  def measuring(shapedText: ShapedTextCache, layoutMemos: LayoutMemos): Measuring =
-    new Measuring(shapedText, layoutMemos)
+  def measuring(layoutMemos: LayoutMemos): Measuring = new Measuring(layoutMemos)
 
   def bounded(
     maxLines: Int = DefaultMaxLines,
     maxChars: Long = DefaultMaxChars,
     layoutMemos: LayoutMemos = LayoutMemos()
   ): Bounded =
-    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), ShapedTextCache(), layoutMemos)
+    new Bounded(math.max(1, maxLines), math.max(1L, maxChars), layoutMemos)
 
-  /** A default-sized cache whose wraps measure through `shapedText`, which the painter of the same owner must share. */
-  def sharing(shapedText: ShapedTextCache, layoutMemos: LayoutMemos = LayoutMemos()): Bounded =
-    new Bounded(DefaultMaxLines, DefaultMaxChars, shapedText, layoutMemos)
+  /** A default-sized cache whose wraps measure through `layoutMemos`. */
+  def sharing(layoutMemos: LayoutMemos = LayoutMemos()): Bounded =
+    new Bounded(DefaultMaxLines, DefaultMaxChars, layoutMemos)
 
   final private case class TableColumnsEntry(content: Rope, font: Font, columns: TableColumns)
 
@@ -277,11 +264,8 @@ object WrappedLineCache:
   final class Bounded private[WrappedLineCache] (
       maxLines: Int,
       maxChars: Long,
-      shaper: ShapedTextCache,
       private[serenity] val layoutMemos: LayoutMemos
   ) extends WrappedLineCache:
-    private[serenity] def shapedText: ShapedTextCache = shaper
-
     private val entries          = new LinkedHashMap[WrappedLineKey, Entry](256, 0.75f, true)
     private val recent           = new HashMap[WrapShape, ArrayDeque[(WrappedLineKey, Entry)]]
     private val retainedChar     = new AtomicLong(0L)

@@ -322,10 +322,9 @@ object OverlaySegmentRowRenderer:
           segment.text,
           fit,
           font,
-          surface.text.fontRenderContext,
+          advances.filter(_ => surface.text.measuresText),
           cellWidthPx,
-          glyphInsetPx,
-          advances
+          glyphInsetPx
         )
       case None => segment.text.take(math.max(0, width - iconWidth - iconGap))
     val renderWidth = iconWidth + iconGap + text.length

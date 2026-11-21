@@ -16,10 +16,8 @@ import com.serenity.ui.renderer.{
   BackendCaches,
   CacheSlots,
   GraphemeSegmentationCache,
-  LabelSprites,
   MeasuredTextAdvances,
   RendererFrameState,
-  ShapedTextCache,
   StyledFontCache,
   SurfaceTextCaches
 }
@@ -32,12 +30,8 @@ import com.serenity.ui.theme.ThemeHighlightCache
   * [[MarkdownPreviewCache]]'s markdown-preview HTML/image/inline-document caches, and [[WrappedLineCache]]'s wrapped
   * lines, which the scene and the state-update path (through the scene it is handed) both read, together with the
   * per-buffer visual-row indexes it keeps for scrolling and jumps, the [[FrameCounters]] the renderer counts what each
-  * frame drew into, and the renderer's text caches: [[ShapedTextCache]]'s shaped glyphs, [[StyledFontCache]]'s derived
-  * fonts, [[LabelSprites]]' rendered labels and [[MeasuredTextAdvances]]' overlay advances.
-  *
-  * The shaped-text cache is the one layout and painting meet in: `wrappedLines` measures through it and the surface
-  * paints through it, so a line is shaped once for both. They must therefore be this one instance, which is why
-  * [[create]] hands the same `shapedText` to each.
+  * frame drew into, and the renderer's text caches: [[StyledFontCache]]'s derived fonts and [[MeasuredTextAdvances]]'
+  * overlay advances.
   *
   * One instance is created per render-owning entity -- today, once per [[StateManager]] (see `StateManager.apply`) --
   * and threaded explicitly: down through [[com.serenity.ui.renderer.RenderContext]] to every render entry point and
@@ -54,9 +48,7 @@ final class RenderCaches private (
     val chapterGhosts: ChapterGhostCache,
     val wrappedLines: WrappedLineCache,
     val frameCounters: FrameCounters,
-    val shapedText: ShapedTextCache,
     val styledFonts: StyledFontCache,
-    val labelSprites: LabelSprites,
     val measuredAdvances: MeasuredTextAdvances,
     val tabBarMeasures: TabBarMeasures,
     val compositionRevisions: CompositionRevisions,
@@ -75,12 +67,14 @@ final class RenderCaches private (
   /** The wraps measured while locating a caret, on the measurer this owner draws and lays out with. */
   def anchorWraps: AnchorWrapCache = AnchorWrapCache()(() => measurer)
 
-  /** The grid of `font` that layout measures on: the owner's measurer's, and AWT's where the owner has none. */
+  /** The grid of `font` that layout measures on: the owner's measurer's, and the terminal's cell where the owner has
+    * none.
+    */
   def cellMetricsOf(font: java.awt.Font): CellMetrics =
-    measurer.fold(CellMetrics.fromFont(font))(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
+    measurer.fold(CellMetrics.cellUnit)(_.cellMetrics(com.serenity.ui.renderer.FontSpec.fromAwt(font)))
 
   /** What a surface drawing for this owner paints text through. */
-  def surfaceText: SurfaceTextCaches = SurfaceTextCaches(labelSprites, styledFonts, shapedText)
+  def surfaceText: SurfaceTextCaches = SurfaceTextCaches(styledFonts)
 
 object RenderCaches:
 
@@ -98,8 +92,7 @@ object RenderCaches:
     val backend        = new BackendCaches(sharedBackendCaches)
     lazy val measurer  = measurerFor(backend)
     val measurerSource = () => measurer
-    val shapedText     = ShapedTextCache()
-    val wrappedLines   = WrappedLineCache.sharing(shapedText, LayoutMemos(measurerSource = measurerSource))
+    val wrappedLines   = WrappedLineCache.sharing(LayoutMemos(measurerSource = measurerSource))
     new RenderCaches(
       RendererFrameState(rendererFrameStateCacheCapacity),
       ThemeHighlightCache(),
@@ -109,9 +102,7 @@ object RenderCaches:
       ChapterGhostCache(),
       wrappedLines,
       FrameCounters(),
-      shapedText,
       styledFonts,
-      LabelSprites(LabelSprites.DefaultCapacity),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, wrappedLines.layoutMemos),
       new TabBarMeasures(measurerSource),
       new CompositionRevisions,

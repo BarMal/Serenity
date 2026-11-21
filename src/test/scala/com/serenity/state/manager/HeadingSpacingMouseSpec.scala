@@ -59,7 +59,8 @@ class HeadingSpacingMouseSpec extends AnyFlatSpec with Matchers:
         focus = Focus.EditorPane(paneId),
         config = config
       ),
-      runtime = initial.runtime.copy(viewportSize = Some(viewportSize))
+      runtime = initial.runtime
+        .copy(viewportSize = Some(viewportSize), anchorWraps = com.serenity.testkit.TestMeasure.anchorWraps())
     )
 
   private def cacheOf(state: AppState): MouseTargetCache =

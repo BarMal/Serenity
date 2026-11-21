@@ -106,17 +106,28 @@ abstract class RoundedTabStripRenderBehaviour extends AnyFlatSpec with Matchers:
       .getOrElse(fail("no tab strip"))
     val entries = tabs.map(id => TabListEntry(id, s"Buffer ${id.value}", isDirty = false))
     val active = TabBarSurfaceComposition
-      .forTabBar(entries, Some(tabs.last), rect, TabBarLayoutSettings.of(state))
+      .forTabBar(entries, Some(tabs.last), rect, TabBarLayoutSettings.of(state, measures = caches.tabBarMeasures))
       .hitRegions
       .find(_.focusId == TabBarSurfaceComposition.focusId(tabs.last))
       .getOrElse(fail("no active tab region"))
       .rect
     val newTab = TabBarSurfaceComposition
-      .newTabAffordance(entries, rect, Some(tabs.last), TabBarLayoutSettings.of(state))
+      .newTabAffordance(
+        entries,
+        rect,
+        Some(tabs.last),
+        TabBarLayoutSettings.of(state, measures = caches.tabBarMeasures)
+      )
       .getOrElse(fail("no new-tab region"))
       .rect
     save(frame, rect, radius)
-    Strip(frame, rect, active, newTab, TabBarLayoutSettings.of(state).measure.cells(s"Buffer ${tabs.last.value}"))
+    Strip(
+      frame,
+      rect,
+      active,
+      newTab,
+      TabBarLayoutSettings.of(state, measures = caches.tabBarMeasures).measure.cells(s"Buffer ${tabs.last.value}")
+    )
 
   private def rgb(frame: FramePixels, x: Int, y: Int): Int = frame.rgbAt(x, y) & 0xffffff
 

@@ -14,9 +14,9 @@ import org.scalatest.matchers.should.Matchers
 /** Dedicated unit coverage for `RendererStartPage` (issue #1421): the empty-pane filler, the welcome text, and the
   * full-screen startup page's per-line colouring, selection highlight, and viewport clipping.
   *
-  * Every fixture uses a `MockRenderSurface` with `fontRenderContextOverride = None` so the renderer takes the cell-only
-  * fallback path (`CharacterRenderer.renderString`) instead of the pixel-measured `TextAlignment` path -- deterministic
-  * across JVMs/fonts, and the same path every headless/TUI surface takes for this content.
+  * Every fixture uses a `MockRenderSurface` with `measuresText = false` so the renderer takes the cell-only fallback
+  * path (`CharacterRenderer.renderString`) instead of the pixel-measured `TextAlignment` path -- deterministic across
+  * JVMs/fonts, and the same path every headless/TUI surface takes for this content.
   */
 class RendererStartPageSpec extends AnyFlatSpec with Matchers:
 
@@ -38,7 +38,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     )
 
   "renderEmptyPane" should "center the empty-document message within the pane, on the pane's top row" in {
-    val surface = new MockRenderSurface(60, 10, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(60, 10, measuresText = false)
     val rect    = LayoutRect(0, 0, 60, 1)
     val line    = "Empty document — start typing"
 
@@ -49,7 +49,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "draw nothing at all when the pane's row falls entirely outside the surface's viewport" in {
-    val surface = new MockRenderSurface(60, 5, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(60, 5, measuresText = false)
     // Row 100 is far past the 5-row surface, so `renderAlignedTextLine`'s visibility check must skip drawing.
     val rect = LayoutRect(0, 100, 60, 1)
 
@@ -59,7 +59,7 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
   }
 
   "renderWelcomeText" should "render each welcome line on its own row, in order, centered in the pane" in {
-    val surface = new MockRenderSurface(60, 10, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(60, 10, measuresText = false)
     val rect    = LayoutRect(0, 0, 60, 5)
 
     RendererStartPage.renderWelcomeText(
@@ -127,11 +127,11 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     )
 
   "renderStartPage" should "highlight the selected action with the theme's highlight colours, background fill, and focus style" in {
-    val surface      = new MockRenderSurface(80, 24, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(80, 24, measuresText = false)
     val page         = simplePage(selectedIndex = 1) // "Two" is selected
     val viewportSize = ViewportSize(80, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val bounds = page
       .actionBounds(viewportSize, cellMetrics, cellMetrics)
@@ -155,11 +155,11 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
 
   it should "lay out the whole status message inside a window narrower than it, wrapping at word boundaries" in {
     val width        = 50
-    val surface      = new MockRenderSurface(width, 24, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(width, 24, measuresText = false)
     val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
     val viewportSize = ViewportSize(width, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val drawn = (0 until 24).map(row => surface.getRow(row).trim).filter(_.nonEmpty)
     drawn.mkString(" ") should include(longNotice)
@@ -167,11 +167,11 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
 
   it should "keep each action's hit-test bounds on the row it is drawn on once the status message wraps" in {
     val width        = 50
-    val surface      = new MockRenderSurface(width, 24, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(width, 24, measuresText = false)
     val page         = simplePage(selectedIndex = 0).copy(statusMessage = Some(longNotice))
     val viewportSize = ViewportSize(width, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     val bounds = page.actionBounds(viewportSize, cellMetrics, cellMetrics)
     bounds.map(_.index) shouldBe List(0, 1)
@@ -181,11 +181,11 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "colour the title and every unselected option with the theme's plain foreground, and other lines muted" in {
-    val surface      = new MockRenderSurface(80, 24, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(80, 24, measuresText = false)
     val page         = simplePage(selectedIndex = 1) // "One" (line 3) is an unselected option
     val viewportSize = ViewportSize(80, 24)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     // Mirrors renderStartPage's own vertical centering so each render-line index maps to the row it actually lands
     // on: the content (7 lines) is shorter than the 24-row viewport, so startYPx is not 0.
@@ -207,11 +207,11 @@ class RendererStartPageSpec extends AnyFlatSpec with Matchers:
     // startYPx at 0 (the content is taller than the viewport), so lines 0-2 land inside rows [0,3) and lines 3-6
     // land at or past row 3 -- outside the viewport this call was asked to paint into, even though the backing
     // surface itself has plenty of spare rows.
-    val surface      = new MockRenderSurface(80, 10, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(80, 10, measuresText = false)
     val page         = simplePage(selectedIndex = 0)
     val viewportSize = ViewportSize(80, 3)
 
-    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics)
+    RendererStartPage.renderStartPage(page, surface, viewportSize, theme, font, cellMetrics, cellMetrics, None)
 
     surface.getRow(0).trim shouldBe "Serenity" // line 0 (title): inside the viewport, must be drawn
     surface.getRow(3).trim shouldBe ""         // line 3 ("One"): at the viewport's height, must be skipped

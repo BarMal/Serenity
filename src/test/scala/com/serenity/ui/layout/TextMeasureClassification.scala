@@ -74,7 +74,7 @@ private[layout] object TextMeasureClassification:
   private def matchesKerningAwt(difference: Compared, pinned: PinnedFont, text: String): Boolean =
     val kerning = pinned.font.deriveFont(java.util.Map.of(TextAttribute.KERNING, TextAttribute.KERNING_ON))
     val vector = kerning.layoutGlyphVector(
-      TextLayoutSnapshot.defaultFontRenderContext(),
+      com.serenity.testkit.TestMeasure.awtFontRenderContext,
       text.toCharArray,
       0,
       text.length,

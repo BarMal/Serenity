@@ -1,6 +1,5 @@
 package com.serenity.ui.tui
 
-import java.awt.font.FontRenderContext
 import java.io.Writer
 import java.util.concurrent.atomic.AtomicReference
 
@@ -158,12 +157,12 @@ final class TerminalRenderSurface(
   override def setFont(font: FontSpec): Unit = ()
 
   // `None` unconditionally: this is what drives #1105's cell-fallback path for callers that would otherwise measure
-  // text with a FontRenderContext this surface does not have.
-  override def fontRenderContext: Option[FontRenderContext] = None
+  // text this surface does not measure.
+  override def measuresText: Boolean = false
 
   // Pixel-precise proportional text has no meaning on a fixed-cell surface -- real text drawing goes through
   // putString/fillRect, which every RenderSurface (including this one) implements for real. #1105 is what keeps
-  // callers from reaching this method on a surface reporting fontRenderContext = None; not this issue's job.
+  // callers from reaching this method on a surface reporting measuresText = false; not this issue's job.
   override def drawRunPx(
     xPx: Float,
     yPx: Int,

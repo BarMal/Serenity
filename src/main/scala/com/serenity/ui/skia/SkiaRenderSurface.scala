@@ -1,8 +1,6 @@
 package com.serenity.ui.skia
 
 import java.awt.Color
-import java.awt.font.FontRenderContext
-import java.awt.geom.AffineTransform
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 
 import com.serenity.ui.color.RenderColor
@@ -107,9 +105,6 @@ final class SkiaRenderSurface(
   private val baseSaveCount = canvas.save()
   val _                     = canvas.scale(deviceScaleX.toFloat, deviceScaleY.toFloat)
 
-  private val renderContext =
-    FontRenderContext(AffineTransform.getScaleInstance(deviceScaleX, deviceScaleY), true, true)
-
   private val fill   = Paint()
   private val glyphs = Paint()
   private val stroke = Paint()
@@ -140,7 +135,7 @@ final class SkiaRenderSurface(
     baseFontRef.set(newFont)
     currentFontRef.set(newFont)
 
-  override def fontRenderContext: Option[FontRenderContext] = Some(renderContext)
+  override def measuresText: Boolean = true
 
   def setForegroundColor(color: RenderColor): Unit = fgRef.set(awtColor(color, fgRef.get()))
   def setBackgroundColor(color: RenderColor): Unit = bgRef.set(awtColor(color, bgRef.get()))
@@ -333,10 +328,11 @@ final class SkiaRenderSurface(
   private def drawRules(leftPx: Int, widthPx: Int, baselinePx: Int): Unit =
     if widthPx > 0 then
       val current = currentFontRef.get()
-      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, styledFonts.underlineOf(current.toAwt))
-      fonts.faceFor(current).strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
+      val face    = fonts.faceFor(current)
+      if underlineRef.get() then drawRule(leftPx, widthPx, baselinePx, face.underline)
+      face.strikethrough.foreach(drawRule(leftPx, widthPx, baselinePx, _))
 
-  private def drawRule(leftPx: Int, widthPx: Int, baselinePx: Int, rule: StyledFontCache.Underline): Unit =
+  private def drawRule(leftPx: Int, widthPx: Int, baselinePx: Int, rule: TextRule): Unit =
     val thickness = rule.thicknessPx.max((1.0 / deviceScaleY).toFloat)
     paintRect(rect(leftPx.toFloat, baselinePx + rule.offsetPx, widthPx.toFloat, thickness), filled(fgRef.get()))
 

@@ -21,7 +21,6 @@ import com.serenity.ui.layout.{
   TextLayoutSnapshot,
   WrappedLineCache
 }
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Scenarios that make a move of a process-wide cache into state a runtime owns measurable: what such a move costs when
   * the cache is cold, and what two runtimes in one process stop sharing.
@@ -122,7 +121,7 @@ private[perf] object CacheOwnershipBenchmarks:
     sane: A => Boolean
   ): BenchmarkRunner.Benchmark =
     val fonts = FreshFonts(base)
-    val frc   = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc   = com.serenity.testkit.TestMeasure.awtFontRenderContext
     BenchmarkRunner.Benchmark(
       name,
       Warmups,
@@ -189,7 +188,7 @@ private[perf] object CacheOwnershipBenchmarks:
       buffer,
       panelWidthPx = 900,
       font = font,
-      wrapCache = WrappedLineCache.measuring(ShapedTextCache(), TestMeasure.layoutMemos())
+      wrapCache = WrappedLineCache.measuring(TestMeasure.layoutMemos())
     )
 
   /** Both runtimes start from the same document. The second types the first's letter (`same_text`) or the same letter

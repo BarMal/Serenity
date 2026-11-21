@@ -19,7 +19,7 @@ private[layout] object TextMeasureDiagnosis:
 
   def lines(pinned: PinnedFont, measurer: SkiaTextMeasurer, faces: SkiaFontCache): Vector[String] =
     val awt      = pinned.font
-    val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc      = com.serenity.testkit.TestMeasure.awtFontRenderContext
     val skia     = faces.faceFor(FontSpec.fromAwt(awt)).font
     val typeface = skia.getTypeface
     val header = Vector(
@@ -37,7 +37,7 @@ private[layout] object TextMeasureDiagnosis:
       .flatMap(line => positions(pinned, line.text, measurer))
 
   private def positions(pinned: PinnedFont, text: String, measurer: SkiaTextMeasurer): Vector[String] =
-    val frc   = TextLayoutSnapshot.defaultFontRenderContext()
+    val frc   = com.serenity.testkit.TestMeasure.awtFontRenderContext
     val chars = text.toCharArray
     val plain = glyphXs(pinned.font, chars, frc)
     val kerned =

@@ -15,7 +15,7 @@ import org.scalatest.matchers.should.Matchers
 class TabAwareGridLayoutSpec extends AnyFlatSpec with Matchers:
 
   private val font = Font(Font.MONOSPACED, Font.PLAIN, 12)
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc  = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private val oneCell     = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0)
   private val oneWideCell = CellMetrics(charWidth = 1, lineHeight = 1, ascent = 0, displayWidthAware = true)

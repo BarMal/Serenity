@@ -17,8 +17,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
 
-  private val shapedText = ShapedTextCache()
-  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private def renderOverlay(
     surface: RenderSurface,
@@ -33,7 +32,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   given Balance = Balance.default
 
   "TextOverlayRenderer" should "render a proportional-font overlay row via putString when the surface has no FontRenderContext" in {
-    val surface = new MockRenderSurface(80, 8, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(80, 8, measuresText = false)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
     val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"
@@ -54,7 +53,7 @@ class TextOverlayRendererCellFallbackSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "render the overlay row cursor as an inverse-video cell character when the surface has no FontRenderContext" in {
-    val surface = new MockRenderSurface(80, 8, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(80, 8, measuresText = false)
     val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
     val metrics = TestMeasure.cellMetrics(font)
     val rowText = "search: iiiiWWWW"

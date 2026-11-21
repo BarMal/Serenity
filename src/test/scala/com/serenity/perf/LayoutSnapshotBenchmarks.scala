@@ -7,7 +7,6 @@ import com.serenity.rope.Balance
 import com.serenity.state.models.{Buffer, BufferId, RichTextState, Viewport}
 import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.{TextLayoutSnapshot, WrappedLineCache}
-import com.serenity.ui.renderer.ShapedTextCache
 
 /** Snapshot builds over a warm wrap cache: the per-frame and per-navigation cost of laying out prose whose wraps are
   * already cached (#1908). Aligned paragraphs pay for placing caret stops, and a line inserted above moves every
@@ -54,7 +53,7 @@ private[perf] object LayoutSnapshotBenchmarks:
     lazy val expectedRows = build(plain).visualLines.size
     lazy val headings     = buffer(headingDocument(paragraphs = 60))
     // Every wrap is measured afresh; what the owner has read off the font stays, as a process-wide cache once kept it.
-    lazy val measuring = WrappedLineCache.measuring(ShapedTextCache(), TestMeasure.layoutMemos())
+    lazy val measuring = WrappedLineCache.measuring(TestMeasure.layoutMemos())
     def buildUncached(source: Buffer): TextLayoutSnapshot =
       TextLayoutSnapshot.fromBuffer(source, panelWidth, proseFont, wrapCache = measuring)
 

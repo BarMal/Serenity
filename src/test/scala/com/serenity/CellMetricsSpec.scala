@@ -1,28 +1,10 @@
 package com.serenity
 
-import java.awt.Font
-
 import com.serenity.ui.layout.{CellMetrics, PixelRect, ViewportSize}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class CellMetricsSpec extends AnyFlatSpec with Matchers:
-
-  "CellMetrics.fromFont" should "produce charWidth > 0 and lineHeight > 0 for a known system font" in {
-    val metrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
-
-    metrics.charWidth should be > 0
-    metrics.lineHeight should be > 0
-    metrics.ascent should be > 0
-  }
-
-  it should "clamp charWidth to at least 1" in {
-    val metrics = CellMetrics.fromFont(Font(Font.MONOSPACED, Font.PLAIN, 12))
-
-    metrics.charWidth should be >= 1
-    metrics.lineHeight should be >= 1
-    metrics.ascent should be >= 1
-  }
 
   "CellMetrics.isValid" should "return true for normal metrics" in {
     CellMetrics(8, 16, 13).isValid shouldBe true

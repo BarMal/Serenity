@@ -27,9 +27,7 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   "Two RenderCaches" should "own distinct renderer text caches" in {
     val (a, b) = (TestMeasure.renderCaches(), TestMeasure.renderCaches())
 
-    (a.shapedText `ne` b.shapedText) shouldBe true
     (a.styledFonts `ne` b.styledFonts) shouldBe true
-    (a.labelSprites `ne` b.labelSprites) shouldBe true
     (a.measuredAdvances `ne` b.measuredAdvances) shouldBe true
   }
 
@@ -59,7 +57,5 @@ class RenderCachesLayoutOwnershipSpec extends AnyFlatSpec with Matchers:
   "A RenderCaches' surface text caches" should "be the owner's own instances" in {
     val owner = TestMeasure.renderCaches()
 
-    (owner.surfaceText.shapedText eq owner.shapedText) shouldBe true
     (owner.surfaceText.styledFonts eq owner.styledFonts) shouldBe true
-    (owner.surfaceText.labelSprites eq owner.labelSprites) shouldBe true
   }

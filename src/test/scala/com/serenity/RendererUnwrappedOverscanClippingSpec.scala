@@ -63,7 +63,7 @@ class RendererUnwrappedOverscanClippingSpec extends AnyFlatSpec with Matchers:
 
     val viewportSize = ViewportSize(60, 20)
     val panelRect    = LayoutEngine.calculateLayout(state, viewportSize).editorPanelRect
-    val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height, fontRenderContextOverride = None)
+    val surface      = new MockRenderSurface(viewportSize.width, viewportSize.height, measuresText = false)
 
     RendererEntryPoints.render(
       state,

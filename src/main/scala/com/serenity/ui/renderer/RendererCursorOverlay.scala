@@ -130,12 +130,12 @@ object RendererCursorOverlay:
     cursorColor: Option[RenderColor],
     caches: RenderCaches
   ): Boolean =
-    // #1105/#1215: a surface reporting no FontRenderContext (a terminal) has no real font rendering to measure
+    // #1105/#1215: a surface that measures no text (a terminal) has no real font rendering to measure
     // against at all -- its own declared cellMetrics must reach this scene's cell-based layout, and must force it,
     // rather than being silently discarded by the font's own measured-vs-cell auto-detection. A surface that does
     // report one (every GUI canvas, and any other surface-generic caller with real font rendering) keeps this scene's
     // long-standing auto-detected behaviour untouched.
-    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state,
       caches.authoritativeScene
@@ -184,7 +184,7 @@ object RendererCursorOverlay:
     caches: RenderCaches = RenderCaches.create()
   ): Boolean =
     val viewportSize = target.viewportSize
-    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always measures text -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,
@@ -274,8 +274,8 @@ object RendererCursorOverlay:
     val repaintRegion = new AtomicReference[Option[List[PixelRect]]](None)
     val output        = Some(FrameOutput(ScreenIdentity(surface), repaintRegion))
     // #1105/#1215: see the surface-generic renderCursorOnly above for why this is scoped to a surface with no real
-    // FontRenderContext.
-    val cellMetricsOverride = Option.when(surface.text.fontRenderContext.isEmpty)(cellMetrics)
+    // measured text.
+    val cellMetricsOverride = Option.when(!surface.text.measuresText)(cellMetrics)
     RendererEntryPoints.withSceneIfNeeded(
       state,
       caches.authoritativeScene
@@ -364,7 +364,7 @@ object RendererCursorOverlay:
         attachLayer = target.attachLayerPresenter
       )
     )
-    // A GUI surface (Swing, AWT fonts) always has a real FontRenderContext -- no cellMetrics override needed, see the render() entry
+    // A GUI surface (Swing, AWT fonts) always measures text -- no cellMetrics override needed, see the render() entry
     // point in RendererEntryPoints.
     RendererEntryPoints.withSceneIfNeeded(
       state,

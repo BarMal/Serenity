@@ -116,15 +116,11 @@ class SkiaRenderSurfaceSpec extends AnyFlatSpec with Matchers:
     surface.devicePixelScaleY shouldBe 2.0
   }
 
-  it should "measure text in the render context layout shares, scaled to the device" in {
+  it should "measure text, whatever the device scale" in {
     val surface =
       SkiaRenderSurface.retaining(canvasAt(2.0).surface, metrics, font, width, height, 2.0, caches, styledFonts)
 
-    val context = surface.text.fontRenderContext.getOrElse(fail("expected a font render context"))
-    context.getTransform.getScaleX shouldBe 2.0
-    context.getTransform.getScaleY shouldBe 2.0
-    context.isAntiAliased shouldBe true
-    context.usesFractionalMetrics shouldBe true
+    surface.text.measuresText shouldBe true
   }
 
   "fillPixelRect" should "paint exactly the device pixels of a logical rectangle, at 2x" in {

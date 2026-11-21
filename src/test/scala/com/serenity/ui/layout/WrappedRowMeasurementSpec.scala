@@ -13,7 +13,7 @@ import org.scalatest.prop.TableDrivenPropertyChecks
   */
 class WrappedRowMeasurementSpec extends AnyFlatSpec with Matchers with TableDrivenPropertyChecks:
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private val kerned =
     Font(Font.SERIF, Font.PLAIN, 15).deriveFont(java.util.Map.of(TextAttribute.KERNING, TextAttribute.KERNING_ON))

@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class LayoutMemosOwnershipSpec extends AnyFlatSpec with Matchers:
 
-  private val frc  = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc  = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val font = new Font(Font.SERIF, Font.BOLD, 47)
 
   "A wrap cache's line extents" should "be probed once per owner" in {

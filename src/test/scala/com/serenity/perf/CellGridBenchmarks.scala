@@ -23,7 +23,7 @@ private[perf] object CellGridBenchmarks:
   private lazy val codeFont = BenchmarkFonts.courierPrimeRegular().deriveFont(10.0f)
   private lazy val cells    = TestMeasure.cellMetrics(codeFont)
   private lazy val viewport = ViewportSize(width / cells.charWidth, height / cells.lineHeight)
-  private lazy val frc      = TextLayoutSnapshot.defaultFontRenderContext()
+  private lazy val frc      = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private def asciiLine(index: Int): String =
     s"val value$index = compute(input, $index) // plain ASCII code line, no wide characters at all"

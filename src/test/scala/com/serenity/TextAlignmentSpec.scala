@@ -2,14 +2,15 @@ package com.serenity
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.ui.layout.*
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
 class TextAlignmentSpec extends AnyFlatSpec with Matchers:
 
   private val font       = Font(Font.SANS_SERIF, Font.PLAIN, 12)
-  private val frc        = TextLayoutSnapshot.defaultFontRenderContext()
   private val lineHeight = 16
   private val ascent     = 12
 
@@ -24,7 +25,7 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascentPx = ascent,
       horizontal = TextHorizontalAlignment.Left,
       vertical = TextVerticalAlignment.Top,
-      fontRenderContext = frc
+      measurer = TestMeasure.measurer
     )
 
     placement.xPx shouldBe area.xPx +- 0.001f
@@ -45,11 +46,31 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascentPx = ascent,
       horizontal = TextHorizontalAlignment.Center,
       vertical = TextVerticalAlignment.Top,
-      fontRenderContext = frc
+      measurer = TestMeasure.measurer
     )
 
-    val textWidth = TextAlignment.measureTextWidth(text, font, frc)
+    val textWidth = TextAlignment.measureTextWidth(text, font, TestMeasure.measurer)
     placement.xPx shouldBe (area.xPx + (area.widthPx - textWidth) / 2.0f) +- 0.001f
+  }
+
+  it should "centre text by the width the measurer measures it, kerning included, not by AWT's string bounds" in {
+    val text = "AVAWAY To Ty"
+    val area = TextAreaPx(xPx = 10.0f, yPx = 4, widthPx = 240.0f, heightPx = 48)
+
+    val placement = TextAlignment.placeLine(
+      text = text,
+      area = area,
+      font = font,
+      lineHeightPx = lineHeight,
+      ascentPx = ascent,
+      horizontal = TextHorizontalAlignment.Center,
+      vertical = TextVerticalAlignment.Top,
+      measurer = TestMeasure.measurer
+    )
+
+    val measured = TestMeasure.measurer.glyphWidthPx(FontSpec.fromAwt(font), text)
+    placement.widthPx shouldBe measured +- 0.001f
+    placement.xPx shouldBe (area.xPx + (area.widthPx - measured) / 2.0f) +- 0.001f
   }
 
   it should "place text at the right edge of a text area" in {
@@ -64,10 +85,10 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascentPx = ascent,
       horizontal = TextHorizontalAlignment.Right,
       vertical = TextVerticalAlignment.Top,
-      fontRenderContext = frc
+      measurer = TestMeasure.measurer
     )
 
-    val textWidth = TextAlignment.measureTextWidth(text, font, frc)
+    val textWidth = TextAlignment.measureTextWidth(text, font, TestMeasure.measurer)
     placement.xPx shouldBe (area.xPx + area.widthPx - textWidth) +- 0.001f
   }
 
@@ -82,7 +103,7 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascent,
       TextHorizontalAlignment.Left,
       TextVerticalAlignment.Top,
-      frc
+      TestMeasure.measurer
     )
     val middle = TextAlignment.placeLine(
       "Text",
@@ -92,7 +113,7 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascent,
       TextHorizontalAlignment.Left,
       TextVerticalAlignment.Middle,
-      frc
+      TestMeasure.measurer
     )
     val bottom = TextAlignment.placeLine(
       "Text",
@@ -102,7 +123,7 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascent,
       TextHorizontalAlignment.Left,
       TextVerticalAlignment.Bottom,
-      frc
+      TestMeasure.measurer
     )
 
     top.yPx shouldBe 10
@@ -121,7 +142,7 @@ class TextAlignmentSpec extends AnyFlatSpec with Matchers:
       ascentPx = ascent,
       horizontal = TextHorizontalAlignment.Right,
       vertical = TextVerticalAlignment.Bottom,
-      fontRenderContext = frc
+      measurer = TestMeasure.measurer
     )
 
     placement.xPx shouldBe area.xPx +- 0.001f

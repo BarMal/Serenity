@@ -74,8 +74,8 @@ private[renderer] object RendererPaneChrome:
       )
       if !roundedFill then fillHeader()
 
-      surface.text.fontRenderContext match
-        case Some(frc) =>
+      context.textMeasurer match
+        case Some(measurer) =>
           val titlePlacement = TextAlignment.placeLine(
             displayTitle,
             TextAreaPx(
@@ -89,7 +89,7 @@ private[renderer] object RendererPaneChrome:
             context.cellMetrics.ascent,
             TextHorizontalAlignment.Center,
             TextVerticalAlignment.Top,
-            frc
+            measurer
           )
           surface.text.drawRunPx(
             titlePlacement.xPx,

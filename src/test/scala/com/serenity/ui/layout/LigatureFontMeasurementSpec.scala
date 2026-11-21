@@ -25,7 +25,7 @@ class LigatureFontMeasurementSpec extends AnyFlatSpec with Matchers:
 
   given Logger[IO] = Slf4jLogger.getLogger[IO]
 
-  private val frc       = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc       = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val tolerance = 0.02f
 
   private val codeFont = FontLoader.loadCodeFont(FontConfig(fontSize = 12.0f)).unsafeRunSync()

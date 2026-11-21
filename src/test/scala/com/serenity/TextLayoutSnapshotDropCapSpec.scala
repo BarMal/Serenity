@@ -37,7 +37,7 @@ class TextLayoutSnapshotDropCapSpec extends AnyFlatSpec with Matchers:
         )
       val font    = Font(Font.SANS_SERIF, Font.PLAIN, 12)
       val metrics = TestMeasure.cellMetrics(font)
-      val frc     = TextLayoutSnapshot.defaultFontRenderContext()
+      val frc     = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
       val snapshot = TextLayoutSnapshot.fromBuffer(
         buffer,

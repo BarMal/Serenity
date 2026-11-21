@@ -24,7 +24,7 @@ class RowCountCertificateTimingSpec extends AnyFlatSpec with Matchers:
 
   given Balance = Balance.default
 
-  private val frc              = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc              = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val bufferId         = BufferId(1)
   private val inline: Executor = _.run()
   private val never: Executor  = _ => ()

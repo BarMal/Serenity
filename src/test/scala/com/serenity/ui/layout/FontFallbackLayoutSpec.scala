@@ -16,7 +16,7 @@ import org.scalatest.matchers.should.Matchers
   */
 class FontFallbackLayoutSpec extends AnyFlatSpec with Matchers:
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private def registered(resource: String): Font =
     val font = Font.createFont(Font.TRUETYPE_FONT, Paths.get(getClass.getResource(resource).toURI).toFile)

@@ -80,8 +80,10 @@ private[perf] object ModalWrapBenchmarks:
     rect -> ModalSurfaceComposition.forModal(modal, rect, 1, measure = measure).fold(0)(_.paintBoxes.size)
 
   def benchmarks(): List[BenchmarkRunner.Benchmark] =
+    // A window's owner has a measurer; a state with none is on the terminal's one-pixel cell and wraps at every character.
+    lazy val windowState = AppState.initial(AppConfig.default)
     lazy val pixels = TextMeasure.pixelsFor(
-      AppState.initial(AppConfig.default),
+      windowState.copy(runtime = windowState.runtime.copy(anchorWraps = TestMeasure.anchorWraps())),
       MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
     )
     val modals = List(

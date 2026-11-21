@@ -24,7 +24,8 @@ object RendererStartPage:
       yPx = yPx,
       font = context.textFont,
       cellMetrics = context.cellMetrics,
-      textMetrics = textMetrics
+      textMetrics = textMetrics,
+      measurer = context.textMeasurer
     )
 
   def welcomeLines(hotkeys: HotkeyConfig, osName: String): List[String] =
@@ -60,7 +61,8 @@ object RendererStartPage:
           yPx = startYPx + (index * lineHeightPx),
           font = context.textFont,
           cellMetrics = context.cellMetrics,
-          textMetrics = textMetrics
+          textMetrics = textMetrics,
+          measurer = context.textMeasurer
         )
     }
 
@@ -71,13 +73,14 @@ object RendererStartPage:
     yPx: Int,
     font: java.awt.Font,
     cellMetrics: CellMetrics,
-    textMetrics: CellMetrics
+    textMetrics: CellMetrics,
+    measurer: Option[TextMeasurer]
   ): Unit =
     val lineHeightPx     = math.max(cellMetrics.lineHeight, textMetrics.lineHeight)
     val viewportHeightPx = surface.viewportHeight * cellMetrics.lineHeight
     if yPx + lineHeightPx > 0 && yPx < viewportHeightPx then
-      surface.text.fontRenderContext match
-        case Some(frc) =>
+      measurer match
+        case Some(textMeasurer) =>
           val placement = TextAlignment.placeLine(
             text = line,
             area = TextAreaPx(
@@ -91,7 +94,7 @@ object RendererStartPage:
             ascentPx = textMetrics.ascent,
             horizontal = TextHorizontalAlignment.Center,
             vertical = TextVerticalAlignment.Top,
-            fontRenderContext = frc
+            measurer = textMeasurer
           )
           surface.text.drawRunPx(
             placement.xPx,
@@ -113,7 +116,8 @@ object RendererStartPage:
     theme: Theme,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    measurer: Option[TextMeasurer]
   ): Unit =
     surface.text.setFont(FontSpec.fromAwt(uiFont))
     val lines         = page.renderLinesWithin(viewportSize.width)
@@ -147,7 +151,7 @@ object RendererStartPage:
                 color = theme.highlighted.background
               )
             }
-            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
+            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics, measurer)
             surface.disableStyle(theme.focusStyle)
           else
             val foreground =
@@ -155,10 +159,10 @@ object RendererStartPage:
               else theme.muted
             surface.setForegroundColor(foreground)
             surface.setBackgroundColor(theme.background)
-            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
+            renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics, measurer)
     }
 
-    renderBottomHints(page, surface, viewportSize, theme, uiFont, cellMetrics, uiMetrics)
+    renderBottomHints(page, surface, viewportSize, theme, uiFont, cellMetrics, uiMetrics, measurer)
 
   /** Keyboard-shortcut hints pinned to the bottom of the screen, outside the vertically-centered menu: the quick-resume
     * line on its own row, with the workflow-preset shortcuts on the row below it.
@@ -170,7 +174,8 @@ object RendererStartPage:
     theme: Theme,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    measurer: Option[TextMeasurer]
   ): Unit =
     val lineHeightPx     = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
     val viewportHeightPx = viewportSize.height * cellMetrics.lineHeight
@@ -190,7 +195,7 @@ object RendererStartPage:
         if yPx >= 0 && yPx + lineHeightPx <= viewportHeightPx then
           surface.setForegroundColor(theme.muted)
           surface.setBackgroundColor(theme.background)
-          renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics)
+          renderCenteredStartPageLine(surface, line, yPx, viewportSize, uiFont, cellMetrics, uiMetrics, measurer)
     }
 
   private def renderCenteredStartPageLine(
@@ -200,10 +205,11 @@ object RendererStartPage:
     viewportSize: ViewportSize,
     uiFont: java.awt.Font,
     cellMetrics: CellMetrics,
-    uiMetrics: CellMetrics
+    uiMetrics: CellMetrics,
+    measurer: Option[TextMeasurer]
   ): Unit =
-    surface.text.fontRenderContext match
-      case Some(frc) =>
+    measurer match
+      case Some(textMeasurer) =>
         val lineHeightPx = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
         val placement = TextAlignment.placeLine(
           text = line,
@@ -218,7 +224,7 @@ object RendererStartPage:
           ascentPx = uiMetrics.ascent,
           horizontal = TextHorizontalAlignment.Center,
           vertical = TextVerticalAlignment.Top,
-          fontRenderContext = frc
+          measurer = textMeasurer
         )
         surface.text.drawRunPx(
           xPx = placement.xPx,

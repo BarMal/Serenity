@@ -1,7 +1,5 @@
 package com.serenity.ui.renderer
 
-import java.awt.font.FontRenderContext
-
 import scala.annotation.unused
 
 import com.serenity.config.CursorMode
@@ -14,7 +12,11 @@ import com.serenity.ui.layout.{PixelRect, RoundedCorners}
   */
 trait TextDrawing:
   def setFont(font: FontSpec): Unit
-  def fontRenderContext: Option[FontRenderContext]
+
+  /** Whether this surface draws text laid out from measured glyphs. A surface that does not (a terminal) is on the cell
+    * grid: the renderer then measures nothing and lays out in whole cells.
+    */
+  def measuresText: Boolean
 
   /** Draw a proportional text run at exact pixel coordinates.
     *

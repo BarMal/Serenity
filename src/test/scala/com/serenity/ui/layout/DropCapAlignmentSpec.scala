@@ -25,7 +25,7 @@ class DropCapAlignmentSpec extends AnyFlatSpec with Matchers:
       "forgotten lore, while I nodded, nearly napping, suddenly there came a tapping, as of some one gently rapping, " +
       "rapping at my chamber door."
 
-  private val base = TextLayoutSnapshot.defaultFontRenderContext()
+  private val base = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private val frcs = List(
     "1x" -> base,

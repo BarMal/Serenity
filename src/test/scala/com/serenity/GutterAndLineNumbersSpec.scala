@@ -656,7 +656,7 @@ class GutterAndLineNumbersSpec extends AnyFlatSpec with Matchers:
       ascentPx = math.max(1, math.min(uiMetrics.ascent, math.min(uiMetrics.lineHeight, gutterHeightPx - 2))),
       horizontal = TextHorizontalAlignment.Left,
       vertical = TextVerticalAlignment.Middle,
-      fontRenderContext = surface.fontRenderContext.get
+      measurer = com.serenity.testkit.TestMeasure.measurer
     )
 
     gutterTextDraw.font shouldBe Some(uiFont)

@@ -167,7 +167,8 @@ class CursorViewportSpec extends AnyFlatSpec with Matchers:
       buffer.typographyRole shouldBe TypographyRole.Prose
       state.runtime.capabilities.isCellGrid shouldBe false
 
-      val adjusted = CursorViewport.adjustForCursor(buffer, state, cursorPos)
+      // The wraps a window adjusts on are its owner's, measured.
+      val adjusted = CursorViewport.adjustForCursor(buffer, state, cursorPos, TestMeasure.wrapCache())
 
       // Mirrors RendererPaneSetup.snapshotForBuffer's own row-fit calculation for the pane actually painted.
       val codeFont            = FontLoader.previewCodeFont(fontConfig)

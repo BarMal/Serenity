@@ -27,8 +27,7 @@ import org.scalatest.matchers.should.Matchers
 
 class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
 
-  private val shapedText = ShapedTextCache()
-  private val advances   = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
+  private val advances = MeasuredTextAdvances(MeasuredTextAdvances.DefaultCapacity, TestMeasure.layoutMemos())
 
   private def renderOverlay(
     surface: RenderSurface,
@@ -524,7 +523,7 @@ class TextOverlayRendererLayoutSpec extends AnyFlatSpec with Matchers:
             if label.isEmpty then 0.0
             else
               java.awt.font
-                .TextLayout(label, font, com.serenity.ui.layout.TextLayoutSnapshot.defaultFontRenderContext())
+                .TextLayout(label, font, com.serenity.testkit.TestMeasure.awtFontRenderContext)
                 .getAdvance
                 .toDouble
           ,

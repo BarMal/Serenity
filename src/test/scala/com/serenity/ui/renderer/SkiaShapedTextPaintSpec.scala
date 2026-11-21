@@ -32,7 +32,7 @@ class SkiaShapedTextPaintSpec extends AnyFlatSpec with Matchers:
     )
   )
 
-  private val frc         = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc         = com.serenity.testkit.TestMeasure.awtFontRenderContext
   private val widthPx     = 600
   private val heightPx    = 60
   private val deviceScale = 2.0

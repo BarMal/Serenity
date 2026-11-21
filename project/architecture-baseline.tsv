@@ -20,7 +20,6 @@ test/scala/com/serenity/state/manager/StateManagerCapabilitySpec.scala	file leng
 # The 10 method-local entries it used to record are gone; the entries below are real object-held caches and counters
 # that later PRs move into runtime-owned state. Items that can never move are in ArchitectureChecks.PurityAllowlist.
 main/scala/com/serenity/text/TextCounts.scala	mutable declaration `TextCounts.threadLocalSegmentations` holds ThreadLocal: a top-level object may not own mutable state -- scope it to an owning instance instead (#1677)	1
-main/scala/com/serenity/ui/renderer/FontFirstUse.scala	object-held stateful instance `FontFirstUse.shared` is a FontFirstUse: a top-level object may not own a mutable instance -- have the runtime that uses it own it (#1677)	1
 # paydown: process ownership (#2508). Seven sites still start their own external process; each migration PR (steps 2-8
 # of the plan on #2508) moves one onto the process service and deletes its entry here, until the rule has no exception
 # but the service's own launcher.

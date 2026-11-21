@@ -24,7 +24,7 @@ class ClusterMeasuredCodeLayoutSpec extends AnyFlatSpec with Matchers:
   private val flag       = s(0x1f1fa, 0x1f1f8)
   private val rainbow    = s(0x1f3f3, 0xfe0f, 0x200d, 0x1f308)
 
-  private val frc = TextLayoutSnapshot.defaultFontRenderContext()
+  private val frc = com.serenity.testkit.TestMeasure.awtFontRenderContext
 
   private val codeFont =
     Font

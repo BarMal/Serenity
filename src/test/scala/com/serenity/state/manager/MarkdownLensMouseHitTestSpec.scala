@@ -59,7 +59,8 @@ class MarkdownLensMouseHitTestSpec extends AnyFlatSpec with Matchers:
         config =
           AppConfig.default.withoutStatusLine.withLineNumbers(false).withWordWrap(true).withMarkdownViewMode(mode)
       ),
-      runtime = initial.runtime.copy(viewportSize = Some(viewportSize))
+      runtime = initial.runtime
+        .copy(viewportSize = Some(viewportSize), anchorWraps = com.serenity.testkit.TestMeasure.anchorWraps())
     )
 
   private def cacheOf(state: AppState): MouseTargetCache =

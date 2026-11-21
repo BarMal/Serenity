@@ -89,9 +89,9 @@ class EditorDiagnosticRenderingSpec extends AnyFlatSpec with Matchers:
       .copy(editing = EditingState(List(CursorPosition(0, 0))))
     val state = stateWithDiagnostic(bufferId, buffer, paneId)
 
-    // fontRenderContextOverride = None models a terminal surface with no FontRenderContext, forcing the cell-based
+    // measuresText = false models a terminal surface with no FontRenderContext, forcing the cell-based
     // (non-measured) drawing path -- see #1105.
-    val surface = new MockRenderSurface(100, 30, fontRenderContextOverride = None)
+    val surface = new MockRenderSurface(100, 30, measuresText = false)
     val diagnosticBackground =
       RendererHighlights.diagnosticHighlightBackground(state.persisted.theme, Some(DiagnosticSeverity.Hint.code))
 
