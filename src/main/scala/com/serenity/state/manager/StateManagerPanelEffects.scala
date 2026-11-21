@@ -96,11 +96,9 @@ final private[manager] class StateManagerPanelEffects(
         )
       case ViewIntent.SetDefaultDocumentMode(mode) =>
         updateConfig(_.withDefaultDocumentMode(mode)).void
-      case ViewIntent.SetAppMode(mode) =>
-        state.runtime.projectTasks.running match
-          case Some(task) if leavesCodeTooling(state, mode) =>
-            showModal(Modal.Confirm(ConfirmPrompt.stopProjectTaskToLeaveCode(task, mode)))
-          case _ => switchAppMode(mode)
+      case ViewIntent.SetAppMode(mode) => setAppMode(state, mode)
+      case ViewIntent.ToggleAppMode =>
+        setAppMode(state, if state.persisted.config.appMode == AppMode.Code then AppMode.Prose else AppMode.Code)
       case ViewIntent.SetAppModeStoppingProjectTask(mode) =>
         switchAppMode(mode)
       case ViewIntent.SetShowAllSettingsRegardlessOfMode(value) =>
@@ -144,6 +142,12 @@ final private[manager] class StateManagerPanelEffects(
 
   private def leavesCodeTooling(state: AppState, mode: AppMode): Boolean =
     state.editingContext.hasCodeTooling && mode != AppMode.Code
+
+  private def setAppMode(state: AppState, mode: AppMode): IO[Unit] =
+    state.runtime.projectTasks.running match
+      case Some(task) if leavesCodeTooling(state, mode) =>
+        showModal(Modal.Confirm(ConfirmPrompt.stopProjectTaskToLeaveCode(task, mode)))
+      case _ => switchAppMode(mode)
 
   private def switchAppMode(mode: AppMode): IO[Unit] =
     updateConfig(_.withAppMode(mode)).void

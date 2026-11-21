@@ -2,12 +2,19 @@ package com.serenity
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import com.serenity.command.{Availability, CommandAvailability, CommandCategory, CommandIntent, CommandRegistry, ViewIntent}
+import com.serenity.command.{
+  Availability,
+  CommandAvailability,
+  CommandCategory,
+  CommandIntent,
+  CommandRegistry,
+  ViewIntent
+}
 import com.serenity.config.{AppConfig, AppMode}
-import com.serenity.state.models.AppState
 import com.serenity.rope.Balance
 import com.serenity.state.manager.StateManager
 import com.serenity.state.manager.StateManagerTestFacade.*
+import com.serenity.state.models.AppState
 import com.serenity.testkit.{SharedDictionary, TestMeasure}
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
@@ -65,12 +72,11 @@ class AppModeSwitchCommandsSpec extends AnyFlatSpec with Matchers:
 
   private val modeCommandIds = Set("toggle-app-mode", "switch-to-prose-mode", "switch-to-code-mode")
 
-  it should "be among the first five results for the words someone looks for a mode switch by" in {
+  it should "be among the first five results for the words someone looks for a mode switch by" in
     List("toggle mode", "mode toggle", "mode", "prose", "code", "switch", "app mode").foreach { query =>
       val first = CommandRegistry.withToggleUI.searchCommands(query, maxResults = 5).map(_.name)
       withClue(s"'$query' found $first: ")(first.exists(modeCommandIds.contains) shouldBe true)
     }
-  }
 
   "The toggle command" should "be registered in every registry as Toggle Prose/Code Mode" in {
     for (registryName, registry) <- registries do

@@ -101,7 +101,7 @@ object CommandScope:
           ViewIntent.OpenKeywordNote | ViewIntent.ToggleChapterGhosts | ViewIntent.ToggleNotesPin |
           ViewIntent.ToggleTermHighlights | ViewIntent.FocusInDirection(_) | ViewIntent.ArrangePanels |
           ViewIntent.OpenMarkdownPreview | ViewIntent.SetMarkdownViewMode(_) | ViewIntent.ToggleMarkdownReadMode |
-          ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) |
+          ViewIntent.SetDefaultDocumentMode(_) | ViewIntent.SetAppMode(_) | ViewIntent.ToggleAppMode |
           ViewIntent.SetAppModeStoppingProjectTask(_) | ViewIntent.SetShowAllSettingsRegardlessOfMode(_) |
           ViewIntent.ToggleShortcutsHelp | ViewIntent.ToggleTabList | ViewIntent.ToggleRecentFilesInMode |
           ViewIntent.TogglePanel(_) | ViewIntent.SetPanelSize(_, _) =>
