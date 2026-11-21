@@ -87,13 +87,12 @@ private[layout] object PanelContentResolver:
 
   def resolveDirectoryTree(
     rect: LayoutRect,
-    mode: SurfaceRenderMode,
     tree: com.serenity.ui.layout.DirectoryTreeData,
     selectedPath: Option[java.nio.file.Path],
     scroll: ListScroll
   ): ResolvedSurfaceContent =
     ResolvedSurfaceContent(
-      title = SurfaceContentResolver.titleFor(mode, tree.rootPath.getFileName.toString),
+      title = None,
       rows = directoryTreeRowViews(rect, tree, selectedPath, scroll).map(_.row)
     )
 
