@@ -23,7 +23,8 @@ object StartupPageContent:
     configNotice: Option[String] = None,
     resumeIdentifier: Option[String] = None,
     fileOrFolderOpen: Boolean = false,
-    recentFolders: List[Path] = Nil
+    recentFolders: List[Path] = Nil,
+    resumeUnsaved: Int = 0
   ): StartupPage =
     val statusMessage =
       configNotice.orElse(Option.when(!sessionExists)("No previous session found"))
@@ -84,7 +85,8 @@ object StartupPageContent:
           "startup.restore-session",
           "Restore an existing session",
           CommandIntent.Session(SessionIntent.StartupRestoreSession)
-        )
+        ),
+        resumeUnsaved
       )
     )
     val recentActions = distinctRecent(recentFiles).map { path =>
@@ -134,6 +136,12 @@ object StartupPageContent:
       workflows = workflowActions,
       resume = resume
     )
+
+  /** How many of the session's documents hold text that is not on disk: what Tab would bring back that a file does not
+    * have.
+    */
+  def sessionUnsavedCount(session: AppState): Int =
+    session.persisted.buffers.values.count(_.hasUnsavedChanges)
 
   /** The session's main file name (active pane's buffer, else the first buffered file), for the quick-resume hint -- so
     * the user recognises what Tab would resume. Falls back to a generic label for an empty/file-less session.

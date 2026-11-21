@@ -180,7 +180,7 @@ object RendererStartPage:
     val lineHeightPx     = math.max(cellMetrics.lineHeight, uiMetrics.lineHeight)
     val viewportHeightPx = viewportSize.height * cellMetrics.lineHeight
     val hintLines =
-      page.resume.map(hint => s"[Tab] Quick resume last session — ${hint.identifier}").toList ++
+      page.resume.map(hint => s"[Tab] ${hint.line}").toList ++
         Option
           .when(page.workflows.nonEmpty)(
             page.workflows
