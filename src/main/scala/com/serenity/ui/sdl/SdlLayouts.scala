@@ -126,7 +126,57 @@ object SdlLayouts:
     "SDL_BUTTON_MIDDLE"                      -> 2L,
     "SDL_BUTTON_RIGHT"                       -> 3L,
     "SDL_MOUSEWHEEL_NORMAL"                  -> 0L,
-    "SDL_MOUSEWHEEL_FLIPPED"                 -> 1L
+    "SDL_MOUSEWHEEL_FLIPPED"                 -> 1L,
+    "SDLK_SCANCODE_MASK"                     -> 1073741824L,
+    "SDLK_RETURN"                            -> 13L,
+    "SDLK_KP_ENTER"                          -> 1073741912L,
+    "SDLK_ESCAPE"                            -> 27L,
+    "SDLK_BACKSPACE"                         -> 8L,
+    "SDLK_TAB"                               -> 9L,
+    "SDLK_DELETE"                            -> 127L,
+    "SDLK_SPACE"                             -> 32L,
+    "SDLK_SLASH"                             -> 47L,
+    "SDLK_0"                                 -> 48L,
+    "SDLK_9"                                 -> 57L,
+    "SDLK_A"                                 -> 97L,
+    "SDLK_Z"                                 -> 122L,
+    "SDLK_INSERT"                            -> 1073741897L,
+    "SDLK_UP"                                -> 1073741906L,
+    "SDLK_DOWN"                              -> 1073741905L,
+    "SDLK_LEFT"                              -> 1073741904L,
+    "SDLK_RIGHT"                             -> 1073741903L,
+    "SDLK_HOME"                              -> 1073741898L,
+    "SDLK_END"                               -> 1073741901L,
+    "SDLK_PAGEUP"                            -> 1073741899L,
+    "SDLK_PAGEDOWN"                          -> 1073741902L,
+    "SDLK_F1"                                -> 1073741882L,
+    "SDLK_F2"                                -> 1073741883L,
+    "SDLK_F3"                                -> 1073741884L,
+    "SDLK_F4"                                -> 1073741885L,
+    "SDLK_F5"                                -> 1073741886L,
+    "SDLK_F6"                                -> 1073741887L,
+    "SDLK_F7"                                -> 1073741888L,
+    "SDLK_F8"                                -> 1073741889L,
+    "SDLK_F9"                                -> 1073741890L,
+    "SDLK_F10"                               -> 1073741891L,
+    "SDLK_F11"                               -> 1073741892L,
+    "SDLK_F12"                               -> 1073741893L,
+    "SDLK_LCTRL"                             -> 1073742048L,
+    "SDLK_RCTRL"                             -> 1073742052L,
+    "SDLK_LSHIFT"                            -> 1073742049L,
+    "SDLK_RSHIFT"                            -> 1073742053L,
+    "SDLK_LALT"                              -> 1073742050L,
+    "SDLK_RALT"                              -> 1073742054L,
+    "SDLK_LGUI"                              -> 1073742051L,
+    "SDLK_RGUI"                              -> 1073742055L,
+    "SDL_KMOD_LSHIFT"                        -> 1L,
+    "SDL_KMOD_RSHIFT"                        -> 2L,
+    "SDL_KMOD_LCTRL"                         -> 64L,
+    "SDL_KMOD_RCTRL"                         -> 128L,
+    "SDL_KMOD_LALT"                          -> 256L,
+    "SDL_KMOD_RALT"                          -> 512L,
+    "SDL_KMOD_LGUI"                          -> 1024L,
+    "SDL_KMOD_RGUI"                          -> 2048L
   )
 
   private def at(name: String): Long = entries(name)
@@ -150,6 +200,12 @@ object SdlLayouts:
 
   /** An `SDL_EventType`, by the name the header gives it. */
   def eventType(name: String): Int = at(name).toInt
+
+  /** An `SDL_Keycode` (`SDLK_*`), by the name the header gives it. */
+  def keycode(name: String): Int = at(name).toInt
+
+  /** An `SDL_Keymod` bit (`SDL_KMOD_*`), by the name the header gives it. */
+  def keyModifier(name: String): Int = at(name).toInt
 
   /** Byte offset of `Struct.field` within its struct. */
   def offset(name: String): Long = at(name)
