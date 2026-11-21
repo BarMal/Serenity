@@ -45,6 +45,7 @@ class SdlKeyToSwapNativeSpec extends AnyFlatSpec with Matchers:
     val run = outcome()
 
     run.sent shouldBe 20
+    run.arrived shouldBe options.warmupKeys + options.keys + 1
     run.keys should have size 20
     run.keys.filterNot(_.isOrdered) shouldBe empty
     run.keys.foreach { key =>

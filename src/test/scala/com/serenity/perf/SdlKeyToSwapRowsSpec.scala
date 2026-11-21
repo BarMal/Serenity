@@ -70,6 +70,7 @@ class SdlKeyToSwapRowsSpec extends AnyFlatSpec with Matchers:
       swapInterval = 1,
       renderFpsTarget = "60",
       sent = 1,
+      arrived = 2,
       keys = Vector(key(8.0)),
       frames = Vector.empty,
       stages = stages.toList.map(_ -> someStats),
@@ -96,4 +97,23 @@ class SdlKeyToSwapRowsSpec extends AnyFlatSpec with Matchers:
   it should "say how many keys were sent, shown and left unpainted, and at what frame rate target" in {
     outcome("frame_wait").lines.head shouldBe
       "[sdl3-key] swap_interval=1 keys sent=1 shown=1 unpainted=0 frames=0 render_fps_target=60"
+  }
+
+  "The header notes" should "say the flush key is left out of the rows and what it does to the last key, for either injector" in {
+    SdlKeyToSwapBenchmark.Injector.values.toList.foreach { injector =>
+      val options = SdlKeyToSwapBenchmark.Options.default.copy(injector = injector)
+      val notes   = SdlKeyToSwapBenchmark.headerNotes(options).mkString("\n")
+
+      notes should include("flush")
+      notes should include("left out of the rows")
+      notes should include("last measured key")
+    }
+  }
+
+  it should "say the pump's wait is not the compositor's hop only for in-process keys" in {
+    val inProcess  = SdlKeyToSwapBenchmark.Options.default.copy(injector = SdlKeyToSwapBenchmark.Injector.InProcess)
+    val compositor = SdlKeyToSwapBenchmark.Options.default.copy(injector = SdlKeyToSwapBenchmark.Injector.Compositor)
+
+    SdlKeyToSwapBenchmark.headerNotes(inProcess).mkString should include("compositor hop")
+    SdlKeyToSwapBenchmark.headerNotes(compositor).mkString should not include "compositor hop"
   }
