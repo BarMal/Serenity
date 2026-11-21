@@ -59,12 +59,18 @@ class CommandRunnerPaletteContextSpec extends AnyFlatSpec with Matchers:
   }
 
   it should "leave prose tooling out of a code workspace, search included" in {
-    val code = openingCommands(Some(context(AppMode.Code, Some(BufferKind.RichText))))
+    val code = openingCommands(Some(context(AppMode.Code, Some(BufferKind.PlainText))))
 
     code should not contain "bold"
     code should not contain "cut-to-darlings"
     searchedCommands(context(AppMode.Code, None), "bold") should not contain "bold"
     searchedCommands(context(AppMode.Code, None), "darlings") should not contain "cut-to-darlings"
+  }
+
+  it should "offer prose tooling for a rich text document even in a code workspace" in {
+    val code = openingCommands(Some(context(AppMode.Code, Some(BufferKind.RichText))))
+
+    code should contain("bold")
   }
 
   it should "keep rich-text formatting searchable on a plain buffer in a prose workspace" in {

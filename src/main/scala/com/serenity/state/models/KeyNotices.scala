@@ -34,7 +34,7 @@ object KeyNotices:
       case _ =>
         val modes = command.scope.family.modes.map(_.configKey).toList.sorted.mkString(" or ")
         val where =
-          if command.scope.family == CommandFamily.Prose && context.editingContext.exists(_.buffer.isDefined) then
+          if command.scope.family == CommandFamily.Prose && context.editingContext.exists(_.bufferIsCode) then
             "prose documents"
           else s"$modes mode"
         info(s"${command.label} works in $where only.")

@@ -1,7 +1,7 @@
 package com.serenity.command
 
 import com.serenity.config.AppMode
-import com.serenity.state.models.{EditingContext, PanelId, PanelRegistry, Shell}
+import com.serenity.state.models.{BufferKind, EditingContext, PanelId, PanelRegistry, Shell}
 
 /** Which workspace mode a command belongs to. */
 enum CommandFamily(val modes: Set[AppMode]):
@@ -34,18 +34,22 @@ final case class CommandScope(family: CommandFamily, frontend: FrontendSupport):
   def admits(context: EditingContext): Boolean =
     admitsFamily(context) && frontend.shells.contains(context.shell)
 
-  /** Prose commands follow the focused document: offered for any document that is not code, whatever the workspace's
-    * mode, and with nothing open for a prose workspace. Every other family, code tooling included, follows the
-    * workspace's mode.
+  /** Prose commands follow a document that says what it is: offered for Markdown and rich text whatever the workspace's
+    * mode, and never for code. Plain text, which could be either, and an empty workspace follow the mode, as does every
+    * other family, code tooling included.
     */
   private def admitsFamily(context: EditingContext): Boolean =
     family match
-      case CommandFamily.Prose => context.buffer.fold(context.mode == AppMode.Prose)(_.isProse)
-      case other               => other.modes.contains(context.mode)
+      case CommandFamily.Prose =>
+        context.buffer match
+          case Some(BufferKind.Code(_))                        => false
+          case Some(BufferKind.Markdown | BufferKind.RichText) => true
+          case Some(BufferKind.PlainText) | None               => context.mode == AppMode.Prose
+      case other => other.modes.contains(context.mode)
 
   def unavailableReason(context: EditingContext): Option[String] =
     if !admitsFamily(context) then
-      if family == CommandFamily.Prose && context.buffer.isDefined then Some("Only available in prose documents.")
+      if family == CommandFamily.Prose && context.bufferIsCode then Some("Only available in prose documents.")
       else Some(s"Only available in ${family.modes.map(_.configKey).toList.sorted.mkString(" or ")} mode.")
     else if !frontend.shells.contains(context.shell) then Some("Only available in the graphical app.")
     else None

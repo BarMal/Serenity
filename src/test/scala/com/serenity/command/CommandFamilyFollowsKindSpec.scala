@@ -6,8 +6,9 @@ import com.serenity.state.models.*
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
-/** What the focused document is decides whether prose commands are offered; the workspace's mode still decides code
-  * tooling. A Markdown file in a code workspace gets bold, a Scala file in a writing workspace does not.
+/** A document that says what it is decides whether prose commands are offered; the workspace's mode decides for plain
+  * text, which could be either, and for code tooling. A Markdown file in a code workspace gets bold, a Scala file in a
+  * writing workspace does not.
   */
 class CommandFamilyFollowsKindSpec extends AnyFlatSpec with Matchers:
 
@@ -22,10 +23,15 @@ class CommandFamilyFollowsKindSpec extends AnyFlatSpec with Matchers:
 
   private val scala = Some(BufferKind.Code(LanguageId.Scala))
 
-  "A prose command" should "be offered for a prose document even in a code workspace" in
-    List(BufferKind.Markdown, BufferKind.PlainText, BufferKind.RichText).foreach { kind =>
+  "A prose command" should "be offered for a Markdown or rich text document even in a code workspace" in
+    List(BufferKind.Markdown, BufferKind.RichText).foreach { kind =>
       withClue(s"$kind: ")(availability("bold", AppMode.Code, Some(kind)).isOffered shouldBe true)
     }
+
+  it should "follow the workspace's mode for plain text, which could be either" in {
+    availability("bold", AppMode.Code, Some(BufferKind.PlainText)) shouldBe Availability.Hidden
+    availability("bold", AppMode.Prose, Some(BufferKind.PlainText)).isOffered shouldBe true
+  }
 
   it should "be hidden for a code document even in a prose workspace" in {
     availability("bold", AppMode.Prose, scala) shouldBe Availability.Hidden
