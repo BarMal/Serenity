@@ -34,9 +34,11 @@ final private[perf] class SdlPresentWatch(
     finish()
     drawn.set(clock())
 
-  def markPublished(): Unit = timings.foreach(_.framePublished())
-
-  def markPresentStart(): Unit =
+  /** Published first: a paint shows only the frames already published when it starts, so a present that began first
+    * would leave its own frame, and the keys in it, waiting for a paint that may never come.
+    */
+  def beginPresent(): Unit =
+    timings.foreach(_.framePublished())
     presentStart.set(clock())
     timings.foreach(frameTimings => paintStartedAt.set(frameTimings.paintStarted()))
 
@@ -78,8 +80,7 @@ final private[perf] class SdlPresentedFrames private (
       case Left(reason) => throw new IllegalStateException(reason)
       case Right(())    => ()
     Await.result(presenter.drained(), SdlPresentedFrames.FrameTimeout)
-    window.post(_ => watch.markPresentStart())
-    watch.markPublished()
+    window.post(_ => watch.beginPresent())
     presenter.requestPresent()
     if !watch.awaitRendered(SdlPresentedFrames.FrameTimeout) then
       throw new IllegalStateException("the frame was never swapped")
