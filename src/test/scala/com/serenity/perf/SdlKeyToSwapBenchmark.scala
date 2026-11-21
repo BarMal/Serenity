@@ -7,7 +7,7 @@ import cats.effect.{IO, Ref, Resource}
 import cats.syntax.all.*
 import com.serenity.app.{AppRuntime, AppRuntimeRenderLoops}
 import com.serenity.config.AppConfig
-import com.serenity.diagnostics.{FrameTimings, PhaseStats}
+import com.serenity.diagnostics.{FrameTimings, LatencyWindow, PhaseStats}
 import com.serenity.input.{InputRouter, PendingInput, SystemClipboard}
 import com.serenity.keystroke.events.Event
 import com.serenity.keystroke.translators.TextEntryTranslator
@@ -57,6 +57,7 @@ private[perf] object SdlKeyToSwapBenchmark:
   given Logger[IO] = NoOpLogger[IO]
 
   private val ClockReadings = 50
+  private val PaintGrace    = 10.seconds
 
   /** The trace's render splits come from the render-phase clock, which only the production overlay path feeds. This
     * benchmark draws through the frame planner, as [[SkiaGlPresentBenchmarks]] does so that its `draw` row stays
@@ -257,12 +258,14 @@ private[perf] object SdlKeyToSwapBenchmark:
         AppRuntimeRenderLoops.inputBatchPhase(context)
       )
       renderLoop = AppRuntimeRenderLoops.renderLoop(idlePhase, fastPhase)
-      _ <- (
+      latency <- (
         Resource.make(inputLoop.compile.drain.start)(_.cancel),
         Resource.make(renderLoop.compile.drain.start)(_.cancel)
       ).tupled
-        .use(_ => inject(window, total, options) >> awaitShown(frameTimings, arrivals, total, options))
-      latency   <- IO(frameTimings.keyLatency.drain())
+        .use { _ =>
+          inject(window, total, options) >> awaitArrivals(arrivals, total, options) >>
+            collectPainted(IO(frameTimings.keyLatency.drain()), total, PaintGrace, 10.millis)
+        }
       seen      <- arrivals.get
       allFrames <- IO(frames.takeStamps())
     yield
@@ -338,22 +341,38 @@ private[perf] object SdlKeyToSwapBenchmark:
             IO.sleep(options.spacing)
         }
 
-  /** Until `expected` keys have arrived and every one of them has been shown, or `options` says to stop waiting. A run
-    * that gives up still reports what it measured, with the keys not shown counted.
-    */
-  private def awaitShown(
-    frameTimings: FrameTimings,
-    arrivals: Ref[IO, Vector[KeyArrival]],
-    expected: Int,
-    options: Options
-  ): IO[Unit] =
+  /** Until `expected` keys have arrived, or `options` says to stop waiting. */
+  private def awaitArrivals(arrivals: Ref[IO, Vector[KeyArrival]], expected: Int, options: Options): IO[Unit] =
     val within = options.injector match
       case Injector.InProcess  => 30.seconds + options.spacing * expected.toLong
       case Injector.Compositor => 5.minutes
-    def settled: IO[Boolean] =
-      (arrivals.get.map(_.size >= expected), IO(frameTimings.keyLatency.pendingKeys.isEmpty)).mapN(_ && _)
-    def poll: IO[Unit] = settled.ifM(IO.unit, IO.sleep(10.millis) >> poll)
+    def poll: IO[Unit] = arrivals.get.map(_.size >= expected).ifM(IO.unit, IO.sleep(10.millis) >> poll)
     poll.timeoutTo(within, IO.unit)
+
+  /** Drains the key-latency trace until `expected` keys are accounted for, each painted or counted unpainted, or
+    * `within` has passed, and reports what it has. A key a frame has taken is no longer pending but is not painted
+    * until that frame's paint finishes, so "nothing pending" is not the end: only a drain shows what has been painted.
+    */
+  private[perf] def collectPainted(
+    drain: IO[LatencyWindow],
+    expected: Int,
+    within: FiniteDuration,
+    pause: FiniteDuration
+  ): IO[LatencyWindow] =
+    def gather(collected: LatencyWindow, deadline: FiniteDuration): IO[LatencyWindow] =
+      drain.flatMap { window =>
+        val total = collected.copy(
+          keys = collected.keys ++ window.keys,
+          unpainted = collected.unpainted + window.unpainted,
+          backend = window.backend
+        )
+        if total.keys.size + total.unpainted >= expected then IO.pure(total)
+        else
+          IO.monotonic.flatMap { now =>
+            if now >= deadline then IO.pure(total) else IO.sleep(pause) >> gather(total, deadline)
+          }
+      }
+    IO.monotonic.flatMap(start => gather(LatencyWindow(0.0, Vector.empty, 0), start + within))
 
   def main(args: Array[String]): Unit =
     BenchmarkMain.run:
