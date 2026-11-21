@@ -32,25 +32,52 @@ class DisplayExclusiveSpec extends AnyFlatSpec with Matchers:
 
     poll()
 
+  /** The window is up only while this thread holds the display, as a spec that shows a window must hold it: shown
+    * before the lock is taken, it is on screen while another spec holds the lock and lists the open windows.
+    */
+  private def windowClosedLateByTheBody(): Unit =
+    DisplayExclusive {
+      val frame   = new JFrame("closing late")
+      val release = new CountDownLatch(1)
+      val timer   = Executors.newSingleThreadScheduledExecutor()
+      onSwing(frame.setVisible(true))
+      try
+        DisplayExclusive {
+          SwingUtilities.invokeLater { () =>
+            release.await()
+            frame.dispose()
+          }
+          timer.schedule((() => release.countDown()): Runnable, 200, TimeUnit.MILLISECONDS): Unit
+        }
+        frame.isShowing shouldBe false
+      finally
+        release.countDown()
+        timer.shutdownNow(): Unit
+        onSwing(frame.dispose())
+    }
+
   "DisplayExclusive" should "have the event thread caught up when it lets go, so a window the body asked to close late is gone" in {
     withDisplay()
-    val frame   = new JFrame("closing late")
-    val release = new CountDownLatch(1)
-    val timer   = Executors.newSingleThreadScheduledExecutor()
-    onSwing(frame.setVisible(true))
-    try
-      DisplayExclusive {
-        SwingUtilities.invokeLater { () =>
-          release.await()
-          frame.dispose()
-        }
-        timer.schedule((() => release.countDown()): Runnable, 200, TimeUnit.MILLISECONDS): Unit
-      }
-      frame.isShowing shouldBe false
-    finally
-      release.countDown()
-      timer.shutdownNow(): Unit
-      onSwing(frame.dispose())
+    windowClosedLateByTheBody()
+  }
+
+  it should "keep a spec's own window out of sight of one listing the windows under the lock" in {
+    withDisplay()
+    val holding = new CountDownLatch(1)
+    val listed  = new AtomicReference[List[Window]](Nil)
+    val holder = new Thread(
+      new Runnable:
+        def run(): Unit =
+          listed.set(DisplayExclusive.withShowingWindowsAfter {
+            holding.countDown()
+            Thread.sleep(500)
+          }._2)
+    )
+    holder.start()
+    holding.await()
+    try windowClosedLateByTheBody()
+    finally holder.join()
+    listed.get() shouldBe empty
   }
 
   "DisplayExclusive.withShowingWindowsAfter" should "return the body's result" in {
@@ -60,10 +87,12 @@ class DisplayExclusiveSpec extends AnyFlatSpec with Matchers:
   it should "list a window the body left showing, and none once it is closed" in {
     withDisplay()
     val frame = new JFrame("left open")
-    try
-      val (_, open) = DisplayExclusive.withShowingWindowsAfter(onSwing(frame.setVisible(true)))
-      open should contain(frame)
-    finally onSwing(frame.dispose())
+    DisplayExclusive {
+      try
+        val (_, open) = DisplayExclusive.withShowingWindowsAfter(onSwing(frame.setVisible(true)))
+        open should contain(frame)
+      finally onSwing(frame.dispose())
+    }
     DisplayExclusive.withShowingWindowsAfter(())._2 shouldBe empty
   }
 
