@@ -8,26 +8,39 @@ import scala.concurrent.duration.*
 import scala.jdk.CollectionConverters.*
 
 import cats.effect.{IO, Resource}
+import com.serenity.diagnostics.FrameTimings
 import com.serenity.ui.renderer.RenderSurface
 import com.serenity.ui.sdl.{Sdl, SdlError, SdlGlWindow}
 import com.serenity.ui.skia.{GlFrameSettings, SkiaGlPresenter}
 
 /** The clock readings the presenter's own hooks give: `beforeSwap` runs on the SDL thread just before the swap and
   * `onRendered` just after it. `finish` is `glFinish` or nothing; run after the draw and before the swap, it moves the
-  * GPU's work into those rows instead of leaving it to surface in the swap.
+  * GPU's work into those rows instead of leaving it to surface in the swap. With `timings`, the app's own key-latency
+  * trace is told when the frame was handed over, when its present started and when the swap returned.
   */
-final private[perf] class SdlPresentWatch(clock: () => Long, finish: () => Unit):
-  private val drawn        = new AtomicLong(0L)
-  private val presentStart = new AtomicLong(0L)
-  private val presentEnd   = new AtomicLong(0L)
-  private val swapEnd      = new AtomicLong(0L)
-  private val rendered     = new Semaphore(0)
+final private[perf] class SdlPresentWatch(
+    clock: () => Long,
+    finish: () => Unit,
+    timings: Option[FrameTimings] = None
+):
+  private val paintStartedAt = new AtomicLong(0L)
+  private val drawn          = new AtomicLong(0L)
+  private val presentStart   = new AtomicLong(0L)
+  private val presentEnd     = new AtomicLong(0L)
+  private val swapEnd        = new AtomicLong(0L)
+  private val rendered       = new Semaphore(0)
 
   def markDrawn(): Unit =
     finish()
     drawn.set(clock())
 
-  def markPresentStart(): Unit = presentStart.set(clock())
+  /** Published first: a paint shows only the frames already published when it starts, so a present that began first
+    * would leave its own frame, and the keys in it, waiting for a paint that may never come.
+    */
+  def beginPresent(): Unit =
+    timings.foreach(_.framePublished())
+    presentStart.set(clock())
+    timings.foreach(frameTimings => paintStartedAt.set(frameTimings.paintStarted()))
 
   def beforeSwap(sdl: Sdl): Unit =
     finish()
@@ -35,6 +48,7 @@ final private[perf] class SdlPresentWatch(clock: () => Long, finish: () => Unit)
 
   def afterSwap(): Unit =
     swapEnd.set(clock())
+    timings.foreach(_.paintFinished(paintStartedAt.get))
     rendered.release()
 
   def awaitRendered(timeout: FiniteDuration): Boolean = rendered.tryAcquire(timeout.toMillis, TimeUnit.MILLISECONDS)
@@ -66,11 +80,17 @@ final private[perf] class SdlPresentedFrames private (
       case Left(reason) => throw new IllegalStateException(reason)
       case Right(())    => ()
     Await.result(presenter.drained(), SdlPresentedFrames.FrameTimeout)
-    window.post(_ => watch.markPresentStart())
+    window.post(_ => watch.beginPresent())
     presenter.requestPresent()
     if !watch.awaitRendered(SdlPresentedFrames.FrameTimeout) then
       throw new IllegalStateException("the frame was never swapped")
     val _ = taken.add(watch.stamps(requested))
+
+  /** The stamps of the frames presented since the last call, which starts the next run. */
+  def takeStamps(): Vector[FrameStamps] =
+    val kept = taken.asScala.toVector
+    taken.clear()
+    kept
 
   /** The stamps of `frames` runs of `step`, after `warmup` runs that are not kept. */
   def measure(warmup: Int, frames: Int)(step: () => Unit): Vector[FrameStamps] =
@@ -87,9 +107,10 @@ private[perf] object SdlPresentedFrames:
   def open(
     window: SdlGlWindow,
     settings: GlFrameSettings,
-    finish: Option[() => Unit]
+    finish: Option[() => Unit],
+    frameTimings: Option[FrameTimings] = None
   ): Resource[IO, Either[SdlError, SdlPresentedFrames]] =
-    val watch = SdlPresentWatch(System.nanoTime, finish.getOrElse(() => ()))
+    val watch = SdlPresentWatch(System.nanoTime, finish.getOrElse(() => ()), frameTimings)
     SkiaGlPresenter
       .open(window, watch.beforeSwap)
       .map(_.map { presenter =>

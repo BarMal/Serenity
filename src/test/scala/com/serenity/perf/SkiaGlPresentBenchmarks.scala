@@ -65,7 +65,7 @@ private[perf] object SkiaGlPresentBenchmarks:
     }
 
   /** The window's pixel size and scale once SDL has told it, as the logical size the renderer lays out for. */
-  private def settledLogicalSize(window: SdlGlWindow): IO[(Int, Int, Double)] =
+  private[perf] def settledLogicalSize(window: SdlGlWindow): IO[(Int, Int, Double)] =
     def settle(attempts: Int): IO[Unit] =
       window.takeResize.flatMap {
         case Some(_) => IO.unit
@@ -128,9 +128,9 @@ private[perf] object SkiaGlPresentBenchmarks:
   /** The size the window is expected to come to once it has been asked for, what to say if it did not, and what was
     * found out on the way.
     */
-  final private case class Expectation(logical: (Int, Int), fix: String, notes: List[String])
+  final private[perf] case class Expectation(logical: (Int, Int), fix: String, notes: List[String])
 
-  private def arrange(window: SdlGlWindow, request: WindowRequest): IO[Expectation] =
+  private[perf] def arrange(window: SdlGlWindow, request: WindowRequest): IO[Expectation] =
     request match
       case WindowRequest.Logical(width, height) =>
         IO.pure(
