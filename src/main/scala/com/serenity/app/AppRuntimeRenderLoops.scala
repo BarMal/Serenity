@@ -359,13 +359,15 @@ private[serenity] object AppRuntimeRenderLoops:
           _ <- awaitFrameDeadline(interval, lastFrameStart, frameClock, sleep)
           _ <- IO(keyLatency.frameDeadlineReached())
           _ <- withRuntimeDiagnostics("render loop", "fast.resize", currentStateForDiagnostics)(checkResizeAndHandle)
+          // Cleared before the read, never after: a key is applied and then its damage emitted, so damage emitted
+          // before this clear is in the model read next, and damage emitted after it stays set and owes another frame.
+          _ <- pendingDamage.set(Damage.Nothing)
           // Before the read, so a keystroke whose damage lands during it is credited to the next frame, never to one
           // that may not show it.
           _ <- IO(keyLatency.frameModelRead())
           model <- withRuntimeDiagnostics("render loop", "fast.state", currentStateForDiagnostics)(
             stateManager.getModel
           )
-          _         <- pendingDamage.set(Damage.Nothing)
           covered   <- damagePublishedFor.get
           published <- pendingPaintDamage.getAndSet(Damage.Nothing)
           previous  <- lastDrawnState.getAndSet(Some(model.app))
