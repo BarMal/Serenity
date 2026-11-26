@@ -2,6 +2,7 @@ package com.serenity.ui.layout
 
 import com.serenity.TestWorkspaceTrees
 import com.serenity.config.AppMode
+import com.serenity.lsp.config.LanguageId
 import com.serenity.richtext.*
 import com.serenity.rope.Balance
 import com.serenity.state.models.*
@@ -49,13 +50,25 @@ class ContextualToolbarContentResolverSpec extends AnyFlatSpec with Matchers:
       )
     )
 
-  "itemsFor" should "offer no prose formatting controls in a code workspace" in {
+  "itemsFor" should "keep the formatting controls of a rich text document in a code workspace" in {
     val codeState = proseState.copy(persisted =
       proseState.persisted.copy(config = proseState.persisted.config.withAppMode(AppMode.Code))
     )
 
-    ContextualToolbar.itemsFor(codeState) shouldBe empty
+    ContextualToolbar.itemsFor(codeState).map(_.id) should contain("bold")
     ContextualToolbar.itemsFor(proseState).map(_.id) should contain("bold")
+  }
+
+  it should "offer no prose formatting controls on a code document, whatever the workspace's mode" in {
+    val scalaFile = proseState.copy(persisted =
+      proseState.persisted.copy(buffers =
+        proseState.persisted.buffers.view
+          .mapValues(buffer => buffer.copy(document = buffer.document.copy(language = Some(LanguageId.Scala))))
+          .toMap
+      )
+    )
+
+    ContextualToolbar.itemsFor(scalaFile) shouldBe empty
   }
 
   "resolve" should "wrap toolbar items across multiple Distributed rows when the rect is narrow" in {

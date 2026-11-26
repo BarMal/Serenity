@@ -119,10 +119,10 @@ class MarkdownFormattingReducerSpec extends AnyFlatSpec with Matchers:
     items.map(_.id).filter(id => id.startsWith("font") || id.startsWith("color") || id.startsWith("align")) shouldBe Nil
   }
 
-  it should "keep only the view controls outside prose mode" in {
+  it should "offer the same controls in a code workspace, since the document says it is prose" in {
     val state = markdown("say hello", Cursor(CursorPosition(0, 0)))
     val codeMode =
       state.copy(persisted = state.persisted.copy(config = state.persisted.config.withAppMode(AppMode.Code)))
 
-    ContextualToolbar.itemsFor(codeMode).map(_.id) shouldBe ContextualToolbar.markdownItems.map(_.id)
+    ContextualToolbar.itemsFor(codeMode).map(_.id) shouldBe ContextualToolbar.itemsFor(state).map(_.id)
   }

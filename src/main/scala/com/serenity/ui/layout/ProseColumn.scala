@@ -3,7 +3,7 @@ package com.serenity.ui.layout
 import java.awt.Font
 
 import com.serenity.config.WrapColumn
-import com.serenity.state.models.{AppState, TypographyRole}
+import com.serenity.state.models.{AppState, EditingContext, PaneId, TypographyRole}
 import com.serenity.ui.fonts.FontLoader
 import com.serenity.ui.renderer.FontSpec
 
@@ -33,6 +33,19 @@ object ProseColumn:
   def widthCells(state: AppState): Option[Int] =
     val surfaceConfig = state.persisted.config.surfaceConfig
     if surfaceConfig.columnModeEnabled && surfaceConfig.wordWrapEnabled then None else wrapCells(state)
+
+  /** [[widthCells]] for the text area of one pane: code is not set in a column, so a pane showing it is not capped,
+    * whatever the workspace's mode. The pane's own buffer decides, not the app mode.
+    */
+  def widthCellsFor(state: AppState, paneId: PaneId): Option[Int] =
+    if paneShowsCode(state, paneId) then None else widthCells(state)
+
+  private def paneShowsCode(state: AppState, paneId: PaneId): Boolean =
+    state.persisted.layout.editorPanes
+      .get(paneId)
+      .flatMap(_.bufferId)
+      .flatMap(state.persisted.buffers.get)
+      .exists(buffer => !EditingContext.bufferKind(buffer).isProse)
 
   /** How many grid cells one `ch` is: the prose font's `0` advance over the grid cell, and exactly one in a terminal.
     */
