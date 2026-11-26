@@ -12,7 +12,9 @@ object CommandPrerequisites:
   def unmetReason(command: Command, context: CommandRunnerContext): Option[String] =
     command.intent match
       case CommandIntent.Project(intent) => projectReason(intent, context.projectPresence)
-      case _                             => None
+      case CommandIntent.View(ViewIntent.SetAppMode(mode)) if context.editingContext.exists(_.mode == mode) =>
+        Some(s"Already in ${mode.configKey} mode.")
+      case _ => None
 
   private def projectReason(intent: ProjectIntent, presence: ProjectPresence): Option[String] =
     intent match

@@ -161,6 +161,9 @@ enum ViewIntent:
   case SetDefaultDocumentMode(mode: DefaultDocumentMode)
   case SetAppMode(mode: AppMode)
 
+  /** [[SetAppMode]] to whichever of Prose and Code the workspace is not in. */
+  case ToggleAppMode
+
   /** [[SetAppMode]] once the writer has agreed to the project task it would stop: the answer to the prompt that asks.
     */
   case SetAppModeStoppingProjectTask(mode: AppMode)
