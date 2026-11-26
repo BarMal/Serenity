@@ -119,6 +119,9 @@ private[skia] object SkiaTypefaces:
     "dialog"      -> "sans-serif"
   )
 
+  /** Whether `family` is one of AWT's logical names, which stand for composites of whatever the system holds. */
+  def isLogical(family: String): Boolean = LogicalFamilies.contains(family.toLowerCase)
+
   private val BundledResources = List(
     "/fonts/MonaspaceNeonVarVF[wght,wdth,slnt].ttf",
     "/fonts/MonaspaceNeon-Regular.otf",

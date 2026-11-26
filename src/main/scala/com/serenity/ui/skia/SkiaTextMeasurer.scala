@@ -2,6 +2,8 @@ package com.serenity.ui.skia
 
 import scala.jdk.CollectionConverters.*
 
+import com.serenity.text.fallback.GlyphCoverage
+import com.serenity.ui.fonts.FontFallback
 import com.serenity.ui.layout.TextMeasurer.{FontRun, InkBounds, LineFonts, LineMetrics, MetricsKey, ShapedRun}
 import com.serenity.ui.layout.{CellMetrics, CharWidth, GlyphAdvances, TextMeasurer}
 import com.serenity.ui.renderer.{BackendCacheKey, BackendCaches, FontSpec}
@@ -53,6 +55,9 @@ final class SkiaTextMeasurer(
   private def skia(font: FontSpec): Font = faces.faceFor(font).font
 
   def cellMetrics(font: FontSpec): CellMetrics = faces.cellMetrics(font)
+
+  def glyphCoverage(primary: FontSpec, fallback: FontFallback): GlyphCoverage =
+    SkiaGlyphCoverage.ofChain(primary, fallback, skia(_).getTypeface, bidiFallbacks)
 
   def measuresProportionally(font: FontSpec): Boolean =
     !isMonospaced(font) || font.ligatures || hasFractionalAdvanceDrift(font)

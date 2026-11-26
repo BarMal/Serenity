@@ -7,7 +7,7 @@ import java.util.LinkedHashMap
   * every question, and the memory stays bounded however much text passes through. One instance belongs to the coverage
   * that owns it; nothing here is shared between owners.
   */
-final private[fonts] class GlyphCoveragePages(maxPages: Int):
+final private[serenity] class GlyphCoveragePages(maxPages: Int):
   import GlyphCoveragePages.*
 
   private val PageBits = 8
@@ -21,11 +21,11 @@ final private[fonts] class GlyphCoveragePages(maxPages: Int):
   private val pages = new LinkedHashMap[Int, Page](16, 0.75f, true):
     override def removeEldestEntry(eldest: java.util.Map.Entry[Int, Page]): Boolean = size() > maxPages
 
-  /** Whether `font` covers `codePoint` in `slot`; the font is asked only when the page has not been asked. The font is
-    * asked outside the lock, since a composite font loads its components on first use: two threads may ask the same
-    * question, and both get the same answer. A page already asked answers without allocating.
+  /** Whether `has` covers `codePoint` in `slot`; it is asked only when the page has not been asked. It is asked outside
+    * the lock, since an answer may load a font on first use: two threads may ask the same question, and both get the
+    * same answer. A page already asked answers without allocating.
     */
-  def covers(slot: Int, codePoint: Int, font: java.awt.Font): Boolean =
+  def covers(slot: Int, codePoint: Int, has: GlyphCoveragePages.Has): Boolean =
     val key    = (slot << 13) | (codePoint >> PageBits)
     val offset = codePoint & (PageSize - 1)
     val word   = offset >> 6
@@ -38,7 +38,7 @@ final private[fonts] class GlyphCoveragePages(maxPages: Int):
     }
     if known != Unknown then known == Yes
     else
-      val answer = font.canDisplay(codePoint)
+      val answer = has.covers(codePoint)
       synchronized {
         val page = Option(pages.get(key)).getOrElse {
           val fresh = new Page
@@ -53,6 +53,11 @@ final private[fonts] class GlyphCoveragePages(maxPages: Int):
   def pageCount: Int = synchronized(pages.size)
 
 object GlyphCoveragePages:
+
+  /** What one slot's font holds, asked once for each codepoint a page has not seen. */
+  trait Has:
+    def covers(codePoint: Int): Boolean
+
   private val Unknown = 0
   private val No      = 1
   private val Yes     = 2

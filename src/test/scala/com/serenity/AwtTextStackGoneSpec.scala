@@ -53,3 +53,7 @@ final class AwtTextStackGoneSpec extends AnyFlatSpec with Matchers:
   it should "hold no Java2D code nothing calls: a Graphics2D font helper, a Path2D rounded outline, an AffineTransform label anchor" in {
     filesMentioning("""\bRoundedPath\b|\bdrawingIn\b|transform: AffineTransform""") shouldBe Nil
   }
+
+  it should "ask AWT whether a font has a glyph nowhere: coverage is read from Skia typefaces, so layout and paint agree" in {
+    filesMentioning("""\bAwtGlyphCoverage\b|\.canDisplay\(""") shouldBe Nil
+  }

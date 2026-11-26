@@ -2,7 +2,9 @@ package com.serenity.ui.fonts
 
 import java.awt.Font
 
+import com.serenity.testkit.TestMeasure
 import com.serenity.text.fallback.FontSlot
+import com.serenity.ui.renderer.FontSpec
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.should.Matchers
 
@@ -21,7 +23,7 @@ class RoleFontCoverageSpec extends AnyFlatSpec with Matchers:
   private def codePoints(text: String): Vector[Int] = text.codePoints().toArray.toVector.filterNot(_ == ' '.toInt)
 
   private def chainCovers(font: Font, codePoint: Int): Boolean =
-    val chain = AwtGlyphCoverage.of(font, FontConfigFallback)
+    val chain = TestMeasure.measurer.glyphCoverage(FontSpec.fromAwt(font), FontConfigFallback)
     (0 until chain.slotCount).exists(slot => chain.covers(FontSlot(slot), codePoint))
 
   private val FontConfigFallback = FontLoader.FontConfig().fallback

@@ -33,10 +33,6 @@ final case class FontFallback(families: Vector[String] = Vector.empty, emojiFami
     if slot == FontSlot.Primary then primary
     else FontFallback.matching(primary, Font(familyAt(slot), primary.getStyle, 1))
 
-  /** Slots 1 and up, in order, as fonts matching `primary`. */
-  def fallbackFonts(primary: Font): Vector[Font] =
-    Vector.tabulate(slotCount - 1)(index => fontFor(FontSlot(index + 1), primary))
-
 object FontFallback:
 
   /** No configured families: only the system's own resolver stands behind the primary. */

@@ -590,7 +590,6 @@ com.serenity.state.models.CursorPositionOrderingPropertySpec	1	0.008
 com.serenity.state.models.PanelArrangementSpec	1	0.008
 com.serenity.state.reducers.DocumentIndentationEditingSpec	1	0.008
 com.serenity.ui.benchmark.FrameStatsSpec	1	0.008
-com.serenity.ui.fonts.AwtGlyphCoverageSpec	1	0.008
 com.serenity.ui.layout.CommentsSurfaceCompositionSpec	1	0.008
 com.serenity.ui.renderer.DropCapRendererSpec	1	0.008
 com.serenity.ui.renderer.OverlayColumnRowRendererSpec	1	0.008
