@@ -32,7 +32,8 @@ object AppStartup:
     configNotice: Option[String] = None,
     resumeIdentifier: Option[String] = None,
     fileOrFolderOpen: Boolean = false,
-    recentFolders: List[Path] = Nil
+    recentFolders: List[Path] = Nil,
+    resumeUnsaved: Int = 0
   ): StartupPage =
     StartupPageContent.createStartPage(
       sessionExists,
@@ -40,7 +41,8 @@ object AppStartup:
       configNotice,
       resumeIdentifier,
       fileOrFolderOpen,
-      recentFolders
+      recentFolders,
+      resumeUnsaved
     )
 
   def startPageState(
@@ -69,7 +71,8 @@ object AppStartup:
         configNotice,
         resumeIdentifier,
         capabilities.opensFileOrFolder,
-        existingRecentFolders
+        existingRecentFolders,
+        loadedSession.fold(0)(StartupPageContent.sessionUnsavedCount)
       )
     yield
       val startPageSurfaceId = SurfaceId("surface-0")
